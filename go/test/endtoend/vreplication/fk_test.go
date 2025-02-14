@@ -43,7 +43,6 @@ func TestFKWorkflow(t *testing.T) {
 	extraVTTabletArgs = []string{
 		// Ensure that there are multiple copy phase cycles per table.
 		"--vstream_packet_size=256",
-		parallelInsertWorkers,
 	}
 	defer func() { extraVTTabletArgs = nil }()
 

@@ -201,11 +201,10 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		// Prepare a vcopierCopyTask for the current batch of work.
 		currCh := make(chan *vcopierCopyTaskResult, 1)
 
-		resp2 := resp
 		if parallelism > 1 {
-			resp2 = resp.CloneVT()
+			resp = resp.CloneVT()
 		}
-		currT := newVCopierCopyTask(newVCopierCopyTaskArgs(resp2.Rows, resp2.Lastpk))
+		currT := newVCopierCopyTask(newVCopierCopyTaskArgs(resp.Rows, resp.Lastpk))
 
 		// Send result to the global resultCh and currCh. resultCh is used by
 		// the loop to return results to VStreamRows. currCh will be used to
