@@ -426,6 +426,13 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			shouldRetry:  false,
 			ignoreTablet: false,
 		},
+		{
+			name:         "query interrupted",
+			code:         vtrpcpb.Code_UNKNOWN,
+			msg:          "vttablet: rpc error: code = Unknown desc = Query execution was interrupted, maximum statement execution time exceeded (errno 3024) (sqlstate HY000)",
+			shouldRetry:  true,
+			ignoreTablet: false,
+		},
 	}
 
 	commit := []*binlogdatapb.VEvent{
