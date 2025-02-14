@@ -142,6 +142,12 @@ func (d *Digest) Write(p []byte) (n int, err error) {
 	return
 }
 
+func (d *Digest) WriteUint16(x uint16) (int, error) {
+	var b [2]byte
+	binary.LittleEndian.PutUint16(b[:], x)
+	return d.Write(b[:])
+}
+
 func (d *Digest) Sum(b []byte) []byte {
 	state := d.state
 	if d.offset > 0 {
