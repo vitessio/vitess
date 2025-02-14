@@ -17,7 +17,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert /*+ SET_VAR(foreign_key_checks=On) */ into tbl2(col2, coly) values (:_col2_0, 3)",
         "TableName": "tbl2",
         "VindexValues": {
@@ -42,7 +41,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert /*+ SET_VAR(foreign_key_checks=On) */ into multicol_tbl2(cola, colb, colc) values (:_cola_0, :_colb_0, :_colc_0)",
         "TableName": "multicol_tbl2",
         "VindexValues": {
@@ -99,7 +97,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0,
@@ -125,7 +122,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
             "Table": "multicol_tbl1",
             "Values": [
@@ -172,7 +168,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -192,7 +187,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals1",
             "Cols": [
               1
@@ -208,7 +202,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from tbl5",
             "Table": "tbl5"
           }
@@ -254,7 +247,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -270,7 +262,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from u_tbl9 where col9 = 5",
             "Table": "u_tbl9"
           }
@@ -295,7 +286,6 @@
           "Name": "unsharded_fk_allow",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl5 set col5 = 'foo' where id = 1",
         "Table": "u_tbl5"
       },
@@ -333,7 +323,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -349,7 +338,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2 set col2 = 'bar' where id = 1",
             "Table": "u_tbl2"
           }
@@ -374,7 +362,6 @@
           "Name": "unsharded_fk_allow",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2 set col_no_ref = 'baz' where id = 1",
         "Table": "u_tbl2"
       },
@@ -401,7 +388,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl1 set not_ref_col = 'foo' where id = 1",
         "Table": "tbl1"
       },
@@ -444,7 +430,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -460,7 +445,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl5 set t5col5 = 'foo'",
             "Table": "tbl5"
           }
@@ -490,7 +474,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl2 set col = 'foo'",
         "Table": "tbl2"
       },
@@ -567,7 +550,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl10 set col = 'foo'",
             "Table": "tbl10"
           }
@@ -617,7 +599,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -633,7 +614,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from tbl9 where col9 = 34",
             "Table": "tbl9",
             "Values": [
@@ -698,7 +678,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   0
@@ -714,7 +693,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'foo' where (col2) in ::fkc_vals",
                 "Table": "u_tbl2"
               }
@@ -748,7 +726,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals3",
                 "Cols": [
                   0
@@ -764,7 +741,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR)))",
                 "Table": "u_tbl9"
               }
@@ -778,7 +754,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl1 set col1 = 'foo'",
             "Table": "u_tbl1"
           }
@@ -801,7 +776,6 @@
       "Original": "update u_tbl2 set col2 = 'bar' limit 2",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -840,7 +814,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -856,7 +829,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2 set col2 = 'bar' where u_tbl2.id in ::dml_vals",
                 "Table": "u_tbl2"
               }
@@ -915,7 +887,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -938,7 +909,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
                 "Table": "u_tbl2"
               }
@@ -1009,7 +979,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   0
@@ -1025,7 +994,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = :fkc_upd where (col2) in ::fkc_vals",
                 "Table": "u_tbl2"
               }
@@ -1066,7 +1034,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals3",
                 "Cols": [
                   0
@@ -1082,7 +1049,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (:fkc_upd1 is null or (col9) not in ((:fkc_upd1)))",
                 "Table": "u_tbl9"
               }
@@ -1096,7 +1062,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
             "Table": "u_tbl1"
           }
@@ -1140,7 +1105,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -1156,7 +1120,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1",
             "Table": "u_tbl2"
           }
@@ -1217,7 +1180,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   0
@@ -1233,7 +1195,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 2 where (col2) in ::fkc_vals",
                 "Table": "u_tbl2"
               }
@@ -1267,7 +1228,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals3",
                 "Cols": [
                   0
@@ -1283,7 +1243,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR)))",
                 "Table": "u_tbl9"
               }
@@ -1297,7 +1256,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl1 set m = x + 'bar', col1 = 2 where id = 1",
             "Table": "u_tbl1"
           }
@@ -1325,7 +1283,6 @@
       "Original": "delete from u_tbl2 limit 2",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -1364,7 +1321,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -1380,7 +1336,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from u_tbl2 where u_tbl2.id in ::dml_vals",
                 "Table": "u_tbl2"
               }
@@ -1465,7 +1420,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl3 set coly = colx + 10 where coly = 10",
             "Table": "tbl3"
           }
@@ -1545,7 +1499,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl3 set coly = 20 where coly = 10",
             "Table": "tbl3"
           }
@@ -1606,7 +1559,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = 'foo' where (col8) in ::fkc_vals",
                 "Table": "u_tbl8"
               }
@@ -1620,7 +1572,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl6 set col6 = 'foo'",
             "Table": "u_tbl6"
           }
@@ -1694,7 +1645,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = 'foo' where (col4) in ::fkc_vals",
                 "Table": "u_tbl4"
               }
@@ -1708,7 +1658,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl7 set col7 = 'foo'",
             "Table": "u_tbl7"
           }
@@ -1783,7 +1732,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = :v1 where (col4) in ::fkc_vals",
                 "Table": "u_tbl4"
               }
@@ -1797,7 +1745,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl7 set col7 = :v1",
             "Table": "u_tbl7"
           }
@@ -1819,7 +1766,6 @@
       "Original": "insert into u_tbl1 (id, col1) values (1, 3) on duplicate key update col1 = 5",
       "Instructions": {
         "OperatorType": "Upsert",
-        "TargetTabletType": "PRIMARY",
         "Inputs": [
           {
             "InputName": "Insert-1",
@@ -1829,7 +1775,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
             "Query": "insert /*+ SET_VAR(foreign_key_checks=On) */ into u_tbl1(id, col1) values (1, 3)",
             "TableName": "u_tbl1"
@@ -1878,7 +1823,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals1",
                     "Cols": [
                       0
@@ -1894,7 +1838,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 5 where (col2) in ::fkc_vals",
                     "Table": "u_tbl2"
                   }
@@ -1928,7 +1871,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals3",
                     "Cols": [
                       0
@@ -1944,7 +1886,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as CHAR)))",
                     "Table": "u_tbl9"
                   }
@@ -1958,7 +1899,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_tbl1 set col1 = 5 where id = 1",
                 "Table": "u_tbl1"
               }
@@ -1988,7 +1928,6 @@
           "Name": "unsharded_fk_allow",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert /*+ SET_VAR(foreign_key_checks=On) */ into u_tbl1(id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'",
         "TableName": "u_tbl1"
       },
@@ -2054,7 +1993,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals1",
                     "Cols": [
                       0
@@ -2070,7 +2008,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "delete /*+ SET_VAR(foreign_key_checks=ON) */ from u_tbl2 where (col2) in ::fkc_vals",
                     "Table": "u_tbl2"
                   }
@@ -2084,7 +2021,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from u_tbl1 where (id) in ((1))",
                 "Table": "u_tbl1"
               }
@@ -2097,7 +2033,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
             "Query": "insert /*+ SET_VAR(foreign_key_checks=On) */ into u_tbl1(id, col1) values (1, 2)",
             "TableName": "u_tbl1"
@@ -2161,7 +2096,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   0,
@@ -2178,7 +2112,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2))",
                 "Table": "u_multicol_tbl2"
               }
@@ -2192,7 +2125,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
             "Table": "u_multicol_tbl1"
           }
@@ -2255,7 +2187,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   0,
@@ -2272,7 +2203,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=ON) */ u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2))))",
                 "Table": "u_multicol_tbl2"
               }
@@ -2286,7 +2216,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
             "Table": "u_multicol_tbl1"
           }
@@ -2334,7 +2263,6 @@
                   "Name": "sharded_fk_allow",
                   "Sharded": true
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -2354,7 +2282,6 @@
                   "Name": "sharded_fk_allow",
                   "Sharded": true
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   1
@@ -2370,7 +2297,6 @@
                   "Name": "sharded_fk_allow",
                   "Sharded": true
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from tbl5 where id = :v1",
                 "Table": "tbl5"
               }
@@ -2397,7 +2323,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
         "Table": "multicol_tbl1",
         "Values": [
@@ -2425,7 +2350,6 @@
           "Name": "unsharded_fk_allow",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
         "Table": "u_multicol_tbl1"
       },
@@ -2447,7 +2371,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert /*+ SET_VAR(foreign_key_checks=Off) */ into tbl3(col3, coly) values (:_col3_0, 3)",
         "TableName": "tbl3",
         "VindexValues": {

@@ -22,7 +22,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -131,7 +130,6 @@ func (u *Upsert) Inputs() ([]Primitive, []map[string]any) {
 
 func (u *Upsert) description() PrimitiveDescription {
 	return PrimitiveDescription{
-		OperatorType:     "Upsert",
-		TargetTabletType: topodatapb.TabletType_PRIMARY,
+		OperatorType: "Upsert",
 	}
 }
