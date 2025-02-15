@@ -1017,16 +1017,8 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 	defer cmCancel()
 
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-<<<<<<< HEAD
+		ts.Logger().Infof("cancelMigration (%v): allowing writes on source tables", ts.WorkflowName())
 		err = ts.changeTableSourceWrites(cmCtx, allowWrites)
-=======
-		if !ts.IsMultiTenantMigration() {
-			ts.Logger().Infof("cancelMigration (%v): adding denied tables to target", ts.WorkflowName())
-			err = ts.switchDeniedTables(cmCtx, true /* revert */)
-		} else {
-			ts.Logger().Infof("cancelMigration (%v): multi-tenant, not adding denied tables to target", ts.WorkflowName())
-		}
->>>>>>> 70114ad687 (Multi-tenant workflow SwitchWrites: Don't add denied tables on cancelMigration() (#17782))
 	} else {
 		ts.Logger().Infof("cancelMigration (%v): allowing writes on source shards", ts.WorkflowName())
 		err = ts.changeShardsAccess(cmCtx, ts.SourceKeyspaceName(), ts.SourceShards(), allowWrites)

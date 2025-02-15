@@ -3271,20 +3271,6 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 				time.Sleep(lockTablesCycleDelay)
 			}
 		}
-<<<<<<< HEAD
-
-=======
-		// Get the source positions now that writes are stopped, the streams were stopped (e.g.
-		// intra-keyspace materializations that write on the source), and we know for certain
-		// that any in progress writes are done.
-		if err := ts.gatherSourcePositions(ctx); err != nil {
-			return handleError("failed to gather replication positions on migration sources", err)
-		}
-
-		if err := confirmKeyspaceLocksHeld(); err != nil {
-			return handleError("locks were lost", err)
-		}
->>>>>>> 70114ad687 (Multi-tenant workflow SwitchWrites: Don't add denied tables on cancelMigration() (#17782))
 		ts.Logger().Infof("Waiting for streams to catchup")
 		if err := sw.waitForCatchup(ctx, timeout); err != nil {
 			if cerr := sw.cancelMigration(ctx, sm); cerr != nil {
