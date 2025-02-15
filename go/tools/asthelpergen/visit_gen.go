@@ -40,7 +40,7 @@ func newVisitGen(pkgname string) *visitGen {
 	}
 }
 
-func (v *visitGen) genFile() (string, *jen.File) {
+func (v *visitGen) genFile(generatorSPI) (string, *jen.File) {
 	return "ast_visit.go", v.file
 }
 
@@ -220,7 +220,8 @@ func visitAllStructFields(strct *types.Struct, spi generatorSPI) []jen.Code {
 	output := []jen.Code{
 		visitIn(),
 	}
-	for i := 0; i < strct.NumFields(); i++ {
+
+	for i := range strct.NumFields() {
 		field := strct.Field(i)
 		if types.Implements(field.Type(), spi.iface()) {
 			spi.addType(field.Type())
