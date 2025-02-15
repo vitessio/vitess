@@ -130,20 +130,6 @@ func TestFKWorkflow(t *testing.T) {
 		<-ch
 	}
 	mt.Complete()
-<<<<<<< HEAD
-=======
-	vtgateConn, closeConn := getVTGateConn()
-	defer closeConn()
-
-	if withLoad {
-		t11Count := getRowCount(t, vtgateConn, "t11")
-		t12Count := getRowCount(t, vtgateConn, "t12")
-		require.Greater(t, t11Count, 1)
-		require.Greater(t, t12Count, 1)
-		require.Equal(t, t11Count, t12Count)
-	}
-
->>>>>>> 420342fddb (VReplication Atomic Copy Workflows: fix bugs around concurrent inserts (#17772))
 }
 
 func insertInitialFKData(t *testing.T) {

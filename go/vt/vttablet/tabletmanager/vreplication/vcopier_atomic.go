@@ -85,17 +85,8 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
 	defer rowsCopiedTicker.Stop()
 
-<<<<<<< HEAD
 	parallelism := getInsertParallelism()
-	// For now do not support concurrent inserts for atomic copies.
-	if parallelism > 1 {
-		parallelism = 1
-		log.Infof("Disabling concurrent inserts for atomic copies")
-	}
-=======
-	parallelism := int(math.Max(1, float64(vc.vr.workflowConfig.ParallelInsertWorkers)))
 
->>>>>>> 420342fddb (VReplication Atomic Copy Workflows: fix bugs around concurrent inserts (#17772))
 	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
 	var copyWorkQueue *vcopierCopyWorkQueue
 
