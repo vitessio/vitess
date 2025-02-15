@@ -18,15 +18,22 @@ package materialize
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
+	addReferenceTablesOptions = struct {
+		Tables []string
+	}{}
+
 	// base is the base command for all actions related to Materialize.
 	base = &cobra.Command{
 		Use:                   "Materialize --workflow <workflow> --target-keyspace <keyspace> [command] [command-flags]",
@@ -35,7 +42,30 @@ var (
 		Aliases:               []string{"materialize"},
 		Args:                  cobra.ExactArgs(1),
 	}
+
+	// addReferenceTables makes a MaterializeAddTables gRPC call to a vtctld.
+	addReferenceTables = &cobra.Command{
+		Use:     "add-reference-tables --tables='table1,table2'",
+		Short:   "Add reference tables to the existing materialize workflow",
+		Aliases: []string{"Add-Reference-Tables"},
+		Args:    cobra.NoArgs,
+		RunE:    commandAddReferenceTables,
+	}
 )
+
+func commandAddReferenceTables(cmd *cobra.Command, args []string) error {
+	_, err := common.GetClient().MaterializeAddTables(common.GetCommandCtx(), &vtctldatapb.MaterializeAddTablesRequest{
+		Workflow: common.BaseOptions.Workflow,
+		Keyspace: common.BaseOptions.TargetKeyspace,
+		Tables:   addReferenceTablesOptions.Tables,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Reference table(s) %s added to the workflow %s. Use show to view the status.\n",
+		strings.Join(addReferenceTablesOptions.Tables, ", "), common.BaseOptions.Workflow)
+	return nil
+}
 
 func registerCommands(root *cobra.Command) {
 	common.AddCommonFlags(base)
@@ -53,6 +83,10 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().IntVar(&common.CreateOptions.TruncateErrLen, "sql-max-length-errors", 0, "truncate queries in error logs to the given length (default unlimited)")
 	create.Flags().StringSliceVarP(&common.CreateOptions.ReferenceTables, "reference-tables", "r", nil, "Used to specify the reference tables to materialize on every target shard.")
 	base.AddCommand(create)
+
+	addReferenceTables.Flags().StringSliceVar(&addReferenceTablesOptions.Tables, "tables", nil, "Used to specify the reference tables to be added to the existing workflow")
+	addReferenceTables.MarkFlagRequired("tables")
+	base.AddCommand(addReferenceTables)
 
 	// Generic workflow commands.
 	opts := &common.SubCommandsOpts{

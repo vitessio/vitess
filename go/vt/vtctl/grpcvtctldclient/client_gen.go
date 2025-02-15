@@ -632,6 +632,15 @@ func (client *gRPCVtctldClient) LookupVindexInternalize(ctx context.Context, in 
 	return client.c.LookupVindexInternalize(ctx, in, opts...)
 }
 
+// MaterializeAddTables is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) MaterializeAddTables(ctx context.Context, in *vtctldatapb.MaterializeAddTablesRequest, opts ...grpc.CallOption) (*vtctldatapb.MaterializeAddTablesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.MaterializeAddTables(ctx, in, opts...)
+}
+
 // MaterializeCreate is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) MaterializeCreate(ctx context.Context, in *vtctldatapb.MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.MaterializeCreateResponse, error) {
 	if client.c == nil {

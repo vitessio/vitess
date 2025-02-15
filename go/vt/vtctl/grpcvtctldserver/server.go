@@ -3095,6 +3095,21 @@ func (s *VtctldServer) MaterializeCreate(ctx context.Context, req *vtctldatapb.M
 	return resp, err
 }
 
+// MaterializeAddTables is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) MaterializeAddTables(ctx context.Context, req *vtctldatapb.MaterializeAddTablesRequest) (resp *vtctldatapb.MaterializeAddTablesResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.MaterializeAddTables")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("tables", req.Tables)
+
+	err = s.ws.MaterializeAddTables(ctx, req)
+	return resp, err
+}
+
 // MigrateCreate is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) MigrateCreate(ctx context.Context, req *vtctldatapb.MigrateCreateRequest) (resp *vtctldatapb.WorkflowStatusResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.MigrateCreate")

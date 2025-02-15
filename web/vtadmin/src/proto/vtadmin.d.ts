@@ -34491,6 +34491,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest message */
         message?: (string|null);
+
+        /** UpdateVReplicationWorkflowRequest filter_rules */
+        filter_rules?: (binlogdata.IRule[]|null);
     }
 
     /** Represents an UpdateVReplicationWorkflowRequest. */
@@ -34528,6 +34531,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest message. */
         public message?: (string|null);
+
+        /** UpdateVReplicationWorkflowRequest filter_rules. */
+        public filter_rules: binlogdata.IRule[];
 
         /**
          * Creates a new UpdateVReplicationWorkflowRequest instance using the specified properties.
@@ -67360,6 +67366,206 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for MaterializeCreateResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MaterializeAddTablesRequest. */
+    interface IMaterializeAddTablesRequest {
+
+        /** MaterializeAddTablesRequest workflow */
+        workflow?: (string|null);
+
+        /** MaterializeAddTablesRequest keyspace */
+        keyspace?: (string|null);
+
+        /** MaterializeAddTablesRequest tables */
+        tables?: (string[]|null);
+    }
+
+    /** Represents a MaterializeAddTablesRequest. */
+    class MaterializeAddTablesRequest implements IMaterializeAddTablesRequest {
+
+        /**
+         * Constructs a new MaterializeAddTablesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMaterializeAddTablesRequest);
+
+        /** MaterializeAddTablesRequest workflow. */
+        public workflow: string;
+
+        /** MaterializeAddTablesRequest keyspace. */
+        public keyspace: string;
+
+        /** MaterializeAddTablesRequest tables. */
+        public tables: string[];
+
+        /**
+         * Creates a new MaterializeAddTablesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MaterializeAddTablesRequest instance
+         */
+        public static create(properties?: vtctldata.IMaterializeAddTablesRequest): vtctldata.MaterializeAddTablesRequest;
+
+        /**
+         * Encodes the specified MaterializeAddTablesRequest message. Does not implicitly {@link vtctldata.MaterializeAddTablesRequest.verify|verify} messages.
+         * @param message MaterializeAddTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMaterializeAddTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MaterializeAddTablesRequest message, length delimited. Does not implicitly {@link vtctldata.MaterializeAddTablesRequest.verify|verify} messages.
+         * @param message MaterializeAddTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMaterializeAddTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MaterializeAddTablesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MaterializeAddTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MaterializeAddTablesRequest;
+
+        /**
+         * Decodes a MaterializeAddTablesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MaterializeAddTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MaterializeAddTablesRequest;
+
+        /**
+         * Verifies a MaterializeAddTablesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MaterializeAddTablesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MaterializeAddTablesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MaterializeAddTablesRequest;
+
+        /**
+         * Creates a plain object from a MaterializeAddTablesRequest message. Also converts values to other types if specified.
+         * @param message MaterializeAddTablesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MaterializeAddTablesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MaterializeAddTablesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MaterializeAddTablesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a MaterializeAddTablesResponse. */
+    interface IMaterializeAddTablesResponse {
+    }
+
+    /** Represents a MaterializeAddTablesResponse. */
+    class MaterializeAddTablesResponse implements IMaterializeAddTablesResponse {
+
+        /**
+         * Constructs a new MaterializeAddTablesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IMaterializeAddTablesResponse);
+
+        /**
+         * Creates a new MaterializeAddTablesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns MaterializeAddTablesResponse instance
+         */
+        public static create(properties?: vtctldata.IMaterializeAddTablesResponse): vtctldata.MaterializeAddTablesResponse;
+
+        /**
+         * Encodes the specified MaterializeAddTablesResponse message. Does not implicitly {@link vtctldata.MaterializeAddTablesResponse.verify|verify} messages.
+         * @param message MaterializeAddTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IMaterializeAddTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified MaterializeAddTablesResponse message, length delimited. Does not implicitly {@link vtctldata.MaterializeAddTablesResponse.verify|verify} messages.
+         * @param message MaterializeAddTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IMaterializeAddTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a MaterializeAddTablesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns MaterializeAddTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.MaterializeAddTablesResponse;
+
+        /**
+         * Decodes a MaterializeAddTablesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns MaterializeAddTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.MaterializeAddTablesResponse;
+
+        /**
+         * Verifies a MaterializeAddTablesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a MaterializeAddTablesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns MaterializeAddTablesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.MaterializeAddTablesResponse;
+
+        /**
+         * Creates a plain object from a MaterializeAddTablesResponse message. Also converts values to other types if specified.
+         * @param message MaterializeAddTablesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.MaterializeAddTablesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this MaterializeAddTablesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for MaterializeAddTablesResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
