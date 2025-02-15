@@ -125,7 +125,8 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		settings.StopPos = pausePos
 		saveStop = false
 	}
-	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %+v",
+	log.Infof("Starting VReplication player id: %v, name: %v, startPos: %v, stop: %v", vr.id, vr.WorkflowName, settings.StartPos, settings.StopPos)
+	log.V(2).Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %+v",
 		vr.id, settings.StartPos, settings.StopPos, vr.source.Filter)
 	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
@@ -265,7 +266,7 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 // one. This allows for the apply thread to catch up more quickly if
 // a backlog builds up.
 func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
-	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.source)
+	log.Infof("Starting VReplication player id: %v, name: %v, startPos: %v, stop: %v", vp.vr.id, vp.vr.WorkflowName, vp.startPos, vp.stopPos)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
