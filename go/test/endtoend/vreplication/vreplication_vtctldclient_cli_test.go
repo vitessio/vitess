@@ -152,8 +152,7 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	moveTablesResponse := getMoveTablesShowResponse(mt)
 	workflowResponse := getWorkflow(targetKeyspace, workflowName)
 
-	// also validates that MoveTables Show and Workflow Show return the same output.
-	//require.EqualValues(t, moveTablesResponse.CloneVT(), workflowResponse)
+	// Also validates that MoveTables Show and Workflow Show return the same output.
 	require.True(t, proto.Equal(moveTablesResponse.CloneVT(), workflowResponse))
 
 	// Validate that the flags are set correctly in the database.

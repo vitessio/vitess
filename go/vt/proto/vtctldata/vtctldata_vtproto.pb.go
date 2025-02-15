@@ -2976,7 +2976,7 @@ func (m *GetWorkflowsRequest) CloneVT() *GetWorkflowsRequest {
 	r.NameOnly = m.NameOnly
 	r.Workflow = m.Workflow
 	r.IncludeLogs = m.IncludeLogs
-	r.VerbosityLevel = m.VerbosityLevel
+	r.Verbosity = m.Verbosity
 	if rhs := m.Shards; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -14099,8 +14099,8 @@ func (m *GetWorkflowsRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.VerbosityLevel != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.VerbosityLevel))
+	if m.Verbosity != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.Verbosity))
 		i--
 		dAtA[i] = 0x38
 	}
@@ -25230,8 +25230,8 @@ func (m *GetWorkflowsRequest) SizeVT() (n int) {
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
-	if m.VerbosityLevel != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.VerbosityLevel))
+	if m.Verbosity != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.Verbosity))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -48623,9 +48623,9 @@ func (m *GetWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 7:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field VerbosityLevel", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Verbosity", wireType)
 			}
-			m.VerbosityLevel = 0
+			m.Verbosity = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -48635,7 +48635,7 @@ func (m *GetWorkflowsRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.VerbosityLevel |= uint32(b&0x7F) << shift
+				m.Verbosity |= VerbosityLevel(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

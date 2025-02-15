@@ -1196,6 +1196,13 @@ message GetVSchemaResponse {
   vschema.Keyspace v_schema = 1;
 }
 
+enum VerbosityLevel {
+  MINIMAL = 0;
+  LOW = 1;
+  MEDIUM = 2;
+  HIGH = 3;
+}
+
 message GetWorkflowsRequest {
   string keyspace = 1;
   bool active_only = 2;
@@ -1204,7 +1211,7 @@ message GetWorkflowsRequest {
   string workflow = 4;
   bool include_logs = 5;
   repeated string shards = 6;
-  uint32 verbosity_level = 7;
+  VerbosityLevel verbosity = 7;
 }
 
 message GetWorkflowsResponse {

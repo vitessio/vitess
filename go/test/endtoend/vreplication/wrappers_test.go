@@ -18,7 +18,6 @@ package vreplication
 
 import (
 	"fmt"
-	"math"
 	"math/rand/v2"
 	"strconv"
 	"strings"
@@ -26,9 +25,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-var verbosityFlag = fmt.Sprintf("--verbosity-level=%d", math.MaxUint32)
+var verbosityFlag = fmt.Sprintf("--verbosity-level=%s", vtctldatapb.VerbosityLevel_HIGH)
 
 type iWorkflow interface {
 	Create()

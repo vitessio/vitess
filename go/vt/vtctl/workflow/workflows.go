@@ -285,7 +285,7 @@ func (wf *workflowFetcher) buildWorkflows(
 			}
 
 			metadata := workflowMetadataMap[workflowName]
-			err := wf.scanWorkflow(ctx, workflow, wfres, tablet, metadata, copyStatesByShardStreamId, req.Keyspace, req.VerbosityLevel)
+			err := wf.scanWorkflow(ctx, workflow, wfres, tablet, metadata, copyStatesByShardStreamId, req.Keyspace, req.Verbosity)
 			if err != nil {
 				return nil, err
 			}
@@ -332,7 +332,7 @@ func (wf *workflowFetcher) scanWorkflow(
 	meta *workflowMetadata,
 	copyStatesByShardStreamId map[string][]*vtctldatapb.Workflow_Stream_CopyState,
 	keyspace string,
-	verbosity uint32,
+	verbosity vtctldatapb.VerbosityLevel,
 ) error {
 
 	shardStreamKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
@@ -349,7 +349,7 @@ func (wf *workflowFetcher) scanWorkflow(
 		shardStream = &vtctldatapb.Workflow_ShardStream{
 			Streams: nil,
 		}
-		if verbosity > 0 {
+		if verbosity > vtctldatapb.VerbosityLevel_MEDIUM {
 			shardStream.TabletControls = si.TabletControls
 			shardStream.IsPrimaryServing = si.IsPrimaryServing
 		}
@@ -377,14 +377,6 @@ func (wf *workflowFetcher) scanWorkflow(
 			cells[i] = strings.TrimSpace(cells[i])
 		}
 
-		if options := res.Options; options != "" && verbosity > 0 {
-			if options != "" {
-				if err := json.Unmarshal([]byte(options), &workflow.Options); err != nil {
-					return err
-				}
-			}
-		}
-
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:      int64(rstream.Id),
 			Shard:   tablet.Shard,
@@ -401,7 +393,7 @@ func (wf *workflowFetcher) scanWorkflow(
 		meta.sourceKeyspace = rstream.Bls.Keyspace
 		meta.targetKeyspace = tablet.Keyspace
 
-		if verbosity > 0 {
+		if verbosity > vtctldatapb.VerbosityLevel_LOW {
 			stream.BinlogSource = rstream.Bls
 			stream.Position = pos
 			stream.StopPosition = rstream.StopPos
@@ -431,8 +423,15 @@ func (wf *workflowFetcher) scanWorkflow(
 			}
 			workflow.WorkflowSubType = res.WorkflowSubType.String()
 			workflow.DeferSecondaryKeys = res.DeferSecondaryKeys
+			if options := res.Options; options != "" {
+				if options != "" {
+					if err := json.Unmarshal([]byte(options), &workflow.Options); err != nil {
+						return err
+					}
+				}
+			}
 		}
-		if verbosity > 1 {
+		if verbosity > vtctldatapb.VerbosityLevel_MEDIUM {
 			stream.StopPosition = rstream.StopPos
 			stream.DbName = tablet.DbName()
 			stream.TabletTypes = res.TabletTypes
