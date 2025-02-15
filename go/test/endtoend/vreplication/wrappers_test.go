@@ -17,6 +17,8 @@ limitations under the License.
 package vreplication
 
 import (
+	"fmt"
+	"math"
 	"math/rand/v2"
 	"strconv"
 	"strings"
@@ -25,6 +27,8 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 )
+
+var verbosityFlag = fmt.Sprintf("--verbosity-level=%d", math.MaxUint32)
 
 type iWorkflow interface {
 	Create()
@@ -163,6 +167,7 @@ func (v VtctldMoveTables) ReverseReadsAndWrites() {
 
 func (v VtctldMoveTables) Show() {
 	args := []string{"Show"}
+	args = append(args, verbosityFlag)
 	args = append(args, v.showFlags...)
 	v.exec(args...)
 }
@@ -308,7 +313,7 @@ func (v VtctldReshard) ReverseReadsAndWrites() {
 }
 
 func (v VtctldReshard) Show() {
-	v.exec("Show")
+	v.exec("Show", verbosityFlag)
 }
 
 func (v *VtctldReshard) Status() {

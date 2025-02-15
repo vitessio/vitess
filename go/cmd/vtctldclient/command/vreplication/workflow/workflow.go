@@ -44,7 +44,8 @@ var (
 	}{}
 
 	workflowShowOptions = struct {
-		IncludeLogs bool
+		IncludeLogs    bool
+		VerbosityLevel uint32
 	}{}
 )
 
@@ -55,6 +56,7 @@ func registerCommands(root *cobra.Command) {
 
 	getWorkflows.Flags().BoolVar(&workflowShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflows.")
 	getWorkflows.Flags().BoolVarP(&getWorkflowsOptions.ShowAll, "show-all", "a", false, "Show all workflows instead of just active workflows.")
+	getWorkflows.Flags().Uint32Var(&workflowShowOptions.VerbosityLevel, "verbosity-level", 0, "How much detail to include in the results.")
 	root.AddCommand(getWorkflows) // Yes this is supposed to be root as GetWorkflows is a top-level command.
 
 	delete.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want to delete.")
@@ -71,6 +73,7 @@ func registerCommands(root *cobra.Command) {
 	show.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want the details for.")
 	show.MarkFlagRequired("workflow")
 	show.Flags().BoolVar(&workflowShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflow.")
+	show.Flags().Uint32Var(&workflowShowOptions.VerbosityLevel, "verbosity-level", 0, "How much detail to include in the results.")
 	common.AddShardSubsetFlag(show, &baseOptions.Shards)
 	base.AddCommand(show)
 

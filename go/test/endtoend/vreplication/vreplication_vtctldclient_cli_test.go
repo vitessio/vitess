@@ -28,6 +28,7 @@ import (
 	"github.com/tidwall/gjson"
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -152,7 +153,8 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	workflowResponse := getWorkflow(targetKeyspace, workflowName)
 
 	// also validates that MoveTables Show and Workflow Show return the same output.
-	require.EqualValues(t, moveTablesResponse.CloneVT(), workflowResponse)
+	//require.EqualValues(t, moveTablesResponse.CloneVT(), workflowResponse)
+	require.True(t, proto.Equal(moveTablesResponse.CloneVT(), workflowResponse))
 
 	// Validate that the flags are set correctly in the database.
 	validateMoveTablesWorkflow(t, workflowResponse.Workflows)
@@ -485,7 +487,7 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	validateOverrides(t, targetTabs, overrides)
 	workflowResponse := getWorkflow(keyspace, workflowName)
 	reshardShowResponse := getReshardShowResponse(&rs)
-	require.EqualValues(t, reshardShowResponse, workflowResponse)
+	require.True(t, proto.Equal(reshardShowResponse, workflowResponse))
 	validateReshardWorkflow(t, workflowResponse.Workflows)
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Stopped.String())
 	rs.Start()
@@ -709,8 +711,8 @@ func getReshardResponse(rs iReshard) *vtctldatapb.WorkflowStatusResponse {
 // helper functions
 
 func getWorkflow(targetKeyspace, workflow string) *vtctldatapb.GetWorkflowsResponse {
-	workflowOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKeyspace, "show", "--workflow", workflow)
-	require.NoError(vc.t, err)
+	workflowOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", targetKeyspace, "show", "--workflow", workflow, verbosityFlag)
+	require.NoError(vc.t, err, workflowOutput)
 	var workflowResponse vtctldatapb.GetWorkflowsResponse
 	err = protojson.Unmarshal([]byte(workflowOutput), &workflowResponse)
 	require.NoError(vc.t, err)
@@ -720,8 +722,8 @@ func getWorkflow(targetKeyspace, workflow string) *vtctldatapb.GetWorkflowsRespo
 }
 
 func getWorkflows(targetKeyspace string) *vtctldatapb.GetWorkflowsResponse {
-	getWorkflowsOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("GetWorkflows", targetKeyspace, "--show-all", "--compact", "--include-logs=false")
-	require.NoError(vc.t, err)
+	getWorkflowsOutput, err := vc.VtctldClient.ExecuteCommandWithOutput("GetWorkflows", targetKeyspace, "--show-all", "--compact", "--include-logs=false", verbosityFlag)
+	require.NoError(vc.t, err, getWorkflowsOutput)
 	var getWorkflowsResponse vtctldatapb.GetWorkflowsResponse
 	err = protojson.Unmarshal([]byte(getWorkflowsOutput), &getWorkflowsResponse)
 	require.NoError(vc.t, err)

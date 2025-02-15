@@ -65,10 +65,6 @@ func commandShow(cmd *cobra.Command, args []string) error {
 	// We always use compact format with SHOW to reduce the overall
 	// size and noise.
 	cli.DefaultMarshalOptions.EmitUnpopulated = false
-	if len(resp.Workflows) == 0 {
-		return fmt.Errorf("workflow %s not found in the %s keyspace",
-			BaseOptions.Workflow, BaseOptions.TargetKeyspace)
-	}
 	data, err := cli.MarshalJSONPretty(resp)
 	if err != nil {
 		return err

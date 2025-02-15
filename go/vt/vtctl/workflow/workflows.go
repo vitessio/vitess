@@ -356,6 +356,7 @@ func (wf *workflowFetcher) scanWorkflow(
 
 		workflow.ShardStreams[shardStreamKey] = shardStream
 	}
+	workflow.WorkflowType = res.WorkflowType.String()
 
 	for _, rstream := range res.Streams {
 		// The value in the pos column can be compressed and thus not
@@ -428,7 +429,6 @@ func (wf *workflowFetcher) scanWorkflow(
 			if vreplicationLag.Seconds() > meta.maxVReplicationLag {
 				meta.maxVReplicationLag = vreplicationLag.Seconds()
 			}
-			workflow.WorkflowType = res.WorkflowType.String()
 			workflow.WorkflowSubType = res.WorkflowSubType.String()
 			workflow.DeferSecondaryKeys = res.DeferSecondaryKeys
 		}
