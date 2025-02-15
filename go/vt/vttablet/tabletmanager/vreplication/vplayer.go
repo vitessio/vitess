@@ -112,13 +112,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		settings.StopPos = pausePos
 		saveStop = false
 	}
-<<<<<<< HEAD
 
-=======
-	log.Infof("Starting VReplication player id: %v, name: %v, startPos: %v, stop: %v", vr.id, vr.WorkflowName, settings.StartPos, settings.StopPos)
-	log.V(2).Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %+v",
-		vr.id, settings.StartPos, settings.StopPos, vr.source.Filter)
->>>>>>> 70114ad687 (Multi-tenant workflow SwitchWrites: Don't add denied tables on cancelMigration() (#17782))
 	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
 	}
