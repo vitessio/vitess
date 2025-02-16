@@ -227,9 +227,7 @@ func TestOutputModes(t *testing.T) {
 			defer func() { os.Stdout = oldStdout }()
 
 			err := parseAndRun(context.Background())
-			if err != nil {
-				t.Fatalf("parseAndRun() error = %v", err)
-			}
+			require.NoError(t, err, "Failed to parse and run")
 
 			w.Close()
 			var buf bytes.Buffer
@@ -238,9 +236,7 @@ func TestOutputModes(t *testing.T) {
 
 			output := buf.String()
 
-			if !tt.check(output) {
-				t.Errorf("%s output check failed", tt.outputMode)
-			}
+			assert.True(t, tt.check(output), "Output check failed")
 		})
 	}
 }
