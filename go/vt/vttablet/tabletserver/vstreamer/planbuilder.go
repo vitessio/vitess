@@ -594,44 +594,21 @@ func (plan *Plan) appendTupleFilter(values sqlparser.ValTuple, opcode Opcode, co
 	return nil
 }
 
-func (plan *Plan) getFromAndToEvalResult(expr *sqlparser.BetweenExpr) (*evalengine.EvalResult, *evalengine.EvalResult, error) {
-	// From value.
-	fromVal, ok := expr.From.(*sqlparser.Literal)
+func (plan *Plan) getEvalResultForLiteral(expr sqlparser.Expr) (*evalengine.EvalResult, error) {
+	literalExpr, ok := expr.(*sqlparser.Literal)
 	if !ok {
-		return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
 	}
-	pv, err := evalengine.Translate(fromVal, &evalengine.Config{
+	pv, err := evalengine.Translate(literalExpr, &evalengine.Config{
 		Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
 		Environment: plan.env,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	env := evalengine.EmptyExpressionEnv(plan.env)
-	fromResolved, err := env.Evaluate(pv)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// To value.
-	toVal, ok := expr.To.(*sqlparser.Literal)
-	if !ok {
-		return nil, nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-	}
-	pv, err = evalengine.Translate(toVal, &evalengine.Config{
-		Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
-		Environment: plan.env,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	env = evalengine.EmptyExpressionEnv(plan.env)
-	toResolved, err := env.Evaluate(pv)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &fromResolved, &toResolved, nil
+	resolved, err := env.Evaluate(pv)
+	return &resolved, err
 }
 
 func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) error {
@@ -674,19 +651,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 				continue
 			}
-			val, ok := expr.Right.(*sqlparser.Literal)
-			if !ok {
-				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-			}
-			pv, err := evalengine.Translate(val, &evalengine.Config{
-				Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
-				Environment: plan.env,
-			})
-			if err != nil {
-				return err
-			}
-			env := evalengine.EmptyExpressionEnv(plan.env)
-			resolved, err := env.Evaluate(pv)
+			resolved, err := plan.getEvalResultForLiteral(expr.Right)
 			if err != nil {
 				return err
 			}
@@ -739,7 +704,11 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if err != nil {
 				return err
 			}
-			fromResolved, toResolved, err := plan.getFromAndToEvalResult(expr)
+			fromResolved, err := plan.getEvalResultForLiteral(expr.From)
+			if err != nil {
+				return err
+			}
+			toResolved, err := plan.getEvalResultForLiteral(expr.To)
 			if err != nil {
 				return err
 			}
