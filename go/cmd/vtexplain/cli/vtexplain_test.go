@@ -233,7 +233,9 @@ func TestOutputModes(t *testing.T) {
 
 			w.Close()
 			var buf bytes.Buffer
-			io.Copy(&buf, r)
+			_, err = io.Copy(&buf, r)
+			require.NoError(t, err, "Failed to copy output buffer")
+
 			output := buf.String()
 
 			if !tt.check(output) {
