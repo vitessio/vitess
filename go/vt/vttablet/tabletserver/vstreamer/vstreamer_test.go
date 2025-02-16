@@ -2194,6 +2194,23 @@ func TestFilteredBetweenOperator(t *testing.T) {
 				{"commit", nil},
 			},
 		},
+		{
+			name:   "between-and-not-between-and-additional-compare",
+			filter: "select id1, val from t1 where id1 between 2 and 10 and id1 != 9 and val not between 'd' and 'f' and val in ('a','e')",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'a')", noEvents},
+				{"insert into t1 values (2, 200, 'b')", noEvents},
+				{"insert into t1 values (3, 100, 'c')", noEvents},
+				{"insert into t1 values (4, 200, 'd')", noEvents},
+				{"insert into t1 values (5, 200, 'e')", noEvents},
+				{"insert into t1 values (6, 200, 'f')", noEvents},
+				{"insert into t1 values (7, 100, 'g')", noEvents},
+				{"insert into t1 values (8, 100, 'a')", nil},
+				{"insert into t1 values (9, 100, 'a')", noEvents},
+				{"commit", nil},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
