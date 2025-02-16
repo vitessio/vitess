@@ -12,7 +12,7 @@ import {
 } from '../../../hooks/api';
 import Toggle from '../../toggle/Toggle';
 import { success } from '../../Snackbar';
-import { vtadmin, vtctldata, vttime } from '../../../proto/vtadmin';
+import { topodata, vtadmin, vtctldata } from '../../../proto/vtadmin';
 import { getReverseWorkflow } from '../../../util/workflows';
 import { Label } from '../../inputs/Label';
 import { TextInput } from '../../TextInput';
@@ -54,8 +54,10 @@ interface SwitchTrafficOptions {
     initializeTargetSequences: boolean;
     maxReplicationLagAllowed: number;
     timeout: number;
-    tabletTypes: number[];
+    tabletTypes: topodata.TabletType[];
 }
+
+const TABLET_OPTIONS = [topodata.TabletType['PRIMARY'], topodata.TabletType['REPLICA'], topodata.TabletType['RDONLY']];
 
 const DefaultSwitchTrafficOptions: SwitchTrafficOptions = {
     enableReverseReplication: true,
@@ -63,15 +65,13 @@ const DefaultSwitchTrafficOptions: SwitchTrafficOptions = {
     initializeTargetSequences: false,
     maxReplicationLagAllowed: 30,
     timeout: 30,
-    tabletTypes: [1, 2, 3],
+    tabletTypes: TABLET_OPTIONS,
 };
 
 const DefaultCancelWorkflowOptions: CancelWorkflowOptions = {
     keepData: false,
     keepRoutingRoules: false,
 };
-
-const TABLET_OPTIONS = [1, 2, 3];
 
 const WorkflowActions: React.FC<WorkflowActionsProps> = ({
     streamsByState,
