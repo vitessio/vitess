@@ -34,7 +34,8 @@ import (
 )
 
 const (
-	countWorkers = 4
+	countWorkers    = 6
+	maxWorkerEvents = 1000
 )
 
 type parallelProducer struct {
@@ -189,7 +190,7 @@ func (p *parallelProducer) updateTimeThrottled(appThrottled throttlerapp.Name, r
 	return err
 }
 
-func (p *parallelProducer) aggregateWorkersPos(ctx context.Context, dbClient *vdbClient) (aggregatedWorkersPos replication.Position, combinedPos replication.Position, err error) {
+func (p *parallelProducer) aggregateWorkersPos(ctx context.Context, dbClient *vdbClient, onlyFirstContiguous bool) (aggregatedWorkersPos replication.Position, combinedPos replication.Position, err error) {
 	// TODO(shlomi): this query can be computed once in the lifetime of the producer
 	query := binlogplayer.ReadVReplicationWorkersGTIDs(p.vp.vr.id)
 	qr, err := dbClient.ExecuteFetch(query, -1)
@@ -210,10 +211,17 @@ func (p *parallelProducer) aggregateWorkersPos(ctx context.Context, dbClient *vd
 		lastEventTimestamp = max(lastEventTimestamp, eventTimestamp)
 		aggregatedWorkersPos = replication.AppendGTIDSet(aggregatedWorkersPos, current.GTIDSet)
 	}
+	if onlyFirstContiguous && aggregatedWorkersPos.GTIDSet != nil {
+		mysql56gtid := aggregatedWorkersPos.GTIDSet.(replication.Mysql56GTIDSet)
+		for sid := range mysql56gtid {
+			mysql56gtid[sid] = mysql56gtid[sid][:1]
+		}
+	}
+
 	combinedPos = replication.AppendGTIDSet(aggregatedWorkersPos, p.vp.startPos.GTIDSet)
 	p.vp.pos = combinedPos // TODO(shlomi) potential for race condition
 
-	log.Errorf("========== QQQ aggregateWorkersPos updatePos ts=%v, pos=%v", lastEventTimestamp, combinedPos)
+	// log.Errorf("========== QQQ aggregateWorkersPos updatePos ts=%v, pos=%v", lastEventTimestamp, combinedPos)
 	if _, err := p.updatePos(ctx, combinedPos, lastEventTimestamp, dbClient); err != nil {
 		return aggregatedWorkersPos, combinedPos, err
 	}
@@ -241,8 +249,8 @@ func (p *parallelProducer) watchPos(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			log.Errorf("========== QQQ watchPos ticker")
-			aggregatedWorkersPos, combinedPos, err := p.aggregateWorkersPos(ctx, dbClient)
+			// log.Errorf("========== QQQ watchPos ticker")
+			aggregatedWorkersPos, combinedPos, err := p.aggregateWorkersPos(ctx, dbClient, true)
 			if err != nil {
 				log.Errorf("Error aggregating vreplication worker positions: %v. isclosed? %v", err, dbClient.IsClosed())
 				continue
@@ -250,12 +258,11 @@ func (p *parallelProducer) watchPos(ctx context.Context) error {
 			log.Errorf("========== QQQ watchPos aggregatedWorkersPos: %v, combinedPos: %v, stop: %v", aggregatedWorkersPos, combinedPos, p.vp.stopPos)
 
 			// Write back this combined pos to all workers, so that we condense their otherwise sparse GTID sets.
-			log.Errorf("========== QQQ watchPos pushing combined pos %v", combinedPos)
+			// log.Errorf("========== QQQ watchPos pushing aggregatedWorkersPos %v", aggregatedWorkersPos)
 			for _, w := range p.workers {
-				log.Errorf("========== QQQ watchPos pushing combined pos worker %v", w.index)
-				w.aggregatedPosChan <- aggregatedWorkersPos
+				go func() { w.aggregatedPosChan <- aggregatedWorkersPos }()
 			}
-			log.Errorf("========== QQQ watchPos pushed combined pos")
+			// log.Errorf("========== QQQ watchPos pushed combined pos")
 			if combinedPos.GTIDSet.Equal(lastCombinedPos.GTIDSet) {
 				// no progress has been made
 				log.Errorf("========== QQQ watchPos no progress!! committing all")
@@ -274,39 +281,12 @@ func (p *parallelProducer) watchPos(ctx context.Context) error {
 				p.posReached.Store(true)
 				return io.EOF
 			}
-			log.Errorf("========== QQQ watchPos end loop cycle")
+			// log.Errorf("========== QQQ watchPos end loop cycle")
 		}
 	}
 }
 
 func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatapb.VEvent) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	// ticker := time.NewTicker(50 * time.Millisecond)
-	// defer ticker.Stop()
-	// var lastGoodTime time.Time
-	//
-	// 	processEvent := func(ctx context.Context, event *binlogdatapb.VEvent) err {
-	// 		workerIndex := p.assignTransactionToWorker(event.SequenceNumber, event.CommitParent)
-	// 		worker := p.workers[workerIndex]
-	// 		for {
-	// 			select {
-	// 			case worker.events <- event:
-	// 				// We managed to assign the event onto the worker.
-	// 				return nil
-	// 			case t := <-ticker.C:
-	// 				if t.After(lastGoodTime.Add(50 * time.Millisecond)) {
-	// 					// We're falling behind. Commit all transactions.
-	// 					p.commitAll(ctx)
-	// 					lastGoodTime = t
-	// 				}
-	// 			case <-ctx.Done():
-	// 				return ctx.Err()
-	// 			}
-	// 		}
-	// 	}
-
 	for {
 		if p.posReached.Load() {
 			return io.EOF
@@ -335,7 +315,7 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 			}
 			if !canApplyInParallel {
 				// As an example, thus could be a DDL.
-				// Wait for all existing workers to complete
+				// Wait for all existing workers to complete, including the one we are about to assign to.
 				if err := p.commitAll(ctx, nil); err != nil {
 					return err
 				}
@@ -361,9 +341,6 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 
 func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) error {
 	// TODO(shlomi): do not cancel context, because if we do, that can terminate async queries still running.
-	// ctx, cancel := context.WithCancel(ctx)
-	// defer cancel()
-
 	defer log.Errorf("========== QQQ applyEvents defer")
 
 	dbClient, err := p.newDBClient()
