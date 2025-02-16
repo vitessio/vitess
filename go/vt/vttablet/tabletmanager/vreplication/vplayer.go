@@ -303,26 +303,30 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 		}
 		go func() {
 			defer log.Errorf("========== QQQ DONE fetchAndApply/parallel goroutine")
-			ctx, cancel := context.WithCancel(ctx)
-			defer cancel()
+			// ctx, cancel := context.WithCancel(ctx)
+			// defer cancel()
 
 			err := func() error {
-				defer log.Errorf("========== QQQ DONE fetchAndApply/parallel inner")
+				defer func() {
+					log.Errorf("========== QQQ DONE fetchAndApply/parallel inner. max_concurrency=%v, num commits=%v", producer.maxConcurrency.Load(), producer.numCommits.Load())
+
+					_, combinedPos, err := producer.aggregateWorkersPos(ctx, vp.vr.dbClient, false)
+					if err != nil {
+						log.Errorf("========== QQQ fetchAndApply producer.aggregateWorkersPos err=%v", err)
+					}
+					log.Errorf("========== QQQ fetchAndApply good. combinedPos=%v", combinedPos)
+
+				}()
 				log.Errorf("========== QQQ fetchAndApply applyEvents call")
-				if err := producer.applyEvents(ctx, relay); err != nil {
+				if err := producer.applyEvents(ctx, relay); err != nil && err != io.EOF {
 					log.Errorf("========== QQQ fetchAndApply applyEvents err=%v", err)
 					return err
 				}
-				log.Errorf("========== QQQ fetchAndApply producer.commitAll call")
-				if err := producer.commitAll(ctx, nil); err != nil {
-					log.Errorf("========== QQQ producer.commitAll err=%v", err)
-					return err
-				}
-				if _, _, err := producer.aggregateWorkersPos(ctx, vp.vr.dbClient); err != nil {
-					log.Errorf("========== QQQ fetchAndApply producer.aggregateWorkersPos err=%v", err)
-					return err
-				}
-				log.Errorf("========== QQQ fetchAndApply good")
+				// log.Errorf("========== QQQ fetchAndApply producer.commitAll call")
+				// if err := producer.commitAll(ctx, nil); err != nil && err != io.EOF {
+				// 	log.Errorf("========== QQQ producer.commitAll err=%v", err)
+				// 	return err
+				// }
 				// TODO(shlomi): DeleteVReplicationWorkerPos
 				if producer.posReached.Load() {
 					log.Infof("Stopped at position: %v", vp.stopPos)
