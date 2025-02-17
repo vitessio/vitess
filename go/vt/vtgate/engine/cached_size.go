@@ -805,7 +805,7 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(208)
 	}
 	// field Original string
 	size += hack.RuntimeAllocSize(int64(len(cached.Original)))
@@ -829,6 +829,8 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
+	// field QueryHints vitess.io/vitess/go/vt/sqlparser.QueryHints
+	size += cached.QueryHints.CachedSize(false)
 	return size
 }
 func (cached *Projection) CachedSize(alloc bool) int64 {
@@ -960,7 +962,7 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(112)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
