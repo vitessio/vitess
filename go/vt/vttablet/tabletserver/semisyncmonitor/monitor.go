@@ -75,11 +75,9 @@ type Monitor struct {
 
 // NewMonitor creates a new Monitor.
 func NewMonitor(env tabletenv.Env) *Monitor {
-	// TODO (@GuptaManan100): Parameterize the watch interval.
-	watchInterval := 10 * time.Second
 	return &Monitor{
 		env:   env,
-		ticks: timer.NewTimer(watchInterval),
+		ticks: timer.NewTimer(env.Config().SemiSyncMonitor.Interval),
 		// We clear the data every day. We can make it configurable in the future,
 		// but this seams fine for now.
 		clearTicks: timer.NewTimer(clearTimerDuration),

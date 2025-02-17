@@ -300,6 +300,12 @@ func TestFlags(t *testing.T) {
 	want.Healthcheck.Interval = time.Second
 	assert.Equal(t, want, currentConfig)
 
+	semiSyncMonitorInterval = time.Second
+	currentConfig.SemiSyncMonitor.Interval = 0
+	Init()
+	want.SemiSyncMonitor.Interval = time.Second
+	assert.Equal(t, want, currentConfig)
+
 	degradedThreshold = 2 * time.Second
 	currentConfig.Healthcheck.DegradedThreshold = 0
 	Init()
