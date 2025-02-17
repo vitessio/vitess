@@ -280,7 +280,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 	ch := make(chan any)
 	go func() {
 		defer func() {
-			ch <- true
+			close(ch)
 		}()
 		utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 	}()
@@ -289,6 +289,19 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 	// on the replica's before the disruption has been introduced.
 	err := clusterInstance.StartVTOrc(clusterInstance.Keyspaces[0].Name)
 	require.NoError(t, err)
+	go func() {
+		for {
+			select {
+			case <-ch:
+				return
+			case <-time.After(1 * time.Second):
+				str, isPresent := tablets[0].VttabletProcess.GetVars()["SemiSyncMonitorWritesBlocked"]
+				if isPresent {
+					log.Errorf("SemiSyncMonitorWritesBlocked - %v", str)
+				}
+			}
+		}
+	}()
 	// If the network disruption is too long lived, then we will end up running ERS from VTOrc.
 	networkDisruptionDuration := 43 * time.Second
 	time.Sleep(networkDisruptionDuration)
