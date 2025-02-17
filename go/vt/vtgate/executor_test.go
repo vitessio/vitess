@@ -1617,7 +1617,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sq
 			return true
 		})
 	} else {
-		h := e.hashPlan(context.Background(), vc, sql)
+		h := e.hashPlan(context.Background(), vc, sql, "")
 		plan, _ = e.plans.Get(h, e.epoch.Load())
 	}
 	require.Truef(t, plan != nil, "plan not found for query: %s", sql)
@@ -1652,29 +1652,26 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 		assertCacheSize(t, r.plans, 0)
 
 		wantSQL := query1 + " /* comment */"
-		if logStats1.SQL != wantSQL {
-			t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats1.SQL)
-		}
+		assert.Equal(t, wantSQL, logStats1.SQL)
 
 		_, logStats2 := getPlanCached(t, ctx, r, emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 1)
 
 		wantSQL = query1 + " /* comment 2 */"
-		if logStats2.SQL != wantSQL {
-			t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
-		}
+		assert.Equal(t, wantSQL, logStats2.SQL)
 	})
 
 	t.Run("Skip Cache", func(t *testing.T) {
-		// Skip cache using directive
 		r, _, _, _, ctx := createExecutorEnv(t)
 
 		unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
 
+		// Skip cache using directive
 		query1 := "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 		getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 0)
 
+		// it will be cached now.
 		query1 = "insert into user(id) values (1), (2)"
 		getPlanCached(t, ctx, r, unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 1)
@@ -1738,7 +1735,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, econtext.VCursorConfig{})
 	unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, econtext.VCursorConfig{})
 
-	query1 := "select * from music_user_map where id = 1"
+	query1 := "select * from music_user_map where id = 1" // 163 -- 80
 	query2 := "select * from music_user_map where id = 2"
 	normalized := "select * from music_user_map where id = :id /* INT64 */"
 
