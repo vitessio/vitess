@@ -86,7 +86,6 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		source:          &binlogdatapb.BinlogSource{},
 	}
 	ct.sourceTablet.Store(&topodatapb.TabletAlias{})
-	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
 	id, err := strconv.ParseInt(params["id"], 10, 32)
 	if err != nil {
@@ -94,6 +93,8 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.id = int32(id)
 	ct.workflow = params["workflow"]
+	log.Infof("creating controller with id: %v, name: %v, cell: %v, tabletTypes: %v", ct.id, ct.workflow, cell, tabletTypesStr)
+
 	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), maxTimeToRetryError)
 
 	state := params["state"]
