@@ -245,7 +245,11 @@ func (set Mysql56GTIDSet) Contains(other GTIDSet) bool {
 	// Check each SID in the other set.
 	for sid, otherIntervals := range other56 {
 		i := 0
-		intervals := set[sid]
+		intervals, ok := set[sid]
+		if !ok {
+			// other56 has a SID that `set` doesn't have.
+			return false
+		}
 		count := len(intervals)
 
 		// Check each interval for this SID in the other set.
