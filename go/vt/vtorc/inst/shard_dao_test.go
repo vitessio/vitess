@@ -108,6 +108,12 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, []string{tt.shardName}, shardNames)
 
+			// ReadAllShardNames
+			allShardNames, err := ReadAllShardNames()
+			ksShards, found := allShardNames[tt.keyspaceName]
+			require.True(t, found)
+			require.Equal(t, []string{tt.shardName}, ksShards)
+
 			// DeleteShard
 			require.NoError(t, DeleteShard(tt.keyspaceName, tt.shardName))
 			_, _, err = ReadShardPrimaryInformation(tt.keyspaceName, tt.shardName)

@@ -311,3 +311,33 @@ func verifyPrimaryAlias(t *testing.T, keyspaceName, shardName string, primaryAli
 	require.NoError(t, err)
 	require.Equal(t, primaryAliasWanted, primaryAlias)
 }
+
+func TestRefreshAllShards(t *testing.T) {
+	// Store the old flags and restore on test completion
+	oldTs := ts
+	defer func() {
+		ts = oldTs
+		db.ClearVTOrcDatabase()
+	}()
+
+	ctx := context.Background()
+	ts = memorytopo.NewServer(ctx, "zone1")
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
+		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+		DurabilityPolicy: policy.DurabilityNone,
+	}))
+	shards := []string{"-80", "80-"}
+	for _, shard := range shards {
+		require.NoError(t, ts.CreateShard(ctx, "ks1", shard))
+	}
+	require.NoError(t, refreshAllShards(context.Background(), "ks1"))
+	shardNames, err := inst.ReadShardNames("ks1")
+	require.NoError(t, err)
+	require.Equal(t, []string{"-80", "80-"}, shardNames)
+
+	require.NoError(t, ts.DeleteShard(ctx, "ks1", "80-"))
+	require.NoError(t, refreshAllShards(context.Background(), "ks1"))
+	shardNames, err = inst.ReadShardNames("ks1")
+	require.NoError(t, err)
+	require.Equal(t, []string{"-80"}, shardNames)
+}
