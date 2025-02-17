@@ -106,7 +106,7 @@ var (
 	}
 	createStatement = `
 		CREATE TABLE stress_test (
-			id bigint(20) not null,
+			id bigint not null,
 			rand_val varchar(32) null default '',
 			op_order bigint unsigned not null default 0,
 			hint_col varchar(64) not null default '',
@@ -117,7 +117,7 @@ var (
 			key updates_idx(updates)
 		) ENGINE=InnoDB;
 		CREATE TABLE t1 (
-			id bigint(20) not null,
+			id bigint not null,
 			i int not null default 0,
 			PRIMARY KEY (id)
 		) ENGINE=InnoDB;
