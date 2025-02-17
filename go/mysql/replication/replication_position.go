@@ -120,9 +120,7 @@ func AppendGTIDSet(rp Position, gtidSet GTIDSet) Position {
 		rp.GTIDSet = gtidSet
 		return rp
 	}
-	rp.GTIDSet.InPlaceUnion(gtidSet)
-
-	return rp
+	return Position{GTIDSet: rp.GTIDSet.Union(gtidSet)}
 }
 
 // MustParsePosition calls ParsePosition and panics
