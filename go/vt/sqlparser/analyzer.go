@@ -145,12 +145,11 @@ func CanNormalize(stmt Statement) bool {
 
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
-	switch stmt.(type) {
-	case *Select, *Insert, *Update, *Delete, *Union, *Stream:
-		return !checkDirective(stmt, DirectiveSkipQueryPlanCache)
-	default:
+	_, supportSetVar := stmt.(SupportOptimizerHint)
+	if !supportSetVar {
 		return false
 	}
+	return !checkDirective(stmt, DirectiveSkipQueryPlanCache)
 }
 
 // MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
@@ -425,11 +424,11 @@ func IsSimpleTuple(node Expr) bool {
 	return false
 }
 
-// IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
-func IsLockingFunc(node Expr) bool {
-	switch node.(type) {
-	case *LockingFunc:
+func SupportsOptimizerHint(stmt StatementType) bool {
+	switch stmt {
+	case StmtSelect, StmtInsert, StmtUpdate, StmtDelete, StmtStream, StmtVStream:
 		return true
+	default:
+		return false
 	}
-	return false
 }
