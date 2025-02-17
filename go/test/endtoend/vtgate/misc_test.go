@@ -972,6 +972,10 @@ func TestQueryProcessedMetric(t *testing.T) {
 		sql:    "select 1 from t1 a, t1 b",
 		metric: "SELECT.Join.PRIMARY",
 		shards: 3,
+	}, {
+		sql:    "select count(*) from t1 a, t1 b",
+		metric: "SELECT.Complex.PRIMARY",
+		shards: 6,
 	}}
 
 	initialQP := getQPMetric(t, "QueryProcessed")
