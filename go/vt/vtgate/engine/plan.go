@@ -25,10 +25,9 @@ import (
 
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vthash"
-
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 // Plan represents the execution strategy for a given query.
@@ -55,6 +54,7 @@ type Plan struct {
 
 type PlanKey struct {
 	CurrentKeyspace string
+	Destination     string
 	Query           string
 	SetVarComment   string
 	Collation       collations.ID
@@ -68,6 +68,7 @@ func (pk PlanKey) Hash() theine.HashKey256 {
 	hasher := vthash.New256()
 	_, _ = hasher.WriteUint16(uint16(pk.Collation))
 	_, _ = hasher.WriteString(pk.CurrentKeyspace)
+	_, _ = hasher.WriteString(pk.Destination)
 	_, _ = hasher.WriteString(pk.SetVarComment)
 	_, _ = hasher.WriteString(pk.Query)
 

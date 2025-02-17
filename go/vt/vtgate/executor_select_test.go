@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -384,7 +386,23 @@ func TestSetSystemVariables(t *testing.T) {
 		// we don't need the set_var since we are in a reserved connection, but since the plan is in the cache, we'll use it
 		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') SET_VAR(sql_safe_updates = '0') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
-	utils.MustMatch(t, wantQueries, lookup.Queries)
+
+	diffOpts := []cmp.Option{
+		cmp.Comparer(func(a, b proto.Message) bool {
+			return proto.Equal(a, b)
+		}),
+		cmp.Exporter(func(reflect.Type) bool {
+			return true
+		}),
+	}
+	diff := cmp.Diff(wantQueries, lookup.Queries, diffOpts...)
+	if diff == "" {
+		return
+	}
+	// try again with rearranged SET_VAR hints
+	wantQueries[2].Sql = "select /*+ SET_VAR(sql_safe_updates = '0') SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`"
+	diff = cmp.Diff(wantQueries, lookup.Queries, diffOpts...)
+	assert.Empty(t, diff)
 }
 
 func TestSetSystemVariablesWithSetVarInvalidSQLMode(t *testing.T) {

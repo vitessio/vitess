@@ -23,15 +23,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
-
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
@@ -49,6 +47,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -58,6 +57,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
@@ -67,7 +67,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
-	"vitess.io/vitess/go/vt/vthash"
 )
 
 var (
@@ -1127,15 +1126,6 @@ func (e *Executor) getPlan(
 	return plan, nil
 }
 
-func (e *Executor) hashPlan(ctx context.Context, vcursor *econtext.VCursorImpl, query string) PlanCacheKey {
-	hasher := vthash.New256()
-	vcursor.KeyForPlan(ctx, query, hasher)
-
-	var planKey PlanCacheKey
-	hasher.Sum(planKey[:0])
-	return planKey
-}
-
 func (e *Executor) getCachedOrBuild(
 	ctx context.Context,
 	vcursor *econtext.VCursorImpl,
@@ -1182,14 +1172,7 @@ func (e *Executor) getCachedOrBuild(
 	planCachable := sqlparser.CachePlan(stmt) && vcursor.CachePlan()
 	if planCachable {
 		// build Plan key
-		pk := engine.PlanKey{
-			CurrentKeyspace: vcursor.GetKeyspace(),
-			Query:           query,
-			SetVarComment:   setVarComment,
-			Collation:       vcursor.ConnCollation(),
-		}
-
-		planKey := pk.Hash()
+		planKey := e.hashPlan(ctx, vcursor, query, setVarComment)
 
 		var plan *engine.Plan
 		var err error
@@ -1199,6 +1182,38 @@ func (e *Executor) getCachedOrBuild(
 		return plan, err
 	}
 	return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh)
+}
+
+func (e *Executor) hashPlan(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) theine.HashKey256 {
+	var allDest []string
+	currDest := vcursor.Destination()
+	if currDest != nil {
+		switch currDest.(type) {
+		case key.DestinationKeyspaceID, key.DestinationKeyspaceIDs:
+			resolved, _, err := vcursor.ResolveDestinations(ctx, vcursor.GetKeyspace(), nil, []key.Destination{currDest})
+			if err == nil && len(resolved) > 0 {
+				shards := make([]string, len(resolved))
+				for i := 0; i < len(shards); i++ {
+					shards[i] = resolved[i].Target.GetShard()
+				}
+				sort.Strings(shards)
+				allDest = shards
+			}
+		default:
+			allDest = []string{currDest.String()}
+		}
+	}
+
+	pk := engine.PlanKey{
+		CurrentKeyspace: vcursor.GetKeyspace(),
+		Destination:     strings.Join(allDest, ","),
+		Query:           query,
+		SetVarComment:   setVarComment,
+		Collation:       vcursor.ConnCollation(),
+	}
+
+	planKey := pk.Hash()
+	return planKey
 }
 
 func (e *Executor) buildStatement(
