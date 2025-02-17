@@ -51,6 +51,7 @@ func (s *connStack[C]) Pop() (*Pooled[C], bool) {
 
 		newHead := oldHead.next.Load()
 		if s.top.CompareAndSwap(oldHead, popCount, newHead, popCount+1) {
+			oldHead.next.Store(nil)
 			return oldHead, true
 		}
 		runtime.Gosched()
