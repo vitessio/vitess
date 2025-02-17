@@ -3512,6 +3512,24 @@ func (cached *PurgeBinaryLogs) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Before)))
 	return size
 }
+func (cached *QueryHints) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Workload string
+	size += hack.RuntimeAllocSize(int64(len(cached.Workload)))
+	// field ForeignKeyChecks *bool
+	size += hack.RuntimeAllocSize(int64(1))
+	// field Priority string
+	size += hack.RuntimeAllocSize(int64(len(cached.Priority)))
+	// field Timeout *int
+	size += hack.RuntimeAllocSize(int64(8))
+	return size
+}
 func (cached *ReferenceDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
