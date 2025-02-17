@@ -219,7 +219,7 @@ func (vc *VCursorImpl) PrepareSetVarComment() string {
 	var res []string
 	vc.Session().GetSystemVariables(func(k, v string) {
 		if sysvars.SupportsSetVar(k) {
-			res = append(res, fmt.Sprintf("SET_VAR(%s = %s) ", k, v))
+			res = append(res, fmt.Sprintf("SET_VAR(%s = %s)", k, v))
 		}
 	})
 
