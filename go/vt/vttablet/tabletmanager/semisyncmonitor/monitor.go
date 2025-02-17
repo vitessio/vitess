@@ -41,6 +41,12 @@ const (
 	clearTimerDuration       = 24 * time.Hour
 )
 
+var (
+	// waitBetweenWrites is the time to wait between consecutive writes.
+	// This is a variable instead of a constant only to be tweaked in tests.
+	waitBetweenWrites = 1 * time.Second
+)
+
 // Monitor is a monitor that checks if the primary tablet
 // is blocked on a semi-sync ack from the replica.
 // If the semi-sync ACK is lost in the network,
@@ -262,7 +268,7 @@ func (m *Monitor) startWrites() {
 		// exponentially backing off. We will not do more than maxWritesPermitted writes and once
 		// all maxWritesPermitted writes are blocked, we'll wait for VTOrc to run an ERS.
 		go m.write()
-		<-time.After(1 * time.Second)
+		<-time.After(waitBetweenWrites)
 	}
 }
 
