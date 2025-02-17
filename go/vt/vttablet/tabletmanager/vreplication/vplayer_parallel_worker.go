@@ -38,7 +38,6 @@ type parallelWorker struct {
 	dbClient          *vdbClient
 	queryFunc         func(ctx context.Context, sql string) (*sqltypes.Result, error)
 	vp                *vplayer
-	lastPos           replication.Position
 	aggregatedPosChan chan replication.Position
 
 	producer *parallelProducer
@@ -133,7 +132,6 @@ func (w *parallelWorker) updatePosByEvent(ctx context.Context, event *binlogdata
 		// end TODO
 		return err
 	}
-	w.lastPos = replication.AppendGTIDSet(w.lastPos, pos.GTIDSet)
 	return nil
 }
 
