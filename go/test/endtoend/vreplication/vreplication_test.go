@@ -546,7 +546,7 @@ func TestMoveTablesIgnoreSourceKeyspace(t *testing.T) {
     }
   },
   "tables": {
-	"customer": {
+    "customer": {
       "column_vindexes": [
         {
           "column": "customer_id",
@@ -651,6 +651,8 @@ func TestMoveTablesIgnoreSourceKeyspace(t *testing.T) {
 		args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, "complete"}
 		run(t, defaultShard, defaultShard, nil, args, true)
 	})
+	// You can't complete a partial MoveTables workflow. Well, only the
+	// last one which moves the last shard(s). So we don't test it here.
 }
 
 func testVStreamCellFlag(t *testing.T) {
