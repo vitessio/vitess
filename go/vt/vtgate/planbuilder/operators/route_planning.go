@@ -289,7 +289,7 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op Operator) (requ
 
 func newJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) JoinOp {
 	lhsID := TableID(lhs)
-	if lhsID.NumberOfTables() > 1 || !joinType.IsInner() {
+	if !ctx.AllowValuesJoin || lhsID.NumberOfTables() > 1 || !joinType.IsInner() {
 		return NewApplyJoin(ctx, lhs, rhs, nil, joinType)
 	}
 	lhsTableInfo, err := ctx.SemTable.TableInfoFor(lhsID)

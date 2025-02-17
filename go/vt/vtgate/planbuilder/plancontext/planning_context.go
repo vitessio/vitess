@@ -51,6 +51,8 @@ type PlanningContext struct {
 
 	PlannerVersion querypb.ExecuteOptions_PlannerVersion
 
+	AllowValuesJoin bool
+
 	// If we during planning have turned this expression into an argument name,
 	// we can continue using the same argument name
 	ReservedArguments map[sqlparser.Expr]string
@@ -133,6 +135,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		ReservedArguments:  map[sqlparser.Expr]string{},
 		ValuesJoinColumns:  make(map[string]sqlparser.Columns),
 		Statement:          stmt,
+		AllowValuesJoin:    sqlparser.AllowValuesJoinDirective(stmt),
 	}, nil
 }
 

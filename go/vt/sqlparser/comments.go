@@ -49,6 +49,8 @@ const (
 	DirectiveAllowHashJoin = "ALLOW_HASH_JOIN"
 	// DirectiveQueryPlanner lets the user specify per query which planner should be used
 	DirectiveQueryPlanner = "PLANNER"
+	// DirectiveAllowValuesJoin allows the planner to use VALUES JOINS when possible.
+	DirectiveAllowValuesJoin = "ALLOW_VALUES_JOIN"
 	// DirectiveVExplainRunDMLQueries tells vexplain queries/all that it is okay to also run the query.
 	DirectiveVExplainRunDMLQueries = "EXECUTE_DML_QUERIES"
 	// DirectiveConsolidator enables the query consolidator.
@@ -552,6 +554,10 @@ func IgnoreMaxMaxMemoryRowsDirective(stmt Statement) bool {
 // AllowScatterDirective returns true if the allow scatter override is set to true
 func AllowScatterDirective(stmt Statement) bool {
 	return checkDirective(stmt, DirectiveAllowScatter)
+}
+
+func AllowValuesJoinDirective(stmt Statement) bool {
+	return checkDirective(stmt, DirectiveAllowValuesJoin)
 }
 
 func checkDirective(stmt Statement, key string) bool {
