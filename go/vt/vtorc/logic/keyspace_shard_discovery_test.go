@@ -326,17 +326,18 @@ func TestRefreshAllShards(t *testing.T) {
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 		DurabilityPolicy: policy.DurabilityNone,
 	}))
+
 	shards := []string{"-80", "80-"}
 	for _, shard := range shards {
 		require.NoError(t, ts.CreateShard(ctx, "ks1", shard))
 	}
-	require.NoError(t, refreshAllShards(context.Background(), "ks1"))
+	require.NoError(t, refreshAllShards(ctx, "ks1"))
 	shardNames, err := inst.ReadShardNames("ks1")
 	require.NoError(t, err)
 	require.Equal(t, []string{"-80", "80-"}, shardNames)
 
 	require.NoError(t, ts.DeleteShard(ctx, "ks1", "80-"))
-	require.NoError(t, refreshAllShards(context.Background(), "ks1"))
+	require.NoError(t, refreshAllShards(ctx, "ks1"))
 	shardNames, err = inst.ReadShardNames("ks1")
 	require.NoError(t, err)
 	require.Equal(t, []string{"-80"}, shardNames)
