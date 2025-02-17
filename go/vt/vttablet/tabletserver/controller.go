@@ -128,6 +128,9 @@ type Controller interface {
 
 	// WaitUntilSemiSyncBeingUnblocked waits until the primary is not blocked on semi-sync.
 	WaitUntilSemiSyncBeingUnblocked(ctx context.Context) error
+
+	// SemiSyncMonitorBlocked returns whether the semi-sync monitor has all its writes blocked.
+	SemiSyncMonitorBlocked() bool
 }
 
 // Ensure TabletServer satisfies Controller interface.

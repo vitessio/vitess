@@ -187,6 +187,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SemiSyncPrimaryClients:      semiSyncClients,
 		SemiSyncPrimaryTimeout:      semiSyncTimeout,
 		SemiSyncWaitForReplicaCount: semiSyncNumReplicas,
+		SemiSyncMonitorBlocked:      tm.QueryServiceControl.SemiSyncMonitorBlocked(),
 		SuperReadOnly:               superReadOnly,
 		ReplicationConfiguration:    replConfiguration,
 	}, nil

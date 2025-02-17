@@ -153,6 +153,9 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			primary_instance.semi_sync_primary_status
 		) AS semi_sync_primary_status,
 		MIN(
+			primary_instance.semi_sync_monitor_blocked
+		) AS semi_sync_monitor_blocked,
+		MIN(
 			primary_instance.semi_sync_replica_enabled
 		) AS semi_sync_replica_enabled,
 		SUM(replica_instance.oracle_gtid) AS count_oracle_gtid_replicas,
@@ -333,6 +336,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.BinlogServerImmediateTopology = countValidBinlogServerReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
 		a.SemiSyncPrimaryStatus = m.GetBool("semi_sync_primary_status")
+		a.SemiSyncMonitorBlocked = m.GetBool("semi_sync_monitor_blocked")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
@@ -505,6 +509,9 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				a.Description = "Semi sync primary seems to be locked, more samplings needed to validate"
 			}
 			//
+		} else if a.IsPrimary && a.SemiSyncMonitorBlocked {
+			a.Analysis = PrimarySemiSyncBlocked
+			a.Description = "Writes seem to be blocked on semi-sync acks on the primary, even though sufficient replicas are configured to send ACKs"
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = PrimarySingleReplicaNotReplicating
 			a.Description = "Primary is reachable but its single replica is not replicating"

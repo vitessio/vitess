@@ -265,7 +265,9 @@ func (m *Monitor) incrementWriteCount() bool {
 // AllWritesBlocked returns if maxWritesPermitted number of writes
 // are already outstanding.
 func (m *Monitor) AllWritesBlocked() bool {
-	return m.inProgressWriteCount == maxWritesPermitted
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.isOpen && m.inProgressWriteCount == maxWritesPermitted
 }
 
 // decrementWriteCount decrements the write count.
