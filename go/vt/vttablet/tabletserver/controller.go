@@ -125,12 +125,6 @@ type Controller interface {
 
 	// IsDiskStalled returns if the disk is stalled.
 	IsDiskStalled() bool
-
-	// WaitUntilSemiSyncBeingUnblocked waits until the primary is not blocked on semi-sync.
-	WaitUntilSemiSyncBeingUnblocked(ctx context.Context) error
-
-	// SemiSyncMonitorBlocked returns whether the semi-sync monitor has all its writes blocked.
-	SemiSyncMonitorBlocked() bool
 }
 
 // Ensure TabletServer satisfies Controller interface.

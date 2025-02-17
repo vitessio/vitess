@@ -187,7 +187,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SemiSyncPrimaryClients:      semiSyncClients,
 		SemiSyncPrimaryTimeout:      semiSyncTimeout,
 		SemiSyncWaitForReplicaCount: semiSyncNumReplicas,
-		SemiSyncMonitorBlocked:      tm.QueryServiceControl.SemiSyncMonitorBlocked(),
+		SemiSyncMonitorBlocked:      tm.SemiSyncMonitor.AllWritesBlocked(),
 		SuperReadOnly:               superReadOnly,
 		ReplicationConfiguration:    replConfiguration,
 	}, nil
@@ -588,7 +588,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 
 	// Now we know no writes are in-flight and no new writes can occur.
 	// We just need to wait for no write being blocked on semi-sync ACKs.
-	err = tm.QueryServiceControl.WaitUntilSemiSyncBeingUnblocked(ctx)
+	err = tm.SemiSyncMonitor.WaitUntilSemiSyncUnblocked(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1052,10 +1052,18 @@ func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.
 	case SemiSyncActionNone:
 		return nil
 	case SemiSyncActionSet:
+		// We want to enable the semi-sync monitor only if the tablet is going to start
+		// expecting semi-sync ACKs.
+		if tabletType == topodatapb.TabletType_PRIMARY {
+			tm.SemiSyncMonitor.Open()
+		} else {
+			tm.SemiSyncMonitor.Close()
+		}
 		// Always enable replica-side since it doesn't hurt to keep it on for a primary.
 		// The primary-side needs to be off for a replica, or else it will get stuck.
 		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, tabletType == topodatapb.TabletType_PRIMARY, true)
 	case SemiSyncActionUnset:
+		tm.SemiSyncMonitor.Close()
 		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, false, false)
 	default:
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)

@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -47,8 +48,8 @@ const (
 // blocking PRS. The monitor looks for this situation and manufactures a write
 // periodically to unblock the primary.
 type Monitor struct {
-	// env is used to get the connection parameters.
-	env tabletenv.Env
+	// config is used to get the connection parameters.
+	config *tabletenv.TabletConfig
 	// ticks is the ticker on which we'll check
 	// if the primary is blocked on semi-sync ACKs or not.
 	ticks *timer.Timer
@@ -77,15 +78,15 @@ type Monitor struct {
 }
 
 // NewMonitor creates a new Monitor.
-func NewMonitor(env tabletenv.Env) *Monitor {
+func NewMonitor(config *tabletenv.TabletConfig, exporter *servenv.Exporter) *Monitor {
 	return &Monitor{
-		env:   env,
-		ticks: timer.NewTimer(env.Config().SemiSyncMonitor.Interval),
+		config: config,
+		ticks:  timer.NewTimer(config.SemiSyncMonitor.Interval),
 		// We clear the data every day. We can make it configurable in the future,
 		// but this seams fine for now.
 		clearTicks:         timer.NewTimer(clearTimerDuration),
-		writesBlockedGauge: env.Exporter().NewGauge("SemiSyncMonitorWritesBlocked", "Number of writes blocked in the semi-sync monitor"),
-		appPool:            dbconnpool.NewConnectionPool("SemiSyncMonitorAppPool", env.Exporter(), 20, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		writesBlockedGauge: exporter.NewGauge("SemiSyncMonitorWritesBlocked", "Number of writes blocked in the semi-sync monitor"),
+		appPool:            dbconnpool.NewConnectionPool("SemiSyncMonitorAppPool", exporter, 20, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 		waiters:            make([]chan any, 0),
 	}
 }
@@ -105,7 +106,7 @@ func (m *Monitor) Open() {
 	// This function could be running from within a unit test scope, in which case we use
 	// mock pools that are already open. This is why we test for the pool being open.
 	if !m.appPool.IsOpen() {
-		m.appPool.Open(m.env.Config().DB.AppWithDB())
+		m.appPool.Open(m.config.DB.AppWithDB())
 	}
 	m.clearTicks.Start(m.clearAllData)
 	m.ticks.Start(m.checkAndFixSemiSyncBlocked)
@@ -179,9 +180,21 @@ func (m *Monitor) isSemiSyncBlocked(ctx context.Context) (bool, error) {
 	return value != 0, err
 }
 
+// isClosed returns if the monitor is currently closed or not.
+func (m *Monitor) isClosed() bool {
+	m.mu.Lock()
+	defer m.mu.Lock()
+	return !m.isOpen
+}
+
 // WaitUntilSemiSyncUnblocked waits until the primary is not blocked
 // on semi-sync or until the context expires.
 func (m *Monitor) WaitUntilSemiSyncUnblocked(ctx context.Context) error {
+	// SemiSyncMonitor is closed, which means semi-sync is not enabled.
+	// We don't have anything to wait for.
+	if m.isClosed() {
+		return nil
+	}
 	// run one iteration of checking if semi-sync is blocked or not.
 	m.checkAndFixSemiSyncBlocked()
 	if !m.stillBlocked() {

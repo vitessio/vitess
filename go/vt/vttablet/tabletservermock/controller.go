@@ -285,18 +285,6 @@ func (tqsc *Controller) IsDiskStalled() bool {
 	return false
 }
 
-// WaitUntilSemiSyncBeingUnblocked is part of the tabletserver.Controller interface
-func (tqsc *Controller) WaitUntilSemiSyncBeingUnblocked(context.Context) error {
-	tqsc.MethodCalled["WaitUntilSemiSyncBeingUnblocked"] = true
-	return nil
-}
-
-// SemiSyncMonitorBlocked is part of the tabletserver.Controller interface
-func (tqsc *Controller) SemiSyncMonitorBlocked() bool {
-	tqsc.MethodCalled["SemiSyncMonitorBlocked"] = true
-	return false
-}
-
 // EnterLameduck implements tabletserver.Controller.
 func (tqsc *Controller) EnterLameduck() {
 	tqsc.mu.Lock()

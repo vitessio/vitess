@@ -66,7 +66,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/repltracker"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -105,22 +104,21 @@ type TabletServer struct {
 	topoServer             *topo.Server
 
 	// These are sub-components of TabletServer.
-	statelessql     *QueryList
-	statefulql      *QueryList
-	olapql          *QueryList
-	se              *schema.Engine
-	rt              *repltracker.ReplTracker
-	vstreamer       *vstreamer.Engine
-	tracker         *schema.Tracker
-	watcher         *BinlogWatcher
-	semiSyncMonitor *semisyncmonitor.Monitor
-	qe              *QueryEngine
-	txThrottler     txthrottler.TxThrottler
-	te              *TxEngine
-	messager        *messager.Engine
-	hs              *healthStreamer
-	lagThrottler    *throttle.Throttler
-	tableGC         *gc.TableGC
+	statelessql  *QueryList
+	statefulql   *QueryList
+	olapql       *QueryList
+	se           *schema.Engine
+	rt           *repltracker.ReplTracker
+	vstreamer    *vstreamer.Engine
+	tracker      *schema.Tracker
+	watcher      *BinlogWatcher
+	qe           *QueryEngine
+	txThrottler  txthrottler.TxThrottler
+	te           *TxEngine
+	messager     *messager.Engine
+	hs           *healthStreamer
+	lagThrottler *throttle.Throttler
+	tableGC      *gc.TableGC
 
 	// sm manages state transitions.
 	sm                *stateManager
@@ -183,7 +181,6 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
-	tsv.semiSyncMonitor = semisyncmonitor.NewMonitor(tsv)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv, topoServer)
 	tsv.te = NewTxEngine(tsv, tsv.hs.sendUnresolvedTransactionSignal)
@@ -202,7 +199,6 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 		vstreamer:         tsv.vstreamer,
 		tracker:           tsv.tracker,
 		watcher:           tsv.watcher,
-		semiSyncMonitor:   tsv.semiSyncMonitor,
 		qe:                tsv.qe,
 		txThrottler:       tsv.txThrottler,
 		te:                tsv.te,
@@ -776,16 +772,6 @@ func (tsv *TabletServer) SetDemotePrimaryStalled() {
 // IsDiskStalled returns if the disk is stalled or not.
 func (tsv *TabletServer) IsDiskStalled() bool {
 	return tsv.sm.diskHealthMonitor.IsDiskStalled()
-}
-
-// WaitUntilSemiSyncBeingUnblocked waits until semi-sync is unblocked or if context has expired.
-func (tsv *TabletServer) WaitUntilSemiSyncBeingUnblocked(ctx context.Context) error {
-	return tsv.semiSyncMonitor.WaitUntilSemiSyncUnblocked(ctx)
-}
-
-// SemiSyncMonitorBlocked returns whether the semi-sync monitor has all its writes blocked.
-func (tsv *TabletServer) SemiSyncMonitorBlocked() bool {
-	return tsv.semiSyncMonitor.AllWritesBlocked()
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
