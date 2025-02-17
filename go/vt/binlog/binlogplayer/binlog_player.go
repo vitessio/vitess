@@ -765,7 +765,26 @@ func ReadVReplicationPos(index int32) string {
 // ReadVReplicationWorkersGTIDs returns a statement to query the gtid for a
 // given stream from the _vt.vreplication_worker_pos table.
 func ReadVReplicationWorkersGTIDs(index int32) string {
-	return fmt.Sprintf("select gtid, transaction_timestamp from _vt.vreplication_worker_pos where id=%v", index)
+	return fmt.Sprintf("select worker, gtid, transaction_timestamp from _vt.vreplication_worker_pos where id=%v", index)
+}
+
+// ReadVReplicationWorkersGTIDs returns a statement to query the gtid for a
+// given stream from the _vt.vreplication_worker_pos table.
+func ReadVReplicationCombinedWorkersGTIDs(index int32) string {
+	return fmt.Sprintf(`
+		select
+				max(@g) as gtid,
+				max(transaction_timestamp) as transaction_timestamp
+		from (
+			select
+					@g:=gtid_subtract(concat(@g,',',gtid),'') as running,
+					transaction_timestamp
+				from
+					_vt.vreplication_worker_pos,
+					(select @g:='') as sel_init
+				where
+					id=%v
+		) sel_inner`, index)
 }
 
 // ReadVReplicationStatus returns a statement to query the status fields for a
