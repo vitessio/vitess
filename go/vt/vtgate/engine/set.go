@@ -352,11 +352,16 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	var buf strings.Builder
 	value.EncodeSQL(&buf)
 	s := buf.String()
+	if s == `''` {
+		// SET_VAR(sql_mode, '') is not accepted by MySQL, giving a warning:
+		// | Warning | 1064 | Optimizer hint syntax error near ''') */
+		s = `' '`
+	}
 	vcursor.Session().SetSysVar(svs.Name, s)
 
 	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
 	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
-	if !svs.SupportSetVar || s == "''" || !vcursor.CanUseSetVar() {
+	if !svs.SupportSetVar || !vcursor.CanUseSetVar() {
 		vcursor.Session().NeedsReservedConn()
 		return true, nil
 	}

@@ -29,6 +29,8 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/vt/sysvars"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -211,6 +213,17 @@ func NewVCursorImpl(
 
 		observer: observer,
 	}, nil
+}
+
+func (vc *VCursorImpl) PrepareSetVarComment() string {
+	var res []string
+	vc.Session().GetSystemVariables(func(k, v string) {
+		if sysvars.SupportsSetVar(k) {
+			res = append(res, fmt.Sprintf("SET_VAR(%s = %s) ", k, v))
+		}
+	})
+
+	return strings.Join(res, " ")
 }
 
 func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
