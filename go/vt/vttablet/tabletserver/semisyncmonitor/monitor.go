@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -71,6 +72,8 @@ type Monitor struct {
 	isBlocked bool
 	// waiters stores the list of waiters that are waiting for the primary to be unblocked.
 	waiters []chan any
+	// writesBlockedGauge is a gauge tracking the number of writes the monitor is blocked on.
+	writesBlockedGauge *stats.Gauge
 }
 
 // NewMonitor creates a new Monitor.
@@ -80,10 +83,10 @@ func NewMonitor(env tabletenv.Env) *Monitor {
 		ticks: timer.NewTimer(env.Config().SemiSyncMonitor.Interval),
 		// We clear the data every day. We can make it configurable in the future,
 		// but this seams fine for now.
-		clearTicks: timer.NewTimer(clearTimerDuration),
-		// TODO: Add a metric on the number of writes that are blocked.
-		appPool: dbconnpool.NewConnectionPool("SemiSyncMonitorAppPool", env.Exporter(), 20, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
-		waiters: make([]chan any, 0),
+		clearTicks:         timer.NewTimer(clearTimerDuration),
+		writesBlockedGauge: env.Exporter().NewGauge("SemiSyncMonitorWritesBlocked", "Number of writes blocked in the semi-sync monitor"),
+		appPool:            dbconnpool.NewConnectionPool("SemiSyncMonitorAppPool", env.Exporter(), 20, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		waiters:            make([]chan any, 0),
 	}
 }
 
@@ -261,6 +264,7 @@ func (m *Monitor) incrementWriteCount() bool {
 		return false
 	}
 	m.inProgressWriteCount = m.inProgressWriteCount + 1
+	m.writesBlockedGauge.Set(int64(m.inProgressWriteCount))
 	return true
 }
 
@@ -277,6 +281,7 @@ func (m *Monitor) decrementWriteCount() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.inProgressWriteCount = m.inProgressWriteCount - 1
+	m.writesBlockedGauge.Set(int64(m.inProgressWriteCount))
 }
 
 // write writes a heartbeat to unblock semi-sync being stuck.
