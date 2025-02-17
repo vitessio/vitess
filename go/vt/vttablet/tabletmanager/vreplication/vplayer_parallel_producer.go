@@ -49,6 +49,7 @@ type parallelProducer struct {
 	completedSequenceNumbers  chan map[int64]bool
 	commitWorkerEventSequence atomic.Int64
 	assignSequence            int64
+	lastSequence              int64
 
 	newDBClient func() (*vdbClient, error)
 
@@ -191,26 +192,45 @@ func (p *parallelProducer) updateTimeThrottled(appThrottled throttlerapp.Name, r
 }
 
 func (p *parallelProducer) aggregateWorkersPos(ctx context.Context, dbClient *vdbClient, onlyFirstContiguous bool) (aggregatedWorkersPos replication.Position, combinedPos replication.Position, err error) {
-	// TODO(shlomi): this query can be computed once in the lifetime of the producer
-	query := binlogplayer.ReadVReplicationWorkersGTIDs(p.vp.vr.id)
+	query := binlogplayer.ReadVReplicationCombinedWorkersGTIDs(p.vp.vr.id)
 	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		log.Errorf("Error fetching vreplication worker positions: %v. isclosed? %v", err, dbClient.IsClosed())
 		return aggregatedWorkersPos, combinedPos, err
 	}
 	var lastEventTimestamp int64
-	for _, row := range qr.Rows {
-		current, err := binlogplayer.DecodeMySQL56Position(row[0].ToString())
+	for _, row := range qr.Rows { // there's just one row
+		aggregatedWorkersPos, err = binlogplayer.DecodeMySQL56Position(row[0].ToString())
 		if err != nil {
 			return aggregatedWorkersPos, combinedPos, err
 		}
-		eventTimestamp, err := row[1].ToInt64()
+		lastEventTimestamp, err = row[1].ToInt64()
 		if err != nil {
 			return aggregatedWorkersPos, combinedPos, err
 		}
-		lastEventTimestamp = max(lastEventTimestamp, eventTimestamp)
-		aggregatedWorkersPos = replication.AppendGTIDSet(aggregatedWorkersPos, current.GTIDSet)
 	}
+	//
+	// // TODO(shlomi): this query can be computed once in the lifetime of the producer
+	// query := binlogplayer.ReadVReplicationWorkersGTIDs(p.vp.vr.id)
+	// qr, err := dbClient.ExecuteFetch(query, -1)
+	// if err != nil {
+	// 	log.Errorf("Error fetching vreplication worker positions: %v. isclosed? %v", err, dbClient.IsClosed())
+	// 	return aggregatedWorkersPos, combinedPos, err
+	// }
+	// var lastEventTimestamp int64
+	// for _, row := range qr.Rows {
+	// 	log.Errorf("========= QQQ INSERT INTO _vt.vreplication_worker_pos (id, worker, gtid, transaction_timestamp) VALUES (%v, %v, '%v', %v);", p.vp.vr.id, row[0].ToString(), row[1].ToString(), row[2].ToString())
+	// 	current, err := binlogplayer.DecodeMySQL56Position(row[1].ToString())
+	// 	if err != nil {
+	// 		return aggregatedWorkersPos, combinedPos, err
+	// 	}
+	// 	eventTimestamp, err := row[2].ToInt64()
+	// 	if err != nil {
+	// 		return aggregatedWorkersPos, combinedPos, err
+	// 	}
+	// 	lastEventTimestamp = max(lastEventTimestamp, eventTimestamp)
+	// 	aggregatedWorkersPos = replication.AppendGTIDSet(aggregatedWorkersPos, current.GTIDSet)
+	// }
 	if onlyFirstContiguous && aggregatedWorkersPos.GTIDSet != nil {
 		mysql56gtid := aggregatedWorkersPos.GTIDSet.(replication.Mysql56GTIDSet)
 		for sid := range mysql56gtid {
@@ -312,6 +332,10 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 				binlogdatapb.VEventType_GTID:
 				// We can parallelize these events.
 				canApplyInParallel = true
+			}
+			if event.SequenceNumber < p.lastSequence {
+				// Rotated into a new binary log
+				canApplyInParallel = false
 			}
 			if !canApplyInParallel {
 				// As an example, thus could be a DDL.
