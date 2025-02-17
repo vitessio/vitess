@@ -148,6 +148,10 @@ func (gtidSet MariadbGTIDSet) Flavor() string {
 	return MariadbFlavorID
 }
 
+func (gtidSet MariadbGTIDSet) Empty() bool {
+	return len(gtidSet) == 0
+}
+
 // ContainsGTID implements GTIDSet.ContainsGTID().
 func (gtidSet MariadbGTIDSet) ContainsGTID(other GTID) bool {
 	if other == nil {
@@ -235,6 +239,13 @@ func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
 		newSet.addGTID(otherGTID)
 	}
 	return newSet
+}
+
+// Union implements GTIDSet.Union().
+func (gtid MariadbGTIDSet) InPlaceUnion(other GTIDSet) GTIDSet {
+	gtid = gtid.Union(other).(MariadbGTIDSet)
+
+	return gtid
 }
 
 // Last returns the last gtid

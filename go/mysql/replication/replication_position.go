@@ -94,7 +94,7 @@ func (rp Position) String() string {
 
 // IsZero returns true if this is the zero value, Position{}.
 func (rp Position) IsZero() bool {
-	return rp.GTIDSet == nil
+	return rp.GTIDSet == nil || rp.GTIDSet.Empty()
 }
 
 // AppendGTID returns a new Position that represents the position
@@ -115,7 +115,14 @@ func AppendGTIDSet(rp Position, gtidSet GTIDSet) Position {
 	if gtidSet == nil {
 		return rp
 	}
-	return Position{GTIDSet: gtidSet.Union(rp.GTIDSet)}
+
+	if rp.GTIDSet == nil {
+		rp.GTIDSet = gtidSet
+		return rp
+	}
+	rp.GTIDSet.InPlaceUnion(gtidSet)
+
+	return rp
 }
 
 // MustParsePosition calls ParsePosition and panics
