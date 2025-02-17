@@ -19,7 +19,6 @@ package semisyncmonitor
 import (
 	"context"
 	"errors"
-	"math"
 	"sync"
 	"time"
 
@@ -36,6 +35,8 @@ const (
 	semiSyncWaitSessionsRead = "SHOW STATUS LIKE 'Rpl_semi_sync_%_wait_sessions'"
 	semiSyncRecoverWrite     = "INSERT INTO %s.semisync_recover (ts) VALUES (NOW())"
 	semiSyncRecoverClear     = "TRUNCATE TABLE %s.semisync_recover"
+	maxWritesPermitted       = 15
+	clearTimerDuration       = 24 * time.Hour
 )
 
 // Monitor is a monitor that checks if the primary tablet
@@ -62,6 +63,10 @@ type Monitor struct {
 	// We don't want two different threads initiating writes, so we use this
 	// for synchronization.
 	isWriting bool
+	// inProgressWriteCount is the number of writes currently in progress.
+	// The writes from the monitor themselves might get blocked and hence a count for them is required.
+	// After enough writes are blocked, we want to notify VTOrc to run an ERS.
+	inProgressWriteCount int
 	// isBlocked stores if the primary is blocked on semi-sync ack.
 	isBlocked bool
 	// waiters stores the list of waiters that are waiting for the primary to be unblocked.
@@ -77,7 +82,7 @@ func NewMonitor(env tabletenv.Env) *Monitor {
 		ticks: timer.NewTimer(watchInterval),
 		// We clear the data every day. We can make it configurable in the future,
 		// but this seams fine for now.
-		clearTicks: timer.NewTimer(24 * time.Hour),
+		clearTicks: timer.NewTimer(clearTimerDuration),
 		// TODO: Add a metric on the number of writes that are blocked.
 		appPool: dbconnpool.NewConnectionPool("SemiSyncMonitorAppPool", env.Exporter(), 20, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 		waiters: make([]chan any, 0),
@@ -231,24 +236,52 @@ func (m *Monitor) startWrites() {
 	// We defer the clear of the isWriting field.
 	defer m.clearIsWriting()
 
-	// We start writing to the DB with a backoff.
-	backoff := 1 * time.Second
-	maxBackoff := 1 * time.Minute
 	// Check if we need to continue writing or not.
 	for m.stillBlocked() {
 		// We do the writes in a go-routine because if the network disruption
 		// is somewhat long-lived, then the writes themselves can also block.
 		// By doing them in a go-routine we give the system more time to recover while
-		// exponentially backing off. We will eventually run out of the connections in the pool
-		// at which point, there would be nothing that we can do.
+		// exponentially backing off. We will not do more than maxWritesPermitted writes and once
+		// all maxWritesPermitted writes are blocked, we'll wait for VTOrc to run an ERS.
 		go m.write()
-		<-time.After(backoff)
-		backoff = time.Duration(math.Min(float64(backoff*2), float64(maxBackoff)))
+		<-time.After(1 * time.Second)
 	}
+}
+
+// incrementWriteCount tries to increment the write count. It
+// also checks that the write count value should not exceed
+// the maximum value configured. It returns whether it was able
+// to increment the value or not.
+func (m *Monitor) incrementWriteCount() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.inProgressWriteCount == maxWritesPermitted {
+		return false
+	}
+	m.inProgressWriteCount = m.inProgressWriteCount + 1
+	return true
+}
+
+// AllWritesBlocked returns if maxWritesPermitted number of writes
+// are already outstanding.
+func (m *Monitor) AllWritesBlocked() bool {
+	return m.inProgressWriteCount == maxWritesPermitted
+}
+
+// decrementWriteCount decrements the write count.
+func (m *Monitor) decrementWriteCount() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.inProgressWriteCount = m.inProgressWriteCount - 1
 }
 
 // write writes a heartbeat to unblock semi-sync being stuck.
 func (m *Monitor) write() {
+	shouldWrite := m.incrementWriteCount()
+	if !shouldWrite {
+		return
+	}
+	defer m.decrementWriteCount()
 	// Get a connection from the pool
 	conn, err := m.appPool.Get(context.Background())
 	if err != nil {
