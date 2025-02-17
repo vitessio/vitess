@@ -773,15 +773,15 @@ func ReadVReplicationWorkersGTIDs(index int32) string {
 func ReadVReplicationCombinedWorkersGTIDs(index int32) string {
 	return fmt.Sprintf(`
 		select
-				max(@g) as gtid,
+				max(@aggregated_gtid) as gtid,
 				max(transaction_timestamp) as transaction_timestamp
 		from (
 			select
-					@g:=gtid_subtract(concat(@g,',',gtid),'') as running,
+					@aggregated_gtid:=gtid_subtract(concat(@aggregated_gtid,',',gtid),'') as running_total,
 					transaction_timestamp
 				from
 					_vt.vreplication_worker_pos,
-					(select @g:='') as sel_init
+					(select @aggregated_gtid:='') as sel_init
 				where
 					id=%v
 		) sel_inner`, index)
