@@ -183,7 +183,7 @@ func (m *Monitor) isSemiSyncBlocked(ctx context.Context) (bool, error) {
 // isClosed returns if the monitor is currently closed or not.
 func (m *Monitor) isClosed() bool {
 	m.mu.Lock()
-	defer m.mu.Lock()
+	defer m.mu.Unlock()
 	return !m.isOpen
 }
 
