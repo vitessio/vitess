@@ -37,17 +37,17 @@ type parallelWorker struct {
 	index             int
 	dbClient          *vdbClient
 	queryFunc         func(ctx context.Context, sql string) (*sqltypes.Result, error)
+	commitFunc        func() error
 	vp                *vplayer
 	aggregatedPosChan chan replication.Position
 
 	producer *parallelProducer
 
-	events          chan *binlogdatapb.VEvent
-	stats           *VrLogStats
-	sequenceNumbers map[int64]bool
-
+	events              chan *binlogdatapb.VEvent
+	stats               *VrLogStats
+	sequenceNumbers     []int64
 	commitSubscribers   map[int64]chan error // subscribing to commit events
-	commitSubscribersMu sync.Mutex
+	commitSubscribersMu sync.RWMutex
 
 	// foreignKeyChecksEnabled is the current state of the foreign key checks for the current session.
 	// It reflects what we have set the @@session.foreign_key_checks session variable to.
@@ -57,7 +57,8 @@ type parallelWorker struct {
 	foreignKeyChecksStateInitialized bool
 
 	// TODO(shlomi): remove this
-	numCommits int
+	numCommits    int
+	numSubscribes int
 }
 
 func newParallelWorker(index int, producer *parallelProducer, capacity int) *parallelWorker {
@@ -67,7 +68,7 @@ func newParallelWorker(index int, producer *parallelProducer, capacity int) *par
 		producer:          producer,
 		events:            make(chan *binlogdatapb.VEvent, capacity),
 		aggregatedPosChan: make(chan replication.Position),
-		sequenceNumbers:   make(map[int64]bool, maxWorkerEvents),
+		sequenceNumbers:   make([]int64, maxWorkerEvents),
 		commitSubscribers: make(map[int64]chan error),
 		vp:                producer.vp,
 	}
@@ -77,6 +78,7 @@ func (w *parallelWorker) subscribeCommitWorkerEvent(sequenceNumber int64) chan e
 	w.commitSubscribersMu.Lock()
 	defer w.commitSubscribersMu.Unlock()
 
+	w.numSubscribes++
 	c := make(chan error, 1)
 	w.commitSubscribers[sequenceNumber] = c
 	return c
@@ -135,14 +137,6 @@ func (w *parallelWorker) updatePosByEvent(ctx context.Context, event *binlogdata
 	return nil
 }
 
-func (w *parallelWorker) commit() error {
-	if w.vp.batchMode {
-		return w.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
-	} else {
-		return w.dbClient.Commit()
-	}
-}
-
 func (w *parallelWorker) commitEvents() chan error {
 	event := w.producer.commitWorkerEvent()
 	log.Errorf("========== QQQ commitEvents: %v", event)
@@ -160,11 +154,12 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 	}()
 
 	defer func() {
+		// Anything that's not committed should be rolled back
 		w.dbClient.Rollback()
 	}()
 
 	defer func() {
-		log.Errorf("========== QQQ applyQueuedEvents worker %v num commits=%v", w.index, w.numCommits)
+		log.Errorf("========== QQQ applyQueuedEvents worker %v num commits=%v, numSubscribes=%v", w.index, w.numCommits, w.numSubscribes)
 	}()
 
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -188,7 +183,7 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 			// log.Errorf("========== QQQ applyQueuedEvents, event=%v", event)
 			if event.SequenceNumber >= 0 {
 				// Negative values are happen in commitWorkerEvent(). These are not real events.
-				w.sequenceNumbers[event.SequenceNumber] = true
+				w.sequenceNumbers = append(w.sequenceNumbers, event.SequenceNumber)
 			}
 			skipApplyEvent := func() bool {
 				if event.Type != binlogdatapb.VEventType_COMMIT {
@@ -331,7 +326,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			if err := w.setVRState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
 				return err
 			}
-			if err := w.dbClient.Commit(); err != nil {
+			if err := w.commitFunc(); err != nil {
 				return err
 			}
 			return io.EOF
@@ -576,7 +571,7 @@ func (w *parallelWorker) applyQueuedCommit(event *binlogdatapb.VEvent) error {
 	var err error
 	if shouldActuallyCommit {
 		// log.Errorf("========== QQQ applyQueuedCommit actual commit worker %v", w.index)
-		err = w.commit()
+		err = w.commitFunc()
 		// log.Errorf("========== QQQ applyQueuedCommit actual commit worker %v DONE", w.index)
 	}
 	// log.Errorf("========== QQQ applyQueuedEvents, event is commit or commitWorkerEvent(), seq=%v", event.SequenceNumber)
@@ -607,12 +602,16 @@ func (w *parallelWorker) applyQueuedCommit(event *binlogdatapb.VEvent) error {
 	// `select` statement as `case sequenceNumbers := <-p.completedSequenceNumbers`. So we need to run this in a goroutine.
 	// Which is fine, because while it is very nice to have, it's not mandatory that the producer updates the sequence
 	// numbers asap.
-	sequenceNumbers := w.sequenceNumbers
-	go func() {
-		w.producer.completedSequenceNumbers <- sequenceNumbers
-	}()
-	// log.Errorf("========== QQQ applyQueuedEvents pushed seqs")
-	w.sequenceNumbers = make(map[int64]bool, maxWorkerEvents)
+	for _, sequenceNumber := range w.sequenceNumbers {
+		w.producer.completedSequenceNumbers <- sequenceNumber
+	}
+	w.sequenceNumbers = w.sequenceNumbers[:0]
+	// sequenceNumbers := w.sequenceNumbers
+	// go func() {
+	// 	w.producer.completedSequenceNumbers <- sequenceNumbers
+	// }()
+	// // log.Errorf("========== QQQ applyQueuedEvents pushed seqs")
+	// w.sequenceNumbers = make(map[int64]bool, maxWorkerEvents)
 	if w.producer.posReached.Load() {
 		return io.EOF
 	}

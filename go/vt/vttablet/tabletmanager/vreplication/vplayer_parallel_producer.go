@@ -35,7 +35,7 @@ import (
 
 const (
 	countWorkers    = 6
-	maxWorkerEvents = 1000
+	maxWorkerEvents = 100
 )
 
 type parallelProducer struct {
@@ -46,10 +46,9 @@ type parallelProducer struct {
 	posReached                atomic.Bool
 	workerErrors              chan error
 	sequenceToWorkersMap      map[int64]int // sequence number => worker index
-	completedSequenceNumbers  chan map[int64]bool
+	completedSequenceNumbers  chan int64
 	commitWorkerEventSequence atomic.Int64
 	assignSequence            int64
-	lastSequence              int64
 
 	newDBClient func() (*vdbClient, error)
 
@@ -64,7 +63,7 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 		workers:                  make([]*parallelWorker, countWorkers),
 		workerErrors:             make(chan error, countWorkers),
 		sequenceToWorkersMap:     make(map[int64]int),
-		completedSequenceNumbers: make(chan map[int64]bool, countWorkers),
+		completedSequenceNumbers: make(chan int64, 2*maxWorkerEvents*countWorkers),
 	}
 
 	p.newDBClient = func() (*vdbClient, error) {
@@ -91,6 +90,9 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 				return w.dbClient.Execute(sql)
 			}
 			return nil, w.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
+		}
+		w.commitFunc = func() error {
+			return w.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
 		}
 		// INSERT a row into _vt.vreplication_worker_pos with an empty position
 		if _, err := w.dbClient.ExecuteFetch(binlogplayer.GenerateInitWorkerPos(vp.vr.id, w.index), -1); err != nil {
@@ -123,7 +125,7 @@ func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastC
 		return workerIndex
 	}
 	// workerIndex = int((p.assignSequence / 10) % countWorkers)
-	workerIndex = int(p.assignSequence % countWorkers)
+	workerIndex = int(p.assignSequence) % len(p.workers)
 	// log.Errorf("========== QQQ assignTransactionToWorker free trx p.sequence=%v, sequenceNumber=%v, lastCommitted=%v, workerIndex=%v", p.assignSequence, sequenceNumber, lastCommitted, workerIndex)
 	p.assignSequence++
 	p.sequenceToWorkersMap[sequenceNumber] = workerIndex
@@ -245,9 +247,6 @@ func (p *parallelProducer) aggregateWorkersPos(ctx context.Context, dbClient *vd
 	if _, err := p.updatePos(ctx, combinedPos, lastEventTimestamp, dbClient); err != nil {
 		return aggregatedWorkersPos, combinedPos, err
 	}
-	if err := p.vp.commit(); err != nil {
-		return aggregatedWorkersPos, combinedPos, err
-	}
 	return aggregatedWorkersPos, combinedPos, nil
 }
 
@@ -257,9 +256,7 @@ func (p *parallelProducer) watchPos(ctx context.Context) error {
 		return err
 	}
 	defer dbClient.Close()
-	// if p.vp.stopPos.IsZero() {
-	// 	return nil
-	// }
+
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -292,7 +289,7 @@ func (p *parallelProducer) watchPos(ctx context.Context) error {
 				log.Errorf("========== QQQ watchPos no progress!! committed all")
 			} else {
 				// progress has been made
-				lastCombinedPos = combinedPos
+				lastCombinedPos.GTIDSet = combinedPos.GTIDSet
 			}
 			if !p.vp.stopPos.IsZero() && combinedPos.AtLeast(p.vp.stopPos) {
 				if err := p.commitAll(ctx, nil); err != nil {
@@ -314,11 +311,9 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case sequenceNumbers := <-p.completedSequenceNumbers:
+		case sequenceNumber := <-p.completedSequenceNumbers:
 			// log.Errorf("========== QQQ process completedSequenceNumbers=%v", sequenceNumbers)
-			for sequenceNumber := range sequenceNumbers {
-				delete(p.sequenceToWorkersMap, sequenceNumber)
-			}
+			delete(p.sequenceToWorkersMap, sequenceNumber)
 		// case t := <-ticker.C:
 		// 	lastGoodTime = t
 		case event := <-events:
@@ -332,9 +327,12 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 				binlogdatapb.VEventType_GTID:
 				// We can parallelize these events.
 				canApplyInParallel = true
-			}
-			if event.SequenceNumber < p.lastSequence {
-				// Rotated into a new binary log
+			case binlogdatapb.VEventType_PREVIOUS_GTIDS:
+				// This `case` is not required, but let's make this very explicit:
+				// The transaction dependency graph is scoped to per-binary log.
+				// When rotating into a new binary log, we must wait until all
+				// existing workers have completed, as there is no information
+				// about dependencies cross binlogs.
 				canApplyInParallel = false
 			}
 			if !canApplyInParallel {
@@ -425,13 +423,15 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 		for i, events := range items {
 			for j, event := range events {
 				// event's GTID is singular, but we parse it as a GTIDSet
-				_, eventGTID, err := replication.DecodePositionMySQL56(event.Gtid)
-				if err != nil {
-					return err
-				}
-				if !p.vp.stopPos.IsZero() && !p.vp.stopPos.GTIDSet.Contains(eventGTID) {
-					// This event goes beyond the stop position. We skip it.
-					continue
+				if !p.vp.stopPos.IsZero() {
+					_, eventGTID, err := replication.DecodePositionMySQL56(event.Gtid)
+					if err != nil {
+						return err
+					}
+					if !p.vp.stopPos.GTIDSet.Contains(eventGTID) {
+						// This event goes beyond the stop position. We skip it.
+						continue
+					}
 				}
 				if event.Timestamp != 0 {
 					// If the event is a heartbeat sent while throttled then do not update
