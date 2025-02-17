@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -118,20 +117,6 @@ func (w *parallelWorker) updatePosByEvent(ctx context.Context, event *binlogdata
 		return err
 	}
 	if _, err := w.updatePos(ctx, pos, event.Timestamp); err != nil {
-		debug.PrintStack() // TODO(shlomi) remove
-		// TODO(remove) this is just debug info
-		{
-			query := binlogplayer.ReadVReplicationWorkersGTIDs(w.vp.vr.id)
-			qr, err := w.dbClient.ExecuteFetch(query, -1)
-			if err != nil {
-				log.Errorf("Error fetching vreplication worker positions: %v", err)
-			} else {
-				for _, row := range qr.Rows {
-					log.Errorf("====== QQQ updatePos gtid= %v", row[0].ToString())
-				}
-			}
-		}
-		// end TODO
 		return err
 	}
 	return nil
@@ -175,7 +160,6 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 		case pos := <-w.aggregatedPosChan:
 			// log.Errorf("========== QQQ applyQueuedEvents worker %v got aggregated pos %v", w.index, pos)
 			if _, err := w.updatePos(ctx, pos, 0); err != nil {
-				// debug.PrintStack() // TODO(shlomi) remove
 				return err
 			}
 			// log.Errorf("========== QQQ applyQueuedEvents worker %v updated aggregated pos", w.index)
