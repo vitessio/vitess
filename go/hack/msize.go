@@ -165,7 +165,7 @@ func RuntimeMapSize[K comparable, V any](themap map[K]V) (internalSize int64) {
 		for i := range m.dirLen {
 			t := directoryAt(m, uintptr(i))
 			if t == lastTab {
-				// continue
+				continue
 			}
 			lastTab = t
 
