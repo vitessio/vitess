@@ -195,7 +195,7 @@ func TestAndExpressions(t *testing.T) {
 	}
 	testcases := []struct {
 		name           string
-		expressions    Exprs
+		expressions    []Expr
 		expectedOutput Expr
 	}{
 		{
@@ -204,7 +204,7 @@ func TestAndExpressions(t *testing.T) {
 			expectedOutput: nil,
 		}, {
 			name: "two equal inputs",
-			expressions: Exprs{
+			expressions: []Expr{
 				greaterThanExpr,
 				equalExpr,
 				equalExpr,
@@ -216,7 +216,7 @@ func TestAndExpressions(t *testing.T) {
 		},
 		{
 			name: "two equal inputs",
-			expressions: Exprs{
+			expressions: []Expr{
 				equalExpr,
 				equalExpr,
 			},

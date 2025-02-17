@@ -176,7 +176,7 @@ func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 }
 
 func (qp *QueryProjection) addSelectExpressions(ctx *plancontext.PlanningContext, sel *sqlparser.Select) {
-	for _, selExp := range sel.SelectExprs {
+	for _, selExp := range sel.GetColumns() {
 		switch selExp := selExp.(type) {
 		case *sqlparser.AliasedExpr:
 			col := SelectExpr{

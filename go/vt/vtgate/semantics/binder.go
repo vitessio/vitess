@@ -365,7 +365,7 @@ func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scop
 // searchInSelectExpressions searches for the ColName among the SELECT and GROUP BY expressions
 // It used dependency information to match the columns
 func (b *binder) searchInSelectExpressions(colName *sqlparser.ColName, deps dependency, stmt *sqlparser.Select) dependency {
-	for _, selectExpr := range stmt.SelectExprs {
+	for _, selectExpr := range stmt.GetColumns() {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
 			continue

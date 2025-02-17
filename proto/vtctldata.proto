@@ -181,8 +181,8 @@ message SchemaMigration {
     // SchemaMigration_VITESS was also formerly called "ONLINE".
     VITESS = 0;
     ONLINE = 0;
-    GHOST = 1;
-    PTOSC = 2;
+    reserved 1; // Was GHOST
+    reserved 2; // Was PTOSC
     // SchemaMigration_DIRECT runs the migration directly against MySQL (e.g. `ALTER TABLE ...`),
     // meaning it is not actually an "online" DDL migration.
     DIRECT = 3;

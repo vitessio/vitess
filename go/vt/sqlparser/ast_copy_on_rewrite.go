@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -160,8 +160,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfExplainStmt(n, parent)
 	case *ExplainTab:
 		return c.copyOnRewriteRefOfExplainTab(n, parent)
-	case Exprs:
-		return c.copyOnRewriteExprs(n, parent)
+	case *Exprs:
+		return c.copyOnRewriteRefOfExprs(n, parent)
 	case *ExtractFuncExpr:
 		return c.copyOnRewriteRefOfExtractFuncExpr(n, parent)
 	case *ExtractValueExpr:
@@ -434,8 +434,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfSavepoint(n, parent)
 	case *Select:
 		return c.copyOnRewriteRefOfSelect(n, parent)
-	case SelectExprs:
-		return c.copyOnRewriteSelectExprs(n, parent)
+	case *SelectExprs:
+		return c.copyOnRewriteRefOfSelectExprs(n, parent)
 	case *SelectInto:
 		return c.copyOnRewriteRefOfSelectInto(n, parent)
 	case *Set:
@@ -1244,11 +1244,19 @@ func (c *cow) copyOnRewriteRefOfCallProc(n *CallProc, parent SQLNode) (out SQLNo
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Name, changedName := c.copyOnRewriteTableName(n.Name, n)
-		_Params, changedParams := c.copyOnRewriteExprs(n.Params, n)
+		var changedParams bool
+		_Params := make([]Expr, len(n.Params))
+		for x, el := range n.Params {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_Params[x] = this.(Expr)
+			if changed {
+				changedParams = true
+			}
+		}
 		if changedName || changedParams {
 			res := *n
 			res.Name, _ = _Name.(TableName)
-			res.Params, _ = _Params.(Exprs)
+			res.Params = _Params
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1351,10 +1359,18 @@ func (c *cow) copyOnRewriteRefOfCharExpr(n *CharExpr, parent SQLNode) (out SQLNo
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Exprs, changedExprs := c.copyOnRewriteExprs(n.Exprs, n)
+		var changedExprs bool
+		_Exprs := make([]Expr, len(n.Exprs))
+		for x, el := range n.Exprs {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_Exprs[x] = this.(Expr)
+			if changed {
+				changedExprs = true
+			}
+		}
 		if changedExprs {
 			res := *n
-			res.Exprs, _ = _Exprs.(Exprs)
+			res.Exprs = _Exprs
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1658,11 +1674,19 @@ func (c *cow) copyOnRewriteRefOfCount(n *Count, parent SQLNode) (out SQLNode, ch
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Args, changedArgs := c.copyOnRewriteExprs(n.Args, n)
+		var changedArgs bool
+		_Args := make([]Expr, len(n.Args))
+		for x, el := range n.Args {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_Args[x] = this.(Expr)
+			if changed {
+				changedArgs = true
+			}
+		}
 		_OverClause, changedOverClause := c.copyOnRewriteRefOfOverClause(n.OverClause, n)
 		if changedArgs || changedOverClause {
 			res := *n
-			res.Args, _ = _Args.(Exprs)
+			res.Args = _Args
 			res.OverClause, _ = _OverClause.(*OverClause)
 			out = &res
 			if c.cloned != nil {
@@ -2134,22 +2158,29 @@ func (c *cow) copyOnRewriteRefOfExplainTab(n *ExplainTab, parent SQLNode) (out S
 	}
 	return
 }
-func (c *cow) copyOnRewriteExprs(n Exprs, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfExprs(n *Exprs, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		res := make(Exprs, len(n))
-		for x, el := range n {
-			this, change := c.copyOnRewriteExpr(el, n)
-			res[x] = this.(Expr)
-			if change {
-				changed = true
+		var changedExprs bool
+		_Exprs := make([]Expr, len(n.Exprs))
+		for x, el := range n.Exprs {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_Exprs[x] = this.(Expr)
+			if changed {
+				changedExprs = true
 			}
 		}
-		if changed {
-			out = res
+		if changedExprs {
+			res := *n
+			res.Exprs = _Exprs
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
 		}
 	}
 	if c.post != nil {
@@ -2355,12 +2386,20 @@ func (c *cow) copyOnRewriteRefOfFuncExpr(n *FuncExpr, parent SQLNode) (out SQLNo
 	if c.pre == nil || c.pre(n, parent) {
 		_Qualifier, changedQualifier := c.copyOnRewriteIdentifierCS(n.Qualifier, n)
 		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
-		_Exprs, changedExprs := c.copyOnRewriteExprs(n.Exprs, n)
+		var changedExprs bool
+		_Exprs := make([]Expr, len(n.Exprs))
+		for x, el := range n.Exprs {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_Exprs[x] = this.(Expr)
+			if changed {
+				changedExprs = true
+			}
+		}
 		if changedQualifier || changedName || changedExprs {
 			res := *n
 			res.Qualifier, _ = _Qualifier.(IdentifierCS)
 			res.Name, _ = _Name.(IdentifierCI)
-			res.Exprs, _ = _Exprs.(Exprs)
+			res.Exprs = _Exprs
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -2685,12 +2724,20 @@ func (c *cow) copyOnRewriteRefOfGroupConcatExpr(n *GroupConcatExpr, parent SQLNo
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Exprs, changedExprs := c.copyOnRewriteExprs(n.Exprs, n)
+		var changedExprs bool
+		_Exprs := make([]Expr, len(n.Exprs))
+		for x, el := range n.Exprs {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_Exprs[x] = this.(Expr)
+			if changed {
+				changedExprs = true
+			}
+		}
 		_OrderBy, changedOrderBy := c.copyOnRewriteOrderBy(n.OrderBy, n)
 		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
 		if changedExprs || changedOrderBy || changedLimit {
 			res := *n
-			res.Exprs, _ = _Exprs.(Exprs)
+			res.Exprs = _Exprs
 			res.OrderBy, _ = _OrderBy.(OrderBy)
 			res.Limit, _ = _Limit.(*Limit)
 			out = &res
@@ -2915,11 +2962,19 @@ func (c *cow) copyOnRewriteRefOfIntervalFuncExpr(n *IntervalFuncExpr, parent SQL
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
-		_Exprs, changedExprs := c.copyOnRewriteExprs(n.Exprs, n)
+		var changedExprs bool
+		_Exprs := make([]Expr, len(n.Exprs))
+		for x, el := range n.Exprs {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_Exprs[x] = this.(Expr)
+			if changed {
+				changedExprs = true
+			}
+		}
 		if changedExpr || changedExprs {
 			res := *n
 			res.Expr, _ = _Expr.(Expr)
-			res.Exprs, _ = _Exprs.(Exprs)
+			res.Exprs = _Exprs
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -3006,10 +3061,18 @@ func (c *cow) copyOnRewriteRefOfJSONArrayExpr(n *JSONArrayExpr, parent SQLNode) 
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Params, changedParams := c.copyOnRewriteExprs(n.Params, n)
+		var changedParams bool
+		_Params := make([]Expr, len(n.Params))
+		for x, el := range n.Params {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_Params[x] = this.(Expr)
+			if changed {
+				changedParams = true
+			}
+		}
 		if changedParams {
 			res := *n
-			res.Params, _ = _Params.(Exprs)
+			res.Params = _Params
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -3325,11 +3388,19 @@ func (c *cow) copyOnRewriteRefOfJSONRemoveExpr(n *JSONRemoveExpr, parent SQLNode
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_JSONDoc, changedJSONDoc := c.copyOnRewriteExpr(n.JSONDoc, n)
-		_PathList, changedPathList := c.copyOnRewriteExprs(n.PathList, n)
+		var changedPathList bool
+		_PathList := make([]Expr, len(n.PathList))
+		for x, el := range n.PathList {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_PathList[x] = this.(Expr)
+			if changed {
+				changedPathList = true
+			}
+		}
 		if changedJSONDoc || changedPathList {
 			res := *n
 			res.JSONDoc, _ = _JSONDoc.(Expr)
-			res.PathList, _ = _PathList.(Exprs)
+			res.PathList = _PathList
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -3567,11 +3638,19 @@ func (c *cow) copyOnRewriteRefOfJSONValueMergeExpr(n *JSONValueMergeExpr, parent
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_JSONDoc, changedJSONDoc := c.copyOnRewriteExpr(n.JSONDoc, n)
-		_JSONDocList, changedJSONDocList := c.copyOnRewriteExprs(n.JSONDocList, n)
+		var changedJSONDocList bool
+		_JSONDocList := make([]Expr, len(n.JSONDocList))
+		for x, el := range n.JSONDocList {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_JSONDocList[x] = this.(Expr)
+			if changed {
+				changedJSONDocList = true
+			}
+		}
 		if changedJSONDoc || changedJSONDocList {
 			res := *n
 			res.JSONDoc, _ = _JSONDoc.(Expr)
-			res.JSONDocList, _ = _JSONDocList.(Exprs)
+			res.JSONDocList = _JSONDocList
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -3784,10 +3863,18 @@ func (c *cow) copyOnRewriteRefOfLineStringExpr(n *LineStringExpr, parent SQLNode
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_PointParams, changedPointParams := c.copyOnRewriteExprs(n.PointParams, n)
+		var changedPointParams bool
+		_PointParams := make([]Expr, len(n.PointParams))
+		for x, el := range n.PointParams {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_PointParams[x] = this.(Expr)
+			if changed {
+				changedPointParams = true
+			}
+		}
 		if changedPointParams {
 			res := *n
-			res.PointParams, _ = _PointParams.(Exprs)
+			res.PointParams = _PointParams
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -4056,10 +4143,18 @@ func (c *cow) copyOnRewriteRefOfMultiLinestringExpr(n *MultiLinestringExpr, pare
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_LinestringParams, changedLinestringParams := c.copyOnRewriteExprs(n.LinestringParams, n)
+		var changedLinestringParams bool
+		_LinestringParams := make([]Expr, len(n.LinestringParams))
+		for x, el := range n.LinestringParams {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_LinestringParams[x] = this.(Expr)
+			if changed {
+				changedLinestringParams = true
+			}
+		}
 		if changedLinestringParams {
 			res := *n
-			res.LinestringParams, _ = _LinestringParams.(Exprs)
+			res.LinestringParams = _LinestringParams
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -4078,10 +4173,18 @@ func (c *cow) copyOnRewriteRefOfMultiPointExpr(n *MultiPointExpr, parent SQLNode
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_PointParams, changedPointParams := c.copyOnRewriteExprs(n.PointParams, n)
+		var changedPointParams bool
+		_PointParams := make([]Expr, len(n.PointParams))
+		for x, el := range n.PointParams {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_PointParams[x] = this.(Expr)
+			if changed {
+				changedPointParams = true
+			}
+		}
 		if changedPointParams {
 			res := *n
-			res.PointParams, _ = _PointParams.(Exprs)
+			res.PointParams = _PointParams
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -4100,10 +4203,18 @@ func (c *cow) copyOnRewriteRefOfMultiPolygonExpr(n *MultiPolygonExpr, parent SQL
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_PolygonParams, changedPolygonParams := c.copyOnRewriteExprs(n.PolygonParams, n)
+		var changedPolygonParams bool
+		_PolygonParams := make([]Expr, len(n.PolygonParams))
+		for x, el := range n.PolygonParams {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_PolygonParams[x] = this.(Expr)
+			if changed {
+				changedPolygonParams = true
+			}
+		}
 		if changedPolygonParams {
 			res := *n
-			res.PolygonParams, _ = _PolygonParams.(Exprs)
+			res.PolygonParams = _PolygonParams
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -4772,10 +4883,18 @@ func (c *cow) copyOnRewriteRefOfPolygonExpr(n *PolygonExpr, parent SQLNode) (out
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_LinestringParams, changedLinestringParams := c.copyOnRewriteExprs(n.LinestringParams, n)
+		var changedLinestringParams bool
+		_LinestringParams := make([]Expr, len(n.LinestringParams))
+		for x, el := range n.LinestringParams {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_LinestringParams[x] = this.(Expr)
+			if changed {
+				changedLinestringParams = true
+			}
+		}
 		if changedLinestringParams {
 			res := *n
-			res.LinestringParams, _ = _LinestringParams.(Exprs)
+			res.LinestringParams = _LinestringParams
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5242,7 +5361,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 			}
 		}
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
-		_SelectExprs, changedSelectExprs := c.copyOnRewriteSelectExprs(n.SelectExprs, n)
+		_SelectExprs, changedSelectExprs := c.copyOnRewriteRefOfSelectExprs(n.SelectExprs, n)
 		_Where, changedWhere := c.copyOnRewriteRefOfWhere(n.Where, n)
 		_GroupBy, changedGroupBy := c.copyOnRewriteRefOfGroupBy(n.GroupBy, n)
 		_Having, changedHaving := c.copyOnRewriteRefOfWhere(n.Having, n)
@@ -5255,7 +5374,7 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 			res.With, _ = _With.(*With)
 			res.From = _From
 			res.Comments, _ = _Comments.(*ParsedComments)
-			res.SelectExprs, _ = _SelectExprs.(SelectExprs)
+			res.SelectExprs, _ = _SelectExprs.(*SelectExprs)
 			res.Where, _ = _Where.(*Where)
 			res.GroupBy, _ = _GroupBy.(*GroupBy)
 			res.Having, _ = _Having.(*Where)
@@ -5275,22 +5394,29 @@ func (c *cow) copyOnRewriteRefOfSelect(n *Select, parent SQLNode) (out SQLNode, 
 	}
 	return
 }
-func (c *cow) copyOnRewriteSelectExprs(n SelectExprs, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfSelectExprs(n *SelectExprs, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		res := make(SelectExprs, len(n))
-		for x, el := range n {
-			this, change := c.copyOnRewriteSelectExpr(el, n)
-			res[x] = this.(SelectExpr)
-			if change {
-				changed = true
+		var changedExprs bool
+		_Exprs := make([]SelectExpr, len(n.Exprs))
+		for x, el := range n.Exprs {
+			this, changed := c.copyOnRewriteSelectExpr(el, n)
+			_Exprs[x] = this.(SelectExpr)
+			if changed {
+				changedExprs = true
 			}
 		}
-		if changed {
-			out = res
+		if changedExprs {
+			res := *n
+			res.Exprs = _Exprs
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
 		}
 	}
 	if c.post != nil {
@@ -6714,13 +6840,21 @@ func (c *cow) copyOnRewriteRefOfWindowSpecification(n *WindowSpecification, pare
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
-		_PartitionClause, changedPartitionClause := c.copyOnRewriteExprs(n.PartitionClause, n)
+		var changedPartitionClause bool
+		_PartitionClause := make([]Expr, len(n.PartitionClause))
+		for x, el := range n.PartitionClause {
+			this, changed := c.copyOnRewriteExpr(el, n)
+			_PartitionClause[x] = this.(Expr)
+			if changed {
+				changedPartitionClause = true
+			}
+		}
 		_OrderClause, changedOrderClause := c.copyOnRewriteOrderBy(n.OrderClause, n)
 		_FrameClause, changedFrameClause := c.copyOnRewriteRefOfFrameClause(n.FrameClause, n)
 		if changedName || changedPartitionClause || changedOrderClause || changedFrameClause {
 			res := *n
 			res.Name, _ = _Name.(IdentifierCI)
-			res.PartitionClause, _ = _PartitionClause.(Exprs)
+			res.PartitionClause = _PartitionClause
 			res.OrderClause, _ = _OrderClause.(OrderBy)
 			res.FrameClause, _ = _FrameClause.(*FrameClause)
 			out = &res

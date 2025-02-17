@@ -163,7 +163,7 @@ func (qb *queryBuilder) setWithRollup() {
 func (qb *queryBuilder) addProjection(projection sqlparser.SelectExpr) {
 	switch stmt := qb.stmt.(type) {
 	case *sqlparser.Select:
-		stmt.SelectExprs = append(stmt.SelectExprs, projection)
+		stmt.AddSelectExpr(projection)
 		return
 	case *sqlparser.Union:
 		if ae, ok := projection.(*sqlparser.AliasedExpr); ok {
@@ -193,11 +193,12 @@ func (qb *queryBuilder) pushUnionInsideDerived() {
 		}},
 	}
 	firstSelect := getFirstSelect(selStmt)
-	sel.SelectExprs = unionSelects(firstSelect.SelectExprs)
+	sel.SetSelectExprs(unionSelects(firstSelect.GetColumns())...)
 	qb.stmt = sel
 }
 
-func unionSelects(exprs sqlparser.SelectExprs) (selectExprs sqlparser.SelectExprs) {
+func unionSelects(exprs []sqlparser.SelectExpr) []sqlparser.SelectExpr {
+	var selectExprs []sqlparser.SelectExpr
 	for _, col := range exprs {
 		switch col := col.(type) {
 		case *sqlparser.AliasedExpr:
@@ -207,13 +208,13 @@ func unionSelects(exprs sqlparser.SelectExprs) (selectExprs sqlparser.SelectExpr
 			selectExprs = append(selectExprs, col)
 		}
 	}
-	return
+	return selectExprs
 }
 
 func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.TableStatement) {
 	colName := column.Name.String()
 	firstSelect := getFirstSelect(sel)
-	exprs := firstSelect.SelectExprs
+	exprs := firstSelect.GetColumns()
 	offset := slices.IndexFunc(exprs, func(expr sqlparser.SelectExpr) bool {
 		switch ae := expr.(type) {
 		case *sqlparser.StarExpr:
@@ -283,7 +284,9 @@ func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr
 
 	if sel, isSel := stmt.(*sqlparser.Select); isSel {
 		otherSel := otherStmt.(*sqlparser.Select)
-		sel.SelectExprs = append(sel.SelectExprs, otherSel.SelectExprs...)
+		for _, expr := range otherSel.GetColumns() {
+			sel.AddSelectExpr(expr)
+		}
 	}
 
 	qb.mergeWhereClauses(stmt, otherStmt)
@@ -410,7 +413,7 @@ func stripDownQuery(from, to sqlparser.TableStatement) {
 		toNode.Comments = node.Comments
 		toNode.Limit = node.Limit
 		toNode.SelectExprs = node.SelectExprs
-		for _, expr := range toNode.SelectExprs {
+		for _, expr := range toNode.SelectExprs.Exprs {
 			removeKeyspaceFromSelectExpr(expr)
 		}
 	case *sqlparser.Union:
@@ -599,8 +602,7 @@ func buildProjection(op *Projection, qb *queryBuilder) {
 	}
 
 	if !isSel {
-		cols := op.GetSelectExprs(qb.ctx)
-		for _, column := range cols {
+		for _, column := range op.GetSelectExprs(qb.ctx) {
 			qb.addProjection(column)
 		}
 	}

@@ -211,7 +211,7 @@ func buildCreateViewCommon(
 	}
 
 	// because we don't trust the schema tracker to have up-to-date info, we don't want to expand any SELECT * here
-	var expressions []sqlparser.SelectExprs
+	var expressions []*sqlparser.SelectExprs
 	_ = sqlparser.VisitAllSelects(ddlSelect, func(p *sqlparser.Select, idx int) error {
 		expressions = append(expressions, sqlparser.Clone(p.SelectExprs))
 		return nil
@@ -252,7 +252,7 @@ func createViewEnabled(vschema plancontext.VSchema, reservedVars *sqlparser.Rese
 
 	// views definition with `select *` should not be expanded as schema tracker might not be up-to-date
 	// We copy the expressions and restore them after the planning context is created
-	var expressions []sqlparser.SelectExprs
+	var expressions []*sqlparser.SelectExprs
 	_ = sqlparser.VisitAllSelects(ddlSelect, func(p *sqlparser.Select, idx int) error {
 		expressions = append(expressions, sqlparser.Clone(p.SelectExprs))
 		return nil

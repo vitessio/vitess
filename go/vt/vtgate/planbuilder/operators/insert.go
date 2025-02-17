@@ -266,7 +266,7 @@ func uniqKeyCompExpressions(vTbl *vindexes.BaseTable, ins *sqlparser.Insert, row
 
 	type uIdx struct {
 		Indexes [][]uComp
-		uniqKey sqlparser.Exprs
+		uniqKey []sqlparser.Expr
 	}
 
 	allIndexes := make([]uIdx, 0, noOfUniqKeys)
@@ -470,7 +470,7 @@ func columnMismatch(gen *Generate, ins *sqlparser.Insert, sel sqlparser.TableSta
 	if origColCount > sel.GetColumnCount() {
 		sel := getFirstSelect(sel)
 		var hasStarExpr bool
-		for _, sExpr := range sel.SelectExprs {
+		for _, sExpr := range sel.GetColumns() {
 			if _, hasStarExpr = sExpr.(*sqlparser.StarExpr); hasStarExpr {
 				break
 			}

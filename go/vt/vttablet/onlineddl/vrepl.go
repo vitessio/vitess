@@ -2,10 +2,6 @@
 	Original copyright by GitHub as follows. Additions by the Vitess authors as follows.
 */
 /*
-   Copyright 2016 GitHub Inc.
-	 See https://github.com/github/gh-ost/blob/master/LICENSE
-*/
-/*
 Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -228,19 +224,6 @@ func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnecti
 	}
 	tableRows, err = row.ToInt64("Rows")
 	return tableRows, err
-}
-
-// formalizeColumns
-func formalizeColumns(columnsLists ...*schemadiff.ColumnDefinitionEntityList) error {
-	for _, colList := range columnsLists {
-		for _, col := range colList.Entities {
-			col.SetExplicitDefaultAndNull()
-			if err := col.SetExplicitCharsetCollate(); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func (v *VRepl) analyzeAlter() error {

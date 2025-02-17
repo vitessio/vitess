@@ -689,9 +689,9 @@ func autoIncGenerate(gen *operators.Generate) *engine.Generate {
 		return nil
 	}
 	selNext := &sqlparser.Select{
-		From:        []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: gen.TableName}},
-		SelectExprs: sqlparser.SelectExprs{&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}}},
+		From: []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: gen.TableName}},
 	}
+	selNext.AddSelectExpr(&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}})
 	return &engine.Generate{
 		Keyspace: gen.Keyspace,
 		Query:    sqlparser.String(selNext),

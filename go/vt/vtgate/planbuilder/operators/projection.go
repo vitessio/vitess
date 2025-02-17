@@ -76,11 +76,11 @@ type (
 	// ProjCols is used to enable projections that are only valid if we can push them into a route, and we never need to ask it about offsets
 	ProjCols interface {
 		GetColumns() []*sqlparser.AliasedExpr
-		GetSelectExprs() sqlparser.SelectExprs
+		GetSelectExprs() []sqlparser.SelectExpr
 	}
 
 	// Used when there are stars in the expressions that we were unable to expand
-	StarProjections sqlparser.SelectExprs
+	StarProjections []sqlparser.SelectExpr
 
 	// Used when we know all the columns
 	AliasedProjections []*ProjExpr
@@ -136,8 +136,8 @@ func (sp StarProjections) GetColumns() []*sqlparser.AliasedExpr {
 	panic(vterrors.VT09015())
 }
 
-func (sp StarProjections) GetSelectExprs() sqlparser.SelectExprs {
-	return sqlparser.SelectExprs(sp)
+func (sp StarProjections) GetSelectExprs() []sqlparser.SelectExpr {
+	return sp
 }
 
 func (ap AliasedProjections) GetColumns() []*sqlparser.AliasedExpr {
@@ -146,7 +146,7 @@ func (ap AliasedProjections) GetColumns() []*sqlparser.AliasedExpr {
 	})
 }
 
-func (ap AliasedProjections) GetSelectExprs() sqlparser.SelectExprs {
+func (ap AliasedProjections) GetSelectExprs() []sqlparser.SelectExpr {
 	return slice.Map(ap, func(from *ProjExpr) sqlparser.SelectExpr {
 		return aeWrap(from.ColExpr)
 	})
@@ -420,12 +420,12 @@ func (p *Projection) GetColumns(*plancontext.PlanningContext) []*sqlparser.Alias
 	return p.Columns.GetColumns()
 }
 
-func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) sqlparser.SelectExprs {
+func (p *Projection) GetSelectExprs(*plancontext.PlanningContext) []sqlparser.SelectExpr {
 	switch cols := p.Columns.(type) {
 	case StarProjections:
-		return sqlparser.SelectExprs(cols)
+		return cols
 	case AliasedProjections:
-		var output sqlparser.SelectExprs
+		var output []sqlparser.SelectExpr
 		for _, pe := range cols {
 			ae := &sqlparser.AliasedExpr{Expr: pe.EvalExpr}
 			if pe.Original.As.NotEmpty() {

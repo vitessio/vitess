@@ -72,7 +72,7 @@ type (
 		FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int
 
 		GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr
-		GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs
+		GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr
 
 		ShortDescription() string
 

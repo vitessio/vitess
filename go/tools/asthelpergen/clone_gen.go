@@ -56,7 +56,7 @@ func (c *cloneGen) addFunc(name string, code *jen.Statement) {
 	c.file.Add(code)
 }
 
-func (c *cloneGen) genFile() (string, *jen.File) {
+func (c *cloneGen) genFile(generatorSPI) (string, *jen.File) {
 	return "ast_clone.go", c.file
 }
 

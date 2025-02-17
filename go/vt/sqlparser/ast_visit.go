@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -160,8 +160,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfExplainStmt(in, f)
 	case *ExplainTab:
 		return VisitRefOfExplainTab(in, f)
-	case Exprs:
-		return VisitExprs(in, f)
+	case *Exprs:
+		return VisitRefOfExprs(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
 	case *ExtractValueExpr:
@@ -434,8 +434,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfSavepoint(in, f)
 	case *Select:
 		return VisitRefOfSelect(in, f)
-	case SelectExprs:
-		return VisitSelectExprs(in, f)
+	case *SelectExprs:
+		return VisitRefOfSelectExprs(in, f)
 	case *SelectInto:
 		return VisitRefOfSelectInto(in, f)
 	case *Set:
@@ -999,8 +999,10 @@ func VisitRefOfCallProc(in *CallProc, f Visit) error {
 	if err := VisitTableName(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitExprs(in.Params, f); err != nil {
-		return err
+	for _, el := range in.Params {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1064,8 +1066,10 @@ func VisitRefOfCharExpr(in *CharExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Exprs, f); err != nil {
-		return err
+	for _, el := range in.Exprs {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1258,8 +1262,10 @@ func VisitRefOfCount(in *Count, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
-		return err
+	for _, el := range in.Args {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
@@ -1558,14 +1564,14 @@ func VisitRefOfExplainTab(in *ExplainTab, f Visit) error {
 	}
 	return nil
 }
-func VisitExprs(in Exprs, f Visit) error {
+func VisitRefOfExprs(in *Exprs, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in {
+	for _, el := range in.Exprs {
 		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
@@ -1705,8 +1711,10 @@ func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitExprs(in.Exprs, f); err != nil {
-		return err
+	for _, el := range in.Exprs {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1914,8 +1922,10 @@ func VisitRefOfGroupConcatExpr(in *GroupConcatExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Exprs, f); err != nil {
-		return err
+	for _, el := range in.Exprs {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
 		return err
@@ -2068,8 +2078,10 @@ func VisitRefOfIntervalFuncExpr(in *IntervalFuncExpr, f Visit) error {
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
-	if err := VisitExprs(in.Exprs, f); err != nil {
-		return err
+	for _, el := range in.Exprs {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2119,8 +2131,10 @@ func VisitRefOfJSONArrayExpr(in *JSONArrayExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Params, f); err != nil {
-		return err
+	for _, el := range in.Params {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2307,8 +2321,10 @@ func VisitRefOfJSONRemoveExpr(in *JSONRemoveExpr, f Visit) error {
 	if err := VisitExpr(in.JSONDoc, f); err != nil {
 		return err
 	}
-	if err := VisitExprs(in.PathList, f); err != nil {
-		return err
+	for _, el := range in.PathList {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2461,8 +2477,10 @@ func VisitRefOfJSONValueMergeExpr(in *JSONValueMergeExpr, f Visit) error {
 	if err := VisitExpr(in.JSONDoc, f); err != nil {
 		return err
 	}
-	if err := VisitExprs(in.JSONDocList, f); err != nil {
-		return err
+	for _, el := range in.JSONDocList {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2601,8 +2619,10 @@ func VisitRefOfLineStringExpr(in *LineStringExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.PointParams, f); err != nil {
-		return err
+	for _, el := range in.PointParams {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2774,8 +2794,10 @@ func VisitRefOfMultiLinestringExpr(in *MultiLinestringExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.LinestringParams, f); err != nil {
-		return err
+	for _, el := range in.LinestringParams {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2786,8 +2808,10 @@ func VisitRefOfMultiPointExpr(in *MultiPointExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.PointParams, f); err != nil {
-		return err
+	for _, el := range in.PointParams {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2798,8 +2822,10 @@ func VisitRefOfMultiPolygonExpr(in *MultiPolygonExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.PolygonParams, f); err != nil {
-		return err
+	for _, el := range in.PolygonParams {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -3218,8 +3244,10 @@ func VisitRefOfPolygonExpr(in *PolygonExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.LinestringParams, f); err != nil {
-		return err
+	for _, el := range in.LinestringParams {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -3535,7 +3563,7 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitSelectExprs(in.SelectExprs, f); err != nil {
+	if err := VisitRefOfSelectExprs(in.SelectExprs, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
@@ -3561,14 +3589,14 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	}
 	return nil
 }
-func VisitSelectExprs(in SelectExprs, f Visit) error {
+func VisitRefOfSelectExprs(in *SelectExprs, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in {
+	for _, el := range in.Exprs {
 		if err := VisitSelectExpr(el, f); err != nil {
 			return err
 		}
@@ -4476,8 +4504,10 @@ func VisitRefOfWindowSpecification(in *WindowSpecification, f Visit) error {
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitExprs(in.PartitionClause, f); err != nil {
-		return err
+	for _, el := range in.PartitionClause {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	if err := VisitOrderBy(in.OrderClause, f); err != nil {
 		return err

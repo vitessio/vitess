@@ -737,7 +737,6 @@ func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.Chec
 		Scope:                 req.Scope,
 		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
 		OkIfNotExists:         req.OkIfNotExists,
-		MultiMetricsEnabled:   true,
 	}
 	r, err := s.tmc.CheckThrottler(ctx, ti.Tablet, tmReq)
 	if err != nil {
@@ -2058,9 +2057,6 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 	if req.Enable && req.Disable {
 		return nil, fmt.Errorf("--enable and --disable are mutually exclusive")
 	}
-	if req.CheckAsCheckSelf && req.CheckAsCheckShard {
-		return nil, fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
-	}
 
 	if req.MetricName != "" && !base.KnownMetricNames.Contains(base.MetricName(req.MetricName)) {
 		return nil, fmt.Errorf("unknown metric name: %s", req.MetricName)
@@ -2125,12 +2121,6 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		}
 		if req.Disable {
 			throttlerConfig.Enabled = false
-		}
-		if req.CheckAsCheckSelf {
-			throttlerConfig.CheckAsCheckSelf = true
-		}
-		if req.CheckAsCheckShard {
-			throttlerConfig.CheckAsCheckSelf = false
 		}
 		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
 			timeNow := time.Now()
@@ -2336,6 +2326,10 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			tablets = append(tablets, ti.Tablet)
 		}
 
+		// Sort the list of tablets alphabetically by alias to improve readability of output.
+		sort.Slice(tablets, func(i, j int) bool {
+			return topoproto.TabletAliasString(tablets[i].Alias) < topoproto.TabletAliasString(tablets[j].Alias)
+		})
 		return &vtctldatapb.GetTabletsResponse{Tablets: tablets}, nil
 	}
 
@@ -2424,6 +2418,10 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 		adjustedTablets[i] = ti.Tablet
 	}
+	// Sort the list of tablets alphabetically by alias to improve readability of output.
+	sort.Slice(adjustedTablets, func(i, j int) bool {
+		return topoproto.TabletAliasString(adjustedTablets[i].Alias) < topoproto.TabletAliasString(adjustedTablets[j].Alias)
+	})
 
 	return &vtctldatapb.GetTabletsResponse{
 		Tablets: adjustedTablets,
