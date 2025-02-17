@@ -2487,60 +2487,47 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "a|"),
 	})
-	_, err := exec(executor, session, "set sql_mode = ''")
-	require.NoError(t, err)
+	queries := []string{
+		"set sql_mode = ''",
+		"begin",
+		"savepoint a",
+		"select id from user where id = 1",
+		"savepoint b",
+		"release savepoint a",
+		"select id from user where id = 3",
+		"commit",
+	}
 
-	_, err = exec(executor, session, "begin")
-	require.NoError(t, err)
-	_, err = exec(executor, session, "savepoint a")
-	require.NoError(t, err)
-	_, err = exec(executor, session, "select id from user where id = 1")
-	require.NoError(t, err)
-	_, err = exec(executor, session, "savepoint b")
-	require.NoError(t, err)
-	_, err = exec(executor, session, "release savepoint a")
-	require.NoError(t, err)
-	_, err = exec(executor, session, "select id from user where id = 3")
-	require.NoError(t, err)
-	_, err = exec(executor, session, "commit")
-	require.NoError(t, err)
+	for _, query := range queries {
+		_, err := exec(executor, session, query)
+		require.NoError(t, err)
+	}
+
 	emptyBV := map[string]*querypb.BindVariable{}
 
-	sbc1WantQueries := []*querypb.BoundQuery{{
-		Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV,
-	}, {
-		Sql: "set sql_mode = ''", BindVariables: emptyBV,
-	}, {
-		Sql: "savepoint a", BindVariables: emptyBV,
-	}, {
-		Sql: "select id from `user` where id = 1", BindVariables: emptyBV,
-	}, {
-		Sql: "savepoint b", BindVariables: emptyBV,
-	}, {
-		Sql: "release savepoint a", BindVariables: emptyBV,
-	}}
+	sbc1WantQueries := []*querypb.BoundQuery{
+		{Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV},
+		{Sql: "savepoint a", BindVariables: emptyBV},
+		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 1", BindVariables: emptyBV},
+		{Sql: "savepoint b", BindVariables: emptyBV},
+		{Sql: "release savepoint a", BindVariables: emptyBV},
+	}
 
-	sbc2WantQueries := []*querypb.BoundQuery{{
-		Sql: "set sql_mode = ''", BindVariables: emptyBV,
-	}, {
-		Sql: "savepoint a", BindVariables: emptyBV,
-	}, {
-		Sql: "savepoint b", BindVariables: emptyBV,
-	}, {
-		Sql: "release savepoint a", BindVariables: emptyBV,
-	}, {
-		Sql: "select id from `user` where id = 3", BindVariables: emptyBV,
-	}}
+	sbc2WantQueries := []*querypb.BoundQuery{
+		{Sql: "savepoint a", BindVariables: emptyBV},
+		{Sql: "savepoint b", BindVariables: emptyBV},
+		{Sql: "release savepoint a", BindVariables: emptyBV},
+		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 3", BindVariables: emptyBV}}
 
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
 	testQueryLog(t, executor, logChan, "TestExecute", "SET", "set @@sql_mode = ''", 1)
 	testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 1", 1)
 	testQueryLog(t, executor, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
 	testQueryLog(t, executor, logChan, "TestExecute", "RELEASE", "release savepoint a", 1)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 3", 1)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 3", 1)
 	testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 2)
 }
 
