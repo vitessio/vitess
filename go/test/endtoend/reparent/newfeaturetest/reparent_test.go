@@ -285,7 +285,13 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 		utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 	}()
 
-	time.Sleep(30 * time.Second)
+	// Starting VTOrc later now, because we don't want it to fix the heartbeat interval
+	// on the replica's before the disruption has been introduced.
+	err := clusterInstance.StartVTOrc(clusterInstance.Keyspaces[0].Name)
+	require.NoError(t, err)
+	// If the network disruption is too long lived, then we will end up running ERS from VTOrc.
+	networkDisruptionDuration := 43 * time.Second
+	time.Sleep(networkDisruptionDuration)
 
 	// Restore the network
 	runCommandWithSudo(t, "cp", "/etc/pf.conf.backup", "/etc/pf.conf")

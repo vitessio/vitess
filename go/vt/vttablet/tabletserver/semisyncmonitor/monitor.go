@@ -186,15 +186,19 @@ func (m *Monitor) WaitUntilSemiSyncUnblocked(ctx context.Context) error {
 	if !m.stillBlocked() {
 		// If we find that the primary isn't blocked, we're good,
 		// we don't need to wait for anything.
+		log.Infof("Primary not blocked on semi-sync ACKs")
 		return nil
 	}
+	log.Infof("Waiting for semi-sync to be unblocked")
 	// The primary is blocked. We need to wait for it to be unblocked
 	// or the context to expire.
 	ch := m.addWaiter()
 	select {
 	case <-ch:
+		log.Infof("Finished waiting for semi-sync to be unblocked")
 		return nil
 	case <-ctx.Done():
+		log.Infof("Error while waiting for semi-sync to be unblocked - %s", ctx.Err().Error())
 		return ctx.Err()
 	}
 }

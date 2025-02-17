@@ -462,6 +462,13 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = PrimaryTabletDeleted
 			a.Description = "Primary tablet has been deleted"
 			ca.hasClusterwideAction = true
+		} else if a.IsPrimary && a.SemiSyncMonitorBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount {
+			// The primary is reporting that semi-sync monitor is blocked on writes.
+			// There are enough replicas configured to send semi-sync ACKs such that the primary shouldn't be blocked.
+			// There is some network diruption in progress. We should run an ERS.
+			a.Analysis = PrimarySemiSyncBlocked
+			a.Description = "Writes seem to be blocked on semi-sync acks on the primary, even though sufficient replicas are configured to send ACKs"
+			ca.hasClusterwideAction = true
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsReadOnly {
 			a.Analysis = ReplicaIsWritable
 			a.Description = "Replica is writable"
@@ -509,9 +516,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				a.Description = "Semi sync primary seems to be locked, more samplings needed to validate"
 			}
 			//
-		} else if a.IsPrimary && a.SemiSyncMonitorBlocked {
-			a.Analysis = PrimarySemiSyncBlocked
-			a.Description = "Writes seem to be blocked on semi-sync acks on the primary, even though sufficient replicas are configured to send ACKs"
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = PrimarySingleReplicaNotReplicating
 			a.Description = "Primary is reachable but its single replica is not replicating"
