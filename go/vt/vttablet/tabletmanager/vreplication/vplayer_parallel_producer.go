@@ -52,7 +52,8 @@ type parallelProducer struct {
 	commitWorkerEventSequence atomic.Int64
 	assignSequence            int64
 
-	newDBClient func() (*vdbClient, error)
+	newDBClient              func() (*vdbClient, error)
+	aggregateWorkersPosQuery string
 
 	numCommits         atomic.Int64 // temporary. TODO: remove
 	currentConcurrency atomic.Int64 // temporary. TODO: remove
@@ -66,6 +67,7 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 		workerErrors:             make(chan error, countWorkers),
 		sequenceToWorkersMap:     make(map[int64]int),
 		completedSequenceNumbers: make(chan int64, countWorkers),
+		aggregateWorkersPosQuery: binlogplayer.ReadVReplicationCombinedWorkersGTIDs(vp.vr.id),
 	}
 
 	p.newDBClient = func() (*vdbClient, error) {
@@ -138,7 +140,6 @@ func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastC
 }
 
 func (p *parallelProducer) commitAll(ctx context.Context, except *parallelWorker) error {
-	// TODO(shlomi) remove
 	{
 		exceptString := ""
 		if except != nil {
@@ -199,8 +200,7 @@ func (p *parallelProducer) updateTimeThrottled(appThrottled throttlerapp.Name, r
 }
 
 func (p *parallelProducer) aggregateWorkersPos(ctx context.Context, dbClient *vdbClient, onlyFirstContiguous bool) (aggregatedWorkersPos replication.Position, combinedPos replication.Position, err error) {
-	query := binlogplayer.ReadVReplicationCombinedWorkersGTIDs(p.vp.vr.id)
-	qr, err := dbClient.ExecuteFetch(query, -1)
+	qr, err := dbClient.ExecuteFetch(p.aggregateWorkersPosQuery, -1)
 	if err != nil {
 		log.Errorf("Error fetching vreplication worker positions: %v. isclosed? %v", err, dbClient.IsClosed())
 		return aggregatedWorkersPos, combinedPos, err
