@@ -22,14 +22,43 @@ import (
 
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
+var statsShardsWatched = stats.NewGaugesFuncWithMultiLabels("ShardsWatched",
+	"Keyspace/shards currently watched",
+	[]string{"Keyspace", "Shard"},
+	getShardsWatchedStats)
+
+// getShardsWatchedStats returns the keyspace/shards watched in a format for stats.
+func getShardsWatchedStats() map[string]int64 {
+	shardsWatched := make(map[string]int64)
+	allShardNames, err := inst.ReadAllShardNames()
+	if err != nil {
+		log.Errorf("Failed to read all shard names: %+v", err)
+		return shardsWatched
+	}
+	for ks, shards := range allShardNames {
+		for _, shard := range shards {
+			shardsWatched[ks+"."+shard] = 1
+		}
+	}
+	return shardsWatched
+}
+
+// refreshAllKeyspacesAndShardsMu ensures RefreshAllKeyspacesAndShards
+// is not executed concurrently.
+var refreshAllKeyspacesAndShardsMu sync.Mutex
+
 // RefreshAllKeyspacesAndShards reloads the keyspace and shard information for the keyspaces that vtorc is concerned with.
 func RefreshAllKeyspacesAndShards(ctx context.Context) error {
+	refreshAllKeyspacesAndShardsMu.Lock()
+	defer refreshAllKeyspacesAndShardsMu.Unlock()
+
 	var keyspaces []string
 	if len(shardsToWatch) == 0 { // all known keyspaces
 		ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
@@ -109,6 +138,7 @@ func refreshKeyspaceHelper(ctx context.Context, keyspaceName string) error {
 
 // refreshAllShards refreshes all the shard records in the given keyspace.
 func refreshAllShards(ctx context.Context, keyspaceName string) error {
+	// get all shards for keyspace name.
 	shardInfos, err := ts.FindAllShardsInKeyspace(ctx, keyspaceName, &topo.FindAllShardsInKeyspaceOptions{
 		// Fetch shard records concurrently to speed up discovery. A typical
 		// Vitess cluster will have 1-3 vtorc instances deployed, so there is
@@ -119,13 +149,35 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		log.Error(err)
 		return err
 	}
+	savedShards := make(map[string]bool, len(shardInfos))
 	for _, shardInfo := range shardInfos {
 		err = inst.SaveShard(shardInfo)
 		if err != nil {
 			log.Error(err)
 			return err
 		}
+		savedShards[shardInfo.ShardName()] = true
 	}
+
+	// delete shards that were not returned by ts.FindAllShardsInKeyspace(...),
+	// indicating they are stale.
+	shards, err := inst.ReadShardNames(keyspaceName)
+	if err != nil {
+		return err
+	}
+	for _, shard := range shards {
+		if savedShards[shard] {
+			continue
+		}
+		shardName := topoproto.KeyspaceShardString(keyspaceName, shard)
+		log.Infof("Forgetting shard: %s", shardName)
+		err = inst.DeleteShard(keyspaceName, shard)
+		if err != nil {
+			log.Errorf("Failed to delete shard %s: %+v", shardName, err)
+			return err
+		}
+	}
+
 	return nil
 }
 

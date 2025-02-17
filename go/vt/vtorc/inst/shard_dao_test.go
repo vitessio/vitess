@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
-func TestSaveAndReadShard(t *testing.T) {
+func TestSaveReadAndDeleteShard(t *testing.T) {
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
 		db.ClearVTOrcDatabase()
@@ -94,6 +94,7 @@ func TestSaveAndReadShard(t *testing.T) {
 				require.NoError(t, err)
 			}
 
+			// ReadShardPrimaryInformation
 			shardPrimaryAlias, primaryTimestamp, err := ReadShardPrimaryInformation(tt.keyspaceName, tt.shardName)
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)
@@ -102,6 +103,16 @@ func TestSaveAndReadShard(t *testing.T) {
 			require.NoError(t, err)
 			require.EqualValues(t, tt.primaryAliasWanted, shardPrimaryAlias)
 			require.EqualValues(t, tt.primaryTimestampWanted, primaryTimestamp)
+
+			// ReadShardNames
+			shardNames, err := ReadShardNames(tt.keyspaceName)
+			require.NoError(t, err)
+			require.Equal(t, []string{tt.shardName}, shardNames)
+
+			// DeleteShard
+			require.NoError(t, DeleteShard(tt.keyspaceName, tt.shardName))
+			_, _, err = ReadShardPrimaryInformation(tt.keyspaceName, tt.shardName)
+			require.EqualError(t, err, ErrShardNotFound.Error())
 		})
 	}
 }
