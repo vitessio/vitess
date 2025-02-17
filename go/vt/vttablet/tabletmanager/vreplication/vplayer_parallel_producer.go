@@ -19,6 +19,7 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -46,6 +47,7 @@ type parallelProducer struct {
 	posReached                atomic.Bool
 	workerErrors              chan error
 	sequenceToWorkersMap      map[int64]int // sequence number => worker index
+	sequenceToWorkersMapMu    sync.RWMutex
 	completedSequenceNumbers  chan int64
 	commitWorkerEventSequence atomic.Int64
 	assignSequence            int64
@@ -63,7 +65,7 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 		workers:                  make([]*parallelWorker, countWorkers),
 		workerErrors:             make(chan error, countWorkers),
 		sequenceToWorkersMap:     make(map[int64]int),
-		completedSequenceNumbers: make(chan int64, 2*maxWorkerEvents*countWorkers),
+		completedSequenceNumbers: make(chan int64, countWorkers),
 	}
 
 	p.newDBClient = func() (*vdbClient, error) {
@@ -113,6 +115,9 @@ func (p *parallelProducer) commitWorkerEvent() *binlogdatapb.VEvent {
 }
 
 func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastCommitted int64) (workerIndex int) {
+	p.sequenceToWorkersMapMu.RLock()
+	defer p.sequenceToWorkersMapMu.RUnlock()
+
 	if workerIndex, ok := p.sequenceToWorkersMap[sequenceNumber]; ok {
 		// Pin for the duration of the transaction
 		// log.Errorf("========== QQQ assignTransactionToWorker same trx sequenceNumber=%v, lastCommitted=%v, workerIndex=%v", sequenceNumber, lastCommitted, workerIndex)
@@ -304,6 +309,18 @@ func (p *parallelProducer) watchPos(ctx context.Context) error {
 }
 
 func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatapb.VEvent) error {
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case sequenceNumber := <-p.completedSequenceNumbers:
+				p.sequenceToWorkersMapMu.Lock()
+				delete(p.sequenceToWorkersMap, sequenceNumber)
+				p.sequenceToWorkersMapMu.Unlock()
+			}
+		}
+	}()
 	for {
 		if p.posReached.Load() {
 			return io.EOF
@@ -311,11 +328,9 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case sequenceNumber := <-p.completedSequenceNumbers:
-			// log.Errorf("========== QQQ process completedSequenceNumbers=%v", sequenceNumbers)
-			delete(p.sequenceToWorkersMap, sequenceNumber)
-		// case t := <-ticker.C:
-		// 	lastGoodTime = t
+		// case sequenceNumber := <-p.completedSequenceNumbers:
+		// 	// log.Errorf("========== QQQ process completedSequenceNumbers=%v", sequenceNumbers)
+		// 	delete(p.sequenceToWorkersMap, sequenceNumber)
 		case event := <-events:
 			// log.Errorf("========== QQQ process event type: %v", event.Type)
 			canApplyInParallel := false
