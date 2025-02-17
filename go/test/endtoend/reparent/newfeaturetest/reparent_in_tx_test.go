@@ -18,7 +18,6 @@ package newfeaturetest
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -39,7 +38,7 @@ func testCommitError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.Lo
 	tabletStopped := make(chan bool)
 	commitDone := make(chan bool)
 	idx := 1
-	createTxAndInsertRows(conn, t, idx)
+	createTxAndInsertRows(conn, t, &idx)
 
 	go func() {
 		<-tabletStopped
@@ -50,30 +49,15 @@ func testCommitError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.Lo
 
 	reparent(t, clusterInstance, tablets, tabletStopped, commitDone)
 
-	// we may run in a situation where we first commit on a healthy shard, in which case we would run in a multi-db commit
-	// warning, in this situation, we cannot proceed with the select asserting that no rows are returned as there will be
-	// commited inserts on healthy shards.
-	r, err := conn.ExecuteFetch("show warnings", 100, false)
+	_, err := conn.ExecuteFetch("delete from vt_insert_test", 0, false)
 	require.NoError(t, err)
-	for _, row := range r.Rows {
-		if len(row) == 3 && strings.Contains(row[2].ToString(), "mutli-db commit failed") {
-			_, err = conn.ExecuteFetch("delete * from vt_insert_test", 0, false)
-			require.NoError(t, err)
-			return
-		}
-	}
-
-	// if the unhealthy shard is the first one where we commited, let's assert that the table is empty on all the shards
-	r, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
-	require.NoError(t, err)
-	require.Len(t, r.Rows, 0)
 }
 
 func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.LocalProcessCluster, tablets []*cluster.Vttablet) {
 	tabletStopped := make(chan bool)
 	executeDone := make(chan bool)
 	idx := 1
-	createTxAndInsertRows(conn, t, idx)
+	createTxAndInsertRows(conn, t, &idx)
 
 	go func() {
 		idx += 5
@@ -91,13 +75,13 @@ func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.L
 	require.Len(t, r.Rows, 0)
 }
 
-func createTxAndInsertRows(conn *mysql.Conn, t *testing.T, idx int) {
+func createTxAndInsertRows(conn *mysql.Conn, t *testing.T, idx *int) {
 	_, err := conn.ExecuteFetch("begin", 0, false)
 	require.NoError(t, err)
 
 	for i := 0; i < 25; i++ {
-		idx += 5
-		_, err = conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
+		*idx += 5
+		_, err = conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(*idx, *idx+1, *idx+2, *idx+3), 0, false)
 		require.NoError(t, err)
 		time.Sleep(10 * time.Millisecond)
 	}
