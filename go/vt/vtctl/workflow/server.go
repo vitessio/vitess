@@ -2012,7 +2012,7 @@ func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 			}
 		}
 	}
-	if err := s.dropRelatedArtifacts(ctx, keepRoutingRules, sw); err != nil {
+	if err := s.dropRelatedArtifacts(ctx, keepRoutingRules, sw, opts...); err != nil {
 		return nil, err
 	}
 	if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
@@ -2175,6 +2175,11 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 		}
 	}
 	if wopts.ignoreSourceKeyspace {
+		// We cannot build the source schema then.
+		// And since we cannot compare the source and target shards we rely on
+		// the workflow sub type, which is set when creating a partial MoveTables
+		// workflow, for the determination.
+		ts.isPartialMigration = ts.workflowSubType == binlogdatapb.VReplicationWorkflowSubType_Partial
 		return ts, nil
 	}
 	vs, err := sourceTopo.GetVSchema(ctx, ts.sourceKeyspace)
@@ -2198,9 +2203,12 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	return ts, nil
 }
 
-func (s *Server) dropRelatedArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher) error {
-	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
-		return err
+func (s *Server) dropRelatedArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher, opts ...WorkflowActionOption) error {
+	wopts := processWorkflowActionOptions(opts)
+	if !wopts.ignoreSourceKeyspace {
+		if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
+			return err
+		}
 	}
 	if !keepRoutingRules {
 		if err := sw.deleteRoutingRules(ctx); err != nil {

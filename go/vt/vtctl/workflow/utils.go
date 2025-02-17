@@ -460,11 +460,11 @@ func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodata
 	sort.Strings(targetShards)
 	getFullKeyRange := func(shards []string) (*topodatapb.KeyRange, error) {
 		// Expect sorted shards.
-		kr1, err := getKeyRange(sourceShards[0])
+		kr1, err := getKeyRange(shards[0])
 		if err != nil {
 			return nil, err
 		}
-		kr2, err := getKeyRange(sourceShards[len(sourceShards)-1])
+		kr2, err := getKeyRange(shards[len(shards)-1])
 		if err != nil {
 			return nil, err
 		}

@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
@@ -47,6 +49,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
@@ -525,28 +528,65 @@ func TestMoveTablesIgnoreSourceKeyspace(t *testing.T) {
 	defaultCellName := "zone1"
 	workflow := "mtnosource"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
-	shard := "0"
-	targetShard := fmt.Sprintf("%s:%s", targetKs, shard)
-	tables := []string{"product", "customer", "merchant", "orders"}
+	defaultShard := "0"
+	tables := []string{"customer"}
 	var defaultCell *Cell
+	unshardedVSchema := `
+{
+  "tables": {
+    "customer": {}
+  }
+}`
+	shardedVSchema := `
+{
+  "sharded": true,
+  "vindexes": {
+    "xxhash": {
+      "type": "xxhash"
+    }
+  },
+  "tables": {
+	"customer": {
+      "column_vindexes": [
+        {
+          "column": "customer_id",
+          "name": "xxhash"
+        }
+      ]
+    }
+  }
+}`
 
-	run := func(t *testing.T, switchTraffic bool, args []string) {
+	run := func(t *testing.T, sourceShards, targetShards string, createArgs, completeArgs []string, switchTraffic bool) {
 		vc = NewVitessCluster(t, nil)
 		require.NotNil(t, vc)
 		defaultCell = vc.Cells[defaultCellName]
 		t.Cleanup(vc.TearDown)
 
-		_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
+		sourceVSchema, targetVSchema := unshardedVSchema, unshardedVSchema
+		if len(sourceShards) > 0 {
+			sourceVSchema = shardedVSchema
+		}
+		if len(targetShards) > 0 {
+			targetVSchema = shardedVSchema
+		}
+		targetShardNames := strings.Split(targetShards, ",")
+
+		_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, sourceShards, sourceVSchema, customerTable, 0, 0, 100, nil)
 		require.NoError(t, err)
-		_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, shard, "", "", 0, 0, 200, nil)
+		_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, targetShards, targetVSchema, "", 0, 0, 500, nil)
 		require.NoError(t, err)
 		verifyClusterHealth(t, vc)
 
-		insertInitialData(t)
+		if len(sourceShards) == 0 {
+			insertInitialData(t)
+		}
 
-		moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, strings.Join(tables, ","))
+		moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, strings.Join(tables, ","), createArgs...)
 		// Wait until we get through the copy phase...
-		catchup(t, vc.getPrimaryTablet(t, targetKs, shard), workflow, "MoveTables")
+		for _, targetShard := range targetShardNames {
+			catchup(t, vc.getPrimaryTablet(t, targetKs, targetShard), workflow, "MoveTables")
+		}
 
 		if switchTraffic {
 			switchReads(t, "MoveTables", defaultCellName, ksWorkflow, false)
@@ -561,34 +601,55 @@ func TestMoveTablesIgnoreSourceKeyspace(t *testing.T) {
 		vc.DeleteKeyspace(t, sourceKs)
 
 		// The command should fail.
-		out, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
+		out, err := vc.VtctldClient.ExecuteCommandWithOutput(completeArgs...)
 		require.Error(t, err, out)
 
 		// But it should succeed if we ignore the source keyspace.
 		confirmRoutingRulesExist(t)
-		args = append(args, "--ignore-source-keyspace")
-		out, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
+		completeArgs = append(completeArgs, "--ignore-source-keyspace")
+		out, err = vc.VtctldClient.ExecuteCommandWithOutput(completeArgs...)
 		require.NoError(t, err, out)
 		confirmNoRoutingRules(t)
 		for _, table := range tables {
-			validateTableInDenyList(t, vc, targetShard, table, false)
+			for _, targetShard := range targetShardNames {
+				tksShard := fmt.Sprintf("%s/%s", targetKs, targetShard)
+				validateTableInDenyList(t, vc, tksShard, table, false)
+			}
 		}
+
+		// Confirm that we cleaned up the proper shard routing rules.
+		out, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShardRoutingRules")
+		require.NoError(t, err, out)
+		var srr vschemapb.ShardRoutingRules
+		err = protojson.Unmarshal([]byte(out), &srr)
+		require.NoError(t, err)
+		srrMap := topotools.GetShardRoutingRulesMap(&srr)
+		for _, shard := range targetShardNames {
+			ksShard := fmt.Sprintf("%s.%s", targetKs, shard)
+			require.NotEqual(t, srrMap[ksShard], targetKs)
+		}
+
 		confirmNoWorkflows(t, targetKs)
 	}
 
 	t.Run("Workflow Delete", func(t *testing.T) {
 		args := []string{"Workflow", "--keyspace=" + targetKs, "delete", "--workflow=" + workflow}
-		run(t, false, args)
+		run(t, defaultShard, defaultShard, nil, args, false)
 	})
 
 	t.Run("MoveTables Cancel", func(t *testing.T) {
 		args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, "cancel"}
-		run(t, false, args)
+		run(t, defaultShard, defaultShard, nil, args, false)
+	})
+	t.Run("MoveTables Partial Cancel", func(t *testing.T) {
+		createArgs := []string{"--source-shards", "-80"}
+		args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, "cancel"}
+		run(t, "-80,80-", "-80,80-", createArgs, args, true)
 	})
 
 	t.Run("MoveTables Complete", func(t *testing.T) {
 		args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, "complete"}
-		run(t, true, args)
+		run(t, defaultShard, defaultShard, nil, args, true)
 	})
 }
 
