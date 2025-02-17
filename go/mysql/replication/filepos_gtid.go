@@ -151,13 +151,6 @@ func (gtid FilePosGTID) Union(other GTIDSet) GTIDSet {
 	return filePosOther
 }
 
-// Union implements GTIDSet.Union().
-func (gtid FilePosGTID) InPlaceUnion(other GTIDSet) GTIDSet {
-	gtid = gtid.Union(other).(FilePosGTID)
-
-	return gtid
-}
-
 // Last returns last filePosition
 // For filePos based GTID we have only one position
 // here we will just return the current filePos

@@ -447,63 +447,6 @@ func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
 	return newSet
 }
 
-// Union implements GTIDSet.Union().
-func (set Mysql56GTIDSet) InPlaceUnion(other GTIDSet) GTIDSet {
-	if other == nil {
-		return set
-	}
-	mydbOther, ok := other.(Mysql56GTIDSet)
-	if !ok {
-		return set
-	}
-	if set == nil {
-		set = mydbOther
-		return set
-	}
-
-	var nextInterval interval
-	for otherSID, otherIntervals := range mydbOther {
-		intervals, ok := set[otherSID]
-		if !ok {
-			// No matching server id, so we must add it from other set.
-			set[otherSID] = otherIntervals
-			continue
-		}
-
-		// Found server id match between sets, so now we need to add each interval.
-		s1 := intervals
-		s2 := otherIntervals
-
-		var newIntervals = make([]interval, 0, len(s1)+len(s2)) // pre-allocation saves computation time later on
-		for popInterval(&nextInterval, &s1, &s2) {
-			if len(newIntervals) == 0 {
-				newIntervals = append(newIntervals, nextInterval)
-				continue
-			}
-
-			activeInterval := &newIntervals[len(newIntervals)-1]
-
-			if nextInterval.end <= activeInterval.end {
-				// We hit an interval whose start was after or equal to the previous interval's start, but whose
-				// end is prior to the active intervals end. Skip to next interval.
-				continue
-			}
-
-			if nextInterval.start > activeInterval.end+1 {
-				// We found a gap, so we need to start a new interval.
-				newIntervals = append(newIntervals, nextInterval)
-				continue
-			}
-
-			// Extend our active interval.
-			activeInterval.end = nextInterval.end
-		}
-		set[otherSID] = newIntervals
-	}
-
-	return set
-}
-
 // SIDBlock returns the binary encoding of a MySQL 5.6 GTID set as expected
 // by internal commands that refer to an "SID block".
 //

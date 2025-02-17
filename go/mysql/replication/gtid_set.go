@@ -53,9 +53,6 @@ type GTIDSet interface {
 	// Union returns a union of the receiver GTIDSet and the supplied GTIDSet.
 	Union(GTIDSet) GTIDSet
 
-	// InPlaceUnion returns a union of the receiver GTIDSet and the supplied GTIDSet, modifying the receiver GTID set
-	InPlaceUnion(GTIDSet) GTIDSet
-
 	// Union returns a union of the receiver GTIDSet and the supplied GTIDSet.
 	Last() string
 }
