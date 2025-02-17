@@ -40,6 +40,7 @@ const testWorkflowFlavor = workflowFlavorRandom
 // It inserts initial data, then simulates load. We insert both child rows with foreign keys and those without,
 // i.e. with foreign_key_checks=0.
 func TestFKWorkflow(t *testing.T) {
+	setSidecarDBName("_vt")
 	extraVTTabletArgs = []string{
 		// Ensure that there are multiple copy phase cycles per table.
 		"--vstream_packet_size=256",
