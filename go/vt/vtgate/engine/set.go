@@ -68,7 +68,7 @@ type (
 	SysVarCheckAndIgnore struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
-		TargetDestination key.Destination `json:",omitempty"`
+		TargetDestination key.ShardDestination `json:",omitempty"`
 		Expr              string
 	}
 
@@ -76,7 +76,7 @@ type (
 	SysVarReservedConn struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
-		TargetDestination key.Destination `json:",omitempty"`
+		TargetDestination key.ShardDestination `json:",omitempty"`
 		Expr              string
 		SupportSetVar     bool
 	}
@@ -234,7 +234,7 @@ func (svci *SysVarCheckAndIgnore) VariableName() string {
 
 // Execute implements the SetOp interface method
 func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
-	rss, _, err := vcursor.ResolveDestinations(ctx, svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
+	rss, _, err := vcursor.ResolveDestinations(ctx, svci.Keyspace.Name, nil, []key.ShardDestination{svci.TargetDestination})
 	if err != nil {
 		return err
 	}
@@ -276,7 +276,7 @@ func (svs *SysVarReservedConn) VariableName() string {
 func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
 	// For those running on advanced vitess settings.
 	if svs.TargetDestination != nil {
-		rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
+		rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.ShardDestination{svs.TargetDestination})
 		if err != nil {
 			return err
 		}
@@ -324,7 +324,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	if svs.Name == "sql_mode" {
 		sysVarExprValidationQuery = fmt.Sprintf("select @@%s orig, %s new", svs.Name, svs.Expr)
 	}
-	rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.Destination{key.DestinationKeyspaceID{0}})
+	rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.ShardDestination{key.DestinationKeyspaceID{0}})
 	if err != nil {
 		return false, err
 	}

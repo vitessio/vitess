@@ -35,7 +35,7 @@ func TestSendTable(t *testing.T) {
 		testName             string
 		sharded              bool
 		shards               []string
-		destination          key.Destination
+		destination          key.ShardDestination
 		expectedQueryLog     []string
 		expectedError        string
 		isDML                bool
@@ -174,7 +174,7 @@ func TestSendTable_StreamExecute(t *testing.T) {
 		testName         string
 		sharded          bool
 		shards           []string
-		destination      key.Destination
+		destination      key.ShardDestination
 		expectedQueryLog []string
 		expectedError    string
 		isDML            bool

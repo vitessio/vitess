@@ -39,7 +39,7 @@ type Send struct {
 	Keyspace *vindexes.Keyspace
 
 	// TargetDestination specifies an explicit target destination to send the query to.
-	TargetDestination key.Destination
+	TargetDestination key.ShardDestination
 
 	// Query specifies the query to be executed.
 	Query string
@@ -125,7 +125,7 @@ func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[str
 }
 
 func (s *Send) checkAndReturnShards(ctx context.Context, vcursor VCursor) ([]*srvtopo.ResolvedShard, error) {
-	rss, _, err := vcursor.ResolveDestinations(ctx, s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
+	rss, _, err := vcursor.ResolveDestinations(ctx, s.Keyspace.Name, nil, []key.ShardDestination{s.TargetDestination})
 	if err != nil {
 		return nil, err
 	}

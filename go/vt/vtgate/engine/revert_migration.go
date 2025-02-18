@@ -40,7 +40,7 @@ type RevertMigration struct {
 	Keyspace          *vindexes.Keyspace
 	Stmt              *sqlparser.RevertMigration
 	Query             string
-	TargetDestination key.Destination
+	TargetDestination key.ShardDestination
 }
 
 func (v *RevertMigration) description() PrimitiveDescription {

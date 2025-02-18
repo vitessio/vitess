@@ -340,7 +340,7 @@ func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map
 
 	// If not find, then pick any shard.
 	if rs == nil {
-		rss, _, err := vcursor.ResolveDestinations(ctx, route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+		rss, _, err := vcursor.ResolveDestinations(ctx, route.Keyspace.Name, nil, []key.ShardDestination{key.DestinationAnyShard{}})
 		if err != nil {
 			return nil, err
 		}
@@ -433,7 +433,7 @@ func (route *Route) executeAfterLookup(
 	bindVars map[string]*querypb.BindVariable,
 	wantfields bool,
 	ids []sqltypes.Value,
-	dest []key.Destination,
+	dest []key.ShardDestination,
 ) (*sqltypes.Result, error) {
 	protoIds := make([]*querypb.Value, 0, len(ids))
 	for _, id := range ids {
@@ -457,7 +457,7 @@ func (route *Route) streamExecuteAfterLookup(
 	wantfields bool,
 	callback func(*sqltypes.Result) error,
 	ids []sqltypes.Value,
-	dest []key.Destination,
+	dest []key.ShardDestination,
 ) error {
 	protoIds := make([]*querypb.Value, 0, len(ids))
 	for _, id := range ids {
