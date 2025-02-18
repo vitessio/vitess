@@ -1682,7 +1682,7 @@ func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *econ
 
 	stmt, reservedVars, err := parseAndValidateQuery(sql, sqlparser.NewTestParser())
 	require.NoError(t, err)
-	plan, err := e.getPlan(context.Background(), vcursor, sql, stmt, comments, bindVars, reservedVars /* normalize */, e.config.Normalize, logStats)
+	plan, err := e.getPlan(context.Background(), vcursor, sql, stmt, comments, bindVars, reservedVars, false, e.config.Normalize, logStats)
 	require.NoError(t, err)
 
 	// Wait for cache to settle
@@ -1846,7 +1846,7 @@ func TestGetPlanPriority(t *testing.T) {
 			qh, _ := sqlparser.BuildQueryHints(stmt)
 			priorityFromStatement := qh.Priority
 
-			_, err = r.getPlan(context.Background(), vCursor, testCase.sql, stmt, makeComments("/* some comment */"), map[string]*querypb.BindVariable{}, nil, true, logStats)
+			_, err = r.getPlan(context.Background(), vCursor, testCase.sql, stmt, makeComments("/* some comment */"), map[string]*querypb.BindVariable{}, nil, false, true, logStats)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {

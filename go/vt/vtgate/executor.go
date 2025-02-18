@@ -1082,17 +1082,7 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(
-	ctx context.Context,
-	vcursor *econtext.VCursorImpl,
-	query string,
-	stmt sqlparser.Statement,
-	comments sqlparser.MarginComments,
-	bindVars map[string]*querypb.BindVariable,
-	reservedVars *sqlparser.ReservedVars,
-	allowParameterization bool,
-	logStats *logstats.LogStats,
-) (*engine.Plan, error) {
+func (e *Executor) getPlan(ctx context.Context, vcursor *econtext.VCursorImpl, query string, stmt sqlparser.Statement, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, reservedVars *sqlparser.ReservedVars, usePreparedPlan bool, allowParameterization bool, logStats *logstats.LogStats) (plan *engine.Plan, err error) {
 	if e.VSchema() == nil {
 		return nil, vterrors.VT13001("vschema not initialized")
 	}
@@ -1100,9 +1090,17 @@ func (e *Executor) getPlan(
 	if e.vConfig.SetVarEnabled {
 		setVarComment = vcursor.PrepareSetVarComment()
 	}
-	plan, err := e.getCachedOrBuild(ctx, vcursor, query, stmt, reservedVars, bindVars, allowParameterization, comments, logStats, setVarComment)
-	if err != nil {
-		return nil, err
+
+	if usePreparedPlan {
+		planKey := createPlanKey(ctx, vcursor, query, setVarComment)
+		plan, logStats.CachedPlan = e.plans.Get(planKey.Hash(), e.epoch.Load())
+	}
+
+	if plan == nil {
+		plan, err = e.getCachedOrBuild(ctx, vcursor, query, stmt, reservedVars, bindVars, usePreparedPlan, allowParameterization, comments, logStats, setVarComment)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	qh := plan.QueryHints
@@ -1133,6 +1131,7 @@ func (e *Executor) getCachedOrBuild(
 	stmt sqlparser.Statement,
 	reservedVars *sqlparser.ReservedVars,
 	bindVars map[string]*querypb.BindVariable,
+	useOriginalQuery bool,
 	allowParameterization bool,
 	comments sqlparser.MarginComments,
 	logStats *logstats.LogStats,
@@ -1162,7 +1161,7 @@ func (e *Executor) getCachedOrBuild(
 	}
 	stmt = rewriteASTResult.AST
 	bindVarNeeds := rewriteASTResult.BindVarNeeds
-	if rewriteASTResult.UpdateQueryFromAST {
+	if rewriteASTResult.UpdateQueryFromAST && !useOriginalQuery {
 		query = sqlparser.String(stmt)
 	}
 
@@ -1454,7 +1453,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 		return nil, err
 	}
 
-	plan, err := e.getPlan(ctx, vcursor, sql, stmt, comments, bindVars, reservedVars /* parameterize */, false, logStats)
+	plan, err := e.getPlan(ctx, vcursor, sql, stmt, comments, bindVars, reservedVars /* usePreparedPlan */, true /* allowParameterization */, false, logStats)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
@@ -1630,17 +1629,7 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, vcursor *econtext.VCurso
 
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, vcursor.Session().GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
-	plan, err := e.getPlan(
-		ctx,
-		vcursor,
-		query,
-		sqlparser.Clone(stmt),
-		vcursor.GetMarginComments(),
-		map[string]*querypb.BindVariable{},
-		reservedVars, /* normalize */
-		false,
-		lStats,
-	)
+	plan, err := e.getPlan(ctx, vcursor, query, sqlparser.Clone(stmt), vcursor.GetMarginComments(), map[string]*querypb.BindVariable{}, reservedVars, false, false, lStats)
 	if err != nil {
 		return nil, nil, err
 	}
