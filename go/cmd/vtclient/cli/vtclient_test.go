@@ -127,6 +127,7 @@ func TestVtclient(t *testing.T) {
 		args := []string{"--server", vtgateAddr}
 		args = append(args, q.args...)
 
+		InitializeFlags()
 		err := Main.ParseFlags(args)
 		require.NoError(t, err)
 
