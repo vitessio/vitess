@@ -111,7 +111,7 @@ func CreateTestSemiSyncMonitor(db *fakesqldb.DB, exporter *servenv.Exporter) *Mo
 	return NewMonitor(&tabletenv.TabletConfig{
 		DB: dbc,
 		SemiSyncMonitor: tabletenv.SemiSyncMonitorConfig{
-			Interval: 10 * time.Second,
+			Interval: 1 * time.Second,
 		},
 	}, exporter)
 }
