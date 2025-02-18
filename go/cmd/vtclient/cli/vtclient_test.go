@@ -121,13 +121,14 @@ func TestVtclient(t *testing.T) {
 		},
 	}
 
+	// initialize the vtclient flags before running any commands
+	InitializeFlags()
 	for _, q := range queries {
 		// Run main function directly and not as external process. To achieve this,
 		// overwrite os.Args which is used by pflag.Parse().
 		args := []string{"--server", vtgateAddr}
 		args = append(args, q.args...)
 
-		InitializeFlags()
 		err := Main.ParseFlags(args)
 		require.NoError(t, err)
 
