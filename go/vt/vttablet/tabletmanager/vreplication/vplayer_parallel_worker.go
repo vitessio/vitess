@@ -87,31 +87,21 @@ func (w *parallelWorker) subscribeCommitWorkerEvent(sequenceNumber int64) chan e
 }
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
-func (w *parallelWorker) updatePos(ctx context.Context, pos string, transactionTimestamp int64) (posReached bool, err error) {
+func (w *parallelWorker) updatePos(ctx context.Context, posStr string, transactionTimestamp int64) (posReached bool, err error) {
 	if w.dbClient.InTransaction {
-		p, err := binlogplayer.DecodeMySQL56Position(pos)
+		// We're assuming there's multiple calls to updatePos within this
+		// transaction. We don't write them at this time. Instead, we
+		// aggregate the given positions and write them in the commit.
+		pos, err := binlogplayer.DecodeMySQL56Position(posStr)
 		if err != nil {
 			return false, err
 		}
-		w.updatedPos = replication.AppendGTIDSet(w.updatedPos, p.GTIDSet)
+		w.updatedPos = replication.AppendGTIDSetInPlace(w.updatedPos, pos.GTIDSet)
 		w.updatedPosTimestamp = max(w.updatedPosTimestamp, transactionTimestamp)
 		return false, nil
 	}
-	update := binlogplayer.GenerateUpdateWorkerPos(w.vp.vr.id, w.index, pos, transactionTimestamp)
+	update := binlogplayer.GenerateUpdateWorkerPos(w.vp.vr.id, w.index, posStr, transactionTimestamp)
 	if _, err := w.queryFunc(ctx, update); err != nil {
-		// TODO(remove) this is just debug info
-		{
-			query := binlogplayer.ReadVReplicationWorkersGTIDs(w.vp.vr.id)
-			qr, err := w.dbClient.ExecuteFetch(query, -1)
-			if err != nil {
-				log.Errorf("Error fetching vreplication worker positions: %v", err)
-			} else {
-				for _, row := range qr.Rows {
-					log.Errorf("====== QQQ updatePos gtid= %v", row[0].ToString())
-				}
-			}
-		}
-		// end TODO
 		return false, fmt.Errorf("error updating position: %v", err)
 	}
 	// TODO (shlomi): handle these
