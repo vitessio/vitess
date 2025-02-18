@@ -1047,6 +1047,13 @@ func confirmKeyspacesRoutedTo(t *testing.T, keyspace string, routedKeyspace, tab
 	}
 }
 
+// confirmNoWorkflows confirms that there are no active workflows in the given keyspace.
+func confirmNoWorkflows(t *testing.T, keyspace string) {
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetWorkflows", keyspace, "--compact", "--include-logs=false")
+	require.NoError(t, err)
+	require.True(t, isEmptyWorkflowShowOutput(output))
+}
+
 // getVReplicationConfig returns the vreplication config for one random workflow for a given tablet. Currently, this is
 // used when there is only one workflow, so we are using this simple method to get the config.
 func getVReplicationConfig(t *testing.T, tab *cluster.VttabletProcess) map[string]string {
