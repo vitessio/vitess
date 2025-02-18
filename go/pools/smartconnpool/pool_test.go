@@ -608,6 +608,7 @@ func TestIdleTimeout(t *testing.T) {
 
 			conns = append(conns, r)
 		}
+		assert.GreaterOrEqual(t, state.open.Load(), int64(5))
 
 		// wait a long while; ensure that none of the conns have been closed
 		time.Sleep(1 * time.Second)
@@ -628,9 +629,15 @@ func TestIdleTimeout(t *testing.T) {
 				t.Fatalf("Connections remain open after 1 second")
 			}
 		}
+		// At least 5 connections should have been closed by now.
+		assert.GreaterOrEqual(t, p.Metrics.IdleClosed(), int64(5), "At least 5 connections should have been closed by now.")
 
-		// no need to assert anything: all the connections in the pool should are idle-closed
-		// now and if they're not the test will timeout and fail
+		// At any point, at least 4 connections should be open, with 1 either in the process of opening or already opened.
+		// The idle connection closer shuts down one connection at a time.
+		assert.GreaterOrEqual(t, state.open.Load(), int64(4))
+
+		// The number of available connections in the pool should remain at 5.
+		assert.EqualValues(t, 5, p.Available())
 	}
 
 	t.Run("WithoutSettings", func(t *testing.T) { testTimeout(t, nil) })
