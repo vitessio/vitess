@@ -145,7 +145,7 @@ func TestRegionExperimentalMap(t *testing.T) {
 	}})
 	assert.NoError(t, err)
 
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x01\x16k@\xb4J\xbaK\xd6")),
 		key.DestinationKeyspaceID([]byte("\xff\x16k@\xb4J\xbaK\xd6")),
 		key.DestinationKeyspaceID([]byte("\x00\x16k@\xb4J\xbaK\xd6")),
@@ -171,7 +171,7 @@ func TestRegionExperimentalMapMulti2(t *testing.T) {
 	}})
 	assert.NoError(t, err)
 
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x00\x01\x16k@\xb4J\xbaK\xd6")),
 		key.DestinationKeyspaceID([]byte("\x00\xff\x16k@\xb4J\xbaK\xd6")),
 		key.DestinationKeyspaceID([]byte("\x01\x00\x16k@\xb4J\xbaK\xd6")),

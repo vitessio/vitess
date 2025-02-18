@@ -51,7 +51,7 @@ func init() {
 	Register("lookup_unicodeloosemd5_hash_unique", newLookupUnicodeLooseMD5HashUnique)
 }
 
-//====================================================================
+// ====================================================================
 
 // LookupUnicodeLooseMD5Hash defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
@@ -117,9 +117,9 @@ func (lh *LookupUnicodeLooseMD5Hash) NeedsVCursor() bool {
 	return true
 }
 
-// Map can map ids to key.Destination objects.
-func (lh *LookupUnicodeLooseMD5Hash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
+// Map can map ids to key.ShardDestination objects.
+func (lh *LookupUnicodeLooseMD5Hash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(ids))
 	if lh.writeOnly {
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
@@ -241,7 +241,7 @@ func (lh *LookupUnicodeLooseMD5Hash) UnknownParams() []string {
 	return lh.unknownParams
 }
 
-//====================================================================
+// ====================================================================
 
 // LookupUnicodeLooseMD5HashUnique defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
@@ -307,9 +307,9 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) NeedsVCursor() bool {
 	return true
 }
 
-// Map can map ids to key.Destination objects.
-func (lhu *LookupUnicodeLooseMD5HashUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
+// Map can map ids to key.ShardDestination objects.
+func (lhu *LookupUnicodeLooseMD5HashUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(ids))
 	if lhu.writeOnly {
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})

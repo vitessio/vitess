@@ -101,7 +101,7 @@ func TestReverseBitsMap(t *testing.T) {
 		sqltypes.NewInt64(6),
 	})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x80\x00\x00\x00\x00\x00\x00\x00")),
 		key.DestinationKeyspaceID([]byte("@\x00\x00\x00\x00\x00\x00\x00")),
 		key.DestinationKeyspaceID([]byte("\xc0\x00\x00\x00\x00\x00\x00\x00")),

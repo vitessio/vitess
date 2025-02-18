@@ -126,7 +126,7 @@ func (c *DBDDL) createDatabase(ctx context.Context, vcursor VCursor, plugin DBDD
 	var destinations []*srvtopo.ResolvedShard
 	for {
 		// loop until we have found a valid shard
-		destinations, _, err = vcursor.ResolveDestinations(ctx, c.name, nil, []key.Destination{key.DestinationAllShards{}})
+		destinations, _, err = vcursor.ResolveDestinations(ctx, c.name, nil, []key.ShardDestination{key.DestinationAllShards{}})
 		if err == nil {
 			break
 		}

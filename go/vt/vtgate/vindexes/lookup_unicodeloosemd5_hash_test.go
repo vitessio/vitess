@@ -69,7 +69,7 @@ func TestLookupUnicodeLooseMD5HashMap(t *testing.T) {
 
 	got, err := lookup.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceIDs([][]byte{
 			[]byte("\x16k@\xb4J\xbaK\xd6"),
 			[]byte("\x06\xe7\xea\"Βp\x8f"),
@@ -122,7 +122,7 @@ func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
 
 	got, err := lnu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceIDs([][]byte{
 			[]byte("\x16k@\xb4J\xbaK\xd6"),
 			[]byte("\x06\xe7\xea\"Βp\x8f"),
@@ -159,7 +159,7 @@ func TestLookupUnicodeLooseMD5HashMapWriteOnly(t *testing.T) {
 
 	got, err := lnu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
 		},
@@ -178,7 +178,7 @@ func TestLookupUnicodeLooseMD5HashMapAbsent(t *testing.T) {
 
 	got, err := lnu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationNone{},
 		key.DestinationNone{},
 	}

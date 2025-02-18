@@ -308,7 +308,7 @@ func TestReservedOnMultiReplica(t *testing.T) {
 	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
-	destinations := []key.Destination{key.DestinationShard("0")}
+	destinations := []key.ShardDestination{key.DestinationShard("0")}
 	for i := 0; i < 10; i++ {
 		executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
 		assert.EqualValues(t, 1, sbc0_1.ReserveCount.Load()+sbc0_2.ReserveCount.Load(), "sbc0 reserve count")
@@ -458,7 +458,7 @@ func TestReservedBeginTableDriven(t *testing.T) {
 			for _, action := range test.actions {
 				session.Session.InTransaction = action.transaction
 				session.Session.InReservedConn = action.reserved
-				var destinations []key.Destination
+				var destinations []key.ShardDestination
 				for _, shard := range action.shards {
 					destinations = append(destinations, key.DestinationShard(shard))
 				}
@@ -488,7 +488,7 @@ func TestReservedConnFail(t *testing.T) {
 	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
-	destinations := []key.Destination{key.DestinationShard("0")}
+	destinations := []key.ShardDestination{key.DestinationShard("0")}
 
 	executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 1, len(session.ShardSessions))

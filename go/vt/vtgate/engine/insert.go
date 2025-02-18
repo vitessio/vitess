@@ -237,7 +237,7 @@ func (ins *Insert) getInsertShardedQueries(
 	// each RSS.  So we pass the ksid indexes in as ids, and get them back
 	// as values. We also skip nil KeyspaceIds, no need to resolve them.
 	var indexes []*querypb.Value
-	var destinations []key.Destination
+	var destinations []key.ShardDestination
 	for i, ksid := range keyspaceIDs {
 		if ksid != nil {
 			indexes = append(indexes, &querypb.Value{

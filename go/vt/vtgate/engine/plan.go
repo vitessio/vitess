@@ -61,7 +61,7 @@ type PlanKey struct {
 }
 
 func (pk PlanKey) DebugString() string {
-	return fmt.Sprintf("CurrentKeyspace: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.Query, pk.SetVarComment, pk.Collation)
+	return fmt.Sprintf("CurrentKeyspace: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
 }
 
 func (pk PlanKey) Hash() theine.HashKey256 {

@@ -36,7 +36,7 @@ func (*hashIndex) NeedsVCursor() bool { return false }
 func (*hashIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*hashIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*hashIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
@@ -53,7 +53,7 @@ func (*lookupIndex) NeedsVCursor() bool { return false }
 func (*lookupIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*lookupIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*lookupIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*lookupIndex) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
@@ -87,7 +87,7 @@ func (*nameLkpIndex) GetCommitOrder() vtgatepb.CommitOrder { return vtgatepb.Com
 func (*nameLkpIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*nameLkpIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*nameLkpIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*nameLkpIndex) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
@@ -102,7 +102,7 @@ func (*nameLkpIndex) Update(context.Context, vindexes.VCursor, []sqltypes.Value,
 func (*nameLkpIndex) Query() (string, []string) {
 	return "select name, keyspace_id from name_user_vdx where name in ::name", []string{"name"}
 }
-func (*nameLkpIndex) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.Destination, error) {
+func (*nameLkpIndex) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 
@@ -131,7 +131,7 @@ func (*costlyIndex) NeedsVCursor() bool { return false }
 func (*costlyIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*costlyIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*costlyIndex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*costlyIndex) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
@@ -157,7 +157,7 @@ func (m *multiColIndex) String() string   { return m.name }
 func (*multiColIndex) Cost() int          { return 1 }
 func (*multiColIndex) IsUnique() bool     { return true }
 func (*multiColIndex) NeedsVCursor() bool { return false }
-func (*multiColIndex) Map(ctx context.Context, vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func (*multiColIndex) Map(ctx context.Context, vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*multiColIndex) Verify(ctx context.Context, vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
@@ -187,7 +187,7 @@ func (*unqLkpVdxBackfill) GetCommitOrder() vtgatepb.CommitOrder { return vtgatep
 func (*unqLkpVdxBackfill) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*unqLkpVdxBackfill) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*unqLkpVdxBackfill) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*unqLkpVdxBackfill) Create(context.Context, vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error {
@@ -202,7 +202,7 @@ func (*unqLkpVdxBackfill) Update(context.Context, vindexes.VCursor, []sqltypes.V
 func (*unqLkpVdxBackfill) Query() (string, []string) {
 	return "select unq_key, keyspace_id from unq_lkp_idx where unq_key in ::unq_key", []string{"unq_key"}
 }
-func (*unqLkpVdxBackfill) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.Destination, error) {
+func (*unqLkpVdxBackfill) MapResult([]sqltypes.Value, []*sqltypes.Result) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (u *unqLkpVdxBackfill) IsBackfilling() bool { return u.inBackfill }

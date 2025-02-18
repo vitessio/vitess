@@ -82,8 +82,8 @@ func (*keyRangeLookuper) NeedsVCursor() bool { return false }
 func (*keyRangeLookuper) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuper) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	return []key.Destination{
+func (*keyRangeLookuper) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	return []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{
 				End: []byte{0x10},
@@ -107,8 +107,8 @@ func (*keyRangeLookuperUnique) NeedsVCursor() bool { return false }
 func (*keyRangeLookuperUnique) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuperUnique) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	return []key.Destination{
+func (*keyRangeLookuperUnique) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	return []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{
 				End: []byte{0x10},

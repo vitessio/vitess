@@ -242,7 +242,7 @@ func TestMultiColMap(t *testing.T) {
 	}})
 	assert.NoError(t, err)
 
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceID("\x16\x6b\x40\x16\x6b\x40\x16\x6b"),
 		key.DestinationKeyspaceID("\x25\x4e\x88\x16\x6b\x40\x16\x6b"),
 		key.DestinationKeyspaceID("\xdd\x7c\x0b\x16\x6b\x40\x16\x6b"),

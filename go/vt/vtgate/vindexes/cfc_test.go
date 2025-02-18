@@ -405,7 +405,7 @@ func TestCFCPrefixMap(t *testing.T) {
 	cases := []struct {
 		testName string
 		id       string
-		dest     key.Destination
+		dest     key.ShardDestination
 	}{
 		{
 			testName: "literal regular",
@@ -540,7 +540,7 @@ func TestCFCFindPrefixEscape(t *testing.T) {
 func TestDestinationKeyRangeFromPrefix(t *testing.T) {
 	testCases := []struct {
 		start []byte
-		dest  key.Destination
+		dest  key.ShardDestination
 	}{
 		{
 			start: []byte{3, 123, 255},

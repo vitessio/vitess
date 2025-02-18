@@ -30,6 +30,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/srvtopo"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/safehtml/template"
 	"github.com/stretchr/testify/assert"
@@ -60,6 +63,78 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
+
+type fakeResolver struct {
+	gw            srvtopo.Gateway
+	resolveShards []*srvtopo.ResolvedShard
+}
+
+func (f *fakeResolver) GetGateway() srvtopo.Gateway {
+	return f.gw
+}
+
+func (f *fakeResolver) ResolveDestinations(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ids []*querypb.Value, destinations []key.ShardDestination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	return f.resolveShards, nil, nil
+}
+
+func (f *fakeResolver) ResolveDestinationsMultiCol(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ids [][]sqltypes.Value, destinations []key.ShardDestination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {
+	panic("implement me")
+}
+
+var _ econtext.Resolver = (*fakeResolver)(nil)
+
+func TestPlanKey(t *testing.T) {
+	ks1 := &vindexes.Keyspace{Name: "ks1"}
+	ks1Schema := &vindexes.KeyspaceSchema{Keyspace: ks1}
+	vschemaWith1KS := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			ks1.Name: ks1Schema,
+		},
+	}
+
+	type testCase struct {
+		targetString          string
+		expectedPlanPrefixKey string
+		resolvedShard         []*srvtopo.ResolvedShard
+		setVarComment         string
+	}
+
+	tests := []testCase{{
+		targetString:          "",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+	}, {
+		setVarComment:         "sEtVaRcOmMeNt",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255",
+	}, {
+		targetString:          "ks1@replica",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+	}, {
+		targetString:          "ks1:-80",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255",
+	}, {
+		targetString: "ks1[deadbeef]",
+		resolvedShard: []*srvtopo.ResolvedShard{
+			{Target: &querypb.Target{Keyspace: "ks1", Shard: "-66"}},
+			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}}},
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255",
+	}}
+	cfg := econtext.VCursorConfig{
+		Collation:         collations.CollationUtf8mb4ID,
+		DefaultTabletType: topodatapb.TabletType_PRIMARY,
+	}
+
+	e, _, _, _, ctx := createExecutorEnv(t)
+	e.vschema = vschemaWith1KS
+	for i, tc := range tests {
+		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
+			ss := econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString})
+			resolver := &fakeResolver{resolveShards: tc.resolvedShard}
+			vc, _ := econtext.NewVCursorImpl(ss, makeComments(""), e, nil, e.vm, e.VSchema(), resolver, nil, nullResultsObserver{}, cfg)
+			key := createPlanKey(ctx, vc, "SELECT 1", tc.setVarComment)
+			require.Equal(t, tc.expectedPlanPrefixKey, key.DebugString(), "test case %d", i)
+		})
+	}
+}
 
 func TestExecutorResultsExceeded(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
@@ -1591,8 +1666,8 @@ func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sq
 			return true
 		})
 	} else {
-		h := e.hashPlan(context.Background(), vc, sql, "")
-		plan, _ = e.plans.Get(h, e.epoch.Load())
+		h := createPlanKey(context.Background(), vc, sql, "")
+		plan, _ = e.plans.Get(h.Hash(), e.epoch.Load())
 	}
 	require.Truef(t, plan != nil, "plan not found for query: %s", sql)
 	return plan
@@ -2140,7 +2215,7 @@ func TestExecutorOther(t *testing.T) {
 				if tc.hasNoKeyspaceErr {
 					assert.Error(t, err, econtext.ErrNoKeyspace.Error())
 				} else if tc.hasDestinationShardErr {
-					assert.Errorf(t, err, "Destination can only be a single shard for statement: %s", stmt)
+					assert.Errorf(t, err, "ShardDestination can only be a single shard for statement: %s", stmt)
 				} else {
 					assert.NoError(t, err)
 				}
@@ -2348,7 +2423,7 @@ func TestExecutorOtherAdmin(t *testing.T) {
 			if tc.hasNoKeyspaceErr {
 				assert.Error(t, err, econtext.ErrNoKeyspace.Error())
 			} else if tc.hasDestinationShardErr {
-				assert.Errorf(t, err, "Destination can only be a single shard for statement: %s, got: DestinationExactKeyRange(-)", stmt)
+				assert.Errorf(t, err, "ShardDestination can only be a single shard for statement: %s, got: DestinationExactKeyRange(-)", stmt)
 			} else {
 				assert.NoError(t, err)
 			}

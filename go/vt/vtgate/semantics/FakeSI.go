@@ -40,7 +40,7 @@ type FakeSI struct {
 }
 
 // FindTableOrVindex implements the SchemaInformation interface
-func (s *FakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+func (s *FakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
 	table, ok := s.Tables[sqlparser.String(tablename)]
 	if ok {
 		return table, nil, "", 0, nil, nil

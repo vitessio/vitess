@@ -105,7 +105,7 @@ func TestHashMap(t *testing.T) {
 		sqltypes.NewInt64(-9223372036854775808),  // - 2^63
 	})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x16k@\xb4J\xbaK\xd6")),
 		key.DestinationKeyspaceID([]byte("\x06\xe7\xea\"Βp\x8f")),
 		key.DestinationKeyspaceID([]byte("N\xb1\x90ɢ\xfa\x16\x9c")),

@@ -1076,7 +1076,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
+func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
 	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
 }
 
@@ -1172,11 +1172,11 @@ func (e *Executor) getCachedOrBuild(
 	planCachable := sqlparser.CachePlan(stmt) && vcursor.CachePlan()
 	if planCachable {
 		// build Plan key
-		planKey := e.hashPlan(ctx, vcursor, query, setVarComment)
+		planKey := createPlanKey(ctx, vcursor, query, setVarComment)
 
 		var plan *engine.Plan
 		var err error
-		plan, logStats.CachedPlan, err = e.plans.GetOrLoad(planKey, e.epoch.Load(), func() (*engine.Plan, error) {
+		plan, logStats.CachedPlan, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
 			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh)
 		})
 		return plan, err
@@ -1184,36 +1184,43 @@ func (e *Executor) getCachedOrBuild(
 	return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh)
 }
 
-func (e *Executor) hashPlan(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) theine.HashKey256 {
-	var allDest []string
-	currDest := vcursor.Destination()
-	if currDest != nil {
-		switch currDest.(type) {
-		case key.DestinationKeyspaceID, key.DestinationKeyspaceIDs:
-			resolved, _, err := vcursor.ResolveDestinations(ctx, vcursor.GetKeyspace(), nil, []key.Destination{currDest})
-			if err == nil && len(resolved) > 0 {
-				shards := make([]string, len(resolved))
-				for i := 0; i < len(shards); i++ {
-					shards[i] = resolved[i].Target.GetShard()
-				}
-				sort.Strings(shards)
-				allDest = shards
-			}
-		default:
-			allDest = []string{currDest.String()}
-		}
-	}
+func createPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {
+	allDest := getDestinations(ctx, vcursor)
 
-	pk := engine.PlanKey{
+	return engine.PlanKey{
 		CurrentKeyspace: vcursor.GetKeyspace(),
 		Destination:     strings.Join(allDest, ","),
 		Query:           query,
 		SetVarComment:   setVarComment,
 		Collation:       vcursor.ConnCollation(),
 	}
+}
 
-	planKey := pk.Hash()
-	return planKey
+func getDestinations(ctx context.Context, vcursor *econtext.VCursorImpl) []string {
+	currDest := vcursor.ShardDestination()
+	if currDest == nil {
+		return nil
+	}
+
+	switch currDest.(type) {
+	case key.DestinationKeyspaceID, key.DestinationKeyspaceIDs:
+		// these need to be resolved to shards
+	default:
+		return []string{currDest.String()}
+	}
+
+	resolved, _, err := vcursor.ResolveDestinations(ctx, vcursor.GetKeyspace(), nil, []key.ShardDestination{currDest})
+	if err != nil || len(resolved) <= 0 {
+		return nil
+	}
+
+	shards := make([]string, len(resolved))
+	for i := 0; i < len(shards); i++ {
+		shards[i] = resolved[i].Target.GetShard()
+	}
+	sort.Strings(shards)
+
+	return shards
 }
 
 func (e *Executor) buildStatement(

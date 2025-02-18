@@ -50,7 +50,7 @@ type VSchemaWrapper struct {
 	V                     *vindexes.VSchema
 	Keyspace              *vindexes.Keyspace
 	TabletType_           topodatapb.TabletType
-	Dest                  key.Destination
+	Dest                  key.ShardDestination
 	SysVarEnabled         bool
 	ForeignKeyChecksState *bool
 	Version               plancontext.PlannerVersion
@@ -227,7 +227,7 @@ func (vw *VSchemaWrapper) SysVarSetEnabled() bool {
 	return vw.SysVarEnabled
 }
 
-func (vw *VSchemaWrapper) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
+func (vw *VSchemaWrapper) TargetDestination(qualifier string) (key.ShardDestination, *vindexes.Keyspace, topodatapb.TabletType, error) {
 	var keyspaceName string
 	if vw.Keyspace != nil {
 		keyspaceName = vw.Keyspace.Name
@@ -249,11 +249,11 @@ func (vw *VSchemaWrapper) TabletType() topodatapb.TabletType {
 	return vw.TabletType_
 }
 
-func (vw *VSchemaWrapper) Destination() key.Destination {
+func (vw *VSchemaWrapper) ShardDestination() key.ShardDestination {
 	return vw.Dest
 }
 
-func (vw *VSchemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.BaseTable, string, topodatapb.TabletType, key.Destination, error) {
+func (vw *VSchemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.BaseTable, string, topodatapb.TabletType, key.ShardDestination, error) {
 	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, destKeyspace, destTabletType, destTarget, err
@@ -284,7 +284,7 @@ func (vw *VSchemaWrapper) FindViewTarget(name sqlparser.TableName) (*vindexes.Ke
 	return nil, nil
 }
 
-func (vw *VSchemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+func (vw *VSchemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
 	return vw.Vcursor.FindTableOrVindex(tab)
 }
 

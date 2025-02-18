@@ -55,7 +55,7 @@ func buildVExplainPlan(
 
 func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) (*planResult, error) {
 	var keyspace *vindexes.Keyspace
-	var dest key.Destination
+	var dest key.ShardDestination
 
 	if sqlparser.SystemSchema(explain.Table.Qualifier.String()) {
 		var err error

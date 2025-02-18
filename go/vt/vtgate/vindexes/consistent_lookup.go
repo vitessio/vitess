@@ -101,9 +101,9 @@ func (lu *ConsistentLookup) NeedsVCursor() bool {
 	return true
 }
 
-// Map can map ids to key.Destination objects.
-func (lu *ConsistentLookup) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
+// Map can map ids to key.ShardDestination objects.
+func (lu *ConsistentLookup) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(ids))
 	if lu.writeOnly {
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
@@ -127,8 +127,8 @@ func (lu *ConsistentLookup) Map(ctx context.Context, vcursor VCursor, ids []sqlt
 }
 
 // MapResult implements the LookupPlanable interface
-func (lu *ConsistentLookup) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
+func (lu *ConsistentLookup) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(ids))
 	if lu.writeOnly {
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
@@ -214,9 +214,9 @@ func (lu *ConsistentLookupUnique) NeedsVCursor() bool {
 	return true
 }
 
-// Map can map ids to key.Destination objects.
-func (lu *ConsistentLookupUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
+// Map can map ids to key.ShardDestination objects.
+func (lu *ConsistentLookupUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(ids))
 	if lu.writeOnly {
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
@@ -232,8 +232,8 @@ func (lu *ConsistentLookupUnique) Map(ctx context.Context, vcursor VCursor, ids 
 }
 
 // MapResult implements the LookupPlanable interface
-func (lu *ConsistentLookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
+func (lu *ConsistentLookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(ids))
 	if lu.writeOnly {
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})

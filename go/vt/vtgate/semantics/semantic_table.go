@@ -165,7 +165,7 @@ type (
 
 	// SchemaInformation is used to provide table information from Vschema.
 	SchemaInformation interface {
-		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
+		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error)
 		ConnCollation() collations.ID
 		Environment() *vtenv.Environment
 		// ForeignKeyMode returns the foreign_key flag value
