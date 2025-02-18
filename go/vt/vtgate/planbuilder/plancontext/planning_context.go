@@ -43,7 +43,15 @@ type PlanningContext struct {
 	// a join predicate is reverted to its original form during planning.
 	skipPredicates map[sqlparser.Expr]any
 
+	// skipValuesArgument tracks Values operator that should be skipped when
+	// rewriting the operator tree to an AST tree.
+	// This happens when a ValuesJoin is pushed under a route and we do not
+	// need to have a Values operator anymore on its RHS.
+	skipValuesArgument map[string]any
+
 	PlannerVersion querypb.ExecuteOptions_PlannerVersion
+
+	AllowValuesJoin bool
 
 	// If we during planning have turned this expression into an argument name,
 	// we can continue using the same argument name
@@ -77,8 +85,21 @@ type PlanningContext struct {
 	// isMirrored indicates that mirrored tables should be used.
 	isMirrored bool
 
+	// ValuesJoinColumns stores the columns we need for each values statement in the plan.
+	ValuesJoinColumns map[string]sqlparser.Columns
+
 	emptyEnv    *evalengine.ExpressionEnv
 	constantCfg *evalengine.Config
+}
+
+func CreateEmptyPlanningContext() *PlanningContext {
+	return &PlanningContext{
+		joinPredicates:     make(map[sqlparser.Expr][]sqlparser.Expr),
+		skipPredicates:     make(map[sqlparser.Expr]any),
+		skipValuesArgument: make(map[string]any),
+		ReservedArguments:  make(map[sqlparser.Expr]string),
+		ValuesJoinColumns:  make(map[string]sqlparser.Columns),
+	}
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -104,14 +125,17 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 	vschema.PlannerWarning(semTable.Warning)
 
 	return &PlanningContext{
-		ReservedVars:      reservedVars,
-		SemTable:          semTable,
-		VSchema:           vschema,
-		joinPredicates:    map[sqlparser.Expr][]sqlparser.Expr{},
-		skipPredicates:    map[sqlparser.Expr]any{},
-		PlannerVersion:    version,
-		ReservedArguments: map[sqlparser.Expr]string{},
-		Statement:         stmt,
+		ReservedVars:       reservedVars,
+		SemTable:           semTable,
+		VSchema:            vschema,
+		joinPredicates:     map[sqlparser.Expr][]sqlparser.Expr{},
+		skipPredicates:     map[sqlparser.Expr]any{},
+		skipValuesArgument: map[string]any{},
+		PlannerVersion:     version,
+		ReservedArguments:  map[sqlparser.Expr]string{},
+		ValuesJoinColumns:  make(map[string]sqlparser.Columns),
+		Statement:          stmt,
+		AllowValuesJoin:    sqlparser.AllowValuesJoinDirective(stmt),
 	}, nil
 }
 
@@ -174,6 +198,15 @@ func (ctx *PlanningContext) SkipJoinPredicates(joinPred sqlparser.Expr) error {
 		return nil
 	}
 	return vterrors.VT13001("predicate does not exist: " + sqlparser.String(joinPred))
+}
+
+func (ctx *PlanningContext) SkipValuesArgument(name string) {
+	ctx.skipValuesArgument[name] = ""
+}
+
+func (ctx *PlanningContext) IsValuesArgumentSkipped(name string) bool {
+	_, ok := ctx.skipValuesArgument[name]
+	return ok
 }
 
 // KeepPredicateInfo transfers join predicate information from another context.

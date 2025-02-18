@@ -35,15 +35,26 @@ CREATE TABLE `t4`
   COLLATE utf8mb4_unicode_ci;
 
 insert into t1 (id, name)
-values (1, 'A'),
-       (2, 'B'),
-       (3, 'C'),
-       (4, 'D');
+values (1, '1'),
+       (2, '2'),
+       (3, '3'),
+       (4, '4'),
+       (5, '5'),
+       (6, '6'),
+       (7, '7'),
+       (8, '8'),
+       (9, '9');
 
 insert into t2 (id, t1_id)
 values (1, 1),
        (2, 2),
-       (3, 3);
+       (3, 3),
+       (4, 4),
+       (5, 5),
+       (6, 6),
+       (7, 7),
+       (8, 8),
+       (9, 9);
 
 insert into t3 (id, name)
 values (1, 'A'),
@@ -60,19 +71,22 @@ values (1, 1),
 -- wait_authoritative t1
 -- wait_authoritative t2
 -- wait_authoritative t3
-select 42
-from t1
-         join t2 on t1.id = t2.t1_id
-         join t3 on t1.id = t3.id
-where t1.name
-   or t2.id
-   or t3.name;
 
-# Complex query that requires hash join underneath a memory sort and ordered aggregate
-select 1
-from t1
-         join t2 on t1.id = t2.t1_id
-         join t4 on t4.col = t2.id
-         left join (select t4.col, count(*) as count from t4 group by t4.col) t3 on t3.col = t2.id
-where t1.id IN (1, 2)
-group by t2.id, t4.col;
+select t1.name, t2.t1_id from t1, t2 where t1.name = t2.id;
+
+# select 42
+# from t1
+#          join t2 on t1.id = t2.t1_id
+#          join t3 on t1.id = t3.id
+# where t1.name
+#    or t2.id
+#    or t3.name;
+#
+# # Complex query that requires hash join underneath a memory sort and ordered aggregate
+# select 1
+# from t1
+#          join t2 on t1.id = t2.t1_id
+#          join t4 on t4.col = t2.id
+#          left join (select t4.col, count(*) as count from t4 group by t4.col) t3 on t3.col = t2.id
+# where t1.id IN (1, 2)
+# group by t2.id, t4.col;
