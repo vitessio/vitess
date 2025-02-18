@@ -149,20 +149,12 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	_, err = executor.Execute(context.Background(), nil, "TestExecute", session, "commit", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@primary", SessionUUID: "suuid"}
-	if !proto.Equal(session.Session, wantSession) {
-		t.Errorf("begin: %v, want %v", session.Session, wantSession)
-	}
-	if commitCount := sbclookup.CommitCount.Load(); commitCount != 1 {
-		t.Errorf("want 1, got %d", commitCount)
-	}
+	assert.Truef(t, proto.Equal(session.Session, wantSession), "begin: %v, want %v", session.Session, wantSession)
+	assert.EqualValues(t, 1, sbclookup.CommitCount.Load(), "commit count")
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 1)
-	if logStats.CommitTime == 0 {
-		t.Errorf("logstats: expected non-zero CommitTime")
-	}
+	assert.NotZero(t, logStats.CommitTime)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// rollback.
@@ -178,18 +170,14 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	_ = testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
 	_ = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
-	if logStats.CommitTime == 0 {
-		t.Errorf("logstats: expected non-zero CommitTime")
-	}
+	assert.NotZero(t, logStats.CommitTime)
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// CloseSession doesn't log anything
 	err = executor.CloseSession(ctx, session)
 	require.NoError(t, err)
 	logStats = getQueryLog(logChan)
-	if logStats != nil {
-		t.Errorf("logstats: expected no record for no-op rollback, got %v", logStats)
-	}
+	assert.Nil(t, logStats, "logstats: expected nil")
 
 	// Prevent use of non-primary if in_transaction is on.
 	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", InTransaction: true})
@@ -1130,9 +1118,7 @@ func TestExecutorUse(t *testing.T) {
 	}
 	for i, stmt := range stmts {
 		_, err := executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
 		wantSession := &vtgatepb.Session{Autocommit: true, TargetString: want[i], RowCount: -1}
 		utils.MustMatch(t, wantSession, session.Session, "session does not match")
 	}
@@ -1158,9 +1144,7 @@ func TestExecutorComment(t *testing.T) {
 
 	for _, stmt := range stmts {
 		gotResult, err := executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
 		if !gotResult.Equal(wantResult) {
 			t.Errorf("Exec %s: %v, want %v", stmt, gotResult, wantResult)
 		}
@@ -1395,9 +1379,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt = "alter vschema create vindex test_vindex2 using hash"
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Fatalf("error in %s: %v", stmt, err)
-	}
+	require.NoError(t, err)
 
 	vschema, vindex = waitForVindex(t, ks, "test_vindex2", vschemaUpdates, executor)
 	if vindex.Type != "hash" {
@@ -1490,14 +1472,10 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	// test when all users are enabled
 	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	_, err = executor.Execute(ctxRedUser, nil, "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Errorf("unexpected error '%v'", err)
-	}
+	require.NoError(t, err)
 	stmt = "alter vschema create vindex test_hash2 using hash"
 	_, err = executor.Execute(ctxBlueUser, nil, "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Errorf("unexpected error '%v'", err)
-	}
+	require.NoError(t, err)
 
 	// test when only one user is enabled
 	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("orangeUser, blueUser, greenUser"))
@@ -1506,9 +1484,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 
 	stmt = "alter vschema create vindex test_hash3 using hash"
 	_, err = executor.Execute(ctxBlueUser, nil, "TestExecute", session, stmt, nil)
-	if err != nil {
-		t.Errorf("unexpected error '%v'", err)
-	}
+	require.NoError(t, err)
 
 	// restore the disallowed state
 	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))
@@ -1543,9 +1519,7 @@ func TestVSchemaStats(t *testing.T) {
 
 	templ := template.New("")
 	templ, err := templ.Parse(VSchemaTemplate)
-	if err != nil {
-		t.Fatalf("error parsing template: %v", err)
-	}
+	require.NoError(t, err)
 	wr := &bytes.Buffer{}
 	if err := templ.Execute(wr, stats); err != nil {
 		t.Fatalf("error executing template: %v", err)
