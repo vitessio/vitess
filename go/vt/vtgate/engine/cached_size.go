@@ -635,7 +635,7 @@ func (cached *Lock) CachedSize(alloc bool) int64 {
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
-	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	// field TargetDestination vitess.io/vitess/go/vt/key.ShardDestination
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -676,7 +676,7 @@ func (cached *MStream) CachedSize(alloc bool) int64 {
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
-	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	// field TargetDestination vitess.io/vitess/go/vt/key.ShardDestination
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -765,7 +765,7 @@ func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.SQL)))
 	// field DDLStrategySetting *vitess.io/vitess/go/vt/schema.DDLStrategySetting
 	size += cached.DDLStrategySetting.CachedSize(true)
-	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	// field TargetDestination vitess.io/vitess/go/vt/key.ShardDestination
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -950,7 +950,7 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	size += cached.Stmt.CachedSize(true)
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
-	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	// field TargetDestination vitess.io/vitess/go/vt/key.ShardDestination
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -1019,7 +1019,7 @@ func (cached *RoutingParameters) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	// field TargetDestination vitess.io/vitess/go/vt/key.ShardDestination
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -1150,7 +1150,7 @@ func (cached *Send) CachedSize(alloc bool) int64 {
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
-	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	// field TargetDestination vitess.io/vitess/go/vt/key.ShardDestination
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -1261,7 +1261,7 @@ func (cached *SysVarCheckAndIgnore) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
-	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	// field TargetDestination vitess.io/vitess/go/vt/key.ShardDestination
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -1295,7 +1295,7 @@ func (cached *SysVarReservedConn) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
-	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	// field TargetDestination vitess.io/vitess/go/vt/key.ShardDestination
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -1467,7 +1467,7 @@ func (cached *VStream) CachedSize(alloc bool) int64 {
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
-	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	// field TargetDestination vitess.io/vitess/go/vt/key.ShardDestination
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
