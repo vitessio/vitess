@@ -25,7 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 )
 
@@ -77,19 +81,62 @@ func TestDemotePrimaryStalled(t *testing.T) {
 		waitTime: 2 * time.Second,
 	}
 	// Create a tablet manager with a replica type tablet.
+	fakeDb := newTestMysqlDaemon(t, 1)
 	tm := &TabletManager{
 		actionSema:  semaphore.NewWeighted(1),
-		MysqlDaemon: newTestMysqlDaemon(t, 1),
+		MysqlDaemon: fakeDb,
 		tmState: &tmState{
 			displayState: displayState{
 				tablet: newTestTablet(t, 100, "ks", "-", map[string]string{}),
 			},
 		},
 		QueryServiceControl: qsc,
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
 	}
 
 	// We make IsServing stall for over 2 seconds, which is longer than 10 * remote operation timeout.
 	// This should cause the demote primary operation to be stalled.
 	tm.demotePrimary(context.Background(), false)
 	require.True(t, qsc.primaryStalled.Load())
+}
+
+// TestDemotePrimaryWaitingForSemiSyncUnblock tests that demote primary unblocks if the primary is blocked on semi-sync ACKs
+// and doesn't issue the set super read-only query until all writes waiting on semi-sync ACKs have gone through.
+func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	fakeMysqlDaemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeDb := fakeMysqlDaemon.DB()
+	fakeDb.SetNeverFail(true)
+
+	tm.SemiSyncMonitor.Open()
+	// Add a fake query that makes the semi-sync monitor believe that the tablet is blocked on semi-sync ACKs.
+	fakeDb.AddQuery("SHOW STATUS LIKE 'Rpl_semi_sync_%_wait_sessions'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1"))
+
+	// Start the demote primary operation in a go routine.
+	var demotePrimaryFinished atomic.Bool
+	go func() {
+		_, err := tm.demotePrimary(context.Background(), false)
+		require.NoError(t, err)
+		demotePrimaryFinished.Store(true)
+	}()
+
+	// Wait for the demote primary operation to be blocked on semi-sync.
+	time.Sleep(1 * time.Second)
+	// DemotePrimary shouldn't have finished yet.
+	require.False(t, demotePrimaryFinished.Load())
+	// We shouldn't have seen the super-read only query either.
+	require.False(t, fakeMysqlDaemon.SuperReadOnly.Load())
+
+	// Now we unblock the semi-sync monitor.
+	fakeDb.AddQuery("SHOW STATUS LIKE 'Rpl_semi_sync_%_wait_sessions'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|0"))
+
+	// This should unblock the demote primary operation eventually.
+	require.Eventually(t, func() bool {
+		return demotePrimaryFinished.Load()
+	}, 5*time.Second, 100*time.Millisecond)
+	// We should have also seen the super-read only query.
+	require.True(t, fakeMysqlDaemon.SuperReadOnly.Load())
 }

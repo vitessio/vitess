@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttest"
@@ -683,6 +684,10 @@ func newTestMysqlDaemon(t *testing.T, port int32) *mysqlctl.FakeMysqlDaemon {
 	return mysqld
 }
 
+var (
+	exporter = servenv.NewExporter("TestTabletManager", "")
+)
+
 func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string, tags map[string]string) *TabletManager {
 	// reset stats
 	statsTabletTags.ResetAll()
@@ -691,11 +696,13 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string, t
 	t.Helper()
 	ctx := context.Background()
 	tablet := newTestTablet(t, uid, keyspace, shard, tags)
+	fakeDb := newTestMysqlDaemon(t, 1)
 	tm := &TabletManager{
 		BatchCtx:            ctx,
 		TopoServer:          ts,
-		MysqlDaemon:         newTestMysqlDaemon(t, 1),
+		MysqlDaemon:         fakeDb,
 		DBConfigs:           &dbconfigs.DBConfigs{},
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
 		QueryServiceControl: tabletservermock.NewController(),
 	}
 	err := tm.Start(tablet, nil)

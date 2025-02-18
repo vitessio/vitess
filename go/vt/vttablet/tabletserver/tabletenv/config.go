@@ -75,6 +75,7 @@ var (
 	heartbeatInterval            time.Duration
 	heartbeatOnDemandDuration    time.Duration
 	healthCheckInterval          time.Duration
+	semiSyncMonitorInterval      time.Duration
 	degradedThreshold            time.Duration
 	unhealthyThreshold           time.Duration
 	transitionGracePeriod        time.Duration
@@ -203,6 +204,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&degradedThreshold, "degraded_threshold", defaultConfig.Healthcheck.DegradedThreshold, "replication lag after which a replica is considered degraded")
 	fs.DurationVar(&unhealthyThreshold, "unhealthy_threshold", defaultConfig.Healthcheck.UnhealthyThreshold, "replication lag after which a replica is considered unhealthy")
 	fs.DurationVar(&transitionGracePeriod, "serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
+	fs.DurationVar(&semiSyncMonitorInterval, "semi-sync-monitor-interval", defaultConfig.SemiSyncMonitor.Interval, "Interval between semi-sync monitor checks if the primary is blocked on semi-sync ACKs")
 
 	fs.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
 	fs.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
@@ -278,6 +280,7 @@ func Init() {
 	currentConfig.Healthcheck.DegradedThreshold = degradedThreshold
 	currentConfig.Healthcheck.UnhealthyThreshold = unhealthyThreshold
 	currentConfig.GracePeriods.Transition = transitionGracePeriod
+	currentConfig.SemiSyncMonitor.Interval = semiSyncMonitorInterval
 
 	logFormat := streamlog.GetQueryLogConfig().Format
 	switch logFormat {
@@ -316,6 +319,8 @@ type TabletConfig struct {
 
 	Healthcheck  HealthcheckConfig  `json:"healthcheck,omitempty"`
 	GracePeriods GracePeriodsConfig `json:"gracePeriods,omitempty"`
+
+	SemiSyncMonitor SemiSyncMonitorConfig `json:"semiSyncMonitor,omitempty"`
 
 	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker,omitempty"`
 
@@ -611,6 +616,42 @@ type HotRowProtectionConfig struct {
 	MaxQueueSize       int    `json:"maxQueueSize,omitempty"`
 	MaxGlobalQueueSize int    `json:"maxGlobalQueueSize,omitempty"`
 	MaxConcurrency     int    `json:"maxConcurrency,omitempty"`
+}
+
+// SemiSyncMonitorConfig contains the config for the semi-sync monitor.
+type SemiSyncMonitorConfig struct {
+	Interval time.Duration
+}
+
+func (cfg *SemiSyncMonitorConfig) MarshalJSON() ([]byte, error) {
+	var tmp struct {
+		IntervalSeconds string `json:"intervalSeconds,omitempty"`
+	}
+
+	if d := cfg.Interval; d != 0 {
+		tmp.IntervalSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
+}
+
+func (cfg *SemiSyncMonitorConfig) UnmarshalJSON(data []byte) (err error) {
+	var tmp struct {
+		Interval string `json:"intervalSeconds,omitempty"`
+	}
+
+	if err = json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	if tmp.Interval != "" {
+		cfg.Interval, err = time.ParseDuration(tmp.Interval)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // HealthcheckConfig contains the config for healthcheck.
@@ -1007,6 +1048,9 @@ var defaultConfig = TabletConfig{
 		Interval:           20 * time.Second,
 		DegradedThreshold:  30 * time.Second,
 		UnhealthyThreshold: 2 * time.Hour,
+	},
+	SemiSyncMonitor: SemiSyncMonitorConfig{
+		Interval: 10 * time.Second,
 	},
 	ReplicationTracker: ReplicationTrackerConfig{
 		Mode:              Disable,

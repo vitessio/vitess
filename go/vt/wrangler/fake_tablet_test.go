@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -41,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -158,6 +160,10 @@ func newFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 	}
 }
 
+var (
+	exporter = servenv.NewExporter("TestWrangler", "")
+)
+
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.
 func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
@@ -199,6 +205,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
 		VDiffEngine:         vdiff2.NewEngine(wr.TopoServer(), ft.Tablet, collations.MySQL8(), sqlparser.NewTestParser()),
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(ft.FakeMysqlDaemon.DB(), exporter),
 		Env:                 vtenv.NewTestEnv(),
 	}
 	if err := ft.TM.Start(ft.Tablet, nil); err != nil {

@@ -217,6 +217,11 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	return result
 }
 
+// DB returns the fakesqldb.DB object.
+func (fmd *FakeMysqlDaemon) DB() *fakesqldb.DB {
+	return fmd.db
+}
+
 // Start is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error {
 	if fmd.Running {
