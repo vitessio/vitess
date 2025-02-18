@@ -8126,15 +8126,23 @@ func (x *GetVSchemaResponse) GetVSchema() *vschema.Keyspace {
 	return nil
 }
 
+// NOTE: if you want to get all information about a workflow, you must
+// set the VerbosityLevel to HIGH. Otherwise certain fields will be
+// set to the type's Zero value and should be elided when displaying
+// results built from the GetWorkflowsResponse.
 type GetWorkflowsRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	Keyspace   string                 `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	ActiveOnly bool                   `protobuf:"varint,2,opt,name=active_only,json=activeOnly,proto3" json:"active_only,omitempty"`
 	NameOnly   bool                   `protobuf:"varint,3,opt,name=name_only,json=nameOnly,proto3" json:"name_only,omitempty"`
 	// If you only want a specific workflow then set this field.
-	Workflow      string         `protobuf:"bytes,4,opt,name=workflow,proto3" json:"workflow,omitempty"`
-	IncludeLogs   bool           `protobuf:"varint,5,opt,name=include_logs,json=includeLogs,proto3" json:"include_logs,omitempty"`
-	Shards        []string       `protobuf:"bytes,6,rep,name=shards,proto3" json:"shards,omitempty"`
+	Workflow    string   `protobuf:"bytes,4,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	IncludeLogs bool     `protobuf:"varint,5,opt,name=include_logs,json=includeLogs,proto3" json:"include_logs,omitempty"`
+	Shards      []string `protobuf:"bytes,6,rep,name=shards,proto3" json:"shards,omitempty"`
+	// How much info to return. Note that values are elided simply by
+	// not setting the field in the response. So you're not guaranteed
+	// to see any particular value in the response unless you set the
+	// VerbosityLevel to HIGH so that everything is included/set.
 	Verbosity     VerbosityLevel `protobuf:"varint,7,opt,name=verbosity,proto3,enum=vtctldata.VerbosityLevel" json:"verbosity,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -8219,6 +8227,10 @@ func (x *GetWorkflowsRequest) GetVerbosity() VerbosityLevel {
 	return VerbosityLevel_MINIMAL
 }
 
+// NOTE: if you want to get all information about a workflow, you must
+// set the VerbosityLevel to HIGH in the GetWorkflowsRequest. Otherwise
+// certain fields will be set to the type's Zero value in the response
+// and should be elided when displaying results from the response.
 type GetWorkflowsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Workflows     []*Workflow            `protobuf:"bytes,1,rep,name=workflows,proto3" json:"workflows,omitempty"`

@@ -1203,6 +1203,10 @@ enum VerbosityLevel {
   HIGH = 3;
 }
 
+// NOTE: if you want to get all information about a workflow, you must
+// set the VerbosityLevel to HIGH. Otherwise certain fields will be
+// set to the type's Zero value and should be elided when displaying
+// results built from the GetWorkflowsResponse.
 message GetWorkflowsRequest {
   string keyspace = 1;
   bool active_only = 2;
@@ -1211,9 +1215,17 @@ message GetWorkflowsRequest {
   string workflow = 4;
   bool include_logs = 5;
   repeated string shards = 6;
+  // How much info to return. Note that values are elided simply by
+  // not setting the field in the response. So you're not guaranteed
+  // to see any particular value in the response unless you set the
+  // VerbosityLevel to HIGH so that everything is included/set.
   VerbosityLevel verbosity = 7;
 }
 
+// NOTE: if you want to get all information about a workflow, you must
+// set the VerbosityLevel to HIGH in the GetWorkflowsRequest. Otherwise
+// certain fields will be set to the type's Zero value in the response
+// and should be elided when displaying results from the response.
 message GetWorkflowsResponse {
   repeated Workflow workflows = 1;
 }
