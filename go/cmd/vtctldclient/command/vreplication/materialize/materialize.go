@@ -54,11 +54,19 @@ var (
 )
 
 func commandAddReferenceTables(cmd *cobra.Command, args []string) error {
+	tableSettings := []*vtctldatapb.TableMaterializeSettings{}
+	for _, table := range addReferenceTablesOptions.Tables {
+		tableSettings = append(tableSettings, &vtctldatapb.TableMaterializeSettings{
+			TargetTable: table,
+		})
+	}
+
 	_, err := common.GetClient().MaterializeAddTables(common.GetCommandCtx(), &vtctldatapb.MaterializeAddTablesRequest{
-		Workflow: common.BaseOptions.Workflow,
-		Keyspace: common.BaseOptions.TargetKeyspace,
-		Tables:   addReferenceTablesOptions.Tables,
+		Workflow:      common.BaseOptions.Workflow,
+		Keyspace:      common.BaseOptions.TargetKeyspace,
+		TableSettings: tableSettings,
 	})
+
 	if err != nil {
 		return err
 	}

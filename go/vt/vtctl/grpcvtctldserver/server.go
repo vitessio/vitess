@@ -3104,7 +3104,7 @@ func (s *VtctldServer) MaterializeAddTables(ctx context.Context, req *vtctldatap
 
 	span.Annotate("workflow", req.Workflow)
 	span.Annotate("keyspace", req.Keyspace)
-	span.Annotate("tables", req.Tables)
+	span.Annotate("table_settings", req.TableSettings)
 
 	err = s.ws.MaterializeAddTables(ctx, req)
 	return resp, err

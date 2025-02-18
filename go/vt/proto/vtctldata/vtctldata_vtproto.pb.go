@@ -3295,10 +3295,12 @@ func (m *MaterializeAddTablesRequest) CloneVT() *MaterializeAddTablesRequest {
 	r := new(MaterializeAddTablesRequest)
 	r.Workflow = m.Workflow
 	r.Keyspace = m.Keyspace
-	if rhs := m.Tables; rhs != nil {
-		tmpContainer := make([]string, len(rhs))
-		copy(tmpContainer, rhs)
-		r.Tables = tmpContainer
+	if rhs := m.TableSettings; rhs != nil {
+		tmpContainer := make([]*TableMaterializeSettings, len(rhs))
+		for k, v := range rhs {
+			tmpContainer[k] = v.CloneVT()
+		}
+		r.TableSettings = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -14989,11 +14991,14 @@ func (m *MaterializeAddTablesRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Tables) > 0 {
-		for iNdEx := len(m.Tables) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.Tables[iNdEx])
-			copy(dAtA[i:], m.Tables[iNdEx])
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Tables[iNdEx])))
+	if len(m.TableSettings) > 0 {
+		for iNdEx := len(m.TableSettings) - 1; iNdEx >= 0; iNdEx-- {
+			size, err := m.TableSettings[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 			i--
 			dAtA[i] = 0x1a
 		}
@@ -25647,9 +25652,9 @@ func (m *MaterializeAddTablesRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if len(m.Tables) > 0 {
-		for _, s := range m.Tables {
-			l = len(s)
+	if len(m.TableSettings) > 0 {
+		for _, e := range m.TableSettings {
+			l = e.SizeVT()
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
@@ -50681,9 +50686,9 @@ func (m *MaterializeAddTablesRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Tables", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field TableSettings", wireType)
 			}
-			var stringLen uint64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -50693,23 +50698,25 @@ func (m *MaterializeAddTablesRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
+			if msglen < 0 {
 				return protohelpers.ErrInvalidLength
 			}
-			postIndex := iNdEx + intStringLen
+			postIndex := iNdEx + msglen
 			if postIndex < 0 {
 				return protohelpers.ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Tables = append(m.Tables, string(dAtA[iNdEx:postIndex]))
+			m.TableSettings = append(m.TableSettings, &TableMaterializeSettings{})
+			if err := m.TableSettings[len(m.TableSettings)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

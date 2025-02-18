@@ -1297,7 +1297,7 @@ message MaterializeCreateResponse {
 message MaterializeAddTablesRequest {
   string workflow = 1;
   string keyspace = 2;
-  repeated string tables = 3;
+  repeated TableMaterializeSettings table_settings = 3;
 }
 
 message MaterializeAddTablesResponse {

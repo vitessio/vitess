@@ -852,9 +852,9 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 	return mz.startStreams(ctx)
 }
 
-// MaterializeAddTables adds specified tables to the existing Materialize workflow.
+// MaterializeAddTables adds specified tables to the existing workflow.
 func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.MaterializeAddTablesRequest) error {
-	if len(req.Tables) == 0 {
+	if len(req.TableSettings) == 0 {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tables found in the request")
 	}
 
@@ -864,17 +864,11 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 	}
 	targetShardInfos := maps.Values(targets)
 
-	// Sort the tables by name to ensure a consistent order.
-	slices.Sort(req.Tables)
-	var rules []*binlogdatapb.Rule
-	for _, table := range req.Tables {
-		rules = append(rules, &binlogdatapb.Rule{
-			Match:  table,
-			Filter: fmt.Sprintf("select * from %s", table),
-		})
-	}
 	// This will be helpful to find duplicate tables.
-	tableSet := sets.New(req.Tables...)
+	tableSet := sets.New[string]()
+	for _, ts := range req.TableSettings {
+		tableSet.Insert(ts.TargetTable)
+	}
 
 	// Store the ReadVReplicationWorkflow response for later use.
 	readVReplicationWorkflowResp := map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{}
@@ -918,6 +912,11 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 	if sourceKeyspace == "" {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "source keyspace not found for workflow %s", req.Workflow)
 	}
+	// We only allow adding tables for MoveTables and Materialize workflows.
+	if workflowType != binlogdatapb.VReplicationWorkflowType_Materialize &&
+		workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot add tables for workflow type %s", workflowType)
+	}
 
 	// Stop the streams
 	err = forAllShards(targetShardInfos, func(target *topo.ShardInfo) error {
@@ -935,6 +934,46 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 	})
 	if err != nil {
 		return err
+	}
+
+	// If SourceExpression is empty or CreateDdl is empty we set it to
+	// values corresponding to a reference table.
+	for _, ts := range req.TableSettings {
+		if ts.SourceExpression == "" {
+			ts.SourceExpression = fmt.Sprintf("select * from %s", ts.TargetTable)
+		}
+		if ts.CreateDdl == "" {
+			ts.CreateDdl = createDDLAsCopyDropForeignKeys
+		}
+	}
+
+	materializationIntent := vtctldatapb.MaterializationIntent_CUSTOM
+	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables {
+		materializationIntent = vtctldatapb.MaterializationIntent_MOVETABLES
+	}
+
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:              req.Workflow,
+		MaterializationIntent: materializationIntent,
+		TargetKeyspace:        req.Keyspace,
+		SourceKeyspace:        sourceKeyspace,
+		TableSettings:         req.TableSettings,
+	}
+	mz := &materializer{
+		ctx:          ctx,
+		ts:           s.ts,
+		sourceTs:     s.ts,
+		tmc:          s.tmc,
+		env:          s.env,
+		ms:           ms,
+		workflowType: workflowType,
+	}
+
+	if err = mz.buildMaterializer(); err != nil {
+		return err
+	}
+	if err = mz.deploySchema(); err != nil {
+		return vterrors.Wrapf(err, "failed to deploy schema")
 	}
 
 	// Add to the copy state.
@@ -955,8 +994,8 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 		buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
 		prefix := ""
 		for _, stream := range res.Streams {
-			for _, table := range req.Tables {
-				fmt.Fprintf(&buf, "%s(%d, %s)", prefix, stream.Id, encodeString(table))
+			for _, ts := range req.TableSettings {
+				fmt.Fprintf(&buf, "%s(%d, %s)", prefix, stream.Id, encodeString(ts.TargetTable))
 				prefix = ", "
 			}
 		}
@@ -972,45 +1011,30 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 		return err
 	}
 
-	tableSettings := []*vtctldatapb.TableMaterializeSettings{}
-	for _, table := range req.Tables {
-		tableSettings = append(tableSettings, &vtctldatapb.TableMaterializeSettings{
-			TargetTable:      table,
-			SourceExpression: fmt.Sprintf("select * from %s", table),
-			CreateDdl:        createDDLAsCopyDropForeignKeys,
-		})
-	}
-
-	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:              req.Workflow,
-		MaterializationIntent: vtctldatapb.MaterializationIntent_CUSTOM,
-		TargetKeyspace:        req.Keyspace,
-		SourceKeyspace:        sourceKeyspace,
-		TableSettings:         tableSettings,
-	}
-	mz := &materializer{
-		ctx:          ctx,
-		ts:           s.ts,
-		sourceTs:     s.ts,
-		tmc:          s.tmc,
-		env:          s.env,
-		ms:           ms,
-		workflowType: workflowType,
-	}
-
-	if err = mz.buildMaterializer(); err != nil {
-		return err
-	}
-	if err = mz.deploySchema(); err != nil {
-		return vterrors.Wrapf(err, "failed to deploy schema")
-	}
-
-	// Start the streams and append the binglogsource filter rules.
+	// Generate the rules using TableSettings, append the binglogsource filter
+	// rules and start the streams.
 	return forAllShards(targetShardInfos, func(target *topo.ShardInfo) error {
 		tablet, err := s.ts.GetTablet(ctx, target.PrimaryAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
 		}
+
+		// This is similar to what we follow while creating workflow streams.
+		sourceShards := mz.filterSourceShards(target)
+		streamKeyRangesEqual := false
+		if len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange) {
+			streamKeyRangesEqual = true
+		}
+
+		var rules []*binlogdatapb.Rule
+		for _, ts := range req.TableSettings {
+			rule, err := mz.generateRule(ts, target, nil, streamKeyRangesEqual)
+			if err != nil {
+				return err
+			}
+			rules = append(rules, rule)
+		}
+
 		if _, err := s.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 			Workflow:    req.Workflow,
 			FilterRules: rules,

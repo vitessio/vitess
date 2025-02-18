@@ -67381,8 +67381,8 @@ export namespace vtctldata {
         /** MaterializeAddTablesRequest keyspace */
         keyspace?: (string|null);
 
-        /** MaterializeAddTablesRequest tables */
-        tables?: (string[]|null);
+        /** MaterializeAddTablesRequest table_settings */
+        table_settings?: (vtctldata.ITableMaterializeSettings[]|null);
     }
 
     /** Represents a MaterializeAddTablesRequest. */
@@ -67400,8 +67400,8 @@ export namespace vtctldata {
         /** MaterializeAddTablesRequest keyspace. */
         public keyspace: string;
 
-        /** MaterializeAddTablesRequest tables. */
-        public tables: string[];
+        /** MaterializeAddTablesRequest table_settings. */
+        public table_settings: vtctldata.ITableMaterializeSettings[];
 
         /**
          * Creates a new MaterializeAddTablesRequest instance using the specified properties.
