@@ -18,7 +18,6 @@ package vtadmin
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -40,13 +39,10 @@ import (
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/dynamic"
@@ -63,7 +59,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtexplain"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -89,10 +84,6 @@ type API struct {
 	authz *rbac.Authorizer
 
 	options Options
-
-	// vtexplain is now global again due to stat exporters in the tablet layer
-	// we're not super concerned because we will be deleting vtexplain Soon(TM).
-	vtexplainLock sync.Mutex
 
 	env *vtenv.Environment
 }
@@ -432,7 +423,6 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/vdiff/{cluster_id}/", httpAPI.Adapt(vtadminhttp.VDiffCreate)).Name("API.VDiffCreate").Methods("POST")
 	router.HandleFunc("/vdiff/{cluster_id}/show", httpAPI.Adapt(vtadminhttp.VDiffShow)).Name("API.VDiffShow")
 	router.HandleFunc("/vtctlds", httpAPI.Adapt(vtadminhttp.GetVtctlds)).Name("API.GetVtctlds")
-	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
 	router.HandleFunc("/vexplain", httpAPI.Adapt(vtadminhttp.VExplain)).Name("API.VExplain")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
 	router.HandleFunc("/workflows", httpAPI.Adapt(vtadminhttp.GetWorkflows)).Name("API.GetWorkflows")
@@ -2668,178 +2658,6 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 	}
 
 	return response, nil
-}
-
-// VTExplain is part of the vtadminpb.VTAdminServer interface.
-func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) (*vtadminpb.VTExplainResponse, error) {
-	// TODO (andrew): https://github.com/vitessio/vitess/issues/12161.
-	log.Warningf("VTAdminServer.VTExplain is deprecated; please use a vexplain query instead. For more details, see https://vitess.io/docs/user-guides/sql/vexplain/.")
-
-	span, ctx := trace.NewSpan(ctx, "API.VTExplain")
-	defer span.Finish()
-
-	if req.Cluster == "" {
-		return nil, fmt.Errorf("%w: cluster ID is required", errors.ErrInvalidRequest)
-	}
-
-	if req.Keyspace == "" {
-		return nil, fmt.Errorf("%w: keyspace name is required", errors.ErrInvalidRequest)
-	}
-
-	if req.Sql == "" {
-		return nil, fmt.Errorf("%w: SQL query is required", errors.ErrInvalidRequest)
-	}
-
-	c, err := api.getClusterForRequest(req.Cluster)
-	if err != nil {
-		return nil, err
-	}
-
-	span.Annotate("keyspace", req.Keyspace)
-	cluster.AnnotateSpan(c, span)
-
-	if !api.authz.IsAuthorized(ctx, c.ID, rbac.VTExplainResource, rbac.GetAction) {
-		return nil, nil
-	}
-
-	lockWaitStart := time.Now()
-
-	api.vtexplainLock.Lock()
-	defer api.vtexplainLock.Unlock()
-
-	lockWaitTime := time.Since(lockWaitStart)
-	log.Infof("vtexplain lock wait time: %s", lockWaitTime)
-
-	span.Annotate("vtexplain_lock_wait_time", lockWaitTime.String())
-
-	tablet, err := c.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
-		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_PRIMARY && t.State == vtadminpb.Tablet_SERVING
-	})
-	if err != nil {
-		return nil, fmt.Errorf("cannot find serving, non-primary tablet in keyspace=%s: %w", req.Keyspace, err)
-	}
-
-	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
-
-	var (
-		wg sync.WaitGroup
-		er concurrency.AllErrorRecorder
-
-		// Writes to these three variables are, in the strictest sense, unsafe.
-		// However, there is one goroutine responsible for writing each of these
-		// values (so, no concurrent writes), and reads are blocked on the call to
-		// wg.Wait(), so we guarantee that all writes have finished before attempting
-		// to read anything.
-		srvVSchema string
-		schema     string
-		shardMap   string
-	)
-
-	wg.Add(3)
-
-	// GetSchema
-	go func(c *cluster.Cluster) {
-		defer wg.Done()
-
-		res, err := c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{})
-		if err != nil {
-			er.RecordError(fmt.Errorf("GetSchema(%s): %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err))
-			return
-		}
-
-		schemas := make([]string, len(res.TableDefinitions))
-		for i, td := range res.TableDefinitions {
-			schemas[i] = td.Schema
-		}
-
-		schema = strings.Join(schemas, ";")
-	}(c)
-
-	// GetSrvVSchema
-	go func(c *cluster.Cluster) {
-		defer wg.Done()
-
-		span, ctx := trace.NewSpan(ctx, "Cluster.GetSrvVSchema")
-		defer span.Finish()
-
-		span.Annotate("cell", tablet.Tablet.Alias.Cell)
-		cluster.AnnotateSpan(c, span)
-
-		res, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
-			Cell: tablet.Tablet.Alias.Cell,
-		})
-
-		if err != nil {
-			er.RecordError(fmt.Errorf("GetSrvVSchema(%s): %w", tablet.Tablet.Alias.Cell, err))
-			return
-		}
-
-		ksvs, ok := res.SrvVSchema.Keyspaces[req.Keyspace]
-		if !ok {
-			er.RecordError(fmt.Errorf("%w: keyspace %s", errors.ErrNoSrvVSchema, req.Keyspace))
-			return
-		}
-
-		ksvsb, err := json.Marshal(&ksvs)
-		if err != nil {
-			er.RecordError(err)
-			return
-		}
-
-		srvVSchema = fmt.Sprintf(`{"%s": %s}`, req.Keyspace, string(ksvsb))
-	}(c)
-
-	// FindAllShardsInKeyspace
-	go func(c *cluster.Cluster) {
-		defer wg.Done()
-
-		shards, err := c.FindAllShardsInKeyspace(ctx, req.Keyspace, cluster.FindAllShardsInKeyspaceOptions{})
-		if err != nil {
-			er.RecordError(err)
-			return
-		}
-
-		vtsm := make(map[string]*topodatapb.Shard)
-		for _, s := range shards {
-			vtsm[s.Name] = s.Shard
-		}
-
-		vtsb, err := json.Marshal(&vtsm)
-		if err != nil {
-			er.RecordError(err)
-			return
-		}
-
-		shardMap = fmt.Sprintf(`{"%s": %s}`, req.Keyspace, string(vtsb))
-	}(c)
-
-	wg.Wait()
-
-	if er.HasErrors() {
-		return nil, er.Error()
-	}
-
-	ts := memorytopo.NewServer(ctx, vtexplain.Cell)
-	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
-	vte, err := vtexplain.Init(ctx, api.env, ts, srvVSchema, schema, shardMap, &vtexplain.Options{ReplicationMode: "ROW"}, srvTopoCounts)
-	if err != nil {
-		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
-	}
-	defer vte.Stop()
-
-	plans, err := vte.Run(req.Sql)
-	if err != nil {
-		return nil, fmt.Errorf("error running vtexplain: %w", err)
-	}
-
-	response, err := vte.ExplainsAsText(plans)
-	if err != nil {
-		return nil, fmt.Errorf("error converting vtexplain to text output: %w", err)
-	}
-
-	return &vtadminpb.VTExplainResponse{
-		Response: response,
-	}, nil
 }
 
 // WorkflowDelete is part of the vtadminpb.VTAdminServer interface.
