@@ -115,12 +115,21 @@ func AppendGTIDSet(rp Position, gtidSet GTIDSet) Position {
 	if gtidSet == nil {
 		return rp
 	}
+	return Position{GTIDSet: gtidSet.Union(rp.GTIDSet)}
+}
 
-	if rp.GTIDSet == nil {
-		rp.GTIDSet = gtidSet
+// AppendGTIDSet returns a new Position that represents the position
+// after the given GTIDSet is replicated.
+func AppendGTIDSetInPlace(rp Position, gtidSet GTIDSet) Position {
+	if gtidSet == nil {
 		return rp
 	}
-	return Position{GTIDSet: rp.GTIDSet.Union(gtidSet)}
+
+	if rp.GTIDSet == nil {
+		return AppendGTIDSet(rp, gtidSet)
+	}
+	rp.GTIDSet = rp.GTIDSet.InPlaceUnion(gtidSet)
+	return rp
 }
 
 // MustParsePosition calls ParsePosition and panics
