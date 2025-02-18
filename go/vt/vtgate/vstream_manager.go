@@ -27,6 +27,7 @@ import (
 
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -36,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -824,9 +824,10 @@ func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
 		return false, false
 	}
 
-	// For anything else, if this is a recoverable/ephemeral error -- such as a
-	// MAX_EXECUTION_TIME SQL error during the copy phase -- then retry.
-	return !vreplication.IsUnrecoverableError(err), false
+	// For anything else, if this is an ephemeral SQL error -- such as a
+	// MAX_EXECUTION_TIME SQL error during the copy phase -- or any other
+	// type of non-SQL error, then retry.
+	return sqlerror.IsEphemeralError(err), false
 }
 
 // sendAll sends a group of events together while holding the lock.

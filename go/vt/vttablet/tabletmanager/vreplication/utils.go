@@ -129,9 +129,9 @@ func insertLogWithParams(dbClient *vdbClient, action string, vreplID int32, para
 	insertLog(dbClient, action, vreplID, params["state"], message)
 }
 
-// IsUnrecoverableError returns true if vreplication cannot recover from the given error and
+// isUnrecoverableError returns true if vreplication cannot recover from the given error and
 // should completely terminate.
-func IsUnrecoverableError(err error) bool {
+func isUnrecoverableError(err error) bool {
 	if err == nil {
 		return false
 	}

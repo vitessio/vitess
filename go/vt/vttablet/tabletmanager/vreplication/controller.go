@@ -306,7 +306,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		// (maxTimeToRetryError). In addition, we cannot restart a workflow
 		// started with AtomicCopy which has _any_ error.
 		if (err != nil && vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy)) ||
-			IsUnrecoverableError(err) ||
+			isUnrecoverableError(err) ||
 			!ct.lastWorkflowError.ShouldRetry() {
 			err = vterrors.Wrapf(err, TerminalErrorIndicator)
 			if errSetState := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, err.Error()); errSetState != nil {

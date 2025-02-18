@@ -164,7 +164,7 @@ func TestIsUnrecoverableError(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := IsUnrecoverableError(tc.err)
+			result := isUnrecoverableError(tc.err)
 			require.Equal(t, tc.expected, result)
 		})
 	}
