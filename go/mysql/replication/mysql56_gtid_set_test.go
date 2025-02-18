@@ -482,6 +482,62 @@ func TestMysql56GTIDSetAddGTID(t *testing.T) {
 	}
 }
 
+func TestMysql56GTIDSetUnion(t *testing.T) {
+	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
+	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
+
+	set1 := Mysql56GTIDSet{
+		sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+		sid2: []interval{{1, 5}, {20, 50}, {60, 70}},
+	}
+
+	set2 := Mysql56GTIDSet{
+		sid1: []interval{{20, 31}, {35, 37}, {41, 46}},
+		sid2: []interval{{3, 6}, {22, 49}, {67, 72}},
+		sid3: []interval{{1, 45}},
+	}
+
+	got := set1.Union(set2)
+
+	want := Mysql56GTIDSet{
+		sid1: []interval{{20, 31}, {35, 46}},
+		sid2: []interval{{1, 6}, {20, 50}, {60, 72}},
+		sid3: []interval{{1, 45}},
+	}
+	assert.True(t, got.Equal(want), "set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
+
+}
+
+func TestMysql56GTIDSetInPlaceUnion(t *testing.T) {
+	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
+	sid3 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17}
+
+	set1 := Mysql56GTIDSet{
+		sid1: []interval{{20, 30}, {35, 40}, {42, 45}},
+		sid2: []interval{{1, 5}, {20, 50}, {60, 70}},
+	}
+
+	set2 := Mysql56GTIDSet{
+		sid1: []interval{{20, 31}, {35, 37}, {41, 46}},
+		sid2: []interval{{3, 6}, {22, 49}, {67, 72}},
+		sid3: []interval{{1, 45}},
+	}
+
+	got := set1.InPlaceUnion(set2)
+
+	want := Mysql56GTIDSet{
+		sid1: []interval{{20, 31}, {35, 46}},
+		sid2: []interval{{1, 6}, {20, 50}, {60, 72}},
+		sid3: []interval{{1, 45}},
+	}
+	assert.Equal(t, set1, got) // Because this is in-place
+	assert.Equal(t, want, got)
+	assert.True(t, got.Equal(want), "set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
+
+}
+
 func BenchmarkMysql56GTIDSetAdd(b *testing.B) {
 	base := "00010203-0405-0607-0809-0a0b0c0d0e0f:1-5"
 	gtidSet, err := ParseMysql56GTIDSet(base)
@@ -509,6 +565,60 @@ func BenchmarkMysql56GTIDSetAdd(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		for _, gtid := range gtids {
 			pos.GTIDSet = pos.GTIDSet.AddGTID(gtid)
+		}
+	}
+}
+
+func BenchmarkMysql56GTIDSetUnion(b *testing.B) {
+	var Inputs = []string{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:10-20:1-5",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:8-7",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:8-7:10-20",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20,00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50",
+		"8aabbf4f-5074-11ed-b225-aa23ce7e3ba2:1-20443,a6f1bf40-5073-11ed-9c0f-12a3889dc912:1-343402",
+	}
+	positions := make([]Position, len(Inputs))
+	for i, input := range Inputs {
+		gtid, err := ParseMysql56GTIDSet(input)
+		require.NoError(b, err)
+		positions[i] = Position{GTIDSet: gtid}
+	}
+	var pos Position
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for n := 0; n < b.N; n++ {
+		for _, p := range positions {
+			pos.GTIDSet = p.GTIDSet.InPlaceUnion(pos.GTIDSet)
+		}
+	}
+}
+
+func BenchmarkMysql56GTIDSetUnionHappyPath(b *testing.B) {
+	var Inputs = []string{
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:12",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:12-15:17-20",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:21-30:41-45",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:48",
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:49-50:52-53",
+	}
+	positions := make([]Position, len(Inputs))
+	for i, input := range Inputs {
+		gtid, err := ParseMysql56GTIDSet(input)
+		require.NoError(b, err)
+		positions[i] = Position{GTIDSet: gtid}
+	}
+	var pos = Position{GTIDSet: Mysql56GTIDSet{}}
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for n := 0; n < b.N; n++ {
+		for _, p := range positions {
+			pos.GTIDSet = pos.GTIDSet.InPlaceUnion(p.GTIDSet)
 		}
 	}
 }
