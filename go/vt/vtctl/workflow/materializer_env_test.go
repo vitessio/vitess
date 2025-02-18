@@ -497,7 +497,7 @@ func (tmc *testMaterializerTMClient) ReadVReplicationWorkflows(ctx context.Conte
 		streams := make([]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, len(tmc.sourceShards))
 		for i, shard := range tmc.sourceShards {
 			streams[i] = &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
-				Id:    1,
+				Id:    int32(i + 1),
 				State: binlogdatapb.VReplicationWorkflowState_Running,
 				Bls: &binlogdatapb.BinlogSource{
 					Keyspace: tmc.keyspace,

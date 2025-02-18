@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -2198,6 +2199,1047 @@ func createReadVReplicationWorkflowFunc(t *testing.T, workflowType binlogdatapb.
 			WorkflowType: workflowType,
 			Streams:      streams,
 		}, nil
+	}
+}
+
+// TestGetWorkflowsOutput confirms the output for the various output limiting
+// flags.
+func TestGetWorkflowsOutput(t *testing.T) {
+	ctx := context.Background()
+	js := protojson.MarshalOptions{
+		Multiline: true,
+	}
+	sourceKeyspace := "source_keyspace"
+	targetKeyspace := "target_keyspace"
+	workflow := "test_workflow"
+	sourceShards := []string{"-80", "80-"}
+	targetShards := []string{"-40", "40-80", "80-c0", "c0-"}
+	logResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|vrepl_id|type|state|message|created_at|updated_at|count", "int64|int64|varchar|varchar|varchar|varchar|varchar|int64"),
+		"1|1|State Change|Running|test message|2006-01-02 15:04:05|2006-01-02 15:04:05|1",
+		"2|2|State Change|Running|test message|2006-01-02 15:04:05|2006-01-02 15:04:05|1",
+	)
+	testCases := []struct {
+		name   string
+		req    *vtctldatapb.GetWorkflowsRequest
+		result string
+	}{
+		{
+			name: "minimal",
+			req: &vtctldatapb.GetWorkflowsRequest{
+				Keyspace:  targetKeyspace,
+				Workflow:  workflow,
+				Verbosity: vtctldatapb.VerbosityLevel_MINIMAL,
+			},
+			result: `{
+  "workflows": [
+    {
+      "name": "test_workflow",
+      "source": {
+        "keyspace": "source_keyspace"
+      },
+      "target": {
+        "keyspace": "target_keyspace"
+      },
+      "shardStreams": {
+        "-40/cell-0000000200": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "-40",
+              "tablet": {
+                "cell": "cell",
+                "uid": 200
+              },
+              "state": "Running"
+            },
+            {
+              "id": "2",
+              "shard": "-40",
+              "tablet": {
+                "cell": "cell",
+                "uid": 200
+              },
+              "state": "Running"
+            }
+          ]
+        },
+        "40-80/cell-0000000210": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "40-80",
+              "tablet": {
+                "cell": "cell",
+                "uid": 210
+              },
+              "state": "Running"
+            },
+            {
+              "id": "2",
+              "shard": "40-80",
+              "tablet": {
+                "cell": "cell",
+                "uid": 210
+              },
+              "state": "Running"
+            }
+          ]
+        },
+        "80-c0/cell-0000000220": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "80-c0",
+              "tablet": {
+                "cell": "cell",
+                "uid": 220
+              },
+              "state": "Running"
+            },
+            {
+              "id": "2",
+              "shard": "80-c0",
+              "tablet": {
+                "cell": "cell",
+                "uid": 220
+              },
+              "state": "Running"
+            }
+          ]
+        },
+        "c0-/cell-0000000230": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "c0-",
+              "tablet": {
+                "cell": "cell",
+                "uid": 230
+              },
+              "state": "Running"
+            },
+            {
+              "id": "2",
+              "shard": "c0-",
+              "tablet": {
+                "cell": "cell",
+                "uid": 230
+              },
+              "state": "Running"
+            }
+          ]
+        }
+      },
+      "workflowType": "MoveTables"
+    }
+  ]
+}`,
+		},
+		{
+			name: "minimal with logs",
+			req: &vtctldatapb.GetWorkflowsRequest{
+				Keyspace:    targetKeyspace,
+				Workflow:    workflow,
+				IncludeLogs: true,
+				Verbosity:   vtctldatapb.VerbosityLevel_MINIMAL,
+			},
+			result: `{
+  "workflows": [
+    {
+      "name": "test_workflow",
+      "source": {
+        "keyspace": "source_keyspace"
+      },
+      "target": {
+        "keyspace": "target_keyspace"
+      },
+      "shardStreams": {
+        "-40/cell-0000000200": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "-40",
+              "tablet": {
+                "cell": "cell",
+                "uid": 200
+              },
+              "state": "Running",
+              "logs": [
+                {
+                  "id": "1",
+                  "streamId": "1",
+                  "type": "State Change",
+                  "state": "Running",
+                  "createdAt": {
+                    "seconds": "1136214245"
+                  },
+                  "updatedAt": {
+                    "seconds": "1136214245"
+                  },
+                  "message": "test message",
+                  "count": "1"
+                }
+              ]
+            },
+            {
+              "id": "2",
+              "shard": "-40",
+              "tablet": {
+                "cell": "cell",
+                "uid": 200
+              },
+              "state": "Running",
+              "logs": [
+                {
+                  "id": "2",
+                  "streamId": "2",
+                  "type": "State Change",
+                  "state": "Running",
+                  "createdAt": {
+                    "seconds": "1136214245"
+                  },
+                  "updatedAt": {
+                    "seconds": "1136214245"
+                  },
+                  "message": "test message",
+                  "count": "1"
+                }
+              ]
+            }
+          ]
+        },
+        "40-80/cell-0000000210": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "40-80",
+              "tablet": {
+                "cell": "cell",
+                "uid": 210
+              },
+              "state": "Running",
+              "logs": [
+                {
+                  "id": "1",
+                  "streamId": "1",
+                  "type": "State Change",
+                  "state": "Running",
+                  "createdAt": {
+                    "seconds": "1136214245"
+                  },
+                  "updatedAt": {
+                    "seconds": "1136214245"
+                  },
+                  "message": "test message",
+                  "count": "1"
+                }
+              ]
+            },
+            {
+              "id": "2",
+              "shard": "40-80",
+              "tablet": {
+                "cell": "cell",
+                "uid": 210
+              },
+              "state": "Running",
+              "logs": [
+                {
+                  "id": "2",
+                  "streamId": "2",
+                  "type": "State Change",
+                  "state": "Running",
+                  "createdAt": {
+                    "seconds": "1136214245"
+                  },
+                  "updatedAt": {
+                    "seconds": "1136214245"
+                  },
+                  "message": "test message",
+                  "count": "1"
+                }
+              ]
+            }
+          ]
+        },
+        "80-c0/cell-0000000220": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "80-c0",
+              "tablet": {
+                "cell": "cell",
+                "uid": 220
+              },
+              "state": "Running",
+              "logs": [
+                {
+                  "id": "1",
+                  "streamId": "1",
+                  "type": "State Change",
+                  "state": "Running",
+                  "createdAt": {
+                    "seconds": "1136214245"
+                  },
+                  "updatedAt": {
+                    "seconds": "1136214245"
+                  },
+                  "message": "test message",
+                  "count": "1"
+                }
+              ]
+            },
+            {
+              "id": "2",
+              "shard": "80-c0",
+              "tablet": {
+                "cell": "cell",
+                "uid": 220
+              },
+              "state": "Running",
+              "logs": [
+                {
+                  "id": "2",
+                  "streamId": "2",
+                  "type": "State Change",
+                  "state": "Running",
+                  "createdAt": {
+                    "seconds": "1136214245"
+                  },
+                  "updatedAt": {
+                    "seconds": "1136214245"
+                  },
+                  "message": "test message",
+                  "count": "1"
+                }
+              ]
+            }
+          ]
+        },
+        "c0-/cell-0000000230": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "c0-",
+              "tablet": {
+                "cell": "cell",
+                "uid": 230
+              },
+              "state": "Running",
+              "logs": [
+                {
+                  "id": "1",
+                  "streamId": "1",
+                  "type": "State Change",
+                  "state": "Running",
+                  "createdAt": {
+                    "seconds": "1136214245"
+                  },
+                  "updatedAt": {
+                    "seconds": "1136214245"
+                  },
+                  "message": "test message",
+                  "count": "1"
+                }
+              ]
+            },
+            {
+              "id": "2",
+              "shard": "c0-",
+              "tablet": {
+                "cell": "cell",
+                "uid": 230
+              },
+              "state": "Running",
+              "logs": [
+                {
+                  "id": "2",
+                  "streamId": "2",
+                  "type": "State Change",
+                  "state": "Running",
+                  "createdAt": {
+                    "seconds": "1136214245"
+                  },
+                  "updatedAt": {
+                    "seconds": "1136214245"
+                  },
+                  "message": "test message",
+                  "count": "1"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "workflowType": "MoveTables"
+    }
+  ]
+}`,
+		},
+		{
+			name: "low",
+			req: &vtctldatapb.GetWorkflowsRequest{
+				Keyspace:  targetKeyspace,
+				Workflow:  workflow,
+				Verbosity: vtctldatapb.VerbosityLevel_LOW,
+			},
+			result: `{
+  "workflows": [
+    {
+      "name": "test_workflow",
+      "source": {
+        "keyspace": "source_keyspace"
+      },
+      "target": {
+        "keyspace": "target_keyspace"
+      },
+      "shardStreams": {
+        "-40/cell-0000000200": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "-40",
+              "tablet": {
+                "cell": "cell",
+                "uid": 200
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            },
+            {
+              "id": "2",
+              "shard": "-40",
+              "tablet": {
+                "cell": "cell",
+                "uid": 200
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            }
+          ]
+        },
+        "40-80/cell-0000000210": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "40-80",
+              "tablet": {
+                "cell": "cell",
+                "uid": 210
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            },
+            {
+              "id": "2",
+              "shard": "40-80",
+              "tablet": {
+                "cell": "cell",
+                "uid": 210
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            }
+          ]
+        },
+        "80-c0/cell-0000000220": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "80-c0",
+              "tablet": {
+                "cell": "cell",
+                "uid": 220
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            },
+            {
+              "id": "2",
+              "shard": "80-c0",
+              "tablet": {
+                "cell": "cell",
+                "uid": 220
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            }
+          ]
+        },
+        "c0-/cell-0000000230": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "c0-",
+              "tablet": {
+                "cell": "cell",
+                "uid": 230
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            },
+            {
+              "id": "2",
+              "shard": "c0-",
+              "tablet": {
+                "cell": "cell",
+                "uid": 230
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            }
+          ]
+        }
+      },
+      "workflowType": "MoveTables"
+    }
+  ]
+}`,
+		},
+		{
+			name: "medium",
+			req: &vtctldatapb.GetWorkflowsRequest{
+				Keyspace:  targetKeyspace,
+				Workflow:  workflow,
+				Verbosity: vtctldatapb.VerbosityLevel_MEDIUM,
+			},
+			result: `{
+  "workflows": [
+    {
+      "name": "test_workflow",
+      "source": {
+        "keyspace": "source_keyspace",
+        "shards": [
+          "-80",
+          "80-"
+        ]
+      },
+      "target": {
+        "keyspace": "target_keyspace",
+        "shards": [
+          "-40",
+          "40-80",
+          "80-c0",
+          "c0-"
+        ]
+      },
+      "shardStreams": {
+        "-40/cell-0000000200": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "-40",
+              "tablet": {
+                "cell": "cell",
+                "uid": 200
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "-80",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            },
+            {
+              "id": "2",
+              "shard": "-40",
+              "tablet": {
+                "cell": "cell",
+                "uid": 200
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "80-",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            }
+          ]
+        },
+        "40-80/cell-0000000210": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "40-80",
+              "tablet": {
+                "cell": "cell",
+                "uid": 210
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "-80",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            },
+            {
+              "id": "2",
+              "shard": "40-80",
+              "tablet": {
+                "cell": "cell",
+                "uid": 210
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "80-",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            }
+          ]
+        },
+        "80-c0/cell-0000000220": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "80-c0",
+              "tablet": {
+                "cell": "cell",
+                "uid": 220
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "-80",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            },
+            {
+              "id": "2",
+              "shard": "80-c0",
+              "tablet": {
+                "cell": "cell",
+                "uid": 220
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "80-",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            }
+          ]
+        },
+        "c0-/cell-0000000230": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "c0-",
+              "tablet": {
+                "cell": "cell",
+                "uid": 230
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "-80",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            },
+            {
+              "id": "2",
+              "shard": "c0-",
+              "tablet": {
+                "cell": "cell",
+                "uid": 230
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "80-",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running"
+            }
+          ]
+        }
+      },
+      "workflowType": "MoveTables"
+    }
+  ]
+}`,
+		},
+		{
+			name: "high",
+			req: &vtctldatapb.GetWorkflowsRequest{
+				Keyspace:  targetKeyspace,
+				Workflow:  workflow,
+				Verbosity: vtctldatapb.VerbosityLevel_HIGH,
+			},
+			result: `{
+  "workflows": [
+    {
+      "name": "test_workflow",
+      "source": {
+        "keyspace": "source_keyspace",
+        "shards": [
+          "-80",
+          "80-"
+        ]
+      },
+      "target": {
+        "keyspace": "target_keyspace",
+        "shards": [
+          "-40",
+          "40-80",
+          "80-c0",
+          "c0-"
+        ]
+      },
+      "shardStreams": {
+        "-40/cell-0000000200": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "-40",
+              "tablet": {
+                "cell": "cell",
+                "uid": 200
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "-80",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running",
+              "dbName": "vt_target_keyspace",
+              "tags": [
+                ""
+              ],
+              "cells": [
+                ""
+              ]
+            },
+            {
+              "id": "2",
+              "shard": "-40",
+              "tablet": {
+                "cell": "cell",
+                "uid": 200
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "80-",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running",
+              "dbName": "vt_target_keyspace",
+              "tags": [
+                ""
+              ],
+              "cells": [
+                ""
+              ]
+            }
+          ],
+          "isPrimaryServing": true
+        },
+        "40-80/cell-0000000210": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "40-80",
+              "tablet": {
+                "cell": "cell",
+                "uid": 210
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "-80",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running",
+              "dbName": "vt_target_keyspace",
+              "tags": [
+                ""
+              ],
+              "cells": [
+                ""
+              ]
+            },
+            {
+              "id": "2",
+              "shard": "40-80",
+              "tablet": {
+                "cell": "cell",
+                "uid": 210
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "80-",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running",
+              "dbName": "vt_target_keyspace",
+              "tags": [
+                ""
+              ],
+              "cells": [
+                ""
+              ]
+            }
+          ],
+          "isPrimaryServing": true
+        },
+        "80-c0/cell-0000000220": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "80-c0",
+              "tablet": {
+                "cell": "cell",
+                "uid": 220
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "-80",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running",
+              "dbName": "vt_target_keyspace",
+              "tags": [
+                ""
+              ],
+              "cells": [
+                ""
+              ]
+            },
+            {
+              "id": "2",
+              "shard": "80-c0",
+              "tablet": {
+                "cell": "cell",
+                "uid": 220
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "80-",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running",
+              "dbName": "vt_target_keyspace",
+              "tags": [
+                ""
+              ],
+              "cells": [
+                ""
+              ]
+            }
+          ],
+          "isPrimaryServing": true
+        },
+        "c0-/cell-0000000230": {
+          "streams": [
+            {
+              "id": "1",
+              "shard": "c0-",
+              "tablet": {
+                "cell": "cell",
+                "uid": 230
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "-80",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running",
+              "dbName": "vt_target_keyspace",
+              "tags": [
+                ""
+              ],
+              "cells": [
+                ""
+              ]
+            },
+            {
+              "id": "2",
+              "shard": "c0-",
+              "tablet": {
+                "cell": "cell",
+                "uid": 230
+              },
+              "binlogSource": {
+                "keyspace": "source_keyspace",
+                "shard": "80-",
+                "filter": {
+                  "rules": [
+                    {
+                      "match": ".*"
+                    }
+                  ]
+                }
+              },
+              "position": "9d10e6ec-07a0-11ee-ae73-8e53f4cf3083:1-97",
+              "state": "Running",
+              "dbName": "vt_target_keyspace",
+              "tags": [
+                ""
+              ],
+              "cells": [
+                ""
+              ]
+            }
+          ],
+          "isPrimaryServing": true
+        }
+      },
+      "workflowType": "MoveTables",
+      "workflowSubType": "None"
+    }
+  ]
+}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			te := newTestMaterializerEnv(t, ctx, &vtctldatapb.MaterializeSettings{
+				SourceKeyspace: sourceKeyspace,
+				TargetKeyspace: targetKeyspace,
+				Workflow:       workflow,
+				TableSettings: []*vtctldatapb.TableMaterializeSettings{
+					{
+						TargetTable:      "table1",
+						SourceExpression: fmt.Sprintf("select * from %s", "table1"),
+					},
+					{
+						TargetTable:      "table2",
+						SourceExpression: fmt.Sprintf("select * from %s", "table2"),
+					},
+				},
+			}, sourceShards, targetShards)
+			defer te.close()
+
+			uid := startingTargetTabletUID
+			for range targetShards {
+				te.tmc.expectVRQuery(uid, "/select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in", &sqltypes.Result{})
+				te.tmc.expectVRQuery(uid, "/select id from _vt.vreplication where db_name = 'vt_target_keyspace' and workflow = 'test_workflow'", &sqltypes.Result{})
+				te.tmc.expectVRQuery(uid, "/select id, vrepl_id, type, state, message, created_at, updated_at, `count` from _vt.vreplication_log where vrepl_id in", logResult)
+				uid += tabletUIDStep
+			}
+
+			res, err := te.ws.GetWorkflows(ctx, tc.req)
+			require.NoError(t, err)
+			require.Len(t, res.Workflows, 1)
+			if tc.req.Verbosity > vtctldatapb.VerbosityLevel_MINIMAL {
+				// Ensure that we have a time updated value as expected.
+				for _, ss := range res.Workflows[0].ShardStreams {
+					for _, s := range ss.Streams {
+						require.NotZero(t, s.TimeUpdated)
+						// But unset it as it is variable and thus we can't compare it.
+						s.TimeUpdated = nil
+					}
+				}
+			}
+			resJS, err := js.Marshal(res)
+			require.NoError(t, err)
+			require.Equal(t, tc.result, string(resJS))
+		})
 	}
 }
 
