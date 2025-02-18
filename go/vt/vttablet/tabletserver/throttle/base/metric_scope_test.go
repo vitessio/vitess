@@ -17,40 +17,21 @@ limitations under the License.
 package base
 
 import (
-	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// Scope defines the tablet range from which a metric is collected. This can be the local tablet
-// ("self") or the entire shard ("shard")
-type Scope string
-
-const (
-	UndefinedScope Scope = ""
-	ShardScope     Scope = "shard"
-	SelfScope      Scope = "self"
-)
-
-var (
-	pascalScopeNames = map[Scope]string{
+func TestScopePascalCase(t *testing.T) {
+	expectCases := map[Scope]string{
 		UndefinedScope: "",
 		ShardScope:     "Shard",
 		SelfScope:      "Self",
 	}
-)
-
-func (s Scope) Pascal() string {
-	return pascalScopeNames[s]
-}
-
-func (s Scope) String() string {
-	return string(s)
-}
-
-func ScopeFromString(s string) (Scope, error) {
-	switch scope := Scope(s); scope {
-	case UndefinedScope, ShardScope, SelfScope:
-		return scope, nil
-	default:
-		return "", fmt.Errorf("unknown scope: %s", s)
+	for scope, expect := range expectCases {
+		t.Run(scope.String(), func(t *testing.T) {
+			pascal := scope.Pascal()
+			assert.Equal(t, expect, pascal)
+		})
 	}
 }
