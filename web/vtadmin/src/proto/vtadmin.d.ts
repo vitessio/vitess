@@ -38463,6 +38463,9 @@ export namespace binlogdata {
 
         /** VEvent must_save */
         must_save?: (boolean|null);
+
+        /** VEvent pin_worker */
+        pin_worker?: (boolean|null);
     }
 
     /** Represents a VEvent. */
@@ -38530,6 +38533,9 @@ export namespace binlogdata {
 
         /** VEvent must_save. */
         public must_save: boolean;
+
+        /** VEvent pin_worker. */
+        public pin_worker: boolean;
 
         /**
          * Creates a new VEvent instance using the specified properties.
