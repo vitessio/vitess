@@ -185,6 +185,9 @@ func (s *Send) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars m
 
 // GetFields implements Primitive interface
 func (s *Send) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	if s.IsDML || s.IsDDL {
+		return &sqltypes.Result{}, nil
+	}
 	qr, err := vcursor.ExecutePrimitive(ctx, s, bindVars, false)
 	if err != nil {
 		return nil, err

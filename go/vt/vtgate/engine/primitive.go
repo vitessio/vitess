@@ -269,6 +269,9 @@ type (
 
 	// txNeeded is a default implementation for Primitives that need transaction handling
 	txNeeded struct{}
+
+	// noFields is a default implementation for Primitives that do not return fields
+	noFields struct{}
 )
 
 // Find will return the first Primitive that matches the evaluate function. If no match is found, nil will be returned
@@ -302,4 +305,8 @@ func (noTxNeeded) NeedsTransaction() bool {
 
 func (txNeeded) NeedsTransaction() bool {
 	return true
+}
+
+func (noFields) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return &sqltypes.Result{}, nil
 }

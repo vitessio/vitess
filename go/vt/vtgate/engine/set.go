@@ -41,6 +41,7 @@ type (
 	// Set contains the instructions to perform set.
 	Set struct {
 		noTxNeeded
+		noFields
 
 		Ops   []SetOp
 		Input Primitive
@@ -140,11 +141,6 @@ func (s *Set) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		return err
 	}
 	return callback(result)
-}
-
-// GetFields implements the Primitive interface method.
-func (s *Set) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return &sqltypes.Result{}, nil
 }
 
 // Inputs implements the Primitive interface

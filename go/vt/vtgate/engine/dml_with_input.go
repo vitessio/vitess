@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -33,6 +31,7 @@ const DmlVals = "dml_vals"
 // DMLWithInput represents the instructions to perform a DML operation based on the input result.
 type DMLWithInput struct {
 	txNeeded
+	noFields
 
 	Input Primitive
 
@@ -158,11 +157,6 @@ func (dml *DMLWithInput) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 		return err
 	}
 	return callback(res)
-}
-
-// GetFields fetches the field info.
-func (dml *DMLWithInput) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.VT13001("unreachable code for DMLs")
 }
 
 func (dml *DMLWithInput) description() PrimitiveDescription {

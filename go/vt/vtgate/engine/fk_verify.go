@@ -36,6 +36,7 @@ type Verify struct {
 // It does this by executing a select distinct query on the parent table with the values that are being inserted/updated.
 type FkVerify struct {
 	txNeeded
+	noFields
 
 	Verify []*Verify
 	Exec   Primitive
@@ -60,11 +61,6 @@ func (f *FkVerify) GetKeyspaceName() string {
 // GetTableName implements the Primitive interface
 func (f *FkVerify) GetTableName() string {
 	return f.Exec.GetTableName()
-}
-
-// GetFields implements the Primitive interface
-func (f *FkVerify) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields should not be called")
 }
 
 // TryExecute implements the Primitive interface

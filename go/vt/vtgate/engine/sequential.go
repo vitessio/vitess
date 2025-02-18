@@ -21,14 +21,14 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Sequential Primitive is used to execute DML statements in a fixed order.
 // Any failure, stops the execution and returns.
 type Sequential struct {
 	txNeeded
+	noFields
+
 	Sources []Primitive
 }
 
@@ -90,11 +90,6 @@ func (s *Sequential) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		return err
 	}
 	return callback(qr)
-}
-
-// GetFields fetches the field info.
-func (s *Sequential) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code for Sequential engine")
 }
 
 // Inputs returns the input primitives for this
