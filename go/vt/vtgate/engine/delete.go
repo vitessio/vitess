@@ -33,10 +33,10 @@ var _ Primitive = (*Delete)(nil)
 
 // Delete represents the instructions to perform a delete.
 type Delete struct {
-	*DML
-
-	// Delete does not take inputs
 	noInputs
+	noFields
+
+	*DML
 }
 
 // TryExecute performs a non-streaming exec.
@@ -68,11 +68,6 @@ func (del *Delete) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 		return err
 	}
 	return callback(res)
-}
-
-// GetFields fetches the field info.
-func (del *Delete) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, fmt.Errorf("BUG: unreachable code for %q", del.Query)
 }
 
 // deleteVindexEntries performs an delete if table owns vindex.

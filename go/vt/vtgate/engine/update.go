@@ -40,8 +40,8 @@ type VindexValues struct {
 
 // Update represents the instructions to perform an update.
 type Update struct {
-	// Update does not take inputs
 	noInputs
+	noFields
 
 	*DML
 
@@ -79,11 +79,6 @@ func (upd *Update) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 	}
 	return callback(res)
 
-}
-
-// GetFields fetches the field info.
-func (upd *Update) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, fmt.Errorf("BUG: unreachable code for %q", upd.Query)
 }
 
 // updateVindexEntries performs an update when a vindex is being modified

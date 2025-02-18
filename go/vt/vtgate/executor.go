@@ -1403,9 +1403,10 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 	}
 
 	switch stmtType {
-	case sqlparser.StmtSelect, sqlparser.StmtShow:
+	case sqlparser.StmtSelect, sqlparser.StmtShow,
+		sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		return e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
-	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
+	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
 		return nil, nil
 	}
