@@ -441,7 +441,7 @@ func TestSetSystemVariablesWithSetVarInvalidSQLMode(t *testing.T) {
 		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ age, city + :vtg1 /* INT64 */, weight_string(age) from `user` group by age, weight_string(age) order by age asc", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-	require.Equal(t, "' '", session.SystemVariables["sql_mode"])
+	require.Equal(t, "''", session.SystemVariables["sql_mode"])
 }
 
 func TestSelectVindexFunc(t *testing.T) {

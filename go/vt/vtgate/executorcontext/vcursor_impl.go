@@ -219,6 +219,11 @@ func (vc *VCursorImpl) PrepareSetVarComment() string {
 	var res []string
 	vc.Session().GetSystemVariables(func(k, v string) {
 		if sysvars.SupportsSetVar(k) {
+			if k == "sql_mode" && v == "''" {
+				// SET_VAR(sql_mode, '') is not accepted by MySQL, giving a warning:
+				// | Warning | 1064 | Optimizer hint syntax error near ''') */
+				v = "' '"
+			}
 			res = append(res, fmt.Sprintf("SET_VAR(%s = %s)", k, v))
 		}
 	})
