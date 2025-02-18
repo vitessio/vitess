@@ -29,6 +29,7 @@ var _ Primitive = (*SingleRow)(nil)
 type SingleRow struct {
 	noInputs
 	noTxNeeded
+	noFields
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -63,11 +64,6 @@ func (s *SingleRow) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 		return err
 	}
 	return callback(res)
-}
-
-// GetFields fetches the field info.
-func (s *SingleRow) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return &sqltypes.Result{}, nil
 }
 
 func (s *SingleRow) description() PrimitiveDescription {

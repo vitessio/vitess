@@ -19,11 +19,15 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/cache/theine"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 // Plan represents the execution strategy for a given query.
@@ -38,6 +42,7 @@ type Plan struct {
 	BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
 	Warnings     []*query.QueryWarning   // Warnings that need to be yielded every time this query runs
 	TablesUsed   []string                // TablesUsed is the list of tables that this plan will query
+	QueryHints   sqlparser.QueryHints
 
 	ExecCount    uint64 // Count of times this plan was executed
 	ExecTime     uint64 // Total execution time
@@ -45,6 +50,31 @@ type Plan struct {
 	RowsReturned uint64 // Total number of rows
 	RowsAffected uint64 // Total number of rows
 	Errors       uint64 // Total number of errors
+}
+
+type PlanKey struct {
+	CurrentKeyspace string
+	Destination     string
+	Query           string
+	SetVarComment   string
+	Collation       collations.ID
+}
+
+func (pk PlanKey) DebugString() string {
+	return fmt.Sprintf("CurrentKeyspace: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
+}
+
+func (pk PlanKey) Hash() theine.HashKey256 {
+	hasher := vthash.New256()
+	_, _ = hasher.WriteUint16(uint16(pk.Collation))
+	_, _ = hasher.WriteString(pk.CurrentKeyspace)
+	_, _ = hasher.WriteString(pk.Destination)
+	_, _ = hasher.WriteString(pk.SetVarComment)
+	_, _ = hasher.WriteString(pk.Query)
+
+	var planKey theine.HashKey256
+	hasher.Sum(planKey[:0])
+	return planKey
 }
 
 // AddStats updates the plan execution statistics

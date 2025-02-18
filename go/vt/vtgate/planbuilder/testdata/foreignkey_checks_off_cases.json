@@ -12,7 +12,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert /*+ SET_VAR(foreign_key_checks=Off) */ into tbl3(col3, coly) values (:_col3_0, 3)",
         "TableName": "tbl3",
         "VindexValues": {
@@ -37,7 +36,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert /*+ SET_VAR(foreign_key_checks=Off) */ into multicol_tbl2(cola, colb, colc) values (:_cola_0, :_colb_0, :_colc_0)",
         "TableName": "multicol_tbl2",
         "VindexValues": {
@@ -62,7 +60,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from tbl1",
         "Table": "tbl1"
       },
@@ -84,7 +81,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from tbl7",
         "Table": "tbl7"
       },
@@ -128,7 +124,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0,
@@ -154,7 +149,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
             "Table": "multicol_tbl1",
             "Values": [
@@ -185,7 +179,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from tbl8 where col8 = 1",
         "Table": "tbl8",
         "Values": [
@@ -211,7 +204,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ tbl1 set t1col1 = 'foo' where col1 = 1",
         "Table": "tbl1",
         "Values": [
@@ -237,7 +229,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ tbl7 set t7col7 = 'foo', t7col72 = 42",
         "Table": "tbl7"
       },
@@ -275,7 +266,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -291,7 +281,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=On) */ tbl5 set t5col5 = 'foo'",
             "Table": "tbl5"
           }
@@ -316,7 +305,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert /*+ SET_VAR(foreign_key_checks=Off) */ into tbl6(col6, t6col6) values (:_col6_0, 'foo')",
         "TableName": "tbl6",
         "VindexValues": {
@@ -341,7 +329,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from tbl20 where col = 'bar'",
         "Table": "tbl20",
         "Values": [
@@ -387,7 +374,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -403,7 +389,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete /*+ SET_VAR(foreign_key_checks=On) */ from tbl9 where col9 = 34",
             "Table": "tbl9",
             "Values": [
@@ -432,7 +417,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
         "Table": "multicol_tbl1",
         "Values": [
@@ -460,7 +444,6 @@
           "Name": "unsharded_fk_allow",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
         "Table": "u_multicol_tbl1"
       },
@@ -482,7 +465,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert /*+ SET_VAR(foreign_key_checks=Off) */ into tbl3(col3, coly) values (:_col3_0, 3)",
         "TableName": "tbl3",
         "VindexValues": {

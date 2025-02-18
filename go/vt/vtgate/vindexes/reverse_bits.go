@@ -70,8 +70,8 @@ func (vind *ReverseBits) NeedsVCursor() bool {
 }
 
 // Map returns the corresponding KeyspaceId values for the given ids.
-func (vind *ReverseBits) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
+func (vind *ReverseBits) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(ids))
 	for _, id := range ids {
 		num, err := vind.Hash(id)
 		if err != nil {

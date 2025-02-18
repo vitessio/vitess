@@ -53,7 +53,7 @@ func (*cheapVindex) NeedsVCursor() bool { return false }
 func (*cheapVindex) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*cheapVindex) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*cheapVindex) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 
@@ -75,7 +75,7 @@ func (*stFU) NeedsVCursor() bool { return false }
 func (*stFU) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*stFU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*stFU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 
@@ -97,7 +97,7 @@ func (*stFN) NeedsVCursor() bool { return false }
 func (*stFN) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*stFN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*stFN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 
@@ -119,7 +119,7 @@ func (*stLN) NeedsVCursor() bool { return true }
 func (*stLN) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*stLN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*stLN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*stLN) Create(context.Context, VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
@@ -147,7 +147,7 @@ func (*stLU) NeedsVCursor() bool { return true }
 func (*stLU) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*stLU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*stLU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*stLU) Create(context.Context, VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
@@ -179,7 +179,7 @@ func (*stLO) NeedsVCursor() bool { return true }
 func (*stLO) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*stLO) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*stLO) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*stLO) Create(context.Context, VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
@@ -213,7 +213,7 @@ func (*mcFU) NeedsVCursor() bool { return false }
 func (*mcFU) Verify(context.Context, VCursor, [][]sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*mcFU) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func (*mcFU) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*mcFU) PartialVindex() bool { return false }
@@ -805,7 +805,7 @@ func TestVSchemaMirrorRules(t *testing.T) {
 					ToTable:   "ks4.ks4t1",
 					Percent:   50,
 				},
-				// Destination sharded table must be defined in VSchema.
+				// ShardDestination sharded table must be defined in VSchema.
 				{
 					FromTable: "ks1.ks1t8",
 					ToTable:   "ks4.ks4t2",

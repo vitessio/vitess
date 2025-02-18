@@ -39,7 +39,7 @@ type VStream struct {
 	noInputs
 
 	Keyspace          *vindexes.Keyspace
-	TargetDestination key.Destination
+	TargetDestination key.ShardDestination
 	TableName         string
 	Position          string
 	Limit             int
@@ -67,7 +67,7 @@ func (v *VStream) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[
 
 // TryStreamExecute implements the Primitive interface
 func (v *VStream) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	rss, _, err := vcursor.ResolveDestinations(ctx, v.Keyspace.Name, nil, []key.Destination{v.TargetDestination})
+	rss, _, err := vcursor.ResolveDestinations(ctx, v.Keyspace.Name, nil, []key.ShardDestination{v.TargetDestination})
 	if err != nil {
 		return err
 	}

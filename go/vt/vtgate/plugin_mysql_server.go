@@ -281,7 +281,7 @@ func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
 }
 
 // ComPrepare is the handler for command prepare.
-func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, error) {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	if mysqlQueryTimeout != 0 {
@@ -315,7 +315,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, bindVars map[st
 		}
 	}()
 
-	session, fld, err := vh.vtg.Prepare(ctx, session, query, bindVars)
+	session, fld, err := vh.vtg.Prepare(ctx, session, query)
 	err = sqlerror.NewSQLErrorFromError(err)
 	if err != nil {
 		return nil, err

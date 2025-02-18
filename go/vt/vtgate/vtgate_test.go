@@ -125,7 +125,6 @@ func TestVTGatePrepare(t *testing.T) {
 			Options:      executeOptions,
 		},
 		"select id from t1",
-		nil,
 	)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -163,7 +162,6 @@ func TestVTGatePrepareError(t *testing.T) {
 			Options:      executeOptions,
 		},
 		"bad select id from t1",
-		nil,
 	)
 	require.Error(t, err)
 	require.Nil(t, qr)

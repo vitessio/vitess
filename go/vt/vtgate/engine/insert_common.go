@@ -37,8 +37,8 @@ import (
 
 type (
 	InsertCommon struct {
-		// Insert needs tx handling
 		txNeeded
+		noFields
 
 		// Opcode is the execution opcode.
 		Opcode InsertOpcode
@@ -144,13 +144,8 @@ func (ic *InsertCommon) GetTableName() string {
 	return ic.TableName
 }
 
-// GetFields fetches the field info.
-func (ic *InsertCommon) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.VT13001("unexpected fields call for insert query")
-}
-
 func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, loggingPrimitive Primitive, bindVars map[string]*querypb.BindVariable, query string, insertID uint64) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, nil, []key.ShardDestination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +441,7 @@ func (ic *InsertCommon) processGenerateFromValues(
 
 func (ic *InsertCommon) execGenerate(ctx context.Context, vcursor VCursor, loggingPrimitive Primitive, count int64) (int64, error) {
 	// If generation is needed, generate the requested number of values (as one call).
-	rss, _, err := vcursor.ResolveDestinations(ctx, ic.Generate.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+	rss, _, err := vcursor.ResolveDestinations(ctx, ic.Generate.Keyspace.Name, nil, []key.ShardDestination{key.DestinationAnyShard{}})
 	if err != nil {
 		return 0, err
 	}

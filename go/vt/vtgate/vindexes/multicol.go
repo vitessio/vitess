@@ -88,8 +88,8 @@ func (m *MultiCol) NeedsVCursor() bool {
 	return false
 }
 
-func (m *MultiCol) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(rowsColValues))
+func (m *MultiCol) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(rowsColValues))
 	for _, colValues := range rowsColValues {
 		partial, ksid, err := m.mapKsid(colValues)
 		if err != nil {

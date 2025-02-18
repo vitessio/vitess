@@ -23,15 +23,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
-
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
@@ -49,6 +47,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -58,6 +57,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
@@ -67,7 +67,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
-	"vitess.io/vitess/go/vt/vthash"
 )
 
 var (
@@ -1077,7 +1076,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
+func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
 	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
 }
 
@@ -1091,17 +1090,30 @@ func (e *Executor) getPlan(
 	comments sqlparser.MarginComments,
 	bindVars map[string]*querypb.BindVariable,
 	reservedVars *sqlparser.ReservedVars,
-	allowParameterization bool,
+	usePreparedPlan, allowParameterization bool,
 	logStats *logstats.LogStats,
-) (*engine.Plan, error) {
+) (plan *engine.Plan, err error) {
 	if e.VSchema() == nil {
 		return nil, vterrors.VT13001("vschema not initialized")
 	}
-
-	qh, err := sqlparser.BuildQueryHints(stmt)
-	if err != nil {
-		return nil, err
+	var setVarComment string
+	if e.vConfig.SetVarEnabled {
+		setVarComment = vcursor.PrepareSetVarComment()
 	}
+
+	if usePreparedPlan {
+		planKey := createPlanKey(ctx, vcursor, query, setVarComment)
+		plan, logStats.CachedPlan = e.plans.Get(planKey.Hash(), e.epoch.Load())
+	}
+
+	if plan == nil {
+		plan, err = e.getCachedOrBuild(ctx, vcursor, query, stmt, reservedVars, bindVars, usePreparedPlan, allowParameterization, comments, logStats, setVarComment)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	qh := plan.QueryHints
 	vcursor.SetIgnoreMaxMemoryRows(qh.IgnoreMaxMemoryRows)
 	vcursor.SetConsolidator(qh.Consolidator)
 	vcursor.SetWorkloadName(qh.Workload)
@@ -1109,20 +1121,44 @@ func (e *Executor) getPlan(
 	vcursor.SetPriority(qh.Priority)
 	vcursor.SetExecQueryTimeout(qh.Timeout)
 
-	setVarComment, err := prepareSetVarComment(vcursor, stmt)
+	if setVarComment != "" {
+		switch stmt.(type) {
+		// If the statement is a transaction statement or a `SET`, no reserved connection / SET_VAR is needed
+		case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
+			*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show, sqlparser.SupportOptimizerHint:
+		default:
+			vcursor.NeedsReservedConn()
+		}
+	}
+
+	return plan, nil
+}
+
+func (e *Executor) getCachedOrBuild(
+	ctx context.Context,
+	vcursor *econtext.VCursorImpl,
+	query string,
+	stmt sqlparser.Statement,
+	reservedVars *sqlparser.ReservedVars,
+	bindVars map[string]*querypb.BindVariable,
+	useOriginalQuery bool,
+	allowParameterization bool,
+	comments sqlparser.MarginComments,
+	logStats *logstats.LogStats,
+	setVarComment string,
+) (*engine.Plan, error) {
+
+	qh, err := sqlparser.BuildQueryHints(stmt)
 	if err != nil {
 		return nil, err
 	}
+	vcursor.UpdateForeignKeyChecksState(qh.ForeignKeyChecks)
 
-	// Normalize if possible
-	shouldNormalize := e.canNormalizeStatement(stmt, setVarComment)
-	parameterize := allowParameterization && shouldNormalize
-
-	rewriteASTResult, err := sqlparser.PrepareAST(
+	rewriteASTResult, err := sqlparser.Normalize(
 		stmt,
 		reservedVars,
 		bindVars,
-		parameterize,
+		allowParameterization,
 		vcursor.GetKeyspace(),
 		vcursor.SafeSession.GetSelectLimit(),
 		setVarComment,
@@ -1135,23 +1171,65 @@ func (e *Executor) getPlan(
 	}
 	stmt = rewriteASTResult.AST
 	bindVarNeeds := rewriteASTResult.BindVarNeeds
-	if shouldNormalize {
+	if rewriteASTResult.UpdateQueryFromAST && !useOriginalQuery {
 		query = sqlparser.String(stmt)
 	}
 
 	logStats.SQL = comments.Leading + query + comments.Trailing
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
-	return e.cacheAndBuildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, logStats)
+	planCachable := sqlparser.CachePlan(stmt) && vcursor.CachePlan()
+	if planCachable {
+		// build Plan key
+		planKey := createPlanKey(ctx, vcursor, query, setVarComment)
+
+		var plan *engine.Plan
+		var err error
+		plan, logStats.CachedPlan, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
+			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh)
+		})
+		return plan, err
+	}
+	return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh)
 }
 
-func (e *Executor) hashPlan(ctx context.Context, vcursor *econtext.VCursorImpl, query string) PlanCacheKey {
-	hasher := vthash.New256()
-	vcursor.KeyForPlan(ctx, query, hasher)
+func createPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {
+	allDest := getDestinations(ctx, vcursor)
 
-	var planKey PlanCacheKey
-	hasher.Sum(planKey[:0])
-	return planKey
+	return engine.PlanKey{
+		CurrentKeyspace: vcursor.GetKeyspace(),
+		Destination:     strings.Join(allDest, ","),
+		Query:           query,
+		SetVarComment:   setVarComment,
+		Collation:       vcursor.ConnCollation(),
+	}
+}
+
+func getDestinations(ctx context.Context, vcursor *econtext.VCursorImpl) []string {
+	currDest := vcursor.ShardDestination()
+	if currDest == nil {
+		return nil
+	}
+
+	switch currDest.(type) {
+	case key.DestinationKeyspaceID, key.DestinationKeyspaceIDs:
+		// these need to be resolved to shards
+	default:
+		return []string{currDest.String()}
+	}
+
+	resolved, _, err := vcursor.ResolveDestinations(ctx, vcursor.GetKeyspace(), nil, []key.ShardDestination{currDest})
+	if err != nil || len(resolved) <= 0 {
+		return nil
+	}
+
+	shards := make([]string, len(resolved))
+	for i := 0; i < len(shards); i++ {
+		shards[i] = resolved[i].Target.GetShard()
+	}
+	sort.Strings(shards)
+
+	return shards
 }
 
 func (e *Executor) buildStatement(
@@ -1161,6 +1239,7 @@ func (e *Executor) buildStatement(
 	stmt sqlparser.Statement,
 	reservedVars *sqlparser.ReservedVars,
 	bindVarNeeds *sqlparser.BindVarNeeds,
+	qh sqlparser.QueryHints,
 ) (*engine.Plan, error) {
 	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, e.ddlConfig)
 	if err != nil {
@@ -1168,64 +1247,10 @@ func (e *Executor) buildStatement(
 	}
 
 	plan.Warnings = vcursor.GetAndEmptyWarnings()
+	plan.QueryHints = qh
 
 	err = e.checkThatPlanIsValid(stmt, plan)
 	return plan, err
-}
-
-func (e *Executor) cacheAndBuildStatement(
-	ctx context.Context,
-	vcursor *econtext.VCursorImpl,
-	query string,
-	stmt sqlparser.Statement,
-	reservedVars *sqlparser.ReservedVars,
-	bindVarNeeds *sqlparser.BindVarNeeds,
-	logStats *logstats.LogStats,
-) (*engine.Plan, error) {
-	planCachable := sqlparser.CachePlan(stmt) && vcursor.CachePlan()
-	if planCachable {
-		planKey := e.hashPlan(ctx, vcursor, query)
-
-		var plan *engine.Plan
-		var err error
-		plan, logStats.CachedPlan, err = e.plans.GetOrLoad(planKey, e.epoch.Load(), func() (*engine.Plan, error) {
-			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds)
-		})
-		return plan, err
-	}
-	return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds)
-}
-
-func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, setVarComment string) bool {
-	return sqlparser.CanNormalize(stmt) || setVarComment != ""
-}
-
-func prepareSetVarComment(vcursor *econtext.VCursorImpl, stmt sqlparser.Statement) (string, error) {
-	if vcursor == nil || vcursor.Session().InReservedConn() {
-		return "", nil
-	}
-
-	if !vcursor.Session().HasSystemVariables() {
-		return "", nil
-	}
-
-	switch stmt.(type) {
-	// If the statement is a transaction statement or a set no reserved connection / SET_VAR is needed
-	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
-		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show:
-		return "", nil
-	case sqlparser.SupportOptimizerHint:
-		break
-	default:
-		vcursor.NeedsReservedConn()
-		return "", nil
-	}
-
-	var res strings.Builder
-	vcursor.Session().GetSystemVariables(func(k, v string) {
-		res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, v))
-	})
-	return strings.TrimSpace(res.String()), nil
 }
 
 func (e *Executor) debugCacheEntries() (items map[string]*engine.Plan) {
@@ -1341,9 +1366,9 @@ func isValidPayloadSize(query string) bool {
 }
 
 // Prepare executes a prepare statements.
-func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (fld []*querypb.Field, err error) {
-	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
-	fld, err = e.prepare(ctx, safeSession, sql, bindVars, logStats)
+func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string) (fld []*querypb.Field, err error) {
+	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
+	fld, err = e.prepare(ctx, safeSession, sql, logStats)
 	logStats.Error = err
 
 	// The mysql plugin runs an implicit rollback whenever a connection closes.
@@ -1360,18 +1385,13 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 	return fld, err
 }
 
-func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
+func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	// Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
 			return nil, err
 		}
 	}
-
-	if bindVars == nil {
-		bindVars = make(map[string]*querypb.BindVariable)
-	}
-
 	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = stmtType.String()
 
@@ -1387,9 +1407,10 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 	}
 
 	switch stmtType {
-	case sqlparser.StmtSelect, sqlparser.StmtShow:
-		return e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
-	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
+	case sqlparser.StmtSelect, sqlparser.StmtShow,
+		sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
+		return e.handlePrepare(ctx, safeSession, sql, logStats)
+	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
 		return nil, nil
 	}
@@ -1427,7 +1448,29 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 	}
 }
 
-func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
+func countArguments(statement sqlparser.Statement) (paramsCount uint16) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.Argument:
+			if strings.HasPrefix(node.Name, "v") {
+				paramsCount++
+			}
+		}
+		return true, nil
+	}, statement)
+	return
+}
+
+func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
+	bindVars := make(map[string]*querypb.BindVariable, paramsCount)
+	for i := range paramsCount {
+		parameterID := fmt.Sprintf("v%d", i+1)
+		bindVars[parameterID] = &querypb.BindVariable{}
+	}
+	return bindVars
+}
+
+func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
 
 	vcursor, _ := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
@@ -1437,7 +1480,10 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 		return nil, err
 	}
 
-	plan, err := e.getPlan(ctx, vcursor, sql, stmt, comments, bindVars, reservedVars /* parameterize */, false, logStats)
+	paramsCount := countArguments(stmt)
+	bindVars := prepareBindVars(paramsCount)
+
+	plan, err := e.getPlan(ctx, vcursor, sql, stmt, comments, bindVars, reservedVars /* usePreparedPlan */, true /* allowParameterization */, false, logStats)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
@@ -1613,17 +1659,7 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, vcursor *econtext.VCurso
 
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, vcursor.Session().GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
-	plan, err := e.getPlan(
-		ctx,
-		vcursor,
-		query,
-		sqlparser.Clone(stmt),
-		vcursor.GetMarginComments(),
-		map[string]*querypb.BindVariable{},
-		reservedVars, /* normalize */
-		false,
-		lStats,
-	)
+	plan, err := e.getPlan(ctx, vcursor, query, sqlparser.Clone(stmt), vcursor.GetMarginComments(), map[string]*querypb.BindVariable{}, reservedVars, false, false, lStats)
 	if err != nil {
 		return nil, nil, err
 	}

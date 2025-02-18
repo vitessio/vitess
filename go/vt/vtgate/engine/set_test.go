@@ -452,7 +452,7 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
 			"SysVar set with (sql_mode,'')",
-			"Needs Reserved Conn",
+			"SET_VAR can be used",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"a|",
@@ -478,7 +478,7 @@ func TestSetTable(t *testing.T) {
 			"|a",
 		)},
 	}, {
-		testName:     "sql_mode change to empty - non empty orig - MySQL80 - should use reserved conn",
+		testName:     "sql_mode change to empty - non empty orig - MySQL80 - set_var allowed",
 		mysqlVersion: "8.0.0",
 		setOps: []SetOp{
 			&SysVarReservedConn{
@@ -492,7 +492,7 @@ func TestSetTable(t *testing.T) {
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
 			"SysVar set with (sql_mode,'')",
-			"Needs Reserved Conn",
+			"SET_VAR can be used",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"a|",

@@ -96,9 +96,9 @@ func (ln *LookupNonUnique) NeedsVCursor() bool {
 	return true
 }
 
-// Map can map ids to key.Destination objects.
-func (ln *LookupNonUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
+// Map can map ids to key.ShardDestination objects.
+func (ln *LookupNonUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(ids))
 	if ln.writeOnly {
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
@@ -123,8 +123,8 @@ func (ln *LookupNonUnique) Map(ctx context.Context, vcursor VCursor, ids []sqlty
 }
 
 // MapResult implements the LookupPlanable interface
-func (ln *LookupNonUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
+func (ln *LookupNonUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(ids))
 	if ln.writeOnly {
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
@@ -244,7 +244,7 @@ func ksidsToValues(ksids [][]byte) []sqltypes.Value {
 	return values
 }
 
-//====================================================================
+// ====================================================================
 
 // LookupUnique defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
@@ -327,10 +327,10 @@ func (lu *LookupUnique) NeedsVCursor() bool {
 	return true
 }
 
-// Map can map ids to key.Destination objects.
-func (lu *LookupUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+// Map can map ids to key.ShardDestination objects.
+func (lu *LookupUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	if lu.writeOnly {
-		out := make([]key.Destination, 0, len(ids))
+		out := make([]key.ShardDestination, 0, len(ids))
 		for range ids {
 			out = append(out, key.DestinationKeyRange{KeyRange: &topodatapb.KeyRange{}})
 		}
@@ -343,8 +343,8 @@ func (lu *LookupUnique) Map(ctx context.Context, vcursor VCursor, ids []sqltypes
 	return lu.MapResult(ids, results)
 }
 
-func (lu *LookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
+func (lu *LookupUnique) MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(ids))
 	for i, result := range results {
 		switch len(result.Rows) {
 		case 0:

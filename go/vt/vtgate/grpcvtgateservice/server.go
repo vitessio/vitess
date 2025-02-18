@@ -224,7 +224,7 @@ func (vtg *VTGate) Prepare(ctx context.Context, request *vtgatepb.PrepareRequest
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	session, fields, err := vtg.server.Prepare(ctx, session, request.Query.Sql, request.Query.BindVariables)
+	session, fields, err := vtg.server.Prepare(ctx, session, request.Query.Sql)
 	return &vtgatepb.PrepareResponse{
 		Fields:  fields,
 		Session: session,

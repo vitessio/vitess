@@ -1627,7 +1627,7 @@ func loadSchemaInfo(version string) map[string][]vindexes.Column {
 }
 
 // FindTableOrVindex implements the SchemaInformation interface
-func (i *infoSchemaWithColumns) FindTableOrVindex(tbl sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+func (i *infoSchemaWithColumns) FindTableOrVindex(tbl sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
 	if !strings.EqualFold(tbl.Qualifier.String(), "information_schema") {
 		return i.inner.FindTableOrVindex(tbl)
 	}

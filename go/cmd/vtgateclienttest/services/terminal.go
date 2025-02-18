@@ -63,7 +63,7 @@ func (c *terminalClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservi
 	return session, errTerminal
 }
 
-func (c *terminalClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+func (c *terminalClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, error) {
 	return session, nil, errTerminal
 }
 

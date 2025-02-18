@@ -190,7 +190,7 @@ func buildSetOpReservedConn(s setting) planFunc {
 		return &engine.SysVarReservedConn{
 			Name:              expr.Var.Name.Lowered(),
 			Keyspace:          ks,
-			TargetDestination: vschema.Destination(),
+			TargetDestination: vschema.ShardDestination(),
 			Expr:              value,
 			SupportSetVar:     s.supportSetVar,
 		}, nil
@@ -234,13 +234,13 @@ func buildSetOpVitessAware(s setting) planFunc {
 	}
 }
 
-func resolveDestination(vschema plancontext.VSchema) (*vindexes.Keyspace, key.Destination, error) {
+func resolveDestination(vschema plancontext.VSchema) (*vindexes.Keyspace, key.ShardDestination, error) {
 	keyspace, err := vschema.AnyKeyspace()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	dest := vschema.Destination()
+	dest := vschema.ShardDestination()
 	if dest == nil {
 		dest = key.DestinationAnyShard{}
 	}

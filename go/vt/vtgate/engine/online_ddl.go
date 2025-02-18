@@ -42,7 +42,7 @@ type OnlineDDL struct {
 	SQL                string
 	DDLStrategySetting *schema.DDLStrategySetting
 	// TargetDestination specifies an explicit target destination to send the query to.
-	TargetDestination key.Destination
+	TargetDestination key.ShardDestination
 }
 
 func (v *OnlineDDL) description() PrimitiveDescription {

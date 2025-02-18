@@ -165,7 +165,7 @@ func TestNumericStaticMapMap(t *testing.T) {
 
 	// in the third slice, we expect 2 instead of 3 as numeric_static_map_test.json
 	// has 3 mapped to 2
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x01")),
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x02")),
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x02")),
@@ -271,7 +271,7 @@ func TestNumericStaticMapWithFallback(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x02")),
 		key.DestinationKeyspaceID([]byte("\x8b\x59\x80\x16\x62\xb5\x21\x60")),
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x04")),

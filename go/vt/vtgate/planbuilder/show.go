@@ -44,7 +44,7 @@ const (
 )
 
 func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
-	if vschema.Destination() != nil {
+	if vschema.ShardDestination() != nil {
 		return buildByPassPlan(sql, vschema, false)
 	}
 
@@ -183,7 +183,7 @@ func buildShowTblPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (e
 		show.DbName = sqlparser.NewIdentifierCS("")
 	}
 
-	dest := key.Destination(key.DestinationAnyShard{})
+	dest := key.ShardDestination(key.DestinationAnyShard{})
 	var ks *vindexes.Keyspace
 	var err error
 
@@ -495,7 +495,7 @@ func buildCreateDbPlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema) 
 }
 
 func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema) (engine.Primitive, error) {
-	dest := key.Destination(key.DestinationAnyShard{})
+	dest := key.ShardDestination(key.DestinationAnyShard{})
 	var ks *vindexes.Keyspace
 	var err error
 
