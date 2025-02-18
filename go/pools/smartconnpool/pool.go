@@ -503,8 +503,8 @@ func (pool *ConnPool[C]) connReopen(ctx context.Context, dbconn *Pooled[C], now 
 		return err
 	}
 
-	if dbconn.Conn.Setting() != nil {
-		err = dbconn.Conn.ApplySetting(ctx, dbconn.Conn.Setting())
+	if setting := dbconn.Conn.Setting(); setting != nil {
+		err = dbconn.Conn.ApplySetting(ctx, setting)
 		if err != nil {
 			dbconn.Close()
 			return err
@@ -772,7 +772,7 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 			if conn.timeUsed.expired(mono, timeout) {
 				pool.Metrics.idleClosed.Add(1)
 				conn.Close()
-				if err := pool.connReopen(context.Background(), conn, monotonicNow()); err != nil {
+				if err := pool.connReopen(context.Background(), conn, mono); err != nil {
 					pool.closedConn()
 				}
 			}
