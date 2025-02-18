@@ -682,12 +682,8 @@ func GenerateInitWorkerPos(uid int32, worker int) string {
 // - txTimestamp?
 // - rowsCopied?
 // - timeUpdated?
-func GenerateUpdateWorkerPos(uid int32, worker int, pos replication.Position, transactionTimestamp int64) string {
-	strGTID := ""
-	if pos.GTIDSet != nil {
-		strGTID = pos.GTIDSet.String()
-	}
-	strGTID = encodeString(strGTID)
+func GenerateUpdateWorkerPos(uid int32, worker int, pos string, transactionTimestamp int64) string {
+	strGTID := encodeString(pos)
 	// Append GTID value to already existing value in `gtid` column
 	if transactionTimestamp == 0 {
 		return fmt.Sprintf(
