@@ -200,13 +200,12 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, session *vtgatepb.Ses
 	}, nil
 }
 
-func (conn *vtgateConn) Prepare(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+func (conn *vtgateConn) Prepare(ctx context.Context, session *vtgatepb.Session, query string) (*vtgatepb.Session, []*querypb.Field, error) {
 	request := &vtgatepb.PrepareRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Session:  session,
 		Query: &querypb.BoundQuery{
-			Sql:           query,
-			BindVariables: bindVars,
+			Sql: query,
 		},
 	}
 	response, err := conn.c.Prepare(ctx, request)

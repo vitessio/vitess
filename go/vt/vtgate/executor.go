@@ -1082,7 +1082,17 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(ctx context.Context, vcursor *econtext.VCursorImpl, query string, stmt sqlparser.Statement, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, reservedVars *sqlparser.ReservedVars, usePreparedPlan bool, allowParameterization bool, logStats *logstats.LogStats) (plan *engine.Plan, err error) {
+func (e *Executor) getPlan(
+	ctx context.Context,
+	vcursor *econtext.VCursorImpl,
+	query string,
+	stmt sqlparser.Statement,
+	comments sqlparser.MarginComments,
+	bindVars map[string]*querypb.BindVariable,
+	reservedVars *sqlparser.ReservedVars,
+	usePreparedPlan, allowParameterization bool,
+	logStats *logstats.LogStats,
+) (plan *engine.Plan, err error) {
 	if e.VSchema() == nil {
 		return nil, vterrors.VT13001("vschema not initialized")
 	}
@@ -1356,9 +1366,9 @@ func isValidPayloadSize(query string) bool {
 }
 
 // Prepare executes a prepare statements.
-func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (fld []*querypb.Field, err error) {
-	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
-	fld, err = e.prepare(ctx, safeSession, sql, bindVars, logStats)
+func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string) (fld []*querypb.Field, err error) {
+	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
+	fld, err = e.prepare(ctx, safeSession, sql, logStats)
 	logStats.Error = err
 
 	// The mysql plugin runs an implicit rollback whenever a connection closes.
@@ -1375,18 +1385,13 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 	return fld, err
 }
 
-func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
+func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	// Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
 			return nil, err
 		}
 	}
-
-	if bindVars == nil {
-		bindVars = make(map[string]*querypb.BindVariable)
-	}
-
 	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = stmtType.String()
 
@@ -1404,7 +1409,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 	switch stmtType {
 	case sqlparser.StmtSelect, sqlparser.StmtShow,
 		sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
-		return e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
+		return e.handlePrepare(ctx, safeSession, sql, logStats)
 	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
 		return nil, nil
@@ -1443,7 +1448,29 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 	}
 }
 
-func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
+func countArguments(statement sqlparser.Statement) (paramsCount uint16) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.Argument:
+			if strings.HasPrefix(node.Name, "v") {
+				paramsCount++
+			}
+		}
+		return true, nil
+	}, statement)
+	return
+}
+
+func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
+	bindVars := make(map[string]*querypb.BindVariable, paramsCount)
+	for i := range paramsCount {
+		parameterID := fmt.Sprintf("v%d", i+1)
+		bindVars[parameterID] = &querypb.BindVariable{}
+	}
+	return bindVars
+}
+
+func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
 
 	vcursor, _ := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
@@ -1452,6 +1479,9 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 	if err != nil {
 		return nil, err
 	}
+
+	paramsCount := countArguments(stmt)
+	bindVars := prepareBindVars(paramsCount)
 
 	plan, err := e.getPlan(ctx, vcursor, sql, stmt, comments, bindVars, reservedVars /* usePreparedPlan */, true /* allowParameterization */, false, logStats)
 	execStart := time.Now()

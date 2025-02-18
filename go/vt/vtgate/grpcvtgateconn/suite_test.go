@@ -197,7 +197,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgatese
 }
 
 // Prepare is part of the VTGateService interface
-func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, error) {
 	if f.hasError {
 		return session, nil, errTestVtGateError
 	}
@@ -210,9 +210,8 @@ func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Sessi
 		return session, nil, fmt.Errorf("no match for: %s", sql)
 	}
 	query := &queryExecute{
-		SQL:           sql,
-		BindVariables: bindVariables,
-		Session:       session,
+		SQL:     sql,
+		Session: session,
 	}
 	if !query.equal(execCase.execQuery) {
 		f.t.Errorf("Prepare:\n%+v, want\n%+v", query, execCase.execQuery)
@@ -484,13 +483,13 @@ func testStreamExecutePanic(t *testing.T, session *vtgateconn.VTGateSession) {
 func testPrepare(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := session.Prepare(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	_, err := session.Prepare(ctx, execCase.execQuery.SQL)
 	require.NoError(t, err)
 	// if !qr.Equal(execCase.result) {
 	//	t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
 	// }
 
-	_, err = session.Prepare(ctx, "none", nil)
+	_, err = session.Prepare(ctx, "none")
 	require.EqualError(t, err, "no match for: none")
 }
 
@@ -498,14 +497,14 @@ func testPrepareError(t *testing.T, session *vtgateconn.VTGateSession, fake *fak
 	ctx := newContext()
 	execCase := execMap["errorRequst"]
 
-	_, err := session.Prepare(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	_, err := session.Prepare(ctx, execCase.execQuery.SQL)
 	verifyError(t, err, "Prepare")
 }
 
 func testPreparePanic(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := session.Prepare(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	_, err := session.Prepare(ctx, execCase.execQuery.SQL)
 	expectPanic(t, err)
 }
 
@@ -528,9 +527,6 @@ var execMap = map[string]struct {
 	"request1": {
 		execQuery: &queryExecute{
 			SQL: "request1",
-			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": sqltypes.Int64BindVariable(0),
-			},
 			Session: &vtgatepb.Session{
 				TargetString: "connection_ks@rdonly",
 				Options:      testExecuteOptions,
@@ -584,5 +580,3 @@ var streamResultFields = sqltypes.Result{
 	Fields: result1.Fields,
 	Rows:   [][]sqltypes.Value{},
 }
-
-var dtid2 = "aa"

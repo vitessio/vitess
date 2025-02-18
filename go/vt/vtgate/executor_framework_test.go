@@ -334,13 +334,12 @@ func executorExec(ctx context.Context, executor *Executor, session *vtgatepb.Ses
 	return executorExecSession(ctx, executor, sql, bv, session)
 }
 
-func executorPrepare(ctx context.Context, executor *Executor, session *vtgatepb.Session, sql string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+func executorPrepare(ctx context.Context, executor *Executor, session *vtgatepb.Session, sql string) ([]*querypb.Field, error) {
 	return executor.Prepare(
 		ctx,
 		"TestExecute",
 		econtext.NewSafeSession(session),
-		sql,
-		bv)
+		sql)
 }
 
 func executorStream(ctx context.Context, executor *Executor, sql string) (qr *sqltypes.Result, err error) {

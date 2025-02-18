@@ -35,7 +35,7 @@ type VTGateService interface {
 	ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error)
 	StreamExecute(ctx context.Context, mysqlCtx MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error)
 	// Prepare statement support
-	Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error)
+	Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, error)
 
 	// CloseSession closes the session, rolling back any implicit transactions.
 	// This has the same effect as if a "rollback" statement was executed,

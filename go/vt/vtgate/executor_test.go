@@ -2928,7 +2928,7 @@ func TestExecutorTruncateErrors(t *testing.T) {
 	err = executor.StreamExecute(ctx, nil, "TestExecute", session, "invalid statement", nil, fn)
 	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
 
-	_, err = executor.Prepare(context.Background(), "TestExecute", session, "invalid statement", nil)
+	_, err = executor.Prepare(context.Background(), "TestExecute", session, "invalid statement")
 	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
 }
 

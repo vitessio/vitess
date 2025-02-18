@@ -525,7 +525,7 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 }
 
 // ComPrepare is part of the mysql.Handler interface.
-func (db *DB) ComPrepare(c *mysql.Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+func (db *DB) ComPrepare(*mysql.Conn, string) ([]*querypb.Field, error) {
 	return nil, nil
 }
 

@@ -58,7 +58,7 @@ func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes
 	return callback(&sqltypes.Result{Fields: []*querypb.Field{}, Rows: [][]sqltypes.Value{}})
 }
 
-func (th *testHandler) ComPrepare(c *mysql.Conn, q string, b map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+func (th *testHandler) ComPrepare(*mysql.Conn, string) ([]*querypb.Field, error) {
 	return nil, nil
 }
 

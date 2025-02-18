@@ -1129,7 +1129,7 @@ func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result)
 	return nil
 }
 
-func (t testRun) ComPrepare(c *Conn, query string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+func (t testRun) ComPrepare(c *Conn, query string) ([]*querypb.Field, error) {
 	assert.Equal(t.t, t.expQuery, query)
 	assert.EqualValues(t.t, t.expStmtID, c.StatementID)
 	assert.NotNil(t.t, c.PrepareData[c.StatementID])
