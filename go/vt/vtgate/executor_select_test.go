@@ -3109,14 +3109,11 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
-	_, err := executorPrepare(ctx, executor, session, sql, map[string]*querypb.BindVariable{
-		"id": sqltypes.Int64BindVariable(1),
-	})
+	_, err := executorPrepare(ctx, executor, session, sql)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from `user` where 1 != 1",
-		BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(1)},
+		Sql: "select id from `user` where 1 != 1",
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	assert.Empty(t, sbc2.Queries)
@@ -3131,7 +3128,7 @@ func TestSelectDatabasePrepare(t *testing.T) {
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
-	_, err := executorPrepare(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
+	_, err := executorPrepare(ctx, executor, session, sql)
 	require.NoError(t, err)
 }
 

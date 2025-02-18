@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -1221,25 +1220,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	}
 	c.PrepareData[c.StatementID] = prepare
 
-	statement, err := handler.Env().Parser().ParseStrictDDL(query)
-	if err != nil {
-		log.Errorf("Conn %v: Error parsing prepared statement: %v", c, err)
-		if !c.writeErrorPacketFromErrorAndLog(err) {
-			return false
-		}
-	}
-
-	paramsCount := countArguments(statement)
-
-	if paramsCount > 0 {
-		prepare.ParamsCount = paramsCount
-		prepare.ParamsType = make([]int32, paramsCount)
-		prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
-	}
-
-	bindVars := prepareBindVars(paramsCount)
-
-	fld, err := handler.ComPrepare(c, query, bindVars)
+	fld, err := handler.ComPrepare(c, query)
 	if err != nil {
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
@@ -1249,28 +1230,6 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		return false
 	}
 	return true
-}
-
-func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
-	bindVars := make(map[string]*querypb.BindVariable, paramsCount)
-	for i := range paramsCount {
-		parameterID := fmt.Sprintf("v%d", i+1)
-		bindVars[parameterID] = &querypb.BindVariable{}
-	}
-	return bindVars
-}
-
-func countArguments(statement sqlparser.Statement) (paramsCount uint16) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		switch node := node.(type) {
-		case *sqlparser.Argument:
-			if strings.HasPrefix(node.Name, "v") {
-				paramsCount++
-			}
-		}
-		return true, nil
-	}, statement)
-	return
 }
 
 func (c *Conn) handleComSetOption(data []byte) bool {
