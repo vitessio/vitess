@@ -405,9 +405,6 @@ func (wf *workflowFetcher) scanWorkflow(
 			if rstream.TimeUpdated == nil {
 				rstream.TimeUpdated = &vttimepb.Time{}
 			}
-			if stream.TimeUpdated == nil {
-				stream.TimeUpdated = &vttimepb.Time{}
-			}
 			stream.TimeUpdated = rstream.TimeUpdated
 			stream.TransactionTimestamp = rstream.TransactionTimestamp
 			timeUpdated := time.Unix(stream.TimeUpdated.Seconds, 0)
