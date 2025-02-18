@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestKScopePascalCase(t *testing.T) {
+func TestScopePascalCase(t *testing.T) {
 	expectCases := map[Scope]string{
 		UndefinedScope: "",
 		ShardScope:     "Shard",
