@@ -344,6 +344,22 @@ func (client *Client) GetPermissions(ctx context.Context, tablet *topodatapb.Tab
 	return response.Permissions, nil
 }
 
+// GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
+func (client *Client) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, variables []string) (map[string]string, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.GetGlobalStatusVars(ctx, &tabletmanagerdatapb.GetGlobalStatusVarsRequest{
+		Variables: variables,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return response.GetStatusValues(), nil
+}
+
 //
 // Various read-write methods
 //

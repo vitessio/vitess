@@ -43,6 +43,10 @@ type RPCTM interface {
 
 	GetPermissions(ctx context.Context) (*tabletmanagerdatapb.Permissions, error)
 
+	// GetGlobalStatusVars returns the server's global status variables asked for.
+	// An empty/nil variable name parameter slice means you want all of them.
+	GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error)
+
 	// Various read-write methods
 
 	SetReadOnly(ctx context.Context, rdonly bool) error

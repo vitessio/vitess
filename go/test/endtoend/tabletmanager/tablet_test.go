@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -99,4 +100,32 @@ func TestResetReplicationParameters(t *testing.T) {
 	res, err = tablet.VttabletProcess.QueryTablet("show slave status", keyspaceName, false)
 	require.NoError(t, err)
 	require.Len(t, res.Rows, 0)
+}
+
+// TestGetGlobalStatusVars tests the GetGlobalStatusVars RPC
+func TestGetGlobalStatusVars(t *testing.T) {
+	ctx := context.Background()
+	statusValues, err := tmcGetGlobalStatusVars(ctx, replicaTablet.GrpcPort, []string{"Innodb_buffer_pool_pages_data", "unknown_value"})
+	require.NoError(t, err)
+	require.Len(t, statusValues, 1)
+	checkValueGreaterZero(t, statusValues, "Innodb_buffer_pool_pages_data")
+
+	statusValues, err = tmcGetGlobalStatusVars(ctx, replicaTablet.GrpcPort, []string{"Uptime", "Innodb_buffer_pool_pages_data"})
+	require.NoError(t, err)
+	require.Len(t, statusValues, 2)
+	checkValueGreaterZero(t, statusValues, "Innodb_buffer_pool_pages_data")
+	checkValueGreaterZero(t, statusValues, "Uptime")
+
+	statusValues, err = tmcGetGlobalStatusVars(ctx, replicaTablet.GrpcPort, nil)
+	require.NoError(t, err)
+	require.Greater(t, len(statusValues), 250)
+	checkValueGreaterZero(t, statusValues, "Innodb_buffer_pool_pages_data")
+	checkValueGreaterZero(t, statusValues, "Innodb_buffer_pool_pages_free")
+	checkValueGreaterZero(t, statusValues, "Uptime")
+}
+
+func checkValueGreaterZero(t *testing.T, statusValues map[string]string, val string) {
+	valInMap, err := strconv.Atoi(statusValues[val])
+	require.NoError(t, err)
+	require.Greater(t, valInMap, 0)
 }

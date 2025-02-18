@@ -758,6 +758,15 @@ func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tab
 	return t.tm.GetPermissions(ctx)
 }
 
+// GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
+func (itmc *internalTabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, variables []string) (map[string]string, error) {
+	t, ok := tabletMap[tablet.Alias.Uid]
+	if !ok {
+		return nil, fmt.Errorf("tmclient: cannot find tablet %v", topoproto.TabletAliasString(tablet.Alias))
+	}
+	return t.tm.GetGlobalStatusVars(ctx, variables)
+}
+
 func (itmc *internalTabletManagerClient) SetReadOnly(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }

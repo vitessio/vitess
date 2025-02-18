@@ -50,6 +50,10 @@ type MysqlDaemon interface {
 	// GetServerUUID returns the servers UUID
 	GetServerUUID(ctx context.Context) (string, error)
 
+	// GetGlobalStatusVars returns the server's global status variables asked for.
+	// An empty/nil variable name parameter slice means you want all of them.
+	GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error)
+
 	// replication related methods
 	StartReplication(hookExtraEnv map[string]string) error
 	RestartReplication(hookExtraEnv map[string]string) error

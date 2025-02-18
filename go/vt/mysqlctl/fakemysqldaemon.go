@@ -417,6 +417,13 @@ func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, e
 	return nil, nil
 }
 
+// GetGlobalStatusVars is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) GetGlobalStatusVars(ctx context.Context, variables []string) (map[string]string, error) {
+	return make(map[string]string), fmd.ExecuteSuperQueryList(ctx, []string{
+		"FAKE " + getGlobalStatusQuery,
+	})
+}
+
 // StartReplication is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) StartReplication(hookExtraEnv map[string]string) error {
 	if fmd.StartReplicationError != nil {
