@@ -57,14 +57,24 @@ func (v *KeyspaceTypeFlag) Type() string {
 	return "cli.KeyspaceTypeFlag"
 }
 
-// VerbosityLevelFlag implements the pflag.Value interface, for parsing a command-line value
-// into a vtctldatapb.VerbosityLevel.
+// VerbosityLevelFlag implements the pflag.Value interface, for parsing a command-line
+// string value into a vtctldatapb.VerbosityLevel.
 type VerbosityLevelFlag vtctldatapb.VerbosityLevel
 
-// String is part of the pflag.Value interfaces.
+// String is part of the pflag.Value interface.
 func (vlf *VerbosityLevelFlag) String() string {
 	return vtctldatapb.VerbosityLevel(*vlf).String()
 }
+
+// Set is part of the pflag.Value interface.
+func (vlf *VerbosityLevelFlag) Set(v string) error {
+	t, err := ParseVerbosityLevelFlag(v)
+	*vlf = VerbosityLevelFlag(t)
+	return err
+}
+
+// Type is part of the pflag.Value interface.
+func (*VerbosityLevelFlag) Type() string { return "vtctldata.VerbosityLevel" }
 
 // ParseVerbosityLevelFlag parses the string value into the enum type.
 func ParseVerbosityLevelFlag(param string) (vtctldatapb.VerbosityLevel, error) {
@@ -76,8 +86,8 @@ func ParseVerbosityLevelFlag(param string) (vtctldatapb.VerbosityLevel, error) {
 	return vtctldatapb.VerbosityLevel(value), nil
 }
 
-// GetVerbosityLevelFlagOptions returns a list of valid values which can be provided for
-// the VerbosityLevelFlag.
+// GetVerbosityLevelFlagOptions returns a logically sorted list of valid values which
+// can be provided for the VerbosityLevelFlag.
 func GetVerbosityLevelFlagOptions() []string {
 	enumVals := maps.Values(vtctldatapb.VerbosityLevel_value)
 	slices.Sort(enumVals)
@@ -87,13 +97,3 @@ func GetVerbosityLevelFlagOptions() []string {
 	}
 	return strVals
 }
-
-// Set is part of the pflag.Value interfaces.
-func (vlf *VerbosityLevelFlag) Set(v string) error {
-	t, err := ParseVerbosityLevelFlag(v)
-	*vlf = VerbosityLevelFlag(t)
-	return err
-}
-
-// Type is part of the pflag.Value interface.
-func (*VerbosityLevelFlag) Type() string { return "vtctldatapb.VerbosityLevel" }

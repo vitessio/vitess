@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
+
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 

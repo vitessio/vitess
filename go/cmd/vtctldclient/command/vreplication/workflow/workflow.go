@@ -17,6 +17,9 @@ limitations under the License.
 package workflow
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -59,7 +62,8 @@ func registerCommands(root *cobra.Command) {
 
 	getWorkflows.Flags().BoolVar(&workflowShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflows.")
 	getWorkflows.Flags().BoolVarP(&getWorkflowsOptions.ShowAll, "show-all", "a", false, "Show all workflows instead of just active workflows.")
-	getWorkflows.Flags().Var((*cli.VerbosityLevelFlag)(&getWorkflowsOptions.Verbosity), "verbosity-level", "How much detail to include in the results.")
+	getWorkflows.Flags().Var((*cli.VerbosityLevelFlag)(&getWorkflowsOptions.Verbosity), "verbosity-level", fmt.Sprintf("How much detail to include in the results. Valid values are: %s.",
+		strings.Join(cli.GetVerbosityLevelFlagOptions(), ",")))
 	root.AddCommand(getWorkflows) // Yes this is supposed to be root as GetWorkflows is a top-level command.
 
 	delete.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want to delete.")
@@ -76,7 +80,8 @@ func registerCommands(root *cobra.Command) {
 	show.Flags().StringVarP(&baseOptions.Workflow, "workflow", "w", "", "The workflow you want the details for.")
 	show.MarkFlagRequired("workflow")
 	show.Flags().BoolVar(&workflowShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflow.")
-	show.Flags().Var((*cli.VerbosityLevelFlag)(&workflowShowOptions.Verbosity), "verbosity-level", "How much detail to include in the results.")
+	show.Flags().Var((*cli.VerbosityLevelFlag)(&workflowShowOptions.Verbosity), "verbosity-level", fmt.Sprintf("How much detail to include in the results. Valid values are: %s.",
+		strings.Join(cli.GetVerbosityLevelFlagOptions(), ",")))
 	common.AddShardSubsetFlag(show, &baseOptions.Shards)
 	base.AddCommand(show)
 

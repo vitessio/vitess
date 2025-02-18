@@ -18,6 +18,7 @@ package common
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -43,7 +44,8 @@ func GetShowCommand(opts *SubCommandsOpts) *cobra.Command {
 		RunE:                  commandShow,
 	}
 	cmd.Flags().BoolVar(&ShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflow.")
-	cmd.Flags().Var((*cli.VerbosityLevelFlag)(&ShowOptions.Verbosity), "verbosity-level", "How much detail to include in the results.")
+	cmd.Flags().Var((*cli.VerbosityLevelFlag)(&ShowOptions.Verbosity), "verbosity-level", fmt.Sprintf("How much detail to include in the results. Valid values are: %s.",
+		strings.Join(cli.GetVerbosityLevelFlagOptions(), ",")))
 	return cmd
 }
 
