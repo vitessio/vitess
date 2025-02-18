@@ -10,6 +10,7 @@ import (
 
 	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
 )
@@ -45,22 +46,18 @@ func TestStatsdCounter(t *testing.T) {
 		found = true
 		if kv.Key == name {
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			result := string(bytes[:n])
 			expected := "test.counter_name:1|c\n"
 			assert.Equal(t, expected, result)
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdGauge(t *testing.T) {
@@ -74,22 +71,18 @@ func TestStatsdGauge(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			result := string(bytes[:n])
 			expected := "test.gauge_name:10|g\n"
 			assert.Equal(t, expected, result)
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdGaugeFloat64(t *testing.T) {
@@ -103,22 +96,18 @@ func TestStatsdGaugeFloat64(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			result := string(bytes[:n])
 			expected := "test.gauge_name_f64:3.14|g\n"
 			assert.Equal(t, expected, result)
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdGaugeFunc(t *testing.T) {
@@ -133,22 +122,18 @@ func TestStatsdGaugeFunc(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			result := string(bytes[:n])
 			expected := "test.gauge_func_name:2|g\n"
 			assert.Equal(t, expected, result)
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdCounterDuration(t *testing.T) {
@@ -162,9 +147,7 @@ func TestStatsdCounterDuration(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			if err != nil {
@@ -175,9 +158,7 @@ func TestStatsdCounterDuration(t *testing.T) {
 			assert.Equal(t, expected, result)
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdCountersWithSingleLabel(t *testing.T) {
@@ -191,9 +172,7 @@ func TestStatsdCountersWithSingleLabel(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			if err != nil {
@@ -211,9 +190,7 @@ func TestStatsdCountersWithSingleLabel(t *testing.T) {
 			}
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdCountersWithMultiLabels(t *testing.T) {
@@ -227,22 +204,18 @@ func TestStatsdCountersWithMultiLabels(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			result := string(bytes[:n])
 			expected := "test.counter_with_multiple_label_name:1|c|#label1:foo,label2:bar\n"
 			assert.Equal(t, expected, result)
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdCountersFuncWithMultiLabels(t *testing.T) {
@@ -260,9 +233,7 @@ func TestStatsdCountersFuncWithMultiLabels(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			if err != nil {
@@ -280,9 +251,7 @@ func TestStatsdCountersFuncWithMultiLabels(t *testing.T) {
 			}
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdGaugesWithMultiLabels(t *testing.T) {
@@ -296,9 +265,7 @@ func TestStatsdGaugesWithMultiLabels(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			if err != nil {
@@ -309,9 +276,7 @@ func TestStatsdGaugesWithMultiLabels(t *testing.T) {
 			assert.Equal(t, expected, result)
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdGaugesFuncWithMultiLabels(t *testing.T) {
@@ -329,9 +294,7 @@ func TestStatsdGaugesFuncWithMultiLabels(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			if err != nil {
@@ -349,9 +312,7 @@ func TestStatsdGaugesFuncWithMultiLabels(t *testing.T) {
 			}
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdGaugesWithSingleLabel(t *testing.T) {
@@ -365,9 +326,7 @@ func TestStatsdGaugesWithSingleLabel(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
 			if err != nil {
@@ -378,9 +337,7 @@ func TestStatsdGaugesWithSingleLabel(t *testing.T) {
 			assert.Equal(t, expected, result)
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdMultiTimings(t *testing.T) {
@@ -394,9 +351,7 @@ func TestStatsdMultiTimings(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 49152)
 			n, err := server.Read(bytes)
 			if err != nil {
@@ -407,9 +362,7 @@ func TestStatsdMultiTimings(t *testing.T) {
 			assert.Equal(t, expected, result)
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdTimings(t *testing.T) {
@@ -423,9 +376,7 @@ func TestStatsdTimings(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
 			bytes := make([]byte, 49152)
 			n, err := server.Read(bytes)
 			if err != nil {
@@ -436,9 +387,7 @@ func TestStatsdTimings(t *testing.T) {
 			assert.Equal(t, expected, result)
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestStatsdHistogram(t *testing.T) {
@@ -454,14 +403,12 @@ func TestStatsdHistogram(t *testing.T) {
 		if kv.Key == name {
 			found = true
 			sb.addExpVar(kv)
-			if err := sb.statsdClient.Flush(); err != nil {
-				t.Errorf("Error flushing: %s", err)
-			}
+			assert.NoError(t, sb.statsdClient.Flush(), "Error flushing")
+
 			bytes := make([]byte, 4096)
 			n, err := server.Read(bytes)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			result := string(bytes[:n])
 			expected := []string{
 				"test.histogram_name:2|h",
@@ -474,9 +421,7 @@ func TestStatsdHistogram(t *testing.T) {
 			}
 		}
 	})
-	if !found {
-		t.Errorf("Stat %s not found...", name)
-	}
+	assert.True(t, found, "Stat %s not found", name)
 }
 
 func TestMakeCommonTags(t *testing.T) {

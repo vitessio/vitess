@@ -181,9 +181,7 @@ func TestOpen(t *testing.T) {
 	assert.Equal(t, 5, len(state.waits))
 	// verify start times are monotonic increasing
 	for i := 1; i < len(state.waits); i++ {
-		if state.waits[i].Before(state.waits[i-1]) {
-			t.Errorf("Expecting monotonic increasing start times")
-		}
+		assert.False(t, state.waits[i].Before(state.waits[i-1]), "Expecting monotonic increasing start times")
 	}
 	assert.NotZero(t, p.Metrics.WaitTime())
 	assert.EqualValues(t, 5, state.lastID.Load())
@@ -1005,9 +1003,7 @@ func TestMultiSettings(t *testing.T) {
 	assert.Equal(t, 5, len(state.waits))
 	// verify start times are monotonic increasing
 	for i := 1; i < len(state.waits); i++ {
-		if state.waits[i].Before(state.waits[i-1]) {
-			t.Errorf("Expecting monotonic increasing start times")
-		}
+		assert.False(t, state.waits[i].Before(state.waits[i-1]), "Expecting monotonic increasing start times")
 	}
 	assert.NotZero(t, p.Metrics.WaitTime())
 	assert.EqualValues(t, 5, state.lastID.Load())
