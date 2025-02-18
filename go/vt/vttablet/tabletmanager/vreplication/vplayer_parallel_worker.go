@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -57,6 +58,9 @@ type parallelWorker struct {
 	// TODO(shlomi): remove this
 	numCommits    int
 	numSubscribes int
+
+	updatedPos          replication.Position
+	updatedPosTimestamp int64
 }
 
 func newParallelWorker(index int, producer *parallelProducer, capacity int) *parallelWorker {
@@ -84,6 +88,15 @@ func (w *parallelWorker) subscribeCommitWorkerEvent(sequenceNumber int64) chan e
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
 func (w *parallelWorker) updatePos(ctx context.Context, pos string, transactionTimestamp int64) (posReached bool, err error) {
+	if w.dbClient.InTransaction {
+		p, err := binlogplayer.DecodeMySQL56Position(pos)
+		if err != nil {
+			return false, err
+		}
+		w.updatedPos = replication.AppendGTIDSet(w.updatedPos, p.GTIDSet)
+		w.updatedPosTimestamp = max(w.updatedPosTimestamp, transactionTimestamp)
+		return false, nil
+	}
 	update := binlogplayer.GenerateUpdateWorkerPos(w.vp.vr.id, w.index, pos, transactionTimestamp)
 	if _, err := w.queryFunc(ctx, update); err != nil {
 		// TODO(remove) this is just debug info
@@ -222,7 +235,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 	case binlogdatapb.VEventType_BEGIN:
 		// No-op: begin is called as needed.
 	case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_UNKNOWN:
-		return w.applyQueuedCommit(event)
+		return w.applyQueuedCommit(ctx, event)
 	case binlogdatapb.VEventType_FIELD:
 		if err := w.dbClient.Begin(); err != nil {
 			return err
@@ -537,7 +550,7 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 	return nil
 }
 
-func (w *parallelWorker) applyQueuedCommit(event *binlogdatapb.VEvent) error {
+func (w *parallelWorker) applyQueuedCommit(ctx context.Context, event *binlogdatapb.VEvent) error {
 	// log.Errorf("========== QQQ applyQueuedCommit worker %v", w.index)
 	switch {
 	case event.Type == binlogdatapb.VEventType_COMMIT:
@@ -549,6 +562,14 @@ func (w *parallelWorker) applyQueuedCommit(event *binlogdatapb.VEvent) error {
 	shouldActuallyCommit := len(w.sequenceNumbers) > 0
 	var err error
 	if shouldActuallyCommit {
+
+		if !w.updatedPos.IsZero() {
+			update := binlogplayer.GenerateUpdateWorkerPos(w.vp.vr.id, w.index, w.updatedPos.String(), w.updatedPosTimestamp)
+			if _, err := w.queryFunc(ctx, update); err != nil {
+				return err
+			}
+			w.updatedPos = replication.Position{}
+		}
 		// log.Errorf("========== QQQ applyQueuedCommit actual commit worker %v", w.index)
 		err = w.commitFunc()
 		// log.Errorf("========== QQQ applyQueuedCommit actual commit worker %v DONE", w.index)
