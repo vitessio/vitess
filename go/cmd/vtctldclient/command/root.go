@@ -29,7 +29,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -106,6 +105,15 @@ connect directly to the topo server(s).`, useInternalVtctld),
 		// We use PersistentPreRun to set up the tracer, grpc client, and
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+			env, err = vtenv.New(vtenv.Options{
+				MySQLServerVersion: servenv.MySQLServerVersion(),
+				TruncateUILen:      servenv.TruncateUILen,
+				TruncateErrLen:     servenv.TruncateErrLen,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to initialize vtenv: %w", err)
+			}
+
 			logutil.PurgeLogs()
 			traceCloser = trace.StartTracing("vtctldclient")
 			client, err = getClientForCommand(cmd)
@@ -119,6 +127,7 @@ connect directly to the topo server(s).`, useInternalVtctld),
 			}
 			vreplcommon.SetClient(client)
 			vreplcommon.SetCommandCtx(commandCtx)
+
 			return err
 		},
 		// Similarly, PersistentPostRun cleans up the resources spawned by
@@ -229,14 +238,4 @@ func init() {
 	Root.PersistentFlags().StringSliceVar(&topoOptions.globalServerAddresses, "topo-global-server-address", topoOptions.globalServerAddresses, "the address of the global topology server(s)")
 	Root.PersistentFlags().StringVar(&topoOptions.globalRoot, "topo-global-root", topoOptions.globalRoot, "the path of the global topology data in the global topology server")
 	vreplcommon.RegisterCommands(Root)
-
-	var err error
-	env, err = vtenv.New(vtenv.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
-		TruncateUILen:      servenv.TruncateUILen,
-		TruncateErrLen:     servenv.TruncateErrLen,
-	})
-	if err != nil {
-		log.Fatalf("failed to initialize vtenv: %v", err)
-	}
 }
