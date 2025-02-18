@@ -1052,18 +1052,24 @@ func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.
 	case SemiSyncActionNone:
 		return nil
 	case SemiSyncActionSet:
-		// We want to enable the semi-sync monitor only if the tablet is going to start
-		// expecting semi-sync ACKs.
-		if tabletType == topodatapb.TabletType_PRIMARY {
-			tm.SemiSyncMonitor.Open()
-		} else {
-			tm.SemiSyncMonitor.Close()
+		if tm.SemiSyncMonitor != nil {
+			// We want to enable the semi-sync monitor only if the tablet is going to start
+			// expecting semi-sync ACKs.
+			if tabletType == topodatapb.TabletType_PRIMARY {
+				tm.SemiSyncMonitor.Open()
+			} else {
+				tm.SemiSyncMonitor.Close()
+			}
 		}
 		// Always enable replica-side since it doesn't hurt to keep it on for a primary.
 		// The primary-side needs to be off for a replica, or else it will get stuck.
 		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, tabletType == topodatapb.TabletType_PRIMARY, true)
 	case SemiSyncActionUnset:
-		tm.SemiSyncMonitor.Close()
+		// The nil check is required for vtcombo, which doesn't run the semi-sync monitor
+		// but does try to turn off semi-sync.
+		if tm.SemiSyncMonitor != nil {
+			tm.SemiSyncMonitor.Close()
+		}
 		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, false, false)
 	default:
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)

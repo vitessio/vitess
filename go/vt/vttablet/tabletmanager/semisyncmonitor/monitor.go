@@ -23,8 +23,10 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -97,11 +99,29 @@ func NewMonitor(config *tabletenv.TabletConfig, exporter *servenv.Exporter) *Mon
 	}
 }
 
+// CreateTestSemiSyncMonitor created a monitor for testing.
+// It takes an optional fake db.
+func CreateTestSemiSyncMonitor(db *fakesqldb.DB, exporter *servenv.Exporter) *Monitor {
+	var dbc *dbconfigs.DBConfigs
+	if db != nil {
+		params := db.ConnParams()
+		cp := *params
+		dbc = dbconfigs.NewTestDBConfigs(cp, cp, "")
+	}
+	return NewMonitor(&tabletenv.TabletConfig{
+		DB: dbc,
+		SemiSyncMonitor: tabletenv.SemiSyncMonitorConfig{
+			Interval: 10 * time.Second,
+		},
+	}, exporter)
+}
+
 // Open starts the monitor.
 func (m *Monitor) Open() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.isOpen {
+	// The check for config being nil is only requried for tests.
+	if m.isOpen || m.config == nil || m.config.DB == nil {
 		// If we are already open, then there is nothing to do
 		return
 	}

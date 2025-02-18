@@ -26,6 +26,7 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 )
 
@@ -77,15 +78,17 @@ func TestDemotePrimaryStalled(t *testing.T) {
 		waitTime: 2 * time.Second,
 	}
 	// Create a tablet manager with a replica type tablet.
+	fakeDb := newTestMysqlDaemon(t, 1)
 	tm := &TabletManager{
 		actionSema:  semaphore.NewWeighted(1),
-		MysqlDaemon: newTestMysqlDaemon(t, 1),
+		MysqlDaemon: fakeDb,
 		tmState: &tmState{
 			displayState: displayState{
 				tablet: newTestTablet(t, 100, "ks", "-", map[string]string{}),
 			},
 		},
 		QueryServiceControl: qsc,
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
 	}
 
 	// We make IsServing stall for over 2 seconds, which is longer than 10 * remote operation timeout.
