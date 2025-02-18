@@ -97,6 +97,7 @@ rowStreamer:
   maxMySQLReplLagSecs: 400
 schemaChangeReloadTimeout: 30s
 schemaReloadIntervalSeconds: 30m0s
+semiSyncMonitor: {}
 txPool: {}
 `
 	assert.Equal(t, wantBytes, string(gotBytes))
@@ -164,6 +165,8 @@ rowStreamer:
   maxMySQLReplLagSecs: 43200
 schemaChangeReloadTimeout: 30s
 schemaReloadIntervalSeconds: 30m0s
+semiSyncMonitor:
+  intervalSeconds: 10s
 signalWhenSchemaChange: true
 streamBufferSize: 32768
 txPool:
