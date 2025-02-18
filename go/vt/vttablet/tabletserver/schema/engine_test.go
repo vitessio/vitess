@@ -1900,6 +1900,10 @@ func TestGetTableForPos(t *testing.T) {
 	se.historian.enabled = false
 
 	addExpectedReloadQueries := func(db *fakesqldb.DB) {
+		db.AddQuery(fetchPartitions, &sqltypes.Result{})
+		db.AddQuery(fetchTableRowCountClusteredIndex, &sqltypes.Result{})
+		db.AddQuery(fetchIndexSizes, &sqltypes.Result{})
+		db.AddQuery(fetchIndexCardinalities, &sqltypes.Result{})
 		db.AddQuery("SELECT UNIX_TIMESTAMP()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"UNIX_TIMESTAMP()",
 			"int64"),
