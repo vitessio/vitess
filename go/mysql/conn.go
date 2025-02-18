@@ -1200,10 +1200,8 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	query := c.parseComPrepare(data)
 	c.recycleReadPacket()
 
-	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		var err error
-		queries, err = handler.Env().Parser().SplitStatementToPieces(query)
+		queries, err := handler.Env().Parser().SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1212,15 +1210,14 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 			log.Errorf("Conn %v: can not prepare multiple statements", c)
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
-	} else {
-		queries = []string{query}
+		query = queries[0]
 	}
 
 	// Populate PrepareData
 	c.StatementID++
 	prepare := &PrepareData{
 		StatementID: c.StatementID,
-		PrepareStmt: queries[0],
+		PrepareStmt: query,
 	}
 
 	statement, err := handler.Env().Parser().ParseStrictDDL(query)
@@ -1249,14 +1246,14 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	}
 
 	bindVars := make(map[string]*querypb.BindVariable, paramsCount)
-	for i := range uint16(paramsCount) {
+	for i := range paramsCount {
 		parameterID := fmt.Sprintf("v%d", i+1)
 		bindVars[parameterID] = &querypb.BindVariable{}
 	}
 
 	c.PrepareData[c.StatementID] = prepare
 
-	fld, err := handler.ComPrepare(c, queries[0], bindVars)
+	fld, err := handler.ComPrepare(c, query, bindVars)
 	if err != nil {
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
