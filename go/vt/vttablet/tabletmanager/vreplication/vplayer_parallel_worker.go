@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -38,7 +37,7 @@ type parallelWorker struct {
 	queryFunc         func(ctx context.Context, sql string) (*sqltypes.Result, error)
 	commitFunc        func() error
 	vp                *vplayer
-	aggregatedPosChan chan replication.Position
+	aggregatedPosChan chan string
 
 	producer *parallelProducer
 
@@ -66,7 +65,7 @@ func newParallelWorker(index int, producer *parallelProducer, capacity int) *par
 		index:             index,
 		producer:          producer,
 		events:            make(chan *binlogdatapb.VEvent, capacity),
-		aggregatedPosChan: make(chan replication.Position),
+		aggregatedPosChan: make(chan string),
 		sequenceNumbers:   make([]int64, maxWorkerEvents),
 		commitSubscribers: make(map[int64]chan error),
 		vp:                producer.vp,
@@ -84,7 +83,7 @@ func (w *parallelWorker) subscribeCommitWorkerEvent(sequenceNumber int64) chan e
 }
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
-func (w *parallelWorker) updatePos(ctx context.Context, pos replication.Position, transactionTimestamp int64) (posReached bool, err error) {
+func (w *parallelWorker) updatePos(ctx context.Context, pos string, transactionTimestamp int64) (posReached bool, err error) {
 	update := binlogplayer.GenerateUpdateWorkerPos(w.vp.vr.id, w.index, pos, transactionTimestamp)
 	if _, err := w.queryFunc(ctx, update); err != nil {
 		// TODO(remove) this is just debug info
@@ -112,11 +111,7 @@ func (w *parallelWorker) updatePos(ctx context.Context, pos replication.Position
 }
 
 func (w *parallelWorker) updatePosByEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
-	pos, err := binlogplayer.DecodeMySQL56Position(event.EventGtid)
-	if err != nil {
-		return err
-	}
-	if _, err := w.updatePos(ctx, pos, event.Timestamp); err != nil {
+	if _, err := w.updatePos(ctx, event.EventGtid, event.Timestamp); err != nil {
 		return err
 	}
 	return nil
@@ -202,20 +197,20 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 	// ctx, cancel := context.WithCancel(ctx)
 	// defer cancel()
 
-	//
-	t := time.NewTimer(5 * time.Second)
-	defer t.Stop()
-	go func() {
-		select {
-		case <-t.C:
-			log.Errorf("========== QQQ applyQueuedEvent worker %v TIMED OUT. event=%v", w.index, event.Type)
-			if event.Type == binlogdatapb.VEventType_ROW {
-				log.Errorf("========== QQQ applyQueuedEvent worker %v TIMED OUT. event=%v. table=%v", w.index, event.Type, event.RowEvent.TableName)
-			}
-		case <-ctx.Done():
-			return
-		}
-	}()
+	// //
+	// t := time.NewTimer(5 * time.Second)
+	// defer t.Stop()
+	// go func() {
+	// 	select {
+	// 	case <-t.C:
+	// 		log.Errorf("========== QQQ applyQueuedEvent worker %v TIMED OUT. event=%v", w.index, event.Type)
+	// 		if event.Type == binlogdatapb.VEventType_ROW {
+	// 			log.Errorf("========== QQQ applyQueuedEvent worker %v TIMED OUT. event=%v. table=%v", w.index, event.Type, event.RowEvent.TableName)
+	// 		}
+	// 	case <-ctx.Done():
+	// 		return
+	// 	}
+	// }()
 
 	stats := NewVrLogStats(event.Type.String())
 	switch event.Type {
@@ -247,7 +242,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 		if err := onField(); err != nil {
 			return err
 		}
-		stats.Send(fmt.Sprintf("%v", event.FieldEvent))
+		go func() { stats.Send(fmt.Sprintf("%v", event.FieldEvent)) }()
 
 	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE,
 		binlogdatapb.VEventType_REPLACE, binlogdatapb.VEventType_SAVEPOINT:
@@ -265,7 +260,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			if err := w.applyQueuedStmtEvent(ctx, event); err != nil {
 				return err
 			}
-			stats.Send(sql)
+			go stats.Send(sql)
 		}
 	case binlogdatapb.VEventType_ROW:
 		if err := w.dbClient.Begin(); err != nil {
@@ -276,7 +271,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 		}
 		// Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed
 		// time for the Row event.
-		stats.Send(fmt.Sprintf("%v", event.RowEvent))
+		go func() { stats.Send(fmt.Sprintf("%v", event.RowEvent)) }()
 	case binlogdatapb.VEventType_OTHER:
 		if w.dbClient.InTransaction {
 			// Unreachable
@@ -322,7 +317,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			if _, err := w.queryFunc(ctx, event.Statement); err != nil {
 				return err
 			}
-			stats.Send(fmt.Sprintf("%v", event.Statement))
+			go func() { stats.Send(fmt.Sprintf("%v", event.Statement)) }()
 			if err := w.updatePosByEvent(ctx, event); err != nil {
 				return err
 			}
@@ -330,7 +325,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			if _, err := w.queryFunc(ctx, event.Statement); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
 			}
-			stats.Send(fmt.Sprintf("%v", event.Statement))
+			go func() { stats.Send(fmt.Sprintf("%v", event.Statement)) }()
 			if err := w.updatePosByEvent(ctx, event); err != nil {
 				return err
 			}
@@ -380,7 +375,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			}
 			return io.EOF
 		}
-		stats.Send(fmt.Sprintf("%v", event.Journal))
+		go func() { stats.Send(fmt.Sprintf("%v", event.Journal)) }()
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		if event.Throttled {
@@ -506,7 +501,7 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 		qr, err := w.queryFunc(ctx, sql)
 		w.vp.vr.stats.QueryCount.Add(w.vp.phase, 1)
 		w.vp.vr.stats.QueryTimings.Record(w.vp.phase, start)
-		stats.Send(sql)
+		go stats.Send(sql)
 		return qr, err
 	}
 

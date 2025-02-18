@@ -131,8 +131,8 @@ func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastC
 		p.sequenceToWorkersMap[sequenceNumber] = workerIndex
 		return workerIndex
 	}
-	// workerIndex = int((p.assignSequence / 10) % countWorkers)
-	workerIndex = int(p.assignSequence) % len(p.workers)
+	// workerIndex = int(p.assignSequence) % len(p.workers)
+	workerIndex = int(p.assignSequence/maxWorkerEvents) % len(p.workers)
 	// log.Errorf("========== QQQ assignTransactionToWorker free trx p.sequence=%v, sequenceNumber=%v, lastCommitted=%v, workerIndex=%v", p.assignSequence, sequenceNumber, lastCommitted, workerIndex)
 	p.assignSequence++
 	p.sequenceToWorkersMap[sequenceNumber] = workerIndex
@@ -282,7 +282,7 @@ func (p *parallelProducer) watchPos(ctx context.Context) error {
 			// Write back this combined pos to all workers, so that we condense their otherwise sparse GTID sets.
 			// log.Errorf("========== QQQ watchPos pushing aggregatedWorkersPos %v", aggregatedWorkersPos)
 			for _, w := range p.workers {
-				go func() { w.aggregatedPosChan <- aggregatedWorkersPos }()
+				go func() { w.aggregatedPosChan <- aggregatedWorkersPos.String() }()
 			}
 			// log.Errorf("========== QQQ watchPos pushed combined pos")
 			if combinedPos.GTIDSet.Equal(lastCombinedPos.GTIDSet) {
@@ -328,9 +328,6 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		// case sequenceNumber := <-p.completedSequenceNumbers:
-		// 	// log.Errorf("========== QQQ process completedSequenceNumbers=%v", sequenceNumbers)
-		// 	delete(p.sequenceToWorkersMap, sequenceNumber)
 		case event := <-events:
 			// log.Errorf("========== QQQ process event type: %v", event.Type)
 			canApplyInParallel := false
