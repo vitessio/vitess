@@ -1219,6 +1219,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		StatementID: c.StatementID,
 		PrepareStmt: query,
 	}
+	c.PrepareData[c.StatementID] = prepare
 
 	statement, err := handler.Env().Parser().ParseStrictDDL(query)
 	if err != nil {
@@ -1228,7 +1229,38 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		}
 	}
 
-	paramsCount := uint16(0)
+	paramsCount := countArguments(statement)
+
+	if paramsCount > 0 {
+		prepare.ParamsCount = paramsCount
+		prepare.ParamsType = make([]int32, paramsCount)
+		prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
+	}
+
+	bindVars := prepareBindVars(paramsCount)
+
+	fld, err := handler.ComPrepare(c, query, bindVars)
+	if err != nil {
+		return c.writeErrorPacketFromErrorAndLog(err)
+	}
+
+	if err := c.writePrepare(fld, prepare); err != nil {
+		log.Error("Error writing prepare data to client %v: %v", c.ConnectionID, err)
+		return false
+	}
+	return true
+}
+
+func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
+	bindVars := make(map[string]*querypb.BindVariable, paramsCount)
+	for i := range paramsCount {
+		parameterID := fmt.Sprintf("v%d", i+1)
+		bindVars[parameterID] = &querypb.BindVariable{}
+	}
+	return bindVars
+}
+
+func countArguments(statement sqlparser.Statement) (paramsCount uint16) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *sqlparser.Argument:
@@ -1238,31 +1270,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		}
 		return true, nil
 	}, statement)
-
-	if paramsCount > 0 {
-		prepare.ParamsCount = paramsCount
-		prepare.ParamsType = make([]int32, paramsCount)
-		prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
-	}
-
-	bindVars := make(map[string]*querypb.BindVariable, paramsCount)
-	for i := range paramsCount {
-		parameterID := fmt.Sprintf("v%d", i+1)
-		bindVars[parameterID] = &querypb.BindVariable{}
-	}
-
-	c.PrepareData[c.StatementID] = prepare
-
-	fld, err := handler.ComPrepare(c, query, bindVars)
-	if err != nil {
-		return c.writeErrorPacketFromErrorAndLog(err)
-	}
-
-	if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
-		log.Error("Error writing prepare data to client %v: %v", c.ConnectionID, err)
-		return false
-	}
-	return true
+	return
 }
 
 func (c *Conn) handleComSetOption(data []byte) bool {
