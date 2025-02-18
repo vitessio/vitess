@@ -29,7 +29,8 @@ import (
 
 var (
 	getWorkflowsOptions = struct {
-		ShowAll bool
+		ShowAll   bool
+		Verbosity vtctldatapb.VerbosityLevel
 	}{}
 	// GetWorkflows makes a GetWorkflows gRPC call to a vtctld.
 	getWorkflows = &cobra.Command{
@@ -50,6 +51,7 @@ func commandGetWorkflows(cmd *cobra.Command, args []string) error {
 		Keyspace:    ks,
 		ActiveOnly:  !getWorkflowsOptions.ShowAll,
 		IncludeLogs: workflowShowOptions.IncludeLogs,
+		Verbosity:   workflowShowOptions.Verbosity,
 	})
 
 	if err != nil {

@@ -17,11 +17,17 @@ limitations under the License.
 package cli
 
 import (
+	"fmt"
+	"slices"
+	"strings"
+
 	"github.com/spf13/pflag"
+	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // KeyspaceTypeFlag adds the pflag.Value interface to a topodatapb.KeyspaceType.
@@ -50,3 +56,44 @@ func (v *KeyspaceTypeFlag) String() string {
 func (v *KeyspaceTypeFlag) Type() string {
 	return "cli.KeyspaceTypeFlag"
 }
+
+// VerbosityLevelFlag implements the pflag.Value interface, for parsing a command-line value
+// into a vtctldatapb.VerbosityLevel.
+type VerbosityLevelFlag vtctldatapb.VerbosityLevel
+
+// String is part of the pflag.Value interfaces.
+func (vlf *VerbosityLevelFlag) String() string {
+	return vtctldatapb.VerbosityLevel(*vlf).String()
+}
+
+// ParseVerbosityLevelFlag parses the string value into the enum type.
+func ParseVerbosityLevelFlag(param string) (vtctldatapb.VerbosityLevel, error) {
+	value, ok := vtctldatapb.VerbosityLevel_value[strings.ToUpper(param)]
+	if !ok {
+		return vtctldatapb.VerbosityLevel(-1), fmt.Errorf("unknown VerbosityLevel %q, valid values are %s",
+			param, strings.Join(GetVerbosityLevelFlagOptions(), ", "))
+	}
+	return vtctldatapb.VerbosityLevel(value), nil
+}
+
+// GetVerbosityLevelFlagOptions returns a list of valid values which can be provided for
+// the VerbosityLevelFlag.
+func GetVerbosityLevelFlagOptions() []string {
+	enumVals := maps.Values(vtctldatapb.VerbosityLevel_value)
+	slices.Sort(enumVals)
+	strVals := make([]string, len(enumVals))
+	for i, v := range enumVals {
+		strVals[i] = vtctldatapb.VerbosityLevel(v).String()
+	}
+	return strVals
+}
+
+// Set is part of the pflag.Value interfaces.
+func (vlf *VerbosityLevelFlag) Set(v string) error {
+	t, err := ParseVerbosityLevelFlag(v)
+	*vlf = VerbosityLevelFlag(t)
+	return err
+}
+
+// Type is part of the pflag.Value interface.
+func (*VerbosityLevelFlag) Type() string { return "vtctldatapb.VerbosityLevel" }

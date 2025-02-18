@@ -65694,6 +65694,14 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** VerbosityLevel enum. */
+    enum VerbosityLevel {
+        MINIMAL = 0,
+        LOW = 1,
+        MEDIUM = 2,
+        HIGH = 3
+    }
+
     /** Properties of a GetWorkflowsRequest. */
     interface IGetWorkflowsRequest {
 
@@ -65714,6 +65722,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest shards */
         shards?: (string[]|null);
+
+        /** GetWorkflowsRequest verbosity */
+        verbosity?: (vtctldata.VerbosityLevel|null);
     }
 
     /** Represents a GetWorkflowsRequest. */
@@ -65742,6 +65753,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest shards. */
         public shards: string[];
+
+        /** GetWorkflowsRequest verbosity. */
+        public verbosity: vtctldata.VerbosityLevel;
 
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.

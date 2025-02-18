@@ -285,7 +285,7 @@ func (wf *workflowFetcher) buildWorkflows(
 			}
 
 			metadata := workflowMetadataMap[workflowName]
-			err := wf.scanWorkflow(ctx, workflow, wfres, tablet, metadata, copyStatesByShardStreamId, req.Keyspace)
+			err := wf.scanWorkflow(ctx, workflow, wfres, tablet, metadata, copyStatesByShardStreamId, req.Keyspace, req.Verbosity)
 			if err != nil {
 				return nil, err
 			}
@@ -332,7 +332,9 @@ func (wf *workflowFetcher) scanWorkflow(
 	meta *workflowMetadata,
 	copyStatesByShardStreamId map[string][]*vtctldatapb.Workflow_Stream_CopyState,
 	keyspace string,
+	verbosity vtctldatapb.VerbosityLevel,
 ) error {
+
 	shardStreamKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
 	shardStream, ok := workflow.ShardStreams[shardStreamKey]
 	if !ok {
@@ -345,13 +347,16 @@ func (wf *workflowFetcher) scanWorkflow(
 		}
 
 		shardStream = &vtctldatapb.Workflow_ShardStream{
-			Streams:          nil,
-			TabletControls:   si.TabletControls,
-			IsPrimaryServing: si.IsPrimaryServing,
+			Streams: nil,
+		}
+		if verbosity > vtctldatapb.VerbosityLevel_MEDIUM {
+			shardStream.TabletControls = si.TabletControls
+			shardStream.IsPrimaryServing = si.IsPrimaryServing
 		}
 
 		workflow.ShardStreams[shardStreamKey] = shardStream
 	}
+	workflow.WorkflowType = res.WorkflowType.String()
 
 	for _, rstream := range res.Streams {
 		// The value in the pos column can be compressed and thus not
@@ -367,90 +372,85 @@ func (wf *workflowFetcher) scanWorkflow(
 			pos = mpos.String()
 		}
 
-		cells := strings.Split(res.Cells, ",")
-		for i := range cells {
-			cells[i] = strings.TrimSpace(cells[i])
-		}
-		options := res.Options
-		if options != "" {
-			if err := json.Unmarshal([]byte(options), &workflow.Options); err != nil {
-				return err
-			}
-		}
-
 		stream := &vtctldatapb.Workflow_Stream{
-			Id:                        int64(rstream.Id),
-			Shard:                     tablet.Shard,
-			Tablet:                    tablet.Alias,
-			BinlogSource:              rstream.Bls,
-			Position:                  pos,
-			StopPosition:              rstream.StopPos,
-			State:                     rstream.State.String(),
-			DbName:                    tablet.DbName(),
-			TabletTypes:               res.TabletTypes,
-			TabletSelectionPreference: res.TabletSelectionPreference,
-			Cells:                     cells,
-			TransactionTimestamp:      rstream.TransactionTimestamp,
-			TimeUpdated:               rstream.TimeUpdated,
-			Message:                   rstream.Message,
-			Tags:                      strings.Split(res.Tags, ","),
-			RowsCopied:                rstream.RowsCopied,
-			ThrottlerStatus: &vtctldatapb.Workflow_Stream_ThrottlerStatus{
+			Id:      int64(rstream.Id),
+			Shard:   tablet.Shard,
+			Tablet:  tablet.Alias,
+			State:   rstream.State.String(),
+			Message: rstream.Message,
+		}
+		if rstream.ComponentThrottled != "" {
+			stream.ThrottlerStatus = &vtctldatapb.Workflow_Stream_ThrottlerStatus{
 				ComponentThrottled: rstream.ComponentThrottled,
 				TimeThrottled:      rstream.TimeThrottled,
-			},
+			}
 		}
-
-		// Merge in copy states, which we've already fetched.
-		shardStreamId := fmt.Sprintf("%s/%d", tablet.Shard, stream.Id)
-		if copyStates, ok := copyStatesByShardStreamId[shardStreamId]; ok {
-			stream.CopyStates = copyStates
-		}
-
-		if rstream.TimeUpdated == nil {
-			rstream.TimeUpdated = &vttimepb.Time{}
-		}
-
 		stream.State = getStreamState(stream, rstream)
-
 		shardStream.Streams = append(shardStream.Streams, stream)
-
-		meta.sourceShards.Insert(stream.BinlogSource.Shard)
-		meta.targetShards.Insert(tablet.Shard)
-
-		if meta.sourceKeyspace != "" && meta.sourceKeyspace != stream.BinlogSource.Keyspace {
-			return vterrors.Wrapf(ErrMultipleSourceKeyspaces, "workflow = %v, ks1 = %v, ks2 = %v", workflow.Name, meta.sourceKeyspace, stream.BinlogSource.Keyspace)
-		}
-
-		meta.sourceKeyspace = stream.BinlogSource.Keyspace
-
+		meta.sourceKeyspace = rstream.Bls.Keyspace
+		meta.targetKeyspace = tablet.Keyspace
 		if meta.targetKeyspace != "" && meta.targetKeyspace != tablet.Keyspace {
 			return vterrors.Wrapf(ErrMultipleTargetKeyspaces, "workflow = %v, ks1 = %v, ks2 = %v", workflow.Name, meta.targetKeyspace, tablet.Keyspace)
 		}
 
-		meta.targetKeyspace = tablet.Keyspace
-
-		if stream.TimeUpdated == nil {
-			stream.TimeUpdated = &vttimepb.Time{}
+		if verbosity > vtctldatapb.VerbosityLevel_MINIMAL {
+			// Merge in copy state related info, if there is any.
+			shardStreamId := fmt.Sprintf("%s/%d", tablet.Shard, stream.Id)
+			if copyStates, ok := copyStatesByShardStreamId[shardStreamId]; ok {
+				stream.CopyStates = copyStates
+				stream.RowsCopied = rstream.RowsCopied
+			}
+			// Calculate and add processing status and lag related info.
+			stream.Position = pos
+			if rstream.TimeUpdated == nil {
+				rstream.TimeUpdated = &vttimepb.Time{}
+			}
+			stream.TimeUpdated = rstream.TimeUpdated
+			stream.TransactionTimestamp = rstream.TransactionTimestamp
+			timeUpdated := time.Unix(stream.TimeUpdated.Seconds, 0)
+			vreplicationLag := time.Since(timeUpdated)
+			// MaxVReplicationLag represents the time since we last processed any event
+			// in the workflow.
+			if vreplicationLag.Seconds() > meta.maxVReplicationLag {
+				meta.maxVReplicationLag = vreplicationLag.Seconds()
+			}
+			// MaxVReplicationTransactionLag estimates the max statement processing lag
+			// between the source and the target across all of the workflow streams.
+			transactionReplicationLag := getVReplicationTrxLag(rstream.TransactionTimestamp, rstream.TimeUpdated, rstream.TimeHeartbeat, rstream.State)
+			if transactionReplicationLag > meta.maxVReplicationTransactionLag {
+				meta.maxVReplicationTransactionLag = transactionReplicationLag
+			}
 		}
-		timeUpdated := time.Unix(stream.TimeUpdated.Seconds, 0)
-		vreplicationLag := time.Since(timeUpdated)
 
-		// MaxVReplicationLag represents the time since we last processed any event
-		// in the workflow.
-		if vreplicationLag.Seconds() > meta.maxVReplicationLag {
-			meta.maxVReplicationLag = vreplicationLag.Seconds()
+		if verbosity > vtctldatapb.VerbosityLevel_LOW {
+			// Add information about the binlog sources and shards.
+			stream.BinlogSource = rstream.Bls
+			if rstream.StopPos != "" {
+				stream.StopPosition = rstream.StopPos
+			}
+			meta.sourceShards.Insert(stream.BinlogSource.Shard)
+			meta.targetShards.Insert(tablet.Shard)
 		}
-
-		workflow.WorkflowType = res.WorkflowType.String()
-		workflow.WorkflowSubType = res.WorkflowSubType.String()
-		workflow.DeferSecondaryKeys = res.DeferSecondaryKeys
-
-		// MaxVReplicationTransactionLag estimates the max statement processing lag
-		// between the source and the target across all of the workflow streams.
-		transactionReplicationLag := getVReplicationTrxLag(rstream.TransactionTimestamp, rstream.TimeUpdated, rstream.TimeHeartbeat, rstream.State)
-		if transactionReplicationLag > meta.maxVReplicationTransactionLag {
-			meta.maxVReplicationTransactionLag = transactionReplicationLag
+		if verbosity > vtctldatapb.VerbosityLevel_MEDIUM {
+			// Add configuration and metadata info.
+			cells := strings.Split(res.Cells, ",")
+			for i := range cells {
+				cells[i] = strings.TrimSpace(cells[i])
+			}
+			stream.Cells = cells
+			stream.DbName = tablet.DbName()
+			stream.TabletTypes = res.TabletTypes
+			stream.TabletSelectionPreference = res.TabletSelectionPreference
+			stream.Tags = strings.Split(res.Tags, ",")
+			workflow.WorkflowSubType = res.WorkflowSubType.String()
+			workflow.DeferSecondaryKeys = res.DeferSecondaryKeys
+			if options := res.Options; options != "" {
+				if options != "" {
+					if err := json.Unmarshal([]byte(options), &workflow.Options); err != nil {
+						return err
+					}
+				}
+			}
 		}
 	}
 
