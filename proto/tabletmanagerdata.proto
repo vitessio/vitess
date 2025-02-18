@@ -160,6 +160,14 @@ message GetPermissionsResponse {
   Permissions permissions = 1;
 }
 
+message GetGlobalStatusVarsRequest {
+  repeated string variables = 1;
+}
+
+message GetGlobalStatusVarsResponse {
+  map<string, string> status_values = 1;
+}
+
 message SetReadOnlyRequest {
 }
 
