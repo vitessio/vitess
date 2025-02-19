@@ -32,7 +32,7 @@ import (
 	"vitess.io/vitess/go/tools/codegen"
 )
 
-const licenseFileHeader = `Copyright 2023 The Vitess Authors.
+const licenseFileHeader = `Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -51,10 +51,10 @@ type (
 		addType(t types.Type)
 		scope() *types.Scope
 		findImplementations(iff *types.Interface, impl func(types.Type) error) error
-		iface() *types.Interface
+		iface() *types.Interface // the root interface that all nodes are expected to implement
 	}
 	generator interface {
-		genFile() (string, *jen.File)
+		genFile(generatorSPI) (string, *jen.File)
 		interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error
 		structMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
 		ptrToStructMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
@@ -76,9 +76,6 @@ type (
 		todo   []types.Type
 	}
 )
-
-// exprInterfacePath is the path of the sqlparser.Expr interface.
-const exprInterfacePath = "vitess.io/vitess/go/vt/sqlparser.Expr"
 
 func (gen *astHelperGen) iface() *types.Interface {
 	return gen._iface
@@ -207,19 +204,15 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 		return nil, err
 	}
 
-	exprType, _ := findTypeObject(exprInterfacePath, scopes)
-	var exprInterface *types.Interface
-	if exprType != nil {
-		exprInterface = exprType.Type().(*types.Named).Underlying().(*types.Interface)
-	}
-
 	nt := tt.Type().(*types.Named)
 	pName := nt.Obj().Pkg().Name()
+	ifaceName := types.TypeString(nt, noQualifier)
 	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt,
 		newEqualsGen(pName, &options.Equals),
 		newCloneGen(pName, &options.Clone),
+		newPathGen(pName, ifaceName),
 		newVisitGen(pName),
-		newRewriterGen(pName, types.TypeString(nt, noQualifier), exprInterface),
+		newRewriterGen(pName, types.TypeString(nt, noQualifier)),
 		newCOWGen(pName, nt),
 	)
 
@@ -307,7 +300,7 @@ func (gen *astHelperGen) createFiles() map[string]*jen.File {
 
 	result := map[string]*jen.File{}
 	for _, g := range gen.gens {
-		fName, jenFile := g.genFile()
+		fName, jenFile := g.genFile(gen)
 		result[fName] = jenFile
 	}
 	return result

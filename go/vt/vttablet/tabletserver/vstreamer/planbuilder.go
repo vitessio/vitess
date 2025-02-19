@@ -58,6 +58,16 @@ type Plan struct {
 	// of the table.
 	Filters []Filter
 
+	// Predicates in the Filter query that we can push down to MySQL
+	// to reduce the returned rows we need to filter in the VStreamer
+	// during the copy phase. This will contain any valid expressions
+	// in the Filter's WHERE clause with the exception of the
+	// in_keyrange() function which is a filter that must be applied
+	// by the VStreamer (it's not a valid MySQL function). Note that
+	// the Filter cannot contain any MySQL functions because the
+	// VStreamer cannot filter binlog events using them.
+	whereExprsToPushDown []sqlparser.Expr
+
 	// Convert any integer values seen in the binlog events for ENUM or SET
 	// columns to the string values. The map is keyed on the column number, with
 	// the value being the map of ordinal values to string values.
@@ -91,6 +101,10 @@ const (
 	IsNotNull
 	// In is used to filter a comparable column if equals any of the values from a specific tuple
 	In
+	// Note that we do not implement filtering for BETWEEN because
+	// in the plan we rewrite `x BETWEEN a AND b` to `x >= a AND x <= b`
+	// NotBetween is used to filter a comparable column if it doesn't lie within a specific range
+	NotBetween
 )
 
 // Filter contains opcodes for filtering.
@@ -262,6 +276,26 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 			}
 			if !found {
 				return false, nil
+			}
+		case NotBetween:
+			// Note that we do not implement filtering for BETWEEN because
+			// in the plan we rewrite `x BETWEEN a AND b` to `x >= a AND x <= b`
+			// This is the filtering for NOT BETWEEN since we don't have support
+			// for OR yet.
+			if filter.Values == nil || len(filter.Values) != 2 {
+				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected 2 filter values when performing NOT BETWEEN")
+			}
+			leftFilterValue, rightFilterValue := filter.Values[0], filter.Values[1]
+			isValueLessThanLeftFilter, err := compare(LessThan, values[filter.ColNum], leftFilterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
+			if err != nil {
+				return false, err
+			}
+			if isValueLessThanLeftFilter {
+				continue
+			}
+			isValueGreaterThanRightFilter, err := compare(GreaterThan, values[filter.ColNum], rightFilterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
+			if err != nil || !isValueGreaterThanRightFilter {
+				return false, err
 			}
 		default:
 			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value, plan.env.CollationEnv(), charsets[filter.ColNum])
@@ -465,7 +499,7 @@ func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, qu
 		log.Errorf("%s", err.Error())
 		return nil, err
 	}
-	if err := plan.analyzeExprs(vschema, sel.SelectExprs); err != nil {
+	if err := plan.analyzeExprs(vschema, sel.GetColumns()); err != nil {
 		log.Errorf("%s", err.Error())
 		return nil, err
 	}
@@ -560,10 +594,28 @@ func (plan *Plan) appendTupleFilter(values sqlparser.ValTuple, opcode Opcode, co
 	return nil
 }
 
+func (plan *Plan) getEvalResultForLiteral(expr sqlparser.Expr) (*evalengine.EvalResult, error) {
+	literalExpr, ok := expr.(*sqlparser.Literal)
+	if !ok {
+		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+	}
+	pv, err := evalengine.Translate(literalExpr, &evalengine.Config{
+		Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
+		Environment: plan.env,
+	})
+	if err != nil {
+		return nil, err
+	}
+	env := evalengine.EmptyExpressionEnv(plan.env)
+	resolved, err := env.Evaluate(pv)
+	return &resolved, err
+}
+
 func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) error {
 	if where == nil {
 		return nil
 	}
+	// Only a series of AND expressions are supported.
 	exprs := splitAndExpression(nil, where.Expr)
 	for _, expr := range exprs {
 		switch expr := expr.(type) {
@@ -595,25 +647,11 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				if err != nil {
 					return err
 				}
+				// Add it to the expressions that get pushed down to mysqld.
+				plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 				continue
 			}
-			val, ok := expr.Right.(*sqlparser.Literal)
-			if !ok {
-				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-			}
-			// StrVal is varbinary, we do not support varchar since we would have to implement all collation types
-			if val.Type != sqlparser.IntVal && val.Type != sqlparser.StrVal {
-				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-			}
-			pv, err := evalengine.Translate(val, &evalengine.Config{
-				Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
-				Environment: plan.env,
-			})
-			if err != nil {
-				return err
-			}
-			env := evalengine.EmptyExpressionEnv(plan.env)
-			resolved, err := env.Evaluate(pv)
+			resolved, err := plan.getEvalResultForLiteral(expr.Right)
 			if err != nil {
 				return err
 			}
@@ -622,7 +660,11 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				ColNum: colnum,
 				Value:  resolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
 			})
+			// Add it to the expressions that get pushed down to mysqld.
+			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		case *sqlparser.FuncExpr:
+			// We cannot filter binlog events in VStreamer using MySQL functions so
+			// we only allow the in_keyrange() function, which is VStreamer specific.
 			if !expr.Name.EqualString("in_keyrange") {
 				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
 			}
@@ -648,6 +690,58 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				Opcode: IsNotNull,
 				ColNum: colnum,
 			})
+			// Add it to the expressions that get pushed down to mysqld.
+			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
+		case *sqlparser.BetweenExpr:
+			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
+			if !ok {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			if !qualifiedName.Qualifier.IsEmpty() {
+				return fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(qualifiedName))
+			}
+			colnum, err := findColumn(plan.Table, qualifiedName.Name)
+			if err != nil {
+				return err
+			}
+			fromResolved, err := plan.getEvalResultForLiteral(expr.From)
+			if err != nil {
+				return err
+			}
+			toResolved, err := plan.getEvalResultForLiteral(expr.To)
+			if err != nil {
+				return err
+			}
+
+			if !expr.IsBetween {
+				// `x NOT BETWEEN a AND b` means: `x < a OR x > b`
+				// Also, since we do not have OR implemented yet,
+				// NOT BETWEEN needs to be handled separately.
+				plan.Filters = append(plan.Filters, Filter{
+					Opcode: NotBetween,
+					ColNum: colnum,
+					Values: []sqltypes.Value{
+						fromResolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
+						toResolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
+					},
+				})
+				// Add it to the expressions that get pushed down to mysqld.
+				plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
+				continue
+			}
+
+			// `x BETWEEN a AND b` means: `x >= a AND x <= b`
+			plan.Filters = append(plan.Filters, Filter{
+				Opcode: GreaterThanEqual,
+				ColNum: colnum,
+				Value:  fromResolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
+			}, Filter{
+				Opcode: LessThanEqual,
+				ColNum: colnum,
+				Value:  toResolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
+			})
+			// Add it to the expressions that get pushed down to mysqld.
+			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		default:
 			return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
 		}
@@ -670,7 +764,7 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 	return append(filters, node)
 }
 
-func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectExprs) error {
+func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs []sqlparser.SelectExpr) error {
 	if _, ok := selExprs[0].(*sqlparser.StarExpr); !ok {
 		for _, expr := range selExprs {
 			cExpr, err := plan.analyzeExpr(vschema, expr)
@@ -681,7 +775,7 @@ func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectE
 		}
 	} else {
 		if len(selExprs) != 1 {
-			return fmt.Errorf("unsupported: %v", sqlparser.String(selExprs))
+			return fmt.Errorf("unsupported: %v", sqlparser.SliceString(selExprs))
 		}
 		plan.ColExprs = make([]ColExpr, len(plan.Table.Fields))
 		for i, col := range plan.Table.Fields {
@@ -838,7 +932,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 // analyzeInKeyRange allows the following constructs: "in_keyrange('-80')",
 // "in_keyrange(col, 'hash', '-80')", "in_keyrange(col, 'local_vindex', '-80')", or
 // "in_keyrange(col, 'ks.external_vindex', '-80')".
-func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Exprs) error {
+func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs []sqlparser.Expr) error {
 	var colnames []sqlparser.IdentifierCI
 	var krExpr sqlparser.Expr
 	whereFilter := Filter{
@@ -879,7 +973,7 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Exprs
 
 		krExpr = exprs[len(exprs)-1]
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected in_keyrange parameters: %v", sqlparser.String(exprs))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected in_keyrange parameters: %v", sqlparser.SliceString(exprs))
 	}
 	var err error
 	whereFilter.VindexColumns, err = buildVindexColumns(plan.Table, colnames)

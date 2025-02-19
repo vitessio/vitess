@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -115,6 +115,7 @@ func CloneRefOfRefContainer(n *RefContainer) *RefContainer {
 	}
 	out := *n
 	out.ASTType = CloneAST(n.ASTType)
+	out.Opts = CloneSliceOfRefOfOptions(n.Opts)
 	out.ASTImplementationType = CloneRefOfLeaf(n.ASTImplementationType)
 	return &out
 }
@@ -174,6 +175,18 @@ func CloneRefOfInterfaceContainer(n *InterfaceContainer) *InterfaceContainer {
 	out := *n
 	out.v = n.v
 	return &out
+}
+
+// CloneSliceOfRefOfOptions creates a deep clone of the input.
+func CloneSliceOfRefOfOptions(n []*Options) []*Options {
+	if n == nil {
+		return nil
+	}
+	res := make([]*Options, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfOptions(x)
+	}
+	return res
 }
 
 // CloneSliceOfAST creates a deep clone of the input.
@@ -238,6 +251,16 @@ func CloneRefOfValueSliceContainer(n *ValueSliceContainer) *ValueSliceContainer 
 	out := *n
 	out.ASTElements = CloneSliceOfAST(n.ASTElements)
 	out.NotASTElements = CloneSliceOfInt(n.NotASTElements)
-	out.ASTImplementationElements = CloneSliceOfRefOfLeaf(n.ASTImplementationElements)
+	out.ASTImplementationElements = CloneLeafSlice(n.ASTImplementationElements)
+	return &out
+}
+
+// CloneRefOfOptions creates a deep clone of the input.
+func CloneRefOfOptions(n *Options) *Options {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.l = CloneRefOfLeaf(n.l)
 	return &out
 }

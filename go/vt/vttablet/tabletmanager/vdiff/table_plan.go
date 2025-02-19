@@ -87,14 +87,14 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 	targetSelect := &sqlparser.Select{}
 	// Aggregates is the list of Aggregate functions, if any.
 	var aggregates []*engine.AggregateParams
-	for _, selExpr := range sel.SelectExprs {
+	for _, selExpr := range sel.GetColumns() {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
 			// If it's a '*' expression, expand column list from the schema.
 			for _, fld := range tp.table.Fields {
 				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(fld.Name)}}
-				sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, aliased)
-				targetSelect.SelectExprs = append(targetSelect.SelectExprs, aliased)
+				sourceSelect.AddSelectExpr(aliased)
+				targetSelect.AddSelectExpr(aliased)
 			}
 		case *sqlparser.AliasedExpr:
 			var targetCol *sqlparser.ColName
@@ -108,8 +108,8 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 				targetCol = &sqlparser.ColName{Name: selExpr.As}
 			}
 			// If the input was "select a as b", then source will use "a" and target will use "b".
-			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, selExpr)
-			targetSelect.SelectExprs = append(targetSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: targetCol})
+			sourceSelect.AddSelectExpr(selExpr)
+			targetSelect.AddSelectExpr(&sqlparser.AliasedExpr{Expr: targetCol})
 
 			// Check if it's an aggregate expression
 			if expr, ok := selExpr.Expr.(sqlparser.AggrFunc); ok {
@@ -121,7 +121,7 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 					// but will need to be revisited when we add such support to vreplication
 					aggregates = append(aggregates, engine.NewAggregateParam(
 						/*opcode*/ opcode.AggregateSum,
-						/*offset*/ len(sourceSelect.SelectExprs)-1,
+						/*offset*/ sourceSelect.GetColumnCount()-1,
 						/*alias*/ "", collationEnv),
 					)
 				}
@@ -135,12 +135,12 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 		fields[strings.ToLower(field.Name)] = field.Type
 	}
 
-	targetSelect.SelectExprs = td.adjustForSourceTimeZone(targetSelect.SelectExprs, fields)
+	targetSelect.SetSelectExprs(td.adjustForSourceTimeZone(targetSelect.GetColumns(), fields)...)
 	// Start with adding all columns for comparison.
-	tp.compareCols = make([]compareColInfo, len(sourceSelect.SelectExprs))
+	tp.compareCols = make([]compareColInfo, sourceSelect.GetColumnCount())
 	for i := range tp.compareCols {
 		tp.compareCols[i].colIndex = i
-		colname, err := getColumnNameForSelectExpr(targetSelect.SelectExprs[i])
+		colname, err := getColumnNameForSelectExpr(targetSelect.GetColumns()[i])
 		if err != nil {
 			return nil, err
 		}
@@ -215,7 +215,7 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 	var orderby sqlparser.OrderBy
 	for _, pk := range tp.table.PrimaryKeyColumns {
 		found := false
-		for i, selExpr := range targetSelect.SelectExprs {
+		for i, selExpr := range targetSelect.SelectExprs.Exprs {
 			expr := selExpr.(*sqlparser.AliasedExpr).Expr
 			colname := ""
 			switch ct := expr.(type) {

@@ -42,6 +42,7 @@ const (
 	InstantExpandEnumCapability                                           //
 	InstantChangeColumnVisibilityCapability                               //
 	MySQLUpgradeInServerFlavorCapability                                  //
+	InnoDBParallelReadThreadsCapability                                   // Supported in 8.0.14 and above, introducing innodb_parallel_read_threads variable
 	DynamicRedoLogCapacityFlavorCapability                                // supported in MySQL 8.0.30 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-30.html
 	DisableRedoLogFlavorCapability                                        // supported in MySQL 8.0.21 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-21.html
 	CheckConstraintsCapability                                            // supported in MySQL 8.0.16 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-16.html
@@ -100,6 +101,8 @@ func MySQLVersionHasCapability(serverVersion string, capability FlavorCapability
 		return atLeast(8, 0, 1)
 	case PerformanceSchemaMetadataLocksTableCapability:
 		return atLeast(8, 0, 2)
+	case InnoDBParallelReadThreadsCapability:
+		return atLeast(8, 0, 14)
 	case MySQLUpgradeInServerFlavorCapability:
 		return atLeast(8, 0, 16)
 	case CheckConstraintsCapability:

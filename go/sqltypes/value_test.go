@@ -20,7 +20,6 @@ import (
 	"math"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -612,16 +611,6 @@ func TestToUint32(t *testing.T) {
 	}
 }
 
-var randomLocation = time.FixedZone("Nowhere", 3*60*60)
-
-func DatetimeValue(str string) Value {
-	return TestValue(Datetime, str)
-}
-
-func DateValue(str string) Value {
-	return TestValue(Date, str)
-}
-
 func TestEncodeSQLStringBuilder(t *testing.T) {
 	testcases := []struct {
 		in     Value
@@ -680,9 +669,9 @@ func TestEncodeSQLBytes2(t *testing.T) {
 		outSQL: "\x89\x02\x011\x950\x03foo",
 	}}
 	for _, tcase := range testcases {
-		buf := bytes2.NewBuffer([]byte{})
+		var buf bytes2.Buffer
 
-		tcase.in.EncodeSQLBytes2(buf)
+		tcase.in.EncodeSQLBytes2(&buf)
 		assert.Equal(t, tcase.outSQL, buf.String())
 	}
 }

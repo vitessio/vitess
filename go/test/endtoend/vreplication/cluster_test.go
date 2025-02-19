@@ -297,11 +297,17 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 }
 
 func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
+	offset := 0
+	if !debugMode {
+		// Add some randomness to the ports so that multiple tests can run in
+		// parallel on the same host.
+		offset = (idx + 1) * rand.IntN(1000)
+	}
 	basePort := 15000
 	etcdPort := 2379
 
-	basePort += idx * 10000
-	etcdPort += idx * 10000
+	basePort += (idx * 10000) + offset
+	etcdPort += (idx * 10000) + offset
 	if _, err := os.Stat(dataRootDir); os.IsNotExist(err) {
 		os.Mkdir(dataRootDir, 0700)
 	}
@@ -856,7 +862,7 @@ func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName
 	tablets := make(map[string]*cluster.VttabletProcess)
 	for _, shard := range keyspace.Shards {
 		for _, tablet := range shard.Tablets {
-			if tablet.Vttablet.GetTabletStatus() == "SERVING" {
+			if tablet.Vttablet.GetTabletStatus() == "SERVING" && (tabletType == "" || strings.EqualFold(tablet.Vttablet.GetTabletType(), tabletType)) {
 				log.Infof("Serving status of tablet %s is %s, %s", tablet.Name, tablet.Vttablet.ServingStatus, tablet.Vttablet.GetTabletStatus())
 				tablets[tablet.Name] = tablet.Vttablet
 			}

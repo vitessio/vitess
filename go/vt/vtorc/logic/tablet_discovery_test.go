@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -30,9 +31,11 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/faketopo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
@@ -102,60 +105,200 @@ var (
 	}
 )
 
-func TestUpdateShardsToWatch(t *testing.T) {
+func TestShouldWatchTablet(t *testing.T) {
 	oldClustersToWatch := clustersToWatch
-	oldTs := ts
 	defer func() {
 		clustersToWatch = oldClustersToWatch
 		shardsToWatch = nil
-		ts = oldTs
 	}()
 
-	// Create a memory topo-server and create the keyspace and shard records
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	testCases := []struct {
+		in                  []string
+		tablet              *topodatapb.Tablet
+		expectedShouldWatch bool
+	}{
+		{
+			in: []string{},
+			tablet: &topodatapb.Tablet{
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{keyspace},
+			tablet: &topodatapb.Tablet{
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{keyspace + "/-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{keyspace + "/" + shard},
+			tablet: &topodatapb.Tablet{
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{"ks/-70", "ks/70-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x50}, []byte{0x70}),
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{"ks/-70", "ks/70-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x40}, []byte{0x50}),
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{"ks/-70", "ks/70-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x70}, []byte{0x90}),
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{"ks/-70", "ks/70-"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x60}, []byte{0x90}),
+			},
+			expectedShouldWatch: false,
+		},
+		{
+			in: []string{"ks/50-70"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x50}, []byte{0x70}),
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x60}, []byte{0x80}),
+			},
+			expectedShouldWatch: true,
+		},
+		{
+			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x80}, []byte{0x90}),
+			},
+			expectedShouldWatch: false,
+		},
+		{
+			in: []string{"ks2/-70", "ks2/70-", "unknownKs/-", "ks/-80"},
+			tablet: &topodatapb.Tablet{
+				Keyspace: "ks",
+				KeyRange: key.NewKeyRange([]byte{0x90}, []byte{0xa0}),
+			},
+			expectedShouldWatch: false,
+		},
+	}
 
-	ts = memorytopo.NewServer(ctx, cell1)
-	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
-	require.NoError(t, err)
+	for _, tt := range testCases {
+		t.Run(fmt.Sprintf("%v-Tablet-%v-%v", strings.Join(tt.in, ","), tt.tablet.GetKeyspace(), tt.tablet.GetShard()), func(t *testing.T) {
+			clustersToWatch = tt.in
+			err := initializeShardsToWatch()
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedShouldWatch, shouldWatchTablet(tt.tablet))
+		})
+	}
+}
+
+// TestInitializeShardsToWatch tests that we initialize the shardsToWatch map correctly
+// using the `--clusters_to_watch` flag.
+func TestInitializeShardsToWatch(t *testing.T) {
+	oldClustersToWatch := clustersToWatch
+	defer func() {
+		clustersToWatch = oldClustersToWatch
+		shardsToWatch = nil
+	}()
 
 	testCases := []struct {
-		in       []string
-		expected map[string][]string
+		in          []string
+		expected    map[string][]*topodatapb.KeyRange
+		expectedErr string
 	}{
 		{
 			in:       []string{},
-			expected: nil,
+			expected: map[string][]*topodatapb.KeyRange{},
 		},
 		{
-			in:       []string{""},
-			expected: map[string][]string{},
+			in: []string{"unknownKs"},
+			expected: map[string][]*topodatapb.KeyRange{
+				"unknownKs": {
+					key.NewCompleteKeyRange(),
+				},
+			},
 		},
 		{
 			in: []string{"test/-"},
-			expected: map[string][]string{
-				"test": {"-"},
+			expected: map[string][]*topodatapb.KeyRange{
+				"test": {
+					key.NewCompleteKeyRange(),
+				},
+			},
+		},
+		{
+			in:          []string{"test/324"},
+			expectedErr: `invalid key range "324" while parsing clusters to watch`,
+		},
+		{
+			in: []string{"test/0"},
+			expected: map[string][]*topodatapb.KeyRange{
+				"test": {
+					key.NewCompleteKeyRange(),
+				},
 			},
 		},
 		{
 			in: []string{"test/-", "test2/-80", "test2/80-"},
-			expected: map[string][]string{
-				"test":  {"-"},
-				"test2": {"-80", "80-"},
+			expected: map[string][]*topodatapb.KeyRange{
+				"test": {
+					key.NewCompleteKeyRange(),
+				},
+				"test2": {
+					key.NewKeyRange(nil, []byte{0x80}),
+					key.NewKeyRange([]byte{0x80}, nil),
+				},
 			},
 		},
 		{
-			// confirm shards fetch from topo
+			// known keyspace
 			in: []string{keyspace},
-			expected: map[string][]string{
-				keyspace: {shard},
+			expected: map[string][]*topodatapb.KeyRange{
+				keyspace: {
+					key.NewCompleteKeyRange(),
+				},
 			},
 		},
 		{
-			// confirm shards fetch from topo when keyspace has trailing-slash
+			// keyspace with trailing-slash
 			in: []string{keyspace + "/"},
-			expected: map[string][]string{
-				keyspace: {shard},
+			expected: map[string][]*topodatapb.KeyRange{
+				keyspace: {
+					key.NewCompleteKeyRange(),
+				},
 			},
 		},
 	}
@@ -163,10 +306,15 @@ func TestUpdateShardsToWatch(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(strings.Join(testCase.in, ","), func(t *testing.T) {
 			defer func() {
-				shardsToWatch = make(map[string][]string, 0)
+				shardsToWatch = make(map[string][]*topodatapb.KeyRange, 0)
 			}()
 			clustersToWatch = testCase.in
-			updateShardsToWatch()
+			err := initializeShardsToWatch()
+			if testCase.expectedErr != "" {
+				require.EqualError(t, err, testCase.expectedErr)
+				return
+			}
+			require.NoError(t, err)
 			require.Equal(t, testCase.expected, shardsToWatch)
 		})
 	}
@@ -692,5 +840,63 @@ func TestSetReplicationSource(t *testing.T) {
 			}
 			require.ErrorContains(t, err, tt.errShouldContain)
 		})
+	}
+}
+
+func TestGetAllTablets(t *testing.T) {
+	tablet := &topodatapb.Tablet{
+		Hostname: t.Name(),
+	}
+	tabletProto, _ := tablet.MarshalVT()
+
+	factory := faketopo.NewFakeTopoFactory()
+
+	// zone1 (success)
+	goodCell1 := faketopo.NewFakeConnection()
+	goodCell1.AddListResult("tablets", []topo.KVInfo{
+		{
+			Key:   []byte("zone1-00000001"),
+			Value: tabletProto,
+		},
+	})
+	factory.SetCell("zone1", goodCell1)
+
+	// zone2 (success)
+	goodCell2 := faketopo.NewFakeConnection()
+	goodCell2.AddListResult("tablets", []topo.KVInfo{
+		{
+			Key:   []byte("zone2-00000002"),
+			Value: tabletProto,
+		},
+	})
+	factory.SetCell("zone2", goodCell2)
+
+	// zone3 (fail)
+	badCell1 := faketopo.NewFakeConnection()
+	badCell1.AddListError(true)
+	factory.SetCell("zone3", badCell1)
+
+	// zone4 (fail)
+	badCell2 := faketopo.NewFakeConnection()
+	badCell2.AddListError(true)
+	factory.SetCell("zone4", badCell2)
+
+	oldTs := ts
+	defer func() {
+		ts = oldTs
+	}()
+	ctx := context.Background()
+	ts = faketopo.NewFakeTopoServer(ctx, factory)
+
+	// confirm zone1 + zone2 succeeded and zone3 + zone4 failed
+	tabletsByCell, failedCells := getAllTablets(ctx, []string{"zone1", "zone2", "zone3", "zone4"})
+	require.Len(t, tabletsByCell, 2)
+	slices.Sort(failedCells)
+	require.Equal(t, []string{"zone3", "zone4"}, failedCells)
+	for _, tablets := range tabletsByCell {
+		require.Len(t, tablets, 1)
+		for _, tablet := range tablets {
+			require.Equal(t, t.Name(), tablet.Tablet.GetHostname())
+		}
 	}
 }

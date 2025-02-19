@@ -318,6 +318,7 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 	// watcher. this means the ongoing availability event has been resolved, so we can broadcast
 	// a resolution event to all listeners
 	kss.consistent = true
+	log.Infof("keyspace %s is now consistent", kss.keyspace)
 
 	kss.moveTablesState = nil
 
@@ -328,7 +329,7 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 			Serving: sstate.serving,
 		})
 
-		log.Infof("keyspace event resolved: %s is now consistent (serving: %t)",
+		log.V(2).Infof("keyspace event resolved: %s is now consistent (serving: %t)",
 			topoproto.KeyspaceShardString(sstate.target.Keyspace, sstate.target.Shard),
 			sstate.serving,
 		)

@@ -18,8 +18,11 @@ package sqlparser
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
+
+	"vitess.io/vitess/go/slice"
 )
 
 // NodeFormatter defines the signature of a custom node formatter
@@ -174,15 +177,6 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 		}
 
 		switch format[i] {
-		case 'c':
-			switch v := values[fieldnum].(type) {
-			case byte:
-				buf.WriteByte(v)
-			case rune:
-				buf.WriteRune(v)
-			default:
-				panic(fmt.Sprintf("unexpected TrackedBuffer type %T", v))
-			}
 		case 's':
 			switch v := values[fieldnum].(type) {
 			case string:
@@ -240,12 +234,59 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 			}
 		case 'a':
 			buf.WriteArg("", values[fieldnum].(string))
+		case 'n':
+			// used for printing slices of SQLNodes
+			value := values[fieldnum]
+			buf.formatNodes(value)
 		default:
-			panic("unexpected")
+			panic("unexpected format: " + string(format[i-1:i+1]))
 		}
 		fieldnum++
 		i++
 	}
+}
+
+func (buf *TrackedBuffer) formatExprs(exprs []Expr) {
+	var prefix string
+	for _, expr := range exprs {
+		buf.WriteString(prefix)
+		buf.formatter(expr)
+		prefix = ", "
+	}
+}
+
+func (buf *TrackedBuffer) formatNodes(input any) {
+	switch nodes := input.(type) {
+	case []Expr:
+		buf.formatExprs(nodes)
+		return
+	}
+
+	// SLOW PATH! Add specific cases above to avoid reflection.
+
+	// Check if the input is a slice
+	val := reflect.ValueOf(input)
+	if val.Kind() != reflect.Slice {
+		// Handle the error or return if input is not a slice
+		panic("input is not a slice")
+	}
+
+	// Iterate over the slice elements
+	for i := 0; i < val.Len(); i++ {
+		elem := val.Index(i).Interface()
+
+		// Assert each element implements SQLNode
+		node, ok := elem.(SQLNode)
+		if !ok {
+			// Handle the error or skip non-SQLNode elements
+			panic("element does not implement SQLNode")
+		}
+
+		// Now `node` is of type SQLNode
+		// You can call methods or use it as a SQLNode here
+		buf.Myprintf("%v", node)
+	}
+
 }
 
 func getExpressionForParensEval(checkParens bool, value any) Expr {
@@ -387,4 +428,15 @@ func CanonicalString(node SQLNode) string {
 	buf.SetEscapeAllIdentifiers()
 	node.Format(buf)
 	return buf.String()
+}
+
+func SliceString[T SQLNode](valueExprs []T) string {
+	return SliceStringWithSep(valueExprs, ", ")
+}
+
+func SliceStringWithSep[T SQLNode](valueExprs []T, sep string) string {
+	exprs := slice.Map(valueExprs, func(expr T) string {
+		return String(expr)
+	})
+	return strings.Join(exprs, sep)
 }

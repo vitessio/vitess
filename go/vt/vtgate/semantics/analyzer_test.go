@@ -41,7 +41,7 @@ var (
 )
 
 func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
-	return in.SelectExprs[idx].(*sqlparser.AliasedExpr).Expr
+	return in.SelectExprs.Exprs[idx].(*sqlparser.AliasedExpr).Expr
 }
 
 func TestBindingSingleTablePositive(t *testing.T) {
@@ -143,7 +143,7 @@ func TestBindingSingleAliasedTableNegative(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(t, err)
 			st, err := Analyze(parse, "", &FakeSI{
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 			})
@@ -294,7 +294,7 @@ func TestBindingMultiTableNegative(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(t, err)
 			_, err = Analyze(parse, "d", &FakeSI{
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"tabl": {Name: sqlparser.NewIdentifierCS("tabl")},
 					"foo":  {Name: sqlparser.NewIdentifierCS("foo")},
 				},
@@ -318,7 +318,7 @@ func TestBindingMultiAliasedTableNegative(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query)
 			require.NoError(t, err)
 			_, err = Analyze(parse, "d", &FakeSI{
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"tabl": {Name: sqlparser.NewIdentifierCS("tabl")},
 					"foo":  {Name: sqlparser.NewIdentifierCS("foo")},
 				},
@@ -383,7 +383,7 @@ func TestMissingTable(t *testing.T) {
 }
 
 func TestUnknownColumnMap2(t *testing.T) {
-	authoritativeTblA := vindexes.Table{
+	authoritativeTblA := vindexes.BaseTable{
 		Name: sqlparser.NewIdentifierCS("a"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("col2"),
@@ -391,7 +391,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		}},
 		ColumnListAuthoritative: true,
 	}
-	authoritativeTblB := vindexes.Table{
+	authoritativeTblB := vindexes.BaseTable{
 		Name: sqlparser.NewIdentifierCS("b"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("col"),
@@ -403,7 +403,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 	nonAuthoritativeTblA.ColumnListAuthoritative = false
 	nonAuthoritativeTblB := authoritativeTblB
 	nonAuthoritativeTblB.ColumnListAuthoritative = false
-	authoritativeTblAWithConflict := vindexes.Table{
+	authoritativeTblAWithConflict := vindexes.BaseTable{
 		Name: sqlparser.NewIdentifierCS("a"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("col"),
@@ -411,7 +411,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		}},
 		ColumnListAuthoritative: true,
 	}
-	authoritativeTblBWithInt := vindexes.Table{
+	authoritativeTblBWithInt := vindexes.BaseTable{
 		Name: sqlparser.NewIdentifierCS("b"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("col"),
@@ -422,40 +422,40 @@ func TestUnknownColumnMap2(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		schema map[string]*vindexes.Table
+		schema map[string]*vindexes.BaseTable
 		err    bool
 		typ    querypb.Type
 	}{{
 		name:   "no info about tables",
-		schema: map[string]*vindexes.Table{"a": {}, "b": {}},
+		schema: map[string]*vindexes.BaseTable{"a": {}, "b": {}},
 		err:    true,
 	}, {
 		name:   "non authoritative columns",
-		schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &nonAuthoritativeTblA},
+		schema: map[string]*vindexes.BaseTable{"a": &nonAuthoritativeTblA, "b": &nonAuthoritativeTblA},
 		err:    true,
 	}, {
 		name:   "non authoritative columns - one authoritative and one not",
-		schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &authoritativeTblB},
+		schema: map[string]*vindexes.BaseTable{"a": &nonAuthoritativeTblA, "b": &authoritativeTblB},
 		err:    false,
 		typ:    sqltypes.VarChar,
 	}, {
 		name:   "non authoritative columns - one authoritative and one not",
-		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &nonAuthoritativeTblB},
+		schema: map[string]*vindexes.BaseTable{"a": &authoritativeTblA, "b": &nonAuthoritativeTblB},
 		err:    false,
 		typ:    sqltypes.VarChar,
 	}, {
 		name:   "authoritative columns",
-		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblB},
+		schema: map[string]*vindexes.BaseTable{"a": &authoritativeTblA, "b": &authoritativeTblB},
 		err:    false,
 		typ:    sqltypes.VarChar,
 	}, {
 		name:   "authoritative columns",
-		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblBWithInt},
+		schema: map[string]*vindexes.BaseTable{"a": &authoritativeTblA, "b": &authoritativeTblBWithInt},
 		err:    false,
 		typ:    sqltypes.Int64,
 	}, {
 		name:   "authoritative columns with overlap",
-		schema: map[string]*vindexes.Table{"a": &authoritativeTblAWithConflict, "b": &authoritativeTblB},
+		schema: map[string]*vindexes.BaseTable{"a": &authoritativeTblAWithConflict, "b": &authoritativeTblB},
 		err:    true,
 	}}
 
@@ -486,10 +486,10 @@ func TestUnknownColumnMap2(t *testing.T) {
 
 func TestUnknownPredicate(t *testing.T) {
 	query := "select 1 from a, b where col = 1"
-	authoritativeTblA := &vindexes.Table{
+	authoritativeTblA := &vindexes.BaseTable{
 		Name: sqlparser.NewIdentifierCS("a"),
 	}
-	authoritativeTblB := &vindexes.Table{
+	authoritativeTblB := &vindexes.BaseTable{
 		Name: sqlparser.NewIdentifierCS("b"),
 	}
 
@@ -497,12 +497,12 @@ func TestUnknownPredicate(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		schema map[string]*vindexes.Table
+		schema map[string]*vindexes.BaseTable
 		err    bool
 	}{
 		{
 			name:   "no info about tables",
-			schema: map[string]*vindexes.Table{"a": authoritativeTblA, "b": authoritativeTblB},
+			schema: map[string]*vindexes.BaseTable{"a": authoritativeTblA, "b": authoritativeTblB},
 			err:    false,
 		},
 	}
@@ -534,7 +534,7 @@ func TestScoping(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query.query)
 			require.NoError(t, err)
 			st, err := Analyze(parse, "user", &FakeSI{
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 			})
@@ -575,7 +575,7 @@ func TestScopeForSubqueries(t *testing.T) {
 			sel, _ := stmt.(*sqlparser.Select)
 
 			// extract the first expression from the subquery (which should be the second expression in the outer query)
-			sel2 := sel.SelectExprs[1].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select)
+			sel2 := extract(sel, 1).(*sqlparser.Subquery).Select.(*sqlparser.Select)
 			exp := extract(sel2, 0)
 			s1 := semTable.RecursiveDeps(exp)
 			require.NoError(t, semTable.NotSingleRouteErr)
@@ -1103,7 +1103,7 @@ func TestScopingWithWITH(t *testing.T) {
 			parse, err := sqlparser.NewTestParser().Parse(query.query)
 			require.NoError(t, err)
 			st, err := Analyze(parse, "user", &FakeSI{
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 			})
@@ -1188,7 +1188,7 @@ func TestScopingWVindexTables(t *testing.T) {
 			require.NoError(t, err)
 			hash, _ := vindexes.CreateVindex("hash", "user_index", nil)
 			st, err := Analyze(parse, "user", &FakeSI{
-				Tables: map[string]*vindexes.Table{
+				Tables: map[string]*vindexes.BaseTable{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
 				VindexTables: map[string]vindexes.Vindex{
@@ -1451,14 +1451,14 @@ func TestScopingSubQueryJoinClause(t *testing.T) {
 	require.NoError(t, err)
 
 	st, err := Analyze(parse, "user", &FakeSI{
-		Tables: map[string]*vindexes.Table{
+		Tables: map[string]*vindexes.BaseTable{
 			"t": {Name: sqlparser.NewIdentifierCS("t")},
 		},
 	})
 	require.NoError(t, err)
 	require.NoError(t, st.NotUnshardedErr)
 
-	tb := st.DirectDeps(parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery).Select.(*sqlparser.Select).From[0].(*sqlparser.JoinTableExpr).Condition.On)
+	tb := st.DirectDeps(extract(parse.(*sqlparser.Select), 0).(*sqlparser.Subquery).Select.(*sqlparser.Select).From[0].(*sqlparser.JoinTableExpr).Condition.On)
 	require.Equal(t, 3, tb.NumberOfTables())
 
 }
@@ -1481,7 +1481,7 @@ var ks3 = &vindexes.Keyspace{
 // create table t2(uid bigint, name varchar(255))
 func fakeSchemaInfo() *FakeSI {
 	si := &FakeSI{
-		Tables: map[string]*vindexes.Table{
+		Tables: map[string]*vindexes.BaseTable{
 			"t":  tableT(),
 			"t1": tableT1(),
 			"t2": tableT2(),
@@ -1491,14 +1491,14 @@ func fakeSchemaInfo() *FakeSI {
 	return si
 }
 
-func tableT() *vindexes.Table {
-	return &vindexes.Table{
+func tableT() *vindexes.BaseTable {
+	return &vindexes.BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t"),
 		Keyspace: unsharded,
 	}
 }
-func tableT1() *vindexes.Table {
-	return &vindexes.Table{
+func tableT1() *vindexes.BaseTable {
+	return &vindexes.BaseTable{
 		Name: sqlparser.NewIdentifierCS("t1"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("id"),
@@ -1511,8 +1511,8 @@ func tableT1() *vindexes.Table {
 		Keyspace: ks2,
 	}
 }
-func tableT2() *vindexes.Table {
-	return &vindexes.Table{
+func tableT2() *vindexes.BaseTable {
+	return &vindexes.BaseTable{
 		Name: sqlparser.NewIdentifierCS("t2"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("uid"),
@@ -1531,8 +1531,8 @@ func tableT2() *vindexes.Table {
 	}
 }
 
-func tableT3() *vindexes.Table {
-	return &vindexes.Table{
+func tableT3() *vindexes.BaseTable {
+	return &vindexes.BaseTable{
 		Name: sqlparser.NewIdentifierCS("t3"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("uid"),
