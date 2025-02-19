@@ -17,6 +17,15 @@ FROM --platform=linux/amd64 golang:1.24.0-bookworm AS builder
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
 
+# Allows docker builds to set the BUILD_GIT_BRANCH
+ARG BUILD_GIT_BRANCH
+
+# Allows docker builds to set the BUILD_GIT_REV
+ARG BUILD_GIT_REV
+
+# Allows docker builds to set the BUILD_TIME
+ARG BUILD_TIME
+
 WORKDIR /vt/src/vitess.io/vitess
 
 # Create vitess user
