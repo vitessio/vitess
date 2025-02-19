@@ -123,6 +123,9 @@ type Controller interface {
 	// SetDemotePrimaryStalled marks that demote primary is stalled in the state manager.
 	SetDemotePrimaryStalled()
 
+	// ClearDemotePrimaryStalled clears the demote primary stalled field in the state manager.
+	ClearDemotePrimaryStalled()
+
 	// IsDiskStalled returns if the disk is stalled.
 	IsDiskStalled() bool
 }

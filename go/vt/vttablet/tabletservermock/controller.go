@@ -279,6 +279,11 @@ func (tqsc *Controller) SetDemotePrimaryStalled() {
 	tqsc.MethodCalled["SetDemotePrimaryStalled"] = true
 }
 
+// ClearDemotePrimaryStalled is part of the tabletserver.Controller interface
+func (tqsc *Controller) ClearDemotePrimaryStalled() {
+	tqsc.MethodCalled["ClearDemotePrimaryStalled"] = true
+}
+
 // IsDiskStalled is part of the tabletserver.Controller interface
 func (tqsc *Controller) IsDiskStalled() bool {
 	tqsc.MethodCalled["IsDiskStalled"] = true

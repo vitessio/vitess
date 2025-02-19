@@ -769,6 +769,14 @@ func (tsv *TabletServer) SetDemotePrimaryStalled() {
 	tsv.BroadcastHealth()
 }
 
+// ClearDemotePrimaryStalled clears the demote primary stalled field in the state manager.
+func (tsv *TabletServer) ClearDemotePrimaryStalled() {
+	tsv.sm.mu.Lock()
+	tsv.sm.demotePrimaryStalled = false
+	tsv.sm.mu.Unlock()
+	tsv.BroadcastHealth()
+}
+
 // IsDiskStalled returns if the disk is stalled or not.
 func (tsv *TabletServer) IsDiskStalled() bool {
 	return tsv.sm.diskHealthMonitor.IsDiskStalled()
