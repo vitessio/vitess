@@ -17,7 +17,7 @@
 /*
 
 package discovery manages a queue of discovery requests: an ordered
-queue.
+queue with no duplicates.
 
 push() operation never blocks while pop() blocks on an empty queue.
 
