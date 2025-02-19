@@ -199,7 +199,7 @@ func init() {
 
 // registerFlags registers the flags required by VTOrc
 func registerFlags(fs *pflag.FlagSet) {
-	fs.Int("discovery-max-concurrency", discoveryMaxConcurrency.Default(), "Number of goroutines doing tablet discovery")
+	fs.Int("discovery-max-concurrency", discoveryMaxConcurrency.Default(), "Number of workers for used for tablet discovery")
 	fs.String("sqlite-data-file", sqliteDataFile.Default(), "SQLite Datafile to use as VTOrc's database")
 	fs.Duration("instance-poll-time", instancePollTime.Default(), "Timer duration on which VTOrc refreshes MySQL information")
 	fs.Duration("snapshot-topology-interval", snapshotTopologyInterval.Default(), "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
