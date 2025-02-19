@@ -872,7 +872,7 @@ func (hc *HealthCheckImpl) TabletConnection(ctx context.Context, alias *topodata
 	hc.mu.Unlock()
 	if thc == nil || thc.Conn == nil {
 		// TODO: test that throws this error
-		return nil, vterrors.VT15001(vtrpc.Code_NOT_FOUND, fmt.Sprintf("tablet: %v is either down or nonexistent", alias))
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
 	}
 	return thc.Connection(ctx), nil
 }
