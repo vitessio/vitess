@@ -108,14 +108,13 @@ func waitForLocksRelease() {
 // handleDiscoveryRequests iterates the discoveryQueue channel and calls upon
 // instance discovery per entry.
 func handleDiscoveryRequests() {
-	discoveryQueue = discovery.CreateQueue("DEFAULT")
+	discoveryQueue = discovery.NewQueue()
 	// create a pool of discovery workers
 	for i := uint(0); i < config.DiscoveryMaxConcurrency; i++ {
 		go func() {
 			for {
 				tabletAlias := discoveryQueue.Consume()
 				DiscoverInstance(tabletAlias, false /* forceDiscovery */)
-				discoveryQueue.Release(tabletAlias)
 			}
 		}()
 	}
