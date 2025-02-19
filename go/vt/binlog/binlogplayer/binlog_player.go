@@ -758,14 +758,9 @@ func ReadVReplicationPos(index int32) string {
 	return fmt.Sprintf("select pos from _vt.vreplication where id=%v", index)
 }
 
-// ReadVReplicationWorkersGTIDs returns a statement to query the gtid for a
-// given stream from the _vt.vreplication_worker_pos table.
-func ReadVReplicationWorkersGTIDs(index int32) string {
-	return fmt.Sprintf("select worker, gtid, transaction_timestamp from _vt.vreplication_worker_pos where id=%v", index)
-}
-
-// ReadVReplicationWorkersGTIDs returns a statement to query the gtid for a
-// given stream from the _vt.vreplication_worker_pos table.
+// ReadVReplicationCombinedWorkersGTIDs returns a statement to query the combined GTID
+// and the last transaction timestamp from the _vt.vreplication_worker_pos table, for
+// a given workflow.
 func ReadVReplicationCombinedWorkersGTIDs(index int32) string {
 	return fmt.Sprintf(`
 		select
