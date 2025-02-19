@@ -551,13 +551,11 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 			buf := make([]byte, 1<<16) // 64 KB buffer size
 			stackSize := runtime.Stack(buf, true)
 			log.Errorf("Stack trace:\n%s", string(buf[:stackSize]))
-			// This select is only to handle the race, where we start to set the demote primary stalled
+			// This condition check is only to handle the race, where we start to set the demote primary stalled
 			// but then the function finishes. So, after we set demote primary stalled, we check if the
 			// function has finished and if it has, we clear the demote primary stalled.
-			select {
-			case <-finishCtx.Done():
+			if finishCtx.Err() != nil {
 				tm.QueryServiceControl.ClearDemotePrimaryStalled()
-			default:
 			}
 		}
 	}()
