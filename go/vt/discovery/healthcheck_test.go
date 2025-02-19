@@ -23,6 +23,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1490,10 +1491,10 @@ func TestConcurrentUpdates(t *testing.T) {
 	// Subscribe to the healthcheck
 	// Make the receiver keep track of the updates received.
 	ch := hc.Subscribe()
-	totalCount := 0
+	var totalCount atomic.Int32
 	go func() {
 		for range ch {
-			totalCount++
+			totalCount.Add(1)
 			// Simulate a somewhat slow consumer.
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -1510,7 +1511,7 @@ func TestConcurrentUpdates(t *testing.T) {
 	hc.Unsubscribe(ch)
 	defer close(ch)
 	require.Eventuallyf(t, func() bool {
-		return totalUpdates == totalCount
+		return totalUpdates == int(totalCount.Load())
 	}, 5*time.Second, 100*time.Millisecond, "expected all updates to be processed")
 }
 
