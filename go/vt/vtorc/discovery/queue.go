@@ -43,7 +43,6 @@ type queueItem struct {
 type Queue struct {
 	sync.Mutex
 	enqueued map[string]struct{}
-	nowFunc  func() time.Time
 	queue    chan queueItem
 }
 
@@ -51,7 +50,6 @@ type Queue struct {
 func NewQueue() *Queue {
 	return &Queue{
 		enqueued: make(map[string]struct{}),
-		nowFunc:  func() time.Time { return time.Now() },
 		queue:    make(chan queueItem, config.DiscoveryQueueCapacity),
 	}
 }
@@ -75,7 +73,7 @@ func (q *Queue) Push(key string) {
 	}
 	q.enqueued[key] = struct{}{}
 	q.queue <- queueItem{
-		CreatedAt: q.nowFunc(),
+		CreatedAt: time.Now(),
 		Key:       key,
 	}
 }
