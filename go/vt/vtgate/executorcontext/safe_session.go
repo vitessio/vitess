@@ -390,6 +390,18 @@ func (session *SafeSession) GetCommitOrder() vtgatepb.CommitOrder {
 	return session.commitOrder
 }
 
+func (session *SafeSession) SetTxErrorBlockNextQueries(enable bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.TxErrorBlockNextQueries = enable
+}
+
+func (session *SafeSession) GetTxErrorBlockNextQueries() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.Session.GetTxErrorBlockNextQueries()
+}
+
 // GetLogger returns executor logger.
 func (session *SafeSession) GetLogger() *ExecuteLogger {
 	return session.logging

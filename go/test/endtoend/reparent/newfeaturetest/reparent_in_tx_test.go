@@ -64,6 +64,13 @@ func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.L
 		<-tabletStopped
 		_, err := conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
 		require.ErrorContains(t, err, vterrors.VT15001(0).ID)
+
+		// Subsequent queries after a VT15001 should start returning a VT15002 error until we issue a ROLLBACK
+		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
+		require.ErrorContains(t, err, vterrors.VT15002().ID)
+
+		_, err = conn.ExecuteFetch("rollback", 0, false)
+		require.NoError(t, err)
 		executeDone <- true
 	}()
 

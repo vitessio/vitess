@@ -152,6 +152,11 @@ func (e *Executor) newExecute(
 		ctx, cancel = vcursor.GetContextWithTimeOut(ctx)
 		defer cancel()
 
+		// If we have previously issued a VT15001 error, we block every queries on this session until we receive a ROLLBACK.
+		if plan.Type != sqlparser.StmtRollback && safeSession.GetTxErrorBlockNextQueries() {
+			return vterrors.VT15002()
+		}
+
 		result, err = e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)
 		if err != nil {
 			return err
@@ -344,11 +349,28 @@ func (e *Executor) executePlan(
 
 // rollbackExecIfNeeded rollbacks the partial execution if earlier it was detected that it needs partial query execution to be rolled back.
 func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *econtext.SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats, err error) error {
-	if safeSession.InTransaction() && safeSession.IsRollbackSet() {
+	if !safeSession.InTransaction() {
+		return err
+	}
+	if e.rollbackOnFatalTxError(ctx, safeSession, err) {
+		return err
+	}
+
+	if safeSession.IsRollbackSet() {
 		rErr := e.rollbackPartialExec(ctx, safeSession, bindVars, logStats)
 		return vterrors.Wrap(err, rErr.Error())
 	}
 	return err
+}
+
+func (e *Executor) rollbackOnFatalTxError(ctx context.Context, safeSession *econtext.SafeSession, err error) bool {
+	if !vterrors.IsVT15001(err) {
+		return false
+	}
+	// we already know one or more shards are going to fail rolling back, the error can be discarded
+	_ = e.txConn.Rollback(ctx, safeSession)
+	safeSession.SetTxErrorBlockNextQueries(true)
+	return true
 }
 
 // rollbackPartialExec rollbacks to the savepoint or rollbacks transaction based on the value set on SafeSession.rollbackOnPartialExec.

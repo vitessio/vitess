@@ -762,12 +762,11 @@ func (vc *VCursorImpl) Execute(ctx context.Context, method string, query string,
 
 	err := vc.markSavepoint(ctx, rollbackOnError, map[string]*querypb.BindVariable{})
 	if err != nil {
-		vc.setRollbackOnPartialExecIfRequired(vterrors.IsInvalidSessionError(err), true, rollbackOnError)
 		return nil, err
 	}
 
 	qr, err := vc.executor.Execute(ctx, nil, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
-	vc.setRollbackOnPartialExecIfRequired(vterrors.IsInvalidSessionError(err), err != nil, rollbackOnError)
+	vc.setRollbackOnPartialExecIfRequired(err != nil, rollbackOnError)
 
 	return qr, err
 }
@@ -795,12 +794,11 @@ func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(noOfShards))
 	err := vc.markSavepoint(ctx, rollbackOnError && (noOfShards > 1), map[string]*querypb.BindVariable{})
 	if err != nil {
-		vc.setRollbackOnPartialExecIfRequired(vterrors.IsInvalidSessionError(err), true, rollbackOnError)
 		return nil, []error{err}
 	}
 
 	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
-	vc.setRollbackOnPartialExecIfRequired(vterrors.ErrorsHaveInvalidSession(errs), len(errs) != len(rss), rollbackOnError)
+	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 	vc.logShardsQueried(primitive, len(rss))
 	if qr != nil && qr.InsertIDUpdated() {
 		vc.SafeSession.LastInsertId = qr.InsertID
@@ -820,7 +818,7 @@ func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.
 	}
 
 	errs := vc.executor.StreamExecuteMulti(ctx, primitive, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.SafeSession, autocommit, callback, vc.observer, fetchLastInsertID)
-	vc.setRollbackOnPartialExecIfRequired(vterrors.ErrorsHaveInvalidSession(errs), len(errs) != len(rss), rollbackOnError)
+	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 
 	return errs
 }
@@ -905,8 +903,8 @@ func (vc *VCursorImpl) AutocommitApproval() bool {
 // when the query gets successfully executed on at least one shard,
 // there does not exist any old savepoint for which rollback is already set
 // and rollback on error is allowed.
-func (vc *VCursorImpl) setRollbackOnPartialExecIfRequired(required bool, atleastOneSuccess bool, rollbackOnError bool) {
-	if required || atleastOneSuccess && rollbackOnError && !vc.SafeSession.IsRollbackSet() {
+func (vc *VCursorImpl) setRollbackOnPartialExecIfRequired(atleastOneSuccess bool, rollbackOnError bool) {
+	if atleastOneSuccess && rollbackOnError && !vc.SafeSession.IsRollbackSet() {
 		vc.SafeSession.SetRollbackCommand()
 	}
 }

@@ -622,6 +622,7 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *econtext.Saf
 	e.updateQueryCounts("Rollback", "", "", int64(logStats.ShardQueries))
 	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
+	safeSession.SetTxErrorBlockNextQueries(false) // We have executed a ROLLBACK, if applicable: we can stop blocking queries on this session
 	return &sqltypes.Result{}, err
 }
 

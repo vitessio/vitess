@@ -122,6 +122,7 @@ var (
 	VT14005 = errorWithoutState("VT14005", vtrpcpb.Code_UNAVAILABLE, "cannot lookup sidecar database for keyspace: %s", "Failed to read sidecar database identifier.")
 
 	VT15001 = errorWithNoCode("VT15001", "transient error, please retry the transaction: %s", "The opened transaction should be closed by the application and re-tried.")
+	VT15002 = errorWithoutState("VT15002", vtrpcpb.Code_FAILED_PRECONDITION, "previous transaction failed fatally: issue a ROLLBACK query in order to acknowledge the failed transaction", "This error appears after a VT15001 error was sent back to the client, future queries on the same session will fail until a ROLLBACK is explicitly sent to VTGate.")
 
 	// Errors is a list of errors that must match all the variables
 	// defined above to enable auto-documentation of error codes.
@@ -209,6 +210,7 @@ var (
 		VT14003,
 		VT14004,
 		VT14005,
+		VT15002,
 	}
 
 	ErrorsWithNoCode = []func(code vtrpcpb.Code, args ...any) *VitessError{
@@ -281,16 +283,7 @@ func errorWithNoCode(id string, short, long string) func(code vtrpcpb.Code, args
 	}
 }
 
-func ErrorsHaveInvalidSession(errs []error) bool {
-	for _, err := range errs {
-		if IsInvalidSessionError(err) {
-			return true
-		}
-	}
-	return false
-}
-
-func IsInvalidSessionError(err error) bool {
+func IsVT15001(err error) bool {
 	if err == nil {
 		return false
 	}
