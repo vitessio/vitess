@@ -517,6 +517,7 @@ func (m *VEvent) CloneVT() *VEvent {
 	r.EventGtid = m.EventGtid
 	r.MustSave = m.MustSave
 	r.PinWorker = m.PinWorker
+	r.Skippable = m.Skippable
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -2174,6 +2175,18 @@ func (m *VEvent) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Skippable {
+		i--
+		if m.Skippable {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xf8
 	}
 	if m.PinWorker {
 		i--
@@ -3957,6 +3970,9 @@ func (m *VEvent) SizeVT() (n int) {
 		n += 3
 	}
 	if m.PinWorker {
+		n += 3
+	}
+	if m.Skippable {
 		n += 3
 	}
 	n += len(m.unknownFields)
@@ -8423,6 +8439,26 @@ func (m *VEvent) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.PinWorker = bool(v != 0)
+		case 31:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Skippable", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Skippable = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

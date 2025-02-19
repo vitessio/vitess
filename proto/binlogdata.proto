@@ -488,8 +488,10 @@ message VEvent {
   string event_gtid = 28;
   // MustSave is a decoration by VPlayer
   bool must_save = 29;
-  // PinWorker is a decoration by VPlayer
+  // PinWorker is a decoration by parallel VPlayer
   bool pin_worker = 30;
+  // Skippable is a decoration by parallel VPlayer
+  bool skippable = 31;
 }
 
 message MinimalTable {

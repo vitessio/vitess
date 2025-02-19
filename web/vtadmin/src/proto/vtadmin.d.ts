@@ -38466,6 +38466,9 @@ export namespace binlogdata {
 
         /** VEvent pin_worker */
         pin_worker?: (boolean|null);
+
+        /** VEvent skippable */
+        skippable?: (boolean|null);
     }
 
     /** Represents a VEvent. */
@@ -38536,6 +38539,9 @@ export namespace binlogdata {
 
         /** VEvent pin_worker. */
         public pin_worker: boolean;
+
+        /** VEvent skippable. */
+        public skippable: boolean;
 
         /**
          * Creates a new VEvent instance using the specified properties.
