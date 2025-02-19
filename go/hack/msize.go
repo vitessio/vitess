@@ -32,6 +32,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package hack
 
+import (
+	"unsafe"
+)
+
 const (
 	_MaxSmallSize   = 32768
 	smallSizeDiv    = 8
@@ -73,4 +77,102 @@ func roundupsize(size uintptr) uintptr {
 // RuntimeAllocSize returns size of the memory block that mallocgc will allocate if you ask for the size.
 func RuntimeAllocSize(size int64) int64 {
 	return int64(roundupsize(uintptr(size)))
+}
+
+// RuntimeMapSize returns the size of the internal data structures of a Map.
+// This is an internal implementation detail based on the Swiss Map implementation
+// as of Go 1.24 and needs to be kept up-to-date after every Go release.
+func RuntimeMapSize[K comparable, V any](themap map[K]V) (internalSize int64) {
+	// The following are copies of internal data structures as of Go 1.24
+	// THEY MUST BE KEPT UP TO DATE
+
+	// internal/abi/type.go
+	const SizeofType = 48
+
+	// internal/abi/map_swiss.go
+	type SwissMapType struct {
+		pad       [SizeofType]uint8
+		Key       unsafe.Pointer
+		Elem      unsafe.Pointer
+		Group     unsafe.Pointer
+		Hasher    func(unsafe.Pointer, uintptr) uintptr
+		GroupSize uintptr // == Group.Size_
+		SlotSize  uintptr // size of key/elem slot
+		ElemOff   uintptr // offset of elem in key/elem slot
+		Flags     uint32
+	}
+
+	// internal/runtime/maps/map.go
+	type Map struct {
+		used        uint64
+		seed        uintptr
+		dirPtr      unsafe.Pointer
+		dirLen      int
+		globalDepth uint8
+		globalShift uint8
+		writing     uint8
+		clearSeq    uint64
+	}
+
+	// internal/runtime/maps/groups.go
+	type groupsReference struct {
+		data       unsafe.Pointer // data *[length]typ.Group
+		lengthMask uint64
+	}
+
+	// internal/runtime/maps/table.go
+	type table struct {
+		used       uint16
+		capacity   uint16
+		growthLeft uint16
+		localDepth uint8
+		index      int
+		groups     groupsReference
+	}
+
+	directoryAt := func(m *Map, i uintptr) *table {
+		const PtrSize = 4 << (^uintptr(0) >> 63)
+		return *(**table)(unsafe.Pointer(uintptr(m.dirPtr) + PtrSize*i))
+	}
+
+	// Converting the map to an interface will result in two ptr-sized words;
+	// like all interfaces, the first word points to an *abi.Type instance,
+	// which is specialized as SwissMapType for maps, and to the actual
+	// memory allocation, which is `*Map`
+	type MapInterface struct {
+		Type *SwissMapType
+		Data *Map
+	}
+
+	mapiface := any(themap)
+	iface := (*MapInterface)(unsafe.Pointer(&mapiface))
+	m := iface.Data
+
+	var groupSize = int64(iface.Type.GroupSize)
+	internalSize = int64(unsafe.Sizeof(Map{}))
+
+	if m.dirLen <= 0 {
+		// Small map optimization: we don't allocate tables at all if all the
+		// entries in a map fit in a single group
+		if m.dirPtr != nil {
+			internalSize += RuntimeAllocSize(groupSize)
+		}
+	} else {
+		// For normal maps, we iterate each table and add the size of all the
+		// groups it contains.
+		// See: internal/runtime/maps/export_test.go
+		var lastTab *table
+		for i := range m.dirLen {
+			t := directoryAt(m, uintptr(i))
+			if t == lastTab {
+				continue
+			}
+			lastTab = t
+
+			gc := int64(t.groups.lengthMask + 1)
+			internalSize += RuntimeAllocSize(groupSize * gc)
+		}
+	}
+
+	return internalSize
 }
