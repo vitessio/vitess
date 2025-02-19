@@ -1366,9 +1366,9 @@ func isValidPayloadSize(query string) bool {
 }
 
 // Prepare executes a prepare statements.
-func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string) (fld []*querypb.Field, err error) {
+func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econtext.SafeSession, sql string) (fld []*querypb.Field, paramsCount uint16, err error) {
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
-	fld, err = e.prepare(ctx, safeSession, sql, logStats)
+	fld, paramsCount, err = e.prepare(ctx, safeSession, sql, logStats)
 	logStats.Error = err
 
 	// The mysql plugin runs an implicit rollback whenever a connection closes.
@@ -1382,14 +1382,14 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
 
-	return fld, err
+	return fld, paramsCount, err
 }
 
-func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, error) {
+func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
 	// Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
 	stmtType := sqlparser.Preview(sql)
@@ -1412,9 +1412,9 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 		return e.handlePrepare(ctx, safeSession, sql, logStats)
 	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtAnalyze, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush, sqlparser.StmtKill:
-		return nil, nil
+		return nil, 0, nil
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)
+	return nil, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)
 }
 
 func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVersion) {
@@ -1470,16 +1470,18 @@ func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 	return bindVars
 }
 
-func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, error) {
+func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
 	query, comments := sqlparser.SplitMarginComments(sql)
 
 	vcursor, _ := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
 
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
+	// We need to count the number of arguments in the statement before we plan the query.
+	// Planning could add additional arguments to the statement.
 	paramsCount := countArguments(stmt)
 	bindVars := prepareBindVars(paramsCount)
 
@@ -1489,13 +1491,13 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 
 	if err != nil {
 		logStats.Error = err
-		return nil, err
+		return nil, 0, err
 	}
 
 	err = e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession)
 	if err != nil {
 		logStats.Error = err
-		return nil, err
+		return nil, 0, err
 	}
 
 	qr, err := plan.Instructions.GetFields(ctx, vcursor, bindVars)
@@ -1504,13 +1506,13 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 	if err != nil {
 		logStats.Error = err
 		errCount = 1 // nolint
-		return nil, err
+		return nil, 0, err
 	}
 	logStats.RowsAffected = qr.RowsAffected
 
 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), errCount)
 
-	return qr.Fields, err
+	return qr.Fields, paramsCount, err
 }
 
 func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {

@@ -197,9 +197,9 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgatese
 }
 
 // Prepare is part of the VTGateService interface
-func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, error) {
+func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
 	if f.hasError {
-		return session, nil, errTestVtGateError
+		return session, nil, 0, errTestVtGateError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
@@ -207,7 +207,7 @@ func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Sessi
 	f.checkCallerID(ctx, "Prepare")
 	execCase, ok := execMap[sql]
 	if !ok {
-		return session, nil, fmt.Errorf("no match for: %s", sql)
+		return session, nil, 0, fmt.Errorf("no match for: %s", sql)
 	}
 	query := &queryExecute{
 		SQL:     sql,
@@ -215,13 +215,13 @@ func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Sessi
 	}
 	if !query.equal(execCase.execQuery) {
 		f.t.Errorf("Prepare:\n%+v, want\n%+v", query, execCase.execQuery)
-		return session, nil, nil
+		return session, nil, 0, nil
 	}
 	if execCase.outSession != nil {
 		proto.Reset(session)
 		proto.Merge(session, execCase.outSession)
 	}
-	return session, execCase.result.Fields, nil
+	return session, execCase.result.Fields, execCase.paramsCount, nil
 }
 
 // CloseSession is part of the VTGateService interface
@@ -519,10 +519,11 @@ var testExecuteOptions = &querypb.ExecuteOptions{
 }
 
 var execMap = map[string]struct {
-	execQuery  *queryExecute
-	result     *sqltypes.Result
-	outSession *vtgatepb.Session
-	err        error
+	execQuery   *queryExecute
+	paramsCount uint16
+	result      *sqltypes.Result
+	outSession  *vtgatepb.Session
+	err         error
 }{
 	"request1": {
 		execQuery: &queryExecute{

@@ -334,7 +334,7 @@ func executorExec(ctx context.Context, executor *Executor, session *vtgatepb.Ses
 	return executorExecSession(ctx, executor, sql, bv, session)
 }
 
-func executorPrepare(ctx context.Context, executor *Executor, session *vtgatepb.Session, sql string) ([]*querypb.Field, error) {
+func executorPrepare(ctx context.Context, executor *Executor, session *vtgatepb.Session, sql string) ([]*querypb.Field, uint16, error) {
 	return executor.Prepare(
 		ctx,
 		"TestExecute",

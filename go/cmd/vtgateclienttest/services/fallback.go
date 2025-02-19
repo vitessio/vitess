@@ -52,7 +52,7 @@ func (c fallbackClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservic
 	return c.fallback.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
 }
 
-func (c fallbackClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, error) {
+func (c fallbackClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
 	return c.fallback.Prepare(ctx, session, sql)
 }
 

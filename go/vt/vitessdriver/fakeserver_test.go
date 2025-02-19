@@ -131,23 +131,23 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgatese
 }
 
 // Prepare is part of the VTGateService interface
-func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, error) {
+func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
 	execCase, ok := execMap[sql]
 	if !ok {
-		return session, nil, fmt.Errorf("no match for: %s", sql)
+		return session, nil, 0, fmt.Errorf("no match for: %s", sql)
 	}
 	query := &queryExecute{
 		SQL:     sql,
 		Session: session,
 	}
 	if !query.Equal(execCase.execQuery) {
-		return session, nil, fmt.Errorf("Prepare request mismatch: got %+v, want %+v", query, execCase.execQuery)
+		return session, nil, 0, fmt.Errorf("Prepare request mismatch: got %+v, want %+v", query, execCase.execQuery)
 	}
 	if execCase.session != nil {
 		proto.Reset(session)
 		proto.Merge(session, execCase.session)
 	}
-	return session, execCase.result.Fields, nil
+	return session, execCase.result.Fields, execCase.paramsCount, nil
 }
 
 func (f *fakeVTGateService) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
@@ -171,10 +171,11 @@ func CreateFakeServer() vtgateservice.VTGateService {
 }
 
 var execMap = map[string]struct {
-	execQuery *queryExecute
-	result    *sqltypes.Result
-	session   *vtgatepb.Session
-	err       error
+	execQuery   *queryExecute
+	paramsCount uint16
+	result      *sqltypes.Result
+	session     *vtgatepb.Session
+	err         error
 }{
 	"request": {
 		execQuery: &queryExecute{

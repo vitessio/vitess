@@ -354,6 +354,8 @@ message PrepareResponse {
 
   // fields contains the fields, only set if error is unset.
   repeated query.Field fields = 3;
+
+  uint32 params_count = 4;
 }
 
 // CloseSessionRequest is the payload to CloseSession.

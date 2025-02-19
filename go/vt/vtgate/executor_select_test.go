@@ -3105,13 +3105,13 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	sql := "select id from `user` where id = :id"
+	sql := "select id from `user` where id = ?"
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
-	_, err := executorPrepare(ctx, executor, session, sql)
+	_, paramsCount, err := executorPrepare(ctx, executor, session, sql)
 	require.NoError(t, err)
-
+	assert.EqualValues(t, 2, paramsCount)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql: "select id from `user` where 1 != 1",
 	}}
@@ -3128,8 +3128,9 @@ func TestSelectDatabasePrepare(t *testing.T) {
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
-	_, err := executorPrepare(ctx, executor, session, sql)
+	_, paramsCount, err := executorPrepare(ctx, executor, session, sql)
 	require.NoError(t, err)
+	assert.Zero(t, paramsCount)
 }
 
 func TestSelectWithUnionAll(t *testing.T) {

@@ -1121,7 +1121,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
-	fieldSent := false
+	receivedResult := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
 	prepare := c.PrepareData[stmtID]
@@ -1131,8 +1131,8 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 			return io.EOF
 		}
 
-		if !fieldSent {
-			fieldSent = true
+		if !receivedResult {
+			receivedResult = true
 
 			if len(qr.Fields) == 0 {
 				sendFinished = true
@@ -1156,7 +1156,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	})
 
 	// If no field was sent, we expect an error.
-	if !fieldSent {
+	if !receivedResult {
 		// This is just a failsafe. Should never happen.
 		if err == nil || err == io.EOF {
 			err = sqlerror.NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
@@ -1212,18 +1212,21 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 		query = queries[0]
 	}
 
+	fld, paramsCount, err := handler.ComPrepare(c, query)
+	if err != nil {
+		return c.writeErrorPacketFromErrorAndLog(err)
+	}
+
 	// Populate PrepareData
 	c.StatementID++
 	prepare := &PrepareData{
 		StatementID: c.StatementID,
 		PrepareStmt: query,
+		ParamsCount: paramsCount,
+		ParamsType:  make([]int32, paramsCount),
+		BindVars:    make(map[string]*querypb.BindVariable, paramsCount),
 	}
 	c.PrepareData[c.StatementID] = prepare
-
-	fld, err := handler.ComPrepare(c, query)
-	if err != nil {
-		return c.writeErrorPacketFromErrorAndLog(err)
-	}
 
 	if err := c.writePrepare(fld, prepare); err != nil {
 		log.Error("Error writing prepare data to client %v: %v", c.ConnectionID, err)

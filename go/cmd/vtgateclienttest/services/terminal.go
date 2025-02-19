@@ -63,8 +63,8 @@ func (c *terminalClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservi
 	return session, errTerminal
 }
 
-func (c *terminalClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, error) {
-	return session, nil, errTerminal
+func (c *terminalClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
+	return session, nil, 0, errTerminal
 }
 
 func (c *terminalClient) CloseSession(ctx context.Context, session *vtgatepb.Session) error {

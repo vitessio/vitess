@@ -592,15 +592,15 @@ func (vtg *VTGate) CloseSession(ctx context.Context, session *vtgatepb.Session) 
 }
 
 // Prepare supports non-streaming prepare statement query with multi shards
-func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
+func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (newSession *vtgatepb.Session, fld []*querypb.Field, paramsCount uint16, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Prepare", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
-	fld, err = vtg.executor.Prepare(ctx, "Prepare", econtext.NewSafeSession(session), sql)
+	fld, paramsCount, err = vtg.executor.Prepare(ctx, "Prepare", econtext.NewSafeSession(session), sql)
 	if err == nil {
-		return session, fld, nil
+		return session, fld, paramsCount, nil
 	}
 
 	query := map[string]any{
@@ -608,7 +608,7 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 		"Session": session,
 	}
 	err = recordAndAnnotateError(err, statsKey, query, vtg.logPrepare, vtg.executor.vm.parser)
-	return session, nil, err
+	return session, nil, 0, err
 }
 
 // VStream streams binlog events.

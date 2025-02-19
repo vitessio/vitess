@@ -2471,8 +2471,9 @@ func TestUpdateEqualWithPrepare(t *testing.T) {
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
-	_, err := executorPrepare(ctx, executor, session, "update music set a = :a0 where id = :id0")
+	_, paramsCount, err := executorPrepare(ctx, executor, session, "update music set a = ? where id = ?")
 	require.NoError(t, err)
+	assert.EqualValues(t, 2, paramsCount)
 
 	var wantQueries []*querypb.BoundQuery
 
@@ -2489,8 +2490,9 @@ func TestInsertShardedWithPrepare(t *testing.T) {
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
-	_, err := executorPrepare(ctx, executor, session, "insert into user(id, v, name) values (:_Id0, 2, ':_name_0')")
+	_, paramsCount, err := executorPrepare(ctx, executor, session, "insert into user(id, v, name) values (?, 2, ?)")
 	require.NoError(t, err)
+	assert.EqualValues(t, 2, paramsCount)
 
 	var wantQueries []*querypb.BoundQuery
 
@@ -2506,13 +2508,12 @@ func TestDeleteEqualWithPrepare(t *testing.T) {
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
-	_, err := executorPrepare(ctx, executor, session, "delete from user where id = :id0")
+	_, paramsCount, err := executorPrepare(ctx, executor, session, "delete from user where id = ?")
 	require.NoError(t, err)
+	assert.EqualValues(t, 1, paramsCount)
 
 	var wantQueries []*querypb.BoundQuery
-
 	assertQueries(t, sbc, wantQueries)
-
 	assertQueries(t, sbclookup, wantQueries)
 }
 

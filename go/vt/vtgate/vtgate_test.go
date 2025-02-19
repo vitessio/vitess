@@ -117,18 +117,17 @@ func TestVTGatePrepare(t *testing.T) {
 	vtg, sbc, ctx := createVtgateEnv(t)
 
 	counts := vtg.timings.Timings.Counts()
-	_, qr, err := vtg.Prepare(
+	_, qr, paramsCount, err := vtg.Prepare(
 		ctx,
 		&vtgatepb.Session{
 			Autocommit:   true,
 			TargetString: KsTestUnsharded + "@primary",
 			Options:      executeOptions,
 		},
-		"select id from t1",
+		"select id from t1 where id = ? and name = ?",
 	)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, paramsCount)
 
 	want := sandboxconn.SingleRowResult.Fields
 	utils.MustMatch(t, want, qr)
@@ -154,7 +153,7 @@ func TestVTGatePrepareError(t *testing.T) {
 
 	counts := errorCounts.Counts()
 
-	_, qr, err := vtg.Prepare(
+	_, qr, _, err := vtg.Prepare(
 		ctx,
 		&vtgatepb.Session{
 			Autocommit:   true,

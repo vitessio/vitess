@@ -139,12 +139,12 @@ func (c *errorClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.
 	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
 }
 
-func (c *errorClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, error) {
+func (c *errorClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
 	if err := requestToPartialError(sql, session); err != nil {
-		return session, nil, err
+		return session, nil, 0, err
 	}
 	if err := requestToError(sql); err != nil {
-		return session, nil, err
+		return session, nil, 0, err
 	}
 	return c.fallbackClient.Prepare(ctx, session, sql)
 }
