@@ -192,12 +192,12 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", fmt.Sprintf("%v", migrationWaitTimeout*2),
-			"--migration_check_interval", "2s",
+			"--migration_check_interval", "1.1s",
 			"--watch_replication_stream",
+			"--pprof-http",
 			// Test VPlayer batching mode.
 			fmt.Sprintf("--vreplication_experimental_flags=%d",
 				// vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts),
-				// vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerParallel),
 				// vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching),
 				vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage|vttablet.VReplicationExperimentalFlagOptimizeInserts|vttablet.VReplicationExperimentalFlagVPlayerBatching|vttablet.VReplicationExperimentalFlagVPlayerParallel),
 		}
@@ -244,6 +244,40 @@ func TestMain(m *testing.M) {
 		os.Exit(exitcode)
 	}
 
+}
+
+// trackVreplicationLag is used as a helper function to track vreplication lag and print progress to standard output.
+func trackVreplicationLag(t *testing.T, ctx context.Context, workloadCtx context.Context, uuid string) {
+	reportTicker := time.NewTicker(1 * time.Second)
+	defer reportTicker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-workloadCtx.Done():
+			return
+		case <-reportTicker.C:
+		}
+		func() {
+			query := fmt.Sprintf(`select time_updated, transaction_timestamp from _vt.vreplication where workflow='%s'`, uuid)
+			rs, err := primaryTablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+			require.NoError(t, err)
+			row := rs.Named().Row()
+			if row == nil {
+				return
+			}
+
+			durationDiff := func(t1, t2 time.Time) time.Duration {
+				return t1.Sub(t2).Abs()
+			}
+			timeNow := time.Now()
+			timeUpdated := time.Unix(row.AsInt64("time_updated", 0), 0)
+			transactionTimestamp := time.Unix(row.AsInt64("transaction_timestamp", 0), 0)
+			vreplicationLag := max(durationDiff(timeNow, timeUpdated), durationDiff(timeNow, transactionTimestamp))
+			fmt.Printf("vreplication lag: %ds\n", int64(vreplicationLag.Seconds()))
+		}()
+	}
 }
 
 func TestVreplMiniStressSchemaChanges(t *testing.T) {
@@ -384,6 +418,11 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 				readPos(t)
 			})
 			t.Run("wait for migration to complete", func(t *testing.T) {
+				ctx, cancel := context.WithCancel(ctx)
+				defer cancel()
+
+				go trackVreplicationLag(t, ctx, ctx, uuid)
+
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 				t.Logf("# Migration status (for debug purposes): <%s>", status)
 				if !onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete) {
@@ -408,6 +447,9 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 			t.Run("validate metrics", func(t *testing.T) {
 				testSelectTableMetrics(t)
 			})
+			// t.Run("sleep", func(t *testing.T) {
+			// 	time.Sleep(time.Minute * 3)
+			// })
 		})
 	}
 
@@ -677,10 +719,18 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 	// As the number of vCPUs decreases, so do we decrease concurrency, and increase intervals. For example, on a 8 vCPU machine
 	// we run concurrency of 8 and interval of 4ms. On a 4 vCPU machine we run concurrency of 4 and interval of 8ms.
 	maxConcurrency := runtime.NumCPU()
-	sleepModifier := 16.0 / float64(maxConcurrency)
-	baseSleepInterval := 2 * time.Millisecond
-	singleConnectionSleepIntervalNanoseconds := float64(baseSleepInterval.Nanoseconds()) * sleepModifier
-	sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
+
+	{
+		// Unlike similar stress tests, here we're not looking to be any mercyful. We're not looking to have
+		// replication capacity. We want to hammer as much as possible, then wait for catchup time. We therefore
+		// use a minimal sleep interval.
+		//
+		// sleepModifier := 16.0 / float64(maxConcurrency)
+		// baseSleepInterval := 2 * time.Millisecond
+		// singleConnectionSleepIntervalNanoseconds := float64(baseSleepInterval.Nanoseconds()) * sleepModifier
+		// sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
+	}
+	sleepInterval := time.Microsecond
 
 	log.Infof("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval)
 	var wg sync.WaitGroup
