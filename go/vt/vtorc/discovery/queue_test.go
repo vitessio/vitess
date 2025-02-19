@@ -29,8 +29,12 @@ func TestQueue(t *testing.T) {
 	// Push
 	q.Push(t.Name())
 	require.Equal(t, 2, q.QueueLen())
+	_, found := q.enqueued[t.Name()]
+	require.True(t, found)
 
 	// Consume
 	require.Equal(t, t.Name(), q.Consume())
 	require.Zero(t, q.QueueLen())
+	_, found = q.enqueued[t.Name()]
+	require.False(t, found)
 }
