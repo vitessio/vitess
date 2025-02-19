@@ -32,7 +32,6 @@ const (
 	AuditPageSize                         = 20
 	DebugMetricsIntervalSeconds           = 10
 	StaleInstanceCoordinatesExpireSeconds = 60
-	DiscoveryMaxConcurrency               = 300 // Number of goroutines doing hosts discovery
 	DiscoveryQueueCapacity                = 100000
 	DiscoveryQueueMaxStatisticsSize       = 120
 	DiscoveryCollectionRetentionSeconds   = 120
@@ -54,6 +53,15 @@ var (
 		viperutil.Options[bool]{
 			FlagName: "prevent-cross-cell-failover",
 			Default:  false,
+			Dynamic:  true,
+		},
+	)
+
+	discoveryMaxConcurrency = viperutil.Configure(
+		"discovery-max-concurrency",
+		viperutil.Options[int]{
+			FlagName: "discovery-max-concurrency",
+			Default:  300,
 			Dynamic:  true,
 		},
 	)
@@ -191,6 +199,7 @@ func init() {
 
 // registerFlags registers the flags required by VTOrc
 func registerFlags(fs *pflag.FlagSet) {
+	fs.Int("discovery-max-concurrency", discoveryMaxConcurrency.Default(), "Number of goroutines doing tablet discovery")
 	fs.String("sqlite-data-file", sqliteDataFile.Default(), "SQLite Datafile to use as VTOrc's database")
 	fs.Duration("instance-poll-time", instancePollTime.Default(), "Timer duration on which VTOrc refreshes MySQL information")
 	fs.Duration("snapshot-topology-interval", snapshotTopologyInterval.Default(), "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
@@ -211,6 +220,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	viperutil.BindFlags(fs,
 		instancePollTime,
 		preventCrossCellFailover,
+		discoveryMaxConcurrency,
 		sqliteDataFile,
 		snapshotTopologyInterval,
 		reasonableReplicationLag,
@@ -246,6 +256,11 @@ func GetInstancePollSeconds() uint {
 // GetPreventCrossCellFailover is a getter function.
 func GetPreventCrossCellFailover() bool {
 	return preventCrossCellFailover.Get()
+}
+
+// GetDiscoveryMaxConcurrency is a getter function.
+func GetDiscoveryMaxConcurrency() uint {
+	return uint(discoveryMaxConcurrency.Get())
 }
 
 // GetSQLiteDataFile is a getter function.

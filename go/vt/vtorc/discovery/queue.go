@@ -17,7 +17,7 @@
 /*
 
 package discovery manages a queue of discovery requests: an ordered
-queue with no duplicates.
+queue.
 
 push() operation never blocks while pop() blocks on an empty queue.
 
@@ -26,7 +26,6 @@ push() operation never blocks while pop() blocks on an empty queue.
 package discovery
 
 import (
-	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -41,37 +40,24 @@ type queueItem struct {
 
 // Queue is an implementation of discovery.Queue.
 type Queue struct {
-	sync.Mutex
-	enqueued map[string]struct{}
-	queue    chan queueItem
+	queue chan queueItem
 }
 
 // NewQueue creates a new queue.
 func NewQueue() *Queue {
 	return &Queue{
-		enqueued: make(map[string]struct{}),
-		queue:    make(chan queueItem, config.DiscoveryQueueCapacity),
+		queue: make(chan queueItem, config.DiscoveryQueueCapacity),
 	}
 }
 
 // QueueLen returns the length of the queue.
 func (q *Queue) QueueLen() int {
-	q.Lock()
-	defer q.Unlock()
-
-	return len(q.queue) + len(q.enqueued)
+	return len(q.queue)
 }
 
 // Push enqueues a key if it is not on a queue and is not being
 // processed; silently returns otherwise.
 func (q *Queue) Push(key string) {
-	q.Lock()
-	defer q.Unlock()
-
-	if _, found := q.enqueued[key]; found {
-		return
-	}
-	q.enqueued[key] = struct{}{}
 	q.queue <- queueItem{
 		CreatedAt: time.Now(),
 		Key:       key,
@@ -81,13 +67,7 @@ func (q *Queue) Push(key string) {
 // Consume fetches a key to process; blocks if queue is empty.
 // Release must be called once after Consume.
 func (q *Queue) Consume() string {
-	var item queueItem
-	func() {
-		q.Lock()
-		defer q.Unlock()
-		item = <-q.queue
-		delete(q.enqueued, item.Key)
-	}()
+	item := <-q.queue
 
 	timeOnQueue := time.Since(item.CreatedAt)
 	if timeOnQueue > config.GetInstancePollTime() {
