@@ -69,6 +69,8 @@ var (
 	hcPrimaryPromotedCounters = stats.NewCountersWithMultiLabels("HealthcheckPrimaryPromoted", "Primary promoted in keyspace/shard name because of health check errors", []string{"Keyspace", "ShardName"})
 	healthcheckOnce           sync.Once
 
+	hcMessagesDropped = stats.NewCounter("HealthCheckMessagesDropped", "Number of messages dropped by the healthcheck because the subscriber buffer was full")
+
 	// TabletURLTemplateString is a flag to generate URLs for the tablets that vtgate discovers.
 	TabletURLTemplateString = "http://{{.GetTabletHostPort}}"
 	tabletURLTemplate       *template.Template
@@ -632,7 +634,7 @@ func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
-	c := make(chan *TabletHealth, 2)
+	c := make(chan *TabletHealth, 2048)
 	hc.subscribers[c] = struct{}{}
 	return c
 }
@@ -651,6 +653,8 @@ func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 		select {
 		case c <- th:
 		default:
+			log.Errorf("HealthCheckImpl.broadcast: subscriber buffer full, dropping message")
+			hcMessagesDropped.Add(1)
 		}
 	}
 }

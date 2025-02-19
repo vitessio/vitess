@@ -1475,6 +1475,109 @@ func TestDebugURLFormatting(t *testing.T) {
 	require.Contains(t, wr.String(), expectedURL, "output missing formatted URL")
 }
 
+// TestConcurrentUpdates tests that concurrent updates from the HealthCheck implementation aren't dropped.
+// Added in response to https://github.com/vitessio/vitess/issues/17629.
+func TestConcurrentUpdates(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	// reset error counters
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	// close healthcheck
+	defer hc.Close()
+
+	// Subscribe to the healthcheck
+	// Make the receiver keep track of the updates received.
+	ch := hc.Subscribe()
+	totalCount := 0
+	go func() {
+		for range ch {
+			totalCount++
+			// Simulate a somewhat slow consumer.
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
+
+	// Run multiple updates really quickly
+	// one after the other.
+	totalUpdates := 10
+	for i := 0; i < totalUpdates; i++ {
+		hc.broadcast(&TabletHealth{})
+	}
+	// Unsubscribe from the healthcheck
+	// and verify we process all the updates eventually.
+	hc.Unsubscribe(ch)
+	defer close(ch)
+	require.Eventuallyf(t, func() bool {
+		return totalUpdates == totalCount
+	}, 5*time.Second, 100*time.Millisecond, "expected all updates to be processed")
+}
+
+// BenchmarkAccess_FastConsumer benchmarks the access time of the healthcheck for a fast consumer.
+func BenchmarkAccess_FastConsumer(b *testing.B) {
+	ctx := context.Background()
+	// reset error counters
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	// close healthcheck
+	defer hc.Close()
+
+	for i := 0; i < b.N; i++ {
+		// Subscribe to the healthcheck with a fast consumer.
+		ch := hc.Subscribe()
+		go func() {
+			for range ch {
+			}
+		}()
+
+		for id := 0; id < 1000; id++ {
+			hc.broadcast(&TabletHealth{})
+		}
+		hc.Unsubscribe(ch)
+		waitForEmptyMessageQueue(ch)
+	}
+}
+
+// BenchmarkAccess_SlowConsumer benchmarks the access time of the healthcheck for a slow consumer.
+func BenchmarkAccess_SlowConsumer(b *testing.B) {
+	ctx := context.Background()
+	// reset error counters
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	// close healthcheck
+	defer hc.Close()
+
+	for i := 0; i < b.N; i++ {
+		// Subscribe to the healthcheck with a slow consumer.
+		ch := hc.Subscribe()
+		go func() {
+			for range ch {
+				time.Sleep(50 * time.Millisecond)
+			}
+		}()
+
+		for id := 0; id < 100; id++ {
+			hc.broadcast(&TabletHealth{})
+		}
+		hc.Unsubscribe(ch)
+		waitForEmptyMessageQueue(ch)
+	}
+}
+
+func waitForEmptyMessageQueue(queue chan *TabletHealth) {
+	for {
+		if len(queue) == 0 {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func tabletDialer(ctx context.Context, tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservice.QueryService, error) {
 	connMapMu.Lock()
 	defer connMapMu.Unlock()
