@@ -34,8 +34,8 @@ import (
 
 // queueItem represents an item in the discovery.Queue.
 type queueItem struct {
-	CreatedAt time.Time
-	Key       string
+	PushedAt time.Time
+	Key      string
 }
 
 // Queue is an implementation of discovery.Queue.
@@ -59,8 +59,8 @@ func (q *Queue) QueueLen() int {
 // processed; silently returns otherwise.
 func (q *Queue) Push(key string) {
 	q.queue <- queueItem{
-		CreatedAt: time.Now(),
-		Key:       key,
+		PushedAt: time.Now(),
+		Key:      key,
 	}
 }
 
@@ -69,7 +69,7 @@ func (q *Queue) Push(key string) {
 func (q *Queue) Consume() string {
 	item := <-q.queue
 
-	timeOnQueue := time.Since(item.CreatedAt)
+	timeOnQueue := time.Since(item.PushedAt)
 	if timeOnQueue > config.GetInstancePollTime() {
 		log.Warningf("key %v spent %.4fs waiting on a discovery queue", item.Key, timeOnQueue.Seconds())
 	}
