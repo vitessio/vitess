@@ -150,46 +150,49 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 
 	var lastTickerTime time.Time
 	var lastAppliedTickerTime time.Time
+	var lastEventWasSkippedCommit bool
+
+	applyEvent := func(event *binlogdatapb.VEvent) error {
+		lastEventWasSkippedCommit = false
+		if err := w.applyQueuedEvent(ctx, event); err != nil {
+			return err
+		}
+		lastAppliedTickerTime = lastTickerTime
+		return nil
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case lastTickerTime = <-ticker.C:
+			if lastEventWasSkippedCommit && lastTickerTime.Sub(lastAppliedTickerTime) > maxIdleWorkerDuration {
+				// The last event was a commit, which we did nto actually apply, as we figured we'd
+				// follow up with more statements. But it's been a while and there's been no statement since.
+				// So we're just sitting idly with a bunch of uncommitted statements. Better to commit now.
+				log.Errorf("========== QQQ applyQueuedEvents worker %v idle with skipped commit and %v events. COMMITTING", w.index, len(w.sequenceNumbers))
+				if err := applyEvent(w.producer.commitWorkerEvent()); err != nil {
+					return err
+				}
+			}
 		case pos := <-w.aggregatedPosChan:
-			// log.Errorf("========== QQQ applyQueuedEvents worker %v got aggregated pos %v", w.index, pos)
 			if _, err := w.updatePos(ctx, pos, 0); err != nil {
 				return err
 			}
-			// log.Errorf("========== QQQ applyQueuedEvents worker %v updated aggregated pos", w.index)
 		case event := <-w.events:
-			// log.Errorf("========== QQQ applyQueuedEvents, event=%v", event)
 			if event.SequenceNumber >= 0 {
 				// Negative values are happen in commitWorkerEvent(). These are not real events.
 				w.sequenceNumbers = append(w.sequenceNumbers, event.SequenceNumber)
 			}
-			skipApplyEvent := func() bool {
-				if event.Type != binlogdatapb.VEventType_COMMIT {
-					// We only skip commits, for performance reasons (aggregate more operations under same commit)
-					return false
-				}
-				if len(w.sequenceNumbers) >= maxWorkerEvents {
-					// Too many events in the queue, commit now
-					return false
-				}
-				if lastTickerTime != lastAppliedTickerTime {
-					// Too much time passed since last applied event. Meaning we're sitting idly doing nothing. Better to commit now
-					// and utilize some IO and make some progress.
-					return false
-				}
-				return true
-			}
-			if skipApplyEvent() {
+
+			if event.Skippable && event.Type == binlogdatapb.VEventType_COMMIT {
+				// At this time only COMMIT events are Skippable, so checking for the type is not
+				// strictly necessary. But it's safer to add that check.
+				lastEventWasSkippedCommit = true
 				continue
 			}
-			if err := w.applyQueuedEvent(ctx, event); err != nil {
+			if err := applyEvent(event); err != nil {
 				return err
 			}
-			lastAppliedTickerTime = lastTickerTime
 		}
 	}
 }
@@ -484,8 +487,6 @@ func (w *parallelWorker) updateFKCheck(ctx context.Context, flags2 uint32) error
 }
 
 func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlogdatapb.VEvent) error {
-	// log.Errorf("========== QQQ applyQueuedRowEvent worker %v", w.index)
-	// defer log.Errorf("========== QQQ applyQueuedRowEvent worker %v DONE", w.index)
 	if err := w.updateFKCheck(ctx, vevent.RowEvent.Flags); err != nil {
 		return err
 	}
@@ -526,12 +527,15 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 			return err
 		}
 	}
-
-	currentConcurrency := w.producer.currentConcurrency.Add(1)
-	defer w.producer.currentConcurrency.Add(-1)
-	if currentConcurrency > w.producer.maxConcurrency.Load() {
-		w.producer.maxConcurrency.Store(currentConcurrency)
+	{
+		// Measure parallel vplayer concurrency (TODO(shlomi): remove)
+		currentConcurrency := w.producer.currentConcurrency.Add(1)
+		defer w.producer.currentConcurrency.Add(-1)
+		if currentConcurrency > w.producer.maxConcurrency.Load() {
+			w.producer.maxConcurrency.Store(currentConcurrency)
+		}
 	}
+
 	for _, change := range vevent.RowEvent.RowChanges {
 		if _, err := tplan.applyChange(change, applyFunc); err != nil {
 			return err
@@ -541,7 +545,6 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 }
 
 func (w *parallelWorker) applyQueuedCommit(ctx context.Context, event *binlogdatapb.VEvent) error {
-	// log.Errorf("========== QQQ applyQueuedCommit worker %v", w.index)
 	switch {
 	case event.Type == binlogdatapb.VEventType_COMMIT:
 	case event.Type == binlogdatapb.VEventType_UNKNOWN && event.SequenceNumber < 0:
@@ -549,10 +552,10 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, event *binlogdat
 		// Not a commit
 		return nil
 	}
+	// As a very simple optimization, we will only commit if we have any events at all to commit.
 	shouldActuallyCommit := len(w.sequenceNumbers) > 0
 	var err error
 	if shouldActuallyCommit {
-
 		if !w.updatedPos.IsZero() {
 			update := binlogplayer.GenerateUpdateWorkerPos(w.vp.vr.id, w.index, w.updatedPos.String(), w.updatedPosTimestamp)
 			if _, err := w.queryFunc(ctx, update); err != nil {
@@ -560,20 +563,18 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, event *binlogdat
 			}
 			w.updatedPos = replication.Position{}
 		}
-		// log.Errorf("========== QQQ applyQueuedCommit actual commit worker %v", w.index)
 		err = w.commitFunc()
-		// log.Errorf("========== QQQ applyQueuedCommit actual commit worker %v DONE", w.index)
 	}
-	// log.Errorf("========== QQQ applyQueuedEvents, event is commit or commitWorkerEvent(), seq=%v", event.SequenceNumber)
-	// log.Errorf("========== QQQ applyQueuedEvents committed, err=%v", err)
 	func() {
-		// log.Errorf("========== QQQ applyQueuedEvents finding subscribers")
+		// Notify subsribers of commit event
+		if event.SequenceNumber >= 0 {
+			// Not a subscribed event
+			return
+		}
 		w.commitSubscribersMu.Lock()
 		defer w.commitSubscribersMu.Unlock()
 		if subs, ok := w.commitSubscribers[event.SequenceNumber]; ok {
-			// log.Errorf("========== QQQ applyQueuedEvents found subscriber")
 			subs <- err
-			// log.Errorf("========== QQQ applyQueuedEvents notified subscriber")
 			delete(w.commitSubscribers, event.SequenceNumber)
 		}
 	}()
@@ -582,26 +583,16 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, event *binlogdat
 	}
 	// Commit successful
 	if shouldActuallyCommit {
+		// Parallel VPlayer metrics. TODO(shlomi): remove
 		w.producer.numCommits.Add(1)
 		w.numCommits++
 	}
-	// log.Errorf("========== QQQ applyQueuedEvents pushing seqs")
-	// Now that we have committed, we want to report the committed sequence numbers back to the producer.
-	// We can't just run `w.producer.completedSequenceNumbers <- sequenceNumbers` because we will be deadlocking
-	// the producer: this very function runs off the producer's `case worker.events <- event`, which is on the same
-	// `select` statement as `case sequenceNumbers := <-p.completedSequenceNumbers`. So we need to run this in a goroutine.
-	// Which is fine, because while it is very nice to have, it's not mandatory that the producer updates the sequence
-	// numbers asap.
+	// We now let the producer know that we've completed the sequence numbers.
+	// It will deassign these sequence numebrs from the worker.
 	for _, sequenceNumber := range w.sequenceNumbers {
 		w.producer.completedSequenceNumbers <- sequenceNumber
 	}
 	w.sequenceNumbers = w.sequenceNumbers[:0]
-	// sequenceNumbers := w.sequenceNumbers
-	// go func() {
-	// 	w.producer.completedSequenceNumbers <- sequenceNumbers
-	// }()
-	// // log.Errorf("========== QQQ applyQueuedEvents pushed seqs")
-	// w.sequenceNumbers = make(map[int64]bool, maxWorkerEvents)
 	if w.producer.posReached.Load() {
 		return io.EOF
 	}

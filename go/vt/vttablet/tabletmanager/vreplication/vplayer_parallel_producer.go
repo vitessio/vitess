@@ -35,8 +35,11 @@ import (
 )
 
 const (
-	countWorkers    = 6
-	maxWorkerEvents = 100
+	countWorkers          = 6
+	maxWorkerEvents       = 100
+	maxIdleWorkerDuration = 100 * time.Millisecond
+
+	aggregatePosInterval = 250 * time.Millisecond
 )
 
 type parallelProducer struct {
@@ -52,8 +55,9 @@ type parallelProducer struct {
 	commitWorkerEventSequence atomic.Int64
 	assignSequence            int64
 
-	newDBClient              func() (*vdbClient, error)
-	aggregateWorkersPosQuery string
+	newDBClient                 func() (*vdbClient, error)
+	aggregateWorkersPosQuery    string
+	lastAggregatedWorkersPosStr string
 
 	numCommits         atomic.Int64 // temporary. TODO: remove
 	currentConcurrency atomic.Int64 // temporary. TODO: remove
@@ -116,37 +120,39 @@ func (p *parallelProducer) commitWorkerEvent() *binlogdatapb.VEvent {
 	}
 }
 
-func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastCommitted int64) (workerIndex int) {
+func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastCommitted int64, currentWorkerIndex int, preferCurrentWorker bool) (workerIndex int) {
 	p.sequenceToWorkersMapMu.RLock()
 	defer p.sequenceToWorkersMapMu.RUnlock()
 
 	if workerIndex, ok := p.sequenceToWorkersMap[sequenceNumber]; ok {
-		// Pin for the duration of the transaction
-		// log.Errorf("========== QQQ assignTransactionToWorker same trx sequenceNumber=%v, lastCommitted=%v, workerIndex=%v", sequenceNumber, lastCommitted, workerIndex)
+		// All events of same sequence should be executed by same worker
 		return workerIndex
 	}
 	if workerIndex, ok := p.sequenceToWorkersMap[lastCommitted]; ok {
-		// Assign transaction to the same worker who owns the last committed transaction
-		// log.Errorf("========== QQQ assignTransactionToWorker dependent trx sequenceNumber=%v, lastCommitted=%v, workerIndex=%v", sequenceNumber, lastCommitted, workerIndex)
+		// Transaction depends on another transaction, that is still being owned by some worker.
+		// Use that same worker, so that this transaction is non-blocking.
 		p.sequenceToWorkersMap[sequenceNumber] = workerIndex
 		return workerIndex
 	}
-	// workerIndex = int(p.assignSequence) % len(p.workers)
-	workerIndex = int(p.assignSequence/maxWorkerEvents) % len(p.workers)
-	// log.Errorf("========== QQQ assignTransactionToWorker free trx p.sequence=%v, sequenceNumber=%v, lastCommitted=%v, workerIndex=%v", p.assignSequence, sequenceNumber, lastCommitted, workerIndex)
+	// No specific transaction dependency constraints (any parent transactions were long since
+	// committed, and no worker longer indicates it owns any such transactions)
+	if preferCurrentWorker {
+		// Prefer the current worker, if it has capacity. On one hand, we want
+		// to batch queries as possible. On the other hand, we want to spread the
+		// the load across workers.
+		workerIndex = currentWorkerIndex
+	} else {
+		// Even if not specifically requested to assign current worker, we still
+		// want to do some batching. We batch `maxWorkerEvents` events per worker.
+		workerIndex = int(p.assignSequence/maxWorkerEvents) % len(p.workers)
+	}
 	p.assignSequence++
 	p.sequenceToWorkersMap[sequenceNumber] = workerIndex
 	return workerIndex
 }
 
+// commitAll commits all workers and waits for them to complete.
 func (p *parallelProducer) commitAll(ctx context.Context, except *parallelWorker) error {
-	{
-		exceptString := ""
-		if except != nil {
-			exceptString = fmt.Sprintf(" except %v", except.index)
-		}
-		log.Errorf("========== QQQ commitAll%v", exceptString)
-	}
 	var eg errgroup.Group
 	for _, w := range p.workers {
 		w := w
@@ -160,7 +166,8 @@ func (p *parallelProducer) commitAll(ctx context.Context, except *parallelWorker
 	return eg.Wait()
 }
 
-// updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
+// updatePos updates _vt.vreplication with the given position and timestamp.
+// This producer updates said position based on the aggregation of all committed workers positions.
 func (p *parallelProducer) updatePos(ctx context.Context, pos replication.Position, ts int64, dbClient *vdbClient) (posReached bool, err error) {
 	update := binlogplayer.GenerateUpdatePos(p.vp.vr.id, pos, time.Now().Unix(), ts, p.vp.vr.stats.CopyRowCount.Get(), p.vp.vr.workflowConfig.StoreCompressedGTID)
 	if _, err := dbClient.ExecuteWithRetry(ctx, update); err != nil {
@@ -199,62 +206,79 @@ func (p *parallelProducer) updateTimeThrottled(appThrottled throttlerapp.Name, r
 	return err
 }
 
+// aggregateWorkersPos aggregates the committed GTID positions of all workers, along with their transaction timestamps.
+// If any change since last call is detected, the combined position is written to _vt.vreplication.
 func (p *parallelProducer) aggregateWorkersPos(ctx context.Context, dbClient *vdbClient, onlyFirstContiguous bool) (aggregatedWorkersPos replication.Position, combinedPos replication.Position, err error) {
 	qr, err := dbClient.ExecuteFetch(p.aggregateWorkersPosQuery, -1)
 	if err != nil {
 		log.Errorf("Error fetching vreplication worker positions: %v. isclosed? %v", err, dbClient.IsClosed())
 		return aggregatedWorkersPos, combinedPos, err
 	}
+	var aggregatedWorkersPosStr string
 	var lastEventTimestamp int64
-	for _, row := range qr.Rows { // there's just one row
-		aggregatedWorkersPos, err = binlogplayer.DecodeMySQL56Position(row[0].ToString())
-		if err != nil {
-			return aggregatedWorkersPos, combinedPos, err
-		}
+	for _, row := range qr.Rows { // there's actually exactly one row in this result set
+		aggregatedWorkersPosStr = row[0].ToString()
 		lastEventTimestamp, err = row[1].ToInt64()
 		if err != nil {
 			return aggregatedWorkersPos, combinedPos, err
 		}
 	}
-	//
-	// // TODO(shlomi): this query can be computed once in the lifetime of the producer
-	// query := binlogplayer.ReadVReplicationWorkersGTIDs(p.vp.vr.id)
-	// qr, err := dbClient.ExecuteFetch(query, -1)
-	// if err != nil {
-	// 	log.Errorf("Error fetching vreplication worker positions: %v. isclosed? %v", err, dbClient.IsClosed())
-	// 	return aggregatedWorkersPos, combinedPos, err
-	// }
-	// var lastEventTimestamp int64
-	// for _, row := range qr.Rows {
-	// 	log.Errorf("========= QQQ INSERT INTO _vt.vreplication_worker_pos (id, worker, gtid, transaction_timestamp) VALUES (%v, %v, '%v', %v);", p.vp.vr.id, row[0].ToString(), row[1].ToString(), row[2].ToString())
-	// 	current, err := binlogplayer.DecodeMySQL56Position(row[1].ToString())
-	// 	if err != nil {
-	// 		return aggregatedWorkersPos, combinedPos, err
-	// 	}
-	// 	eventTimestamp, err := row[2].ToInt64()
-	// 	if err != nil {
-	// 		return aggregatedWorkersPos, combinedPos, err
-	// 	}
-	// 	lastEventTimestamp = max(lastEventTimestamp, eventTimestamp)
-	// 	aggregatedWorkersPos = replication.AppendGTIDSet(aggregatedWorkersPos, current.GTIDSet)
-	// }
+	if aggregatedWorkersPosStr == p.lastAggregatedWorkersPosStr {
+		// Nothing changed since last visit. Skip all the parsing and updates.
+		return aggregatedWorkersPos, combinedPos, nil
+	}
+	p.lastAggregatedWorkersPosStr = aggregatedWorkersPosStr
+	aggregatedWorkersPos, err = binlogplayer.DecodeMySQL56Position(aggregatedWorkersPosStr)
+	if err != nil {
+		return aggregatedWorkersPos, combinedPos, err
+	}
+
 	if onlyFirstContiguous && aggregatedWorkersPos.GTIDSet != nil {
+		// This is a performance optimization which, for the running duration, only
+		// considers the first contiguous part of the aggregated GTID set.
+		// The idea is that with out-of-order workers, a worker's GTID set
+		// is punctured, and that means its representation is very long.
+		// Consider something like:
+		// 9ee2b9ca-e848-11ef-b80c-091a65af3e28:4697:4699:4702:4704:4706:4708:4710:4713:4717:4719:4723:4726:4728:4730:4732:4734:4737:4739:4742:4744:4746:4748:4751:4753:4756:4758:4760:4762:4765:4768-4769:4772-4774:...
+		// Even when combined with multiple workers, it's enough that one worker is behind,
+		// that the same amount of punctures exists in the aggregated GTID set.
+		// What this leads to is:
+		// - Longer and more complex parsing of GTID sets.
+		// - More data to be sent over the wire.
+		// - More data to be stored in the database. Easily surpassing VARCHAR(10000) limitation.
+		// And the observation is that we don't really need all of this data _at this time_.
+		// Consider: when do we stop the workflow?
+		// - Either startPos is defined (and in all likelihood it is contiguous, as in 9ee2b9ca-e848-11ef-b80c-091a65af3e28:1-100000)
+		// - Or sommething is running VReplicationWaitForPos (e.g. Online DDL), and again, it's contiguous.
+		// So the conditions for which we wait don't care about the punctures. These are as good as "not applied"
+		// when it comes to comparing to the expected terminal position.
+		// However, when the workflow is stopped, we do need to know the full GTID set, so that we
+		// have accurate information about what was applied and what wasn't (consider Online DDL reverts
+		// that need to start at that precise position). And so when the workflow is stopped, we will
+		// have onlyFirstContiguous==false.
 		mysql56gtid := aggregatedWorkersPos.GTIDSet.(replication.Mysql56GTIDSet)
 		for sid := range mysql56gtid {
 			mysql56gtid[sid] = mysql56gtid[sid][:1]
 		}
 	}
-
+	// The aggregatedWorkersPos only looks at the GTI entries actually processed in the binary logs.
+	// The combinedPos also takes into account the startPos. combinedPos is what we end up storing
+	// in _vt.vreplication, and it's what will be compared to stopPosition or used by VReplicationWaitForPos.
 	combinedPos = replication.AppendGTIDSet(aggregatedWorkersPos, p.vp.startPos.GTIDSet)
 	p.vp.pos = combinedPos // TODO(shlomi) potential for race condition
 
-	// log.Errorf("========== QQQ aggregateWorkersPos updatePos ts=%v, pos=%v", lastEventTimestamp, combinedPos)
+	// Update _vt.vreplication. This write reflects everything we could read from the workers table,
+	// which means that data was committed by the workers, which means this is a de-factor "what's been
+	// actually applied"."
 	if _, err := p.updatePos(ctx, combinedPos, lastEventTimestamp, dbClient); err != nil {
 		return aggregatedWorkersPos, combinedPos, err
 	}
 	return aggregatedWorkersPos, combinedPos, nil
 }
 
+// watchPos runs in a goroutine and is in charge of peridocially aggregating workers
+// positions and writing the aggregated value to _vt.vreplication, as well as
+// sending the aggregated value to the workers themselves.
 func (p *parallelProducer) watchPos(ctx context.Context) error {
 	dbClient, err := p.newDBClient()
 	if err != nil {
@@ -262,40 +286,47 @@ func (p *parallelProducer) watchPos(ctx context.Context) error {
 	}
 	defer dbClient.Close()
 
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	var lastCombinedPos replication.Position
+	aggregatePosTicker := time.NewTicker(aggregatePosInterval)
+	defer aggregatePosTicker.Stop()
+	// noProgressRateLimiter := timer.NewRateLimiter(time.Second)
+	// defer noProgressRateLimiter.Stop()
+	// var lastCombinedPos replication.Position
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-ticker.C:
-			// log.Errorf("========== QQQ watchPos ticker")
+		case <-aggregatePosTicker.C:
 			aggregatedWorkersPos, combinedPos, err := p.aggregateWorkersPos(ctx, dbClient, true)
 			if err != nil {
 				log.Errorf("Error aggregating vreplication worker positions: %v. isclosed? %v", err, dbClient.IsClosed())
 				continue
 			}
+			if aggregatedWorkersPos.IsZero() {
+				// This happens when there's been no change since last polling. It's a performance
+				// optimization to save the cost of updating the position.
+				log.Errorf("========== QQQ watchPos aggregatedWorkersPos is IDLE: %v", p.lastAggregatedWorkersPosStr)
+				continue
+			}
 			log.Errorf("========== QQQ watchPos aggregatedWorkersPos: %v, combinedPos: %v, stop: %v", aggregatedWorkersPos, combinedPos, p.vp.stopPos)
 
 			// Write back this combined pos to all workers, so that we condense their otherwise sparse GTID sets.
-			// log.Errorf("========== QQQ watchPos pushing aggregatedWorkersPos %v", aggregatedWorkersPos)
 			for _, w := range p.workers {
 				go func() { w.aggregatedPosChan <- aggregatedWorkersPos.String() }()
 			}
 			// log.Errorf("========== QQQ watchPos pushed combined pos")
-			if combinedPos.GTIDSet.Equal(lastCombinedPos.GTIDSet) {
-				// no progress has been made
-				log.Errorf("========== QQQ watchPos no progress!! committing all")
-				if err := p.commitAll(ctx, nil); err != nil {
-					return err
-				}
-				log.Errorf("========== QQQ watchPos no progress!! committed all")
-			} else {
-				// progress has been made
-				lastCombinedPos.GTIDSet = combinedPos.GTIDSet
-			}
+			// if combinedPos.GTIDSet.Equal(lastCombinedPos.GTIDSet) {
+			// 	// no progress has been made
+			// 	err := noProgressRateLimiter.Do(func() error {
+			// 		log.Errorf("========== QQQ watchPos no progress!! committing all")
+			// 		return p.commitAll(ctx, nil)
+			// 	})
+			// 	if err != nil {
+			// 		return err
+			// 	}
+			// } else {
+			// 	// progress has been made
+			// 	lastCombinedPos.GTIDSet = combinedPos.GTIDSet
+			// }
 			if !p.vp.stopPos.IsZero() && combinedPos.AtLeast(p.vp.stopPos) {
 				if err := p.commitAll(ctx, nil); err != nil {
 					return err
@@ -303,11 +334,11 @@ func (p *parallelProducer) watchPos(ctx context.Context) error {
 				p.posReached.Store(true)
 				return io.EOF
 			}
-			// log.Errorf("========== QQQ watchPos end loop cycle")
 		}
 	}
 }
 
+// process is a goroutine that reads events from the input channel and assigns them to workers.
 func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatapb.VEvent) error {
 	go func() {
 		for {
@@ -321,6 +352,7 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 			}
 		}
 	}()
+	currentWorker := p.workers[0]
 	for {
 		if p.posReached.Load() {
 			return io.EOF
@@ -354,18 +386,16 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 					return err
 				}
 			}
-			workerIndex := p.assignTransactionToWorker(event.SequenceNumber, event.CommitParent)
-			worker := p.workers[workerIndex]
-			// We know the worker has enough capacity and thus the following will not block.
-			// log.Errorf("========== QQQ process: assigning event.Type %v seq=%v, parent=%v, to worker.Index %v at index %v", event.Type, event.SequenceNumber, event.CommitParent, worker.index, workerIndex)
+			workerIndex := p.assignTransactionToWorker(event.SequenceNumber, event.CommitParent, currentWorker.index, event.PinWorker)
+			currentWorker = p.workers[workerIndex]
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case worker.events <- event:
+			case currentWorker.events <- event:
 			}
 			if !canApplyInParallel {
 				// Say this was a DDL. Then we need to wait until it is absolutely complete, before we allow the next event to be processed.
-				if err := <-worker.commitEvents(); err != nil {
+				if err := <-currentWorker.commitEvents(); err != nil {
 					return err
 				}
 			}
@@ -373,8 +403,9 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 	}
 }
 
+// applyEvents is a parallel variation on VPlayer's applyEvents() function. It spawns the necessary
+// goroutines, starts the workers, processes the vents, and looks for errors.
 func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) error {
-	// TODO(shlomi): do not cancel context, because if we do, that can terminate async queries still running.
 	defer log.Errorf("========== QQQ applyEvents defer")
 
 	dbClient, err := p.newDBClient()
@@ -430,7 +461,7 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 		if err != nil {
 			return err
 		}
-
+		var pinWorker bool
 		lagSecs = -1
 		for i, events := range items {
 			for j, event := range events {
@@ -457,6 +488,32 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 						lagSecs = event.CurrentTime/1e9 - event.Timestamp
 					}
 				}
+				switch event.Type {
+				case binlogdatapb.VEventType_COMMIT:
+					// If we've reached the stop position, we must save the current commit
+					// even if it's empty. So, the next applyEvent is invoked with the
+					// mustSave flag.
+					if !p.vp.stopPos.IsZero() && p.vp.pos.AtLeast(p.vp.stopPos) {
+						// We break early, so we never set `event.Skippable = true`.
+						// This is the equivalent of `mustSave` in sequential VPlayer
+						break
+					}
+					// In order to group multiple commits into a single one, we look ahead for
+					// the next commit. If there is one, we skip the current commit, which ends up
+					// applying the next set of events as part of the current transaction. This approach
+					// also handles the case where the last transaction is partial. In that case,
+					// we only group the transactions with commits we've seen so far.
+					if hasAnotherCommit(items, i, j+1) {
+						pinWorker = true
+						event.Skippable = true
+						// continue
+					} else {
+						pinWorker = false
+					}
+				case binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_JOURNAL:
+					pinWorker = false
+				}
+				event.PinWorker = pinWorker
 				select {
 				case eventQueue <- event: // to be consumed by p.Process()
 				case <-ctx.Done():
