@@ -115,6 +115,7 @@ func handleDiscoveryRequests() {
 			for {
 				tabletAlias := discoveryQueue.Consume()
 				DiscoverInstance(tabletAlias, false /* forceDiscovery */)
+				discoveryQueue.Release(tabletAlias)
 			}
 		}()
 	}

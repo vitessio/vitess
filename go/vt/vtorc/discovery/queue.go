@@ -26,6 +26,7 @@ push() operation never blocks while pop() blocks on an empty queue.
 package discovery
 
 import (
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -40,7 +41,8 @@ type queueItem struct {
 
 // Queue is an implementation of discovery.Queue.
 type Queue struct {
-	queue chan queueItem
+	enqueued sync.Map
+	queue    chan queueItem
 }
 
 // NewQueue creates a new queue.
@@ -58,10 +60,14 @@ func (q *Queue) QueueLen() int {
 // Push enqueues a key if it is not on a queue and is not being
 // processed; silently returns otherwise.
 func (q *Queue) Push(key string) {
+	if _, found := q.enqueued.Load(key); found {
+		return
+	}
 	q.queue <- queueItem{
 		PushedAt: time.Now(),
 		Key:      key,
 	}
+	q.enqueued.Store(key, struct{}{})
 }
 
 // Consume fetches a key to process; blocks if queue is empty.
@@ -75,4 +81,10 @@ func (q *Queue) Consume() string {
 	}
 
 	return item.Key
+}
+
+// Release removes a key from a list of being processed keys
+// which allows that key to be pushed into the queue again.
+func (q *Queue) Release(key string) {
+	q.enqueued.Delete(key)
 }

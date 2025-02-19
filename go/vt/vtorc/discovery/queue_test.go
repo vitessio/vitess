@@ -29,8 +29,22 @@ func TestQueue(t *testing.T) {
 	// Push
 	q.Push(t.Name())
 	require.Equal(t, 1, q.QueueLen())
+	_, found := q.enqueued.Load(t.Name())
+	require.True(t, found)
+
+	// Push duplicate
+	q.Push(t.Name())
+	require.Equal(t, 1, q.QueueLen())
 
 	// Consume
 	require.Equal(t, t.Name(), q.Consume())
 	require.Zero(t, q.QueueLen())
+	_, found = q.enqueued.Load(t.Name())
+	require.True(t, found)
+
+	// Release
+	q.Release(t.Name())
+	require.Zero(t, q.QueueLen())
+	_, found = q.enqueued.Load(t.Name())
+	require.False(t, found)
 }
