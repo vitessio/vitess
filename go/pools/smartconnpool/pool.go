@@ -133,7 +133,6 @@ type ConnPool[C Connection] struct {
 		connect Connector[C]
 		// refresh is the callback to check whether the pool needs to be refreshed
 		refresh RefreshCheck
-
 		// maxCapacity is the maximum value to which capacity can be set; when the pool
 		// is re-opened, it defaults to this capacity
 		maxCapacity int64
@@ -380,6 +379,8 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 
 	if conn == nil {
 		var err error
+		// Using context.Background() is fine since MySQL connection already enforces
+		// a connect timeout via the `db_connect_timeout_ms` config param.
 		conn, err = pool.connNew(context.Background())
 		if err != nil {
 			pool.closedConn()
@@ -392,6 +393,8 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 		if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
 			pool.Metrics.maxLifetimeClosed.Add(1)
 			conn.Close()
+			// Using context.Background() is fine since MySQL connection already enforces
+			// a connect timeout via the `db_connect_timeout_ms` config param.
 			if err := pool.connReopen(context.Background(), conn, conn.timeUsed.get()); err != nil {
 				pool.closedConn()
 				return
@@ -456,15 +459,22 @@ func (pool *ConnPool[D]) extendedMaxLifetime() time.Duration {
 	return time.Duration(maxLifetime) + time.Duration(extended)
 }
 
-func (pool *ConnPool[C]) connReopen(ctx context.Context, dbconn *Pooled[C], now time.Duration) error {
-	var err error
+func (pool *ConnPool[C]) connReopen(ctx context.Context, dbconn *Pooled[C], now time.Duration) (err error) {
 	dbconn.Conn, err = pool.config.connect(ctx)
 	if err != nil {
 		return err
 	}
 
-	dbconn.timeUsed.set(now)
+	if setting := dbconn.Conn.Setting(); setting != nil {
+		err = dbconn.Conn.ApplySetting(ctx, setting)
+		if err != nil {
+			dbconn.Close()
+			return err
+		}
+	}
+
 	dbconn.timeCreated.set(now)
+	dbconn.timeUsed.set(now)
 	return nil
 }
 
@@ -721,7 +731,11 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 			if conn.timeUsed.expired(mono, timeout) {
 				pool.Metrics.idleClosed.Add(1)
 				conn.Close()
-				pool.closedConn()
+				// Using context.Background() is fine since MySQL connection already enforces
+				// a connect timeout via the `db_connect_timeout_ms` config param.
+				if err := pool.connReopen(context.Background(), conn, mono); err != nil {
+					pool.closedConn()
+				}
 			}
 		}
 	}
