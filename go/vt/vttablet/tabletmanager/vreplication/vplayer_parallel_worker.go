@@ -145,7 +145,7 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 		log.Errorf("========== QQQ applyQueuedEvents worker %v num commits=%v, numSubscribes=%v", w.index, w.numCommits, w.numSubscribes)
 	}()
 
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(maxIdleWorkerDuration / 2)
 	defer ticker.Stop()
 
 	var lastTickerTime time.Time
@@ -165,7 +165,7 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 		case <-ctx.Done():
 			return ctx.Err()
 		case lastTickerTime = <-ticker.C:
-			if lastEventWasSkippedCommit && lastTickerTime.Sub(lastAppliedTickerTime) > maxIdleWorkerDuration {
+			if lastEventWasSkippedCommit && lastTickerTime.Sub(lastAppliedTickerTime) >= maxIdleWorkerDuration {
 				// The last event was a commit, which we did nto actually apply, as we figured we'd
 				// follow up with more statements. But it's been a while and there's been no statement since.
 				// So we're just sitting idly with a bunch of uncommitted statements. Better to commit now.
@@ -184,7 +184,30 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 				w.sequenceNumbers = append(w.sequenceNumbers, event.SequenceNumber)
 			}
 
-			if event.Skippable && event.Type == binlogdatapb.VEventType_COMMIT {
+			if isConsiderCommitWorkerEvent(event) {
+				if !lastEventWasSkippedCommit {
+					continue
+				}
+				log.Errorf("========== QQQ applyQueuedEvents worker %v idle with isConsiderCommitWorkerEvent commit and %v events. COMMITTING", w.index, len(w.sequenceNumbers))
+			}
+
+			skippable := func() bool {
+				if event.Type != binlogdatapb.VEventType_COMMIT {
+					return false
+				}
+				if event.Skippable {
+					// At this time only COMMIT events are Skippable, so checking for the type is not
+					// strictly necessary. But it's safer to add that check.
+					return true
+				}
+				if len(w.sequenceNumbers) < maxWorkerEvents {
+					// We don't want to commit yet. We're waiting for more events.
+					return true
+				}
+				return false
+			}
+
+			if skippable() {
 				// At this time only COMMIT events are Skippable, so checking for the type is not
 				// strictly necessary. But it's safer to add that check.
 				lastEventWasSkippedCommit = true
@@ -547,7 +570,7 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 func (w *parallelWorker) applyQueuedCommit(ctx context.Context, event *binlogdatapb.VEvent) error {
 	switch {
 	case event.Type == binlogdatapb.VEventType_COMMIT:
-	case event.Type == binlogdatapb.VEventType_UNKNOWN && event.SequenceNumber < 0:
+	case isCommitWorkerEvent(event):
 	default:
 		// Not a commit
 		return nil

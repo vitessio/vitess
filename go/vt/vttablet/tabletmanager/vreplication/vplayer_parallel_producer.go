@@ -119,6 +119,20 @@ func (p *parallelProducer) commitWorkerEvent() *binlogdatapb.VEvent {
 		SequenceNumber: p.commitWorkerEventSequence.Add(-1),
 	}
 }
+func (p *parallelProducer) considerCommitWorkerEvent() *binlogdatapb.VEvent {
+	return &binlogdatapb.VEvent{
+		Type:           binlogdatapb.VEventType_UNKNOWN,
+		SequenceNumber: math.MinInt64,
+	}
+}
+
+func isCommitWorkerEvent(event *binlogdatapb.VEvent) bool {
+	return event.Type == binlogdatapb.VEventType_UNKNOWN && event.SequenceNumber < 0
+}
+
+func isConsiderCommitWorkerEvent(event *binlogdatapb.VEvent) bool {
+	return event.Type == binlogdatapb.VEventType_UNKNOWN && event.SequenceNumber == math.MinInt64
+}
 
 func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastCommitted int64, currentWorkerIndex int, preferCurrentWorker bool) (workerIndex int) {
 	p.sequenceToWorkersMapMu.RLock()
@@ -387,6 +401,13 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 				}
 			}
 			workerIndex := p.assignTransactionToWorker(event.SequenceNumber, event.CommitParent, currentWorker.index, event.PinWorker)
+			// if event.PinWorker && workerIndex != currentWorker.index {
+			// 	select {
+			// 	case <-ctx.Done():
+			// 		return ctx.Err()
+			// 	case currentWorker.events <- p.considerCommitWorkerEvent():
+			// 	}
+			// }
 			currentWorker = p.workers[workerIndex]
 			select {
 			case <-ctx.Done():
@@ -506,7 +527,6 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 					if hasAnotherCommit(items, i, j+1) {
 						pinWorker = true
 						event.Skippable = true
-						// continue
 					} else {
 						pinWorker = false
 					}
