@@ -145,10 +145,10 @@ func (sn *VTGateSession) StreamExecute(ctx context.Context, query string, bindVa
 }
 
 // Prepare performs a VTGate Prepare.
-func (sn *VTGateSession) Prepare(ctx context.Context, query string) ([]*querypb.Field, error) {
-	session, fields, err := sn.impl.Prepare(ctx, sn.session, query)
+func (sn *VTGateSession) Prepare(ctx context.Context, query string) ([]*querypb.Field, uint16, error) {
+	session, fields, paramsCount, err := sn.impl.Prepare(ctx, sn.session, query)
 	sn.session = session
-	return fields, err
+	return fields, paramsCount, err
 }
 
 //
@@ -168,7 +168,7 @@ type Impl interface {
 	StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, processResponse func(*vtgatepb.StreamExecuteResponse)) (sqltypes.ResultStream, error)
 
 	// Prepare returns the fields information for the query as part of supporting prepare statements.
-	Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, error)
+	Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error)
 
 	// CloseSession closes the session provided by rolling back any active transaction.
 	CloseSession(ctx context.Context, session *vtgatepb.Session) error

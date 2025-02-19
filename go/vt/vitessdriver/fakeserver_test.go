@@ -188,8 +188,9 @@ var execMap = map[string]struct {
 				Autocommit:   true,
 			},
 		},
-		result:  &result1,
-		session: nil,
+		result:      &result1,
+		paramsCount: 1,
+		session:     nil,
 	},
 	"requestDates": {
 		execQuery: &queryExecute{
@@ -202,8 +203,9 @@ var execMap = map[string]struct {
 				Autocommit:   true,
 			},
 		},
-		result:  &result2,
-		session: nil,
+		result:      &result2,
+		paramsCount: 1,
+		session:     nil,
 	},
 	"txRequest": {
 		execQuery: &queryExecute{
@@ -213,8 +215,9 @@ var execMap = map[string]struct {
 			},
 			Session: session1,
 		},
-		result:  &sqltypes.Result{},
-		session: session2,
+		result:      &sqltypes.Result{},
+		paramsCount: 1,
+		session:     session2,
 	},
 	"distributedTxRequest": {
 		execQuery: &queryExecute{
@@ -237,8 +240,9 @@ var execMap = map[string]struct {
 				TargetString: "@rdonly",
 			},
 		},
-		result:  &sqltypes.Result{},
-		session: session2,
+		result:      &sqltypes.Result{},
+		paramsCount: 1,
+		session:     session2,
 	},
 	"begin": {
 		execQuery: &queryExecute{

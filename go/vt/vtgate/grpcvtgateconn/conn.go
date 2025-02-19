@@ -200,7 +200,7 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, session *vtgatepb.Ses
 	}, nil
 }
 
-func (conn *vtgateConn) Prepare(ctx context.Context, session *vtgatepb.Session, query string) (*vtgatepb.Session, []*querypb.Field, error) {
+func (conn *vtgateConn) Prepare(ctx context.Context, session *vtgatepb.Session, query string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
 	request := &vtgatepb.PrepareRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Session:  session,
@@ -210,12 +210,12 @@ func (conn *vtgateConn) Prepare(ctx context.Context, session *vtgatepb.Session, 
 	}
 	response, err := conn.c.Prepare(ctx, request)
 	if err != nil {
-		return session, nil, vterrors.FromGRPC(err)
+		return session, nil, 0, vterrors.FromGRPC(err)
 	}
 	if response.Error != nil {
-		return response.Session, nil, vterrors.FromVTRPC(response.Error)
+		return response.Session, nil, 0, vterrors.FromVTRPC(response.Error)
 	}
-	return response.Session, response.Fields, nil
+	return response.Session, response.Fields, uint16(response.ParamsCount), nil
 }
 
 func (conn *vtgateConn) CloseSession(ctx context.Context, session *vtgatepb.Session) error {

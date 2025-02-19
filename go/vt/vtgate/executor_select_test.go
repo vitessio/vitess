@@ -3111,9 +3111,10 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	}
 	_, paramsCount, err := executorPrepare(ctx, executor, session, sql)
 	require.NoError(t, err)
-	assert.EqualValues(t, 2, paramsCount)
+	assert.EqualValues(t, 1, paramsCount)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "select id from `user` where 1 != 1",
+		Sql:           "select id from `user` where 1 != 1",
+		BindVariables: map[string]*querypb.BindVariable{"v1": sqltypes.NullBindVariable},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	assert.Empty(t, sbc2.Queries)

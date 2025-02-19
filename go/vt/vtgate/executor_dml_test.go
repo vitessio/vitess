@@ -2481,6 +2481,7 @@ func TestUpdateEqualWithPrepare(t *testing.T) {
 	assertQueries(t, sbc2, nil)
 	assertQueries(t, sbc1, nil)
 }
+
 func TestInsertShardedWithPrepare(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 

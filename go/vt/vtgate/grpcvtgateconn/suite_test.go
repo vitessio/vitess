@@ -483,13 +483,12 @@ func testStreamExecutePanic(t *testing.T, session *vtgateconn.VTGateSession) {
 func testPrepare(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := session.Prepare(ctx, execCase.execQuery.SQL)
+	fields, paramsCount, err := session.Prepare(ctx, execCase.execQuery.SQL)
 	require.NoError(t, err)
-	// if !qr.Equal(execCase.result) {
-	//	t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
-	// }
+	require.True(t, sqltypes.FieldsEqual(fields, execCase.result.Fields))
+	require.Equal(t, execCase.paramsCount, paramsCount)
 
-	_, err = session.Prepare(ctx, "none")
+	_, _, err = session.Prepare(ctx, "none")
 	require.EqualError(t, err, "no match for: none")
 }
 
@@ -497,14 +496,14 @@ func testPrepareError(t *testing.T, session *vtgateconn.VTGateSession, fake *fak
 	ctx := newContext()
 	execCase := execMap["errorRequst"]
 
-	_, err := session.Prepare(ctx, execCase.execQuery.SQL)
+	_, _, err := session.Prepare(ctx, execCase.execQuery.SQL)
 	verifyError(t, err, "Prepare")
 }
 
 func testPreparePanic(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := session.Prepare(ctx, execCase.execQuery.SQL)
+	_, _, err := session.Prepare(ctx, execCase.execQuery.SQL)
 	expectPanic(t, err)
 }
 
