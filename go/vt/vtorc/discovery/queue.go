@@ -39,7 +39,7 @@ type queueItem struct {
 	Key      string
 }
 
-// Queue is an implementation of discovery.Queue.
+// Queue is an ordered queue with deduplication.
 type Queue struct {
 	mu       sync.Mutex
 	enqueued map[string]struct{}
