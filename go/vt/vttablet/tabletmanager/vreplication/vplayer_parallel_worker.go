@@ -130,7 +130,7 @@ func (w *parallelWorker) updatePosByEvent(ctx context.Context, event *binlogdata
 }
 
 func (w *parallelWorker) commitEvents() chan error {
-	event := w.producer.commitWorkerEvent()
+	event := w.producer.generateCommitWorkerEvent()
 	log.Errorf("========== QQQ commitEvents: %v", event)
 	c := w.subscribeCommitWorkerEvent(event.SequenceNumber)
 	log.Errorf("========== QQQ commitEvents: subscribed to %v in worker %v", event.SequenceNumber, w.index)
@@ -179,7 +179,7 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 				// follow up with more statements. But it's been a while and there's been no statement since.
 				// So we're just sitting idly with a bunch of uncommitted statements. Better to commit now.
 				log.Errorf("========== QQQ applyQueuedEvents worker %v idle with skipped commit and %v events. COMMITTING", w.index, len(w.sequenceNumbers))
-				if err := applyEvent(w.producer.commitWorkerEvent()); err != nil {
+				if err := applyEvent(w.producer.generateCommitWorkerEvent()); err != nil {
 					return err
 				}
 			}
@@ -250,7 +250,6 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 	// 	}
 	// }()
 
-	stats := NewVrLogStats(event.Type.String())
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		if err := w.updatePosByEvent(ctx, event); err != nil {
@@ -280,8 +279,6 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 		if err := onField(); err != nil {
 			return err
 		}
-		go func() { stats.Send(fmt.Sprintf("%v", event.FieldEvent)) }()
-
 	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE,
 		binlogdatapb.VEventType_REPLACE, binlogdatapb.VEventType_SAVEPOINT:
 		// use event.Statement if available, preparing for deprecation in 8.0
@@ -298,7 +295,6 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			if err := w.applyQueuedStmtEvent(ctx, event); err != nil {
 				return err
 			}
-			go stats.Send(sql)
 		}
 	case binlogdatapb.VEventType_ROW:
 		if err := w.dbClient.Begin(); err != nil {
@@ -309,7 +305,6 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 		}
 		// Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed
 		// time for the Row event.
-		go func() { stats.Send(fmt.Sprintf("%v", event.RowEvent)) }()
 	case binlogdatapb.VEventType_OTHER:
 		if w.dbClient.InTransaction {
 			// Unreachable
@@ -355,7 +350,6 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			if _, err := w.queryFunc(ctx, event.Statement); err != nil {
 				return err
 			}
-			go func() { stats.Send(fmt.Sprintf("%v", event.Statement)) }()
 			if err := w.updatePosByEvent(ctx, event); err != nil {
 				return err
 			}
@@ -363,7 +357,6 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			if _, err := w.queryFunc(ctx, event.Statement); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
 			}
-			go func() { stats.Send(fmt.Sprintf("%v", event.Statement)) }()
 			if err := w.updatePosByEvent(ctx, event); err != nil {
 				return err
 			}
@@ -413,7 +406,6 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			}
 			return io.EOF
 		}
-		go func() { stats.Send(fmt.Sprintf("%v", event.Journal)) }()
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		if event.Throttled {
@@ -532,13 +524,7 @@ func (w *parallelWorker) applyQueuedRowEvent(ctx context.Context, vevent *binlog
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "unexpected event on table %s that has no plan yet", vevent.RowEvent.TableName)
 	}
 	applyFunc := func(sql string) (*sqltypes.Result, error) {
-		stats := NewVrLogStats("ROWCHANGE")
-		start := time.Now()
-		qr, err := w.queryFunc(ctx, sql)
-		w.vp.vr.stats.QueryCount.Add(w.vp.phase, 1)
-		w.vp.vr.stats.QueryTimings.Record(w.vp.phase, start)
-		go stats.Send(sql)
-		return qr, err
+		return w.queryFunc(ctx, sql)
 	}
 
 	rowEvent := vevent.RowEvent

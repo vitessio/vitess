@@ -55,6 +55,8 @@ type parallelProducer struct {
 	commitWorkerEventSequence atomic.Int64
 	assignSequence            int64
 
+	countAssignedToCurrentWorker int64
+
 	newDBClient                 func() (*vdbClient, error)
 	aggregateWorkersPosQuery    string
 	lastAggregatedWorkersPosStr string
@@ -88,7 +90,7 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 		return vdbClient, nil
 	}
 	for i := range p.workers {
-		w := newParallelWorker(i, p, vp.vr.workflowConfig.RelayLogMaxItems)
+		w := newParallelWorker(i, p, maxWorkerEvents*2)
 		var err error
 		if w.dbClient, err = p.newDBClient(); err != nil {
 			return nil, err
@@ -111,58 +113,6 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 	}
 
 	return p, nil
-}
-
-func (p *parallelProducer) commitWorkerEvent() *binlogdatapb.VEvent {
-	return &binlogdatapb.VEvent{
-		Type:           binlogdatapb.VEventType_UNKNOWN,
-		SequenceNumber: p.commitWorkerEventSequence.Add(-1),
-	}
-}
-func (p *parallelProducer) considerCommitWorkerEvent() *binlogdatapb.VEvent {
-	return &binlogdatapb.VEvent{
-		Type:           binlogdatapb.VEventType_UNKNOWN,
-		SequenceNumber: math.MinInt64,
-	}
-}
-
-func isCommitWorkerEvent(event *binlogdatapb.VEvent) bool {
-	return event.Type == binlogdatapb.VEventType_UNKNOWN && event.SequenceNumber < 0
-}
-
-func isConsiderCommitWorkerEvent(event *binlogdatapb.VEvent) bool {
-	return event.Type == binlogdatapb.VEventType_UNKNOWN && event.SequenceNumber == math.MinInt64
-}
-
-func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastCommitted int64, currentWorkerIndex int, preferCurrentWorker bool) (workerIndex int) {
-	p.sequenceToWorkersMapMu.RLock()
-	defer p.sequenceToWorkersMapMu.RUnlock()
-
-	if workerIndex, ok := p.sequenceToWorkersMap[sequenceNumber]; ok {
-		// All events of same sequence should be executed by same worker
-		return workerIndex
-	}
-	if workerIndex, ok := p.sequenceToWorkersMap[lastCommitted]; ok {
-		// Transaction depends on another transaction, that is still being owned by some worker.
-		// Use that same worker, so that this transaction is non-blocking.
-		p.sequenceToWorkersMap[sequenceNumber] = workerIndex
-		return workerIndex
-	}
-	// No specific transaction dependency constraints (any parent transactions were long since
-	// committed, and no worker longer indicates it owns any such transactions)
-	if preferCurrentWorker {
-		// Prefer the current worker, if it has capacity. On one hand, we want
-		// to batch queries as possible. On the other hand, we want to spread the
-		// the load across workers.
-		workerIndex = currentWorkerIndex
-	} else {
-		// Even if not specifically requested to assign current worker, we still
-		// want to do some batching. We batch `maxWorkerEvents` events per worker.
-		workerIndex = int(p.assignSequence/maxWorkerEvents) % len(p.workers)
-	}
-	p.assignSequence++
-	p.sequenceToWorkersMap[sequenceNumber] = workerIndex
-	return workerIndex
 }
 
 // commitAll commits all workers and waits for them to complete.
@@ -352,6 +302,37 @@ func (p *parallelProducer) watchPos(ctx context.Context) error {
 	}
 }
 
+func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastCommitted int64, currentWorkerIndex int, preferCurrentWorker bool) (workerIndex int) {
+	p.sequenceToWorkersMapMu.RLock()
+	defer p.sequenceToWorkersMapMu.RUnlock()
+
+	if workerIndex, ok := p.sequenceToWorkersMap[sequenceNumber]; ok {
+		// All events of same sequence should be executed by same worker
+		return workerIndex
+	}
+	if workerIndex, ok := p.sequenceToWorkersMap[lastCommitted]; ok {
+		// Transaction depends on another transaction, that is still being owned by some worker.
+		// Use that same worker, so that this transaction is non-blocking.
+		p.sequenceToWorkersMap[sequenceNumber] = workerIndex
+		return workerIndex
+	}
+	// No specific transaction dependency constraints (any parent transactions were long since
+	// committed, and no worker longer indicates it owns any such transactions)
+	if preferCurrentWorker && p.countAssignedToCurrentWorker < maxWorkerEvents {
+		// Prefer the current worker, if it has capacity. On one hand, we want
+		// to batch queries as possible. On the other hand, we want to spread the
+		// the load across workers.
+		workerIndex = currentWorkerIndex
+	} else {
+		// Even if not specifically requested to assign current worker, we still
+		// want to do some batching. We batch `maxWorkerEvents` events per worker.
+		workerIndex = int(p.assignSequence/maxWorkerEvents) % len(p.workers)
+	}
+	p.assignSequence++
+	p.sequenceToWorkersMap[sequenceNumber] = workerIndex
+	return workerIndex
+}
+
 // process is a goroutine that reads events from the input channel and assigns them to workers.
 func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatapb.VEvent) error {
 	go func() {
@@ -367,6 +348,8 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 		}
 	}()
 	currentWorker := p.workers[0]
+	// commitsWereSkipped tells us if at a given point in time we have delivered Skippable commits
+	commitsWereSkipped := false
 	for {
 		if p.posReached.Load() {
 			return io.EOF
@@ -375,7 +358,6 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 		case <-ctx.Done():
 			return ctx.Err()
 		case event := <-events:
-			// log.Errorf("========== QQQ process event type: %v", event.Type)
 			canApplyInParallel := false
 			switch event.Type {
 			case binlogdatapb.VEventType_BEGIN,
@@ -401,13 +383,16 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 				}
 			}
 			workerIndex := p.assignTransactionToWorker(event.SequenceNumber, event.CommitParent, currentWorker.index, event.PinWorker)
-			// if event.PinWorker && workerIndex != currentWorker.index {
-			// 	select {
-			// 	case <-ctx.Done():
-			// 		return ctx.Err()
-			// 	case currentWorker.events <- p.considerCommitWorkerEvent():
-			// 	}
-			// }
+			if workerIndex == currentWorker.index {
+				// Measure how many events we have assigned to the current worker. We will
+				// cap at some value so as to distribute events to other workers and to avoid
+				// one worker taking all the load.
+				// See logic in assignTransactionToWorker()
+				p.countAssignedToCurrentWorker++
+			} else {
+				p.countAssignedToCurrentWorker = 1
+			}
+
 			currentWorker = p.workers[workerIndex]
 			select {
 			case <-ctx.Done():
@@ -419,6 +404,33 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 				if err := <-currentWorker.commitEvents(); err != nil {
 					return err
 				}
+			}
+			if event.Skippable {
+				// Mark that as of now, we have skipped commits.
+				// Noteworthy, we do ship Skippable commits to the workers, and
+				// it's the worker's choice to actually skip them. It mostly will
+				// (though sometimes it will override).
+				commitsWereSkipped = true
+			}
+			// This logic is about a scenario where we have batched *many* row changes and have skipped
+			// many commits. The logic in assignTransactionToWorker() caps the number of events per worker
+			// even if we're in the middle of an uncommitted batch, as we want to distribute the load across
+			// workers. But what this ends up with, is then we send some worker(s) a "Skippable" commit, move on
+			// to another worker(s), and when we finally reach the end of the batch, we've long since forgotten
+			// about those early workers.
+			// The idea here is to send a "consider commit" event to all workers. Workers will only consider this
+			// suggestion if they have a skipped commit. If so, they will go ahead and commit it.
+			// So, to summarize, when we reach the end of a batch, we make sure all workers who may have taken
+			// part in the batch, all commit the changes.
+			if event.Type == binlogdatapb.VEventType_COMMIT && !event.Skippable && commitsWereSkipped {
+				for _, w := range p.workers {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case w.events <- p.generateConsiderCommitWorkerEvent():
+					}
+				}
+				commitsWereSkipped = false
 			}
 		}
 	}
@@ -453,7 +465,7 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 		p.vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(p.vp.vr.id)), time.Duration(behind/1e9)*time.Second)
 	}
 
-	eventQueue := make(chan *binlogdatapb.VEvent, 1000)
+	eventQueue := make(chan *binlogdatapb.VEvent, maxWorkerEvents*2*countWorkers)
 	go p.process(ctx, eventQueue)
 
 	// If we're not running, set ReplicationLagSeconds to be very high.
@@ -482,6 +494,7 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 		if err != nil {
 			return err
 		}
+
 		var pinWorker bool
 		lagSecs = -1
 		for i, events := range items {
