@@ -23,6 +23,7 @@ package vreplication
 import (
 	"net/http"
 	"strconv"
+	"sync"
 	"text/template"
 	"time"
 
@@ -35,6 +36,7 @@ var (
 	vrLogStatsLogger   = streamlog.New[*VrLogStats]("VReplication", 50)
 	vrLogStatsTemplate = template.Must(template.New("vrlog").
 				Parse("{{.Type}} Event	{{.Detail}}	{{.LogTime}}	{{.DurationNs}}\n"))
+	addEndpointOnce sync.Once
 )
 
 // VrLogStats collects attributes of a vreplication event for logging
@@ -47,6 +49,9 @@ type VrLogStats struct {
 }
 
 func NewVrLogStats(eventType string, startTime time.Time) *VrLogStats {
+	addEndpointOnce.Do(func() {
+		addHttpEndpoint()
+	})
 	return &VrLogStats{Type: eventType, StartTime: startTime}
 }
 
@@ -62,7 +67,7 @@ func (stats *VrLogStats) Send(detail string) {
 	vrLogStatsLogger.Send(stats)
 }
 
-func init() {
+func addHttpEndpoint() {
 	servenv.HTTPHandleFunc("/debug/vrlog", func(w http.ResponseWriter, r *http.Request) {
 		ch := vrLogStatsLogger.Subscribe("vrlogstats")
 		defer vrLogStatsLogger.Unsubscribe(ch)
