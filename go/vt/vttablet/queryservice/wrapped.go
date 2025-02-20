@@ -84,10 +84,10 @@ func wrapInVT15001(err error, inTx bool) error {
 	}
 	c := vterrors.Code(err)
 	m := err.Error()
-	if c != vtrpcpb.Code_UNAVAILABLE && !strings.Contains(m, "connection refused") {
-		return err
+	if c == vtrpcpb.Code_UNAVAILABLE && strings.Contains(m, "connection refused") {
+		return vterrors.VT15001(c, m)
 	}
-	return vterrors.VT15001(c, m)
+	return err
 }
 
 // wrappedService wraps an existing QueryService with
