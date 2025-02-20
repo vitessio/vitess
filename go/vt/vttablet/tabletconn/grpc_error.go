@@ -18,7 +18,6 @@ package tabletconn
 
 import (
 	"io"
-	"strings"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -42,15 +41,6 @@ func ErrorFromGRPC(err error) error {
 	return vterrors.Errorf(vtrpcpb.Code(code), "vttablet: %v", err)
 }
 
-func ErrorsFromGRPCWrapTransientTxError(err error, inTx bool) error {
-	err = ErrorFromGRPC(err)
-	if err == nil || !inTx {
-		return err
-	}
-
-	return ifConnectionRefusedWrapInVT15001(err)
-}
-
 // ErrorFromVTRPC converts a *vtrpcpb.RPCError to vtError for
 // tabletserver calls.
 func ErrorFromVTRPC(err *vtrpcpb.RPCError) error {
@@ -58,20 +48,4 @@ func ErrorFromVTRPC(err *vtrpcpb.RPCError) error {
 		return nil
 	}
 	return vterrors.Errorf(err.Code, "vttablet: %s", err.Message)
-}
-
-func ErrorsFromVTRPCWrapTransientTxError(err *vtrpcpb.RPCError, inTx bool) error {
-	nerr := ErrorFromVTRPC(err)
-	if nerr == nil || !inTx {
-		return nerr
-	}
-
-	return ifConnectionRefusedWrapInVT15001(nerr)
-}
-
-func ifConnectionRefusedWrapInVT15001(err error) error {
-	if vterrors.Code(err) == vtrpcpb.Code_UNAVAILABLE && strings.Contains(err.Error(), "connection refused") {
-		return vterrors.VT15001(vtrpcpb.Code_UNAVAILABLE, err.Error())
-	}
-	return err
 }
