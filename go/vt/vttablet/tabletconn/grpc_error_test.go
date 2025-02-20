@@ -19,6 +19,10 @@ package tabletconn
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -48,8 +52,86 @@ func TestTabletErrorFromRPCError(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		got := vterrors.Code(ErrorFromVTRPC(tcase.in))
-		if got != tcase.want {
-			t.Errorf("FromVtRPCError(%v):\n%v, want\n%v", tcase.in, got, tcase.want)
+		require.Equal(t, tcase.want, got)
+	}
+}
+
+func TestGRPCErrorToVT15001(t *testing.T) {
+	msg := "connection error: desc = \"transport: Error while dialing: dial tcp 127.0.0.1:7108: connect: connection refused\""
+	testcases := []struct {
+		in   error
+		inTx bool
+		wrap bool
+	}{{
+		in:   status.Error(codes.Unavailable, msg),
+		inTx: true,
+		wrap: true,
+	}, {
+		in:   status.Error(codes.Unavailable, msg),
+		inTx: false,
+		wrap: false,
+	}, {
+		in:   status.Error(codes.Unavailable, "unavailable"),
+		inTx: true,
+		wrap: false,
+	}, {
+		in:   status.Error(codes.FailedPrecondition, msg),
+		inTx: true,
+		wrap: false,
+	}}
+	for _, tcase := range testcases {
+		got := ErrorsFromGRPCWrapTransientTxError(tcase.in, tcase.inTx)
+		require.Error(t, got)
+		if tcase.wrap {
+			require.ErrorContains(t, got, "VT15001")
+		} else {
+			require.NotContains(t, got.Error(), "VT15001")
+		}
+	}
+}
+
+func TestVTRPCErrorToVT15001(t *testing.T) {
+	msg := "connection error: desc = \"transport: Error while dialing: dial tcp 127.0.0.1:7108: connect: connection refused\""
+	testcases := []struct {
+		in   *vtrpcpb.RPCError
+		inTx bool
+		wrap bool
+	}{{
+		in: &vtrpcpb.RPCError{
+			Code:    vtrpcpb.Code_UNAVAILABLE,
+			Message: msg,
+		},
+		inTx: true,
+		wrap: true,
+	}, {
+		in: &vtrpcpb.RPCError{
+			Code:    vtrpcpb.Code_UNAVAILABLE,
+			Message: msg,
+		},
+		inTx: false,
+		wrap: false,
+	}, {
+		in: &vtrpcpb.RPCError{
+			Code:    vtrpcpb.Code_UNAVAILABLE,
+			Message: "unavailable",
+		},
+		inTx: true,
+		wrap: false,
+	}, {
+		in: &vtrpcpb.RPCError{
+			Code:    vtrpcpb.Code_FAILED_PRECONDITION,
+			Message: msg,
+		},
+		inTx: true,
+		wrap: false,
+	}}
+	for _, tcase := range testcases {
+		got := ErrorsFromVTRPCWrapTransientTxError(tcase.in, tcase.inTx)
+		require.Error(t, got)
+		if tcase.wrap {
+			require.ErrorContains(t, got, "VT15001")
+		} else {
+			require.NotContains(t, got.Error(), "VT15001")
 		}
 	}
 }

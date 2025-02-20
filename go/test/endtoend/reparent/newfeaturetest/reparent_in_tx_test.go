@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var primary int
@@ -43,7 +42,7 @@ func testCommitError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.Lo
 	go func() {
 		<-tabletStopped
 		_, err := conn.ExecuteFetch("commit", 0, false)
-		require.ErrorContains(t, err, vterrors.VT15001(0).ID)
+		require.ErrorContains(t, err, "VT15001")
 		commitDone <- true
 	}()
 
@@ -63,11 +62,11 @@ func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.L
 		idx += 5
 		<-tabletStopped
 		_, err := conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
-		require.ErrorContains(t, err, vterrors.VT15001(0).ID)
+		require.ErrorContains(t, err, "VT15001")
 
 		// Subsequent queries after a VT15001 should start returning a VT15002 error until we issue a ROLLBACK
 		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
-		require.ErrorContains(t, err, vterrors.VT15002().ID)
+		require.ErrorContains(t, err, "VT15002")
 
 		_, err = conn.ExecuteFetch("rollback", 0, false)
 		require.NoError(t, err)
@@ -123,9 +122,9 @@ func reparent(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet
 }
 
 func TestErrorsInTransaction(t *testing.T) {
-	clusterInstance := utils.SetupShardedReparentCluster(t, policy.DurabilitySemiSync, map[string]string{
-		"--queryserver-config-transaction-timeout": "5m",
-		"--queryserver-config-query-timeout":       "5m",
+	clusterInstance := utils.SetupShardedReparentCluster(t, policy.DurabilitySemiSync, []string{
+		"--queryserver-config-transaction-timeout", "5m",
+		"--queryserver-config-query-timeout", "5m",
 	})
 
 	defer utils.TeardownCluster(clusterInstance)
