@@ -547,6 +547,11 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	err := m.WaitUntilSemiSyncUnblocked(context.Background())
 	require.NoError(t, err)
 
+	// Add a universal insert query pattern that would block until we make it unblock.
+	ch := make(chan int)
+	db.AddQueryPatternWithCallback("^INSERT INTO.*", sqltypes.MakeTestResult(nil), func(s string) {
+		<-ch
+	})
 	// Now we set the monitor to be blocked.
 	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|3"))
 
@@ -595,6 +600,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 
 	// Now we set the monitor to be unblocked.
 	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|0"))
+	close(ch)
 	err = m.WaitUntilSemiSyncUnblocked(context.Background())
 	require.NoError(t, err)
 	// This should unblock the second wait.
@@ -649,6 +655,11 @@ func TestSemiSyncMonitor(t *testing.T) {
 	err := m.WaitUntilSemiSyncUnblocked(ctx)
 	require.NoError(t, err)
 
+	// Add a universal insert query pattern that would block until we make it unblock.
+	ch := make(chan int)
+	db.AddQueryPatternWithCallback("^INSERT INTO.*", sqltypes.MakeTestResult(nil), func(s string) {
+		<-ch
+	})
 	// Now we set the monitor to be blocked.
 	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1"))
 
@@ -666,13 +677,14 @@ func TestSemiSyncMonitor(t *testing.T) {
 
 	// If we unblock the semi-sync, then the wait should finish.
 	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|0"))
+	close(ch)
 	require.Eventually(t, func() bool {
 		return waitFinished.Load()
 	}, 2*time.Second, 100*time.Millisecond)
 	require.False(t, m.AllWritesBlocked())
 
 	// Add a universal insert query pattern that would block until we make it unblock.
-	ch := make(chan int)
+	ch = make(chan int)
 	db.AddQueryPatternWithCallback("^INSERT INTO.*", sqltypes.MakeTestResult(nil), func(s string) {
 		<-ch
 	})

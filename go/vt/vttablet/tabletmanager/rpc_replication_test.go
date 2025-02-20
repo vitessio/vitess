@@ -116,6 +116,11 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	fakeDb.SetNeverFail(true)
 
 	tm.SemiSyncMonitor.Open()
+	// Add a universal insert query pattern that would block until we make it unblock.
+	ch := make(chan int)
+	fakeDb.AddQueryPatternWithCallback("^INSERT INTO.*", sqltypes.MakeTestResult(nil), func(s string) {
+		<-ch
+	})
 	// Add a fake query that makes the semi-sync monitor believe that the tablet is blocked on semi-sync ACKs.
 	fakeDb.AddQuery("select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1"))
 
@@ -143,6 +148,7 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 
 	// Now we unblock the semi-sync monitor.
 	fakeDb.AddQuery("select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|0"))
+	close(ch)
 
 	// This should unblock the demote primary operation eventually.
 	require.Eventually(t, func() bool {

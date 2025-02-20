@@ -342,6 +342,10 @@ func (m *Monitor) write() {
 	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncRecoverWrite), 0, false)
 	if err != nil {
 		log.Errorf("SemiSync Monitor: failed to write to semisync_recovery table: %v", err)
+	} else {
+		// One of the writes went through without an error.
+		// This means that we aren't blocked on semi-sync anymore.
+		m.setIsBlocked(false)
 	}
 }
 
