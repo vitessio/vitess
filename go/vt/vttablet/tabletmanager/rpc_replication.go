@@ -535,7 +535,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		return nil, err
 	}
 	defer tm.unlock()
-	defer tm.QueryServiceControl.ClearDemotePrimaryStalled()
+	defer tm.QueryServiceControl.SetDemotePrimaryStalled(false)
 
 	finishCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -547,7 +547,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 			// We waited for over 10 times of remote operation timeout, but DemotePrimary is still not done.
 			// Collect more information and signal demote primary is indefinitely stalled.
 			log.Errorf("DemotePrimary seems to be stalled. Collecting more information.")
-			tm.QueryServiceControl.SetDemotePrimaryStalled()
+			tm.QueryServiceControl.SetDemotePrimaryStalled(true)
 			buf := make([]byte, 1<<16) // 64 KB buffer size
 			stackSize := runtime.Stack(buf, true)
 			log.Errorf("Stack trace:\n%s", string(buf[:stackSize]))
@@ -555,7 +555,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 			// but then the function finishes. So, after we set demote primary stalled, we check if the
 			// function has finished and if it has, we clear the demote primary stalled.
 			if finishCtx.Err() != nil {
-				tm.QueryServiceControl.ClearDemotePrimaryStalled()
+				tm.QueryServiceControl.SetDemotePrimaryStalled(false)
 			}
 		}
 	}()

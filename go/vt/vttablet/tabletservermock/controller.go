@@ -275,13 +275,8 @@ func (tqsc *Controller) WaitForPreparedTwoPCTransactions(context.Context) error 
 }
 
 // SetDemotePrimaryStalled is part of the tabletserver.Controller interface
-func (tqsc *Controller) SetDemotePrimaryStalled() {
+func (tqsc *Controller) SetDemotePrimaryStalled(bool) {
 	tqsc.MethodCalled["SetDemotePrimaryStalled"] = true
-}
-
-// ClearDemotePrimaryStalled is part of the tabletserver.Controller interface
-func (tqsc *Controller) ClearDemotePrimaryStalled() {
-	tqsc.MethodCalled["ClearDemotePrimaryStalled"] = true
 }
 
 // IsDiskStalled is part of the tabletserver.Controller interface

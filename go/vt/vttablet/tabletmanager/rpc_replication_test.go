@@ -54,12 +54,8 @@ type demotePrimaryStallQS struct {
 	primaryStalled atomic.Bool
 }
 
-func (d *demotePrimaryStallQS) SetDemotePrimaryStalled() {
-	d.primaryStalled.Store(true)
-}
-
-func (d *demotePrimaryStallQS) ClearDemotePrimaryStalled() {
-	d.primaryStalled.Store(false)
+func (d *demotePrimaryStallQS) SetDemotePrimaryStalled(val bool) {
+	d.primaryStalled.Store(val)
 }
 
 func (d *demotePrimaryStallQS) IsServing() bool {
