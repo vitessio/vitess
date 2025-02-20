@@ -19,7 +19,9 @@ package newfeaturetest
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -242,7 +244,12 @@ func TestBufferingWithMultipleDisruptions(t *testing.T) {
 // where a primary is stuck waiting for semi-sync ACKs due to a network issue,
 // even if no new writes from the user arrives.
 func TestSemiSyncBlockDueToDisruption(t *testing.T) {
-	t.Skip("Test not meant to be run on CI")
+	// This is always set to "true" on GitHub Actions runners:
+	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
+	ci, ok := os.LookupEnv("CI")
+	if ok && strings.ToLower(ci) == "true" {
+		t.Skip("Test not meant to be run on CI")
+	}
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
