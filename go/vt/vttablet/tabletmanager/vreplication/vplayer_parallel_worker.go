@@ -87,16 +87,25 @@ func (w *parallelWorker) subscribeCommitWorkerEvent(sequenceNumber int64) chan e
 }
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
-func (w *parallelWorker) updatePos(ctx context.Context, posStr string, transactionTimestamp int64) (posReached bool, err error) {
+func (w *parallelWorker) updatePos(ctx context.Context, posStr string, transactionTimestamp int64, singleGTID bool) (posReached bool, err error) {
 	if w.dbClient.InTransaction {
 		// We're assuming there's multiple calls to updatePos within this
 		// transaction. We don't write them at this time. Instead, we
 		// aggregate the given positions and write them in the commit.
-		pos, err := binlogplayer.DecodeMySQL56Position(posStr)
-		if err != nil {
-			return false, err
+		if singleGTID {
+			// Faster to ParseMysql56GTID than DecodeMySQL56Position when it's just the one entry
+			gtid, err := replication.ParseMysql56GTID(posStr)
+			if err != nil {
+				return false, err
+			}
+			w.updatedPos = replication.AppendGTIDInPlace(w.updatedPos, gtid)
+		} else {
+			pos, err := binlogplayer.DecodeMySQL56Position(posStr)
+			if err != nil {
+				return false, err
+			}
+			w.updatedPos = replication.AppendGTIDSetInPlace(w.updatedPos, pos.GTIDSet)
 		}
-		w.updatedPos = replication.AppendGTIDSetInPlace(w.updatedPos, pos.GTIDSet)
 		w.updatedPosTimestamp = max(w.updatedPosTimestamp, transactionTimestamp)
 		return false, nil
 	}
@@ -114,7 +123,7 @@ func (w *parallelWorker) updatePos(ctx context.Context, posStr string, transacti
 }
 
 func (w *parallelWorker) updatePosByEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
-	if _, err := w.updatePos(ctx, event.EventGtid, event.Timestamp); err != nil {
+	if _, err := w.updatePos(ctx, event.EventGtid, event.Timestamp, true); err != nil {
 		return err
 	}
 	return nil
@@ -175,7 +184,7 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 				}
 			}
 		case pos := <-w.aggregatedPosChan:
-			if _, err := w.updatePos(ctx, pos, 0); err != nil {
+			if _, err := w.updatePos(ctx, pos, 0, false); err != nil {
 				return err
 			}
 		case event := <-w.events:
