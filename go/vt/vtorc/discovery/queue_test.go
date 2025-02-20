@@ -17,6 +17,7 @@ limitations under the License.
 package discovery
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,7 +30,7 @@ func TestQueue(t *testing.T) {
 	// Push
 	q.Push(t.Name())
 	require.Equal(t, 1, q.QueueLen())
-	_, found := q.enqueued.Load(t.Name())
+	_, found := q.enqueued[t.Name()]
 	require.True(t, found)
 
 	// Push duplicate
@@ -39,12 +40,41 @@ func TestQueue(t *testing.T) {
 	// Consume
 	require.Equal(t, t.Name(), q.Consume())
 	require.Zero(t, q.QueueLen())
-	_, found = q.enqueued.Load(t.Name())
+	_, found = q.enqueued[t.Name()]
 	require.True(t, found)
 
 	// Release
 	q.Release(t.Name())
 	require.Zero(t, q.QueueLen())
-	_, found = q.enqueued.Load(t.Name())
+	_, found = q.enqueued[t.Name()]
 	require.False(t, found)
+}
+
+type testQueue interface {
+	QueueLen() int
+	Push(string)
+	Consume() string
+	Release(string)
+}
+
+func BenchmarkQueues(b *testing.B) {
+	tests := []struct {
+		name  string
+		queue testQueue
+	}{
+		{"Current", NewQueue()},
+	}
+	for _, test := range tests {
+		q := test.queue
+		b.Run(test.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < 1000; i++ {
+					q.Push(b.Name() + strconv.Itoa(i))
+				}
+				for q.QueueLen() > 0 {
+					q.Release(q.Consume())
+				}
+			}
+		})
+	}
 }

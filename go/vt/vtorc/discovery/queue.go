@@ -41,15 +41,31 @@ type queueItem struct {
 
 // Queue is an implementation of discovery.Queue.
 type Queue struct {
-	enqueued sync.Map
+	mu       sync.Mutex
+	enqueued map[string]struct{}
 	queue    chan queueItem
 }
 
 // NewQueue creates a new queue.
 func NewQueue() *Queue {
 	return &Queue{
-		queue: make(chan queueItem, config.DiscoveryQueueCapacity),
+		enqueued: make(map[string]struct{}),
+		queue:    make(chan queueItem, config.DiscoveryQueueCapacity),
 	}
+}
+
+// setKeyCheckEnqueued returns true if a key is already enqueued, if
+// not the key will be marked as enqueued and false is returned.
+func (q *Queue) setKeyCheckEnqueued(key string) (alreadyEnqueued bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if _, found := q.enqueued[key]; found {
+		alreadyEnqueued = true
+	} else {
+		q.enqueued[key] = struct{}{}
+	}
+	return alreadyEnqueued
 }
 
 // QueueLen returns the length of the queue.
@@ -60,14 +76,13 @@ func (q *Queue) QueueLen() int {
 // Push enqueues a key if it is not on a queue and is not being
 // processed; silently returns otherwise.
 func (q *Queue) Push(key string) {
-	if _, found := q.enqueued.Load(key); found {
+	if q.setKeyCheckEnqueued(key) {
 		return
 	}
 	q.queue <- queueItem{
 		PushedAt: time.Now(),
 		Key:      key,
 	}
-	q.enqueued.Store(key, struct{}{})
 }
 
 // Consume fetches a key to process; blocks if queue is empty.
@@ -86,5 +101,8 @@ func (q *Queue) Consume() string {
 // Release removes a key from a list of being processed keys
 // which allows that key to be pushed into the queue again.
 func (q *Queue) Release(key string) {
-	q.enqueued.Delete(key)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	delete(q.enqueued, key)
 }
