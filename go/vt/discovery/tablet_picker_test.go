@@ -720,6 +720,7 @@ func TestPickNonLaggingTablets(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(ctx, contextTimeout)
 	defer cancel()
+
 	var pickedPrimary, pickedLaggingReplica, pickedNonLaggingReplica int
 	for i := 0; i < numTestIterations; i++ {
 		tablet, err := tp.PickForStreaming(ctx)
@@ -734,9 +735,9 @@ func TestPickNonLaggingTablets(t *testing.T) {
 			pickedNonLaggingReplica++
 		}
 	}
-	assert.Zero(t, pickedPrimary)
-	assert.Zero(t, pickedLaggingReplica)
-	assert.Equal(t, numTestIterations, pickedNonLaggingReplica)
+	require.Zero(t, pickedPrimary)
+	require.Zero(t, pickedLaggingReplica)
+	require.Equal(t, numTestIterations, pickedNonLaggingReplica)
 }
 
 type pickerTestEnv struct {
