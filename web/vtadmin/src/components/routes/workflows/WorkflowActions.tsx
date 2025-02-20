@@ -33,19 +33,19 @@ interface WorkflowActionsProps {
 
 interface CompleteMoveTablesOptions {
     keepData: boolean;
-    keepRoutingRoules: boolean;
+    keepRoutingRules: boolean;
     renameTables: boolean;
 }
 
 const DefaultCompleteMoveTablesOptions: CompleteMoveTablesOptions = {
     keepData: false,
-    keepRoutingRoules: false,
+    keepRoutingRules: false,
     renameTables: false,
 };
 
 interface CancelWorkflowOptions {
     keepData: boolean;
-    keepRoutingRoules: boolean;
+    keepRoutingRules: boolean;
 }
 
 interface SwitchTrafficOptions {
@@ -70,7 +70,7 @@ const DefaultSwitchTrafficOptions: SwitchTrafficOptions = {
 
 const DefaultCancelWorkflowOptions: CancelWorkflowOptions = {
     keepData: false,
-    keepRoutingRoules: false,
+    keepRoutingRules: false,
 };
 
 const WorkflowActions: React.FC<WorkflowActionsProps> = ({
@@ -144,7 +144,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 keyspace: keyspace,
                 workflow: name,
                 keep_data: cancelWorkflowOptions.keepData,
-                keep_routing_rules: cancelWorkflowOptions.keepRoutingRoules,
+                keep_routing_rules: cancelWorkflowOptions.keepRoutingRules,
             },
         },
         {
@@ -161,7 +161,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 workflow: name,
                 target_keyspace: keyspace,
                 keep_data: completeMoveTablesOptions.keepData,
-                keep_routing_rules: completeMoveTablesOptions.keepRoutingRoules,
+                keep_routing_rules: completeMoveTablesOptions.keepRoutingRules,
                 rename_tables: completeMoveTablesOptions.renameTables,
             },
         },
@@ -213,6 +213,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                         }
                         value={switchTrafficOptions.timeout || ''}
                         type="number"
+                        data-testid="input-timeout"
                     />
                 </Label>
                 <Label
@@ -229,6 +230,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                         }
                         value={switchTrafficOptions.maxReplicationLagAllowed || ''}
                         type="number"
+                        data-testid="input-max-repl-lag-allowed"
                     />
                 </Label>
                 <MultiSelect
@@ -253,6 +255,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                     />
                     <Toggle
                         className="mr-2"
+                        data-testid="toggle-enable-reverse-repl"
                         enabled={switchTrafficOptions.enableReverseReplication}
                         onChange={() =>
                             setSwitchTrafficOptions((prevOptions) => ({
@@ -272,6 +275,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                         />
                         <Toggle
                             className="mr-2"
+                            data-testid="toggle-init-target-seq"
                             enabled={switchTrafficOptions.initializeTargetSequences}
                             onChange={() =>
                                 setSwitchTrafficOptions((prevOptions) => ({
@@ -293,6 +297,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                     <Toggle
                         className="mr-2"
                         enabled={switchTrafficOptions.force}
+                        data-testid="toggle-force"
                         onChange={() =>
                             setSwitchTrafficOptions((prevOptions) => ({
                                 ...prevOptions,
@@ -311,7 +316,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 {!isReverseWorkflow && (
                     <>
                         {supportsComplete && isSwitched && (
-                            <MenuItem onClick={() => setCurrentDialog('Complete MoveTables')}>Complete</MenuItem>
+                            <MenuItem onClick={() => setCurrentDialog('Complete Workflow')}>Complete</MenuItem>
                         )}
                         {isRunning && (
                             <MenuItem onClick={() => setCurrentDialog('Switch Traffic')}>Switch Traffic</MenuItem>
@@ -451,6 +456,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                             </div>
                             <Toggle
                                 enabled={cancelWorkflowOptions.keepData}
+                                data-testid="toggle-keep-data"
                                 onChange={() =>
                                     setCancelWorkflowOptions((prevOptions) => ({
                                         ...prevOptions,
@@ -467,11 +473,12 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                                 </p>
                             </div>
                             <Toggle
-                                enabled={cancelWorkflowOptions.keepRoutingRoules}
+                                enabled={cancelWorkflowOptions.keepRoutingRules}
+                                data-testid="toggle-routing-rules"
                                 onChange={() =>
                                     setCancelWorkflowOptions((prevOptions) => ({
                                         ...prevOptions,
-                                        keepRoutingRoules: !prevOptions.keepRoutingRoules,
+                                        keepRoutingRules: !prevOptions.keepRoutingRules,
                                     }))
                                 }
                             />
@@ -490,7 +497,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                 errorText={`Error occured while completing workflow ${name}`}
                 errorDescription={completeMoveTablesMutation.error ? completeMoveTablesMutation.error.message : ''}
                 closeDialog={closeDialog}
-                isOpen={currentDialog === 'Complete MoveTables'}
+                isOpen={currentDialog === 'Complete Workflow'}
                 refetchWorkflows={refetchWorkflows}
                 body={
                     <div className="flex flex-col gap-2">
@@ -503,6 +510,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                             </div>
                             <Toggle
                                 enabled={completeMoveTablesOptions.keepData}
+                                data-testid="toggle-keep-data"
                                 onChange={() =>
                                     setCompleteMoveTablesOptions((prevOptions) => ({
                                         ...prevOptions,
@@ -520,11 +528,12 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                                 </p>
                             </div>
                             <Toggle
-                                enabled={completeMoveTablesOptions.keepRoutingRoules}
+                                enabled={completeMoveTablesOptions.keepRoutingRules}
+                                data-testid="toggle-routing-rules"
                                 onChange={() =>
                                     setCompleteMoveTablesOptions((prevOptions) => ({
                                         ...prevOptions,
-                                        keepRoutingRoules: !prevOptions.keepRoutingRoules,
+                                        keepRoutingRules: !prevOptions.keepRoutingRules,
                                     }))
                                 }
                             />
@@ -540,6 +549,7 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
                             </div>
                             <Toggle
                                 enabled={completeMoveTablesOptions.renameTables}
+                                data-testid="toggle-rename-tables"
                                 onChange={() =>
                                     setCompleteMoveTablesOptions((prevOptions) => ({
                                         ...prevOptions,
