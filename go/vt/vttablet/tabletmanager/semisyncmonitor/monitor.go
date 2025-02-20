@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	semiSyncWaitSessionsRead = "SHOW STATUS LIKE 'Rpl_semi_sync_%_wait_sessions'"
+	semiSyncWaitSessionsRead = "select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')"
 	semiSyncRecoverWrite     = "INSERT INTO %s.semisync_recover (ts) VALUES (NOW())"
 	semiSyncRecoverClear     = "TRUNCATE TABLE %s.semisync_recover"
 	maxWritesPermitted       = 15
