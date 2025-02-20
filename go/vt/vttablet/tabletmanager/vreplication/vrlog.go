@@ -47,8 +47,8 @@ type VrLogStats struct {
 }
 
 // NewVrLogStats should be called at the start of the event to be logged
-func NewVrLogStats(eventType string) *VrLogStats {
-	return &VrLogStats{Type: eventType, StartTime: time.Now()}
+func NewVrLogStats(eventType string, startTime time.Time) *VrLogStats {
+	return &VrLogStats{Type: eventType, StartTime: startTime}
 }
 
 // Send records the log event, should be called on a stats object constructed by NewVrLogStats()
