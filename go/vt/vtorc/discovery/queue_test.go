@@ -71,7 +71,8 @@ func BenchmarkQueues(b *testing.B) {
 				for i := 0; i < 1000; i++ {
 					q.Push(b.Name() + strconv.Itoa(i))
 				}
-				for q.QueueLen() > 0 {
+				q.QueueLen()
+				for i := 0; i < 1000; i++ {
 					q.Release(q.Consume())
 				}
 			}
