@@ -46,7 +46,6 @@ type VrLogStats struct {
 	DurationNs int64
 }
 
-// NewVrLogStats should be called at the start of the event to be logged
 func NewVrLogStats(eventType string, startTime time.Time) *VrLogStats {
 	return &VrLogStats{Type: eventType, StartTime: startTime}
 }
