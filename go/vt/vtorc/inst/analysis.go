@@ -116,7 +116,7 @@ type ReplicationAnalysis struct {
 	SemiSyncPrimaryWaitForReplicaCount        uint
 	SemiSyncPrimaryClients                    uint
 	SemiSyncReplicaEnabled                    bool
-	SemiSyncMonitorBlocked                    bool
+	SemiSyncBlocked                           bool
 	CountSemiSyncReplicasEnabled              uint
 	CountLoggingReplicas                      uint
 	CountStatementBasedLoggingReplicas        uint

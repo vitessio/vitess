@@ -143,7 +143,7 @@ func (m *FullStatus) CloneVT() *FullStatus {
 	r.SuperReadOnly = m.SuperReadOnly
 	r.ReplicationConfiguration = m.ReplicationConfiguration.CloneVT()
 	r.DiskStalled = m.DiskStalled
-	r.SemiSyncMonitorBlocked = m.SemiSyncMonitorBlocked
+	r.SemiSyncBlocked = m.SemiSyncBlocked
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -554,9 +554,9 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.SemiSyncMonitorBlocked {
+	if m.SemiSyncBlocked {
 		i--
-		if m.SemiSyncMonitorBlocked {
+		if m.SemiSyncBlocked {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -1004,7 +1004,7 @@ func (m *FullStatus) SizeVT() (n int) {
 	if m.DiskStalled {
 		n += 3
 	}
-	if m.SemiSyncMonitorBlocked {
+	if m.SemiSyncBlocked {
 		n += 3
 	}
 	n += len(m.unknownFields)
@@ -2605,7 +2605,7 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 			m.DiskStalled = bool(v != 0)
 		case 24:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SemiSyncMonitorBlocked", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SemiSyncBlocked", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -2622,7 +2622,7 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.SemiSyncMonitorBlocked = bool(v != 0)
+			m.SemiSyncBlocked = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -106,5 +106,5 @@ message FullStatus {
   bool super_read_only = 21;
   replicationdata.Configuration replication_configuration = 22;
   bool disk_stalled = 23;
-  bool semi_sync_monitor_blocked = 24;
+  bool semi_sync_blocked = 24;
 }

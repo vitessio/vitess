@@ -115,12 +115,12 @@ func TestMonitorBindSideCarDBName(t *testing.T) {
 		expected string
 	}{
 		{
-			query:    semiSyncRecoverWrite,
-			expected: "INSERT INTO _vt.semisync_recover (ts) VALUES (NOW())",
+			query:    semiSyncHeartbeatWrite,
+			expected: "INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())",
 		},
 		{
-			query:    semiSyncRecoverClear,
-			expected: "TRUNCATE TABLE _vt.semisync_recover",
+			query:    semiSyncHeartbeatClear,
+			expected: "TRUNCATE TABLE _vt.semisync_heartbeat",
 		},
 	}
 	for _, tt := range tests {
@@ -138,7 +138,7 @@ func TestMonitorClearAllData(t *testing.T) {
 	db.SetNeverFail(true)
 	m.clearAllData()
 	ql := db.QueryLog()
-	require.EqualValues(t, "truncate table _vt.semisync_recover", ql)
+	require.EqualValues(t, "truncate table _vt.semisync_heartbeat", ql)
 }
 
 // TestMonitorWaitMechanism tests that the wait mechanism works as intended.
@@ -285,16 +285,16 @@ func TestMonitorWrite(t *testing.T) {
 	}{
 		{
 			initVal:  maxWritesPermitted - 2,
-			queryLog: "insert into _vt.semisync_recover (ts) values (now())",
+			queryLog: "insert into _vt.semisync_heartbeat (ts) values (now())",
 		}, {
 			initVal:  maxWritesPermitted - 1,
-			queryLog: "insert into _vt.semisync_recover (ts) values (now())",
+			queryLog: "insert into _vt.semisync_heartbeat (ts) values (now())",
 		}, {
 			initVal:  maxWritesPermitted,
 			queryLog: "",
 		}, {
 			initVal:  0,
-			queryLog: "insert into _vt.semisync_recover (ts) values (now())",
+			queryLog: "insert into _vt.semisync_heartbeat (ts) values (now())",
 		},
 	}
 	for _, tt := range tests {

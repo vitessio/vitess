@@ -48802,8 +48802,8 @@ export namespace replicationdata {
         /** FullStatus disk_stalled */
         disk_stalled?: (boolean|null);
 
-        /** FullStatus semi_sync_monitor_blocked */
-        semi_sync_monitor_blocked?: (boolean|null);
+        /** FullStatus semi_sync_blocked */
+        semi_sync_blocked?: (boolean|null);
     }
 
     /** Represents a FullStatus. */
@@ -48884,8 +48884,8 @@ export namespace replicationdata {
         /** FullStatus disk_stalled. */
         public disk_stalled: boolean;
 
-        /** FullStatus semi_sync_monitor_blocked. */
-        public semi_sync_monitor_blocked: boolean;
+        /** FullStatus semi_sync_blocked. */
+        public semi_sync_blocked: boolean;
 
         /**
          * Creates a new FullStatus instance using the specified properties.

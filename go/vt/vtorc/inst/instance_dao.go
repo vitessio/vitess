@@ -240,7 +240,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		instance.SemiSyncPrimaryClients = uint(fs.SemiSyncPrimaryClients)
 		instance.SemiSyncPrimaryStatus = fs.SemiSyncPrimaryStatus
 		instance.SemiSyncReplicaStatus = fs.SemiSyncReplicaStatus
-		instance.SemiSyncMonitorBlocked = fs.SemiSyncMonitorBlocked
+		instance.SemiSyncBlocked = fs.SemiSyncBlocked
 
 		if instance.IsOracleMySQL() || instance.IsPercona() {
 			// Stuff only supported on Oracle / Percona MySQL
@@ -580,7 +580,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.SemiSyncPrimaryStatus = m.GetBool("semi_sync_primary_status")
 	instance.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
 	instance.SemiSyncReplicaStatus = m.GetBool("semi_sync_replica_status")
-	instance.SemiSyncMonitorBlocked = m.GetBool("semi_sync_monitor_blocked")
+	instance.SemiSyncBlocked = m.GetBool("semi_sync_blocked")
 	instance.ReplicationDepth = m.GetUint("replication_depth")
 	instance.IsCoPrimary = m.GetBool("is_co_primary")
 	instance.HasReplicationCredentials = m.GetBool("has_replication_credentials")
@@ -881,7 +881,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"semi_sync_primary_status",
 		"semi_sync_primary_clients",
 		"semi_sync_replica_status",
-		"semi_sync_monitor_blocked",
+		"semi_sync_blocked",
 		"last_discovery_latency",
 		"is_disk_stalled",
 	}
@@ -962,7 +962,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.SemiSyncPrimaryStatus)
 		args = append(args, instance.SemiSyncPrimaryClients)
 		args = append(args, instance.SemiSyncReplicaStatus)
-		args = append(args, instance.SemiSyncMonitorBlocked)
+		args = append(args, instance.SemiSyncBlocked)
 		args = append(args, instance.LastDiscoveryLatency.Nanoseconds())
 		args = append(args, instance.StalledDisk)
 	}

@@ -105,7 +105,7 @@ CREATE TABLE database_instance (
 	semi_sync_primary_status TINYint NOT NULL DEFAULT 0,
 	semi_sync_replica_status TINYint NOT NULL DEFAULT 0,
 	semi_sync_primary_clients int NOT NULL DEFAULT 0,
-	semi_sync_monitor_blocked tinyint NOT NULL DEFAULT 0,
+	semi_sync_blocked tinyint NOT NULL DEFAULT 0,
 	is_disk_stalled TINYint NOT NULL DEFAULT 0,
 	PRIMARY KEY (alias)
 )`,

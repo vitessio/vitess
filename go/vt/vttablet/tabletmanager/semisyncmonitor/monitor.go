@@ -37,8 +37,8 @@ import (
 
 const (
 	semiSyncWaitSessionsRead = "select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')"
-	semiSyncRecoverWrite     = "INSERT INTO %s.semisync_recover (ts) VALUES (NOW())"
-	semiSyncRecoverClear     = "TRUNCATE TABLE %s.semisync_recover"
+	semiSyncHeartbeatWrite   = "INSERT INTO %s.semisync_heartbeat (ts) VALUES (NOW())"
+	semiSyncHeartbeatClear   = "TRUNCATE TABLE %s.semisync_heartbeat"
 	maxWritesPermitted       = 15
 	clearTimerDuration       = 24 * time.Hour
 )
@@ -62,7 +62,7 @@ type Monitor struct {
 	// if the primary is blocked on semi-sync ACKs or not.
 	ticks *timer.Timer
 	// clearTicks is the ticker to clear the data in
-	// the semisync_recover table.
+	// the semisync_heartbeat table.
 	clearTicks *timer.Timer
 
 	// mu protects the fields below.
@@ -335,13 +335,13 @@ func (m *Monitor) write() {
 	defer cancel()
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
-		log.Errorf("SemiSync Monitor: failed to get a connection when writing to semisync_recovery table: %v", err)
+		log.Errorf("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table: %v", err)
 		return
 	}
 	defer conn.Recycle()
-	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncRecoverWrite), 0, false)
+	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatWrite), 0, false)
 	if err != nil {
-		log.Errorf("SemiSync Monitor: failed to write to semisync_recovery table: %v", err)
+		log.Errorf("SemiSync Monitor: failed to write to semisync_heartbeat table: %v", err)
 	} else {
 		// One of the writes went through without an error.
 		// This means that we aren't blocked on semi-sync anymore.
@@ -370,13 +370,13 @@ func (m *Monitor) clearAllData() {
 	// Get a connection from the pool
 	conn, err := m.appPool.Get(context.Background())
 	if err != nil {
-		log.Errorf("SemiSync Monitor: failed get a connection to clear semisync_recovery table: %v", err)
+		log.Errorf("SemiSync Monitor: failed get a connection to clear semisync_heartbeat table: %v", err)
 		return
 	}
 	defer conn.Recycle()
-	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncRecoverClear), 0, false)
+	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatClear), 0, false)
 	if err != nil {
-		log.Errorf("SemiSync Monitor: failed to clear semisync_recovery table: %v", err)
+		log.Errorf("SemiSync Monitor: failed to clear semisync_heartbeat table: %v", err)
 	}
 }
 

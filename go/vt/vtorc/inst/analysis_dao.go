@@ -153,8 +153,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			primary_instance.semi_sync_primary_status
 		) AS semi_sync_primary_status,
 		MIN(
-			primary_instance.semi_sync_monitor_blocked
-		) AS semi_sync_monitor_blocked,
+			primary_instance.semi_sync_blocked
+		) AS semi_sync_blocked,
 		MIN(
 			primary_instance.semi_sync_replica_enabled
 		) AS semi_sync_replica_enabled,
@@ -336,7 +336,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.BinlogServerImmediateTopology = countValidBinlogServerReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
 		a.SemiSyncPrimaryStatus = m.GetBool("semi_sync_primary_status")
-		a.SemiSyncMonitorBlocked = m.GetBool("semi_sync_monitor_blocked")
+		a.SemiSyncBlocked = m.GetBool("semi_sync_blocked")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
@@ -462,7 +462,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = PrimaryTabletDeleted
 			a.Description = "Primary tablet has been deleted"
 			ca.hasClusterwideAction = true
-		} else if a.IsPrimary && a.SemiSyncMonitorBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount {
+		} else if a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount {
 			// The primary is reporting that semi-sync monitor is blocked on writes.
 			// There are enough replicas configured to send semi-sync ACKs such that the primary shouldn't be blocked.
 			// There is some network diruption in progress. We should run an ERS.

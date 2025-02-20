@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS semisync_recover
+CREATE TABLE IF NOT EXISTS semisync_heartbeat
 (
     ts            BIGINT UNSIGNED NOT NULL,
     PRIMARY KEY (`ts`)

@@ -65,7 +65,7 @@ type InfoForRecoveryAnalysis struct {
 	CountValidBinlogServerReplicas            uint
 	SemiSyncPrimaryEnabled                    int
 	SemiSyncPrimaryStatus                     int
-	SemiSyncMonitorBlocked                    int
+	SemiSyncBlocked                           int
 	SemiSyncPrimaryWaitForReplicaCount        uint
 	SemiSyncPrimaryClients                    uint
 	SemiSyncReplicaEnabled                    int
@@ -143,7 +143,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["semi_sync_primary_clients"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncPrimaryClients), Valid: true}
 	rowMap["semi_sync_primary_enabled"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncPrimaryEnabled), Valid: true}
 	rowMap["semi_sync_primary_status"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncPrimaryStatus), Valid: true}
-	rowMap["semi_sync_monitor_blocked"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncMonitorBlocked), Valid: true}
+	rowMap["semi_sync_blocked"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncBlocked), Valid: true}
 	rowMap["semi_sync_primary_wait_for_replica_count"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncPrimaryWaitForReplicaCount), Valid: true}
 	rowMap["semi_sync_replica_enabled"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncReplicaEnabled), Valid: true}
 	res, _ := prototext.Marshal(info.TabletInfo)
