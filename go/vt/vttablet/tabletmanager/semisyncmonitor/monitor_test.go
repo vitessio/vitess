@@ -169,7 +169,7 @@ func TestMonitorWaitMechanism(t *testing.T) {
 	m.setIsBlocked(false)
 	require.Eventually(t, func() bool {
 		return waiterUnblocked.Load()
-	}, time.Second, time.Millisecond*100)
+	}, 2*time.Second, time.Millisecond*100)
 	require.False(t, m.stillBlocked())
 	require.False(t, m.isClosed())
 }
@@ -644,7 +644,9 @@ func TestSemiSyncMonitor(t *testing.T) {
 
 	// Initially writes aren't blocked and the wait returns immediately.
 	require.False(t, m.AllWritesBlocked())
-	err := m.WaitUntilSemiSyncUnblocked(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	err := m.WaitUntilSemiSyncUnblocked(ctx)
 	require.NoError(t, err)
 
 	// Now we set the monitor to be blocked.

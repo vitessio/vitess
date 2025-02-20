@@ -80,7 +80,7 @@ type Monitor struct {
 	// isBlocked stores if the primary is blocked on semi-sync ack.
 	isBlocked bool
 	// waiters stores the list of waiters that are waiting for the primary to be unblocked.
-	waiters []chan any
+	waiters []chan struct{}
 	// writesBlockedGauge is a gauge tracking the number of writes the monitor is blocked on.
 	writesBlockedGauge *stats.Gauge
 }
@@ -95,7 +95,7 @@ func NewMonitor(config *tabletenv.TabletConfig, exporter *servenv.Exporter) *Mon
 		clearTicks:         timer.NewTimer(clearTimerDuration),
 		writesBlockedGauge: exporter.NewGauge("SemiSyncMonitorWritesBlocked", "Number of writes blocked in the semi-sync monitor"),
 		appPool:            dbconnpool.NewConnectionPool("SemiSyncMonitorAppPool", exporter, 20, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
-		waiters:            make([]chan any, 0),
+		waiters:            make([]chan struct{}, 0),
 	}
 }
 
@@ -288,7 +288,7 @@ func (m *Monitor) startWrites() {
 		// exponentially backing off. We will not do more than maxWritesPermitted writes and once
 		// all maxWritesPermitted writes are blocked, we'll wait for VTOrc to run an ERS.
 		go m.write()
-		<-time.After(waitBetweenWrites)
+		time.Sleep(waitBetweenWrites)
 	}
 }
 
@@ -302,7 +302,7 @@ func (m *Monitor) incrementWriteCount() bool {
 	if m.inProgressWriteCount == maxWritesPermitted {
 		return false
 	}
-	m.inProgressWriteCount = m.inProgressWriteCount + 1
+	m.inProgressWriteCount++
 	m.writesBlockedGauge.Set(int64(m.inProgressWriteCount))
 	return true
 }
@@ -319,7 +319,7 @@ func (m *Monitor) AllWritesBlocked() bool {
 func (m *Monitor) decrementWriteCount() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.inProgressWriteCount = m.inProgressWriteCount - 1
+	m.inProgressWriteCount--
 	m.writesBlockedGauge.Set(int64(m.inProgressWriteCount))
 }
 
@@ -331,9 +331,11 @@ func (m *Monitor) write() {
 	}
 	defer m.decrementWriteCount()
 	// Get a connection from the pool
-	conn, err := m.appPool.Get(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	conn, err := m.appPool.Get(ctx)
 	if err != nil {
-		log.Errorf("SemiSync Monitor: failed to write to semisync_recovery table: %v", err)
+		log.Errorf("SemiSync Monitor: failed to get a connection when writing to semisync_recovery table: %v", err)
 		return
 	}
 	defer conn.Recycle()
@@ -364,7 +366,7 @@ func (m *Monitor) clearAllData() {
 	// Get a connection from the pool
 	conn, err := m.appPool.Get(context.Background())
 	if err != nil {
-		log.Errorf("SemiSync Monitor: failed to clear semisync_recovery table: %v", err)
+		log.Errorf("SemiSync Monitor: failed get a connection to clear semisync_recovery table: %v", err)
 		return
 	}
 	defer conn.Recycle()
@@ -376,10 +378,10 @@ func (m *Monitor) clearAllData() {
 
 // addWaiter adds a waiter to the list of waiters
 // that will be unblocked when the primary is no longer blocked.
-func (m *Monitor) addWaiter() chan any {
+func (m *Monitor) addWaiter() chan struct{} {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	ch := make(chan any)
+	ch := make(chan struct{})
 	m.waiters = append(m.waiters, ch)
 	return ch
 }
