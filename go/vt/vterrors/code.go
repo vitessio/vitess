@@ -235,6 +235,7 @@ func (o *VitessError) Cause() error {
 
 var _ error = (*VitessError)(nil)
 
+// errorWithoutState is an error that does not have any state, e.g. the state will be unknown
 func errorWithoutState(id string, code vtrpcpb.Code, short, long string) func(args ...any) *VitessError {
 	return func(args ...any) *VitessError {
 		s := short
@@ -268,6 +269,8 @@ func errorWithState(id string, code vtrpcpb.Code, state State, short, long strin
 	}
 }
 
+// errorWithNoCode creates a VitessError where the error code is set by the user when creating the error
+// instead of having a static error code that is declared in this file.
 func errorWithNoCode(id string, short, long string) func(code vtrpcpb.Code, args ...any) *VitessError {
 	return func(code vtrpcpb.Code, args ...any) *VitessError {
 		s := short

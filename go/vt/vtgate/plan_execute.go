@@ -153,7 +153,7 @@ func (e *Executor) newExecute(
 		defer cancel()
 
 		// If we have previously issued a VT15001 error, we block every queries on this session until we receive a ROLLBACK.
-		if plan.Type != sqlparser.StmtRollback && safeSession.GetTxErrorBlockNextQueries() {
+		if plan.Type != sqlparser.StmtRollback && safeSession.IsErrorUntilRollback() {
 			return vterrors.VT15002()
 		}
 
@@ -369,7 +369,7 @@ func (e *Executor) rollbackOnFatalTxError(ctx context.Context, safeSession *econ
 	}
 	// we already know one or more shards are going to fail rolling back, the error can be discarded
 	_ = e.txConn.Rollback(ctx, safeSession)
-	safeSession.SetTxErrorBlockNextQueries(true)
+	safeSession.SetErrorUntilRollback(true)
 	return true
 }
 

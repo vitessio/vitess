@@ -160,7 +160,7 @@ message Session {
   // MigrationContext
   string migration_context = 27;
 
-  bool tx_error_block_next_queries = 28;
+  bool error_until_rollback = 28;
 }
 
 // PrepareData keeps the prepared statement and other information related for execution of it.

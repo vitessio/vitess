@@ -69,7 +69,7 @@ func (m *Session) CloneVT() *Session {
 	r.EnableSystemSettings = m.EnableSystemSettings
 	r.QueryTimeout = m.QueryTimeout
 	r.MigrationContext = m.MigrationContext
-	r.TxErrorBlockNextQueries = m.TxErrorBlockNextQueries
+	r.ErrorUntilRollback = m.ErrorUntilRollback
 	if rhs := m.ShardSessions; rhs != nil {
 		tmpContainer := make([]*Session_ShardSession, len(rhs))
 		for k, v := range rhs {
@@ -598,9 +598,9 @@ func (m *Session) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.TxErrorBlockNextQueries {
+	if m.ErrorUntilRollback {
 		i--
-		if m.TxErrorBlockNextQueries {
+		if m.ErrorUntilRollback {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -2070,7 +2070,7 @@ func (m *Session) SizeVT() (n int) {
 	if l > 0 {
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.TxErrorBlockNextQueries {
+	if m.ErrorUntilRollback {
 		n += 3
 	}
 	n += len(m.unknownFields)
@@ -3762,7 +3762,7 @@ func (m *Session) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 28:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TxErrorBlockNextQueries", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ErrorUntilRollback", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -3779,7 +3779,7 @@ func (m *Session) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.TxErrorBlockNextQueries = bool(v != 0)
+			m.ErrorUntilRollback = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

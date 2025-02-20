@@ -390,16 +390,16 @@ func (session *SafeSession) GetCommitOrder() vtgatepb.CommitOrder {
 	return session.commitOrder
 }
 
-func (session *SafeSession) SetTxErrorBlockNextQueries(enable bool) {
+func (session *SafeSession) SetErrorUntilRollback(enable bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.TxErrorBlockNextQueries = enable
+	session.ErrorUntilRollback = enable
 }
 
-func (session *SafeSession) GetTxErrorBlockNextQueries() bool {
+func (session *SafeSession) IsErrorUntilRollback() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	return session.Session.GetTxErrorBlockNextQueries()
+	return session.Session.GetErrorUntilRollback()
 }
 
 // GetLogger returns executor logger.
