@@ -33,6 +33,10 @@ var (
 	ErrExpectMysql56Flavor = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "expected MySQL GTID position but found a different or invalid format.")
 )
 
+func ParseMysql56GTID(s string) (GTID, error) {
+	return parseMysql56GTID(s)
+}
+
 // parseMysql56GTID is registered as a GTID parser.
 func parseMysql56GTID(s string) (GTID, error) {
 	// Split into parts.

@@ -478,6 +478,10 @@ func TestMysql56GTIDSetAddGTID(t *testing.T) {
 			got := set.AddGTID(tcase.add)
 			assert.Equal(t, originalSet, set) // ensure immutable
 			assert.Equal(t, tcase.expect, got)
+
+			gotInplace := set.AddGTIDInPlace(tcase.add)
+			assert.Equal(t, gotInplace, set) // ensure mutable
+			assert.Equal(t, tcase.expect, gotInplace)
 		})
 	}
 }

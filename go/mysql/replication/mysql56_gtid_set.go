@@ -378,6 +378,66 @@ func (set Mysql56GTIDSet) AddGTID(gtid GTID) GTIDSet {
 	return newSet
 }
 
+// AddGTID implements GTIDSet.
+func (set Mysql56GTIDSet) AddGTIDInPlace(gtid GTID) GTIDSet {
+	gtid56, ok := gtid.(Mysql56GTID)
+	if !ok {
+		return set
+	}
+
+	added := false
+	intervals, ok := set[gtid56.Server]
+	if !ok {
+		set[gtid56.Server] = []interval{{start: gtid56.Sequence, end: gtid56.Sequence}}
+		return set
+	}
+
+	var newIntervals []interval
+	// Look for the right place to add this GTID.
+	for _, iv := range intervals {
+		if gtid56.Sequence >= iv.start && gtid56.Sequence <= iv.end {
+			// GTID already exists in the set.
+			return set
+		}
+		if !added {
+			switch {
+			case gtid56.Sequence == iv.start-1:
+				// Expand the interval at the beginning.
+				iv.start = gtid56.Sequence
+				added = true
+			case gtid56.Sequence == iv.end+1:
+				// Expand the interval at the end.
+				iv.end = gtid56.Sequence
+				added = true
+			case gtid56.Sequence < iv.start-1:
+				// The next interval is beyond the new GTID, but it can't
+				// be expanded, so we have to insert a new interval.
+				newIntervals = append(newIntervals, interval{start: gtid56.Sequence, end: gtid56.Sequence})
+				added = true
+			}
+		}
+		// Check if this interval can be merged with the previous one.
+		count := len(newIntervals)
+		if count != 0 && iv.start == newIntervals[count-1].end+1 {
+			// Merge instead of appending.
+			newIntervals[count-1].end = iv.end
+		} else {
+			// Can't be merged.
+			newIntervals = append(newIntervals, iv)
+		}
+
+		set[gtid56.Server] = newIntervals
+	}
+
+	if !added {
+		// There wasn't any place to insert the new GTID, so just append it
+		// as a new interval.
+		set[gtid56.Server] = append(set[gtid56.Server], interval{start: gtid56.Sequence, end: gtid56.Sequence})
+	}
+
+	return set
+}
+
 // Union implements GTIDSet.Union().
 func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
 	if set == nil && other != nil {

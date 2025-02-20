@@ -141,6 +141,11 @@ func (gtid FilePosGTID) AddGTID(other GTID) GTIDSet {
 	return filePosOther
 }
 
+// AddGTID implements GTIDSet.AddGTID().
+func (gtid FilePosGTID) AddGTIDInPlace(other GTID) GTIDSet {
+	return gtid.AddGTID(other)
+}
+
 // Union implements GTIDSet.Union().
 func (gtid FilePosGTID) Union(other GTIDSet) GTIDSet {
 	filePosOther, ok := other.(FilePosGTID)

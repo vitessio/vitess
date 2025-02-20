@@ -50,6 +50,9 @@ type GTIDSet interface {
 	// AddGTID returns a new GTIDSet that is expanded to contain the given GTID.
 	AddGTID(GTID) GTIDSet
 
+	// AddGTID returns a new GTIDSet that is expanded to contain the given GTID, modifying the receiver GTID set
+	AddGTIDInPlace(GTID) GTIDSet
+
 	// Union returns a union of the receiver GTIDSet and the supplied GTIDSet.
 	Union(GTIDSet) GTIDSet
 
