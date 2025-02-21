@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -71,6 +71,8 @@ type tabletHealthCheck struct {
 	// possibly delete both these
 	loggedServingState    bool
 	lastResponseTimestamp time.Time // timestamp of the last healthcheck response
+	// logger is used to log messages.
+	logger logutil.Logger
 }
 
 // String is defined because we want to print a []*tabletHealthCheck array nicely.
@@ -107,7 +109,7 @@ func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
 	if !thc.loggedServingState || (serving != thc.Serving) {
 		// Emit the log from a separate goroutine to avoid holding
 		// the th lock while logging is happening
-		log.Infof("HealthCheckUpdate(Serving State): tablet: %v serving %v => %v for %v/%v (%v) reason: %s",
+		thc.logger.Infof("HealthCheckUpdate(Serving State): tablet: %v serving %v => %v for %v/%v (%v) reason: %s",
 			topotools.TabletIdent(thc.Tablet),
 			thc.Serving,
 			serving,
@@ -294,7 +296,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 			// the healthcheck cache again via the topology watcher.
 			// WARNING: Under no other circumstances should we be deleting the tablet here.
 			if strings.Contains(err.Error(), "health stats mismatch") {
-				log.Warningf("deleting tablet %v from healthcheck due to health stats mismatch", thc.Tablet)
+				thc.logger.Warningf("deleting tablet %v from healthcheck due to health stats mismatch", thc.Tablet)
 				hc.deleteTablet(thc.Tablet)
 				return
 			}
@@ -331,7 +333,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 }
 
 func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
-	log.Warningf("tablet %v healthcheck stream error: %v", thc.Tablet, err)
+	thc.logger.Warningf("tablet %v healthcheck stream error: %v", thc.Tablet, err)
 	thc.setServingState(false, err.Error())
 	thc.LastError = err
 	_ = thc.Conn.Close(ctx)

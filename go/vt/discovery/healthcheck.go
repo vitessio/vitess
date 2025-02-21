@@ -52,6 +52,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -188,8 +189,10 @@ func FilteringKeyspaces() bool {
 	return len(KeyspacesToWatch) > 0
 }
 
-type KeyspaceShardTabletType string
-type tabletAliasString string
+type (
+	KeyspaceShardTabletType string
+	tabletAliasString       string
+)
 
 // HealthCheck declares what the TabletGateway needs from the HealthCheck
 type HealthCheck interface {
@@ -299,6 +302,9 @@ type HealthCheckImpl struct {
 	subscribers map[chan *TabletHealth]struct{}
 	// loadTablets trigger is used to immediately load a new primary tablet when the current one has been demoted
 	loadTabletsTrigger chan struct{}
+	// options contains optional settings used to modify HealthCheckImpl
+	// behavior.
+	options discoveryOptions
 }
 
 // NewVTGateHealthCheckFilters returns healthcheck filters for vtgate.
@@ -350,9 +356,9 @@ func NewVTGateHealthCheckFilters() (filters TabletFilters, err error) {
 // filters.
 //
 //	Is one or more filters to apply when determining what tablets we want to stream healthchecks from.
-func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, filters TabletFilter) *HealthCheckImpl {
-	log.Infof("loading tablets for cells: %v", cellsToWatch)
-
+func NewHealthCheck(
+	ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, filters TabletFilter, opts ...DiscoveryOption,
+) *HealthCheckImpl {
 	hc := &HealthCheckImpl{
 		ts:                 topoServer,
 		cell:               localCell,
@@ -364,7 +370,11 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		subscribers:        make(map[chan *TabletHealth]struct{}),
 		cellAliases:        make(map[string]string),
 		loadTabletsTrigger: make(chan struct{}, 1),
+		options:            withOptions(opts...),
 	}
+
+	hc.logger().Infof("loading tablets for cells: %v", cellsToWatch)
+
 	var topoWatchers []*TopologyWatcher
 	cells := strings.Split(cellsToWatch, ",")
 	if cellsToWatch == "" {
@@ -372,11 +382,11 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 	}
 
 	for _, c := range cells {
-		log.Infof("Setting up healthcheck for cell: %v", c)
+		hc.logger().Infof("Setting up healthcheck for cell: %v", c)
 		if c == "" {
 			continue
 		}
-		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filters, c, refreshInterval, refreshKnownTablets))
+		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filters, c, refreshInterval, refreshKnownTablets, opts...))
 	}
 
 	hc.topoWatchers = topoWatchers
@@ -401,7 +411,7 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 		return
 	}
 
-	log.Infof("Adding tablet to healthcheck: %v", tablet)
+	hc.logger().Infof("Adding tablet to healthcheck: %v", tablet)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	if hc.healthByAlias == nil {
@@ -419,6 +429,7 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 		cancelFunc: cancelFunc,
 		Tablet:     tablet,
 		Target:     target,
+		logger:     hc.logger(),
 	}
 
 	// add to our datastore
@@ -426,7 +437,7 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
 	if _, ok := hc.healthByAlias[tabletAliasString(tabletAlias)]; ok {
 		// We should not add a tablet that we already have
-		log.Errorf("Program bug: tried to add existing tablet: %v to healthcheck", tabletAlias)
+		hc.logger().Errorf("Program bug: tried to add existing tablet: %v to healthcheck", tabletAlias)
 		return
 	}
 	hc.healthByAlias[tabletAliasString(tabletAlias)] = thc
@@ -454,7 +465,7 @@ func (hc *HealthCheckImpl) ReplaceTablet(old, new *topodata.Tablet) {
 }
 
 func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
-	log.Infof("Removing tablet from healthcheck: %v", tablet)
+	hc.logger().Infof("Removing tablet from healthcheck: %v", tablet)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
@@ -497,7 +508,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	// delete from authoritative map
 	th, ok := hc.healthByAlias[tabletAlias]
 	if !ok {
-		log.Infof("We have no health data for tablet: %v, it might have been deleted already", tablet)
+		hc.logger().Infof("We have no health data for tablet: %v, it might have been deleted already", tablet)
 		return
 	}
 	// Calling this will end the context associated with th.checkConn,
@@ -516,7 +527,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	// so that we're not racing to update it and in effect re-adding a copy of the
 	// tablet record that was deleted
 	if _, ok := hc.healthByAlias[tabletAlias]; !ok {
-		log.Infof("Tablet %v has been deleted, skipping health update", th.Tablet)
+		hc.logger().Infof("Tablet %v has been deleted, skipping health update", th.Tablet)
 		return
 	}
 
@@ -541,7 +552,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 		// causing an interruption where no primary is assigned to the shard.
 		if prevTarget.TabletType == topodata.TabletType_PRIMARY {
 			if primaries := hc.healthData[oldTargetKey]; len(primaries) == 0 {
-				log.Infof("We will have no health data for the next new primary tablet after demoting the tablet: %v, so start loading tablets now", topotools.TabletIdent(th.Tablet))
+				hc.logger().Infof("We will have no health data for the next new primary tablet after demoting the tablet: %v, so start loading tablets now", topotools.TabletIdent(th.Tablet))
 				// We want to trigger a loadTablets call, but if the channel is not empty
 				// then a trigger is already scheduled, we don't need to trigger another one.
 				// This also prevents the code from deadlocking as described in https://github.com/vitessio/vitess/issues/16994.
@@ -567,7 +578,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 			// We already have one up server, see if we
 			// need to replace it.
 			if th.PrimaryTermStartTime < hc.healthy[targetKey][0].PrimaryTermStartTime {
-				log.Warningf("not marking healthy primary %s as Up for %s because its PrimaryTermStartTime is smaller than the highest known timestamp from previous PRIMARYs %s: %d < %d ",
+				hc.logger().Warningf("not marking healthy primary %s as Up for %s because its PrimaryTermStartTime is smaller than the highest known timestamp from previous PRIMARYs %s: %d < %d ",
 					topoproto.TabletAliasString(th.Tablet.Alias),
 					topoproto.KeyspaceShardString(th.Target.Keyspace, th.Target.Shard),
 					topoproto.TabletAliasString(hc.healthy[targetKey][0].Tablet.Alias),
@@ -604,7 +615,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 
 	isNewPrimary := isPrimary && prevTarget.TabletType != topodata.TabletType_PRIMARY
 	if isNewPrimary {
-		log.Errorf("Adding 1 to PrimaryPromoted counter for target: %v, tablet: %v, tabletType: %v", prevTarget, topoproto.TabletAliasString(th.Tablet.Alias), th.Target.TabletType)
+		hc.logger().Errorf("Adding 1 to PrimaryPromoted counter for target: %v, tablet: %v, tabletType: %v", prevTarget, topoproto.TabletAliasString(th.Tablet.Alias), th.Target.TabletType)
 		hcPrimaryPromotedCounters.Add([]string{th.Target.Keyspace, th.Target.Shard}, 1)
 	}
 
@@ -656,7 +667,7 @@ func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 		default:
 			// If the channel is full, we drop the message.
 			hcChannelFullCounter.Add(1)
-			log.Warningf("HealthCheck broadcast channel is full, dropping message for %s", topotools.TabletIdent(th.Tablet))
+			hc.logger().Warningf("HealthCheck broadcast channel is full, dropping message for %s", topotools.TabletIdent(th.Tablet))
 		}
 	}
 }
@@ -837,7 +848,7 @@ func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.
 			timer.Stop()
 			for _, target := range targets {
 				if target != nil {
-					log.Infof("couldn't find tablets for target: %v", target)
+					hc.logger().Infof("couldn't find tablets for target: %v", target)
 				}
 			}
 			return ctx.Err()
@@ -966,7 +977,7 @@ func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	if err != nil {
 		// Error logged
 		if _, err := w.Write([]byte(err.Error())); err != nil {
-			log.Errorf("write to buffer error failed: %v", err)
+			hc.logger().Errorf("write to buffer error failed: %v", err)
 		}
 
 		return
@@ -977,7 +988,7 @@ func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 
 	// Error logged
 	if _, err := w.Write(buf.Bytes()); err != nil {
-		log.Errorf("write to buffer bytes failed: %v", err)
+		hc.logger().Errorf("write to buffer bytes failed: %v", err)
 	}
 }
 
@@ -1016,6 +1027,11 @@ func (hc *HealthCheckImpl) stateChecksum() int64 {
 	}
 
 	return int64(crc32.ChecksumIEEE(buf.Bytes()))
+}
+
+// logger returns the logutil.Logger used by the healthcheck.
+func (hc *HealthCheckImpl) logger() logutil.Logger {
+	return hc.options.logger
 }
 
 // TabletToMapKey creates a key to the map from tablet's host and ports.
