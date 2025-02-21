@@ -40,6 +40,7 @@ type Instance struct {
 	LogBinEnabled                bool
 	LogReplicationUpdatesEnabled bool
 	SelfBinlogCoordinates        BinlogCoordinates
+	SourceAlias                  string
 	SourceHost                   string
 	SourcePort                   int
 	SourceUUID                   string

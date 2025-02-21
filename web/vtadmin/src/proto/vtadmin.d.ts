@@ -48801,6 +48801,9 @@ export namespace replicationdata {
 
         /** FullStatus disk_stalled */
         disk_stalled?: (boolean|null);
+
+        /** FullStatus source_alias */
+        source_alias?: (topodata.ITabletAlias|null);
     }
 
     /** Represents a FullStatus. */
@@ -48880,6 +48883,9 @@ export namespace replicationdata {
 
         /** FullStatus disk_stalled. */
         public disk_stalled: boolean;
+
+        /** FullStatus source_alias. */
+        public source_alias?: (topodata.ITabletAlias|null);
 
         /**
          * Creates a new FullStatus instance using the specified properties.
