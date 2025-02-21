@@ -506,6 +506,9 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 
+	// Store the new source alias
+	tm.sourceAlias = parent
+
 	// wait until we get the replicated row, or our context times out
 	return tm.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
@@ -922,6 +925,10 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
 		return nil
 	}
+
+	// Store the new primary alias
+	tm.sourceAlias = parent
+
 	return tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
 }
 
@@ -1047,6 +1054,10 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone); err != nil {
 		return "", err
 	}
+
+	// Set the source alias to nil
+	tm.sourceAlias = nil
+
 	return replication.EncodePosition(pos), nil
 }
 
