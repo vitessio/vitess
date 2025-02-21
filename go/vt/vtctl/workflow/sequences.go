@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
@@ -23,6 +25,13 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+)
+
+const (
+	sqlGetMaxSequenceVal     = "select max(%a) as maxval from %a.%a"
+	sqlInitSequenceTable     = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
+	sqlCreateSequenceTable   = "create table if not exists %a (id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence'"
+	sqlGetCurrentSequenceVal = "select next_id from %a.%a where id = 0"
 )
 
 // sequenceMetadata contains all of the relevant metadata for a sequence that
@@ -106,7 +115,6 @@ func (ts *trafficSwitcher) getMaxSequenceValues(ctx context.Context, sequences m
 		return nil, errs
 	}
 	return maxValues, nil
-
 }
 
 func (ts *trafficSwitcher) getMaxSequenceValue(ctx context.Context, seq *sequenceMetadata) (int64, error) {
@@ -158,14 +166,79 @@ func (ts *trafficSwitcher) getMaxSequenceValue(ctx context.Context, seq *sequenc
 	return maxSequenceValue, errs
 }
 
+func (ts *trafficSwitcher) getCurrentSequenceValues(ctx context.Context, sequences map[string]*sequenceMetadata) (map[string]int64, error) {
+	currentValues := make(map[string]int64, len(sequences))
+	mu := sync.Mutex{}
+	initGroup, gctx := errgroup.WithContext(ctx)
+	for _, sm := range sequences {
+		initGroup.Go(func() error {
+			currentVal, err := ts.getCurrentSequenceValue(gctx, sm)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			currentValues[sm.backingTableName] = currentVal
+			return nil
+		})
+	}
+	errs := initGroup.Wait()
+	if errs != nil {
+		return nil, errs
+	}
+	return currentValues, nil
+}
+
+func (ts *trafficSwitcher) getCurrentSequenceValue(ctx context.Context, seq *sequenceMetadata) (int64, error) {
+	if err := seq.escapeValues(); err != nil {
+		return 0, err
+	}
+	sequenceShard, ierr := ts.TopoServer().GetOnlyShard(ctx, seq.backingTableKeyspace)
+	if ierr != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+			seq.backingTableKeyspace, ierr)
+	}
+	sequenceTablet, ierr := ts.TopoServer().GetTablet(ctx, sequenceShard.PrimaryAlias)
+	if ierr != nil || sequenceTablet == nil {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+			seq.backingTableKeyspace, ierr)
+	}
+	if sequenceTablet.DbNameOverride != "" {
+		seq.backingTableDBName = sequenceTablet.DbNameOverride
+	}
+	query := sqlparser.BuildParsedQuery(sqlGetCurrentSequenceVal,
+		seq.backingDB,
+		seq.backingTable,
+	)
+	qr, ierr := ts.ws.tmc.ExecuteFetchAsApp(ctx, sequenceTablet.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   []byte(query.Query),
+		MaxRows: 1,
+	})
+	if ierr != nil || len(qr.Rows) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the current value for the sequence table %s.%s: %v",
+			seq.backingTableDBName, seq.backingTableName, ierr)
+	}
+	rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
+	if rawVal.IsNull() {
+		return 0, nil
+	}
+	currentVal, err := rawVal.ToInt64()
+	if err != nil {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to convert the current value for the sequence table %s.%s: %v",
+			seq.backingTableDBName, seq.backingTableName, err)
+	}
+	return currentVal, nil
+}
+
 func (ts *trafficSwitcher) updateSequenceValue(ctx context.Context, seq *sequenceMetadata, currentMaxValue int64) error {
 	if err := seq.escapeValues(); err != nil {
 		return err
 	}
 	nextVal := currentMaxValue + 1
+	log.Infof("Updating sequence %s.%s to %d", seq.backingTableDBName, seq.backingTableName, nextVal)
 
 	// Now we need to update the sequence table, if needed, in order to
-	// ensure that that the next value it provides is > the current max.
+	// ensure that the next value it provides is > the current max.
 	sequenceShard, ierr := ts.TopoServer().GetOnlyShard(ctx, seq.backingTableKeyspace)
 	if ierr != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
@@ -176,7 +249,9 @@ func (ts *trafficSwitcher) updateSequenceValue(ctx context.Context, seq *sequenc
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
 			seq.backingTableKeyspace, ierr)
 	}
-	// FIXME: check for db name override
+	if sequenceTablet.DbNameOverride != "" {
+		seq.backingTableDBName = sequenceTablet.DbNameOverride
+	}
 	query := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
 		seq.backingTableDBName,
 		seq.backingTableName,
@@ -214,6 +289,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 	return nil
 }
 
+// isSequenceParticipating checks to see if the target keyspace has any tables with a sequence
 func (ts *trafficSwitcher) isSequenceParticipating(ctx context.Context) (bool, error) {
 	vschema, err := ts.TopoServer().GetVSchema(ctx, ts.targetKeyspace)
 	if err != nil {

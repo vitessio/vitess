@@ -74,10 +74,7 @@ const (
 	// Use pt-osc's naming convention, this format also ensures vstreamer ignores such tables.
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 
-	sqlDeleteWorkflow      = "delete from _vt.vreplication where db_name = %s and workflow = %s"
-	sqlGetMaxSequenceVal   = "select max(%a) as maxval from %a.%a"
-	sqlInitSequenceTable   = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
-	sqlCreateSequenceTable = "create table if not exists %a (id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence'"
+	sqlDeleteWorkflow = "delete from _vt.vreplication where db_name = %s and workflow = %s"
 )
 
 // accessType specifies the type of access for a shard (allow/disallow writes).
