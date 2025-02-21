@@ -121,6 +121,24 @@ var (
 		},
 	)
 
+	backendReadConcurrency = viperutil.Configure(
+		"backend-read-concurrency",
+		viperutil.Options[int64]{
+			FlagName: "backend-read-concurrency",
+			Default:  32,
+			Dynamic:  true,
+		},
+	)
+
+	backendWriteConcurrency = viperutil.Configure(
+		"backend-write-concurrency",
+		viperutil.Options[int64]{
+			FlagName: "backend-write-concurrency",
+			Default:  24,
+			Dynamic:  true,
+		},
+	)
+
 	waitReplicasTimeout = viperutil.Configure(
 		"wait-replicas-timeout",
 		viperutil.Options[time.Duration]{
@@ -199,6 +217,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("audit-to-backend", auditToBackend.Default(), "Whether to store the audit log in the VTOrc database")
 	fs.Bool("audit-to-syslog", auditToSyslog.Default(), "Whether to store the audit log in the syslog")
 	fs.Duration("audit-purge-duration", auditPurgeDuration.Default(), "Duration for which audit logs are held before being purged. Should be in multiples of days")
+	fs.Int64("backend-read-concurrency", backendReadConcurrency.Default(), "Maximum concurrency for reads to the backend")
+	fs.Int64("backend-write-concurrency", backendWriteConcurrency.Default(), "Maximum concurrency for writes to the backend")
 	fs.Bool("prevent-cross-cell-failover", preventCrossCellFailover.Default(), "Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover")
 	fs.Duration("wait-replicas-timeout", waitReplicasTimeout.Default(), "Duration for which to wait for replica's to respond when issuing RPCs")
 	fs.Duration("tolerable-replication-lag", tolerableReplicationLag.Default(), "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS")
@@ -218,6 +238,8 @@ func registerFlags(fs *pflag.FlagSet) {
 		auditToBackend,
 		auditToSyslog,
 		auditPurgeDuration,
+		backendReadConcurrency,
+		backendWriteConcurrency,
 		waitReplicasTimeout,
 		tolerableReplicationLag,
 		topoInformationRefreshDuration,
@@ -301,6 +323,16 @@ func GetAuditPurgeDays() int64 {
 // SetAuditPurgeDays sets the audit purge duration.
 func SetAuditPurgeDays(days int64) {
 	auditPurgeDuration.Set(time.Duration(days) * 24 * time.Hour)
+}
+
+// GetBackendReadConcurrency returns the max backend read concurrency.
+func GetBackendReadConcurrency() int64 {
+	return backendReadConcurrency.Get()
+}
+
+// GetBackendWriteConcurrency returns the max backend write concurrency.
+func GetBackendWriteConcurrency() int64 {
+	return backendWriteConcurrency.Get()
 }
 
 // GetWaitReplicasTimeout is a getter function.
