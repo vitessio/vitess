@@ -1515,15 +1515,6 @@ func TestConcurrentUpdates(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond, "expected all updates to be processed")
 }
 
-func waitForEmptyMessageQueue(queue chan *TabletHealth) {
-	for {
-		if len(queue) == 0 {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
 func tabletDialer(ctx context.Context, tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservice.QueryService, error) {
 	connMapMu.Lock()
 	defer connMapMu.Unlock()
