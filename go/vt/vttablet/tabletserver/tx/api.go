@@ -26,7 +26,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -124,55 +123,59 @@ var txNames = map[ReleaseReason]string{
 
 // RecordQueryDetail records the query and tables against this transaction.
 func (p *Properties) RecordQueryDetail(query string, tables []string) {
-	if p == nil {
-		return
-	}
-	p.Queries = append(p.Queries, Query{
-		Sql:    query,
-		Tables: tables,
-	})
+	return
+	// if p == nil {
+	// 	return
+	// }
+	// p.Queries = append(p.Queries, Query{
+	// 	Sql:    query,
+	// 	Tables: tables,
+	// })
 }
 
 // RecordQueryDetail records the query and tables against this transaction.
 func (p *Properties) RecordSavePointDetail(savepoint string) {
-	if p == nil {
-		return
-	}
-	p.Queries = append(p.Queries, Query{
-		Savepoint: savepoint,
-	})
+	return
+	// if p == nil {
+	// 	return
+	// }
+	// p.Queries = append(p.Queries, Query{
+	// 	Savepoint: savepoint,
+	// })
 }
 
 func (p *Properties) RollbackToSavepoint(savepoint string) error {
-	if p == nil {
-		return nil
-	}
-	for i, query := range p.Queries {
-		if query.Savepoint == savepoint {
-			p.Queries = p.Queries[:i]
-			return nil
-		}
-	}
-
-	return vterrors.VT13001(fmt.Sprintf("savepoint %s not found", savepoint))
+	return nil
+	// if p == nil {
+	// 	return nil
+	// }
+	// for i, query := range p.Queries {
+	// 	if query.Savepoint == savepoint {
+	// 		p.Queries = p.Queries[:i]
+	// 		return nil
+	// 	}
+	// }
+	//
+	// return vterrors.VT13001(fmt.Sprintf("savepoint %s not found", savepoint))
 }
 
 // RecordQuery records the query and extract tables against this transaction.
 func (p *Properties) RecordQuery(query string, parser *sqlparser.Parser) {
-	if p == nil {
-		return
-	}
-	stmt, err := parser.Parse(query)
-	if err != nil {
-		// This should neven happen, but if it does,
-		// we would not be able to block cut-overs on this query.
-		return
-	}
-	tables := sqlparser.ExtractAllTables(stmt)
-	p.Queries = append(p.Queries, Query{
-		Sql:    query,
-		Tables: tables,
-	})
+	return
+	// if p == nil {
+	// 	return
+	// }
+	// stmt, err := parser.Parse(query)
+	// if err != nil {
+	// 	// This should neven happen, but if it does,
+	// 	// we would not be able to block cut-overs on this query.
+	// 	return
+	// }
+	// tables := sqlparser.ExtractAllTables(stmt)
+	// p.Queries = append(p.Queries, Query{
+	// 	Sql:    query,
+	// 	Tables: tables,
+	// })
 }
 
 // InTransaction returns true as soon as this struct is not nil
