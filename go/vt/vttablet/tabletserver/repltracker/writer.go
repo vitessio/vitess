@@ -98,15 +98,15 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	configType := HeartbeatConfigTypeNone
 	onDemandDuration := defaultOnDemandDuration
 	switch {
+	case config.ReplicationTracker.Mode == tabletenv.Heartbeat:
+		configType = HeartbeatConfigTypeAlways
+		onDemandDuration = 0
 	case config.ReplicationTracker.HeartbeatOnDemand > 0:
 		configType = HeartbeatConfigTypeOnDemand
 		onDemandDuration = config.ReplicationTracker.HeartbeatOnDemand
 		if onDemandDuration < minimalOnDemandDuration {
 			onDemandDuration = minimalOnDemandDuration
 		}
-	case config.ReplicationTracker.Mode == tabletenv.Heartbeat:
-		configType = HeartbeatConfigTypeAlways
-		onDemandDuration = 0
 	}
 	heartbeatInterval := config.ReplicationTracker.HeartbeatInterval
 	if heartbeatInterval == 0 {
