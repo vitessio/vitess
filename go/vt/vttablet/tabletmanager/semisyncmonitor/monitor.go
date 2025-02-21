@@ -83,6 +83,9 @@ type Monitor struct {
 	waiters []chan struct{}
 	// writesBlockedGauge is a gauge tracking the number of writes the monitor is blocked on.
 	writesBlockedGauge *stats.Gauge
+	// errorCount is the number of errors that the semi-sync monitor ran into.
+	// We ignore some of the errors, so the counter is a good way to track how many errors we have seen.
+	errorCount *stats.Counter
 }
 
 // NewMonitor creates a new Monitor.
@@ -94,7 +97,8 @@ func NewMonitor(config *tabletenv.TabletConfig, exporter *servenv.Exporter) *Mon
 		// but this seams fine for now.
 		clearTicks:         timer.NewTimer(clearTimerDuration),
 		writesBlockedGauge: exporter.NewGauge("SemiSyncMonitorWritesBlocked", "Number of writes blocked in the semi-sync monitor"),
-		appPool:            dbconnpool.NewConnectionPool("SemiSyncMonitorAppPool", exporter, 20, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		errorCount:         exporter.NewCounter("SemiSyncMonitorErrorCount", "Number of errors encountered by the semi-sync monitor"),
+		appPool:            dbconnpool.NewConnectionPool("SemiSyncMonitorAppPool", exporter, maxWritesPermitted+5, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 		waiters:            make([]chan struct{}, 0),
 	}
 }
@@ -162,6 +166,7 @@ func (m *Monitor) checkAndFixSemiSyncBlocked() {
 	defer cancel()
 	isBlocked, err := m.isSemiSyncBlocked(ctx)
 	if err != nil {
+		m.errorCount.Add(1)
 		// If we are unable to determine whether the primary is blocked or not,
 		// then we can just abort the function and try again later.
 		log.Errorf("SemiSync Monitor: failed to check if primary is blocked on semi-sync: %v", err)
@@ -335,12 +340,14 @@ func (m *Monitor) write() {
 	defer cancel()
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
+		m.errorCount.Add(1)
 		log.Errorf("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table: %v", err)
 		return
 	}
 	defer conn.Recycle()
 	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatWrite), 0, false)
 	if err != nil {
+		m.errorCount.Add(1)
 		log.Errorf("SemiSync Monitor: failed to write to semisync_heartbeat table: %v", err)
 	} else {
 		// One of the writes went through without an error.
@@ -370,12 +377,14 @@ func (m *Monitor) clearAllData() {
 	// Get a connection from the pool
 	conn, err := m.appPool.Get(context.Background())
 	if err != nil {
+		m.errorCount.Add(1)
 		log.Errorf("SemiSync Monitor: failed get a connection to clear semisync_heartbeat table: %v", err)
 		return
 	}
 	defer conn.Recycle()
 	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatClear), 0, false)
 	if err != nil {
+		m.errorCount.Add(1)
 		log.Errorf("SemiSync Monitor: failed to clear semisync_heartbeat table: %v", err)
 	}
 }
