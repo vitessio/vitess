@@ -100,5 +100,5 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	fs.Uint64Var(&mysql.ZstdInMemoryDecompressorMaxSize, "binlog-in-memory-decompressor-max-size", mysql.ZstdInMemoryDecompressorMaxSize, "This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode.")
 
-	fs.BoolVar(&vreplicationEnableHttpLog, "vreplication_enable_http_log", vreplicationEnableHttpLog, "Enable the /debug/vrlog HTTP endpoint, which will produce a log of the queries executed on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.")
+	fs.BoolVar(&vreplicationEnableHttpLog, "vreplication_enable_http_log", vreplicationEnableHttpLog, "Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.")
 }
