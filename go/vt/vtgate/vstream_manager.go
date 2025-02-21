@@ -194,6 +194,10 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		tabletPickerOptions: discovery.TabletPickerOptions{
 			CellPreference: flags.GetCellPreference(),
 			TabletOrder:    flags.GetTabletOrder(),
+			// This is NOT configurable via the API because we check the
+			// discovery.GetLowReplicationLag().Seconds() value in the tablet
+			// health stream.
+			ExcludeTabletsWithMaxReplicationLag: discovery.GetLowReplicationLag(),
 		},
 		flags: flags,
 	}
