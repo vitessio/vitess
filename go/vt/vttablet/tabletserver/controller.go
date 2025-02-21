@@ -120,8 +120,8 @@ type Controller interface {
 	// WaitForPreparedTwoPCTransactions waits for all prepared transactions to be resolved.
 	WaitForPreparedTwoPCTransactions(ctx context.Context) error
 
-	// SetDemotePrimaryStalled marks that demote primary is stalled in the state manager.
-	SetDemotePrimaryStalled()
+	// SetDemotePrimaryStalled sets the demote primary stalled field to the provided value in the state manager.
+	SetDemotePrimaryStalled(val bool)
 
 	// IsDiskStalled returns if the disk is stalled.
 	IsDiskStalled() bool

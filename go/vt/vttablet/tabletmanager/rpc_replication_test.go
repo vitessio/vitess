@@ -50,16 +50,16 @@ func TestWaitForGrantsToHaveApplied(t *testing.T) {
 
 type demotePrimaryStallQS struct {
 	tabletserver.Controller
-	waitTime       time.Duration
+	qsWaitChan     chan any
 	primaryStalled atomic.Bool
 }
 
-func (d *demotePrimaryStallQS) SetDemotePrimaryStalled() {
-	d.primaryStalled.Store(true)
+func (d *demotePrimaryStallQS) SetDemotePrimaryStalled(val bool) {
+	d.primaryStalled.Store(val)
 }
 
 func (d *demotePrimaryStallQS) IsServing() bool {
-	time.Sleep(d.waitTime)
+	<-d.qsWaitChan
 	return false
 }
 
@@ -74,7 +74,7 @@ func TestDemotePrimaryStalled(t *testing.T) {
 
 	// Create a fake query service control to intercept calls from DemotePrimary function.
 	qsc := &demotePrimaryStallQS{
-		waitTime: 2 * time.Second,
+		qsWaitChan: make(chan any),
 	}
 	// Create a tablet manager with a replica type tablet.
 	tm := &TabletManager{
@@ -88,8 +88,20 @@ func TestDemotePrimaryStalled(t *testing.T) {
 		QueryServiceControl: qsc,
 	}
 
-	// We make IsServing stall for over 2 seconds, which is longer than 10 * remote operation timeout.
+	go func() {
+		tm.demotePrimary(context.Background(), false)
+	}()
+	// We make IsServing stall by making it wait on a channel.
 	// This should cause the demote primary operation to be stalled.
-	tm.demotePrimary(context.Background(), false)
-	require.True(t, qsc.primaryStalled.Load())
+	require.Eventually(t, func() bool {
+		return qsc.primaryStalled.Load()
+	}, 5*time.Second, 100*time.Millisecond)
+
+	// Unblock the DemotePrimary call by closing the channel.
+	close(qsc.qsWaitChan)
+
+	// Eventually demote primary will succeed, and we want the stalled field to be cleared.
+	require.Eventually(t, func() bool {
+		return !qsc.primaryStalled.Load()
+	}, 5*time.Second, 100*time.Millisecond)
 }
