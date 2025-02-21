@@ -22,6 +22,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/vschema"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -370,21 +373,83 @@ func TestChangeRouting(t *testing.T) {
 }
 
 func TestDRInitializeTargetSequences(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+	sourceKeyspaceName := "sourceks"
+	targetKeyspaceName := "targetks"
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = schema
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+	require.NoError(t, err)
 	drLog := NewLogRecorder()
 	dr := &switcherDryRun{
 		drLog: drLog,
+		ts:    ts,
 	}
 
-	tables := map[string]*sequenceMetadata{
-		"t1": nil,
-		"t2": nil,
-		"t3": nil,
+	sm1 := sequenceMetadata{
+		backingTableName:     "seq1",
+		backingTableKeyspace: "sourceks",
+		backingTableDBName:   "ks1",
+		usingTableName:       "t1",
+		usingTableDBName:     "targetks",
+		usingTableDefinition: &vschema.Table{
+			AutoIncrement: &vschema.AutoIncrement{Column: "id", Sequence: "seq1"},
+		},
 	}
-	err := dr.initializeTargetSequences(ctx, tables)
+	sm2 := sm1
+	sm2.backingTableName = "seq2"
+	sm2.usingTableName = "t2"
+	sm2.usingTableDefinition.AutoIncrement.Sequence = "seq2"
+
+	sm3 := sm1
+	sm3.backingTableName = "seq3"
+	sm3.usingTableName = "t3"
+	sm3.usingTableDefinition.AutoIncrement.Sequence = "seq3"
+
+	tables := map[string]*sequenceMetadata{
+		"t1": &sm1,
+		"t2": &sm2,
+		"t3": &sm3,
+	}
+
+	for range tables {
+		env.tmc.expectVRQuery(200, "/select max.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("maxval", "int64"), "10"))
+		env.tmc.expectVRQuery(100, "/select next_id.*.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("next_id", "int64"), "1"))
+	}
+	env.tmc.expectVRQuery(100, "/select next_id.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("next_id", "int64"), "1"))
+
+	err = dr.initializeTargetSequences(ctx, tables)
 	require.NoError(t, err)
-	assert.Len(t, drLog.logs, 1)
-	assert.Contains(t, drLog.logs[0], "t1")
-	assert.Contains(t, drLog.logs[0], "t2")
-	assert.Contains(t, drLog.logs[0], "t3")
+	assert.Len(t, drLog.logs, 4)
+	assert.Contains(t, drLog.logs[0], "The following sequence backing tables used by tables being moved will be initialized:")
+	assert.Contains(t, drLog.logs[1], "Backing table: t1, current value 0, new value 1")
+	assert.Contains(t, drLog.logs[2], "Backing table: t2, current value 0, new value 1")
+	assert.Contains(t, drLog.logs[3], "Backing table: t3, current value 0, new value 1")
 }

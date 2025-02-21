@@ -70,11 +70,15 @@ type sequenceMetadata struct {
 }
 
 func (sm *sequenceMetadata) escapeValues() error {
-	usingCol, err := sqlescape.EnsureEscaped(sm.usingTableDefinition.AutoIncrement.Column)
-	if err != nil {
-		err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid column name %s specified for sequence in table %s: %v",
-			sm.usingTableDefinition.AutoIncrement.Column, sm.usingTableName, err)
-		return err
+	usingCol := ""
+	var err error
+	if sm.usingTableDefinition != nil && sm.usingTableDefinition.AutoIncrement != nil {
+		usingCol, err = sqlescape.EnsureEscaped(sm.usingTableDefinition.AutoIncrement.Column)
+		if err != nil {
+			err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid column name %s specified for sequence in table %s: %v",
+				sm.usingTableDefinition.AutoIncrement.Column, sm.usingTableName, err)
+			return err
+		}
 	}
 	sm.usingCol = usingCol
 	usingDB, err := sqlescape.EnsureEscaped(sm.usingTableDBName)
