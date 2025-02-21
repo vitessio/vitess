@@ -415,6 +415,9 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 
+	// Set source alias to nil
+	tm.sourceAlias = nil
+
 	return replication.EncodePosition(pos), nil
 }
 
@@ -681,6 +684,10 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
+
+	// Set source alias to nil
+	tm.sourceAlias = nil
+
 	return nil
 }
 
@@ -694,6 +701,7 @@ func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {
 		return err
 	}
 	defer tm.unlock()
+	tm.sourceAlias = nil
 	return tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionNone, SemiSyncActionNone)
 }
 
@@ -772,6 +780,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err
 		}
+		tm.sourceAlias = nil
 	}
 
 	// See if we were replicating at all, and should be replicating.
@@ -825,6 +834,9 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if err != nil {
 		return err
 	}
+
+	// Store the current primary alias
+	tm.sourceAlias = parentAlias
 
 	host := parent.Tablet.MysqlHostname
 	port := parent.Tablet.MysqlPort
@@ -901,9 +913,6 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			}
 		}
 	}
-
-	// Store the current primary alias
-	tm.sourceAlias = parentAlias
 
 	return nil
 }
