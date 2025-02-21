@@ -69,7 +69,8 @@ var (
 	hcPrimaryPromotedCounters = stats.NewCountersWithMultiLabels("HealthcheckPrimaryPromoted", "Primary promoted in keyspace/shard name because of health check errors", []string{"Keyspace", "ShardName"})
 	healthcheckOnce           sync.Once
 
-	hcMessagesDropped = stats.NewCounter("HealthCheckMessagesDropped", "Number of messages dropped by the healthcheck because the subscriber buffer was full")
+	// counter that tells us how many healthcheck messages have been dropped
+	hcChannelFullCounter = stats.NewCounter("HealthCheckChannelFullErrors", "Number of times the healthcheck broadcast channel was full")
 
 	// TabletURLTemplateString is a flag to generate URLs for the tablets that vtgate discovers.
 	TabletURLTemplateString = "http://{{.GetTabletHostPort}}"
@@ -653,8 +654,9 @@ func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 		select {
 		case c <- th:
 		default:
-			log.Errorf("HealthCheckImpl.broadcast: subscriber buffer full, dropping message")
-			hcMessagesDropped.Add(1)
+			// If the channel is full, we drop the message.
+			hcChannelFullCounter.Add(1)
+			log.Warningf("HealthCheck broadcast channel is full, dropping message for %s", topotools.TabletIdent(th.Tablet))
 		}
 	}
 }

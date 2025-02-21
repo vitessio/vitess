@@ -1515,61 +1515,6 @@ func TestConcurrentUpdates(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond, "expected all updates to be processed")
 }
 
-// BenchmarkAccess_FastConsumer benchmarks the access time of the healthcheck for a fast consumer.
-func BenchmarkAccess_FastConsumer(b *testing.B) {
-	ctx := context.Background()
-	// reset error counters
-	hcErrorCounters.ResetAll()
-	ts := memorytopo.NewServer(ctx, "cell")
-	defer ts.Close()
-	hc := createTestHc(ctx, ts)
-	// close healthcheck
-	defer hc.Close()
-
-	for i := 0; i < b.N; i++ {
-		// Subscribe to the healthcheck with a fast consumer.
-		ch := hc.Subscribe()
-		go func() {
-			for range ch {
-			}
-		}()
-
-		for id := 0; id < 1000; id++ {
-			hc.broadcast(&TabletHealth{})
-		}
-		hc.Unsubscribe(ch)
-		waitForEmptyMessageQueue(ch)
-	}
-}
-
-// BenchmarkAccess_SlowConsumer benchmarks the access time of the healthcheck for a slow consumer.
-func BenchmarkAccess_SlowConsumer(b *testing.B) {
-	ctx := context.Background()
-	// reset error counters
-	hcErrorCounters.ResetAll()
-	ts := memorytopo.NewServer(ctx, "cell")
-	defer ts.Close()
-	hc := createTestHc(ctx, ts)
-	// close healthcheck
-	defer hc.Close()
-
-	for i := 0; i < b.N; i++ {
-		// Subscribe to the healthcheck with a slow consumer.
-		ch := hc.Subscribe()
-		go func() {
-			for range ch {
-				time.Sleep(50 * time.Millisecond)
-			}
-		}()
-
-		for id := 0; id < 100; id++ {
-			hc.broadcast(&TabletHealth{})
-		}
-		hc.Unsubscribe(ch)
-		waitForEmptyMessageQueue(ch)
-	}
-}
-
 func waitForEmptyMessageQueue(queue chan *TabletHealth) {
 	for {
 		if len(queue) == 0 {
