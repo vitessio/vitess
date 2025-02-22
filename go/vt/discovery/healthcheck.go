@@ -304,7 +304,7 @@ type HealthCheckImpl struct {
 	loadTabletsTrigger chan struct{}
 	// options contains optional settings used to modify HealthCheckImpl
 	// behavior.
-	options discoveryOptions
+	options Options
 }
 
 // NewVTGateHealthCheckFilters returns healthcheck filters for vtgate.
@@ -357,7 +357,7 @@ func NewVTGateHealthCheckFilters() (filters TabletFilters, err error) {
 //
 //	Is one or more filters to apply when determining what tablets we want to stream healthchecks from.
 func NewHealthCheck(
-	ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, filters TabletFilter, opts ...DiscoveryOption,
+	ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, filters TabletFilter, opts ...Option,
 ) *HealthCheckImpl {
 	hc := &HealthCheckImpl{
 		ts:                 topoServer,

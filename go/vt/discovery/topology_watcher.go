@@ -86,13 +86,13 @@ type TopologyWatcher struct {
 	firstLoadChan chan struct{}
 	// options contains optional settings used to modify HealthCheckImpl
 	// behavior.
-	options discoveryOptions
+	options Options
 }
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and reloads them as needed.
 func NewTopologyWatcher(
-	ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, opts ...DiscoveryOption,
+	ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, opts ...Option,
 ) *TopologyWatcher {
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
@@ -299,7 +299,7 @@ type FilterByShard struct {
 	filters map[string][]*filterShard
 	// options contains optional settings used to modify FilterByShard
 	// behavior.
-	options discoveryOptions
+	options Options
 }
 
 // filterShard describes a filter for a given shard or keyrange inside
@@ -308,7 +308,7 @@ type filterShard struct {
 	keyspace string
 	shard    string
 	keyRange *topodatapb.KeyRange // only set if shard is also a KeyRange
-	options  discoveryOptions
+	options  Options
 }
 
 // NewFilterByShard creates a new FilterByShard for use by a
@@ -316,7 +316,7 @@ type filterShard struct {
 // can either be a shard name, or a keyrange. All tablets that match
 // at least one keyspace|shard tuple will be forwarded by the
 // TopologyWatcher to its consumer.
-func NewFilterByShard(filters []string, opts ...DiscoveryOption) (*FilterByShard, error) {
+func NewFilterByShard(filters []string, opts ...Option) (*FilterByShard, error) {
 	m := make(map[string][]*filterShard)
 	for _, filter := range filters {
 		parts := strings.Split(filter, "|")

@@ -17,30 +17,30 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 )
 
-// discoveryOptions configure a discovery components. discoveryOptions are set
-// by the DiscoveryOption values passed to the component constructors.
-type discoveryOptions struct {
+// Options configure a discovery components. Options are set by the Option
+// values passed to the component constructors.
+type Options struct {
 	logger logutil.Logger
 }
 
-// DiscoveryOption configures how we perform certain operations.
-type DiscoveryOption interface {
-	apply(*discoveryOptions)
+// Option configures how we perform certain operations.
+type Option interface {
+	apply(*Options)
 }
 
-// funcDiscoveryOption wraps a function that modifies discoveryOptions into
-// an implementation of the DiscoveryOption interface.
-type funcDiscoveryOption struct {
-	f func(*discoveryOptions)
+// funcOption wraps a function that modifies options into an implementation of
+// the Option interface.
+type funcOption struct {
+	f func(*Options)
 }
 
-func defaultOptions() discoveryOptions {
-	return discoveryOptions{
+func defaultOptions() Options {
+	return Options{
 		logger: logutil.NewConsoleLogger(),
 	}
 }
 
-func withOptions(dos ...DiscoveryOption) discoveryOptions {
+func withOptions(dos ...Option) Options {
 	os := defaultOptions()
 	for _, do := range dos {
 		do.apply(&os)
@@ -48,20 +48,20 @@ func withOptions(dos ...DiscoveryOption) discoveryOptions {
 	return os
 }
 
-func (fhco *funcDiscoveryOption) apply(dos *discoveryOptions) {
+func (fhco *funcOption) apply(dos *Options) {
 	fhco.f(dos)
 }
 
-func newFuncDiscoveryOption(f func(*discoveryOptions)) *funcDiscoveryOption {
-	return &funcDiscoveryOption{
+func newFuncOption(f func(*Options)) *funcOption {
+	return &funcOption{
 		f: f,
 	}
 }
 
 // WithLogger accepts a custom logger to use in a discovery component. If this
 // option is not provided then the default system logger will be used.
-func WithLogger(l logutil.Logger) DiscoveryOption {
-	return newFuncDiscoveryOption(func(o *discoveryOptions) {
+func WithLogger(l logutil.Logger) Option {
+	return newFuncOption(func(o *Options) {
 		o.logger = l
 	})
 }
