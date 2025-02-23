@@ -55,9 +55,9 @@ type parallelWorker struct {
 	// The initialization is done on the first row event that this vplayer sees.
 	foreignKeyChecksStateInitialized bool
 
-	// TODO(shlomi): remove this
-	numCommits    int
-	numSubscribes int
+	numCommits    int // TODO(shlomi): remove this (only used as benchmark info)
+	numEvents     int // TODO(shlomi): remove this (only used as benchmark info)
+	numSubscribes int // TODO(shlomi): remove this (only used as benchmark info)
 
 	updatedPos          replication.Position
 	updatedPosTimestamp int64
@@ -151,7 +151,7 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 	}()
 
 	defer func() {
-		log.Errorf("========== QQQ applyQueuedEvents worker %v num commits=%v, numSubscribes=%v", w.index, w.numCommits, w.numSubscribes)
+		log.Errorf("========== QQQ applyQueuedEvents worker %v num commits=%v, num events=%v, numSubscribes=%v", w.index, w.numCommits, w.numEvents, w.numSubscribes)
 	}()
 
 	ticker := time.NewTicker(maxIdleWorkerDuration / 2)
@@ -197,7 +197,7 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 				if !lastEventWasSkippedCommit {
 					continue
 				}
-				log.Errorf("========== QQQ applyQueuedEvents worker %v idle with isConsiderCommitWorkerEvent commit and %v events. COMMITTING", w.index, len(w.sequenceNumbers))
+				// log.Errorf("========== QQQ applyQueuedEvents worker %v idle with isConsiderCommitWorkerEvent commit and %v events. COMMITTING", w.index, len(w.sequenceNumbers))
 			}
 
 			skippable := func() bool {
@@ -205,8 +205,6 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 					return false
 				}
 				if event.Skippable {
-					// At this time only COMMIT events are Skippable, so checking for the type is not
-					// strictly necessary. But it's safer to add that check.
 					return true
 				}
 				if len(w.sequenceNumbers) < maxWorkerEvents {
@@ -604,6 +602,7 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, event *binlogdat
 		// Parallel VPlayer metrics. TODO(shlomi): remove
 		w.producer.numCommits.Add(1)
 		w.numCommits++
+		w.numEvents += len(w.sequenceNumbers)
 	}
 	// We now let the producer know that we've completed the sequence numbers.
 	// It will deassign these sequence numebrs from the worker.

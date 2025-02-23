@@ -37,6 +37,7 @@ import (
 const (
 	countWorkers          = 6
 	maxWorkerEvents       = 100
+	maxCountWorkersEvents = countWorkers * maxWorkerEvents
 	maxIdleWorkerDuration = 100 * time.Millisecond
 
 	aggregatePosInterval = 250 * time.Millisecond
@@ -87,6 +88,7 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 			return nil, err
 		}
 		vdbClient.maxBatchSize = vp.vr.dbClient.maxBatchSize
+
 		return vdbClient, nil
 	}
 	for i := range p.workers {
@@ -348,8 +350,6 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 		}
 	}()
 	currentWorker := p.workers[0]
-	// commitsWereSkipped tells us if at a given point in time we have delivered Skippable commits
-	commitsWereSkipped := false
 	for {
 		if p.posReached.Load() {
 			return io.EOF
@@ -405,33 +405,6 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 					return err
 				}
 			}
-			if event.Skippable {
-				// Mark that as of now, we have skipped commits.
-				// Noteworthy, we do ship Skippable commits to the workers, and
-				// it's the worker's choice to actually skip them. It mostly will
-				// (though sometimes it will override).
-				commitsWereSkipped = true
-			}
-			// This logic is about a scenario where we have batched *many* row changes and have skipped
-			// many commits. The logic in assignTransactionToWorker() caps the number of events per worker
-			// even if we're in the middle of an uncommitted batch, as we want to distribute the load across
-			// workers. But what this ends up with, is then we send some worker(s) a "Skippable" commit, move on
-			// to another worker(s), and when we finally reach the end of the batch, we've long since forgotten
-			// about those early workers.
-			// The idea here is to send a "consider commit" event to all workers. Workers will only consider this
-			// suggestion if they have a skipped commit. If so, they will go ahead and commit it.
-			// So, to summarize, when we reach the end of a batch, we make sure all workers who may have taken
-			// part in the batch, all commit the changes.
-			if event.Type == binlogdatapb.VEventType_COMMIT && !event.Skippable && commitsWereSkipped {
-				for _, w := range p.workers {
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case w.events <- p.generateConsiderCommitWorkerEvent():
-					}
-				}
-				commitsWereSkipped = false
-			}
 		}
 	}
 }
@@ -465,7 +438,7 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 		p.vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(p.vp.vr.id)), time.Duration(behind/1e9)*time.Second)
 	}
 
-	eventQueue := make(chan *binlogdatapb.VEvent, maxWorkerEvents*2*countWorkers)
+	eventQueue := make(chan *binlogdatapb.VEvent, 2*maxCountWorkersEvents)
 	go p.process(ctx, eventQueue)
 
 	// If we're not running, set ReplicationLagSeconds to be very high.
@@ -494,8 +467,8 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 		if err != nil {
 			return err
 		}
-
 		var pinWorker bool
+		countPinnedWorkerEvents := 0
 		lagSecs = -1
 		for i, events := range items {
 			for j, event := range events {
@@ -537,7 +510,7 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 					// applying the next set of events as part of the current transaction. This approach
 					// also handles the case where the last transaction is partial. In that case,
 					// we only group the transactions with commits we've seen so far.
-					if hasAnotherCommit(items, i, j+1) {
+					if countPinnedWorkerEvents < 2*maxCountWorkersEvents && hasAnotherCommit(items, i, j+1) {
 						pinWorker = true
 						event.Skippable = true
 					} else {
@@ -545,6 +518,11 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 					}
 				case binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_JOURNAL:
 					pinWorker = false
+				}
+				if pinWorker {
+					countPinnedWorkerEvents++
+				} else {
+					countPinnedWorkerEvents = 0
 				}
 				event.PinWorker = pinWorker
 				select {
