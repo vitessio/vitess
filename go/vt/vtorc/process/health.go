@@ -35,12 +35,7 @@ var ThisNodeHealth = &NodeHealth{}
 
 // writeHealthToDatabase writes to the database and returns if it was successful.
 func writeHealthToDatabase() bool {
-	_, err := db.ExecVTOrc("DELETE FROM node_health")
-	if err != nil {
-		log.Error(err)
-		return false
-	}
-	sqlResult, err := db.ExecVTOrc(`INSERT
+	sqlResult, err := db.ExecVTOrc(`REPLACE
 		INTO node_health (
 			last_seen_active
 		) VALUES (
