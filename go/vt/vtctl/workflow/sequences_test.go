@@ -615,3 +615,87 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 		})
 	}
 }
+
+// TestDryRunInitializeTargetSequences validates that we get the max value of the using tables and initialize the backing
+// tables to the next value.
+func TestDryRunInitializeTargetSequences(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+	sourceKeyspaceName := "sourceks"
+	targetKeyspaceName := "targetks"
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = schema
+
+	ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+	require.NoError(t, err)
+	drLog := NewLogRecorder()
+	dr := &switcherDryRun{
+		drLog: drLog,
+		ts:    ts,
+	}
+
+	sm1 := sequenceMetadata{
+		backingTableName:     "seq1",
+		backingTableKeyspace: "sourceks",
+		backingTableDBName:   "ks1",
+		usingTableName:       "t1",
+		usingTableDBName:     "targetks",
+		usingTableDefinition: &vschema.Table{
+			AutoIncrement: &vschema.AutoIncrement{Column: "id", Sequence: "seq1"},
+		},
+	}
+	sm2 := sm1
+	sm2.backingTableName = "seq2"
+	sm2.usingTableName = "t2"
+	sm2.usingTableDefinition.AutoIncrement.Sequence = "seq2"
+
+	sm3 := sm1
+	sm3.backingTableName = "seq3"
+	sm3.usingTableName = "t3"
+	sm3.usingTableDefinition.AutoIncrement.Sequence = "seq3"
+
+	tables := map[string]*sequenceMetadata{
+		"t1": &sm1,
+		"t2": &sm2,
+		"t3": &sm3,
+	}
+
+	for range tables {
+		env.tmc.expectVRQuery(200, "/select max.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("maxval", "int64"), "10"))
+		env.tmc.expectVRQuery(100, "/select next_id.*.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("next_id", "int64"), "1"))
+	}
+	env.tmc.expectVRQuery(100, "/select next_id.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("next_id", "int64"), "1"))
+
+	err = dr.initializeTargetSequences(ctx, tables)
+	require.NoError(t, err)
+	require.Len(t, drLog.logs, 4)
+	require.Contains(t, drLog.logs[0], "The following sequence backing tables used by tables being moved will be initialized:")
+	for i, sm := range []sequenceMetadata{sm1, sm2, sm3} {
+		require.Contains(t, drLog.logs[i+1], fmt.Sprintf("Backing table: %s, current value 0, new value 1", sm.usingTableName))
+	}
+}
