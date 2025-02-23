@@ -129,7 +129,9 @@ func (gtid Mysql56GTID) SequenceNumber() any {
 
 // GTIDSet implements GTID.GTIDSet().
 func (gtid Mysql56GTID) GTIDSet() GTIDSet {
-	return Mysql56GTIDSet{}.AddGTID(gtid)
+	return Mysql56GTIDSet{
+		gtid.Server: []interval{{start: gtid.Sequence, end: gtid.Sequence}},
+	}
 }
 
 func init() {

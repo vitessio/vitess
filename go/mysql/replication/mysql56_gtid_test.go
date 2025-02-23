@@ -137,9 +137,7 @@ func TestMysql56GTIDGTIDSet(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	input := Mysql56GTID{Server: sid1, Sequence: 5432}
 	want := Mysql56GTIDSet{sid1: []interval{{5432, 5432}}}
-	if got := input.GTIDSet(); !got.Equal(want) {
-		t.Errorf("%#v.GTIDSet() = %#v, want %#v", input, got, want)
-	}
+	assert.Equal(t, want, input.GTIDSet())
 }
 
 func TestMysql56ParseGTID(t *testing.T) {
