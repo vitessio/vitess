@@ -352,7 +352,7 @@ func TestRefreshAllShards(t *testing.T) {
 	require.Equal(t, []string{"-40", "40-80", "80-c0"}, shardNames)
 
 	// test clustersToWatch filters what shards are saved
-	clustersToWatch = []string{"ks1/-40", "ks1/40-80"}
+	clustersToWatch = []string{"ks1/-80"}
 	require.NoError(t, initializeShardsToWatch())
 	require.NoError(t, refreshAllShards(ctx, "ks1"))
 	shardNames, err = inst.ReadShardNames("ks1")
