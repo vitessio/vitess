@@ -82,12 +82,12 @@ func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 	return v
 }
 
-func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field, cmp *testcases.Comparison) {
+func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field, cmp *testcases.Comparison, skipCollationCheck bool) {
 	t.Helper()
 
 	localQuery := "SELECT " + expr
 	remoteQuery := "SELECT " + expr
-	if debugCheckCollations {
+	if debugCheckCollations && !skipCollationCheck {
 		remoteQuery = fmt.Sprintf("SELECT %s, COLLATION(%s)", expr, expr)
 	}
 	if len(fields) > 0 {
@@ -146,7 +146,7 @@ func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, en
 	var localCollation, remoteCollation collations.ID
 	if localErr == nil {
 		v := local.Value(collations.MySQL8().DefaultConnectionCharset())
-		if debugCheckCollations {
+		if debugCheckCollations && !skipCollationCheck {
 			if v.IsNull() {
 				localCollation = collations.CollationBinaryID
 			} else {
@@ -166,7 +166,7 @@ func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, en
 		} else {
 			remoteVal = remote.Rows[0][0]
 		}
-		if debugCheckCollations {
+		if debugCheckCollations && !skipCollationCheck {
 			if remote.Rows[0][0].IsNull() {
 				// TODO: passthrough proper collations for nullable fields
 				remoteCollation = collations.CollationBinaryID
@@ -271,9 +271,9 @@ func TestMySQL(t *testing.T) {
 				Username: "vt_dba",
 			})
 			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{env: venv})
-			tc.Run(func(query string, row []sqltypes.Value) {
+			tc.Run(func(query string, row []sqltypes.Value, skipCollationCheck bool) {
 				env.Row = row
-				compareRemoteExprEnv(t, collationEnv, env, conn, query, tc.Schema, tc.Compare)
+				compareRemoteExprEnv(t, collationEnv, env, conn, query, tc.Schema, tc.Compare, skipCollationCheck)
 			})
 		})
 	}
