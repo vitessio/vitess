@@ -311,7 +311,7 @@ func (call *builtinDateFormat) compile(c *compiler) (ctype, error) {
 	skip1 := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Datetime, sqltypes.Date:
+	case sqltypes.Datetime, sqltypes.Date, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xDT(1, datetime.DefaultPrecision, false)
 	}
@@ -423,7 +423,7 @@ func (call *builtinConvertTz) compile(c *compiler) (ctype, error) {
 
 	var prec int32
 	switch n.Type {
-	case sqltypes.Datetime, sqltypes.Date:
+	case sqltypes.Datetime, sqltypes.Date, sqltypes.Timestamp:
 		prec = n.Size
 	case sqltypes.Decimal:
 		prec = n.Scale
@@ -505,7 +505,7 @@ func (call *builtinDayOfMonth) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, true)
 	}
@@ -538,7 +538,7 @@ func (call *builtinDayOfWeek) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, false)
 	}
@@ -571,7 +571,7 @@ func (call *builtinDayOfYear) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, false)
 	}
@@ -714,7 +714,7 @@ func (call *builtinFromUnixtime) compile(c *compiler) (ctype, error) {
 	case sqltypes.Decimal:
 		prec = arg.Size
 		c.asm.Fn_FROM_UNIXTIME_d()
-	case sqltypes.Datetime, sqltypes.Date, sqltypes.Time:
+	case sqltypes.Datetime, sqltypes.Date, sqltypes.Time, sqltypes.Timestamp:
 		prec = arg.Size
 		if prec == 0 {
 			c.asm.Convert_Ti(1)
@@ -786,7 +786,7 @@ func (call *builtinHour) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xT(1, -1)
 	}
@@ -1130,7 +1130,7 @@ func (call *builtinMicrosecond) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xT(1, -1)
 	}
@@ -1163,7 +1163,7 @@ func (call *builtinMinute) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xT(1, -1)
 	}
@@ -1196,7 +1196,7 @@ func (call *builtinMonth) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, true)
 	}
@@ -1234,7 +1234,7 @@ func (call *builtinMonthName) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, c.sqlmode.AllowZeroDate())
 	}
@@ -1279,7 +1279,7 @@ func (call *builtinLastDay) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, c.sqlmode.AllowZeroDate())
 	}
@@ -1314,7 +1314,7 @@ func (call *builtinToDays) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, true)
 	}
@@ -1387,7 +1387,7 @@ func (call *builtinTimeToSec) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xT(1, -1)
 	}
@@ -1421,7 +1421,7 @@ func (call *builtinQuarter) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, true)
 	}
@@ -1454,7 +1454,7 @@ func (call *builtinSecond) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Time, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xT(1, -1)
 	}
@@ -1489,7 +1489,7 @@ func (call *builtinTime) compile(c *compiler) (ctype, error) {
 	var prec int32
 	switch arg.Type {
 	case sqltypes.Time:
-	case sqltypes.Datetime, sqltypes.Date:
+	case sqltypes.Datetime, sqltypes.Date, sqltypes.Timestamp:
 		prec = arg.Size
 		c.asm.Convert_xT(1, -1)
 	case sqltypes.Decimal:
@@ -1585,7 +1585,7 @@ func (call *builtinUnixTimestamp) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_UNIX_TIMESTAMP1()
 	c.asm.jumpDestination(skip)
 	switch arg.Type {
-	case sqltypes.Datetime, sqltypes.Time, sqltypes.Decimal:
+	case sqltypes.Datetime, sqltypes.Time, sqltypes.Decimal, sqltypes.Timestamp:
 		if arg.Size == 0 {
 			return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
 		}
@@ -1650,7 +1650,7 @@ func (call *builtinWeek) compile(c *compiler) (ctype, error) {
 	var skip2 *jump
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, false)
 	}
@@ -1695,7 +1695,7 @@ func (call *builtinWeekDay) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, false)
 	}
@@ -1731,7 +1731,7 @@ func (call *builtinWeekOfYear) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, false)
 	}
@@ -1766,7 +1766,7 @@ func (call *builtinYear) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(arg)
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, true)
 	}
@@ -1816,7 +1816,7 @@ func (call *builtinYearWeek) compile(c *compiler) (ctype, error) {
 	var skip2 *jump
 
 	switch arg.Type {
-	case sqltypes.Date, sqltypes.Datetime:
+	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp:
 	default:
 		c.asm.Convert_xD(1, false)
 	}
