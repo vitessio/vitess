@@ -2987,12 +2987,12 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		return countRunnning, cancellable, nil
 	}
 
-	var currentUserThrottleRatio float64
+	var onlineddlUserThrottleRatio float64
 
 	// No point in reviewing throttler info if it's not enabled&open
 	for _, app := range e.lagThrottler.ThrottledApps() {
 		if throttlerapp.OnlineDDLName.Equals(app.AppName) {
-			currentUserThrottleRatio = app.Ratio
+			onlineddlUserThrottleRatio = app.Ratio
 			break
 		}
 	}
@@ -3029,7 +3029,17 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 
 		uuidsFoundRunning[uuid] = true
 
-		_ = e.updateMigrationUserThrottleRatio(ctx, uuid, currentUserThrottleRatio)
+		var migrationUserThrottleRatio float64
+		for _, app := range e.lagThrottler.ThrottledApps() {
+			m := app.Name().SplitMap()
+			if m[uuid] {
+				migrationUserThrottleRatio = app.Ratio
+				break
+			}
+		}
+		userThrottleRatio := max(onlineddlUserThrottleRatio, migrationUserThrottleRatio)
+		_ = e.updateMigrationUserThrottleRatio(ctx, uuid, userThrottleRatio)
+
 		switch strategySetting.Strategy {
 		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 			reviewVReplRunningMigration := func() error {
