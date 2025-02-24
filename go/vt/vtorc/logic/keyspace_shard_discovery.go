@@ -123,8 +123,8 @@ func shouldWatchShard(shard *topo.ShardInfo) bool {
 
 	shardRanges, err := key.ParseShardingSpec(shard.ShardName())
 	if err != nil {
-		// This should never happen because we parse shard
-		// names when building shardsToWatch.
+		// This parse should never fail because we get the shard names
+		// from the topo using ts.FindAllShardsInKeyspace().
 		log.Error(err)
 		return false
 	}
