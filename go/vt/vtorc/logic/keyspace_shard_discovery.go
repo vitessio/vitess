@@ -121,19 +121,9 @@ func shouldWatchShard(shard *topo.ShardInfo) bool {
 		return false
 	}
 
-	shardRanges, err := key.ParseShardingSpec(shard.ShardName())
-	if err != nil {
-		// This parse should never fail because we get the shard names
-		// from the topo using ts.FindAllShardsInKeyspace().
-		log.Error(err)
-		return false
-	}
-
 	for _, keyRange := range watchRanges {
-		for _, shardRange := range shardRanges {
-			if key.KeyRangeContainsKeyRange(keyRange, shardRange) {
-				return true
-			}
+		if key.KeyRangeContainsKeyRange(keyRange, shard.GetKeyRange()) {
+			return true
 		}
 	}
 	return false
@@ -204,8 +194,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		}
 		shardName := topoproto.KeyspaceShardString(keyspaceName, shard)
 		log.Infof("Forgetting shard: %s", shardName)
-		err = inst.DeleteShard(keyspaceName, shard)
-		if err != nil {
+		if err = inst.DeleteShard(keyspaceName, shard); err != nil {
 			log.Errorf("Failed to delete shard %s: %+v", shardName, err)
 			return err
 		}
