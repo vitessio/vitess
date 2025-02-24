@@ -271,7 +271,8 @@ func (se *Engine) Open() error {
 	}
 
 	se.ticks.Start(func() {
-		if err := se.Reload(ctx); err != nil {
+		// update stats on periodic reloads
+		if err := se.reload(ctx, true); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
