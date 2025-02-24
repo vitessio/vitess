@@ -38,7 +38,7 @@ const (
 	countWorkers          = 6
 	maxWorkerEvents       = 100
 	maxCountWorkersEvents = countWorkers * maxWorkerEvents
-	maxIdleWorkerDuration = 100 * time.Millisecond
+	maxIdleWorkerDuration = 250 * time.Millisecond
 
 	aggregatePosInterval = 250 * time.Millisecond
 )
