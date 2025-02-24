@@ -179,20 +179,19 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 	}
 	savedShards := make(map[string]bool, len(shardInfos))
 	for _, shardInfo := range shardInfos {
-		shardName := shardInfo.ShardName()
-		shouldRefresh, err := shouldWatchShard(shardInfo)
+		shouldWatchShard, err := shouldWatchShard(shardInfo)
 		if err != nil {
 			log.Error(err)
 			return err
 		}
-		if !shouldRefresh {
+		if !shouldWatchShard {
 			continue
 		}
 		if err = inst.SaveShard(shardInfo); err != nil {
 			log.Error(err)
 			return err
 		}
-		savedShards[shardName] = true
+		savedShards[shardInfo.ShardName()] = true
 	}
 
 	// delete shards that were not returned by ts.FindAllShardsInKeyspace(...),
