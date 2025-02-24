@@ -518,7 +518,7 @@ func (p *Projection) Compact(ctx *plancontext.PlanningContext) (Operator, *Apply
 
 func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *ApplyJoin) (Operator, *ApplyResult) {
 	ap, err := p.GetAliasedProjections()
-	if err != nil {
+	if err != nil || len(join.Columns) == 0 {
 		return p, NoRewrite
 	}
 
@@ -528,9 +528,6 @@ func (p *Projection) compactWithJoin(ctx *plancontext.PlanningContext, join *App
 		switch colInfo := col.Info.(type) {
 		case Offset:
 			if col.Original.As.NotEmpty() {
-				return p, NoRewrite
-			}
-			if len(join.Columns) == 0 {
 				return p, NoRewrite
 			}
 			newColumns = append(newColumns, join.Columns[colInfo])
