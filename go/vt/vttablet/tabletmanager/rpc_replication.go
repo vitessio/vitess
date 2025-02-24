@@ -155,13 +155,20 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	// Semi sync status - "show status like 'Rpl_semi_sync_%_status'"
 	primarySemiSyncStatus, replicaSemiSyncStatus := tm.MysqlDaemon.SemiSyncStatus(ctx)
 
-	//  Semi sync clients count - "show status like 'semi_sync_source_clients'"
+	// Semi sync clients count - "show status like 'semi_sync_source_clients'"
 	semiSyncClients := tm.MysqlDaemon.SemiSyncClients(ctx)
 
 	// Semi sync settings - "show status like 'rpl_semi_sync_%'
 	semiSyncTimeout, semiSyncNumReplicas := tm.MysqlDaemon.SemiSyncSettings(ctx)
 
+	// Replication configuration
 	replConfiguration, err := tm.MysqlDaemon.ReplicationConfiguration(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Replication source tablet alias
+	sourceAlias, err := tm.getReplicationSourceAlias(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +196,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SemiSyncWaitForReplicaCount: semiSyncNumReplicas,
 		SuperReadOnly:               superReadOnly,
 		ReplicationConfiguration:    replConfiguration,
+		SourceAlias:                 sourceAlias,
 	}, nil
 }
 
@@ -407,6 +415,9 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 
+	// Set source alias to nil
+	tm.sourceAlias = nil
+
 	return replication.EncodePosition(pos), nil
 }
 
@@ -497,6 +508,9 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort, 0, false, true); err != nil {
 		return err
 	}
+
+	// Store the new source alias
+	tm.sourceAlias = parent
 
 	// wait until we get the replicated row, or our context times out
 	return tm.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
@@ -677,6 +691,10 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
+
+	// Set source alias to nil
+	tm.sourceAlias = nil
+
 	return nil
 }
 
@@ -690,6 +708,7 @@ func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {
 		return err
 	}
 	defer tm.unlock()
+	tm.sourceAlias = nil
 	return tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionNone, SemiSyncActionNone)
 }
 
@@ -738,6 +757,14 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication, semiSyncAction, heartbeatInterval)
 }
 
+func (tm *TabletManager) getReplicationSourceAlias(ctx context.Context) (*topodatapb.TabletAlias, error) {
+	if err := tm.lock(ctx); err != nil {
+		return nil, err
+	}
+	defer tm.unlock()
+	return tm.sourceAlias, nil
+}
+
 func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
 	log.Infof("SetReplicationSource: parent: %v  position: %v force: %v", parentAlias, waitPosition, forceStartReplication)
 	if err := tm.lock(ctx); err != nil {
@@ -760,6 +787,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err
 		}
+		tm.sourceAlias = nil
 	}
 
 	// See if we were replicating at all, and should be replicating.
@@ -813,6 +841,9 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	if err != nil {
 		return err
 	}
+
+	// Store the current primary alias
+	tm.sourceAlias = parentAlias
 
 	host := parent.Tablet.MysqlHostname
 	port := parent.Tablet.MysqlPort
@@ -910,6 +941,10 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
 		return nil
 	}
+
+	// Store the new primary alias
+	tm.sourceAlias = parent
+
 	return tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
 }
 
@@ -1035,6 +1070,10 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone); err != nil {
 		return "", err
 	}
+
+	// Set the source alias to nil
+	tm.sourceAlias = nil
+
 	return replication.EncodePosition(pos), nil
 }
 

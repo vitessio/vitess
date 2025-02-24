@@ -174,6 +174,9 @@ type TabletManager struct {
 	// tabletAlias is saved away from tablet for read-only access
 	tabletAlias *topodatapb.TabletAlias
 
+	// sourceAlias is the current replication source.
+	sourceAlias *topodatapb.TabletAlias
+
 	// baseTabletType is the tablet type we revert back to
 	// when we transition back from something like PRIMARY.
 	baseTabletType topodatapb.TabletType

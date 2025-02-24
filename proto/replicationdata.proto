@@ -19,6 +19,8 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "vitess.io/vitess/go/vt/proto/replicationdata";
 
+import "topodata.proto";
+
 package replicationdata;
 
 // Status is the replication status for MySQL/MariaDB/File-based. Returned by a
@@ -106,4 +108,5 @@ message FullStatus {
   bool super_read_only = 21;
   replicationdata.Configuration replication_configuration = 22;
   bool disk_stalled = 23;
+  topodata.TabletAlias source_alias = 24;
 }

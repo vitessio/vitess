@@ -299,6 +299,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		instance.SourceUUID = fs.ReplicationStatus.SourceUuid
 		instance.HasReplicationFilters = fs.ReplicationStatus.HasReplicationFilters
 
+		instance.SourceAlias = topoproto.TabletAliasString(fs.SourceAlias)
 		instance.SourceHost = fs.ReplicationStatus.SourceHost
 		instance.SourcePort = int(fs.ReplicationStatus.SourcePort)
 
@@ -478,7 +479,21 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	var primaryExecutedGtidSet string
 	primaryDataFound := false
 
-	query := `SELECT
+	primaryAlias := instance.SourceAlias
+	primaryHostname := instance.SourceHost
+	primaryPort := instance.SourcePort
+
+	// Using alias is a primary-key read
+	whereCond := `alias = ?`
+	args := sqlutils.Args(primaryAlias)
+
+	// Fallback to hostname + port query if no primaryAlias defined (added in v22)
+	if primaryAlias == "" {
+		whereCond = `hostname = ? AND port = ?`
+		args = sqlutils.Args(primaryHostname, primaryPort)
+	}
+
+	query := fmt.Sprintf(`SELECT
 		replication_depth,
 		source_host,
 		source_port,
@@ -486,11 +501,10 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		executed_gtid_set
 	FROM database_instance
 	WHERE
-		hostname = ?
-		AND port = ?`
-	primaryHostname := instance.SourceHost
-	primaryPort := instance.SourcePort
-	args := sqlutils.Args(primaryHostname, primaryPort)
+		%s`,
+		whereCond,
+	)
+
 	err = db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		primaryReplicationDepth = m.GetUint("replication_depth")
 		primaryHostname = m.GetString("source_host")
@@ -536,6 +550,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.BinlogRowImage = m.GetString("binlog_row_image")
 	instance.LogBinEnabled = m.GetBool("log_bin")
 	instance.LogReplicationUpdatesEnabled = m.GetBool("log_replica_updates")
+	instance.SourceAlias = m.GetString("source_alias")
 	instance.SourceHost = m.GetString("source_host")
 	instance.SourcePort = m.GetInt("source_port")
 	instance.ReplicaNetTimeout = m.GetInt32("replica_net_timeout")
@@ -836,6 +851,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"log_replica_updates",
 		"binary_log_file",
 		"binary_log_pos",
+		"source_alias",
 		"source_host",
 		"source_port",
 		"replica_net_timeout",
@@ -916,6 +932,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.LogReplicationUpdatesEnabled)
 		args = append(args, instance.SelfBinlogCoordinates.LogFile)
 		args = append(args, instance.SelfBinlogCoordinates.LogPos)
+		args = append(args, instance.SourceAlias)
 		args = append(args, instance.SourceHost)
 		args = append(args, instance.SourcePort)
 		args = append(args, instance.ReplicaNetTimeout)
