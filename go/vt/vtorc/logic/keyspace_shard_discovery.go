@@ -47,7 +47,7 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
 
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, _ := errgroup.WithContext(ctx)
 	for idx, keyspace := range keyspaces {
 		// Check if the current keyspace name is the same as the last one.
 		// If it is, then we know we have already refreshed its information.
