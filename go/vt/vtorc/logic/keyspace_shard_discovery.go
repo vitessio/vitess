@@ -109,19 +109,19 @@ func RefreshKeyspaceAndShard(keyspaceName string, shardName string) error {
 	return refreshShard(keyspaceName, shardName)
 }
 
-// shouldRefreshShard returns true if a shard is within the shardsToWatch
+// shouldWatchShard returns true if a shard is within the shardsToWatch
 // ranges for it's keyspace.
-func shouldRefreshShard(keyspace, shardName string) (bool, error) {
+func shouldWatchShard(shard *topo.ShardInfo) (bool, error) {
 	if len(shardsToWatch) == 0 {
 		return true, nil
 	}
 
-	watchRanges, found := shardsToWatch[keyspace]
+	watchRanges, found := shardsToWatch[shard.Keyspace()]
 	if !found {
 		return false, nil
 	}
 
-	shardRanges, err := key.ParseShardingSpec(shardName)
+	shardRanges, err := key.ParseShardingSpec(shard.ShardName())
 	if err != nil {
 		return false, err
 	}
@@ -180,7 +180,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 	savedShards := make(map[string]bool, len(shardInfos))
 	for _, shardInfo := range shardInfos {
 		shardName := shardInfo.ShardName()
-		shouldRefresh, err := shouldRefreshShard(keyspaceName, shardName)
+		shouldRefresh, err := shouldWatchShard(shardInfo)
 		if err != nil {
 			log.Error(err)
 			return err
