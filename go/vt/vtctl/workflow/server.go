@@ -973,6 +973,11 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 		return err
 	}
 	if err = mz.deploySchema(); err != nil {
+		// If there was an error while deploying schema, we should restart the
+		// streams before returning the error.
+		if startStreamsErr := mz.startStreams(ctx); startStreamsErr != nil {
+			return vterrors.Wrapf(startStreamsErr, "unable to restart workflow %s and failed to deploy schema: %v", req.Workflow, err)
+		}
 		return vterrors.Wrapf(err, "failed to deploy schema")
 	}
 
@@ -1008,11 +1013,6 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 		return nil
 	})
 	if err != nil {
-		// If there was an error while inserting copy_state of tables
-		// we should restart the streams before returning the error.
-		if startStreamsErr := mz.startStreams(ctx); startStreamsErr != nil {
-			return vterrors.Wrapf(startStreamsErr, "unable to restart workflow %s and failed to insert copy state: %v", req.Workflow, err)
-		}
 		return err
 	}
 
