@@ -29,8 +29,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -181,9 +179,7 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 
 	firstTime := true
 	notifier := func(full map[string]*Table, created, altered, dropped []*Table, _ bool) {
-		log.Infof("Notifier called, firstTime: %v, created %v, altered %v, dropped %v", firstTime, created, altered, dropped)
 		if firstTime {
-			log.Infof("Notifier called 2, firstTime: %v, created %v, altered %v, dropped %v", firstTime, created, altered, dropped)
 			firstTime = false
 			createTables := extractNamesFromTablesList(created)
 			sort.Strings(createTables)
@@ -191,7 +187,6 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 			assert.Equal(t, []*Table(nil), altered)
 			assert.Equal(t, []*Table(nil), dropped)
 		} else {
-			log.Infof("Notifier called 3, firstTime: %v, created %v, altered %v, dropped %v", firstTime, created, altered, dropped)
 			assert.Equal(t, []string{"test_table_04"}, extractNamesFromTablesList(created))
 			assert.Equal(t, []string{"test_table_03"}, extractNamesFromTablesList(altered))
 			assert.Equal(t, []string{"msg"}, extractNamesFromTablesList(dropped))
