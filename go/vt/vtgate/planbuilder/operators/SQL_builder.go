@@ -142,7 +142,7 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 		addPred = sel.AddWhere
 		qb.stmt = sel
 	default:
-		panic(fmt.Sprintf("cant add WHERE to %T", qb.stmt))
+		panic(fmt.Sprintf("cant add WHERE to %T, %s", qb.stmt, sqlparser.String(expr)))
 	}
 
 	for _, exp := range sqlparser.SplitAndExpression(nil, expr) {
