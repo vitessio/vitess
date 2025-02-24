@@ -56,9 +56,11 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	// Store the old flags and restore on test completion
 	oldTs := ts
 	oldClustersToWatch := clustersToWatch
+	oldShardsToWatch := shardsToWatch
 	defer func() {
 		ts = oldTs
 		clustersToWatch = oldClustersToWatch
+		shardsToWatch = oldShardsToWatch
 	}()
 
 	db.ClearVTOrcDatabase()
@@ -314,31 +316,46 @@ func verifyPrimaryAlias(t *testing.T, keyspaceName, shardName string, primaryAli
 
 func TestRefreshAllShards(t *testing.T) {
 	// Store the old flags and restore on test completion
+	oldClustersToWatch := clustersToWatch
+	oldShardsToWatch := shardsToWatch
 	oldTs := ts
 	defer func() {
+		clustersToWatch = oldClustersToWatch
+		shardsToWatch = oldShardsToWatch
 		ts = oldTs
 		db.ClearVTOrcDatabase()
 	}()
 
 	ctx := context.Background()
 	ts = memorytopo.NewServer(ctx, "zone1")
+	require.NoError(t, initializeShardsToWatch())
 	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 		DurabilityPolicy: policy.DurabilityNone,
 	}))
 
-	shards := []string{"-80", "80-"}
+	// test shard refresh
+	shards := []string{"-40", "40-80", "80-c0", "c0-"}
 	for _, shard := range shards {
 		require.NoError(t, ts.CreateShard(ctx, "ks1", shard))
 	}
 	require.NoError(t, refreshAllShards(ctx, "ks1"))
 	shardNames, err := inst.ReadShardNames("ks1")
 	require.NoError(t, err)
-	require.Equal(t, []string{"-80", "80-"}, shardNames)
+	require.Equal(t, []string{"-40", "40-80", "80-c0", "c0-"}, shardNames)
 
-	require.NoError(t, ts.DeleteShard(ctx, "ks1", "80-"))
+	// test topo shard delete propagates
+	require.NoError(t, ts.DeleteShard(ctx, "ks1", "c0-"))
 	require.NoError(t, refreshAllShards(ctx, "ks1"))
 	shardNames, err = inst.ReadShardNames("ks1")
 	require.NoError(t, err)
-	require.Equal(t, []string{"-80"}, shardNames)
+	require.Equal(t, []string{"-40", "40-80", "80-c0"}, shardNames)
+
+	// test clustersToWatch filters what shards are saved
+	clustersToWatch = []string{"ks1/-40", "ks1/40-80"}
+	require.NoError(t, initializeShardsToWatch())
+	require.NoError(t, refreshAllShards(ctx, "ks1"))
+	shardNames, err = inst.ReadShardNames("ks1")
+	require.NoError(t, err)
+	require.Equal(t, []string{"-40", "40-80"}, shardNames)
 }
