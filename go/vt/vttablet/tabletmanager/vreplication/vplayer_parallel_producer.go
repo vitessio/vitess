@@ -318,6 +318,7 @@ func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastC
 		p.sequenceToWorkersMap[sequenceNumber] = workerIndex
 		return workerIndex
 	}
+	p.assignSequence++
 	// No specific transaction dependency constraints (any parent transactions were long since
 	// committed, and no worker longer indicates it owns any such transactions)
 	if preferCurrentWorker && p.countAssignedToCurrentWorker < maxWorkerEvents {
@@ -330,7 +331,6 @@ func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastC
 		// want to do some batching. We batch `maxWorkerEvents` events per worker.
 		workerIndex = int(p.assignSequence/maxWorkerEvents) % len(p.workers)
 	}
-	p.assignSequence++
 	p.sequenceToWorkersMap[sequenceNumber] = workerIndex
 	return workerIndex
 }
