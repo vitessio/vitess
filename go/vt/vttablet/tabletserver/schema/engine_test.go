@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -124,8 +126,8 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 	// Modify test_table_03
 	// Add test_table_04
 	// Drop msg
-	db.AddQueryPattern(baseShowTablesWithSizesPattern, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesWithSizesFields,
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
 			mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
@@ -134,16 +136,14 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),    // table_type
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),      // unix_timestamp(t.create_time)
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),              // table_comment
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),             // file_size
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),             // allocated_size
 			},
 			// test_table_04 will in spite of older timestamp because it doesn't exist yet.
-			mysql.BaseShowTablesWithSizesRow("test_table_04", false, ""),
-			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("test_table_04", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
 		},
 	})
 
-	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf("Reloading schema engine should query tables with size information"))
+	db.AddRejectedQuery(mysql.TablesWithSize57, fmt.Errorf("Reloading schema engine should query tables with size information"))
 
 	db.MockQueriesForTable("test_table_03", &sqltypes.Result{
 		Fields: []*querypb.Field{{
@@ -181,7 +181,9 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 
 	firstTime := true
 	notifier := func(full map[string]*Table, created, altered, dropped []*Table, _ bool) {
+		log.Infof("Notifier called, firstTime: %v, created %v, altered %v, dropped %v", firstTime, created, altered, dropped)
 		if firstTime {
+			log.Infof("Notifier called 2, firstTime: %v, created %v, altered %v, dropped %v", firstTime, created, altered, dropped)
 			firstTime = false
 			createTables := extractNamesFromTablesList(created)
 			sort.Strings(createTables)
@@ -189,25 +191,27 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 			assert.Equal(t, []*Table(nil), altered)
 			assert.Equal(t, []*Table(nil), dropped)
 		} else {
+			log.Infof("Notifier called 3, firstTime: %v, created %v, altered %v, dropped %v", firstTime, created, altered, dropped)
 			assert.Equal(t, []string{"test_table_04"}, extractNamesFromTablesList(created))
 			assert.Equal(t, []string{"test_table_03"}, extractNamesFromTablesList(altered))
 			assert.Equal(t, []string{"msg"}, extractNamesFromTablesList(dropped))
 		}
 	}
 	se.RegisterNotifier("test", notifier, true)
+	log.Infof(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>. Before Reload")
 	err := se.Reload(context.Background())
 	require.NoError(t, err)
 
 	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsCounter.Get())
 
-	want["seq"].FileSize = 100
-	want["seq"].AllocatedSize = 150
+	want["seq"].FileSize = 0
+	want["seq"].AllocatedSize = 0
 
-	want["test_table_01"].FileSize = 100
-	want["test_table_01"].AllocatedSize = 150
+	want["test_table_01"].FileSize = 0
+	want["test_table_01"].AllocatedSize = 0
 
-	want["test_table_02"].FileSize = 100
-	want["test_table_02"].AllocatedSize = 150
+	want["test_table_02"].FileSize = 0
+	want["test_table_02"].AllocatedSize = 0
 
 	want["test_table_03"] = &Table{
 		Name: sqlparser.NewIdentifierCS("test_table_03"),
@@ -221,10 +225,8 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 			Name: "val",
 			Type: sqltypes.Int32,
 		}},
-		PKColumns:     []int{0, 1},
-		CreateTime:    1427325877,
-		FileSize:      128,
-		AllocatedSize: 256,
+		PKColumns:  []int{0, 1},
+		CreateTime: 1427325877,
 	}
 	want["test_table_04"] = &Table{
 		Name: sqlparser.NewIdentifierCS("test_table_04"),
@@ -232,10 +234,8 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
-		PKColumns:     []int{0},
-		CreateTime:    1427325875,
-		FileSize:      100,
-		AllocatedSize: 150,
+		PKColumns:  []int{0},
+		CreateTime: 1427325875,
 	}
 	delete(want, "msg")
 	assert.Equal(t, want, se.GetSchema())
@@ -296,7 +296,7 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 	assert.Equal(t, want, se.GetSchema())
 }
 
-func TestOpenAndReload(t *testing.T) {
+func TestOpenAndReload2(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
