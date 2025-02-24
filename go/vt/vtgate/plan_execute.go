@@ -152,8 +152,8 @@ func (e *Executor) newExecute(
 		ctx, cancel = vcursor.GetContextWithTimeOut(ctx)
 		defer cancel()
 
-		// If we have previously issued a VT15001 error, we block every queries on this session until we receive a ROLLBACK.
-		if plan.Type != sqlparser.StmtRollback && safeSession.IsErrorUntilRollback() {
+		// If we have previously issued a VT15001 error, we block every queries on this session until we receive a ROLLBACK or "show warnings".
+		if shouldBlockQuery(plan, safeSession) {
 			return vterrors.VT15002()
 		}
 
@@ -443,4 +443,15 @@ func (e *Executor) logPlanningFinished(logStats *logstats.LogStats, plan *engine
 	}
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	return execStart
+}
+
+func shouldBlockQuery(plan *engine.Plan, safeSession *econtext.SafeSession) bool {
+	block := safeSession.IsErrorUntilRollback()
+	if plan.Type != sqlparser.StmtRollback && plan.Type != sqlparser.StmtShow && block {
+		return true
+	}
+	if block {
+		safeSession.SetErrorUntilRollback(false)
+	}
+	return false
 }

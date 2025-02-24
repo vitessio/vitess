@@ -68,7 +68,7 @@ func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.L
 		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
 		require.ErrorContains(t, err, "VT15002")
 
-		_, err = conn.ExecuteFetch("rollback", 0, false)
+		_, err = conn.ExecuteFetch("show warnings", 0, false)
 		require.NoError(t, err)
 		executeDone <- true
 	}()
