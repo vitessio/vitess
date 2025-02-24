@@ -18,12 +18,11 @@ package logic
 
 import (
 	"context"
-	"sync"
 
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
