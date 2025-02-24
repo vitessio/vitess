@@ -849,8 +849,14 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 			{Opcode: NotBetween, ColNum: 0, Values: []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(5)}},
 		},
 	}, {
+		name:     "is-null-operator",
+		inFilter: "select * from t1 where val is null",
+		outFilters: []Filter{
+			{Opcode: IsNull, ColNum: 1},
+		},
+	}, {
 		name:     "vindex-and-operators",
-		inFilter: "select * from t1 where in_keyrange(id, 'hash', '-80') and id = 2 and val <> 'xyz' and id in (100, 30) and id between 20 and 60",
+		inFilter: "select * from t1 where in_keyrange(id, 'hash', '-80') and id = 2 and val <> 'xyz' and id in (100, 30) and val is null and id between 20 and 60",
 		outFilters: []Filter{
 			{
 				Opcode:        VindexMatch,
@@ -867,6 +873,7 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 			{Opcode: NotEqual, ColNum: 1, Value: sqltypes.NewVarChar("xyz")},
 			{Opcode: In, ColNum: 0, Values: []sqltypes.Value{sqltypes.NewInt64(100), sqltypes.NewInt64(30)}},
 			{Opcode: GreaterThanEqual, ColNum: 0, Value: sqltypes.NewInt64(20)},
+			{Opcode: IsNull, ColNum: 1},
 			{Opcode: LessThanEqual, ColNum: 0, Value: sqltypes.NewInt64(60)},
 		},
 	}}
