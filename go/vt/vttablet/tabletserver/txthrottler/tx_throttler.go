@@ -311,7 +311,7 @@ func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, t
 	if err != nil {
 		return err
 	}
-	ts.healthCheckChan = ts.healthCheck.Subscribe()
+	ts.healthCheckChan = ts.healthCheck.Subscribe("TxThrottler")
 	return nil
 }
 

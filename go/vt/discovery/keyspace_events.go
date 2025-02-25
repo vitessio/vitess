@@ -221,7 +221,7 @@ func (kew *KeyspaceEventWatcher) broadcast(ev *KeyspaceEvent) {
 }
 
 func (kew *KeyspaceEventWatcher) run(ctx context.Context) {
-	hcChan := kew.hc.Subscribe()
+	hcChan := kew.hc.Subscribe("KeyspaceEventWatcher")
 	bufferCtx, bufferCancel := context.WithCancel(ctx)
 
 	go func() {

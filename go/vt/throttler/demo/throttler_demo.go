@@ -246,7 +246,7 @@ func newClient(ctx context.Context, primary *primary, replica *replica, ts *topo
 		throttler:   t,
 		stopChan:    make(chan struct{}),
 	}
-	healthcheckCh := c.healthCheck.Subscribe()
+	healthcheckCh := c.healthCheck.Subscribe("ThrottlerDemo")
 	c.healthcheckCh = healthcheckCh
 	c.healthCheck.AddTablet(replica.fakeTablet.Tablet)
 	return c

@@ -241,7 +241,7 @@ type HealthCheck interface {
 	GetTabletHealthByAlias(alias *topodata.TabletAlias) (*TabletHealth, error)
 
 	// Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
-	Subscribe() chan *TabletHealth
+	Subscribe(name string) chan *TabletHealth
 
 	// Unsubscribe removes a listener.
 	Unsubscribe(c chan *TabletHealth)
@@ -296,7 +296,7 @@ type HealthCheckImpl struct {
 	// mutex to protect subscribers
 	subMu sync.Mutex
 	// subscribers
-	subscribers map[chan *TabletHealth]struct{}
+	subscribers map[chan *TabletHealth]string
 	// loadTablets trigger is used to immediately load a new primary tablet when the current one has been demoted
 	loadTabletsTrigger chan struct{}
 }
@@ -361,7 +361,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		healthByAlias:      make(map[tabletAliasString]*tabletHealthCheck),
 		healthData:         make(map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
 		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
-		subscribers:        make(map[chan *TabletHealth]struct{}),
+		subscribers:        make(map[chan *TabletHealth]string),
 		cellAliases:        make(map[string]string),
 		loadTabletsTrigger: make(chan struct{}, 1),
 	}
@@ -632,11 +632,11 @@ func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 }
 
 // Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
-func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
+func (hc *HealthCheckImpl) Subscribe(subscriber string) chan *TabletHealth {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
 	c := make(chan *TabletHealth, 2048)
-	hc.subscribers[c] = struct{}{}
+	hc.subscribers[c] = subscriber
 	return c
 }
 
@@ -650,13 +650,13 @@ func (hc *HealthCheckImpl) Unsubscribe(c chan *TabletHealth) {
 func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
-	for c := range hc.subscribers {
+	for c, subscriber := range hc.subscribers {
 		select {
 		case c <- th:
 		default:
 			// If the channel is full, we drop the message.
 			hcChannelFullCounter.Add(1)
-			log.Warningf("HealthCheck broadcast channel is full, dropping message for %s", topotools.TabletIdent(th.Tablet))
+			log.Warningf("HealthCheck broadcast channel is full for %v, dropping message for %s", subscriber, topotools.TabletIdent(th.Tablet))
 		}
 	}
 }
