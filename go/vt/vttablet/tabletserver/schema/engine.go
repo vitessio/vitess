@@ -271,7 +271,8 @@ func (se *Engine) Open() error {
 	}
 
 	se.ticks.Start(func() {
-		if err := se.Reload(ctx); err != nil {
+		// update stats on periodic reloads
+		if err := se.reload(ctx, true); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
@@ -369,7 +370,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 // It maintains the position at which the schema was reloaded and if the same position is provided
 // (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
 func (se *Engine) ReloadAt(ctx context.Context, pos replication.Position) error {
-	return se.ReloadAtEx(ctx, pos, true)
+	return se.ReloadAtEx(ctx, pos, false)
 }
 
 // ReloadAtEx reloads the schema info from the db.
@@ -800,7 +801,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 	// This also allows us to perform a just-in-time initialization of the cache if
 	// a vstreamer is the first one to access it.
 	if se.conns != nil { // Test Engines (NewEngineForTests()) don't have a conns pool
-		if err := se.reload(ctx, true); err != nil {
+		if err := se.reload(ctx, false); err != nil {
 			return nil, err
 		}
 		if st, ok := se.tables[tableNameStr]; ok {
