@@ -1034,6 +1034,21 @@ func (vc *VCursorImpl) SetSysVar(name string, expr string) {
 	vc.SafeSession.SetSystemVariable(name, expr)
 }
 
+func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sqlparser.Statement) {
+	if setVarComment == "" {
+		return
+	}
+	switch stmt.(type) {
+	// If the statement supports optimizer hints or a transaction statement or a SET statement
+	// no reserved connection is needed
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
+		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show,
+		sqlparser.SupportOptimizerHint:
+	default:
+		vc.NeedsReservedConn()
+	}
+}
+
 // NeedsReservedConn implements the SessionActions interface
 func (vc *VCursorImpl) NeedsReservedConn() {
 	vc.SafeSession.SetReservedConn(true)
@@ -1574,18 +1589,9 @@ func (vc *VCursorImpl) GetWarmingReadsChannel() chan bool {
 	return vc.config.WarmingReadsChannel
 }
 
-// UpdateForeignKeyChecksState updates the foreign key checks state of the vcursor.
-func (vc *VCursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
-	// Initialize the state to unspecified.
-	vc.fkChecksState = nil
-	// If the query has a SET_VAR optimizer hint that explicitly sets the foreign key checks state,
-	// we should use that.
-	if fkStateFromQuery != nil {
-		vc.fkChecksState = fkStateFromQuery
-		return
-	}
-	// If the query doesn't have anything, then we consult the session state.
-	vc.fkChecksState = vc.SafeSession.ForeignKeyChecks()
+// SetForeignKeyCheckState updates the foreign key checks state of the vcursor.
+func (vc *VCursorImpl) SetForeignKeyCheckState(fkChecksState *bool) {
+	vc.fkChecksState = fkChecksState
 }
 
 // GetForeignKeyChecksState gets the stored foreign key checks state in the vcursor.

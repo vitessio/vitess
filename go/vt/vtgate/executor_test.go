@@ -130,7 +130,7 @@ func TestPlanKey(t *testing.T) {
 			ss := econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString})
 			resolver := &fakeResolver{resolveShards: tc.resolvedShard}
 			vc, _ := econtext.NewVCursorImpl(ss, makeComments(""), e, nil, e.vm, e.VSchema(), resolver, nil, nullResultsObserver{}, cfg)
-			key := createPlanKey(ctx, vc, "SELECT 1", tc.setVarComment)
+			key := buildPlanKey(ctx, vc, "SELECT 1", tc.setVarComment)
 			require.Equal(t, tc.expectedPlanPrefixKey, key.DebugString(), "test case %d", i)
 		})
 	}
@@ -1666,7 +1666,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sq
 			return true
 		})
 	} else {
-		h := createPlanKey(context.Background(), vc, sql, "")
+		h := buildPlanKey(context.Background(), vc, sql, "")
 		plan, _ = e.plans.Get(h.Hash(), e.epoch.Load())
 	}
 	require.Truef(t, plan != nil, "plan not found for query: %s", sql)
@@ -1682,7 +1682,7 @@ func getPlanCached(t *testing.T, ctx context.Context, e *Executor, vcursor *econ
 
 	stmt, reservedVars, err := parseAndValidateQuery(sql, sqlparser.NewTestParser())
 	require.NoError(t, err)
-	plan, err := e.getPlan(context.Background(), vcursor, sql, stmt, comments, bindVars, reservedVars, false, e.config.Normalize, logStats)
+	plan, err := e.getPlan(context.Background(), vcursor, sql, stmt, comments, bindVars, reservedVars, e.config.Normalize, logStats)
 	require.NoError(t, err)
 
 	// Wait for cache to settle
@@ -1846,7 +1846,7 @@ func TestGetPlanPriority(t *testing.T) {
 			qh, _ := sqlparser.BuildQueryHints(stmt)
 			priorityFromStatement := qh.Priority
 
-			_, err = r.getPlan(context.Background(), vCursor, testCase.sql, stmt, makeComments("/* some comment */"), map[string]*querypb.BindVariable{}, nil, false, true, logStats)
+			_, err = r.getPlan(context.Background(), vCursor, testCase.sql, stmt, makeComments("/* some comment */"), map[string]*querypb.BindVariable{}, nil, true, logStats)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {

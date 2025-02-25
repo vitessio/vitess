@@ -42,7 +42,8 @@ type Plan struct {
 	BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
 	Warnings     []*query.QueryWarning   // Warnings that need to be yielded every time this query runs
 	TablesUsed   []string                // TablesUsed is the list of tables that this plan will query
-	QueryHints   sqlparser.QueryHints
+	QueryHints   sqlparser.QueryHints    // QueryHints are the SET_VAR hints that were used to generate this plan
+	ParamsCount  int                     // ParameterCount is the number of parameters in the query
 
 	ExecCount    uint64 // Count of times this plan was executed
 	ExecTime     uint64 // Total execution time

@@ -230,19 +230,21 @@ func (nz *normalizer) noteAliasedExprName(node *AliasedExpr) {
 // It finalizes normalization logic based on node types.
 func (nz *normalizer) walkUp(cursor *Cursor) bool {
 	// Add SET_VAR comments if applicable.
-	if supportOptimizerHint, supports := cursor.Node().(SupportOptimizerHint); supports {
+	if stmt, supports := cursor.Node().(SupportOptimizerHint); supports {
 		if nz.setVarComment != "" {
-			newComments, err := supportOptimizerHint.GetParsedComments().AddQueryHint(nz.setVarComment)
+			newComments, err := stmt.GetParsedComments().AddQueryHint(nz.setVarComment)
 			if err != nil {
 				nz.err = err
 				return false
 			}
-			supportOptimizerHint.SetComments(newComments)
+			stmt.SetComments(newComments)
 			nz.useASTQuery = true
 		}
+
+		// use foreign key checks of normalizer and set the query hint in the query.
 		if nz.fkChecksState != nil {
-			newComments := supportOptimizerHint.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, FkChecksStateString(nz.fkChecksState))
-			supportOptimizerHint.SetComments(newComments)
+			newComments := stmt.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, FkChecksStateString(nz.fkChecksState))
+			stmt.SetComments(newComments)
 			nz.useASTQuery = true
 		}
 	}
