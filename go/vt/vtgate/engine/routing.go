@@ -431,6 +431,7 @@ func (rp *RoutingParameters) multiEqual(ctx context.Context, vcursor VCursor, bi
 	if err != nil {
 		return nil, nil, err
 	}
+
 	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
 	for i := range multiBindVars {
 		multiBindVars[i] = bindVars
@@ -480,7 +481,13 @@ func setReplaceSchemaName(bindVars map[string]*querypb.BindVariable) {
 	bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.Int64BindVariable(1)
 }
 
-func resolveShards(ctx context.Context, vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func resolveShards(
+	ctx context.Context,
+	vcursor VCursor,
+	vindex vindexes.SingleColumn,
+	keyspace *vindexes.Keyspace,
+	vindexKeys []sqltypes.Value,
+) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	// Convert vindexKeys to []*querypb.Value
 	ids := make([]*querypb.Value, len(vindexKeys))
 	for i, vik := range vindexKeys {
