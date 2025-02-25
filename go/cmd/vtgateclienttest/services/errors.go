@@ -110,14 +110,21 @@ func trimmedRequestToError(received string) error {
 	}
 }
 
-func (c *errorClient) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (c *errorClient) Execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if err := requestToPartialError(sql, session); err != nil {
 		return session, nil, err
 	}
 	if err := requestToError(sql); err != nil {
 		return session, nil, err
 	}
-	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables)
+	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables, prepared)
 }
 
 func (c *errorClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {

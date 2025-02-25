@@ -491,7 +491,7 @@ func (c *conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 		return nil, err
 	}
 
-	qr, err := c.session.Execute(ctx, query, bindVars)
+	qr, err := c.session.Execute(ctx, query, bindVars, false)
 	if err != nil {
 		return nil, err
 	}
@@ -507,7 +507,7 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 	if err != nil {
 		return nil, err
 	}
-	qr, err := c.session.Execute(ctx, query, bv)
+	qr, err := c.session.Execute(ctx, query, bv, false)
 	if err != nil {
 		return nil, err
 	}
@@ -529,7 +529,7 @@ func (c *conn) Query(query string, args []driver.Value) (driver.Rows, error) {
 		return newStreamingRows(stream, c.convert), nil
 	}
 
-	qr, err := c.session.Execute(ctx, query, bindVars)
+	qr, err := c.session.Execute(ctx, query, bindVars, false)
 	if err != nil {
 		return nil, err
 	}
@@ -555,7 +555,7 @@ func (c *conn) QueryContext(ctx context.Context, query string, args []driver.Nam
 		return newStreamingRows(stream, c.convert), nil
 	}
 
-	qr, err := c.session.Execute(ctx, query, bv)
+	qr, err := c.session.Execute(ctx, query, bv, false)
 	if err != nil {
 		return nil, err
 	}

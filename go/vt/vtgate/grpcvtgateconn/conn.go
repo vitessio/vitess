@@ -107,7 +107,13 @@ func DialWithOpts(_ context.Context, opts ...grpc.DialOption) vtgateconn.DialerF
 	return Dial(opts...)
 }
 
-func (conn *vtgateConn) Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (conn *vtgateConn) Execute(
+	ctx context.Context,
+	session *vtgatepb.Session,
+	query string,
+	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
 	request := &vtgatepb.ExecuteRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Session:  session,
@@ -115,6 +121,7 @@ func (conn *vtgateConn) Execute(ctx context.Context, session *vtgatepb.Session, 
 			Sql:           query,
 			BindVariables: bindVars,
 		},
+		Prepared: prepared,
 	}
 	response, err := conn.c.Execute(ctx, request)
 	if err != nil {

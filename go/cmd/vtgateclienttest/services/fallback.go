@@ -40,8 +40,15 @@ func newFallbackClient(fallback vtgateservice.VTGateService) fallbackClient {
 	return fallbackClient{fallback: fallback}
 }
 
-func (c fallbackClient) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
-	return c.fallback.Execute(ctx, mysqlCtx, session, sql, bindVariables)
+func (c fallbackClient) Execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
+	return c.fallback.Execute(ctx, mysqlCtx, session, sql, bindVariables, prepared)
 }
 
 func (c fallbackClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {

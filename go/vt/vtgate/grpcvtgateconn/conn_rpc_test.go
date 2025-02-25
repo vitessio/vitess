@@ -147,7 +147,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	RegisterTestDialProtocol(client)
 	conn, _ := vtgateconn.DialProtocol(context.Background(), "test", "")
 	// run the test suite
-	_, err = conn.Session("", nil).Execute(context.Background(), "select * from t", nil)
+	_, err = conn.Session("", nil).Execute(context.Background(), "select * from t", nil, false)
 	want := "rpc error: code = Unauthenticated desc = username and password must be provided"
 	if err == nil || err.Error() != want {
 		t.Errorf("expected auth failure:\n%v, want\n%s", err, want)

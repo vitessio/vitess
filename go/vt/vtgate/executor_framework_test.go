@@ -320,26 +320,16 @@ func createExecutorEnvWithPrimaryReplicaConn(t testing.TB, ctx context.Context, 
 	return executor, primary, replica
 }
 
-func executorExecSession(ctx context.Context, executor *Executor, sql string, bv map[string]*querypb.BindVariable, session *vtgatepb.Session) (*sqltypes.Result, error) {
-	return executor.Execute(
-		ctx,
-		nil,
-		"TestExecute",
-		econtext.NewSafeSession(session),
-		sql,
-		bv)
+func executorExecSession(ctx context.Context, executor *Executor, session *econtext.SafeSession, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return executor.Execute(ctx, nil, "TestExecute", session, sql, bv, false)
 }
 
 func executorExec(ctx context.Context, executor *Executor, session *vtgatepb.Session, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return executorExecSession(ctx, executor, sql, bv, session)
+	return executorExecSession(ctx, executor, econtext.NewSafeSession(session), sql, bv)
 }
 
 func executorPrepare(ctx context.Context, executor *Executor, session *vtgatepb.Session, sql string) ([]*querypb.Field, uint16, error) {
-	return executor.Prepare(
-		ctx,
-		"TestExecute",
-		econtext.NewSafeSession(session),
-		sql)
+	return executor.Prepare(ctx, "TestExecute", econtext.NewSafeSession(session), sql)
 }
 
 func executorStream(ctx context.Context, executor *Executor, sql string) (qr *sqltypes.Result, err error) {

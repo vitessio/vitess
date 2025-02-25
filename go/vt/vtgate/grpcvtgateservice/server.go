@@ -145,7 +145,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if session == nil {
 		session = &vtgatepb.Session{Autocommit: true}
 	}
-	session, result, err := vtg.server.Execute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables)
+	session, result, err := vtg.server.Execute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, request.Prepared)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: session,

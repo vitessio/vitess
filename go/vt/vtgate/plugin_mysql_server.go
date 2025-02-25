@@ -258,7 +258,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		fillInTxStatusFlags(c, session)
 		return nil
 	}
-	session, result, err := vh.vtg.Execute(ctx, vh, session, query, make(map[string]*querypb.BindVariable))
+	session, result, err := vh.vtg.Execute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), false)
 
 	if err := sqlerror.NewSQLErrorFromError(err); err != nil {
 		return err
@@ -364,7 +364,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		fillInTxStatusFlags(c, session)
 		return nil
 	}
-	_, qr, err := vh.vtg.Execute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars)
+	_, qr, err := vh.vtg.Execute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, true)
 	if err != nil {
 		return sqlerror.NewSQLErrorFromError(err)
 	}

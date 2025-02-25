@@ -329,7 +329,7 @@ func TestRecordMirrorStats(t *testing.T) {
 
 type fakeExecutor struct{}
 
-func (f fakeExecutor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (f fakeExecutor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable, prepared bool) (*sqltypes.Result, error) {
 	// TODO implement me
 	panic("implement me")
 }

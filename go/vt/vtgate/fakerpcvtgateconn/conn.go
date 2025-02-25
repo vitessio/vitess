@@ -85,7 +85,13 @@ func (conn *FakeVTGateConn) AddQuery(
 }
 
 // Execute please see vtgateconn.Impl.Execute
-func (conn *FakeVTGateConn) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (conn *FakeVTGateConn) Execute(
+	ctx context.Context,
+	session *vtgatepb.Session,
+	sql string,
+	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
 	response, ok := conn.execMap[sql]
 	if !ok {
 		return nil, nil, fmt.Errorf("no match for: %s", sql)

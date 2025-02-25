@@ -229,14 +229,22 @@ func NewExecutor(
 }
 
 // Execute executes a non-streaming query.
-func (e *Executor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (result *sqltypes.Result, err error) {
+func (e *Executor) Execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	method string,
+	safeSession *econtext.SafeSession,
+	sql string,
+	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
+) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "executor.Execute")
 	span.Annotate("method", method)
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
-	stmtType, result, err := e.execute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats)
+	stmtType, result, err := e.execute(ctx, mysqlCtx, safeSession, sql, bindVars, prepared, logStats)
 	logStats.Error = err
 	if result == nil {
 		saveSessionStats(safeSession, stmtType, 0, 0, err)
@@ -377,7 +385,7 @@ func (e *Executor) StreamExecute(
 		return err
 	}
 
-	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, resultHandler, srr.storeResultStats)
+	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, false, logStats, resultHandler, srr.storeResultStats)
 
 	logStats.Error = err
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.rowsReturned, err)
@@ -429,11 +437,11 @@ func saveSessionStats(safeSession *econtext.SafeSession, stmtType sqlparser.Stat
 	}
 }
 
-func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
+func (e *Executor) execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, safeSession *econtext.SafeSession, sql string, bindVars map[string]*querypb.BindVariable, prepared bool, logStats *logstats.LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
 	var err error
 	var qr *sqltypes.Result
 	var stmtType sqlparser.StatementType
-	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, logStats, func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
+	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, prepared, logStats, func(ctx context.Context, plan *engine.Plan, vc *econtext.VCursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
 		stmtType = plan.Type
 		qr, err = e.executePlan(ctx, safeSession, plan, vc, bindVars, logStats, time)
 		return err

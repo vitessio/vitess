@@ -91,7 +91,14 @@ func (q *queryExecute) equal(q2 *queryExecute) bool {
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (f *fakeVTGateService) Execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if f.hasError {
 		return session, nil, errTestVtGateError
 	}
@@ -340,13 +347,13 @@ func verifyErrorString(t *testing.T, err error, method string) {
 func testExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	qr, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	qr, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, false)
 	require.NoError(t, err)
 	if !qr.Equal(execCase.result) {
 		t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
 	}
 
-	_, err = session.Execute(ctx, "none", nil)
+	_, err = session.Execute(ctx, "none", nil, false)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -357,14 +364,14 @@ func testExecuteError(t *testing.T, session *vtgateconn.VTGateSession, fake *fak
 	ctx := newContext()
 	execCase := execMap["errorRequst"]
 
-	_, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	_, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, false)
 	verifyError(t, err, "Execute")
 }
 
 func testExecutePanic(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	_, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, false)
 	expectPanic(t, err)
 }
 

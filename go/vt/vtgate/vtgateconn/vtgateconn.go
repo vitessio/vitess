@@ -118,8 +118,8 @@ type VTGateSession struct {
 }
 
 // Execute performs a VTGate Execute.
-func (sn *VTGateSession) Execute(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	session, res, err := sn.impl.Execute(ctx, sn.session, query, bindVars)
+func (sn *VTGateSession) Execute(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable, prepared bool) (*sqltypes.Result, error) {
+	session, res, err := sn.impl.Execute(ctx, sn.session, query, bindVars, prepared)
 	sn.session = session
 	return res, err
 }
@@ -159,7 +159,7 @@ func (sn *VTGateSession) Prepare(ctx context.Context, query string) ([]*querypb.
 // implementation. It can be used concurrently across goroutines.
 type Impl interface {
 	// Execute executes a non-streaming query on vtgate.
-	Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error)
+	Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, prepared bool) (*vtgatepb.Session, *sqltypes.Result, error)
 
 	// ExecuteBatch executes a non-streaming queries on vtgate.
 	ExecuteBatch(ctx context.Context, session *vtgatepb.Session, queryList []string, bindVarsList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error)

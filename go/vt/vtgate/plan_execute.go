@@ -65,6 +65,7 @@ func (e *Executor) newExecute(
 	safeSession *econtext.SafeSession,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
 	logStats *logstats.LogStats,
 	execPlan planExec, // used when there is a plan to execute
 	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
@@ -118,7 +119,7 @@ func (e *Executor) newExecute(
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
 		// take full advatange of the cached plan.
-		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, e.config.Normalize, false, logStats)
+		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, e.config.Normalize, prepared, logStats)
 		execStart := e.logPlanningFinished(logStats, plan)
 
 		if err != nil {
@@ -358,7 +359,7 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 	rQuery := safeSession.GetRollbackOnPartialExec()
 	if rQuery != econtext.TxRollback {
 		safeSession.SavepointRollback()
-		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, logStats)
+		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, false, logStats)
 		// If no error, the revert is successful with the savepoint. Notify the reason as error to the client.
 		if err == nil {
 			errMsg.WriteString("reverted partial DML execution failure")

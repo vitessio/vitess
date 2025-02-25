@@ -58,6 +58,7 @@ func TestVTGateExecute(t *testing.T) {
 		},
 		"select id from t1",
 		nil,
+		false,
 	)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -98,6 +99,7 @@ func TestVTGateExecuteError(t *testing.T) {
 		},
 		"bad select id from t1",
 		nil,
+		false,
 	)
 	require.Error(t, err)
 	require.Nil(t, qr)
@@ -188,6 +190,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		},
 		"select id from none",
 		nil,
+		false,
 	)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -205,6 +208,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		},
 		"select id from none",
 		nil,
+		false,
 	)
 	want := "VT05003: unknown database 'invalid_keyspace' in vschema"
 	assert.EqualError(t, err, want)
@@ -218,6 +222,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		},
 		"select id from none",
 		nil,
+		false,
 	)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -233,6 +238,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		},
 		"select id from none",
 		nil,
+		false,
 	)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestExecutor" shard:"noshard" tablet_type:PRIMARY`)
@@ -286,7 +292,7 @@ func TestVTGateBindVarError(t *testing.T) {
 	}{{
 		name: "Execute",
 		f: func() error {
-			_, _, err := vtg.Execute(ctx, nil, session, "", bindVars)
+			_, _, err := vtg.Execute(ctx, nil, session, "", bindVars, false)
 			return err
 		},
 	}, {
@@ -325,6 +331,7 @@ func testErrorPropagation(t *testing.T, ctx context.Context, vtg *VTGate, sbcs [
 		session,
 		"select id from t1",
 		nil,
+		false,
 	)
 	if err == nil {
 		t.Errorf("error %v not propagated for Execute", expected)
@@ -457,11 +464,11 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
 	// vtrpcpb.Code_ABORTED case.
-	session, _, err := vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil)
+	session, _, err := vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil, false)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
 	}
-	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil)
+	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -469,7 +476,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
-	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil)
+	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
@@ -482,11 +489,11 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:
 	// vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED case.
-	session, _, err = vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil)
+	session, _, err = vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil, false)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
 	}
-	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil)
+	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -494,7 +501,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
-	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil)
+	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
@@ -507,11 +514,11 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Start a transaction, send one statement.
 	// Simulate an error that should *not* trigger a rollback:
 	// vtrpcpb.Code_ALREADY_EXISTS case.
-	session, _, err = vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil)
+	session, _, err = vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil, false)
 	if err != nil {
 		t.Fatalf("cannot start a transaction: %v", err)
 	}
-	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil)
+	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
@@ -519,7 +526,7 @@ func TestErrorIssuesRollback(t *testing.T) {
 		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
-	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil)
+	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
@@ -605,13 +612,13 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	require.False(t, session.InTransaction)
 
 	var err error
-	session, _, err = vtg.Execute(ctx, nil, session, "begin", nil)
+	session, _, err = vtg.Execute(ctx, nil, session, "begin", nil, false)
 	require.NoError(t, err)
 	require.True(t, session.GetAutocommit())
 	require.True(t, session.InTransaction)
 
 	// this query goes to multiple shards so internal savepoint will be created.
-	session, _, err = vtg.Execute(ctx, nil, session, "insert into sp_tbl(user_id) values (1), (3)", nil)
+	session, _, err = vtg.Execute(ctx, nil, session, "insert into sp_tbl(user_id) values (1), (3)", nil, false)
 	require.NoError(t, err)
 	require.True(t, session.GetAutocommit())
 	require.True(t, session.InTransaction)
@@ -639,7 +646,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	sbc2.Queries = nil
 
 	// multi shard so new savepoint will be created.
-	session, _, err = vtg.Execute(ctx, nil, session, "insert into sp_tbl(user_id) values (2), (4)", nil)
+	session, _, err = vtg.Execute(ctx, nil, session, "insert into sp_tbl(user_id) values (2), (4)", nil, false)
 	require.NoError(t, err)
 	wantQ = []*querypb.BoundQuery{{
 		Sql:           "savepoint x",
@@ -657,7 +664,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	sbc3.Queries = nil
 
 	// single shard so no savepoint will be created and neither any old savepoint will be executed
-	_, _, err = vtg.Execute(ctx, nil, session, "insert into sp_tbl(user_id) values (5)", nil)
+	_, _, err = vtg.Execute(ctx, nil, session, "insert into sp_tbl(user_id) values (5)", nil, false)
 	require.NoError(t, err)
 	wantQ = []*querypb.BoundQuery{{
 		Sql: "insert into sp_tbl(user_id) values (:_user_id_0)",

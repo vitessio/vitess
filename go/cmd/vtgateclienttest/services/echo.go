@@ -98,7 +98,14 @@ func echoQueryResult(vals map[string]any) *sqltypes.Result {
 	return qr
 }
 
-func (c *echoClient) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (c *echoClient) Execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		return session, echoQueryResult(map[string]any{
 			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
@@ -107,7 +114,7 @@ func (c *echoClient) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLCo
 			"session":  session,
 		}), nil
 	}
-	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables)
+	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables, prepared)
 }
 
 func (c *echoClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
