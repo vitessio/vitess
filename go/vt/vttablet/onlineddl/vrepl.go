@@ -289,6 +289,12 @@ func (v *VRepl) generateFilterQuery() error {
 		case targetCol.Type() == "json": // we already know the source col is not JSON, per the above `case` condition
 			// Convert any type to JSON: encode the type as utf8mb4 text
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
+		case sourceCol.Type() == "timestamp":
+			sb.WriteString(fmt.Sprintf("IF(%s='0000-00-00 00:00:00', '0000-00-00 00:00:00', CONVERT_TZ(%s, '+00:00', @@global.time_zone))", escapeName(name), escapeName(name)))
+		// case targetCol.Type() == "timestamp":
+		// 	sb.WriteString(fmt.Sprintf("CONVERT_TZ(%s, '+00:00', @@global.time_zone)", escapeName(name)))
+		// case targetCol.Type() == "datetime":
+		// 	sb.WriteString(fmt.Sprintf("CONVERT_TZ(%s, '+00:00', @@global.time_zone)", escapeName(name)))
 		case sourceCol.IsTextual():
 			// Check source and target charset/encoding. If needed, create
 			// a binlogdatapb.CharsetConversion entry (later written to vreplication)
