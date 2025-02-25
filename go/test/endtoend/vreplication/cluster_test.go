@@ -26,20 +26,18 @@ import (
 	"path"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -816,30 +814,27 @@ func (vc *VitessCluster) teardown() {
 }
 
 func (vc *VitessCluster) TearDownKeyspace(ks *Keyspace) error {
-	wg := sync.WaitGroup{}
-	errs := concurrency.AllErrorRecorder{}
+	eg := errgroup.Group{}
 	for _, shard := range ks.Shards {
 		for _, tablet := range shard.Tablets {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			eg.Go(func() error {
 				if tablet.DbServer != nil && tablet.DbServer.TabletUID > 0 {
 					if err := tablet.DbServer.Stop(); err != nil {
-						log.Infof("Error stopping mysql process: %s", err.Error())
-						errs.RecordError(err)
+						log.Infof("Error stopping mysql process associated with vttablet %s: %v", tablet.Name, err)
+						return err
 					}
 				}
 				if err := tablet.Vttablet.TearDown(); err != nil {
-					log.Infof("Error stopping vttablet %s %s", tablet.Name, err.Error())
-					errs.RecordError(err)
+					log.Infof("Error stopping vttablet %s: %v", tablet.Name, err)
+					return err
 				} else {
 					log.Infof("Successfully stopped vttablet %s", tablet.Name)
 				}
-			}()
+				return nil
+			})
 		}
 	}
-	wg.Wait()
-	return errs.AggrError(vterrors.Aggregate)
+	return eg.Wait()
 }
 
 func (vc *VitessCluster) DeleteKeyspace(t testing.TB, ksName string) {
