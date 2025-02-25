@@ -466,6 +466,7 @@ func TestVStreamsMetricsErrors(t *testing.T) {
 		}
 		close(done)
 	}()
+	<-ch
 	<-done
 
 	expectedLabels1 := "TestVStream.-20.PRIMARY"
