@@ -39,6 +39,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"net/http"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -647,6 +648,12 @@ func (hc *HealthCheckImpl) Unsubscribe(c chan *TabletHealth) {
 	delete(hc.subscribers, c)
 }
 
+var printStack = sync.OnceFunc(func() {
+	buf := make([]byte, 10240) // Allocate buffer large enough
+	n := runtime.Stack(buf, true)
+	fmt.Printf("All Goroutines Stack Trace:\n%s\n", buf[:n])
+})
+
 func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
@@ -657,6 +664,8 @@ func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 			// If the channel is full, we drop the message.
 			hcChannelFullCounter.Add(1)
 			log.Warningf("HealthCheck broadcast channel is full for %v, dropping message for %s", subscriber, topotools.TabletIdent(th.Tablet))
+			// Print the stack trace only once.
+			printStack()
 		}
 	}
 }
