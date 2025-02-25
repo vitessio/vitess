@@ -97,8 +97,10 @@ const (
 	GreaterThanEqual
 	// NotEqual is used to filter a comparable column if != specific value
 	NotEqual
-	// IsNotNull is used to filter a column if it is NULL
+	// IsNotNull is used to filter a column if it is not NULL
 	IsNotNull
+	// IsNull is used to filter a column if it is NULL
+	IsNull
 	// In is used to filter a comparable column if equals any of the values from a specific tuple
 	In
 	// Note that we do not implement filtering for BETWEEN because
@@ -257,6 +259,10 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 			}
 		case IsNotNull:
 			if values[filter.ColNum].IsNull() {
+				return false, nil
+			}
+		case IsNull:
+			if !values[filter.ColNum].IsNull() {
 				return false, nil
 			}
 		case In:
@@ -671,10 +677,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if err := plan.analyzeInKeyRange(vschema, expr.Exprs); err != nil {
 				return err
 			}
-		case *sqlparser.IsExpr: // Needed for CreateLookupVindex with ignore_nulls
-			if expr.Right != sqlparser.IsNotNullOp {
-				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
-			}
+		case *sqlparser.IsExpr:
 			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
 			if !ok {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
@@ -686,10 +689,20 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if err != nil {
 				return err
 			}
-			plan.Filters = append(plan.Filters, Filter{
-				Opcode: IsNotNull,
-				ColNum: colnum,
-			})
+			switch expr.Right {
+			case sqlparser.IsNullOp:
+				plan.Filters = append(plan.Filters, Filter{
+					Opcode: IsNull,
+					ColNum: colnum,
+				})
+			case sqlparser.IsNotNullOp:
+				plan.Filters = append(plan.Filters, Filter{
+					Opcode: IsNotNull,
+					ColNum: colnum,
+				})
+			default:
+				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
+			}
 			// Add it to the expressions that get pushed down to mysqld.
 			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 		case *sqlparser.BetweenExpr:
