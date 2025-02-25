@@ -1157,7 +1157,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	}
 	vcursor.SetForeignKeyCheckState(qh.ForeignKeyChecks)
 
-	paramsCount := 0
+	paramsCount := uint16(0)
 	if preparedPlan {
 		// We need to count the number of arguments in the statement before we plan the query.
 		// Planning could add additional arguments to the statement.
@@ -1248,7 +1248,7 @@ func (e *Executor) buildStatement(
 	reservedVars *sqlparser.ReservedVars,
 	bindVarNeeds *sqlparser.BindVarNeeds,
 	qh sqlparser.QueryHints,
-	paramsCount int,
+	paramsCount uint16,
 ) (*engine.Plan, error) {
 	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, e.ddlConfig)
 	if err != nil {
@@ -1458,7 +1458,7 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 	}
 }
 
-func countArguments(statement sqlparser.Statement) (paramsCount int) {
+func countArguments(statement sqlparser.Statement) (paramsCount uint16) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *sqlparser.Argument:
@@ -1471,7 +1471,7 @@ func countArguments(statement sqlparser.Statement) (paramsCount int) {
 	return
 }
 
-func prepareBindVars(paramsCount int) map[string]*querypb.BindVariable {
+func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 	bindVars := make(map[string]*querypb.BindVariable, paramsCount)
 	for i := range paramsCount {
 		parameterID := fmt.Sprintf("v%d", i+1)
@@ -1509,7 +1509,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 
 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), errCount)
 
-	return qr.Fields, uint16(plan.ParamsCount), err
+	return qr.Fields, plan.ParamsCount, err
 }
 
 func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
