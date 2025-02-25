@@ -346,6 +346,9 @@ func TestVStreamsMetrics(t *testing.T) {
 	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	vsm.vstreamsCreated.ResetAll()
 	vsm.vstreamsLag.ResetAll()
+	vsm.vstreamsCount.ResetAll()
+	vsm.vstreamsEventsStreamed.ResetAll()
+	vsm.vstreamsEndedWithErrors.ResetAll()
 	hostname1 := "host1"
 	hostname2 := "host2"
 	sbc0 := hc.AddTestTablet(cell, hostname1, 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -420,6 +423,9 @@ func TestVStreamsMetricsErrors(t *testing.T) {
 	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	vsm.vstreamsCreated.ResetAll()
 	vsm.vstreamsLag.ResetAll()
+	vsm.vstreamsCount.ResetAll()
+	vsm.vstreamsEventsStreamed.ResetAll()
+	vsm.vstreamsEndedWithErrors.ResetAll()
 	hostname1 := "host1"
 	hostname2 := "host2"
 	sbc0 := hc.AddTestTablet(cell, hostname1, 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
