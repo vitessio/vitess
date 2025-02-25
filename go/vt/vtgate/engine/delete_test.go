@@ -45,7 +45,7 @@ func TestDeleteUnsharded(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("0")
+	vc := newTestVCursor("0")
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -80,7 +80,7 @@ func TestDeleteEqual(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -112,7 +112,7 @@ func TestDeleteEqualMultiCol(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -148,7 +148,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("0")
+	vc := newTestVCursor("0")
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -181,7 +181,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("0")
+	vc := newTestVCursor("0")
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
@@ -213,7 +213,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		"1|4|5|6",
 	)}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -231,7 +231,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	})
 
 	// No rows changing
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 	_, err = del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -252,7 +252,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		"1|4|5|6",
 		"1|7|8|9",
 	)}
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err = del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -300,7 +300,7 @@ func TestDeleteOwnedVindexMultiCol(t *testing.T) {
 		"1|2|4",
 	)}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -371,7 +371,7 @@ func TestDeleteSharded(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
@@ -399,7 +399,7 @@ func TestDeleteShardedStreaming(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	err := del.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		return nil
 	})
@@ -435,7 +435,7 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 		"1|4|5|6",
 	)}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -453,7 +453,7 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 	})
 
 	// No rows changing
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 
 	_, err = del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -475,7 +475,7 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 		"1|4|5|6",
 		"1|7|8|9",
 	)}
-	vc = newDMLTestVCursor("-20", "20-")
+	vc = newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err = del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -528,7 +528,7 @@ func TestDeleteInChangedVindexMultiCol(t *testing.T) {
 		"1|3|6",
 		"2|3|7",
 	)}
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
@@ -565,7 +565,7 @@ func TestDeleteEqualSubshard(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"-20", "20-"}
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -602,7 +602,7 @@ func TestDeleteMultiEqual(t *testing.T) {
 		},
 	}
 
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"-20", "20-"}
 	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -635,7 +635,7 @@ func TestDeleteInUnique(t *testing.T) {
 		Type:   querypb.Type_TUPLE,
 		Values: append([]*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(1))}, sqltypes.ValueToProto(sqltypes.NewInt64(2)), sqltypes.ValueToProto(sqltypes.NewInt64(4))),
 	}
-	vc := newDMLTestVCursor("-20", "20-")
+	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"-20", "20-"}
 	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{"__vals": tupleBV}, false)
 	require.NoError(t, err)

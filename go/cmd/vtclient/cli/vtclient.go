@@ -82,7 +82,7 @@ var (
 	seqChan = make(chan int, 10)
 )
 
-func init() {
+func InitializeFlags() {
 	servenv.MoveFlagsToCobraCommand(Main)
 
 	Main.Flags().StringVar(&server, "server", server, "vtgate server to connect to")

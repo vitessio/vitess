@@ -261,6 +261,7 @@ func TestKnownMetricNamesPascalCase(t *testing.T) {
 		t.Run(metricName.String(), func(t *testing.T) {
 			expect, ok := expectCases[metricName]
 			require.True(t, ok)
+			assert.Equal(t, expect, metricName.Pascal())
 			assert.Equal(t, expect, textutil.PascalCase(metricName.String()))
 		})
 	}

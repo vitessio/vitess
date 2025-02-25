@@ -339,7 +339,9 @@ func (c *Conn) drainMoreResults(more bool, err error) error {
 	for more {
 		var moreErr error
 		_, more, _, moreErr = c.ReadQueryResult(FETCH_NO_ROWS, false)
-		err = errors.Join(err, moreErr)
+		if moreErr != nil {
+			err = errors.Join(err, moreErr)
+		}
 	}
 	return err
 }

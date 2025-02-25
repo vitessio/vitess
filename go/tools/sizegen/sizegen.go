@@ -34,7 +34,7 @@ import (
 	"vitess.io/vitess/go/tools/codegen"
 )
 
-const licenseFileHeader = `Copyright 2021 The Vitess Authors.
+const licenseFileHeader = `Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -340,7 +340,7 @@ func (sizegen *sizegen) sizeImplForSlice(name *types.TypeName, st *types.Slice) 
 }
 
 func (sizegen *sizegen) sizeImplForMap(name *types.TypeName, st *types.Map) (jen.Code, codeFlag) {
-	stmt := sizegen.sizeStmtForMap(jen.Op("*").Add(jen.Id("cached")), st)
+	stmt := sizegen.sizeStmtForMap(jen.Op("*").Add(jen.Id("cached")))
 
 	f := jen.Func()
 	f.Params(jen.Id("cached").Op("*").Id(name.Name()))
@@ -388,49 +388,9 @@ func (sizegen *sizegen) sizeImplForSignature(name *types.TypeName, _ *types.Sign
 	return f, 0
 }
 
-func (sizegen *sizegen) sizeStmtForMap(fieldName *jen.Statement, m *types.Map) []jen.Code {
-	const bucketCnt = 8
-	const sizeofHmap = int64(6 * 8)
-
-	/*
-		type bmap struct {
-			// tophash generally contains the top byte of the hash value
-			// for each key in this bucket. If tophash[0] < minTopHash,
-			// tophash[0] is a bucket evacuation state instead.
-			tophash [bucketCnt]uint8
-			// Followed by bucketCnt keys and then bucketCnt elems.
-			// NOTE: packing all the keys together and then all the elems together makes the
-			// code a bit more complicated than alternating key/elem/key/elem/... but it allows
-			// us to eliminate padding which would be needed for, e.g., map[int64]int8.
-			// Followed by an overflow pointer.
-		}
-	*/
-	sizeOfBucket := int(
-		bucketCnt + // tophash
-			bucketCnt*sizegen.sizes.Sizeof(m.Key()) +
-			bucketCnt*sizegen.sizes.Sizeof(m.Elem()) +
-			8, // overflow pointer
-	)
-
+func (sizegen *sizegen) sizeStmtForMap(fieldName *jen.Statement) []jen.Code {
 	return []jen.Code{
-		jen.Id("size").Op("+=").Lit(hack.RuntimeAllocSize(sizeofHmap)),
-
-		jen.Id("hmap").Op(":=").Qual("reflect", "ValueOf").Call(fieldName),
-
-		jen.Id("numBuckets").Op(":=").Id("int").Call(
-			jen.Qual("math", "Pow").Call(jen.Lit(2), jen.Id("float64").Call(
-				jen.Parens(jen.Op("*").Parens(jen.Op("*").Id("uint8")).Call(
-					jen.Qual("unsafe", "Pointer").Call(jen.Id("hmap").Dot("Pointer").Call().
-						Op("+").Id("uintptr").Call(jen.Lit(9)))))))),
-
-		jen.Id("numOldBuckets").Op(":=").Parens(jen.Op("*").Parens(jen.Op("*").Id("uint16")).Call(
-			jen.Qual("unsafe", "Pointer").Call(
-				jen.Id("hmap").Dot("Pointer").Call().Op("+").Id("uintptr").Call(jen.Lit(10))))),
-
-		jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Id("numOldBuckets").Op("*").Lit(sizeOfBucket)))),
-
-		jen.If(jen.Id("len").Call(fieldName).Op(">").Lit(0).Op("||").Id("numBuckets").Op(">").Lit(1)).Block(
-			jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Id("numBuckets").Op("*").Lit(sizeOfBucket))))),
+		jen.Id("size").Op("+=").Qual("vitess.io/vitess/go/hack", "RuntimeMapSize").Call(fieldName),
 	}
 }
 
@@ -512,11 +472,16 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 		return nil, 0
 
 	case *types.Map:
-		keySize, keyFlag := sizegen.sizeStmtForType(jen.Id("k"), node.Key(), false)
-		valSize, valFlag := sizegen.sizeStmtForType(jen.Id("v"), node.Elem(), false)
+		const (
+			SwissMapMaxKeyBytes  = 128
+			SwissMapMaxElemBytes = 128
+		)
+
+		keySize, keyFlag := sizegen.sizeStmtForType(jen.Id("k"), node.Key(), sizegen.sizes.Sizeof(node.Key()) > SwissMapMaxKeyBytes)
+		valSize, valFlag := sizegen.sizeStmtForType(jen.Id("v"), node.Elem(), sizegen.sizes.Sizeof(node.Elem()) > SwissMapMaxElemBytes)
 
 		return jen.If(fieldName.Clone().Op("!=").Nil()).BlockFunc(func(block *jen.Group) {
-			for _, stmt := range sizegen.sizeStmtForMap(fieldName, node) {
+			for _, stmt := range sizegen.sizeStmtForMap(fieldName) {
 				block.Add(stmt)
 			}
 
