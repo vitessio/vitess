@@ -79,7 +79,7 @@ func TestIsEquivalent(t *testing.T) {
 	q := New(4)
 	q.Add(duplic(0))
 	q.Add(duplic(0))
-	assert.EqualValues(t, 1, len(q.Records()))
+	assert.Len(t, q.Records(), 1)
 }
 
 type mod10 int

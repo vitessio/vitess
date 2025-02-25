@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -359,7 +358,7 @@ func TestMySQLToType(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		got, err := MySQLToType(tcase.intype, tcase.inflags)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, tcase.outtype, got)
 	}
 }

@@ -49,7 +49,7 @@ func TestSetInsertsValue(t *testing.T) {
 	assert.EqualValues(t, v, data)
 
 	values := cache.Items()
-	require.NotEmpty(t, values)
+	require.Len(t, values, 1)
 	assert.Equal(t, key, values[0].Key)
 }
 
