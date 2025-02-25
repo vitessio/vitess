@@ -871,10 +871,12 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 	}
 
 	// Store the ReadVReplicationWorkflow response for later use.
-	readVReplicationWorkflowResp := map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{}
-	var mu sync.Mutex
-	var sourceKeyspace string
-	var workflowType binlogdatapb.VReplicationWorkflowType
+	readVReplicationWorkflowResp := make(map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse)
+	var (
+		mu             sync.Mutex
+		sourceKeyspace string
+		workflowType   binlogdatapb.VReplicationWorkflowType
+	)
 
 	// Validation for duplicate reference tables.
 	err = forAllShards(targetShardInfos, func(si *topo.ShardInfo) error {
@@ -888,12 +890,12 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to read workflow %s on shard %s/%s", req.Workflow, req.Keyspace, tablet.Shard)
 		}
-		if len(res.Streams) > 0 {
+
+		mu.Lock()
+		if len(res.Streams) > 0 && sourceKeyspace == "" {
 			sourceKeyspace = res.Streams[0].Bls.Keyspace
 		}
 		workflowType = res.WorkflowType
-
-		mu.Lock()
 		readVReplicationWorkflowResp[tablet.Shard] = res
 		mu.Unlock()
 
