@@ -211,11 +211,6 @@ func setDBClientSettings(dbClient binlogplayer.DBClient, workflowConfig *vttable
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vreplication controller: workflowConfig is nil")
 	}
 	const maxRows = 10000
-	// Timestamp fields from binlogs are always sent as UTC.
-	// So, we should set the timezone to be UTC for those values to be correctly inserted.
-	if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", maxRows); err != nil {
-		return err
-	}
 	// Tables may have varying character sets. To ship the bits without interpreting them
 	// we set the character set to be binary.
 	if _, err := dbClient.ExecuteFetch("set names 'binary'", maxRows); err != nil {
