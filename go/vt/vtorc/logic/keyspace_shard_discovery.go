@@ -170,6 +170,8 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		log.Error(err)
 		return err
 	}
+
+	// save shards that should be watched.
 	savedShards := make(map[string]bool, len(shardInfos))
 	for _, shardInfo := range shardInfos {
 		if !shouldWatchShard(shardInfo) {
@@ -182,10 +184,10 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		savedShards[shardInfo.ShardName()] = true
 	}
 
-	// delete shards that were not returned by ts.FindAllShardsInKeyspace(...),
-	// indicating they are stale.
+	// delete shards that were not saved, indicating they are stale.
 	shards, err := inst.ReadShardNames(keyspaceName)
 	if err != nil {
+		log.Error(err)
 		return err
 	}
 	for _, shard := range shards {

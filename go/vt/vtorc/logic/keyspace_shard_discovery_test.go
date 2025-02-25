@@ -56,11 +56,9 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	// Store the old flags and restore on test completion
 	oldTs := ts
 	oldClustersToWatch := clustersToWatch
-	oldShardsToWatch := shardsToWatch
 	defer func() {
 		ts = oldTs
 		clustersToWatch = oldClustersToWatch
-		shardsToWatch = oldShardsToWatch
 	}()
 
 	db.ClearVTOrcDatabase()
@@ -317,11 +315,9 @@ func verifyPrimaryAlias(t *testing.T, keyspaceName, shardName string, primaryAli
 func TestRefreshAllShards(t *testing.T) {
 	// Store the old flags and restore on test completion
 	oldClustersToWatch := clustersToWatch
-	oldShardsToWatch := shardsToWatch
 	oldTs := ts
 	defer func() {
 		clustersToWatch = oldClustersToWatch
-		shardsToWatch = oldShardsToWatch
 		ts = oldTs
 		db.ClearVTOrcDatabase()
 	}()
