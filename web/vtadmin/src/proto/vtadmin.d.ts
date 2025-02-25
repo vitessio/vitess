@@ -69032,6 +69032,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest shards */
         shards?: (string[]|null);
+
+        /** MoveTablesCompleteRequest ignore_source_keyspace */
+        ignore_source_keyspace?: (boolean|null);
     }
 
     /** Represents a MoveTablesCompleteRequest. */
@@ -69063,6 +69066,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest shards. */
         public shards: string[];
+
+        /** MoveTablesCompleteRequest ignore_source_keyspace. */
+        public ignore_source_keyspace: boolean;
 
         /**
          * Creates a new MoveTablesCompleteRequest instance using the specified properties.
@@ -79000,6 +79006,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest delete_batch_size */
         delete_batch_size?: (number|Long|null);
+
+        /** WorkflowDeleteRequest ignore_source_keyspace */
+        ignore_source_keyspace?: (boolean|null);
     }
 
     /** Represents a WorkflowDeleteRequest. */
@@ -79028,6 +79037,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest delete_batch_size. */
         public delete_batch_size: (number|Long);
+
+        /** WorkflowDeleteRequest ignore_source_keyspace. */
+        public ignore_source_keyspace: boolean;
 
         /**
          * Creates a new WorkflowDeleteRequest instance using the specified properties.

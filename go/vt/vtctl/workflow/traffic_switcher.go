@@ -268,7 +268,7 @@ func (ts *trafficSwitcher) ExternalTopo() *topo.Server                     { ret
 func (ts *trafficSwitcher) MigrationType() binlogdatapb.MigrationType      { return ts.migrationType }
 func (ts *trafficSwitcher) IsPartialMigration() bool                       { return ts.isPartialMigration }
 func (ts *trafficSwitcher) ReverseWorkflowName() string                    { return ts.reverseWorkflow }
-func (ts *trafficSwitcher) SourceKeyspaceName() string                     { return ts.sourceKSSchema.Keyspace.Name }
+func (ts *trafficSwitcher) SourceKeyspaceName() string                     { return ts.sourceKeyspace }
 func (ts *trafficSwitcher) SourceKeyspaceSchema() *vindexes.KeyspaceSchema { return ts.sourceKSSchema }
 func (ts *trafficSwitcher) Sources() map[string]*MigrationSource           { return ts.sources }
 func (ts *trafficSwitcher) Tables() []string                               { return ts.tables }
@@ -370,7 +370,6 @@ func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []stri
 	if err != nil {
 		return false, err
 	}
-
 	if key.KeyRangeIsComplete(skr) || key.KeyRangeIsComplete(tkr) || len(sourceShards) != len(targetShards) {
 		return false, nil
 	}
