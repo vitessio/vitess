@@ -615,24 +615,24 @@ func TestDTResolveAfterMMCommit(t *testing.T) {
 	qCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Insert into multiple shards
-	_, err = conn.Execute(qCtx, "begin", nil)
+	_, err = conn.Execute(qCtx, "begin", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(9,'baz')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(9,'baz')", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'apa')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'apa')", nil, false)
 	require.NoError(t, err)
 	// Also do an update to a table that has a consistent lookup vindex.
 	// We expect to see only the pre-session changes in the logs.
-	_, err = conn.Execute(qCtx, "update twopc_consistent_lookup set col = 22 where id = 4", nil)
+	_, err = conn.Execute(qCtx, "update twopc_consistent_lookup set col = 22 where id = 4", nil, false)
 	require.NoError(t, err)
 
 	// The caller ID is used to simulate the failure at the desired point.
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("MMCommitted_FailNow", "", ""), nil)
-	_, err = conn.Execute(newCtx, "commit", nil)
+	_, err = conn.Execute(newCtx, "commit", nil, false)
 	require.ErrorContains(t, err, "Fail After MM commit")
 
 	testWarningAndTransactionStatus(t, conn,
@@ -717,20 +717,20 @@ func TestDTResolveAfterRMPrepare(t *testing.T) {
 	qCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Insert into multiple shards
-	_, err = conn.Execute(qCtx, "begin", nil)
+	_, err = conn.Execute(qCtx, "begin", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil, false)
 	require.NoError(t, err)
 	// Also do an update to a table that has a consistent lookup vindex.
 	// We expect to see only the pre-session changes in the logs.
-	_, err = conn.Execute(qCtx, "update twopc_consistent_lookup set col = 22 where id = 4", nil)
+	_, err = conn.Execute(qCtx, "update twopc_consistent_lookup set col = 22 where id = 4", nil, false)
 	require.NoError(t, err)
 
 	// The caller ID is used to simulate the failure at the desired point.
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("RMPrepared_FailNow", "", ""), nil)
-	_, err = conn.Execute(newCtx, "commit", nil)
+	_, err = conn.Execute(newCtx, "commit", nil, false)
 	require.ErrorContains(t, err, "Fail After RM prepared")
 
 	testWarningAndTransactionStatus(t, conn,
@@ -796,18 +796,18 @@ func TestDTResolveDuringRMPrepare(t *testing.T) {
 	qCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Insert into multiple shards
-	_, err = conn.Execute(qCtx, "begin", nil)
+	_, err = conn.Execute(qCtx, "begin", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'bar')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'bar')", nil, false)
 	require.NoError(t, err)
 
 	// The caller ID is used to simulate the failure at the desired point.
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("RMPrepare_-40_FailNow", "", ""), nil)
-	_, err = conn.Execute(newCtx, "commit", nil)
+	_, err = conn.Execute(newCtx, "commit", nil, false)
 	require.ErrorContains(t, err, "Fail During RM prepare")
 
 	testWarningAndTransactionStatus(t, conn,
@@ -862,18 +862,18 @@ func TestDTResolveDuringRMCommit(t *testing.T) {
 	qCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Insert into multiple shards
-	_, err = conn.Execute(qCtx, "begin", nil)
+	_, err = conn.Execute(qCtx, "begin", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'apa')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(10,'apa')", nil, false)
 	require.NoError(t, err)
 
 	// The caller ID is used to simulate the failure at the desired point.
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("RMCommit_-40_FailNow", "", ""), nil)
-	_, err = conn.Execute(newCtx, "commit", nil)
+	_, err = conn.Execute(newCtx, "commit", nil, false)
 	require.ErrorContains(t, err, "Fail During RM commit")
 
 	testWarningAndTransactionStatus(t, conn,
@@ -945,16 +945,16 @@ func TestDTResolveAfterTransactionRecord(t *testing.T) {
 	qCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	// Insert into multiple shards
-	_, err = conn.Execute(qCtx, "begin", nil)
+	_, err = conn.Execute(qCtx, "begin", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(7,'foo')", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil)
+	_, err = conn.Execute(qCtx, "insert into twopc_user(id, name) values(8,'bar')", nil, false)
 	require.NoError(t, err)
 
 	// The caller ID is used to simulate the failure at the desired point.
 	newCtx := callerid.NewContext(qCtx, callerid.NewEffectiveCallerID("TRCreated_FailNow", "", ""), nil)
-	_, err = conn.Execute(newCtx, "commit", nil)
+	_, err = conn.Execute(newCtx, "commit", nil, false)
 	require.ErrorContains(t, err, "Fail After TR created")
 
 	testWarningAndTransactionStatus(t, conn,
@@ -1000,7 +1000,7 @@ func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSessio
 	txConcluded bool, txState string, txParticipants string) {
 	t.Helper()
 
-	qr, err := conn.Execute(context.Background(), "show warnings", nil)
+	qr, err := conn.Execute(context.Background(), "show warnings", nil, false)
 	require.NoError(t, err)
 	require.Len(t, qr.Rows, 1)
 
@@ -1015,7 +1015,7 @@ func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSessio
 	require.Greater(t, indx, 0)
 	dtid := w.Msg[:indx]
 
-	qr, err = conn.Execute(context.Background(), fmt.Sprintf(`show transaction status for '%v'`, dtid), nil)
+	qr, err = conn.Execute(context.Background(), fmt.Sprintf(`show transaction status for '%v'`, dtid), nil, false)
 	require.NoError(t, err)
 
 	// validate transaction status
@@ -1304,7 +1304,7 @@ func executeReturnError(ctx context.Context, t *testing.T, ss *vtgateconn.VTGate
 		// sort by shard
 		sortShard(ss)
 	}
-	_, err := ss.Execute(ctx, sql, nil)
+	_, err := ss.Execute(ctx, sql, nil, false)
 	return err
 }
 
