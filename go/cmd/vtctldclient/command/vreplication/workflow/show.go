@@ -60,6 +60,7 @@ func commandShow(cmd *cobra.Command, args []string) error {
 		Workflow:    baseOptions.Workflow,
 		IncludeLogs: workflowShowOptions.IncludeLogs,
 		Shards:      baseOptions.Shards,
+		Verbosity:   workflowShowOptions.Verbosity,
 	}
 	resp, err := common.GetClient().GetWorkflows(common.GetCommandCtx(), req)
 	if err != nil {

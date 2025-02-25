@@ -690,6 +690,8 @@ type FindWorkflowsOptions struct {
 	ActiveOnly      bool
 	IgnoreKeyspaces sets.Set[string]
 	Filter          func(workflow *vtadminpb.Workflow) bool
+	VerbosityLevel  vtctldatapb.VerbosityLevel
+	IncludeLogs     bool
 }
 
 // FindWorkflows returns a list of Workflows in this cluster, across the given
@@ -759,6 +761,8 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 		span.Annotate("keyspaces", strings.Join(keyspaces, ","))
 		span.Annotate("num_ignore_keyspaces", opts.IgnoreKeyspaces.Len())
 		span.Annotate("ignore_keyspaces", strings.Join(sets.List(opts.IgnoreKeyspaces), ","))
+		span.Annotate("include_logs", opts.IncludeLogs)
+		span.Annotate("verbosity_level", opts.VerbosityLevel.String())
 	}
 
 	clusterpb := c.ToProto()
@@ -799,7 +803,8 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 			resp, err := c.Vtctld.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
 				Keyspace:    ks,
 				ActiveOnly:  opts.ActiveOnly,
-				IncludeLogs: true,
+				IncludeLogs: opts.IncludeLogs,
+				Verbosity:   opts.VerbosityLevel,
 			})
 			c.workflowReadPool.Release()
 
@@ -2023,6 +2028,8 @@ func (c *Cluster) GetWorkflow(ctx context.Context, keyspace string, name string,
 		Filter: func(workflow *vtadminpb.Workflow) bool {
 			return workflow.Workflow.Name == name
 		},
+		VerbosityLevel: vtctldatapb.VerbosityLevel_HIGH,
+		IncludeLogs:    true,
 	})
 	if err != nil {
 		return nil, err
@@ -2067,6 +2074,8 @@ func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts Get
 		ActiveOnly:      opts.ActiveOnly,
 		IgnoreKeyspaces: opts.IgnoreKeyspaces,
 		Filter:          func(_ *vtadminpb.Workflow) bool { return true },
+		IncludeLogs:     false,
+		VerbosityLevel:  vtctldatapb.VerbosityLevel_LOW,
 	})
 }
 

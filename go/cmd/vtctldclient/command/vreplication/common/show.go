@@ -18,6 +18,7 @@ package common
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -29,6 +30,7 @@ import (
 var ShowOptions = struct {
 	IncludeLogs bool
 	Shards      []string
+	Verbosity   vtctldatapb.VerbosityLevel
 }{}
 
 func GetShowCommand(opts *SubCommandsOpts) *cobra.Command {
@@ -42,6 +44,8 @@ func GetShowCommand(opts *SubCommandsOpts) *cobra.Command {
 		RunE:                  commandShow,
 	}
 	cmd.Flags().BoolVar(&ShowOptions.IncludeLogs, "include-logs", true, "Include recent logs for the workflow.")
+	cmd.Flags().Var((*cli.VerbosityLevelFlag)(&ShowOptions.Verbosity), "verbosity-level", fmt.Sprintf("How much detail to include in the results. Valid values are: %s.",
+		strings.Join(cli.GetVerbosityLevelFlagOptions(), ",")))
 	return cmd
 }
 
@@ -53,12 +57,16 @@ func commandShow(cmd *cobra.Command, args []string) error {
 		Workflow:    BaseOptions.Workflow,
 		IncludeLogs: ShowOptions.IncludeLogs,
 		Shards:      ShowOptions.Shards,
+		Verbosity:   ShowOptions.Verbosity,
 	}
 	resp, err := GetClient().GetWorkflows(GetCommandCtx(), req)
 	if err != nil {
 		return err
 	}
 
+	// We always omit empty/zero value fields with SHOW to reduce the
+	// overall size and noise.
+	cli.DefaultMarshalOptions.EmitUnpopulated = false
 	data, err := cli.MarshalJSONPretty(resp)
 	if err != nil {
 		return err

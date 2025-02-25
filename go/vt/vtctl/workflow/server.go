@@ -366,6 +366,7 @@ func (s *Server) GetWorkflow(ctx context.Context, keyspace, workflow string, inc
 		Workflow:    workflow,
 		IncludeLogs: includeLogs,
 		Shards:      shards,
+		Verbosity:   vtctldatapb.VerbosityLevel_HIGH, // Get all info for generic callers
 	})
 	if err != nil {
 		return nil, err
@@ -1562,7 +1563,9 @@ func (s *Server) WorkflowStatus(ctx context.Context, req *vtctldatapb.WorkflowSt
 			}
 			ts.Id = int32(st.Id)
 			ts.Tablet = st.Tablet
-			ts.SourceShard = fmt.Sprintf("%s/%s", st.BinlogSource.Keyspace, st.BinlogSource.Shard)
+			if st.BinlogSource != nil {
+				ts.SourceShard = fmt.Sprintf("%s/%s", st.BinlogSource.Keyspace, st.BinlogSource.Shard)
+			}
 			ts.Position = st.Position
 			ts.Status = st.State
 			ts.Info = strings.Join(info, "; ")
