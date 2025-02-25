@@ -404,7 +404,7 @@ func (f fakeExecutor) VSchema() *vindexes.VSchema {
 	panic("implement me")
 }
 
-func (f fakeExecutor) PlanPrepareStmt(ctx context.Context, vcursor *VCursorImpl, query string) (*engine.Plan, sqlparser.Statement, error) {
+func (f fakeExecutor) PlanPrepareStmt(context.Context, *SafeSession, string) (*engine.Plan, error) {
 	// TODO implement me
 	panic("implement me")
 }

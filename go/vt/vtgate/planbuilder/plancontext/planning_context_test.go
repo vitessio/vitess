@@ -345,7 +345,7 @@ func (v *vschema) GetUDV(name string) *querypb.BindVariable {
 	panic("implement me")
 }
 
-func (v *vschema) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
+func (v *vschema) PlanPrepareStatement(context.Context, string) (*engine.Plan, error) {
 	// TODO implement me
 	panic("implement me")
 }

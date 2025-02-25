@@ -109,16 +109,12 @@ func (vw *VSchemaWrapper) GetPrepareData(stmtName string) *vtgatepb.PrepareData 
 	return nil
 }
 
-func (vw *VSchemaWrapper) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
+func (vw *VSchemaWrapper) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, error) {
 	plan, err := vw.TestBuilder(query, vw, vw.CurrentDb())
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	stmt, _, err := vw.Env.Parser().Parse2(query)
-	if err != nil {
-		return nil, nil, err
-	}
-	return plan, stmt, nil
+	return plan, nil
 }
 
 func (vw *VSchemaWrapper) ClearPrepareData(string) {}

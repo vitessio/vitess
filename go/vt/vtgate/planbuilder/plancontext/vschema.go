@@ -87,7 +87,7 @@ type VSchema interface {
 	GetUDV(name string) *querypb.BindVariable
 
 	// PlanPrepareStatement plans the prepared statement.
-	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error)
+	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, error)
 
 	// ClearPrepareData clears the prepared data from the session.
 	ClearPrepareData(stmtName string)

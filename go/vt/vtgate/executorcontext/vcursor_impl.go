@@ -113,7 +113,7 @@ type (
 
 		// TODO: remove when resolver is gone
 		VSchema() *vindexes.VSchema
-		PlanPrepareStmt(ctx context.Context, vcursor *VCursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
+		PlanPrepareStmt(ctx context.Context, safeSession *SafeSession, query string) (*engine.Plan, error)
 
 		Environment() *vtenv.Environment
 		ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
@@ -1565,8 +1565,8 @@ func (vc *VCursorImpl) GetUDV(name string) *querypb.BindVariable {
 	return vc.SafeSession.GetUDV(name)
 }
 
-func (vc *VCursorImpl) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
-	return vc.executor.PlanPrepareStmt(ctx, vc, query)
+func (vc *VCursorImpl) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, error) {
+	return vc.executor.PlanPrepareStmt(ctx, vc.SafeSession, query)
 }
 
 func (vc *VCursorImpl) ClearPrepareData(name string) {
