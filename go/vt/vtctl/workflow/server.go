@@ -27,6 +27,7 @@ import (
 	"text/template"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
@@ -36,6 +37,7 @@ import (
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -848,6 +850,207 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		return err
 	}
 	return mz.startStreams(ctx)
+}
+
+// MaterializeAddTables adds specified tables to the existing workflow.
+func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.MaterializeAddTablesRequest) error {
+	if len(req.TableSettings) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tables found in the request")
+	}
+
+	targets, err := s.ts.FindAllShardsInKeyspace(ctx, req.Keyspace, nil)
+	if err != nil {
+		return err
+	}
+	targetShardInfos := maps.Values(targets)
+
+	// This will be helpful to find duplicate tables.
+	tableSet := sets.New[string]()
+	for _, ts := range req.TableSettings {
+		tableSet.Insert(ts.TargetTable)
+	}
+
+	// Store the ReadVReplicationWorkflow response for later use.
+	readVReplicationWorkflowResp := make(map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse)
+	var (
+		mu             sync.Mutex
+		sourceKeyspace string
+		workflowType   binlogdatapb.VReplicationWorkflowType
+	)
+
+	// Validation for duplicate reference tables.
+	err = forAllShards(targetShardInfos, func(si *topo.ShardInfo) error {
+		tablet, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		res, err := s.tmc.ReadVReplicationWorkflow(ctx, tablet.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: req.Workflow,
+		})
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to read workflow %s on shard %s/%s", req.Workflow, req.Keyspace, tablet.Shard)
+		}
+
+		mu.Lock()
+		if len(res.Streams) > 0 && sourceKeyspace == "" {
+			sourceKeyspace = res.Streams[0].Bls.Keyspace
+		}
+		workflowType = res.WorkflowType
+		readVReplicationWorkflowResp[tablet.Shard] = res
+		mu.Unlock()
+
+		for _, stream := range res.Streams {
+			for _, rule := range stream.Bls.Filter.Rules {
+				if tableSet.Has(rule.Match) {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "rule for %s already exists", rule.Match)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if sourceKeyspace == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "source keyspace not found for workflow %s", req.Workflow)
+	}
+	// We only allow adding tables for MoveTables and Materialize workflows.
+	if workflowType != binlogdatapb.VReplicationWorkflowType_Materialize &&
+		workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot add tables for workflow type %s", workflowType)
+	}
+
+	// Stop the streams
+	err = forAllShards(targetShardInfos, func(target *topo.ShardInfo) error {
+		tablet, err := s.ts.GetTablet(ctx, target.PrimaryAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
+		}
+		if _, err := s.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow: req.Workflow,
+			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+		}); err != nil {
+			return vterrors.Wrapf(err, "failed to stop workflow %s on shard %s/%s", req.Workflow, req.Keyspace, tablet.Shard)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// If SourceExpression is empty or CreateDdl is empty we set it to
+	// values corresponding to a reference table.
+	for _, ts := range req.TableSettings {
+		if ts.SourceExpression == "" {
+			ts.SourceExpression = fmt.Sprintf("select * from %s", ts.TargetTable)
+		}
+		if ts.CreateDdl == "" {
+			ts.CreateDdl = createDDLAsCopyDropForeignKeys
+		}
+	}
+
+	materializationIntent := vtctldatapb.MaterializationIntent_CUSTOM
+	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables {
+		materializationIntent = vtctldatapb.MaterializationIntent_MOVETABLES
+	}
+
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:              req.Workflow,
+		MaterializationIntent: materializationIntent,
+		TargetKeyspace:        req.Keyspace,
+		SourceKeyspace:        sourceKeyspace,
+		TableSettings:         req.TableSettings,
+	}
+	mz := &materializer{
+		ctx:          ctx,
+		ts:           s.ts,
+		sourceTs:     s.ts,
+		tmc:          s.tmc,
+		env:          s.env,
+		ms:           ms,
+		workflowType: workflowType,
+	}
+
+	if err = mz.buildMaterializer(); err != nil {
+		return err
+	}
+	if err = mz.deploySchema(); err != nil {
+		// If there was an error while deploying schema, we should restart the
+		// streams before returning the error.
+		if startStreamsErr := mz.startStreams(ctx); startStreamsErr != nil {
+			return vterrors.Wrapf(startStreamsErr, "unable to restart workflow %s and failed to deploy schema: %v", req.Workflow, err)
+		}
+		return vterrors.Wrapf(err, "failed to deploy schema")
+	}
+
+	// Add to the copy state.
+	err = forAllShards(targetShardInfos, func(si *topo.ShardInfo) error {
+		tablet, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+
+		mu.Lock()
+		res, ok := readVReplicationWorkflowResp[tablet.Shard]
+		mu.Unlock()
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to read workflow %s on shard %s/%s", req.Workflow, req.Keyspace, tablet.Shard)
+		}
+
+		var buf strings.Builder
+		buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
+		prefix := ""
+		for _, stream := range res.Streams {
+			for _, ts := range req.TableSettings {
+				fmt.Fprintf(&buf, "%s(%d, %s)", prefix, stream.Id, encodeString(ts.TargetTable))
+				prefix = ", "
+			}
+		}
+		_, err = s.tmc.ExecuteFetchAsAllPrivs(ctx, tablet.Tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+			Query: []byte(buf.String()),
+		})
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to insert tables copy state for workflow %s on shard %s/%s", req.Workflow, req.Keyspace, tablet.Shard)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// Generate the rules using TableSettings, append the binglogsource filter
+	// rules and start the streams.
+	return forAllShards(targetShardInfos, func(target *topo.ShardInfo) error {
+		tablet, err := s.ts.GetTablet(ctx, target.PrimaryAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
+		}
+
+		// This is similar to what we follow while creating workflow streams.
+		sourceShards := mz.filterSourceShards(target)
+		streamKeyRangesEqual := false
+		if len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange) {
+			streamKeyRangesEqual = true
+		}
+
+		var rules []*binlogdatapb.Rule
+		for _, ts := range req.TableSettings {
+			rule, err := mz.generateRule(ts, target, nil, streamKeyRangesEqual)
+			if err != nil {
+				return err
+			}
+			rules = append(rules, rule)
+		}
+
+		if _, err := s.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow:    req.Workflow,
+			FilterRules: rules,
+			State:       ptr.Of(binlogdatapb.VReplicationWorkflowState_Running),
+		}); err != nil {
+			return vterrors.Wrapf(err, "failed to update workflow %s on shard %s/%s", req.Workflow, req.Keyspace, tablet.Shard)
+		}
+		return nil
+	})
 }
 
 func validateMaterializeSettings(ms *vtctldatapb.MaterializeSettings) error {
