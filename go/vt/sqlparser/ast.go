@@ -2119,6 +2119,7 @@ func (*AliasedTableExpr) iTableExpr() {}
 func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
 func (*JSONTableExpr) iTableExpr()    {}
+func (*TableFnExpr) iTableExpr()      {}
 
 type (
 	// SimpleTableExpr represents a simple table expression.
@@ -2615,6 +2616,11 @@ type (
 		Alias   IdentifierCS
 		Filter  Expr
 		Columns []*JtColumnDefinition
+	}
+
+	TableFnExpr struct {
+		Expr  Expr
+		Alias IdentifierCS
 	}
 
 	// JSONArrayAgg is an aggregation expression that creates a JSON Array.

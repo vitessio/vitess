@@ -498,7 +498,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
 %type <expr> simple_expr literal NUM_literal text_start text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
 %type <tableExprs> from_opt table_references from_clause
-%type <tableExpr> table_reference table_factor join_table json_table_function
+%type <tableExpr> table_reference table_factor join_table json_table_function table_function
 %type <jtColumnDefinition> jt_column
 %type <jtColumnList> jt_columns_clause columns_list
 %type <jtOnResponse> on_error on_empty json_on_response
@@ -3543,6 +3543,12 @@ json_table_function:
     $$ = &JSONTableExpr{Expr: $3, Filter: $5, Columns: $6, Alias: $8}
   }
 
+table_function:
+  TABLE openb expression closeb as_opt_id
+  {
+    $$ = &TableFnExpr{Expr: $3, Alias: $5}
+  }
+
 jt_columns_clause:
   COLUMNS openb columns_list closeb
   {
@@ -5027,6 +5033,10 @@ table_factor:
 | json_table_function
   {
     $$ = $1
+  }
+| table_function
+  { 
+    $$ = $1 
   }
 
 derived_table:

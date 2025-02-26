@@ -2602,6 +2602,15 @@ func (node *RenameTable) Format(buf *TrackedBuffer) {
 	}
 }
 
+func (node *TableFnExpr) Format(buf *TrackedBuffer) {
+	aliasStr := node.Alias.String()
+	if aliasStr != "" {
+		buf.astPrintf(node, "table(%v) as %v", node.Expr, node.Alias)
+	} else {
+		buf.astPrintf(node, "table(%v)", node.Expr)
+	}
+}
+
 func (node *JSONTableExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "json_table(%v, %v columns(\n", node.Expr, node.Filter)
 	sz := len(node.Columns)

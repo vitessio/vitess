@@ -3402,6 +3402,20 @@ func (node *RenameTable) FormatFast(buf *TrackedBuffer) {
 	}
 }
 
+func (node *TableFnExpr) FormatFast(buf *TrackedBuffer) {
+	aliasStr := node.Alias.String()
+	if aliasStr != "" {
+		buf.WriteString("table(")
+		node.Expr.FormatFast(buf)
+		buf.WriteString(") as ")
+		node.Alias.FormatFast(buf)
+	} else {
+		buf.WriteString("table(")
+		node.Expr.FormatFast(buf)
+		buf.WriteByte(')')
+	}
+}
+
 func (node *JSONTableExpr) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("json_table(")
 	node.Expr.FormatFast(buf)
