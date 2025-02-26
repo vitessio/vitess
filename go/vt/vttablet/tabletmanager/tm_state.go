@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -202,11 +203,12 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 	defer ts.mu.Unlock()
 	log.Infof("Changing Tablet Type: %v for %s", tabletType, ts.tablet.Alias.String())
 
+	var primaryTermStartTime *vttime.Time
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		PrimaryTermStartTime := protoutil.TimeToProto(time.Now())
+		primaryTermStartTime = protoutil.TimeToProto(time.Now())
 
 		// Update the tablet record first.
-		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, PrimaryTermStartTime)
+		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, primaryTermStartTime)
 		if err != nil {
 			log.Errorf("Error changing type in topo record for tablet %s :- %v\nWill keep trying to read from the toposerver", topoproto.TabletAliasString(ts.tm.tabletAlias), err)
 			// In case of a topo error, we aren't sure if the data has been written or not.
@@ -221,7 +223,7 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 					<-time.After(100 * time.Millisecond)
 					continue
 				}
-				if ti.Type == tabletType && proto.Equal(ti.PrimaryTermStartTime, PrimaryTermStartTime) {
+				if ti.Type == tabletType && proto.Equal(ti.PrimaryTermStartTime, primaryTermStartTime) {
 					log.Infof("Tablet record in toposerver matches, continuing operation")
 					break
 				}
@@ -229,18 +231,26 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 				return err
 			}
 		}
+	}
 
+	err := ts.updateTypeAndPublish(ctx, tabletType, primaryTermStartTime, action)
+	return err
+}
+
+// updateTypeAndPublish updates the tablet type in the internal state, and publishes the changes.
+func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodatapb.TabletType, primaryTermStartTime *vttime.Time, action DBAction) error {
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		if action == DBActionSetReadWrite {
 			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 			// We call SetReadOnly only after the topo has been updated to avoid
 			// situations where two tablets are primary at the DB level but not at the vitess level
-			if err = ts.tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
+			if err := ts.tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 				return err
 			}
 		}
 
 		ts.tablet.Type = tabletType
-		ts.tablet.PrimaryTermStartTime = PrimaryTermStartTime
+		ts.tablet.PrimaryTermStartTime = primaryTermStartTime
 	} else {
 		ts.tablet.Type = tabletType
 		ts.tablet.PrimaryTermStartTime = nil
