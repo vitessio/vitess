@@ -33,8 +33,6 @@ const (
 	mysql80 mysqlVersion = "mysql80"
 	mysql84 mysqlVersion = "mysql84"
 
-	cores16RunnerName   = "gh-hosted-runners-16cores-1-24.04"
-	defaultRunnerName   = "ubuntu-24.04"
 	defaultMySQLVersion = mysql80
 )
 
@@ -46,6 +44,11 @@ var (
 
 var (
 	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mysql84}
+)
+
+const (
+	cores16RunnerName = "gh-hosted-runners-16cores-1-24.04"
+	defaultRunnerName = "ubuntu-24.04"
 )
 
 const (

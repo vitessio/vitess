@@ -49,16 +49,16 @@ func (j *Join) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult) {
+func (j *Join) tryCompact(ctx *plancontext.PlanningContext) Operator {
 	if !j.JoinType.IsCommutative() {
 		// if we can't move tables around, we can't merge these inputs
-		return j, NoRewrite
+		return nil
 	}
 
 	lqg, lok := j.LHS.(*QueryGraph)
 	rqg, rok := j.RHS.(*QueryGraph)
 	if !lok || !rok {
-		return j, NoRewrite
+		return nil
 	}
 
 	newOp := &QueryGraph{
@@ -69,7 +69,7 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult
 	if j.Predicate != nil {
 		newOp.collectPredicate(ctx, j.Predicate)
 	}
-	return newOp, Rewrote("merge querygraphs into a single one")
+	return newOp
 }
 
 func createStraightJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
@@ -103,7 +103,7 @@ func createLeftOuterJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinT
 
 	// for outer joins we have to be careful with the predicates we use
 	var op Operator
-	subq, _ := getSubQuery(join.Condition.On)
+	subq, _, _ := getSubQuery(join.Condition.On)
 	if subq != nil {
 		panic(vterrors.VT12001("subquery in outer join predicate"))
 	}

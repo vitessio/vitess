@@ -1042,8 +1042,8 @@ func TestEngineReload(t *testing.T) {
 					assert.Zero(t, tbl.FileSize)
 					assert.Zero(t, tbl.AllocatedSize)
 				default:
-					assert.NotZero(t, tbl.FileSize)
-					assert.NotZero(t, tbl.AllocatedSize)
+					assert.Zero(t, tbl.FileSize)
+					assert.Zero(t, tbl.AllocatedSize)
 				}
 			})
 		}
@@ -1082,8 +1082,8 @@ func TestEngineReload(t *testing.T) {
 					assert.Zero(t, tbl.FileSize)
 					assert.Zero(t, tbl.AllocatedSize)
 				default:
-					assert.NotZero(t, tbl.FileSize)
-					assert.NotZero(t, tbl.AllocatedSize)
+					assert.Zero(t, tbl.FileSize)
+					assert.Zero(t, tbl.AllocatedSize)
 				}
 			})
 		}

@@ -613,7 +613,6 @@ func (tr *ShardedRouting) planCompositeInOpArg(
 			Index: idx,
 		}
 		if typ, found := ctx.TypeForExpr(col); found {
-			value.Type = typ.Type()
 			value.Collation = typ.Collation()
 		}
 

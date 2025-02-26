@@ -573,6 +573,89 @@ func TestPlanBuilder(t *testing.T) {
 		},
 	}, {
 		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select val, id from t1 where id between 2 and 5"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 1,
+				Field: &querypb.Field{
+					Name:    "val",
+					Type:    sqltypes.VarChar,
+					Charset: unicodeCollationID,
+				},
+			}, {
+				ColNum: 0,
+				Field: &querypb.Field{
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
+				},
+			}},
+			Filters: []Filter{{
+				Opcode:        GreaterThanEqual,
+				ColNum:        0,
+				Value:         sqltypes.NewInt64(2),
+				Vindex:        nil,
+				VindexColumns: nil,
+				KeyRange:      nil,
+			}, {
+				Opcode:        LessThanEqual,
+				ColNum:        0,
+				Value:         sqltypes.NewInt64(5),
+				Vindex:        nil,
+				VindexColumns: nil,
+				KeyRange:      nil,
+			}},
+			whereExprsToPushDown: []sqlparser.Expr{
+				&sqlparser.BetweenExpr{
+					IsBetween: true,
+					Left:      sqlparser.NewColName("id"),
+					From:      sqlparser.NewIntLiteral("2"),
+					To:        sqlparser.NewIntLiteral("5"),
+				},
+			},
+			env: vtenv.NewTestEnv(),
+		},
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select val, id from t1 where id not between 2 and 5"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 1,
+				Field: &querypb.Field{
+					Name:    "val",
+					Type:    sqltypes.VarChar,
+					Charset: unicodeCollationID,
+				},
+			}, {
+				ColNum: 0,
+				Field: &querypb.Field{
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
+				},
+			}},
+			Filters: []Filter{{
+				Opcode:        NotBetween,
+				ColNum:        0,
+				Values:        []sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewInt64(5)},
+				Vindex:        nil,
+				VindexColumns: nil,
+				KeyRange:      nil,
+			}},
+			whereExprsToPushDown: []sqlparser.Expr{
+				&sqlparser.BetweenExpr{
+					IsBetween: false,
+					Left:      sqlparser.NewColName("id"),
+					From:      sqlparser.NewIntLiteral("2"),
+					To:        sqlparser.NewIntLiteral("5"),
+				},
+			},
+			env: vtenv.NewTestEnv(),
+		},
+	}, {
+		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "/*/"},
 		outErr:  "error parsing regexp: missing argument to repetition operator: `*`",
 	}, {
@@ -753,8 +836,27 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 			{Opcode: In, ColNum: 0, Values: []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}},
 		},
 	}, {
+		name:     "between-operator",
+		inFilter: "select * from t1 where id between 1 and 5",
+		outFilters: []Filter{
+			{Opcode: GreaterThanEqual, ColNum: 0, Value: sqltypes.NewInt64(1)},
+			{Opcode: LessThanEqual, ColNum: 0, Value: sqltypes.NewInt64(5)},
+		},
+	}, {
+		name:     "not-between-operator",
+		inFilter: "select * from t1 where id not between 1 and 5",
+		outFilters: []Filter{
+			{Opcode: NotBetween, ColNum: 0, Values: []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(5)}},
+		},
+	}, {
+		name:     "is-null-operator",
+		inFilter: "select * from t1 where val is null",
+		outFilters: []Filter{
+			{Opcode: IsNull, ColNum: 1},
+		},
+	}, {
 		name:     "vindex-and-operators",
-		inFilter: "select * from t1 where in_keyrange(id, 'hash', '-80') and id = 2 and val <> 'xyz' and id in (100, 30)",
+		inFilter: "select * from t1 where in_keyrange(id, 'hash', '-80') and id = 2 and val <> 'xyz' and id in (100, 30) and val is null and id between 20 and 60",
 		outFilters: []Filter{
 			{
 				Opcode:        VindexMatch,
@@ -770,6 +872,9 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 			{Opcode: Equal, ColNum: 0, Value: sqltypes.NewInt64(2)},
 			{Opcode: NotEqual, ColNum: 1, Value: sqltypes.NewVarChar("xyz")},
 			{Opcode: In, ColNum: 0, Values: []sqltypes.Value{sqltypes.NewInt64(100), sqltypes.NewInt64(30)}},
+			{Opcode: GreaterThanEqual, ColNum: 0, Value: sqltypes.NewInt64(20)},
+			{Opcode: IsNull, ColNum: 1},
+			{Opcode: LessThanEqual, ColNum: 0, Value: sqltypes.NewInt64(60)},
 		},
 	}}
 

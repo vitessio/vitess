@@ -85,6 +85,7 @@ type Instance struct {
 	SemiSyncPrimaryStatus              bool
 	SemiSyncPrimaryClients             uint
 	SemiSyncReplicaStatus              bool
+	SemiSyncBlocked                    bool
 
 	LastSeenTimestamp    string
 	IsLastCheckValid     bool
