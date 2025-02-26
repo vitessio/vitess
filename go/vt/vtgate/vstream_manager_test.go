@@ -349,11 +349,9 @@ func TestVStreamsMetrics(t *testing.T) {
 	vsm.vstreamsCount.ResetAll()
 	vsm.vstreamsEventsStreamed.ResetAll()
 	vsm.vstreamsEndedWithErrors.ResetAll()
-	hostname1 := "host1"
-	hostname2 := "host2"
-	sbc0 := hc.AddTestTablet(cell, hostname1, 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
-	sbc1 := hc.AddTestTablet(cell, hostname2, 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 := hc.AddTestTablet(cell, "1.1.1.2", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
 
 	send0 := []*binlogdatapb.VEvent{
@@ -382,10 +380,8 @@ func TestVStreamsMetrics(t *testing.T) {
 	ch := startVStream(ctx, t, vsm, vgtid, nil)
 	<-ch
 	<-ch
-	expectedLabels1Prefix := "TestVStream.-20.PRIMARY"
-	expectedLabels2Prefix := "TestVStream.20-40.PRIMARY"
-	expectedLabels1 := expectedLabels1Prefix + "." + hostname1
-	expectedLabels2 := expectedLabels2Prefix + "." + hostname2
+	expectedLabels1 := "TestVStream.-20.PRIMARY"
+	expectedLabels2 := "TestVStream.20-40.PRIMARY"
 	wantVStreamsCreated := make(map[string]int64)
 	wantVStreamsCreated[expectedLabels1] = 1
 	wantVStreamsCreated[expectedLabels2] = 1
@@ -407,8 +403,8 @@ func TestVStreamsMetrics(t *testing.T) {
 	assert.Equal(t, wantVStreamsEventsStreamed, vsm.vstreamsEventsStreamed.Counts(), "vstreamsEventsStreamed matches")
 
 	wantVStreamsEndedWithErrors := make(map[string]int64)
-	wantVStreamsEndedWithErrors[expectedLabels1Prefix] = 0
-	wantVStreamsEndedWithErrors[expectedLabels2Prefix] = 0
+	wantVStreamsEndedWithErrors[expectedLabels1] = 0
+	wantVStreamsEndedWithErrors[expectedLabels2] = 0
 	assert.Equal(t, wantVStreamsEndedWithErrors, vsm.vstreamsEndedWithErrors.Counts(), "vstreamsEndedWithErrors matches")
 }
 
@@ -426,11 +422,9 @@ func TestVStreamsMetricsErrors(t *testing.T) {
 	vsm.vstreamsCount.ResetAll()
 	vsm.vstreamsEventsStreamed.ResetAll()
 	vsm.vstreamsEndedWithErrors.ResetAll()
-	hostname1 := "host1"
-	hostname2 := "host2"
-	sbc0 := hc.AddTestTablet(cell, hostname1, 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
-	sbc1 := hc.AddTestTablet(cell, hostname2, 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 := hc.AddTestTablet(cell, "1.1.1.2", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
 
 	const wantErr = "Invalid arg message"
