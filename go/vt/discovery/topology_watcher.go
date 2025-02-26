@@ -110,20 +110,42 @@ func (tw *TopologyWatcher) getTablets() ([]*topo.TabletInfo, error) {
 	return tw.topoServer.GetTabletsByCell(tw.ctx, tw.cell, nil)
 }
 
+func (tw *TopologyWatcher) getTabletsByShard(keyspace string, shard string) ([]*topo.TabletInfo, error) {
+	return tw.topoServer.GetTabletsByShardCell(tw.ctx, keyspace, shard, []string{tw.cell})
+}
+
 // Start starts the topology watcher.
 func (tw *TopologyWatcher) Start() {
-	tw.wg.Add(1)
+	tw.wg.Add(2)
+	// Goroutine to refresh the tablets list periodically.
 	go func(t *TopologyWatcher) {
 		defer t.wg.Done()
 		ticker := time.NewTicker(t.refreshInterval)
 		defer ticker.Stop()
 		for {
-			t.loadTablets()
+			// Since we are going to load all the tablets,
+			// we can clear out the entire list for reloading
+			// specific keyspace shards.
+			for range tw.healthcheck.GetLoadTabletsTrigger() {
+			}
+			t.loadTablets("", "")
 			select {
 			case <-t.ctx.Done():
 				return
-			case <-tw.healthcheck.GetLoadTabletsTrigger():
 			case <-ticker.C:
+			}
+		}
+	}(tw)
+	// Go routine to refresh tablets for a specific
+	// keyspace shard.
+	go func(t *TopologyWatcher) {
+		defer t.wg.Done()
+		for {
+			select {
+			case <-t.ctx.Done():
+				return
+			case kss := <-tw.healthcheck.GetLoadTabletsTrigger():
+				t.loadTablets(kss.Keyspace, kss.Shard)
 			}
 		}
 	}(tw)
@@ -136,22 +158,35 @@ func (tw *TopologyWatcher) Stop() {
 	tw.wg.Wait()
 }
 
-func (tw *TopologyWatcher) loadTablets() {
+func (tw *TopologyWatcher) loadTablets(keyspace string, shard string) {
 	newTablets := make(map[string]*tabletInfo)
 	var partialResult bool
 
-	// First get the list of all tablets.
-	tabletInfos, err := tw.getTablets()
-	topologyWatcherOperations.Add(topologyWatcherOpListTablets, 1)
-	if err != nil {
-		topologyWatcherErrors.Add(topologyWatcherOpListTablets, 1)
-		// If we get a partial result error, we just log it and process the tablets that we did manage to fetch.
-		if topo.IsErrType(err, topo.PartialResult) {
-			log.Errorf("received partial result from getTablets for cell %v: %v", tw.cell, err)
-			partialResult = true
-		} else { // For all other errors, just return.
-			log.Errorf("error getting tablets for cell: %v: %v", tw.cell, err)
+	var tabletInfos []*topo.TabletInfo
+	var err error
+	if keyspace != "" && shard != "" {
+		tabletInfos, err = tw.getTabletsByShard(keyspace, shard)
+		if err != nil {
+			log.Errorf("error getting tablets for keyspace-shard: %v:%v: %v", keyspace, shard, err)
 			return
+		}
+		// Since we are only reading tablets for a keyspace shard,
+		// this is by default a partial result.
+		partialResult = true
+	} else {
+		// First get the list of all tablets.
+		tabletInfos, err = tw.getTablets()
+		topologyWatcherOperations.Add(topologyWatcherOpListTablets, 1)
+		if err != nil {
+			topologyWatcherErrors.Add(topologyWatcherOpListTablets, 1)
+			// If we get a partial result error, we just log it and process the tablets that we did manage to fetch.
+			if topo.IsErrType(err, topo.PartialResult) {
+				log.Errorf("received partial result from getTablets for cell %v: %v", tw.cell, err)
+				partialResult = true
+			} else { // For all other errors, just return.
+				log.Errorf("error getting tablets for cell: %v: %v", tw.cell, err)
+				return
+			}
 		}
 	}
 
