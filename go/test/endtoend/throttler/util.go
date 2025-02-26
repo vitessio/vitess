@@ -66,8 +66,7 @@ func CheckThrottlerRaw(vtctldProcess *cluster.VtctldClientProcess, tablet *clust
 	args = append(args, "CheckThrottler")
 	if flags == nil {
 		flags = &throttle.CheckFlags{
-			Scope:               base.SelfScope,
-			MultiMetricsEnabled: true,
+			Scope: base.SelfScope,
 		}
 	}
 	if appName != "" {
@@ -124,11 +123,6 @@ func UpdateThrottlerTopoConfigRaw(
 		args = append(args, "--threshold", fmt.Sprintf("%f", opts.Threshold))
 	}
 	args = append(args, "--custom-query", opts.CustomQuery)
-	if opts.CustomQuery != "" {
-		args = append(args, "--check-as-check-self")
-	} else {
-		args = append(args, "--check-as-check-shard")
-	}
 	if appRule != nil {
 		args = append(args, "--throttle-app", appRule.Name)
 		args = append(args, "--throttle-app-duration", time.Until(protoutil.TimeFromProto(appRule.ExpiresAt).UTC()).String())
@@ -485,7 +479,7 @@ func EnableLagThrottlerAndWaitForStatus(t *testing.T, clusterInstance *cluster.L
 	}
 }
 
-func WaitForCheckThrottlerResult(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags, expect int32, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, error) {
+func WaitForCheckThrottlerResult(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, appName throttlerapp.Name, flags *throttle.CheckFlags, expect tabletmanagerdatapb.CheckThrottlerResponseCode, timeout time.Duration) (*vtctldatapb.CheckThrottlerResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
@@ -493,7 +487,7 @@ func WaitForCheckThrottlerResult(t *testing.T, clusterInstance *cluster.LocalPro
 	for {
 		resp, err := CheckThrottler(clusterInstance, tablet, appName, flags)
 		require.NoError(t, err)
-		if resp.Check.StatusCode == expect {
+		if resp.Check.ResponseCode == expect {
 			return resp, nil
 		}
 		select {
@@ -534,11 +528,11 @@ func WaitForValidData(t *testing.T, tablet *cluster.Vttablet, timeout time.Durat
 
 	for {
 		checkResp, checkErr := http.Get(checkURL)
-		if checkErr != nil {
+		if checkErr == nil {
 			defer checkResp.Body.Close()
 		}
 		selfCheckResp, selfCheckErr := http.Get(selfCheckURL)
-		if selfCheckErr != nil {
+		if selfCheckErr == nil {
 			defer selfCheckResp.Body.Close()
 		}
 		if checkErr == nil && selfCheckErr == nil &&

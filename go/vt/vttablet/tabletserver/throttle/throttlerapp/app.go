@@ -42,6 +42,14 @@ func (n Name) Concatenate(other Name) Name {
 func (n Name) SplitStrings() []string {
 	return strings.Split(n.String(), ":")
 }
+func (n Name) SplitMap() map[string]bool {
+	split := n.SplitStrings()
+	result := make(map[string]bool, len(split))
+	for _, s := range split {
+		result[s] = true
+	}
+	return result
+}
 
 const (
 	// AllName is a special catch-all name for all apps
@@ -55,8 +63,6 @@ const (
 
 	TableGCName   Name = "tablegc"
 	OnlineDDLName Name = "online-ddl"
-	GhostName     Name = "gh-ost"
-	PTOSCName     Name = "pt-osc"
 
 	VReplicationName      Name = "vreplication"
 	VStreamerName         Name = "vstreamer"

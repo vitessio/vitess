@@ -44,7 +44,7 @@ type (
 		Alias      *sqlparser.AliasedTableExpr
 		Table      sqlparser.TableName
 		Predicates []sqlparser.Expr
-		VTable     *vindexes.Table
+		VTable     *vindexes.BaseTable
 	}
 )
 
@@ -100,7 +100,7 @@ func (v *Vindex) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedEx
 	return slice.Map(v.Columns, colNameToExpr)
 }
 
-func (v *Vindex) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (v *Vindex) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return transformColumnsToSelectExprs(ctx, v)
 }
 

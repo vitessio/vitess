@@ -44,11 +44,9 @@ package throttle
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"time"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
@@ -71,13 +69,10 @@ type CheckFlags struct {
 	OverrideThreshold     float64
 	OKIfNotExists         bool
 	SkipRequestHeartbeats bool
-	MultiMetricsEnabled   bool
 }
 
 // selfCheckFlags have no special hints
-var selfCheckFlags = &CheckFlags{
-	MultiMetricsEnabled: true,
-}
+var selfCheckFlags = &CheckFlags{}
 
 // ThrottlerCheck provides methods for an app checking on metrics
 type ThrottlerCheck struct {
@@ -102,42 +97,34 @@ func (check *ThrottlerCheck) checkAppMetricResult(ctx context.Context, appName s
 	}
 	value, err := metricResult.Get()
 	if appName == "" {
-		return NewCheckResult(tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, http.StatusExpectationFailed, value, threshold, "", fmt.Errorf("no app indicated"))
+		return NewCheckResult(tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, value, threshold, "", fmt.Errorf("no app indicated"))
 	}
 
-	var statusCode int
 	var responseCode tabletmanagerdatapb.CheckThrottlerResponseCode
-
 	switch {
 	case err == base.ErrAppDenied:
 		// app specifically not allowed to get metrics
-		statusCode = http.StatusExpectationFailed // 417
 		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED
 	case err == base.ErrNoSuchMetric:
 		// not collected yet, or metric does not exist
-		statusCode = http.StatusNotFound // 404
 		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC
 	case err != nil:
 		// any error
-		statusCode = http.StatusInternalServerError // 500
 		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR
 	case value > threshold:
 		// casual throttling
-		statusCode = http.StatusTooManyRequests // 429
 		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED
 		err = base.ErrThresholdExceeded
 	default:
 		// all good!
-		statusCode = http.StatusOK // 200
 		responseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 	}
-	return NewCheckResult(responseCode, statusCode, value, threshold, matchedApp, err)
+	return NewCheckResult(responseCode, value, threshold, matchedApp, err)
 }
 
 // Check is the core function that runs when a user wants to check a metric
 func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope base.Scope, metricNames base.MetricNames, flags *CheckFlags) (checkResult *CheckResult) {
 	checkResult = &CheckResult{
-		StatusCode:   http.StatusOK,
 		ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
 		Metrics:      make(map[string]*MetricResult),
 	}
@@ -146,7 +133,6 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 	}
 	metricNames = metricNames.Unique()
 	applyMetricToCheckResult := func(metricName base.MetricName, metric *MetricResult) {
-		checkResult.StatusCode = metric.StatusCode
 		checkResult.ResponseCode = metric.ResponseCode
 		checkResult.Value = metric.Value
 		checkResult.Threshold = metric.Threshold
@@ -188,9 +174,9 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 					// Out of abundance of caution, we will protect against such a scenario.
 					return
 				}
-				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheck%s%sTotal", textutil.PascalCase(metricScope.String()), textutil.PascalCase(metricName.String())), "").Add(1)
+				stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheck%s%sTotal", metricScope.Pascal(), metricName.Pascal()), "").Add(1)
 				if !metricCheckResult.IsOK() {
-					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheck%s%sError", textutil.PascalCase(metricScope.String()), textutil.PascalCase(metricName.String())), "").Add(1)
+					stats.GetOrNewCounter(fmt.Sprintf("ThrottlerCheck%s%sError", metricScope.Pascal(), metricName.Pascal()), "").Add(1)
 				}
 			}(metricCheckResult)
 		}
@@ -198,7 +184,6 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 			checkResult.RecentlyChecked = true
 		}
 		metric := &MetricResult{
-			StatusCode:   metricCheckResult.StatusCode,
 			ResponseCode: metricCheckResult.ResponseCode,
 			Value:        metricCheckResult.Value,
 			Threshold:    metricCheckResult.Threshold,
@@ -208,11 +193,8 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 			Scope:        metricScope.String(), // This reports back the actual scope used for the check
 		}
 		checkResult.Metrics[metricName.String()] = metric
-		if flags.MultiMetricsEnabled && !metricCheckResult.IsOK() && metricName != base.DefaultMetricName {
+		if !metricCheckResult.IsOK() && metricName != base.DefaultMetricName {
 			// If we're checking multiple metrics, and one of them fails, we should return any of the failing metric.
-			// For backwards compatibility, if flags.MultiMetricsEnabled is not set, we do not report back failing
-			// metrics, because a v20 primary would not know how to deal with it, and is not expecting any of those
-			// metrics.
 			// The only metric we ever report back is the default metric, see below.
 			applyMetricToCheckResult(metricName, metric)
 		}
@@ -233,7 +215,7 @@ func (check *ThrottlerCheck) Check(ctx context.Context, appName string, scope ba
 			statsThrottlerCheckAnyError.Add(1)
 		}
 	}(checkResult)
-	go check.throttler.markRecentApp(appName, checkResult.StatusCode, checkResult.ResponseCode)
+	go check.throttler.markRecentApp(appName, checkResult.ResponseCode)
 	return checkResult
 }
 
@@ -249,7 +231,7 @@ func (check *ThrottlerCheck) localCheck(ctx context.Context, aggregatedMetricNam
 		check.throttler.markMetricHealthy(aggregatedMetricName)
 	}
 	if timeSinceHealthy, found := check.throttler.timeSinceMetricHealthy(aggregatedMetricName); found {
-		go stats.GetOrNewGauge(fmt.Sprintf("ThrottlerCheck%sSecondsSinceHealthy", textutil.PascalCase(scope.String())), fmt.Sprintf("seconds since last healthy check for %v", scope)).Set(int64(timeSinceHealthy.Seconds()))
+		go stats.GetOrNewGauge(fmt.Sprintf("ThrottlerCheck%sSecondsSinceHealthy", scope.Pascal()), fmt.Sprintf("seconds since last healthy check for %v", scope)).Set(int64(timeSinceHealthy.Seconds()))
 	}
 
 	return checkResult
@@ -261,7 +243,7 @@ func (check *ThrottlerCheck) reportAggregated(aggregatedMetricName string, metri
 		return
 	}
 	if value, err := metricResult.Get(); err == nil {
-		stats.GetOrNewGaugeFloat64(fmt.Sprintf("ThrottlerAggregated%s%s", textutil.PascalCase(scope.String()), textutil.PascalCase(metricName.String())), fmt.Sprintf("aggregated value for %v", scope)).Set(value)
+		stats.GetOrNewGaugeFloat64(fmt.Sprintf("ThrottlerAggregated%s%s", scope.Pascal(), metricName.Pascal()), fmt.Sprintf("aggregated value for %v", scope)).Set(value)
 	}
 }
 

@@ -39,7 +39,7 @@ type (
 		Name() (sqlparser.TableName, error)
 
 		// GetVindexTable returns the vschema version of this TableInfo
-		GetVindexTable() *vindexes.Table
+		GetVindexTable() *vindexes.BaseTable
 
 		// IsInfSchema returns true if this table is information_schema
 		IsInfSchema() bool
@@ -140,7 +140,7 @@ type (
 		// The columns were added because of the use of `*` in the query
 		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 
-		columns map[*sqlparser.Union]sqlparser.SelectExprs
+		columns map[*sqlparser.Union][]sqlparser.SelectExpr
 
 		comparator *sqlparser.Comparator
 
@@ -165,7 +165,7 @@ type (
 
 	// SchemaInformation is used to provide table information from Vschema.
 	SchemaInformation interface {
-		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
+		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 		ConnCollation() collations.ID
 		Environment() *vtenv.Environment
 		// ForeignKeyMode returns the foreign_key flag value
@@ -190,13 +190,15 @@ var ErrNotSingleTable = vterrors.VT13001("should only be used for single tables"
 
 // CopyDependencies copies the dependencies from one expression into the other
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
-	if ValidAsMapKey(to) {
-		st.Recursive[to] = st.RecursiveDeps(from)
-		st.Direct[to] = st.DirectDeps(from)
-		if ValidAsMapKey(from) {
-			if typ, found := st.ExprTypes[from]; found {
-				st.ExprTypes[to] = typ
-			}
+	if ValidAsMapKey(to) && ValidAsMapKey(from) {
+		if ts, ok := st.Recursive[from]; ok {
+			st.Recursive[to] = ts
+		}
+		if ts, ok := st.Direct[from]; ok {
+			st.Direct[to] = ts
+		}
+		if typ, found := st.ExprTypes[from]; found {
+			st.ExprTypes[to] = typ
 		}
 	}
 }
@@ -436,7 +438,7 @@ func (st *SemTable) HasNonLiteralForeignKeyUpdate(updExprs sqlparser.UpdateExprs
 }
 
 // isShardScoped checks if the foreign key constraint is shard-scoped or not. It uses the vindex information to make this call.
-func isShardScoped(pTable *vindexes.Table, cTable *vindexes.Table, pCols sqlparser.Columns, cCols sqlparser.Columns) bool {
+func isShardScoped(pTable *vindexes.BaseTable, cTable *vindexes.BaseTable, pCols sqlparser.Columns, cCols sqlparser.Columns) bool {
 	if !pTable.Keyspace.Sharded {
 		return true
 	}
@@ -493,10 +495,10 @@ func (st *SemTable) ForeignKeysPresent() bool {
 	return false
 }
 
-func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) sqlparser.SelectExprs {
+func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) []sqlparser.SelectExpr {
 	switch sel := sel.(type) {
 	case *sqlparser.Select:
-		return sel.SelectExprs
+		return sel.GetColumns()
 	case *sqlparser.Union:
 		exprs, found := st.columns[sel]
 		if found {
@@ -512,8 +514,9 @@ func (st *SemTable) SelectExprs(sel sqlparser.TableStatement) sqlparser.SelectEx
 	panic(fmt.Sprintf("BUG: unexpected select statement type %T", sel))
 }
 
-func getColumnNames(exprs sqlparser.SelectExprs) (expanded bool, selectExprs sqlparser.SelectExprs) {
-	expanded = true
+func getColumnNames(exprs []sqlparser.SelectExpr) (bool, []sqlparser.SelectExpr) {
+	var selectExprs []sqlparser.SelectExpr
+	expanded := true
 	for _, col := range exprs {
 		switch col := col.(type) {
 		case *sqlparser.AliasedExpr:
@@ -524,7 +527,7 @@ func getColumnNames(exprs sqlparser.SelectExprs) (expanded bool, selectExprs sql
 			expanded = false
 		}
 	}
-	return
+	return expanded, selectExprs
 }
 
 // CopySemanticInfo copies all semantic information we have about this SQLNode so that it also applies to the `to` node
@@ -571,7 +574,7 @@ func EmptySemTable() *SemTable {
 		Recursive:        map[sqlparser.Expr]TableSet{},
 		Direct:           map[sqlparser.Expr]TableSet{},
 		ColumnEqualities: map[columnName][]sqlparser.Expr{},
-		columns:          map[*sqlparser.Union]sqlparser.SelectExprs{},
+		columns:          map[*sqlparser.Union][]sqlparser.SelectExpr{},
 		ExprTypes:        make(map[sqlparser.Expr]evalengine.Type),
 	}
 }
@@ -651,6 +654,21 @@ func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
 	return result
 }
 
+// ForEachExprEquality returns a slice containing the given expression, and it's known equalities if any
+func (st *SemTable) ForEachExprEquality(in sqlparser.Expr, forEach func(sqlparser.Expr) error) error {
+	switch expr := in.(type) {
+	case *sqlparser.ColName:
+		table := st.DirectDeps(expr)
+		k := columnName{Table: table, ColumnName: expr.Name.String()}
+		for _, expr := range st.ColumnEqualities[k] {
+			if err := forEach(expr); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // TableInfoForExpr returns the table info of the table that this expression depends on.
 // Careful: this only works for expressions that have a single table dependency
 func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
@@ -658,9 +676,9 @@ func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
 }
 
 // AddExprs adds new select exprs to the SemTable.
-func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.SelectExprs) {
+func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols *sqlparser.SelectExprs) {
 	tableSet := st.TableSetFor(tbl)
-	for _, col := range cols {
+	for _, col := range cols.Exprs {
 		st.Recursive[col.(*sqlparser.AliasedExpr).Expr] = tableSet
 	}
 }
@@ -757,16 +775,16 @@ func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
 var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 
 // ColumnLookup implements the TranslationLookup interface
-func (st *SemTable) ColumnLookup(col *sqlparser.ColName) (int, error) {
+func (st *SemTable) ColumnLookup(*sqlparser.ColName) (int, error) {
 	return 0, columnNotSupportedErr
 }
 
 // SingleUnshardedKeyspace returns the single keyspace if all tables in the query are in the same, unsharded keyspace
-func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*vindexes.Table) {
+func (st *SemTable) SingleUnshardedKeyspace() (ks *vindexes.Keyspace, tables []*vindexes.BaseTable) {
 	return singleUnshardedKeyspace(st.Tables)
 }
 
-func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tables []*vindexes.Table) {
+func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tables []*vindexes.BaseTable) {
 	validKS := func(this *vindexes.Keyspace) bool {
 		if this == nil || this.Sharded {
 			return false
@@ -783,7 +801,7 @@ func singleUnshardedKeyspace(tableInfos []TableInfo) (ks *vindexes.Keyspace, tab
 
 	for _, table := range tableInfos {
 		sc := table.canShortCut()
-		var vtbl *vindexes.Table
+		var vtbl *vindexes.BaseTable
 
 		switch sc {
 		case dependsOnKeyspace:

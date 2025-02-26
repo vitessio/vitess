@@ -1,0 +1,8 @@
+{
+  "sharded": false,
+  "tables": {
+    "t": {},
+    "u": {},
+    "cv1": {}
+  }
+}

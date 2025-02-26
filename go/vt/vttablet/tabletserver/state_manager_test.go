@@ -79,7 +79,6 @@ func TestStateManagerServePrimary(t *testing.T) {
 	assert.Equal(t, testNow, sm.ptsTimestamp)
 
 	verifySubcomponent(t, 1, sm.watcher, testStateClosed)
-
 	verifySubcomponent(t, 2, sm.se, testStateOpen)
 	verifySubcomponent(t, 3, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 4, sm.qe, testStateOpen)
@@ -150,15 +149,24 @@ func TestStateManagerUnservePrimary(t *testing.T) {
 }
 
 type testDiskMonitor struct {
+	mu            sync.Mutex
 	isDiskStalled bool
 }
 
 func (t *testDiskMonitor) IsDiskStalled() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	return t.isDiskStalled
 }
 
-// TestIsServingLocked tests isServingLocked() functionality.
-func TestIsServingLocked(t *testing.T) {
+func (t *testDiskMonitor) setDiskStalled(ds bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.isDiskStalled = ds
+}
+
+// TestIsServing tests IsServing() functionality.
+func TestIsServing(t *testing.T) {
 	sm := newTestStateManager()
 	defer sm.StopService()
 	tdm := &testDiskMonitor{isDiskStalled: false}
@@ -166,10 +174,10 @@ func TestIsServingLocked(t *testing.T) {
 
 	err := sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
-	require.True(t, sm.isServingLocked())
+	require.True(t, sm.IsServing())
 
-	tdm.isDiskStalled = true
-	require.False(t, sm.isServingLocked())
+	tdm.setDiskStalled(true)
+	require.False(t, sm.IsServing())
 }
 
 func TestStateManagerUnserveNonPrimary(t *testing.T) {

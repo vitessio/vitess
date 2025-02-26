@@ -180,7 +180,7 @@ func (aj *ApplyJoin) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.A
 	return cols
 }
 
-func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (aj *ApplyJoin) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return transformColumnsToSelectExprs(ctx, aj)
 }
 
@@ -414,7 +414,7 @@ func (aj *ApplyJoin) findOrAddColNameBindVarName(ctx *plancontext.PlanningContex
 	return bvName
 }
 
-func (aj *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed sqlparser.Exprs) {
+func (aj *ApplyJoin) LHSColumnsNeeded(ctx *plancontext.PlanningContext) (needed []sqlparser.Expr) {
 	f := func(from BindVarExpr) sqlparser.Expr {
 		return from.Expr
 	}

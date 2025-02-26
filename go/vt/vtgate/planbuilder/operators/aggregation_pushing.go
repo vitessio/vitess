@@ -206,9 +206,9 @@ func pushAggregations(ctx *plancontext.PlanningContext, aggregator *Aggregator, 
 	}
 }
 
-func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) (bool, sqlparser.Exprs) {
+func checkIfWeCanPush(ctx *plancontext.PlanningContext, aggregator *Aggregator) (bool, []sqlparser.Expr) {
 	canPush := true
-	var distinctExprs sqlparser.Exprs
+	var distinctExprs []sqlparser.Expr
 	var differentExpr *sqlparser.AliasedExpr
 
 	for _, aggr := range aggregator.Aggregations {
@@ -574,13 +574,7 @@ outer:
 
 func coalesceFunc(e sqlparser.Expr) sqlparser.Expr {
 	// `coalesce(e,1)` will return `e` if `e` is not `NULL`, otherwise it will return `1`
-	return &sqlparser.FuncExpr{
-		Name: sqlparser.NewIdentifierCI("coalesce"),
-		Exprs: sqlparser.Exprs{
-			e,
-			sqlparser.NewIntLiteral("1"),
-		},
-	}
+	return sqlparser.NewFuncExpr("coalesce", e, sqlparser.NewIntLiteral("1"))
 }
 
 func initColReUse(size int) []int {

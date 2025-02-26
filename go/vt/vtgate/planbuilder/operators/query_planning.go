@@ -30,10 +30,10 @@ import (
 )
 
 func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
-	var selExpr sqlparser.SelectExprs
+	var selExpr []sqlparser.SelectExpr
 	if horizon, isHorizon := root.(*Horizon); isHorizon {
 		sel := getFirstSelect(horizon.Query)
-		selExpr = sqlparser.Clone(sel.SelectExprs)
+		selExpr = sqlparser.Clone(sel.SelectExprs).Exprs
 	}
 
 	output := runPhases(ctx, root)
@@ -65,7 +65,6 @@ func runPhases(ctx *plancontext.PlanningContext, root Operator) Operator {
 
 		op = phase.act(ctx, op)
 		op = runRewriters(ctx, op)
-		op = compact(ctx, op)
 	}
 
 	return addGroupByOnRHSOfJoin(op)
@@ -699,6 +698,18 @@ func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (Operator, *App
 		}
 		src.Outer, in.Source = in, src.Outer
 		return src, Rewrote("push filter to outer query in subquery container")
+	case *Filter:
+		if len(in.Predicates) == 0 {
+			return in.Source, Rewrote("filter with no predicates removed")
+		}
+
+		other, isFilter := in.Source.(*Filter)
+		if !isFilter {
+			return in, NoRewrite
+		}
+		in.Source = other.Source
+		in.Predicates = append(in.Predicates, other.Predicates...)
+		return in, Rewrote("two filters merged into one")
 	}
 
 	return in, NoRewrite
@@ -805,7 +816,7 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 	}
 
 	var sources []Operator
-	var selects []sqlparser.SelectExprs
+	var selects [][]sqlparser.SelectExpr
 
 	if op.distinct {
 		sources, selects = mergeUnionInputInAnyOrder(ctx, op)
@@ -829,7 +840,7 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 }
 
 // addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for
-func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, selExprs sqlparser.SelectExprs, output Operator) Operator {
+func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, selExprs []sqlparser.SelectExpr, output Operator) Operator {
 	if len(selExprs) == 0 {
 		return output
 	}
@@ -843,7 +854,7 @@ func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, s
 	return createSimpleProjection(ctx, selExprs, output)
 }
 
-func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {
+func colNamesAlign(expected, actual []sqlparser.SelectExpr) bool {
 	if len(expected) > len(actual) {
 		// if we expect more columns than we have, we can't align
 		return false

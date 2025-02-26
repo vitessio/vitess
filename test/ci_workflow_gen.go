@@ -47,6 +47,11 @@ var (
 )
 
 const (
+	cores16RunnerName = "gh-hosted-runners-16cores-1-24.04"
+	defaultRunnerName = "ubuntu-24.04"
+)
+
+const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate = "templates/unit_test.tpl"
@@ -164,13 +169,14 @@ var (
 )
 
 type unitTest struct {
-	Name, Platform, FileName, Evalengine string
+	Name, RunsOn, Platform, FileName, Evalengine string
 }
 
 type clusterTest struct {
 	Name, Shard, Platform              string
 	FileName                           string
 	BuildTag                           string
+	RunsOn                             string
 	MemoryCheck                        bool
 	MakeTools, InstallXtraBackup       bool
 	Docker                             bool
@@ -178,13 +184,13 @@ type clusterTest struct {
 	EnableBinlogTransactionCompression bool
 	EnablePartialJSON                  bool
 	PartialKeyspace                    bool
-	Cores16                            bool
 	NeedsMinio                         bool
 }
 
 type vitessTesterTest struct {
 	FileName string
 	Name     string
+	RunsOn   string
 	Path     string
 }
 
@@ -241,8 +247,9 @@ func canonnizeList(list []string) []string {
 func generateVitessTesterWorkflows(mp map[string]string, tpl string) {
 	for test, testPath := range mp {
 		tt := &vitessTesterTest{
-			Name: fmt.Sprintf("Vitess Tester (%v)", test),
-			Path: testPath,
+			Name:   fmt.Sprintf("Vitess Tester (%v)", test),
+			RunsOn: defaultRunnerName,
+			Path:   testPath,
 		}
 
 		templateFileName := tpl
@@ -263,11 +270,12 @@ func generateClusterWorkflows(list []string, tpl string) {
 				Name:     fmt.Sprintf("Cluster (%s)", cluster),
 				Shard:    cluster,
 				BuildTag: buildTag[cluster],
+				RunsOn:   defaultRunnerName,
 			}
 			cores16Clusters := canonnizeList(clusterRequiring16CoresMachines)
 			for _, cores16Cluster := range cores16Clusters {
 				if cores16Cluster == cluster {
-					test.Cores16 = true
+					test.RunsOn = cores16RunnerName
 					break
 				}
 			}
@@ -339,6 +347,7 @@ func generateUnitTestWorkflows() {
 		for _, evalengine := range []string{"1", "0"} {
 			test := &unitTest{
 				Name:       fmt.Sprintf("Unit Test (%s%s)", evalengineToString(evalengine), platform),
+				RunsOn:     defaultRunnerName,
 				Platform:   string(platform),
 				Evalengine: evalengine,
 			}

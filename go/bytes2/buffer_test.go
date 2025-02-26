@@ -23,7 +23,7 @@ import (
 )
 
 func TestBuffer(t *testing.T) {
-	b := NewBuffer(nil)
+	var b Buffer
 
 	// Test Write function
 	b.Write([]byte("ab"))

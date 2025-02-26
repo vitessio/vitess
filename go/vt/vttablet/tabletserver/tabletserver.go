@@ -230,7 +230,6 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.registerTxlogzHandler()
 	tsv.registerQueryListHandlers([]*QueryList{tsv.statelessql, tsv.statefulql, tsv.olapql})
 	tsv.registerTwopczHandler()
-	tsv.registerMigrationStatusHandler()
 	tsv.registerThrottlerHandlers()
 	tsv.registerDebugEnvHandler()
 
@@ -361,31 +360,32 @@ func (tsv *TabletServer) SetQueryRules(ruleSource string, qrs *rules.Rules) erro
 	return nil
 }
 
-func (tsv *TabletServer) initACL(tableACLConfigFile string, enforceTableACLConfig bool) {
+func (tsv *TabletServer) initACL(tableACLConfigFile string) error {
 	// tabletacl.Init loads ACL from file if *tableACLConfig is not empty
-	err := tableacl.Init(
+	return tableacl.Init(
 		tableACLConfigFile,
 		func() {
 			tsv.ClearQueryPlanCache()
 		},
 	)
-	if err != nil {
-		log.Errorf("Fail to initialize Table ACL: %v", err)
-		if enforceTableACLConfig {
-			log.Exit("Need a valid initial Table ACL when enforce-tableacl-config is set, exiting.")
-		}
-	}
 }
 
 // InitACL loads the table ACL and sets up a SIGHUP handler for reloading it.
-func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfig bool, reloadACLConfigFileInterval time.Duration) {
-	tsv.initACL(tableACLConfigFile, enforceTableACLConfig)
+func (tsv *TabletServer) InitACL(tableACLConfigFile string, reloadACLConfigFileInterval time.Duration) error {
+	if err := tsv.initACL(tableACLConfigFile); err != nil {
+		return err
+	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGHUP)
 	go func() {
 		for range sigChan {
-			tsv.initACL(tableACLConfigFile, enforceTableACLConfig)
+			err := tsv.initACL(tableACLConfigFile)
+			if err != nil {
+				log.Errorf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err)
+			} else {
+				log.Info("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile)
+			}
 		}
 	}()
 
@@ -397,6 +397,7 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 			}
 		}()
 	}
+	return nil
 }
 
 // SetServingType changes the serving type of the tabletserver. It starts or
@@ -760,10 +761,10 @@ func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) e
 	}
 }
 
-// SetDemotePrimaryStalled marks that demote primary is stalled in the state manager.
-func (tsv *TabletServer) SetDemotePrimaryStalled() {
+// SetDemotePrimaryStalled sets the demote primary stalled field to the provided value in the state manager.
+func (tsv *TabletServer) SetDemotePrimaryStalled(val bool) {
 	tsv.sm.mu.Lock()
-	tsv.sm.demotePrimaryStalled = true
+	tsv.sm.demotePrimaryStalled = val
 	tsv.sm.mu.Unlock()
 	tsv.BroadcastHealth()
 }
@@ -1904,18 +1905,6 @@ func (tsv *TabletServer) registerTwopczHandler() {
 	})
 }
 
-func (tsv *TabletServer) registerMigrationStatusHandler() {
-	tsv.exporter.HandleFunc("/schema-migration/report-status", func(w http.ResponseWriter, r *http.Request) {
-		ctx := tabletenv.LocalContext()
-		query := r.URL.Query()
-		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, query.Get("uuid"), query.Get("status"), query.Get("dryrun"), query.Get("progress"), query.Get("eta"), query.Get("rowscopied"), query.Get("hint")); err != nil {
-			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
-			return
-		}
-		w.Write([]byte("ok"))
-	})
-}
-
 // registerThrottlerCheckHandlers registers throttler "check" requests
 func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 	handle := func(path string, scope base.Scope) {
@@ -1928,19 +1917,32 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			flags := &throttle.CheckFlags{
 				Scope:                 scope,
 				SkipRequestHeartbeats: (r.URL.Query().Get("s") == "true"),
-				MultiMetricsEnabled:   true,
 			}
 			metricNames := tsv.lagThrottler.MetricNames(r.URL.Query()["m"])
 			checkResult := tsv.lagThrottler.Check(ctx, appName, metricNames, flags)
 			if checkResult.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC && flags.OKIfNotExists {
-				checkResult.StatusCode = http.StatusOK // 200
 				checkResult.ResponseCode = tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 			}
 
 			if r.Method == http.MethodGet {
 				w.Header().Set("Content-Type", "application/json")
 			}
-			w.WriteHeader(checkResult.StatusCode)
+			var httpStatusCode int
+			switch checkResult.ResponseCode {
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_OK:
+				httpStatusCode = http.StatusOK
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED:
+				httpStatusCode = http.StatusExpectationFailed
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED:
+				httpStatusCode = http.StatusTooManyRequests
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC:
+				httpStatusCode = http.StatusNotFound
+			case tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR:
+				httpStatusCode = http.StatusInternalServerError
+			default:
+				httpStatusCode = http.StatusInternalServerError
+			}
+			w.WriteHeader(httpStatusCode)
 			if r.Method == http.MethodGet {
 				json.NewEncoder(w).Encode(checkResult)
 			}

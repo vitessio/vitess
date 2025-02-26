@@ -31,13 +31,6 @@ import (
 
 type TestPolicy struct{}
 
-func (tp TestPolicy) CheckAccessActor(actor, role string) error {
-	if role == ADMIN {
-		return errors.New("not allowed")
-	}
-	return nil
-}
-
 func (tp TestPolicy) CheckAccessHTTP(req *http.Request, role string) error {
 	if role == ADMIN {
 		return errors.New("not allowed")
@@ -55,17 +48,8 @@ func init() {
 
 func TestSimplePolicy(t *testing.T) {
 	currentPolicy = policies["test"]
-	err := CheckAccessActor("", ADMIN)
 	want := "not allowed"
-	assert.Equalf(t, err.Error(), want, "got %v, want %s", err, want)
-
-	err = CheckAccessActor("", DEBUGGING)
-	assert.Equalf(t, err, nil, "got %v, want no error", err)
-
-	err = CheckAccessActor("", MONITORING)
-	assert.Equalf(t, err, nil, "got %v, want no error", err)
-
-	err = CheckAccessHTTP(nil, ADMIN)
+	err := CheckAccessHTTP(nil, ADMIN)
 	assert.Equalf(t, err.Error(), want, "got %v, want %s", err, want)
 
 	err = CheckAccessHTTP(nil, DEBUGGING)
@@ -77,16 +61,7 @@ func TestSimplePolicy(t *testing.T) {
 
 func TestEmptyPolicy(t *testing.T) {
 	currentPolicy = nil
-	err := CheckAccessActor("", ADMIN)
-	assert.Equalf(t, err, nil, "got %v, want no error", err)
-
-	err = CheckAccessActor("", DEBUGGING)
-	assert.Equalf(t, err, nil, "got %v, want no error", err)
-
-	err = CheckAccessActor("", MONITORING)
-	assert.Equalf(t, err, nil, "got %v, want no error", err)
-
-	err = CheckAccessHTTP(nil, ADMIN)
+	err := CheckAccessHTTP(nil, ADMIN)
 	assert.Equalf(t, err, nil, "got %v, want no error", err)
 
 	err = CheckAccessHTTP(nil, DEBUGGING)

@@ -26,11 +26,11 @@ import (
 	"path"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -297,11 +297,17 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 }
 
 func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
+	offset := 0
+	if !debugMode {
+		// Add some randomness to the ports so that multiple tests can run in
+		// parallel on the same host.
+		offset = (idx + 1) * rand.IntN(1000)
+	}
 	basePort := 15000
 	etcdPort := 2379
 
-	basePort += idx * 10000
-	etcdPort += idx * 10000
+	basePort += (idx * 10000) + offset
+	etcdPort += (idx * 10000) + offset
 	if _, err := os.Stat(dataRootDir); os.IsNotExist(err) {
 		os.Mkdir(dataRootDir, 0700)
 	}
@@ -409,10 +415,7 @@ func (vc *VitessCluster) setupVtctldClient() {
 // CleanupDataroot deletes the vtdataroot directory. Since we run multiple tests sequentially in a single CI test shard,
 // we can run out of disk space due to all the leftover artifacts from previous tests.
 func (vc *VitessCluster) CleanupDataroot(t *testing.T, recreate bool) {
-	// This is always set to "true" on GitHub Actions runners:
-	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
-	ci, ok := os.LookupEnv("CI")
-	if !ok || strings.ToLower(ci) != "true" {
+	if debugMode {
 		// Leave the directory in place to support local debugging.
 		return
 	}
@@ -786,29 +789,9 @@ func (vc *VitessCluster) teardown() {
 		}
 	}
 
-	var wg sync.WaitGroup
-
 	for _, keyspace := range keyspaces {
-		for _, shard := range keyspace.Shards {
-			for _, tablet := range shard.Tablets {
-				wg.Add(1)
-				go func(tablet2 *Tablet) {
-					defer wg.Done()
-					if tablet2.DbServer != nil && tablet2.DbServer.TabletUID > 0 {
-						if err := tablet2.DbServer.Stop(); err != nil {
-							log.Infof("Error stopping mysql process: %s", err.Error())
-						}
-					}
-					if err := tablet2.Vttablet.TearDown(); err != nil {
-						log.Infof("Error stopping vttablet %s %s", tablet2.Name, err.Error())
-					} else {
-						log.Infof("Successfully stopped vttablet %s", tablet2.Name)
-					}
-				}(tablet)
-			}
-		}
+		_ = vc.TearDownKeyspace(keyspace)
 	}
-	wg.Wait()
 	if err := vc.Vtctld.TearDown(); err != nil {
 		log.Infof("Error stopping Vtctld:  %s", err.Error())
 	} else {
@@ -828,6 +811,38 @@ func (vc *VitessCluster) teardown() {
 			log.Infof("Error stopping VTOrc: %s", err.Error())
 		}
 	}
+}
+
+func (vc *VitessCluster) TearDownKeyspace(ks *Keyspace) error {
+	eg := errgroup.Group{}
+	for _, shard := range ks.Shards {
+		for _, tablet := range shard.Tablets {
+			eg.Go(func() error {
+				if tablet.DbServer != nil && tablet.DbServer.TabletUID > 0 {
+					if err := tablet.DbServer.Stop(); err != nil {
+						log.Infof("Error stopping mysql process associated with vttablet %s: %v", tablet.Name, err)
+						return err
+					}
+				}
+				if err := tablet.Vttablet.TearDown(); err != nil {
+					log.Infof("Error stopping vttablet %s: %v", tablet.Name, err)
+					return err
+				} else {
+					log.Infof("Successfully stopped vttablet %s", tablet.Name)
+				}
+				return nil
+			})
+		}
+	}
+	return eg.Wait()
+}
+
+func (vc *VitessCluster) DeleteKeyspace(t testing.TB, ksName string) {
+	out, err := vc.VtctldClient.ExecuteCommandWithOutput("DeleteKeyspace", ksName, "--recursive")
+	if err != nil {
+		log.Error("DeleteKeyspace failed with error: , output: %s", err, out)
+	}
+	require.NoError(t, err)
 }
 
 // TearDown brings down a cluster, deleting processes, removing topo keys
@@ -856,7 +871,7 @@ func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName
 	tablets := make(map[string]*cluster.VttabletProcess)
 	for _, shard := range keyspace.Shards {
 		for _, tablet := range shard.Tablets {
-			if tablet.Vttablet.GetTabletStatus() == "SERVING" {
+			if tablet.Vttablet.GetTabletStatus() == "SERVING" && (tabletType == "" || strings.EqualFold(tablet.Vttablet.GetTabletType(), tabletType)) {
 				log.Infof("Serving status of tablet %s is %s, %s", tablet.Name, tablet.Vttablet.ServingStatus, tablet.Vttablet.GetTabletStatus())
 				tablets[tablet.Name] = tablet.Vttablet
 			}

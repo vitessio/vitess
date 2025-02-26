@@ -31,7 +31,7 @@ import (
 // Insert represents an insert operation on a table.
 type Insert struct {
 	// VTable represents the target table for the insert operation.
-	VTable *vindexes.Table
+	VTable *vindexes.BaseTable
 	// AST represents the insert statement from the SQL syntax.
 	AST *sqlparser.Insert
 
@@ -146,7 +146,7 @@ func createOperatorFromInsert(ctx *plancontext.PlanningContext, ins *sqlparser.I
 	return &Sequential{Sources: []Operator{delOp, insOp}}
 }
 
-func checkAndCreateInsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, vTbl *vindexes.Table, routing Routing) Operator {
+func checkAndCreateInsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, vTbl *vindexes.BaseTable, routing Routing) Operator {
 	insOp := createInsertOperator(ctx, ins, vTbl, routing)
 
 	// Find the foreign key mode and for unmanaged foreign-key-mode, we don't need to do anything.
@@ -200,7 +200,7 @@ func getWhereCondExpr(compExprs []*sqlparser.ComparisonExpr) sqlparser.Expr {
 	return outputExpr
 }
 
-func pkCompExpression(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sqlparser.Values) *sqlparser.ComparisonExpr {
+func pkCompExpression(vTbl *vindexes.BaseTable, ins *sqlparser.Insert, rows sqlparser.Values) *sqlparser.ComparisonExpr {
 	if len(vTbl.PrimaryKey) == 0 {
 		return nil
 	}
@@ -227,7 +227,7 @@ type pComp struct {
 	col sqlparser.IdentifierCI
 }
 
-func findPKIndexes(vTbl *vindexes.Table, ins *sqlparser.Insert) (pIndexes []pComp, pColTuple sqlparser.ValTuple) {
+func findPKIndexes(vTbl *vindexes.BaseTable, ins *sqlparser.Insert) (pIndexes []pComp, pColTuple sqlparser.ValTuple) {
 	for _, pCol := range vTbl.PrimaryKey {
 		var def sqlparser.Expr
 		idx := ins.Columns.FindColumn(pCol)
@@ -244,7 +244,7 @@ func findPKIndexes(vTbl *vindexes.Table, ins *sqlparser.Insert) (pIndexes []pCom
 	return
 }
 
-func findDefault(vTbl *vindexes.Table, pCol sqlparser.IdentifierCI) sqlparser.Expr {
+func findDefault(vTbl *vindexes.BaseTable, pCol sqlparser.IdentifierCI) sqlparser.Expr {
 	for _, column := range vTbl.Columns {
 		if column.Name.Equal(pCol) {
 			return column.Default
@@ -258,7 +258,7 @@ type uComp struct {
 	def sqlparser.Expr
 }
 
-func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sqlparser.Values) (comps []*sqlparser.ComparisonExpr) {
+func uniqKeyCompExpressions(vTbl *vindexes.BaseTable, ins *sqlparser.Insert, rows sqlparser.Values) (comps []*sqlparser.ComparisonExpr) {
 	noOfUniqKeys := len(vTbl.UniqueKeys)
 	if noOfUniqKeys == 0 {
 		return nil
@@ -266,7 +266,7 @@ func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sq
 
 	type uIdx struct {
 		Indexes [][]uComp
-		uniqKey sqlparser.Exprs
+		uniqKey []sqlparser.Expr
 	}
 
 	allIndexes := make([]uIdx, 0, noOfUniqKeys)
@@ -322,7 +322,7 @@ func uniqKeyCompExpressions(vTbl *vindexes.Table, ins *sqlparser.Insert, rows sq
 	return compExprs
 }
 
-func createUniqueKeyComp(ins *sqlparser.Insert, expr sqlparser.Expr, vTbl *vindexes.Table) ([]uComp, bool) {
+func createUniqueKeyComp(ins *sqlparser.Insert, expr sqlparser.Expr, vTbl *vindexes.BaseTable) ([]uComp, bool) {
 	col, isCol := expr.(*sqlparser.ColName)
 	if isCol {
 		var def sqlparser.Expr
@@ -357,7 +357,7 @@ func createUniqueKeyComp(ins *sqlparser.Insert, expr sqlparser.Expr, vTbl *vinde
 	return offsets, false
 }
 
-func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.Insert, vTbl *vindexes.Table, routing Routing) (op Operator) {
+func createInsertOperator(ctx *plancontext.PlanningContext, insStmt *sqlparser.Insert, vTbl *vindexes.BaseTable, routing Routing) (op Operator) {
 	if _, target := routing.(*TargetedRouting); target {
 		panic(vterrors.VT09017("INSERT with a target destination is not allowed"))
 	}
@@ -470,7 +470,7 @@ func columnMismatch(gen *Generate, ins *sqlparser.Insert, sel sqlparser.TableSta
 	if origColCount > sel.GetColumnCount() {
 		sel := getFirstSelect(sel)
 		var hasStarExpr bool
-		for _, sExpr := range sel.SelectExprs {
+		for _, sExpr := range sel.GetColumns() {
 			if _, hasStarExpr = sExpr.(*sqlparser.StarExpr); hasStarExpr {
 				break
 			}
@@ -595,7 +595,7 @@ func findColumn(ins *sqlparser.Insert, col sqlparser.IdentifierCI) int {
 	return -1
 }
 
-func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) *sqlparser.Insert {
+func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.BaseTable) *sqlparser.Insert {
 	cols := make(sqlparser.Columns, 0, len(table.Columns))
 	for _, c := range table.Columns {
 		cols = append(cols, c.Name)
@@ -606,7 +606,7 @@ func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) *sql
 
 // modifyForAutoinc modifies the AST and the plan to generate necessary autoinc values.
 // For row values cases, bind variable names are generated using baseName.
-func modifyForAutoinc(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, vTable *vindexes.Table) *Generate {
+func modifyForAutoinc(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, vTable *vindexes.BaseTable) *Generate {
 	if vTable.AutoIncrement == nil {
 		return nil
 	}

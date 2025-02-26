@@ -53,6 +53,9 @@ func pushDerived(ctx *plancontext.PlanningContext, op *Horizon) (Operator, *Appl
 }
 
 func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, *ApplyResult) {
+	if newOp := op.tryCompact(ctx); newOp != nil {
+		return newOp, Rewrote("merged query graphs")
+	}
 	return mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), op.JoinType)
 }
 
@@ -82,7 +85,7 @@ func buildVindexTableForDML(
 	table *QueryTable,
 	ins *sqlparser.Insert,
 	dmlType string,
-) (*vindexes.Table, Routing) {
+) (*vindexes.BaseTable, Routing) {
 	vindexTable := tableInfo.GetVindexTable()
 	if tableInfo.GetVindexTable().Type == vindexes.TypeReference && vindexTable.Source != nil {
 		sourceTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vindexTable.Source.TableName)
@@ -179,7 +182,7 @@ func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) O
 	}
 	var src Operator = &Table{
 		QTable: table,
-		VTable: &vindexes.Table{
+		VTable: &vindexes.BaseTable{
 			Name:     table.Table.Name,
 			Keyspace: ks,
 		},

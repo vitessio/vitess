@@ -51,7 +51,7 @@ type ShardedRouting struct {
 
 var _ Routing = (*ShardedRouting)(nil)
 
-func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.Table, id semantics.TableSet) Routing {
+func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.BaseTable, id semantics.TableSet) Routing {
 	routing := &ShardedRouting{
 		RouteOpCode: engine.Scatter,
 		keyspace:    vtable.Keyspace,
@@ -613,7 +613,6 @@ func (tr *ShardedRouting) planCompositeInOpArg(
 			Index: idx,
 		}
 		if typ, found := ctx.TypeForExpr(col); found {
-			value.Type = typ.Type()
 			value.Collation = typ.Collation()
 		}
 
@@ -665,10 +664,11 @@ func (tr *ShardedRouting) extraInfo() string {
 		)
 	}
 
+	valueExprs := tr.Selected.ValueExprs
 	return fmt.Sprintf(
 		"Vindex[%s] Values[%s] Seen:[%s]",
 		tr.Selected.FoundVindex.String(),
-		sqlparser.String(sqlparser.Exprs(tr.Selected.ValueExprs)),
+		sqlparser.SliceString(valueExprs),
 		sqlparser.String(sqlparser.AndExpressions(tr.SeenPredicates...)),
 	)
 }
