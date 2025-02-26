@@ -2952,7 +2952,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 					},
 				},
 			},
-			err: "vindex owner (otherTable) must match table name (t1)",
+			err: "table owner not found for vindex v",
 		},
 		{
 			description: "owner must match",

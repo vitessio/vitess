@@ -612,11 +612,8 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 		cancelFunc    func() error
 		err           error
 	)
-	if req.Vindex != nil && len(req.Vindex.Vindexes) > 1 {
-		ms, sourceVSchema, targetVSchema, cancelFunc, err = lv.prepareMultipleCreate(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
-	} else {
-		ms, sourceVSchema, targetVSchema, cancelFunc, err = lv.prepareCreate(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
-	}
+
+	ms, sourceVSchema, targetVSchema, cancelFunc, err = lv.prepareCreate(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
 
 	if err != nil {
 		return nil, err
