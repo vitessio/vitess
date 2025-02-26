@@ -38,6 +38,7 @@ const (
 	DeadPrimaryAndSomeReplicas             AnalysisCode = "DeadPrimaryAndSomeReplicas"
 	PrimaryHasPrimary                      AnalysisCode = "PrimaryHasPrimary"
 	PrimaryIsReadOnly                      AnalysisCode = "PrimaryIsReadOnly"
+	PrimaryDisplayTypeMismatch             AnalysisCode = "PrimaryDisplayTypeMismatch"
 	PrimarySemiSyncMustBeSet               AnalysisCode = "PrimarySemiSyncMustBeSet"
 	PrimarySemiSyncMustNotBeSet            AnalysisCode = "PrimarySemiSyncMustNotBeSet"
 	ReplicaIsWritable                      AnalysisCode = "ReplicaIsWritable"
@@ -88,6 +89,7 @@ type ReplicationAnalysis struct {
 	AnalyzedInstanceAlias        string
 	AnalyzedInstancePrimaryAlias string
 	TabletType                   topodatapb.TabletType
+	DisplayTabletType            topodatapb.TabletType
 	PrimaryTimeStamp             time.Time
 	ClusterDetails               ClusterInfo
 	AnalyzedKeyspace             string
