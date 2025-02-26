@@ -534,7 +534,7 @@ func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequenc
 
 	dr.drLog.Log("The following sequence backing tables used by tables being moved will be initialized:")
 	for _, backingTable := range sortedBackingTableNames {
-		dr.drLog.Logf("\t\tBacking table: %s, current value %d, new value %d",
+		dr.drLog.Logf("\tBacking table: %s, current value %d, new value %d",
 			backingTable, curValues[backingTable], maxValues[backingTable]+1)
 	}
 

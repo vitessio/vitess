@@ -81,38 +81,33 @@ func (sm *sequenceMetadata) escapeValues() error {
 	if sm.usingTableDefinition != nil && sm.usingTableDefinition.AutoIncrement != nil {
 		usingCol, err = sqlescape.EnsureEscaped(sm.usingTableDefinition.AutoIncrement.Column)
 		if err != nil {
-			err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid column name %s specified for sequence in table %s: %v",
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid column name %s specified for sequence in table %s: %v",
 				sm.usingTableDefinition.AutoIncrement.Column, sm.usingTableName, err)
-			return err
 		}
 	}
 	sm.usingCol = usingCol
 	usingDB, err := sqlescape.EnsureEscaped(sm.usingTableDBName)
 	if err != nil {
-		err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid database name %s specified for sequence in table %s: %v",
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid database name %s specified for sequence in table %s: %v",
 			sm.usingTableDBName, sm.usingTableName, err)
-		return err
 	}
 	sm.usingDB = usingDB
 	usingTable, err := sqlescape.EnsureEscaped(sm.usingTableName)
 	if err != nil {
-		err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s specified for sequence: %v",
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name %s specified for sequence: %v",
 			sm.usingTableName, err)
-		return err
 	}
 	sm.usingTable = usingTable
 	backingDB, err := sqlescape.EnsureEscaped(sm.backingTableDBName)
 	if err != nil {
-		err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid database name %s specified for sequence backing table: %v",
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid database name %s specified for sequence backing table: %v",
 			sm.backingTableDBName, err)
-		return err
 	}
 	sm.backingDB = backingDB
 	backingTable, err := sqlescape.EnsureEscaped(sm.backingTableName)
 	if err != nil {
-		err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s specified for sequence backing table: %v",
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name %s specified for sequence backing table: %v",
 			sm.backingTableName, err)
-		return err
 	}
 	sm.backingTable = backingTable
 	sm.escaped = true
@@ -158,7 +153,7 @@ func (ts *trafficSwitcher) getMaxSequenceValue(ctx context.Context, seq *sequenc
 	errs := ts.ForAllTargets(func(target *MigrationTarget) error {
 		primary := target.GetPrimary()
 		if primary == nil || primary.GetAlias() == nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary tablet found for target shard %s/%s",
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no primary tablet found for target shard %s/%s",
 				ts.targetKeyspace, target.GetShard().ShardName())
 		}
 
@@ -492,7 +487,7 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 
 // createMissingSequenceTables will create the backing sequence tables for those that
 // could not be found in any current keyspace.
-func (ts trafficSwitcher) createMissingSequenceTables(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata, tablesFound map[string]struct{}) error {
+func (ts *trafficSwitcher) createMissingSequenceTables(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata, tablesFound map[string]struct{}) error {
 	globalKeyspace := ts.options.GetGlobalKeyspace()
 	if globalKeyspace == "" {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used and no global-keyspace was provided to auto create them in: %s",
@@ -553,7 +548,7 @@ func (ts trafficSwitcher) createMissingSequenceTables(ctx context.Context, seque
 	return nil
 }
 
-func (ts trafficSwitcher) createSequenceTable(ctx context.Context, tableName string, primary *topo.TabletInfo) error {
+func (ts *trafficSwitcher) createSequenceTable(ctx context.Context, tableName string, primary *topo.TabletInfo) error {
 	escapedTableName, err := sqlescape.EnsureEscaped(tableName)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s: %v",
