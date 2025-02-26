@@ -22,12 +22,12 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
-
+	
 	"vitess.io/vitess/go/vt/vtctl/internal/grpcshim"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
-)
+	)
 
 // AddCellInfo is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) AddCellInfo(ctx context.Context, in *vtctldatapb.AddCellInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.AddCellInfoResponse, error) {
@@ -100,7 +100,6 @@ func (stream *backupStreamAdapter) Send(msg *vtctldatapb.BackupResponse) error {
 		return nil
 	}
 }
-
 // Backup is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) Backup(ctx context.Context, in *vtctldatapb.BackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupClient, error) {
 	stream := &backupStreamAdapter{
@@ -151,7 +150,6 @@ func (stream *backupShardStreamAdapter) Send(msg *vtctldatapb.BackupResponse) er
 		return nil
 	}
 }
-
 // BackupShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb.BackupShardRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupShardClient, error) {
 	stream := &backupShardStreamAdapter{
@@ -602,7 +600,6 @@ func (stream *restoreFromBackupStreamAdapter) Send(msg *vtctldatapb.RestoreFromB
 		return nil
 	}
 }
-
 // RestoreFromBackup is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_RestoreFromBackupClient, error) {
 	stream := &restoreFromBackupStreamAdapter{

@@ -441,6 +441,8 @@ const (
 	RefOfSumArg
 	RefOfSumOverClause
 	TableExprsOffset
+	RefOfTableFnExprExpr
+	RefOfTableFnExprAlias
 	TableNameName
 	TableNameQualifier
 	TableNamesOffset
@@ -1407,6 +1409,10 @@ func (s ASTStep) DebugString() string {
 		return "(*Sum).OverClause"
 	case TableExprsOffset:
 		return "(TableExprs)[]Offset"
+	case RefOfTableFnExprExpr:
+		return "(*TableFnExpr).Expr"
+	case RefOfTableFnExprAlias:
+		return "(*TableFnExpr).Alias"
 	case TableNameName:
 		return "(TableName).Name"
 	case TableNameQualifier:
@@ -2585,6 +2591,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(TableExprs)[idx]
+		case RefOfTableFnExprExpr:
+			node = node.(*TableFnExpr).Expr
+		case RefOfTableFnExprAlias:
+			node = node.(*TableFnExpr).Alias
 		case TableNameName:
 			node = node.(TableName).Name
 		case TableNameQualifier:

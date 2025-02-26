@@ -490,6 +490,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfSum(in, f)
 	case TableExprs:
 		return VisitTableExprs(in, f)
+	case *TableFnExpr:
+		return VisitRefOfTableFnExpr(in, f)
 	case TableName:
 		return VisitTableName(in, f)
 	case TableNames:
@@ -3972,6 +3974,21 @@ func VisitTableExprs(in TableExprs, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfTableFnExpr(in *TableFnExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitIdentifierCS(in.Alias, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitTableName(in TableName, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
@@ -5349,6 +5366,8 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 		return VisitRefOfJoinTableExpr(in, f)
 	case *ParenTableExpr:
 		return VisitRefOfParenTableExpr(in, f)
+	case *TableFnExpr:
+		return VisitRefOfTableFnExpr(in, f)
 	default:
 		// this should never happen
 		return nil

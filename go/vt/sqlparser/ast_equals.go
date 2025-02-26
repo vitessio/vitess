@@ -1430,6 +1430,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.TableExprs(a, b)
+	case *TableFnExpr:
+		b, ok := inB.(*TableFnExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfTableFnExpr(a, b)
 	case TableName:
 		b, ok := inB.(TableName)
 		if !ok {
@@ -4569,6 +4575,18 @@ func (cmp *Comparator) TableExprs(a, b TableExprs) bool {
 	return true
 }
 
+// RefOfTableFnExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfTableFnExpr(a, b *TableFnExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.Expr, b.Expr) &&
+		cmp.IdentifierCS(a.Alias, b.Alias)
+}
+
 // TableName does deep equals between the two objects.
 func (cmp *Comparator) TableName(a, b TableName) bool {
 	return cmp.IdentifierCS(a.Name, b.Name) &&
@@ -7209,6 +7227,12 @@ func (cmp *Comparator) TableExpr(inA, inB TableExpr) bool {
 			return false
 		}
 		return cmp.RefOfParenTableExpr(a, b)
+	case *TableFnExpr:
+		b, ok := inB.(*TableFnExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfTableFnExpr(a, b)
 	default:
 		// this should never happen
 		return false

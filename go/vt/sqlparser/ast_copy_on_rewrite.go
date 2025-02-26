@@ -490,6 +490,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfSum(n, parent)
 	case TableExprs:
 		return c.copyOnRewriteTableExprs(n, parent)
+	case *TableFnExpr:
+		return c.copyOnRewriteRefOfTableFnExpr(n, parent)
 	case TableName:
 		return c.copyOnRewriteTableName(n, parent)
 	case TableNames:
@@ -6007,6 +6009,30 @@ func (c *cow) copyOnRewriteTableExprs(n TableExprs, parent SQLNode) (out SQLNode
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfTableFnExpr(n *TableFnExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
+		_Alias, changedAlias := c.copyOnRewriteIdentifierCS(n.Alias, n)
+		if changedExpr || changedAlias {
+			res := *n
+			res.Expr, _ = _Expr.(Expr)
+			res.Alias, _ = _Alias.(IdentifierCS)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteTableName(n TableName, parent SQLNode) (out SQLNode, changed bool) {
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
@@ -7726,6 +7752,8 @@ func (c *cow) copyOnRewriteTableExpr(n TableExpr, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfJoinTableExpr(n, parent)
 	case *ParenTableExpr:
 		return c.copyOnRewriteRefOfParenTableExpr(n, parent)
+	case *TableFnExpr:
+		return c.copyOnRewriteRefOfTableFnExpr(n, parent)
 	default:
 		// this should never happen
 		return nil, false

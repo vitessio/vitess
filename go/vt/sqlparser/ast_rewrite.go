@@ -491,6 +491,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfSum(parent, node, replacer)
 	case TableExprs:
 		return a.rewriteTableExprs(parent, node, replacer)
+	case *TableFnExpr:
+		return a.rewriteRefOfTableFnExpr(parent, node, replacer)
 	case TableName:
 		return a.rewriteTableName(parent, node, replacer)
 	case TableNames:
@@ -11840,6 +11842,55 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 	return true
 }
 
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfTableFnExpr(parent SQLNode, node *TableFnExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfTableFnExprExpr))
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*TableFnExpr).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfTableFnExprAlias))
+	}
+	if !a.rewriteIdentifierCS(node, node.Alias, func(newNode, parent SQLNode) {
+		parent.(*TableFnExpr).Alias = newNode.(IdentifierCS)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
 // Function Generation Source: StructMethod
 func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer replacerFunc) bool {
 	if a.pre != nil {
@@ -14605,6 +14656,8 @@ func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer 
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
 	case *ParenTableExpr:
 		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
+	case *TableFnExpr:
+		return a.rewriteRefOfTableFnExpr(parent, node, replacer)
 	default:
 		// this should never happen
 		return true

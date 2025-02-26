@@ -491,6 +491,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfSum(in)
 	case TableExprs:
 		return CloneTableExprs(in)
+	case *TableFnExpr:
+		return CloneRefOfTableFnExpr(in)
 	case TableName:
 		return CloneTableName(in)
 	case TableNames:
@@ -3079,6 +3081,17 @@ func CloneTableExprs(n TableExprs) TableExprs {
 	return res
 }
 
+// CloneRefOfTableFnExpr creates a deep clone of the input.
+func CloneRefOfTableFnExpr(n *TableFnExpr) *TableFnExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.Alias = CloneIdentifierCS(n.Alias)
+	return &out
+}
+
 // CloneTableName creates a deep clone of the input.
 func CloneTableName(n TableName) TableName {
 	return *CloneRefOfTableName(&n)
@@ -4323,6 +4336,8 @@ func CloneTableExpr(in TableExpr) TableExpr {
 		return CloneRefOfJoinTableExpr(in)
 	case *ParenTableExpr:
 		return CloneRefOfParenTableExpr(in)
+	case *TableFnExpr:
+		return CloneRefOfTableFnExpr(in)
 	default:
 		// this should never happen
 		return nil
