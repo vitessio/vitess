@@ -91,6 +91,11 @@ type (
 	InterfaceContainer struct {
 		v any
 	}
+
+	Visitable interface {
+		AST
+		VisitThis() AST
+	}
 )
 
 func (l *Leaf) String() string {

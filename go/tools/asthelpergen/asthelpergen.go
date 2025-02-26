@@ -52,6 +52,7 @@ type (
 		scope() *types.Scope
 		findImplementations(iff *types.Interface, impl func(types.Type) error) error
 		iface() *types.Interface // the root interface that all nodes are expected to implement
+		getRootInterfaceName() string
 	}
 	generator interface {
 		genFile(generatorSPI) (string, *jen.File)
@@ -79,6 +80,10 @@ type (
 
 func (gen *astHelperGen) iface() *types.Interface {
 	return gen._iface
+}
+
+func (gen *astHelperGen) getRootInterfaceName() string {
+	return types.TypeString(gen.namedIface, noQualifier)
 }
 
 func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named, generators ...generator) *astHelperGen {

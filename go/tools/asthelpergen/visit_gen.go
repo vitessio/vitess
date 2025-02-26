@@ -40,12 +40,36 @@ func newVisitGen(pkgname string) *visitGen {
 	}
 }
 
-func (v *visitGen) genFile(generatorSPI) (string, *jen.File) {
+func (v *visitGen) genFile(spi generatorSPI) (string, *jen.File) {
+	v.genVisitable(spi)
 	return "ast_visit.go", v.file
 }
 
+func (v *visitGen) genVisitable(spi generatorSPI) {
+	/*
+		func VisitVisitable(in Visitable, f Visit) error {
+			if cont, err := f(in); err != nil || !cont {
+				return err
+			}
+
+			if err := VisitSQLNode(in.VisitThis(), f); err != nil {
+				return err
+			}
+			return nil
+		}
+	*/
+	v.file.Add(jen.Func().Id(visitName+"Visitable")).Call(jen.Id("in").Id("Visitable"), jen.Id("f Visit")).Error().Block(
+		visitIn(),
+		jen.If(
+			jen.Id("err := ").Id(visitName+spi.getRootInterfaceName()).Call(jen.Id("in.VisitThis()"), jen.Id("f")),
+			jen.Id("err != nil "),
+		).Block(jen.Return(jen.Err())),
+		jen.Return(jen.Nil()),
+	)
+}
+
 func shouldAdd(t types.Type, i *types.Interface) bool {
-	return types.Implements(t, i)
+	return types.Implements(t, i) && types.TypeString(t, noQualifier) != "Visitable"
 }
 
 func (v *visitGen) interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error {
@@ -83,6 +107,12 @@ func (v *visitGen) interfaceMethod(t types.Type, iface *types.Interface, spi gen
 		cases = append(cases, caseBlock)
 		return nil
 	})
+
+	cases = append(cases,
+		jen.Case(jen.Id("Visitable")).Block(
+			jen.Return(jen.Id("VisitVisitable").Call(jen.Id("in"), jen.Id("f"))),
+		),
+	)
 
 	cases = append(cases,
 		jen.Default().Block(

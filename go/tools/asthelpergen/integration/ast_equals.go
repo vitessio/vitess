@@ -245,6 +245,21 @@ func (cmp *Comparator) SubIface(inA, inB SubIface) bool {
 	}
 }
 
+// Visitable does deep equals between the two objects.
+func (cmp *Comparator) Visitable(inA, inB Visitable) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // RefOfInterfaceContainer does deep equals between the two objects.
 func (cmp *Comparator) RefOfInterfaceContainer(a, b *InterfaceContainer) bool {
 	if a == b {

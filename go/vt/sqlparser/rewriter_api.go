@@ -113,6 +113,11 @@ type Cursor struct {
 	current *pathbuilder.ASTPathBuilder
 }
 
+type Visitable interface {
+	SQLNode
+	VisitThis() SQLNode
+}
+
 // Node returns the current Node.
 func (c *Cursor) Node() SQLNode { return c.node }
 

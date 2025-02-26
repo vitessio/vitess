@@ -291,6 +291,16 @@ func (c *cow) copyOnRewriteSubIface(n SubIface, parent AST) (out AST, changed bo
 		return nil, false
 	}
 }
+func (c *cow) copyOnRewriteVisitable(n Visitable, parent AST) (out AST, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	switch n := n.(type) {
+	default:
+		// this should never happen
+		return nil, false
+	}
+}
 func (c *cow) copyOnRewriteBasicType(n BasicType, parent AST) (out AST, changed bool) {
 	if c.cursor.stop {
 		return n, false

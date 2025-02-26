@@ -167,6 +167,18 @@ func CloneSubIface(in SubIface) SubIface {
 	}
 }
 
+// CloneVisitable creates a deep clone of the input.
+func CloneVisitable(in Visitable) Visitable {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // CloneRefOfInterfaceContainer creates a deep clone of the input.
 func CloneRefOfInterfaceContainer(n *InterfaceContainer) *InterfaceContainer {
 	if n == nil {
