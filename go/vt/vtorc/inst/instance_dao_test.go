@@ -2,6 +2,7 @@ package inst
 
 import (
 	"bytes"
+	"database/sql"
 	"fmt"
 	"regexp"
 	"strings"
@@ -353,6 +354,112 @@ func TestReadInstancesWithErrantGTIds(t *testing.T) {
 			require.ElementsMatch(t, tabletAliases, tt.instancesRequired)
 		})
 	}
+}
+
+// TestReadInstanceAllFields tests that we read all the fields for a specific instance.
+func TestReadInstanceAllFields(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+	for _, query := range initialSQL {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+
+	wantInstance := &Instance{
+		Hostname:                     "localhost",
+		Port:                         6711,
+		InstanceAlias:                "zone1-0000000100",
+		DisplayTabletType:            topodatapb.TabletType_REPLICA,
+		ServerID:                     1094500338,
+		ServerUUID:                   "729a5138-8680-11ed-acf8-d6b0ef9f4eaa",
+		Version:                      "8.0.31",
+		VersionComment:               "Homebrew",
+		FlavorName:                   "MySQL",
+		ReadOnly:                     true,
+		BinlogFormat:                 "ROW",
+		BinlogRowImage:               "FULL",
+		LogBinEnabled:                true,
+		LogReplicationUpdatesEnabled: true,
+		SelfBinlogCoordinates: BinlogCoordinates{
+			LogFile: "vt-0000000100-bin.000001",
+			LogPos:  15963,
+		},
+		SourceHost:                 "localhost",
+		SourcePort:                 6714,
+		SourceUUID:                 "729a4cc4-8680-11ed-a104-47706090afbd",
+		AncestryUUID:               "729a4cc4-8680-11ed-a104-47706090afbd,729a5138-8680-11ed-acf8-d6b0ef9f4eaa",
+		ReplicaNetTimeout:          8,
+		HeartbeatInterval:          4,
+		ReplicationSQLThreadRuning: true,
+		ReplicationIOThreadRuning:  true,
+		ReplicationSQLThreadState:  ReplicationThreadStateRunning,
+		ReplicationIOThreadState:   ReplicationThreadStateRunning,
+		HasReplicationFilters:      false,
+		GTIDMode:                   "ON",
+		SupportsOracleGTID:         true,
+		UsingOracleGTID:            true,
+		ReadBinlogCoordinates: BinlogCoordinates{
+			LogFile: "vt-0000000101-bin.000001",
+			LogPos:  15583,
+		},
+		ExecBinlogCoordinates: BinlogCoordinates{
+			LogFile: "vt-0000000101-bin.000001",
+			LogPos:  15583,
+		},
+		IsDetached: false,
+		RelaylogCoordinates: BinlogCoordinates{
+			LogFile: "vt-0000000100-relay-bin.000002",
+			LogPos:  15815,
+			Type:    RelayLog,
+		},
+		LastSQLError: "",
+		LastIOError:  "",
+		SecondsBehindPrimary: sql.NullInt64{
+			Valid: true,
+		},
+		SQLDelay:               0,
+		ExecutedGtidSet:        "729a4cc4-8680-11ed-a104-47706090afbd:1-54",
+		GtidPurged:             "",
+		GtidErrant:             "",
+		primaryExecutedGtidSet: "",
+		ReplicationLagSeconds: sql.NullInt64{
+			Valid: true,
+		},
+		DataCenter:                         "zone1",
+		Region:                             "",
+		PhysicalEnvironment:                "",
+		ReplicationDepth:                   1,
+		IsCoPrimary:                        false,
+		HasReplicationCredentials:          true,
+		SemiSyncEnforced:                   false,
+		SemiSyncPrimaryEnabled:             false,
+		SemiSyncReplicaEnabled:             true,
+		SemiSyncPrimaryTimeout:             1000000000000000000,
+		SemiSyncPrimaryWaitForReplicaCount: 1,
+		SemiSyncPrimaryStatus:              false,
+		SemiSyncPrimaryClients:             0,
+		SemiSyncReplicaStatus:              true,
+		SemiSyncBlocked:                    false,
+		LastSeenTimestamp:                  "2022-12-28T07:26:04Z",
+		IsLastCheckValid:                   true,
+		IsUpToDate:                         false,
+		IsRecentlyChecked:                  false,
+		SecondsSinceLastSeen:               sql.NullInt64{},
+		StalledDisk:                        false,
+		AllowTLS:                           false,
+		Problems:                           nil,
+		LastDiscoveryLatency:               0,
+	}
+
+	instance, found, err := ReadInstance(`zone1-0000000100`)
+	require.NoError(t, err)
+	require.True(t, found)
+	instance.SecondsSinceLastSeen = sql.NullInt64{}
+	instance.Problems = nil
+	instance.LastDiscoveryLatency = 0
+	require.EqualValues(t, wantInstance, instance)
 }
 
 // TestReadInstancesByCondition is used to test the functionality of readInstancesByCondition and verify its failure modes and successes.
