@@ -44,11 +44,7 @@ func InitializeTMC() tmclient.TabletManagerClient {
 }
 
 // fullStatus gets the full status of the MySQL running in vttablet.
-func fullStatus(tabletAlias string) (*replicationdatapb.FullStatus, error) {
-	tablet, err := ReadTablet(tabletAlias)
-	if err != nil {
-		return nil, err
-	}
+func fullStatus(tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
 	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer tmcCancel()
 	return tmc.FullStatus(tmcCtx, tablet)
