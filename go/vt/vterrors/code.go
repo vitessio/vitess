@@ -121,8 +121,8 @@ var (
 	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "cannot find keyspace for: %s", "The specified keyspace could not be found.")
 	VT14005 = errorWithoutState("VT14005", vtrpcpb.Code_UNAVAILABLE, "cannot lookup sidecar database for keyspace: %s", "Failed to read sidecar database identifier.")
 
-	VT15001 = errorWithNoCode("VT15001", "transient transaction error, please issue a ROLLBACK or SHOW WARNINGS and retry the transaction: %s", "The opened transaction must be ROLLBACK by the application and re-tried.")
-	VT15002 = errorWithoutState("VT15002", vtrpcpb.Code_FAILED_PRECONDITION, "previous transaction failed fatally: issue a ROLLBACK or SHOW WARNINGS query in order to acknowledge the failed transaction", "This error appears after a VT15001 error was sent back to the client, future queries on the same session will fail until the client acknowledge the situation by a sending a ROLLBACK or SHOW WARNINGS query.")
+	VT15001 = errorWithNoCode("VT15001", "transaction error, issue ROLLBACK and retry the transaction: %s", "The opened transaction must be ROLLBACK by the application and re-tried.")
+	VT15002 = errorWithoutState("VT15002", vtrpcpb.Code_FAILED_PRECONDITION, "previous transaction failed fatally. Issue a ROLLBACK query to resolve the failure.", "This error occurs after a VT15001 error was sent to the client. Future queries in the same session will continue to fail until the client resolves the issue by sending a ROLLBACK query.")
 
 	// Errors is a list of errors that must match all the variables
 	// defined above to enable auto-documentation of error codes.

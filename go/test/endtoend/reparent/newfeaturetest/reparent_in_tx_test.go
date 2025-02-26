@@ -31,8 +31,7 @@ import (
 
 var primary int
 
-// This test ensures that we get a VT15001 error when doing COMMIT while having primary being turned off.
-// The test then ensures that, if there was no partial commit, all the inserts were rolled back correctly.
+// This test ensures that we get a VT15001 when doing a commit while the primary is down.
 func testCommitError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.LocalProcessCluster, tablets []*cluster.Vttablet) {
 	tabletStopped := make(chan bool)
 	commitDone := make(chan bool)
@@ -52,6 +51,9 @@ func testCommitError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.Lo
 	require.NoError(t, err)
 }
 
+// This test ensures that we are getting a VT15001 when executing a query on an open transaction
+// while the primary is down. Subsequent queries should fail with a VT15002 until a ROLLBACK
+// or SHOW WARNINGS is issued.
 func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.LocalProcessCluster, tablets []*cluster.Vttablet) {
 	tabletStopped := make(chan bool)
 	executeDone := make(chan bool)
