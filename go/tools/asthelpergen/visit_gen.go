@@ -114,9 +114,6 @@ func (v *visitGen) interfaceMethod(t types.Type, iface *types.Interface, spi gen
 		jen.Case(jen.Id(visitableName)).Block(
 			jen.Return(jen.Id("VisitVisitable").Call(jen.Id("in"), jen.Id("f"))),
 		),
-	)
-
-	cases = append(cases,
 		jen.Default().Block(
 			jen.Comment("this should never happen"),
 			returnNil(),
