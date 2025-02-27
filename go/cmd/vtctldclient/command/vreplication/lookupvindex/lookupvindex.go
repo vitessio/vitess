@@ -17,6 +17,7 @@ limitations under the License.
 package lookupvindex
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -25,13 +26,22 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
-	"vitess.io/vitess/go/json2"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 )
+
+// vindexParams is used to unmarshal content from params-file.
+type vindexParams struct {
+	LookupVindexType  string   `json:"lookup_vindex_type"`
+	TableOwner        string   `json:"table_owner"`
+	TableOwnerColumns []string `json:"table_owner_columns"`
+	TableName         string   `json:"table_name"`
+	TableVindexType   string   `json:"table_vindex_type"`
+	IgnoreNulls       bool     `json:"ignore_nulls"`
+}
 
 var (
 	tabletTypesDefault = []topodatapb.TabletType{
@@ -92,24 +102,21 @@ var (
 			if err != nil {
 				return err
 			}
-			createParams := &vtctldatapb.LookupVindexCreateParams{}
-			err = json2.UnmarshalPB(paramsFile, createParams)
+			createVindexParams := map[string]*vindexParams{}
+			err = json.Unmarshal(paramsFile, &createVindexParams)
 			if err != nil {
 				return err
 			}
-			return parseCreateParams(createParams)
-		}
-		if createOptions.Keyspace == "" {
-			return fmt.Errorf("keyspace is a required flag.")
+			return parseVindexParams(createVindexParams, cmd)
 		}
 		if createOptions.TableOwner == "" {
 			return fmt.Errorf("table-owner is a required flag.")
 		}
+		if createOptions.Type == "" {
+			return fmt.Errorf("type is a required flag.")
+		}
 		if len(createOptions.TableOwnerColumns) == 0 {
 			return fmt.Errorf("table-owner-columns is a required flag.")
-		}
-		if createOptions.Keyspace == "" {
-			return fmt.Errorf("keyspace is a required flag.")
 		}
 		if createOptions.TableName == "" { // Use vindex name
 			createOptions.TableName = baseOptions.Name
@@ -166,28 +173,23 @@ var (
 		return nil
 	}
 
-	parseCreateParams = func(params *vtctldatapb.LookupVindexCreateParams) error {
-		if params.Keyspace == "" {
-			return fmt.Errorf("keyspace cannot be empty")
-		}
-		createOptions.Keyspace = params.Keyspace
-
-		if len(params.Vindexes) == 0 {
+	parseVindexParams = func(params map[string]*vindexParams, cmd *cobra.Command) error {
+		if len(params) == 0 {
 			return fmt.Errorf("atleast 1 vindex is required")
 		}
 
 		vindexes := map[string]*vschemapb.Vindex{}
 		tables := map[string]*vschemapb.Table{}
-		for _, vindex := range params.Vindexes {
+		for vindexName, vindex := range params {
 			if vindex.TableName == "" {
-				vindex.TableName = vindex.Name
+				vindex.TableName = vindexName
 			}
 
 			if !strings.Contains(vindex.LookupVindexType, "lookup") {
 				return fmt.Errorf("%s is not a lookup vindex type.", vindex.LookupVindexType)
 			}
 
-			vindexes[vindex.Name] = &vschemapb.Vindex{
+			vindexes[vindexName] = &vschemapb.Vindex{
 				Type: vindex.LookupVindexType,
 				Params: map[string]string{
 					"table":        baseOptions.TableKeyspace + "." + vindex.TableName,
@@ -205,7 +207,7 @@ var (
 				Columns: vindex.TableOwnerColumns,
 			}
 			sourceTableColumnVindex := &vschemapb.ColumnVindex{
-				Name:    vindex.Name,
+				Name:    vindexName,
 				Columns: vindex.TableOwnerColumns,
 			}
 
@@ -232,26 +234,16 @@ var (
 		}
 
 		// VReplication specific flags.
-		if len(params.TabletTypes) == 0 {
+		ttFlag := cmd.Flags().Lookup("tablet-types")
+		if ttFlag != nil && ttFlag.Changed {
 			createOptions.TabletTypes = tabletTypesDefault
-		} else {
-			createOptions.TabletTypes = params.TabletTypes
 		}
-
-		if len(params.Cells) != 0 {
+		cFlag := cmd.Flags().Lookup("cells")
+		if cFlag != nil && cFlag.Changed {
 			for i, cell := range createOptions.Cells {
 				createOptions.Cells[i] = strings.TrimSpace(cell)
 			}
 		}
-
-		if params.ContinueAfterCopyWithOwner != nil {
-			createOptions.ContinueAfterCopyWithOwner = *params.ContinueAfterCopyWithOwner
-		}
-
-		if params.TabletTypesInPreferenceOrder != nil {
-			createOptions.ContinueAfterCopyWithOwner = *params.TabletTypesInPreferenceOrder
-		}
-
 		return nil
 	}
 
@@ -484,6 +476,7 @@ func registerCommands(root *cobra.Command) {
 	// This will create the lookup vindex in the specified keyspace
 	// and setup a VReplication workflow to backfill its lookup table.
 	create.Flags().StringVar(&createOptions.Keyspace, "keyspace", "", "The keyspace to create the Lookup Vindex in. This is also where the table-owner must exist.")
+	base.MarkPersistentFlagRequired("keyspace")
 	create.Flags().StringVar(&createOptions.Type, "type", "", "The type of Lookup Vindex to create.")
 	create.Flags().StringVar(&createOptions.TableOwner, "table-owner", "", "The table holding the data which we should use to backfill the Lookup Vindex. This must exist in the same keyspace as the Lookup Vindex.")
 	create.Flags().StringSliceVar(&createOptions.TableOwnerColumns, "table-owner-columns", nil, "The columns to read from the owner table. These will be used to build the hash which gets stored as the keyspace_id value in the lookup table.")

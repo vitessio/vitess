@@ -2867,7 +2867,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			input: &vschemapb.Keyspace{
 				Vindexes: unique,
 			},
-			err: "atleast one table must be specified",
+			err: "at least one table must be specified",
 		},
 		{
 			description: "too many tables",

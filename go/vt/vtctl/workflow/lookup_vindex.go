@@ -347,7 +347,7 @@ func (lv *lookupVindex) validateAndGetVindexInfo(vindexName string, vindex *vsch
 
 	// Validate input table.
 	if len(tables) < 1 {
-		return nil, fmt.Errorf("atleast one table must be specified")
+		return nil, fmt.Errorf("at least one table must be specified")
 	}
 
 	return &vindexInfo{
