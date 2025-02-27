@@ -397,7 +397,7 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 		defer vs.wg.Done()
 
 		labelValues := []string{sgtid.Keyspace, sgtid.Shard, vs.tabletType.String()}
-		vs.vsm.vstreamsEndedWithErrors.Add(labelValues, 0)
+		vs.vsm.vstreamsEndedWithErrors.Reset(labelValues)
 		vs.vsm.vstreamsCreated.Add(labelValues, 1)
 		vs.vsm.vstreamsCount.Add(labelValues, 1)
 
