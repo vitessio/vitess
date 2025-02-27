@@ -604,16 +604,7 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 
 	lv := newLookupVindex(s)
 
-	var (
-		ms            *vtctldatapb.MaterializeSettings
-		sourceVSchema *topo.KeyspaceVSchemaInfo
-		targetVSchema *topo.KeyspaceVSchemaInfo
-		cancelFunc    func() error
-		err           error
-	)
-
-	ms, sourceVSchema, targetVSchema, cancelFunc, err = lv.prepareCreate(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
-
+	ms, sourceVSchema, targetVSchema, cancelFunc, err := lv.prepareCreate(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
 	if err != nil {
 		return nil, err
 	}

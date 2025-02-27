@@ -476,7 +476,7 @@ func registerCommands(root *cobra.Command) {
 	// This will create the lookup vindex in the specified keyspace
 	// and setup a VReplication workflow to backfill its lookup table.
 	create.Flags().StringVar(&createOptions.Keyspace, "keyspace", "", "The keyspace to create the Lookup Vindex in. This is also where the table-owner must exist.")
-	base.MarkPersistentFlagRequired("keyspace")
+	create.MarkFlagRequired("keyspace")
 	create.Flags().StringVar(&createOptions.Type, "type", "", "The type of Lookup Vindex to create.")
 	create.Flags().StringVar(&createOptions.TableOwner, "table-owner", "", "The table holding the data which we should use to backfill the Lookup Vindex. This must exist in the same keyspace as the Lookup Vindex.")
 	create.Flags().StringSliceVar(&createOptions.TableOwnerColumns, "table-owner-columns", nil, "The columns to read from the owner table. These will be used to build the hash which gets stored as the keyspace_id value in the lookup table.")

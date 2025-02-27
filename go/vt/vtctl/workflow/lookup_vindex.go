@@ -62,7 +62,7 @@ func newLookupVindex(ws *Server) *lookupVindex {
 	}
 }
 
-// prepareMultipleCreate performs the preparatory steps for creating a LookupVindex.
+// prepareCreate performs the preparatory steps for creating a LookupVindex.
 func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (
 	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *topo.KeyspaceVSchemaInfo, cancelFunc func() error, err error) {
 	var (
