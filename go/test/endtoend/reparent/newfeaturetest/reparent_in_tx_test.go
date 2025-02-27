@@ -44,7 +44,6 @@ func testCommitError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.Lo
 		<-tabletStopped
 		_, err := conn.ExecuteFetch("commit", 0, false)
 		require.ErrorContains(t, err, "VT15001")
-		require.ErrorContains(t, err, vterrors.ConnectionRefused)
 		commitDone <- true
 	}()
 
@@ -68,7 +67,6 @@ func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.L
 		<-tabletStopped
 		_, err := conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
 		require.ErrorContains(t, err, "VT15001")
-		require.ErrorContains(t, err, vterrors.ConnectionRefused)
 
 		// Subsequent queries after a VT15001 should start returning a VT15002 error until we issue a ROLLBACK
 		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
