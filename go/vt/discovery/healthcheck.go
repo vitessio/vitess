@@ -547,8 +547,8 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 				// If the buffer is exhausted, then we'll just receive the update when all the tablets are loaded on the ticker.
 				select {
 				case hc.loadTabletsTrigger <- topo.KeyspaceShard{
-					Keyspace: th.Target.Keyspace,
-					Shard:    th.Target.Shard,
+					Keyspace: prevTarget.Keyspace,
+					Shard:    prevTarget.Shard,
 				}:
 				default:
 				}
