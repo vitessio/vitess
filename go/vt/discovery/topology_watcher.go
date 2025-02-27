@@ -126,8 +126,15 @@ func (tw *TopologyWatcher) Start() {
 			// Since we are going to load all the tablets,
 			// we can clear out the entire list for reloading
 			// specific keyspace shards.
-			for range tw.healthcheck.GetLoadTabletsTrigger() {
-			}
+			func() {
+				for {
+					select {
+					case <-tw.healthcheck.GetLoadTabletsTrigger():
+					default:
+						return
+					}
+				}
+			}()
 			t.loadTablets("", "")
 			select {
 			case <-t.ctx.Done():
