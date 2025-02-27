@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -405,7 +406,13 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 		// Set the error on exit. First one wins.
 		if err != nil {
 			log.Errorf("Error in vstream for %+v: %s", sgtid, err)
-			vs.vsm.vstreamsEndedWithErrors.Add(labelValues, 1)
+			// Get the original/base error.
+			uerr := vterrors.UnwrapAll(err)
+			if !errors.Is(uerr, context.Canceled) && !errors.Is(uerr, context.DeadlineExceeded) {
+				// The client did not intentionally end the stream so this was an error in the
+				// vstream itself.
+				vs.vsm.vstreamsEndedWithErrors.Add(labelValues, 1)
+			}
 			vs.vsm.vstreamsCount.Add(labelValues, -1)
 			vs.once.Do(func() {
 				vs.setError(err, fmt.Sprintf("error starting stream from shard GTID %+v", sgtid))

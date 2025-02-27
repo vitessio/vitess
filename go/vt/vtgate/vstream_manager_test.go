@@ -456,7 +456,7 @@ func TestVStreamsMetricsErrors(t *testing.T) {
 		})
 
 		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
+			require.ErrorContains(t, err, wantErr)
 		}
 		close(done)
 	}()
@@ -468,7 +468,7 @@ func TestVStreamsMetricsErrors(t *testing.T) {
 
 	wantVStreamsEndedWithErrors := make(map[string]int64)
 	wantVStreamsEndedWithErrors[expectedLabels1] = 1
-	wantVStreamsEndedWithErrors[expectedLabels2] = 1
+	wantVStreamsEndedWithErrors[expectedLabels2] = 0
 	assert.Equal(t, wantVStreamsEndedWithErrors, vsm.vstreamsEndedWithErrors.Counts(), "vstreamsEndedWithErrors matches")
 }
 
