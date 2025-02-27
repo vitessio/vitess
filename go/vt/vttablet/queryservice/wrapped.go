@@ -76,7 +76,7 @@ func canRetry(ctx context.Context, err error) bool {
 	return false
 }
 
-// wrapInVT15001 will wrap the given error if we are in a transaction and the connection was refused.
+// wrapInVT15001 will wrap the given error if we are in a transaction and the error is a fatal tx error.
 // This situation often means that there is a transient error where the client should re-try the entire transaction.
 func wrapInVT15001(err error, inTx bool) error {
 	if err == nil || !inTx {
@@ -85,17 +85,17 @@ func wrapInVT15001(err error, inTx bool) error {
 	c := vterrors.Code(err)
 	m := err.Error()
 
-	conditions := []struct {
-		code        vtrpcpb.Code
-		containsMsg string
-	}{
-		{code: vtrpcpb.Code_UNAVAILABLE, containsMsg: vterrors.ConnectionRefused},
-		{code: vtrpcpb.Code_FAILED_PRECONDITION, containsMsg: vterrors.WrongTablet},
-		{code: vtrpcpb.Code_CLUSTER_EVENT, containsMsg: vterrors.NotServing},
-		{code: vtrpcpb.Code_CLUSTER_EVENT, containsMsg: vterrors.ShuttingDown},
-	}
-	for _, condition := range conditions {
-		if c == condition.code && strings.Contains(m, condition.containsMsg) {
+	switch c {
+	case vtrpcpb.Code_UNAVAILABLE:
+		if strings.Contains(m, vterrors.ConnectionRefused) {
+			return vterrors.VT15001(c, m)
+		}
+	case vtrpcpb.Code_FAILED_PRECONDITION:
+		if strings.Contains(m, vterrors.WrongTablet) {
+			return vterrors.VT15001(c, m)
+		}
+	case vtrpcpb.Code_CLUSTER_EVENT:
+		if strings.Contains(m, vterrors.NotServing) || strings.Contains(m, vterrors.ShuttingDown) {
 			return vterrors.VT15001(c, m)
 		}
 	}

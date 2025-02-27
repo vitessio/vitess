@@ -447,7 +447,7 @@ func (e *Executor) logPlanningFinished(logStats *logstats.LogStats, plan *engine
 
 func shouldBlockQuery(plan *engine.Plan, safeSession *econtext.SafeSession) bool {
 	block := safeSession.IsErrorUntilRollback()
-	if plan.Type != sqlparser.StmtRollback && plan.Type != sqlparser.StmtShow && block {
+	if plan.Type != sqlparser.StmtRollback && block {
 		return true
 	}
 	if block {
