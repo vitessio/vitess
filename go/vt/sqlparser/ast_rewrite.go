@@ -565,6 +565,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfWith(parent, node, replacer)
 	case *XorExpr:
 		return a.rewriteRefOfXorExpr(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -13817,6 +13819,8 @@ func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer re
 		return a.rewriteRefOfVarSamp(parent, node, replacer)
 	case *Variance:
 		return a.rewriteRefOfVariance(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -13873,6 +13877,8 @@ func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, repla
 		return a.rewriteRefOfTablespaceOperation(parent, node, replacer)
 	case *Validation:
 		return a.rewriteRefOfValidation(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14041,6 +14047,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
 	case *WeightStringFuncExpr:
 		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14059,6 +14067,8 @@ func (a *application) rewriteColTuple(parent SQLNode, node ColTuple, replacer re
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case ValTuple:
 		return a.rewriteValTuple(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14075,6 +14085,8 @@ func (a *application) rewriteConstraintInfo(parent SQLNode, node ConstraintInfo,
 		return a.rewriteRefOfCheckConstraintDefinition(parent, node, replacer)
 	case *ForeignKeyDefinition:
 		return a.rewriteRefOfForeignKeyDefinition(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14093,6 +14105,8 @@ func (a *application) rewriteDBDDLStatement(parent SQLNode, node DBDDLStatement,
 		return a.rewriteRefOfCreateDatabase(parent, node, replacer)
 	case *DropDatabase:
 		return a.rewriteRefOfDropDatabase(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14121,6 +14135,8 @@ func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, rep
 		return a.rewriteRefOfRenameTable(parent, node, replacer)
 	case *TruncateTable:
 		return a.rewriteRefOfTruncateTable(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14137,6 +14153,8 @@ func (a *application) rewriteExplain(parent SQLNode, node Explain, replacer repl
 		return a.rewriteRefOfExplainStmt(parent, node, replacer)
 	case *ExplainTab:
 		return a.rewriteRefOfExplainTab(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14383,6 +14401,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
 	case *XorExpr:
 		return a.rewriteRefOfXorExpr(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14403,6 +14423,8 @@ func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replace
 		return a.rewriteValues(parent, node, replacer)
 	case *ValuesStatement:
 		return a.rewriteRefOfValuesStatement(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14421,6 +14443,8 @@ func (a *application) rewriteSelectExpr(parent SQLNode, node SelectExpr, replace
 		return a.rewriteRefOfNextval(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14437,6 +14461,8 @@ func (a *application) rewriteSelectStatement(parent SQLNode, node SelectStatemen
 		return a.rewriteRefOfSelect(parent, node, replacer)
 	case *Union:
 		return a.rewriteRefOfUnion(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14457,6 +14483,8 @@ func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, rep
 		return a.rewriteRefOfShowOther(parent, node, replacer)
 	case *ShowTransactionStatus:
 		return a.rewriteRefOfShowTransactionStatus(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14473,6 +14501,8 @@ func (a *application) rewriteSimpleTableExpr(parent SQLNode, node SimpleTableExp
 		return a.rewriteRefOfDerivedTable(parent, node, replacer)
 	case TableName:
 		return a.rewriteTableName(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14585,6 +14615,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfVStream(parent, node, replacer)
 	case *ValuesStatement:
 		return a.rewriteRefOfValuesStatement(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14605,6 +14637,8 @@ func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer 
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
 	case *ParenTableExpr:
 		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14623,6 +14657,8 @@ func (a *application) rewriteTableStatement(parent SQLNode, node TableStatement,
 		return a.rewriteRefOfUnion(parent, node, replacer)
 	case *ValuesStatement:
 		return a.rewriteRefOfValuesStatement(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -14948,6 +14984,38 @@ func (a *application) rewriteRefOfVindexParam(parent SQLNode, node *VindexParam,
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteVisitable(parent SQLNode, node Visitable, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		panic("[BUG] paths are not supported on 'Visitable'")
+	}
+	if !a.rewriteSQLNode(node, node.VisitThis(), func(newNode, parent SQLNode) {
+		panic("[BUG] tried to replace 'VisitThis' on 'Visitable'")
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer

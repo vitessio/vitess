@@ -52,7 +52,6 @@ type (
 		scope() *types.Scope
 		findImplementations(iff *types.Interface, impl func(types.Type) error) error
 		iface() *types.Interface // the root interface that all nodes are expected to implement
-		getRootInterfaceName() string
 	}
 	generator interface {
 		genFile(generatorSPI) (string, *jen.File)
@@ -80,10 +79,6 @@ type (
 
 func (gen *astHelperGen) iface() *types.Interface {
 	return gen._iface
-}
-
-func (gen *astHelperGen) getRootInterfaceName() string {
-	return types.TypeString(gen.namedIface, noQualifier)
 }
 
 func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named, generators ...generator) *astHelperGen {
@@ -114,6 +109,10 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 				default:
 					panic(fmt.Errorf("interface %s implemented by %s (%s as %T) without ptr", iff.String(), baseType, tt.String(), tt))
 				}
+			}
+			if types.TypeString(baseType, noQualifier) == visitableName {
+				// skip the visitable interface
+				continue
 			}
 			if err := impl(baseType); err != nil {
 				return err
@@ -216,8 +215,8 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 		newEqualsGen(pName, &options.Equals),
 		newCloneGen(pName, &options.Clone),
 		newPathGen(pName, ifaceName),
-		newVisitGen(pName),
-		newRewriterGen(pName, types.TypeString(nt, noQualifier)),
+		newVisitGen(pName, ifaceName),
+		newRewriterGen(pName, ifaceName),
 		newCOWGen(pName, nt),
 	)
 

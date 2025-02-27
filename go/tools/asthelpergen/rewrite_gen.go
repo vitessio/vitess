@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	rewriteName = "rewrite"
+	rewriteName   = "rewrite"
+	visitableName = "Visitable"
 )
 
 type rewriteGen struct {
@@ -46,7 +47,96 @@ func newRewriterGen(pkgname string, ifaceName string) *rewriteGen {
 }
 
 func (r *rewriteGen) genFile(generatorSPI) (string, *jen.File) {
+	r.genVisitable()
 	return "ast_rewrite.go", r.file
+}
+
+func (r *rewriteGen) genVisitable() {
+	/*
+		func (a *application) rewriteVisitable(parent AST, node Visitable, replacer replacerFunc) bool {
+			if a.pre != nil {
+				a.cur.replacer = replacer
+				a.cur.parent = parent
+				a.cur.node = node
+				kontinue := !a.pre(&a.cur)
+				if a.cur.revisit {
+					a.cur.revisit = false
+					return a.rewriteAST(parent, a.cur.node, replacer)
+				}
+				if kontinue {
+					return true
+				}
+			}
+			if a.collectPaths {
+				panic("[BUG] paths are not supported on 'Visitable'")
+			}
+			if !a.rewriteAST(node, node.VisitThis(), func(newNode, parent AST) {
+				panic("[BUG] tried to replace 'VisitThis' on 'Visitable'")
+			}) {
+				return false
+			}
+			if a.post != nil {
+				a.cur.replacer = replacer
+				a.cur.parent = parent
+				a.cur.node = node
+				if !a.post(&a.cur) {
+					return false
+				}
+			}
+			return true
+		}
+	*/
+
+	call := rewriteName + visitableName
+	arguments := fmt.Sprintf("parent %s, node Visitable, replacer replacerFunc", r.ifaceName)
+	r.file.Add(jen.Func().Params(jen.Id("a *application")).Id(call)).Call(jen.Id(arguments)).Bool().Block(
+		// if a.pre != nil { ... }
+		jen.If(jen.Id("a").Dot("pre").Op("!=").Nil()).Block(
+			jen.Id("a").Dot("cur").Dot("replacer").Op("=").Id("replacer"),
+			jen.Id("a").Dot("cur").Dot("parent").Op("=").Id("parent"),
+			jen.Id("a").Dot("cur").Dot("node").Op("=").Id("node"),
+			jen.Id("kontinue").Op(":=").Op("!").Id("a").Dot("pre").Call(jen.Op("&").Id("a").Dot("cur")),
+			// if a.cur.revisit { ... }
+			jen.If(jen.Id("a").Dot("cur").Dot("revisit")).Block(
+				jen.Id("a").Dot("cur").Dot("revisit").Op("=").False(),
+				jen.Return(jen.Id("a").Dot(rewriteName+r.ifaceName).Call(jen.Id("parent"), jen.Id("a").Dot("cur").Dot("node"), jen.Id("replacer"))),
+			),
+			// if kontinue { ... }
+			jen.If(jen.Id("kontinue")).Block(
+				jen.Return(jen.True()),
+			),
+		),
+		// if a.collectPaths { panic(...) }
+		jen.If(jen.Id("a").Dot("collectPaths")).Block(
+			jen.Panic(jen.Lit("[BUG] paths are not supported on 'Visitable'")),
+		),
+		// if !a.rewriteAST(node, node.VisitThis(), func(...) { ... }) { return false }
+		jen.If(
+			jen.Op("!").Id("a").Dot(rewriteName+r.ifaceName).Call(
+				jen.Id("node"),
+				jen.Id("node").Dot("VisitThis").Call(),
+				jen.Func().Params(
+					jen.Id("newNode"), jen.Id("parent").Id(r.ifaceName),
+				).Block(
+					jen.Panic(jen.Lit("[BUG] tried to replace 'VisitThis' on 'Visitable'")),
+				),
+			),
+		).Block(
+			jen.Return(jen.False()),
+		),
+		// if a.post != nil { ... }
+		jen.If(jen.Id("a").Dot("post").Op("!=").Nil()).Block(
+			jen.Id("a").Dot("cur").Dot("replacer").Op("=").Id("replacer"),
+			jen.Id("a").Dot("cur").Dot("parent").Op("=").Id("parent"),
+			jen.Id("a").Dot("cur").Dot("node").Op("=").Id("node"),
+			// if !a.post(&a.cur) { return false }
+			jen.If(jen.Op("!").Id("a").Dot("post").Call(jen.Op("&").Id("a").Dot("cur"))).Block(
+				jen.Return(jen.False()),
+			),
+		),
+		// return true
+		jen.Return(jen.True()),
+	)
 }
 
 func (r *rewriteGen) interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error {
@@ -84,6 +174,12 @@ func (r *rewriteGen) interfaceMethod(t types.Type, iface *types.Interface, spi g
 		cases = append(cases, caseBlock)
 		return nil
 	})
+
+	cases = append(cases,
+		jen.Case(jen.Id(visitableName)).Block(
+			jen.Return(jen.Id("a.rewriteVisitable").Call(jen.Id("parent, node, replacer"))),
+		),
+	)
 
 	cases = append(cases,
 		jen.Default().Block(
