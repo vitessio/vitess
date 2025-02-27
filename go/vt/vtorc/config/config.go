@@ -62,7 +62,7 @@ var (
 		viperutil.Options[int]{
 			FlagName: "discovery-max-concurrency",
 			Default:  300,
-			Dynamic:  true,
+			Dynamic:  false,
 		},
 	)
 

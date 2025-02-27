@@ -70,7 +70,10 @@ func (q *Queue) setKeyCheckEnqueued(key string) (alreadyEnqueued bool) {
 
 // QueueLen returns the length of the queue.
 func (q *Queue) QueueLen() int {
-	return len(q.queue)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	return len(q.queue) + len(q.enqueued)
 }
 
 // Push enqueues a key if it is not on a queue and is not being
