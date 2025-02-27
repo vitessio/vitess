@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,6 +31,7 @@ import (
 	"github.com/google/safehtml/template"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -1444,6 +1446,33 @@ func TestTemplate(t *testing.T) {
 	wr := &bytes.Buffer{}
 	err = templ.Execute(wr, []*TabletsCacheStatus{tcs})
 	require.Nil(t, err, "error executing template: %v", err)
+}
+
+// TestHealthCheckImplSubscriberName tests that we have the subscirber name in the healthcheck.
+func TestHealthCheckImplSubscriberName(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	hc := NewHealthCheck(ctx, 1*time.Millisecond, time.Hour, nil, "", "", nil)
+	defer hc.Close()
+
+	subsName := "SubscriberName1"
+	subsName2 := "SubscriberName2"
+	ch := hc.Subscribe(subsName)
+	ch2 := hc.Subscribe(subsName2)
+
+	subsNames := maps.Values(hc.subscribers)
+	slices.Sort(subsNames)
+	require.Equal(t, 2, len(subsNames), "expected 2 subscribers")
+	require.EqualValues(t, []string{subsName, subsName2}, subsNames, "unexpected subscribers")
+
+	hc.Unsubscribe(ch)
+	subsNames = maps.Values(hc.subscribers)
+	require.Equal(t, 1, len(subsNames), "expected 1 subscriber")
+	require.EqualValues(t, []string{subsName2}, subsNames, "unexpected subscribers")
+
+	hc.Unsubscribe(ch2)
+	subsNames = maps.Values(hc.subscribers)
+	require.Empty(t, subsNames, "expected no subscribers")
 }
 
 func TestDebugURLFormatting(t *testing.T) {
