@@ -368,6 +368,25 @@ func TestRefSliceContainerReplace(t *testing.T) {
 	}, ast)
 }
 
+func TestVisitableRewrite(t *testing.T) {
+	leaf := &Leaf{v: 1}
+	visitable := &testVisitable{inner: leaf}
+	refContainer := &RefContainer{ASTType: visitable}
+
+	tv := &rewriteTestVisitor{}
+
+	_ = Rewrite(refContainer, tv.pre, tv.post)
+
+	tv.assertEquals(t, []step{
+		Pre{refContainer},
+		Pre{visitable},
+		Pre{leaf},
+		Post{leaf},
+		Post{visitable},
+		Post{refContainer},
+	})
+}
+
 type step interface {
 	String() string
 }

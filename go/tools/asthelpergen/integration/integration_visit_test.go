@@ -151,6 +151,39 @@ func TestVisitInterfaceSlice(t *testing.T) {
 	})
 }
 
+// testVisitable is declared in a test package, so it lacks the normal generated AST helper methods.
+// Instead, we lean on the Visitable interface to make sure we can visit nodes inside it.
+type testVisitable struct {
+	inner AST
+}
+
+func (t *testVisitable) String() string {
+	return t.inner.String()
+}
+
+func (t *testVisitable) VisitThis() AST {
+	return t.inner
+}
+
+var _ Visitable = (*testVisitable)(nil)
+
+func TestVisitableVisit(t *testing.T) {
+	leaf := &Leaf{v: 1}
+	visitable := &testVisitable{inner: leaf}
+	refContainer := &RefContainer{ASTType: visitable}
+
+	tv := &testVisitor{}
+
+	require.NoError(t,
+		VisitAST(refContainer, tv.visit))
+
+	tv.assertVisitOrder(t, []AST{
+		refContainer,
+		visitable,
+		leaf,
+	})
+}
+
 func (tv *testVisitor) assertVisitOrder(t *testing.T, expected []AST) {
 	t.Helper()
 	var lines []string
