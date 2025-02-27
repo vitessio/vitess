@@ -154,7 +154,7 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set workload = 1",
 		err: "incorrect argument type to variable 'workload': INT64",
 	}, {
-		in:  "set tx_isolation = 'read-committed'",
+		in:  "set transaction_isolation = 'read-committed'",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set transaction_isolation = 'read-committed'",
@@ -362,9 +362,9 @@ func TestExecutorSetOp(t *testing.T) {
 		in:     "set global client_found_rows = 1",
 		result: returnNoResult("client_found_rows", "int64"),
 	}, {
-		in:      "set tx_isolation = 'read-committed'",
-		sysVars: map[string]string{"tx_isolation": "'read-committed'"},
-		result:  returnResult("tx_isolation", "varchar", "read-committed"),
+		in:      "set transaction_isolation = 'read-committed'",
+		sysVars: map[string]string{"transaction_isolation": "'read-committed'"},
+		result:  returnResult("transaction_isolation", "varchar", "read-committed"),
 	}, {
 		in:      "set @@innodb_lock_wait_timeout=120",
 		sysVars: map[string]string{"innodb_lock_wait_timeout": "120"},
@@ -590,11 +590,11 @@ func TestExecutorSetAndSelect(t *testing.T) {
 		val:    "READ-COMMITTED",
 		exp:    `[[VARCHAR("READ-COMMITTED")]]`,
 	}, {
-		sysVar: "tx_isolation",
+		sysVar: "transaction_isolation",
 		val:    "READ-UNCOMMITTED",
 		exp:    `[[VARCHAR("READ-UNCOMMITTED")]]`,
 	}, {
-		sysVar: "tx_isolation",
+		sysVar: "transaction_isolation",
 		exp:    `[[VARCHAR("READ-UNCOMMITTED")]]`, // this returns the value set in previous query.
 	}}
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded, EnableSystemSettings: true})
