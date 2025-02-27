@@ -509,6 +509,14 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 					returnErr = NewError(PartialResult, tabletAlias.GetCell())
 				}
 			} else {
+				if opt != nil && opt.KeyspaceShard != nil {
+					if opt.KeyspaceShard.Keyspace != "" && opt.KeyspaceShard.Keyspace != tabletInfo.Keyspace {
+						return
+					}
+					if opt.KeyspaceShard.Shard != "" && opt.KeyspaceShard.Shard != tabletInfo.Shard {
+						return
+					}
+				}
 				tabletMap[topoproto.TabletAliasString(tabletAlias)] = tabletInfo
 			}
 		}(tabletAlias)

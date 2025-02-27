@@ -369,6 +369,12 @@ func TestServerGetTabletsByCell(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, out, len(tt.expectedTablets))
 
+			// We also check that the results for getting tablets individually
+			// matches the output we get from listing them.
+			out2, err := ts.GetTabletsIndividuallyByCell(ctx, cell, tt.opt)
+			require.NoError(t, err)
+			require.ElementsMatch(t, out, out2)
+
 			slices.SortFunc(out, func(i, j *topo.TabletInfo) int {
 				return cmp.Compare(i.Alias.Uid, j.Alias.Uid)
 			})
