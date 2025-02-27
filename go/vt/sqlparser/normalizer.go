@@ -173,7 +173,9 @@ func (nz *normalizer) determineQueryRewriteStrategy(in Statement) {
 // It handles normalization logic based on node types.
 func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 	switch node := node.(type) {
-	case *PrepareStmt, *ExecuteStmt:
+	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release, *OtherAdmin, *Analyze,
+		*PrepareStmt, *ExecuteStmt, *FramePoint, *ColName, TableName, *ConvertType:
+		// These statement do not need normalizing
 		return false
 	case *AssignmentExpr:
 		nz.err = vterrors.VT12001("Assignment expression")
