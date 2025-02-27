@@ -175,7 +175,7 @@ var (
 
 	parseVindexParams = func(params map[string]*vindexParams, cmd *cobra.Command) error {
 		if len(params) == 0 {
-			return fmt.Errorf("atleast 1 vindex is required")
+			return fmt.Errorf("at least 1 vindex is required")
 		}
 
 		vindexes := map[string]*vschemapb.Vindex{}
@@ -186,7 +186,7 @@ var (
 			}
 
 			if !strings.Contains(vindex.LookupVindexType, "lookup") {
-				return fmt.Errorf("%s is not a lookup vindex type.", vindex.LookupVindexType)
+				return fmt.Errorf("%s is not a lookup vindex type", vindex.LookupVindexType)
 			}
 
 			vindexes[vindexName] = &vschemapb.Vindex{
