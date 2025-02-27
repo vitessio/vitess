@@ -382,8 +382,8 @@ func TestVisitableRewrite(t *testing.T) {
 		Pre{visitable},
 		Pre{leaf},
 		Post{leaf},
-		Post{visitable},
-		Post{refContainer},
+		Pre{visitable},
+		Pre{refContainer},
 	})
 }
 
@@ -418,15 +418,19 @@ func (tv *rewriteTestVisitor) post(cursor *Cursor) bool {
 	return true
 }
 func (tv *rewriteTestVisitor) assertEquals(t *testing.T, expected []step) {
+	assertStepsEqual(t, tv.walk, expected)
+}
+
+func assertStepsEqual(t *testing.T, walk, expected []step) {
 	t.Helper()
 	var lines []string
 	error := false
 	expectedSize := len(expected)
-	for i, step := range tv.walk {
+	for i, step := range walk {
 		t.Run(fmt.Sprintf("step %d", i), func(t *testing.T) {
 			t.Helper()
 			if expectedSize <= i {
-				t.Fatalf("❌️ - Expected less elements %v", tv.walk[i:])
+				t.Fatalf("❌️ - Expected less elements %v", walk[i:])
 			} else {
 				e := expected[i]
 				if reflect.DeepEqual(e, step) {
@@ -449,7 +453,7 @@ func (tv *rewriteTestVisitor) assertEquals(t *testing.T, expected []step) {
 			}
 		})
 	}
-	walkSize := len(tv.walk)
+	walkSize := len(walk)
 	if expectedSize > walkSize {
 		t.Errorf("❌️ - Expected more elements %v", expected[walkSize:])
 	}

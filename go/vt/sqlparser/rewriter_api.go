@@ -116,6 +116,7 @@ type Cursor struct {
 type Visitable interface {
 	SQLNode
 	VisitThis() SQLNode
+	Clone(inner SQLNode) SQLNode
 }
 
 // Node returns the current Node.

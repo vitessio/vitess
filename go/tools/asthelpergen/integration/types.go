@@ -95,6 +95,7 @@ type (
 	Visitable interface {
 		AST
 		VisitThis() AST
+		Clone(inner AST) AST
 	}
 )
 
