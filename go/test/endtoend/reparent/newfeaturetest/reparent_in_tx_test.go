@@ -70,12 +70,41 @@ func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.L
 		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
 		require.ErrorContains(t, err, "VT15002")
 
-		_, err = conn.ExecuteFetch("show warnings", 0, false)
+		_, err = conn.ExecuteFetch("rollback", 0, false)
 		require.NoError(t, err)
 		executeDone <- true
 	}()
 
 	reparent(t, clusterInstance, tablets, tabletStopped, executeDone)
+
+	// if the unhealthy shard is the first one where we commited, let's assert that the table is empty on all the shards
+	r, err := conn.ExecuteFetch("select * from vt_insert_test", 1, false)
+	require.NoError(t, err)
+	require.Len(t, r.Rows, 0)
+}
+
+func testExecuteErrorWhileTabletIsNotServing(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.LocalProcessCluster, tablets []*cluster.Vttablet) {
+	tabletNotServing := make(chan bool)
+	executeDone := make(chan bool)
+	idx := 1
+	createTxAndInsertRows(conn, t, &idx)
+
+	go func() {
+		idx += 5
+		<-tabletNotServing
+		_, err := conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
+		require.ErrorContains(t, err, "VT15001")
+
+		// Subsequent queries after a VT15001 should start returning a VT15002 error until we issue a ROLLBACK
+		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
+		require.ErrorContains(t, err, "VT15002")
+
+		_, err = conn.ExecuteFetch("rollback", 0, false)
+		require.NoError(t, err)
+		executeDone <- true
+	}()
+
+	makeTabletNotServing(t, clusterInstance, tablets, tabletNotServing, executeDone)
 
 	// if the unhealthy shard is the first one where we commited, let's assert that the table is empty on all the shards
 	r, err := conn.ExecuteFetch("select * from vt_insert_test", 1, false)
@@ -112,15 +141,45 @@ func reparent(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet
 	// We now restart the vttablet that became a replica.
 	utils.StopTablet(t, tablets[primary], false)
 	tabletStopped <- true
-	primary = prsTo
 
 	// Wait for the action triggering the VT15001 to be done before moving on
 	<-actionDone
 
-	tablets[0].VttabletProcess.ServingStatus = "SERVING"
-	err = tablets[0].VttabletProcess.Setup()
+	tablets[primary].VttabletProcess.ServingStatus = "SERVING"
+	err = tablets[primary].VttabletProcess.Setup()
 	require.NoError(t, err)
+	primary = prsTo
+}
 
+func makeTabletNotServing(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablets []*cluster.Vttablet, stateChanged, actionDone chan bool) {
+	// Reparent to the other replica
+	utils.ShardName = "40-80"
+	defer func() {
+		utils.ShardName = "0"
+	}()
+
+	prsTo := primary - 1
+	if primary == 0 {
+		prsTo = primary + 1
+	}
+	output, err := utils.Prs(t, clusterInstance, tablets[prsTo])
+	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
+
+	// We now restart the vttablet that became a replica.
+	utils.StopTablet(t, tablets[primary], false)
+	tablets[primary].VttabletProcess.ServingStatus = "NOT_SERVING"
+	err = tablets[primary].VttabletProcess.Setup()
+	require.NoError(t, err)
+	stateChanged <- true
+
+	// Wait for the action triggering the VT15001 to be done before moving on
+	<-actionDone
+
+	utils.StopTablet(t, tablets[primary], false)
+	tablets[primary].VttabletProcess.ServingStatus = "SERVING"
+	err = tablets[primary].VttabletProcess.Setup()
+	require.NoError(t, err)
+	primary = prsTo
 }
 
 func TestErrorsInTransaction(t *testing.T) {
@@ -150,6 +209,10 @@ func TestErrorsInTransaction(t *testing.T) {
 
 	t.Run("commit while reparenting", func(t *testing.T) {
 		testCommitError(t, conn, clusterInstance, tablets)
+	})
+
+	t.Run("execute DML while tablet is NOT_SERVING", func(t *testing.T) {
+		testExecuteErrorWhileTabletIsNotServing(t, conn, clusterInstance, tablets)
 	})
 
 	t.Run("execute DML while reparenting", func(t *testing.T) {

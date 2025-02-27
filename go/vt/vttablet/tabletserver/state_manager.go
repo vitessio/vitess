@@ -391,7 +391,7 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 
 	if sm.state != StateServing || !sm.replHealthy || sm.demotePrimaryStalled {
 		// This specific error string needs to be returned for vtgate buffering to work.
-		return vterrors.VT15001(vtrpcpb.Code_CLUSTER_EVENT, vterrors.NotServing)
+		return vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.NotServing)
 	}
 
 	shuttingDown := sm.wantState != StateServing
@@ -399,7 +399,7 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 	// We cannot allow adding to the requests to prevent any panics from happening.
 	if (shuttingDown && !allowOnShutdown) || sm.rw.GetWaiterCount() > 0 {
 		// This specific error string needs to be returned for vtgate buffering to work.
-		return vterrors.VT15001(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown)
+		return vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown)
 	}
 
 	err = sm.verifyTargetLocked(ctx, target)
@@ -436,7 +436,7 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 					return nil
 				}
 			}
-			return vterrors.VT15001(vtrpcpb.Code_FAILED_PRECONDITION, fmt.Sprintf("%s: %v, want: %v or %v", vterrors.WrongTablet, target.TabletType, sm.target.TabletType, sm.alsoAllow))
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v or %v", vterrors.WrongTablet, target.TabletType, sm.target.TabletType, sm.alsoAllow)
 		}
 	} else {
 		if !tabletenv.IsLocalContext(ctx) {

@@ -84,8 +84,20 @@ func wrapInVT15001(err error, inTx bool) error {
 	}
 	c := vterrors.Code(err)
 	m := err.Error()
-	if c == vtrpcpb.Code_UNAVAILABLE && strings.Contains(m, "connection refused") {
-		return vterrors.VT15001(c, m)
+
+	conditions := []struct {
+		code        vtrpcpb.Code
+		containsMsg string
+	}{
+		{code: vtrpcpb.Code_UNAVAILABLE, containsMsg: vterrors.ConnectionRefused},
+		{code: vtrpcpb.Code_FAILED_PRECONDITION, containsMsg: vterrors.WrongTablet},
+		{code: vtrpcpb.Code_CLUSTER_EVENT, containsMsg: vterrors.NotServing},
+		{code: vtrpcpb.Code_CLUSTER_EVENT, containsMsg: vterrors.ShuttingDown},
+	}
+	for _, condition := range conditions {
+		if c == condition.code && strings.Contains(m, condition.containsMsg) {
+			return vterrors.VT15001(c, m)
+		}
 	}
 	return err
 }
