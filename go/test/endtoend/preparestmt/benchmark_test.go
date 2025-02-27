@@ -17,6 +17,8 @@ limitations under the License.
 package preparestmt
 
 import (
+	"context"
+	"fmt"
 	"math/rand/v2"
 	"testing"
 
@@ -113,7 +115,7 @@ WHERE
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer sStmt.Close()
+	defer uStmt.Close()
 
 	b.Run("Update", func(b *testing.B) {
 		b.ResetTimer()
@@ -129,12 +131,105 @@ WHERE
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer sStmt.Close()
+	defer dStmt.Close()
 
 	b.Run("Delete", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_, err = dStmt.Exec(rand.IntN(2), rand.IntN(100))
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+}
+
+/*
+export ver=v1 p=~/benchmark && go test \
+-run '^$' -bench '^BenchmarkExecuteStmt' \
+-benchtime 2s -count 6 -cpu 4 \
+| tee $p/${ver}.txt
+*/
+func BenchmarkExecuteStmt(b *testing.B) {
+	dbo := Connect(b, "interpolateParams=false")
+	defer dbo.Close()
+
+	// prepare statement
+	insertStmt := `insert into sks.t1 (name, age, email, created_at, is_active) values('%s', %d, '%s', current_timestamp, %d)`
+	selectStmt := `select id, name, age, email from sks.t1 where age between %d and %d and is_active = %d limit %d`
+	updateStmt := `update sks.t1 set is_active = %d where id = %d`
+	deleteStmt := `delete from sks.t1 where is_active = %d and age = %d`
+
+	joinStmt := `SELECT 
+    user.id AS user_id
+FROM 
+    sks.t1 AS user
+LEFT JOIN 
+    sks.t1 AS parent ON user.id = parent.id AND parent.age = %d
+LEFT JOIN 
+    sks.t1 AS manager ON user.id = manager.id AND manager.is_active = %d
+LEFT JOIN 
+    sks.t1 AS child ON user.id = child.id
+WHERE 
+    user.is_active = %d 
+    AND user.id = %d
+    AND parent.id = %d
+    AND manager.id = %d`
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	b.Run("Insert", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := dbo.ExecContext(ctx, fmt.Sprintf(insertStmt, fake.FirstName(), rand.IntN(100), fake.EmailAddress(), rand.IntN(2)))
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("Select", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			age := rand.IntN(80)
+			r, err := dbo.QueryContext(ctx, fmt.Sprintf(selectStmt, age, age+20, rand.IntN(2), rand.IntN(10)))
+			if err != nil {
+				b.Fatal(err)
+			}
+			r.Close()
+		}
+	})
+
+	b.Run("Join Select:Simple Route", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			age := rand.IntN(80)
+			active := rand.IntN(2)
+			id := rand.IntN(2000)
+			r, err := dbo.QueryContext(ctx, fmt.Sprintf(joinStmt, age, active, active, id, id, id))
+			if err != nil {
+				b.Fatal(err)
+			}
+			r.Close()
+		}
+	})
+
+	b.Run("Update", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := dbo.ExecContext(ctx, fmt.Sprintf(updateStmt, rand.IntN(2), rand.IntN(2000)))
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("Delete", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := dbo.ExecContext(ctx, fmt.Sprintf(deleteStmt, rand.IntN(2), rand.IntN(100)))
 			if err != nil {
 				b.Fatal(err)
 			}
