@@ -732,7 +732,9 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 		}
 
 		set, found := d[expr]
-		deps = deps.Merge(set)
+		if found {
+			deps = deps.Merge(set)
+		}
 
 		// if we found a cached value, there is no need to continue down to visit children
 		return !found, nil

@@ -30,12 +30,15 @@ type JoinPredicate struct {
 }
 
 func (j *JoinPredicate) Clone(inner sqlparser.SQLNode) sqlparser.SQLNode {
-	panic(vterrors.VT13001("unexpected type in JoinPredicate.Clone"))
-	//expr, ok := inner.(sqlparser.Expr)
-	//if !ok {
-	//	panic(vterrors.VT13001("unexpected type in JoinPredicate.Clone"))
-	//}
-	//return j.tracker.NewJoinPredicate(expr)
+	expr, ok := inner.(sqlparser.Expr)
+	if !ok {
+		panic(vterrors.VT13001("unexpected type in JoinPredicate.Clone"))
+	}
+	j.tracker.Expressions[j.ID] = expr
+	return &JoinPredicate{
+		ID:      j.ID,
+		tracker: j.tracker,
+	}
 }
 
 var _ sqlparser.Expr = (*JoinPredicate)(nil)
