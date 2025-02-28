@@ -60,9 +60,8 @@ func (q *Queue) setKeyCheckEnqueued(key string) (alreadyEnqueued bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	if _, found := q.enqueued[key]; found {
-		alreadyEnqueued = true
-	} else {
+	_, alreadyEnqueued = q.enqueued[key]
+	if !alreadyEnqueued {
 		q.enqueued[key] = struct{}{}
 	}
 	return alreadyEnqueued
