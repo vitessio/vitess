@@ -927,67 +927,83 @@ func getVar(t *testing.T, key string) interface{} {
 	return val
 }
 
-// TestQueryProcessedMetric tests that query processed metric is published.
+// TestQueryProcessedMetric verifies that query metrics are correctly published.
 func TestQueryProcessedMetric(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
 	tcases := []struct {
-		sql    string
-		metric string
-		shards int
+		sql          string
+		queryMetric  string
+		tableMetrics []string
+		shards       int
 	}{{
-		sql:    "select id1, id2 from t1",
-		metric: "SELECT.Scatter.PRIMARY",
-		shards: 2,
+		sql:          "select id1, id2 from t1",
+		queryMetric:  "SELECT.Scatter.PRIMARY",
+		shards:       2,
+		tableMetrics: []string{"SELECT.ks_t1"},
 	}, {
-		sql:    "update t1 set id2 = 2 where id1 = 1",
-		metric: "UPDATE.MultiShard.PRIMARY",
-		shards: 2,
+		sql:          "update t1 set id2 = 2 where id1 = 1",
+		queryMetric:  "UPDATE.MultiShard.PRIMARY",
+		shards:       2,
+		tableMetrics: []string{"UPDATE.ks_t1"},
 	}, {
-		sql:    "delete from t1 where id1 in (1)",
-		metric: "DELETE.MultiShard.PRIMARY",
-		shards: 2,
+		sql:          "delete from t1 where id1 in (1)",
+		queryMetric:  "DELETE.MultiShard.PRIMARY",
+		shards:       2,
+		tableMetrics: []string{"DELETE.ks_t1"},
 	}, {
-		sql:    "show tables",
-		metric: "SHOW.Passthrough.PRIMARY",
-		shards: 1,
+		sql:         "show tables",
+		queryMetric: "SHOW.Passthrough.PRIMARY",
+		shards:      1,
 	}, {
-		sql:    "savepoint a",
-		metric: "SAVEPOINT.Transaction.PRIMARY",
+		sql:         "savepoint a",
+		queryMetric: "SAVEPOINT.Transaction.PRIMARY",
 	}, {
-		sql:    "rollback",
-		metric: "ROLLBACK.Transaction.PRIMARY",
+		sql:         "rollback",
+		queryMetric: "ROLLBACK.Transaction.PRIMARY",
 	}, {
-		sql:    "set @x=3",
-		metric: "SET.Local.PRIMARY",
+		sql:         "set @x=3",
+		queryMetric: "SET.Local.PRIMARY",
 	}, {
-		sql:    "set sql_mode=''",
-		metric: "SET.MultiShard.PRIMARY",
-		shards: 1,
+		sql:         "set sql_mode=''",
+		queryMetric: "SET.MultiShard.PRIMARY",
+		shards:      1,
 	}, {
-		sql:    "set @@vitess_metadata.k1='v1'",
-		metric: "SET.Topology.PRIMARY",
+		sql:         "set @@vitess_metadata.k1='v1'",
+		queryMetric: "SET.Topology.PRIMARY",
 	}, {
-		sql:    "select 1 from t1 a, t1 b",
-		metric: "SELECT.Join.PRIMARY",
-		shards: 3,
+		sql:          "select 1 from t1 a, t1 b",
+		queryMetric:  "SELECT.Join.PRIMARY",
+		shards:       3,
+		tableMetrics: []string{"SELECT.ks_t1"},
 	}, {
-		sql:    "select count(*) from t1 a, t1 b",
-		metric: "SELECT.Complex.PRIMARY",
-		shards: 6,
+		sql:          "select count(*) from t1 a, t1 b",
+		queryMetric:  "SELECT.Complex.PRIMARY",
+		shards:       6,
+		tableMetrics: []string{"SELECT.ks_t1"},
+	}, {
+		sql:          "select 1 from t1, t2, t3, t4 where t1.id1 = t2.id3 and t2.id3 = t3.id6 and t3.id6 = t4.id1 and t3.id7 = 5",
+		queryMetric:  "SELECT.Lookup.PRIMARY",
+		shards:       2,
+		tableMetrics: []string{"SELECT.ks_t1", "SELECT.ks_t2", "SELECT.ks_t3", "SELECT.ks_t4"},
 	}}
 
-	initialQP := getQPMetric(t, "QueryProcessed")
-	initialQR := getQPMetric(t, "QueryRouted")
+	initialQP := getQPMetric(t, "Queries")
+	initialQR := getQPMetric(t, "QueryRoutes")
+	initialQT := getQPMetric(t, "QueryTables")
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
 			utils.Exec(t, conn, tc.sql)
-			updatedQP := getQPMetric(t, "QueryProcessed")
-			updatedQR := getQPMetric(t, "QueryRouted")
-			assert.EqualValues(t, 1, getValue(updatedQP, tc.metric)-getValue(initialQP, tc.metric))
-			assert.EqualValues(t, tc.shards, getValue(updatedQR, tc.metric)-getValue(initialQR, tc.metric))
-			initialQP, initialQR = updatedQP, updatedQR
+			updatedQP := getQPMetric(t, "Queries")
+			updatedQR := getQPMetric(t, "QueryRoutes")
+			updatedQT := getQPMetric(t, "QueryTables")
+			assert.EqualValuesf(t, 1, getValue(updatedQP, tc.queryMetric)-getValue(initialQP, tc.queryMetric), "queries metric: %s", tc.queryMetric)
+			assert.EqualValuesf(t, tc.shards, getValue(updatedQR, tc.queryMetric)-getValue(initialQR, tc.queryMetric), "queryRoutes metric: %s", tc.queryMetric)
+			for _, metric := range tc.tableMetrics {
+				assert.EqualValuesf(t, 1, getValue(updatedQT, metric)-getValue(initialQT, metric), "queryTables metric: %s", metric)
+			}
+			initialQP, initialQR, initialQT = updatedQP, updatedQR, updatedQT
 		})
 	}
 }
@@ -1004,7 +1020,7 @@ func getQPMetric(t *testing.T, metric string) map[string]any {
 	}
 
 	qpMap, ok := qpVars.(map[string]any)
-	require.True(t, ok, "query metric vars is not a map")
+	require.True(t, ok, "query queryMetric vars is not a map")
 
 	return qpMap
 }

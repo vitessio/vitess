@@ -79,9 +79,9 @@ var (
 	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Deprecated: Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Deprecated: Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 
-	queries        = stats.NewCountersWithMultiLabels("Queries", "Counts queries processed at VTGate, categorized by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
-	queryRoutes    = stats.NewCountersWithMultiLabels("QueryRoutes", "Counts queries routed from VTGate to VTTablet, categorized by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
-	queriesByTable = stats.NewCountersWithMultiLabels("QueryTables", "Counts queries processed at VTGate per table, categorized by query type and table.", []string{"Query", "Table"})
+	queries        = stats.NewCountersWithMultiLabels("Queries", "Counts queries processed at VTGate by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
+	queryRoutes    = stats.NewCountersWithMultiLabels("QueryRoutes", "Counts queries routed from VTGate to VTTablet by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
+	queriesByTable = stats.NewCountersWithMultiLabels("QueryTables", "Counts queries processed at VTGate per table by query type and table.", []string{"Query", "Table"})
 
 	// commitMode records the timing of the commit phase of a transaction.
 	// It also tracks between different transaction mode i.e. Single, Multi and TwoPC
