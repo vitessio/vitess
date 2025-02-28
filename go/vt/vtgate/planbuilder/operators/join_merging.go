@@ -239,8 +239,12 @@ func (jm *joinMerger) getApplyJoin(ctx *plancontext.PlanningContext, op1, op2 *R
 }
 
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) *Route {
+	aj := jm.getApplyJoin(ctx, op1, op2)
+	for _, column := range aj.JoinPredicates.columns {
+		ctx.PredTracker.Set(column.JoinPredicateID, column.Original)
+	}
 	return &Route{
-		unaryOperator: newUnaryOp(jm.getApplyJoin(ctx, op1, op2)),
+		unaryOperator: newUnaryOp(aj),
 		MergedWith:    []*Route{op2},
 		Routing:       r,
 	}

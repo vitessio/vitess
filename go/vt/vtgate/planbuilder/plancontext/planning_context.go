@@ -19,6 +19,8 @@ package plancontext
 import (
 	"io"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -41,7 +43,8 @@ type PlanningContext struct {
 
 	// skipPredicates tracks predicates that should be skipped, typically when
 	// a join predicate is reverted to its original form during planning.
-	skipPredicates map[sqlparser.Expr]any
+	skipPredicates     map[sqlparser.Expr]any
+	skipJoinPredicates map[predicates.ID]any
 
 	PlannerVersion querypb.ExecuteOptions_PlannerVersion
 
@@ -79,6 +82,8 @@ type PlanningContext struct {
 
 	emptyEnv    *evalengine.ExpressionEnv
 	constantCfg *evalengine.Config
+
+	PredTracker *predicates.Tracker
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -104,14 +109,16 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 	vschema.PlannerWarning(semTable.Warning)
 
 	return &PlanningContext{
-		ReservedVars:      reservedVars,
-		SemTable:          semTable,
-		VSchema:           vschema,
-		joinPredicates:    map[sqlparser.Expr][]sqlparser.Expr{},
-		skipPredicates:    map[sqlparser.Expr]any{},
-		PlannerVersion:    version,
-		ReservedArguments: map[sqlparser.Expr]string{},
-		Statement:         stmt,
+		ReservedVars:       reservedVars,
+		SemTable:           semTable,
+		VSchema:            vschema,
+		joinPredicates:     map[sqlparser.Expr][]sqlparser.Expr{},
+		skipPredicates:     map[sqlparser.Expr]any{},
+		skipJoinPredicates: map[predicates.ID]any{},
+		PlannerVersion:     version,
+		ReservedArguments:  map[sqlparser.Expr]string{},
+		Statement:          stmt,
+		PredTracker:        predicates.NewTracker(),
 	}, nil
 }
 
@@ -146,7 +153,11 @@ func (ctx *PlanningContext) ShouldSkip(expr sqlparser.Expr) bool {
 			return true
 		}
 	}
-	return false
+	var found bool
+	if jp, ok := expr.(*predicates.JoinPredicate); ok {
+		_, found = ctx.skipJoinPredicates[jp.ID]
+	}
+	return found
 }
 
 // AddJoinPredicates associates additional RHS predicates with an existing join predicate.
@@ -174,6 +185,10 @@ func (ctx *PlanningContext) SkipJoinPredicates(joinPred sqlparser.Expr) error {
 		return nil
 	}
 	return vterrors.VT13001("predicate does not exist: " + sqlparser.String(joinPred))
+}
+
+func (ctx *PlanningContext) SkipJoinPredicatesTODO(id predicates.ID) {
+	ctx.skipJoinPredicates[id] = struct{}{}
 }
 
 // KeepPredicateInfo transfers join predicate information from another context.
@@ -456,6 +471,7 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		OuterTables:       ctx.OuterTables,
 		CurrentCTE:        ctx.CurrentCTE,
 		emptyEnv:          ctx.emptyEnv,
+		PredTracker:       ctx.PredTracker,
 		isMirrored:        true,
 	}
 	return ctx.mirror

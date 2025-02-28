@@ -333,6 +333,9 @@ func mergeOffsetExpressions(e1, e2 sqlparser.Expr) (expr sqlparser.Expr, failed 
 }
 
 // mergeLimitExpressions merges two LIMIT expressions with an OFFSET expression.
+
+// select tbl1.foo = tbl2.bar from tbl1, tbl2 where tbl1.foo = tbl2.bar
+
 // l1: First LIMIT expression.
 // l2: Second LIMIT expression.
 // off2: Second OFFSET expression.

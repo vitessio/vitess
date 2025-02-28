@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -181,6 +183,7 @@ func createPlanContext(st *semantics.SemTable) *PlanningContext {
 		skipPredicates:    map[sqlparser.Expr]any{},
 		ReservedArguments: map[sqlparser.Expr]string{},
 		VSchema:           &vschema{},
+		PredTracker:       predicates.NewTracker(),
 	}
 }
 
