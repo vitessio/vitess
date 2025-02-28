@@ -85,6 +85,8 @@ func (f *fakeResolver) ResolveDestinationsMultiCol(ctx context.Context, keyspace
 var _ econtext.Resolver = (*fakeResolver)(nil)
 
 func TestPlanKey(t *testing.T) {
+	// TestPlanKey verifies that buildPlanKey produces the expected PlanKey.DebugString
+	// values under different target, shard, and SET_VAR comment conditions.
 	ks1 := &vindexes.Keyspace{Name: "ks1"}
 	ks1Schema := &vindexes.KeyspaceSchema{Keyspace: ks1}
 	vschemaWith1KS := &vindexes.VSchema{
