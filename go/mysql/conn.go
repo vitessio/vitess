@@ -1424,13 +1424,14 @@ func (c *Conn) handleComRegisterReplica(handler Handler, data []byte) (kontinue 
 		return true
 	}
 
-	c.recycleReadPacket()
-
 	replicaHost, replicaPort, replicaUser, replicaPassword, err := c.parseComRegisterReplica(data)
 	if err != nil {
 		log.Errorf("conn %v: parseComRegisterReplica failed: %v", c.ID(), err)
 		return false
 	}
+
+	c.recycleReadPacket()
+
 	if err := binlogReplicaHandler.ComRegisterReplica(c, replicaHost, replicaPort, replicaUser, replicaPassword); err != nil {
 		c.writeErrorPacketFromError(err)
 		return false
@@ -1449,7 +1450,6 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		return true
 	}
 
-	c.recycleReadPacket()
 	kontinue = true
 
 	c.startWriterBuffering()
@@ -1465,6 +1465,7 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
 		return false
 	}
+	c.recycleReadPacket()
 	if err := binlogReplicaHandler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
 		log.Error(err.Error())
 		c.writeErrorPacketFromError(err)
