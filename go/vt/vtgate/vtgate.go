@@ -360,7 +360,7 @@ func Init(
 	}
 
 	// executor sets a watch on SrvVSchema, so let's rebuild these before creating it
-	if err := rebuildTopoGraphs(ctx, serv, cell, keyspaces); err != nil {
+	if err := rebuildTopoGraphs(ctx, ts, cell, keyspaces); err != nil {
 		log.Fatalf("rebuildTopoGraphs failed: %v", err)
 	}
 
@@ -423,12 +423,7 @@ func Init(
 	return vtgateInst
 }
 
-func rebuildTopoGraphs(ctx context.Context, serv srvtopo.Server, cell string, keyspaces []string) error {
-	topoServer, err := serv.GetTopoServer()
-	if err != nil {
-		return vterrors.Wrap(err, "error reading topo server")
-	}
-
+func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string, keyspaces []string) error {
 	for _, ks := range keyspaces {
 		_, err := topoServer.GetSrvKeyspace(ctx, cell, ks)
 		switch {
