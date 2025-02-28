@@ -137,9 +137,9 @@ func addJoinPredicates(
 
 		// if we are inside a CTE, we need to check if we depend on the recursion table
 		if cte := ctx.ActiveCTE(); cte != nil && ctx.SemTable.DirectDeps(pred).IsOverlapping(cte.Id) {
-			original := pred
+			//original := pred
 			pred = addCTEPredicate(ctx, pred, cte)
-			ctx.AddJoinPredicates(original, pred)
+			//ctx.AddJoinPredicates(original, pred) TODO
 		}
 		op = op.AddPredicate(ctx, pred)
 	}

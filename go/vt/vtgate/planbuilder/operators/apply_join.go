@@ -154,7 +154,6 @@ func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sql
 		newPred := ctx.PredTracker.NewJoinPredicate(col.RHSExpr)
 		col.JoinPredicateID = newPred.ID
 		aj.JoinPredicates.add(col)
-		ctx.AddJoinPredicates(pred, newPred)
 		rhs = rhs.AddPredicate(ctx, newPred)
 	}
 	aj.RHS = rhs

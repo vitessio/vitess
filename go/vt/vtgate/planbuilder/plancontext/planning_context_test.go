@@ -179,8 +179,6 @@ func prepareContextAndFindColumns(t *testing.T, query string) (ctx *PlanningCont
 func createPlanContext(st *semantics.SemTable) *PlanningContext {
 	return &PlanningContext{
 		SemTable:          st,
-		joinPredicates:    map[sqlparser.Expr][]sqlparser.Expr{},
-		skipPredicates:    map[sqlparser.Expr]any{},
 		ReservedArguments: map[sqlparser.Expr]string{},
 		VSchema:           &vschema{},
 		PredTracker:       predicates.NewTracker(),

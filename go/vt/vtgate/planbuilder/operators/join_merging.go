@@ -37,16 +37,19 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 	// We clone the right hand side and try and push all the join predicates that are solved entirely by that side.
 	// If a dual is on the left side, and it is a left join (all right joins are changed to left joins), then we can only merge if the right side is a single sharded routing.
 	case a == dual:
-		rhsClone := Clone(rhs).(*Route)
+		newRouting := rhsRoute.Routing.Clone()
+
+		rhsID := TableID(rhsRoute)
 		for _, predicate := range joinPredicates {
-			if ctx.SemTable.DirectDeps(predicate).IsSolvedBy(TableID(rhsClone)) {
-				rhsClone.AddPredicate(ctx, predicate)
+			if ctx.SemTable.DirectDeps(predicate).IsSolvedBy(rhsID) {
+				newRouting = UpdateRoutingLogic(ctx, predicate, newRouting)
 			}
 		}
-		if !jm.joinType.IsInner() && !rhsClone.Routing.OpCode().IsSingleShard() {
+
+		if !(jm.joinType.IsInner() || newRouting.OpCode().IsSingleShard()) {
 			return nil
 		}
-		return jm.merge(ctx, lhsRoute, rhsClone, rhsClone.Routing)
+		return jm.merge(ctx, lhsRoute, rhsRoute, newRouting)
 
 	// If a dual is on the right side.
 	case b == dual:
@@ -243,6 +246,7 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 	for _, column := range aj.JoinPredicates.columns {
 		ctx.PredTracker.Set(column.JoinPredicateID, column.Original)
 	}
+	//UpdateRoutingLogic(ctx, )
 	return &Route{
 		unaryOperator: newUnaryOp(aj),
 		MergedWith:    []*Route{op2},

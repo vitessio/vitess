@@ -231,7 +231,7 @@ func createOpFromStmt(inCtx *plancontext.PlanningContext, stmt sqlparser.Stateme
 	}
 
 	// need to remember which predicates have been broken up during join planning
-	inCtx.KeepPredicateInfo(ctx)
+	//inCtx.KeepPredicateInfo(ctx) TODO
 
 	return op
 }

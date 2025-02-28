@@ -72,9 +72,9 @@ func newRecurse(
 	leftID, outerID semantics.TableSet,
 	distinct bool,
 ) *RecurseCTE {
-	for _, pred := range predicates {
-		ctx.AddJoinPredicates(pred.Original, pred.RightExpr)
-	}
+	//for _, pred := range predicates {
+	//	ctx.AddJoinPredicates(pred.Original, pred.RightExpr)
+	//}
 	return &RecurseCTE{
 		binaryOperator: newBinaryOp(seed, term),
 		Def:            def,

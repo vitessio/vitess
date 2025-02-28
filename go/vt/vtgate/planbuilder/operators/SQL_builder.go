@@ -716,10 +716,10 @@ func buildHorizon(op *Horizon, qb *queryBuilder) {
 func buildRecursiveCTE(op *RecurseCTE, qb *queryBuilder) {
 	predicates := slice.Map(op.Predicates, func(jc *plancontext.RecurseExpression) sqlparser.Expr {
 		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
-		err := qb.ctx.SkipJoinPredicates(jc.Original)
-		if err != nil {
-			panic(err)
-		}
+		//err := qb.ctx.SkipJoinPredicates(jc.Original) TODO
+		//if err != nil {
+		//	panic(err)
+		//}
 		return jc.Original
 	})
 	pred := sqlparser.AndExpressions(predicates...)

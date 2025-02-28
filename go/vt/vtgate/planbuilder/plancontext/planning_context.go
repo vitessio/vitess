@@ -35,15 +35,8 @@ type PlanningContext struct {
 	SemTable     *semantics.SemTable
 	VSchema      VSchema
 
-	// joinPredicates maps each original join predicate (key) to a slice of
-	// variations of the RHS predicates (value). This map is used to handle
-	// different scenarios in join planning, where the RHS predicates are
-	// modified to accommodate dependencies from the LHS, represented as Arguments.
-	joinPredicates map[sqlparser.Expr][]sqlparser.Expr
-
 	// skipPredicates tracks predicates that should be skipped, typically when
 	// a join predicate is reverted to its original form during planning.
-	skipPredicates     map[sqlparser.Expr]any
 	skipJoinPredicates map[predicates.ID]any
 
 	PlannerVersion querypb.ExecuteOptions_PlannerVersion
@@ -112,8 +105,6 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		ReservedVars:       reservedVars,
 		SemTable:           semTable,
 		VSchema:            vschema,
-		joinPredicates:     map[sqlparser.Expr][]sqlparser.Expr{},
-		skipPredicates:     map[sqlparser.Expr]any{},
 		skipJoinPredicates: map[predicates.ID]any{},
 		PlannerVersion:     version,
 		ReservedArguments:  map[sqlparser.Expr]string{},
@@ -148,11 +139,6 @@ func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
 // ShouldSkip determines if a given expression should be ignored in the SQL output building.
 // It checks against expressions that have been marked to be excluded from further processing.
 func (ctx *PlanningContext) ShouldSkip(expr sqlparser.Expr) bool {
-	for k := range ctx.skipPredicates {
-		if ctx.SemTable.EqualsExpr(expr, k) {
-			return true
-		}
-	}
 	var found bool
 	if jp, ok := expr.(*predicates.JoinPredicate); ok {
 		_, found = ctx.skipJoinPredicates[jp.ID]
@@ -160,83 +146,21 @@ func (ctx *PlanningContext) ShouldSkip(expr sqlparser.Expr) bool {
 	return found
 }
 
-// AddJoinPredicates associates additional RHS predicates with an existing join predicate.
-// This is used to dynamically adjust the RHS predicates based on evolving join conditions.
-func (ctx *PlanningContext) AddJoinPredicates(joinPred sqlparser.Expr, predicates ...sqlparser.Expr) {
-	fn := func(original sqlparser.Expr, rhsExprs []sqlparser.Expr) {
-		ctx.joinPredicates[original] = append(rhsExprs, predicates...)
-	}
-	if ctx.execOnJoinPredicateEqual(joinPred, fn) {
-		return
-	}
-
-	// we didn't find an existing entry
-	ctx.joinPredicates[joinPred] = predicates
-}
-
-// SkipJoinPredicates marks the predicates related to a specific join predicate as irrelevant
-// for the current planning stage. This is used when a join has been pushed under a route and
-// the original predicate will be used.
-func (ctx *PlanningContext) SkipJoinPredicates(joinPred sqlparser.Expr) error {
-	fn := func(_ sqlparser.Expr, rhsExprs []sqlparser.Expr) {
-		ctx.skipThesePredicates(rhsExprs...)
-	}
-	if ctx.execOnJoinPredicateEqual(joinPred, fn) {
-		return nil
-	}
-	return vterrors.VT13001("predicate does not exist: " + sqlparser.String(joinPred))
-}
-
 func (ctx *PlanningContext) SkipJoinPredicatesTODO(id predicates.ID) {
 	ctx.skipJoinPredicates[id] = struct{}{}
 }
 
-// KeepPredicateInfo transfers join predicate information from another context.
-// This is useful when nesting queries, ensuring consistent predicate handling across contexts.
-func (ctx *PlanningContext) KeepPredicateInfo(other *PlanningContext) {
-	for k, v := range other.joinPredicates {
-		ctx.AddJoinPredicates(k, v...)
-	}
-	for expr := range other.skipPredicates {
-		ctx.skipThesePredicates(expr)
-	}
-}
-
-// skipThesePredicates is a utility function to exclude certain predicates from SQL building
-func (ctx *PlanningContext) skipThesePredicates(preds ...sqlparser.Expr) {
-outer:
-	for _, expr := range preds {
-		for k := range ctx.skipPredicates {
-			if ctx.SemTable.EqualsExpr(expr, k) {
-				// already skipped
-				continue outer
-			}
-		}
-		ctx.skipPredicates[expr] = nil
-	}
-}
-
-func (ctx *PlanningContext) execOnJoinPredicateEqual(joinPred sqlparser.Expr, fn func(original sqlparser.Expr, rhsExprs []sqlparser.Expr)) bool {
-	for key, values := range ctx.joinPredicates {
-		if ctx.SemTable.EqualsExpr(joinPred, key) {
-			fn(key, values)
-			return true
-		}
-	}
-	return false
-}
-
 func (ctx *PlanningContext) RewriteDerivedTableExpression(expr sqlparser.Expr, tableInfo semantics.TableInfo) sqlparser.Expr {
-	modifiedExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
-	for key, exprs := range ctx.joinPredicates {
-		for _, rhsExpr := range exprs {
-			if ctx.SemTable.EqualsExpr(expr, rhsExpr) {
-				ctx.joinPredicates[key] = append(ctx.joinPredicates[key], modifiedExpr)
-				return modifiedExpr
-			}
-		}
-	}
-	return modifiedExpr
+	//modifiedExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	//for key, exprs := range ctx.joinPredicates {
+	//	for _, rhsExpr := range exprs {
+	//		if ctx.SemTable.EqualsExpr(expr, rhsExpr) {
+	//			ctx.joinPredicates[key] = append(ctx.joinPredicates[key], modifiedExpr)
+	//			return modifiedExpr
+	//		}
+	//	}
+	//}
+	return expr
 }
 
 // TypeForExpr returns the type of the given expression, with nullable set if the expression is from an outer table.
@@ -460,8 +384,6 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		ReservedVars:      ctx.ReservedVars,
 		SemTable:          ctx.SemTable,
 		VSchema:           ctx.VSchema,
-		joinPredicates:    map[sqlparser.Expr][]sqlparser.Expr{},
-		skipPredicates:    map[sqlparser.Expr]any{},
 		PlannerVersion:    ctx.PlannerVersion,
 		ReservedArguments: map[sqlparser.Expr]string{},
 		VerifyAllFKs:      ctx.VerifyAllFKs,

@@ -515,7 +515,7 @@ func tryMergeSubqueriesRecursively(
 		return outer, NoRewrite
 	}
 
-	op = Clone(op).(*Route)
+	op = Clone(op)
 	op.Source = outer.Source
 	var finalResult *ApplyResult
 	for _, subq := range inner.Inner {
