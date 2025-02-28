@@ -382,8 +382,8 @@ func TestVisitableRewrite(t *testing.T) {
 		Pre{visitable},
 		Pre{leaf},
 		Post{leaf},
-		Pre{visitable},
-		Pre{refContainer},
+		Post{visitable},
+		Post{refContainer},
 	})
 }
 
@@ -418,6 +418,7 @@ func (tv *rewriteTestVisitor) post(cursor *Cursor) bool {
 	return true
 }
 func (tv *rewriteTestVisitor) assertEquals(t *testing.T, expected []step) {
+	t.Helper()
 	assertStepsEqual(t, tv.walk, expected)
 }
 
