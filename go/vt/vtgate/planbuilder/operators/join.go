@@ -139,7 +139,6 @@ func addJoinPredicates(
 		if cte := ctx.ActiveCTE(); cte != nil && ctx.SemTable.DirectDeps(pred).IsOverlapping(cte.Id) {
 			//original := pred
 			pred = addCTEPredicate(ctx, pred, cte)
-			//ctx.AddJoinPredicates(original, pred) TODO
 		}
 		op = op.AddPredicate(ctx, pred)
 	}
@@ -154,7 +153,9 @@ func addCTEPredicate(
 ) sqlparser.Expr {
 	expr := breakCTEExpressionInLhsAndRhs(ctx, pred, cte.Id)
 	cte.Predicates = append(cte.Predicates, expr)
-	return expr.RightExpr
+	predicate := ctx.PredTracker.NewJoinPredicate(expr.RightExpr)
+	expr.JoinPredicateID = &predicate.ID
+	return predicate
 }
 
 func breakCTEExpressionInLhsAndRhs(ctx *plancontext.PlanningContext, pred sqlparser.Expr, lhsID semantics.TableSet) *plancontext.RecurseExpression {

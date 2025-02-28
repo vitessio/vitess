@@ -340,9 +340,10 @@ type ContextCTE struct {
 }
 
 type RecurseExpression struct {
-	Original  sqlparser.Expr
-	RightExpr sqlparser.Expr
-	LeftExprs []BindVarExpr
+	JoinPredicateID *predicates.ID
+	Original        sqlparser.Expr
+	RightExpr       sqlparser.Expr
+	LeftExprs       []BindVarExpr
 }
 
 type BindVarExpr struct {
