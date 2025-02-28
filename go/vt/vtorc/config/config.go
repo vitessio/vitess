@@ -57,10 +57,10 @@ var (
 		},
 	)
 
-	discoveryMaxConcurrency = viperutil.Configure(
-		"discovery-max-concurrency",
+	discoveryWorkers = viperutil.Configure(
+		"discovery-workers",
 		viperutil.Options[int]{
-			FlagName: "discovery-max-concurrency",
+			FlagName: "discovery-workers",
 			Default:  300,
 			Dynamic:  false,
 		},
@@ -199,7 +199,7 @@ func init() {
 
 // registerFlags registers the flags required by VTOrc
 func registerFlags(fs *pflag.FlagSet) {
-	fs.Int("discovery-max-concurrency", discoveryMaxConcurrency.Default(), "Number of workers used for tablet discovery")
+	fs.Int("discovery-workers", discoveryWorkers.Default(), "Number of workers used for tablet discovery")
 	fs.String("sqlite-data-file", sqliteDataFile.Default(), "SQLite Datafile to use as VTOrc's database")
 	fs.Duration("instance-poll-time", instancePollTime.Default(), "Timer duration on which VTOrc refreshes MySQL information")
 	fs.Duration("snapshot-topology-interval", snapshotTopologyInterval.Default(), "Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours")
@@ -220,7 +220,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	viperutil.BindFlags(fs,
 		instancePollTime,
 		preventCrossCellFailover,
-		discoveryMaxConcurrency,
+		discoveryWorkers,
 		sqliteDataFile,
 		snapshotTopologyInterval,
 		reasonableReplicationLag,
@@ -258,9 +258,9 @@ func GetPreventCrossCellFailover() bool {
 	return preventCrossCellFailover.Get()
 }
 
-// GetDiscoveryMaxConcurrency is a getter function.
-func GetDiscoveryMaxConcurrency() uint {
-	return uint(discoveryMaxConcurrency.Get())
+// GetDiscoveryWorkers is a getter function.
+func GetDiscoveryWorkers() uint {
+	return uint(discoveryWorkers.Get())
 }
 
 // GetSQLiteDataFile is a getter function.
