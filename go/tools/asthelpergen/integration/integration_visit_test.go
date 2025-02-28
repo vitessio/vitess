@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -149,6 +151,89 @@ func TestVisitInterfaceSlice(t *testing.T) {
 		leaf1,
 		leaf2,
 	})
+}
+
+// testVisitable is declared in a test package, so it lacks the normal generated AST helper methods.
+// Instead, we lean on the Visitable interface to make sure we can visit nodes inside it.
+type testVisitable struct {
+	inner AST
+}
+
+func (t *testVisitable) Clone(inner AST) AST {
+	return &testVisitable{inner: inner}
+}
+
+func (t *testVisitable) String() string {
+	return t.inner.String()
+}
+
+func (t *testVisitable) VisitThis() AST {
+	return t.inner
+}
+
+var _ Visitable = (*testVisitable)(nil)
+
+func TestVisitableVisit(t *testing.T) {
+	leaf := &Leaf{v: 1}
+	visitable := &testVisitable{inner: leaf}
+	refContainer := &RefContainer{ASTType: visitable}
+
+	tv := &testVisitor{}
+
+	require.NoError(t,
+		VisitAST(refContainer, tv.visit))
+
+	tv.assertVisitOrder(t, []AST{
+		refContainer,
+		visitable,
+		leaf,
+	})
+}
+
+func TestCopyOnRewriteVisitable(t *testing.T) {
+	leaf := &Leaf{v: 1}
+	visitable := &testVisitable{inner: leaf}
+	refContainer := &RefContainer{ASTType: visitable}
+	var walk []step
+	pre := func(node, parent AST) bool {
+		walk = append(walk, Pre{node})
+		return true
+	}
+	post := func(cursor *cursor) {
+		walk = append(walk, Post{cursor.node})
+	}
+	CopyOnRewrite(refContainer, pre, post, nil)
+
+	assertStepsEqual(t, walk, []step{
+		Pre{refContainer},
+		Pre{visitable},
+		Pre{leaf},
+		Post{leaf},
+		Post{visitable},
+		Post{refContainer},
+	})
+}
+
+func TestCopyOnRewriteReplaceVisitable(t *testing.T) {
+	leaf := &Leaf{v: 1}
+	visitable := &testVisitable{inner: leaf}
+	refContainer := &RefContainer{ASTType: visitable}
+
+	result := CopyOnRewrite(refContainer, nil, func(cursor *cursor) {
+		_, ok := cursor.node.(*Leaf)
+		if !ok {
+			return
+		}
+		cursor.replaced = &Leaf{v: 2}
+	}, nil)
+
+	assert.NotSame(t, refContainer, result)
+	resRefCon := result.(*RefContainer)
+	assert.NotSame(t, visitable, resRefCon.ASTType)
+	newLeaf := resRefCon.ASTType.(*testVisitable).inner.(*Leaf)
+	assert.Equal(t, 2, newLeaf.v)
+	assert.Equal(t, 1, leaf.v)
+
 }
 
 func (tv *testVisitor) assertVisitOrder(t *testing.T, expected []AST) {
