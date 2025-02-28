@@ -18,6 +18,7 @@ package plancontext
 
 import (
 	"io"
+	"slices"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 
@@ -37,7 +38,7 @@ type PlanningContext struct {
 
 	// skipPredicates tracks predicates that should be skipped, typically when
 	// a join predicate is reverted to its original form during planning.
-	skipJoinPredicates map[predicates.ID]any
+	skipJoinPredicates []predicates.ID
 
 	PlannerVersion querypb.ExecuteOptions_PlannerVersion
 
@@ -102,14 +103,13 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 	vschema.PlannerWarning(semTable.Warning)
 
 	return &PlanningContext{
-		ReservedVars:       reservedVars,
-		SemTable:           semTable,
-		VSchema:            vschema,
-		skipJoinPredicates: map[predicates.ID]any{},
-		PlannerVersion:     version,
-		ReservedArguments:  map[sqlparser.Expr]string{},
-		Statement:          stmt,
-		PredTracker:        predicates.NewTracker(),
+		ReservedVars:      reservedVars,
+		SemTable:          semTable,
+		VSchema:           vschema,
+		PlannerVersion:    version,
+		ReservedArguments: map[sqlparser.Expr]string{},
+		Statement:         stmt,
+		PredTracker:       predicates.NewTracker(),
 	}, nil
 }
 
@@ -141,17 +141,17 @@ func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
 func (ctx *PlanningContext) ShouldSkip(expr sqlparser.Expr) bool {
 	var found bool
 	if jp, ok := expr.(*predicates.JoinPredicate); ok {
-		_, found = ctx.skipJoinPredicates[jp.ID]
+		found = slices.Contains(ctx.skipJoinPredicates, jp.ID)
 	}
 	return found
 }
 
-func (ctx *PlanningContext) SkipJoinPredicatesTODO(id predicates.ID) {
-	ctx.skipJoinPredicates[id] = struct{}{}
+func (ctx *PlanningContext) SkipJoinPredicates(id predicates.ID) {
+	ctx.skipJoinPredicates = append(ctx.skipJoinPredicates, id)
 }
 
 func (ctx *PlanningContext) RewriteDerivedTableExpression(expr sqlparser.Expr, tableInfo semantics.TableInfo) sqlparser.Expr {
-	//modifiedExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
+	modifiedExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
 	//for key, exprs := range ctx.joinPredicates {
 	//	for _, rhsExpr := range exprs {
 	//		if ctx.SemTable.EqualsExpr(expr, rhsExpr) {
@@ -160,7 +160,7 @@ func (ctx *PlanningContext) RewriteDerivedTableExpression(expr sqlparser.Expr, t
 	//		}
 	//	}
 	//}
-	return expr
+	return modifiedExpr
 }
 
 // TypeForExpr returns the type of the given expression, with nullable set if the expression is from an outer table.
