@@ -86,7 +86,13 @@ type (
 	}
 )
 
-func NewApplyJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, predicate sqlparser.Expr, joinType sqlparser.JoinType) *ApplyJoin {
+func NewApplyJoin(
+	ctx *plancontext.PlanningContext,
+	lhs, rhs Operator,
+	predicate sqlparser.Expr,
+	joinType sqlparser.JoinType,
+	pushDownPredicate bool,
+) *ApplyJoin {
 	aj := &ApplyJoin{
 		binaryOperator: newBinaryOp(lhs, rhs),
 		Vars:           map[string]int{},
@@ -94,7 +100,7 @@ func NewApplyJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, predicate
 		JoinColumns:    &applyJoinColumns{},
 		JoinPredicates: &applyJoinColumns{},
 	}
-	aj.AddJoinPredicate(ctx, predicate)
+	aj.AddJoinPredicate(ctx, predicate, pushDownPredicate)
 	return aj
 }
 
@@ -142,7 +148,7 @@ func (aj *ApplyJoin) IsInner() bool {
 	return aj.JoinType.IsInner()
 }
 
-func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
+func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, pushDown bool) {
 	if expr == nil {
 		return
 	}
@@ -151,9 +157,13 @@ func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sql
 	for _, pred := range preds {
 		lhsID := TableID(aj.LHS)
 		col := breakExpressionInLHSandRHS(ctx, pred, lhsID)
+		aj.JoinPredicates.add(col)
+		if !pushDown {
+			// we are already under a route, so no need to push down predicates and track them
+			continue
+		}
 		newPred := ctx.PredTracker.NewJoinPredicate(col.RHSExpr)
 		col.JoinPredicateID = newPred.ID
-		aj.JoinPredicates.add(col)
 		rhs = rhs.AddPredicate(ctx, newPred)
 	}
 	aj.RHS = rhs

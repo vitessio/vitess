@@ -237,16 +237,11 @@ func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting
 	return tr
 }
 
-func (jm *joinMerger) getApplyJoin(ctx *plancontext.PlanningContext, op1, op2 *Route) *ApplyJoin {
-	return NewApplyJoin(ctx, op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), jm.joinType)
-}
-
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) *Route {
-	aj := jm.getApplyJoin(ctx, op1, op2)
+	aj := NewApplyJoin(ctx, op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), jm.joinType, false)
 	for _, column := range aj.JoinPredicates.columns {
 		ctx.PredTracker.Set(column.JoinPredicateID, column.Original)
 	}
-	//UpdateRoutingLogic(ctx, )
 	return &Route{
 		unaryOperator: newUnaryOp(aj),
 		MergedWith:    []*Route{op2},

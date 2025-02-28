@@ -302,22 +302,22 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 			// we can't switch sides, so let's see if we can use a HashJoin to solve it
 			join := NewHashJoin(lhs, rhs, !joinType.IsInner())
 			for _, pred := range joinPredicates {
-				join.AddJoinPredicate(ctx, pred)
+				join.AddJoinPredicate(ctx, pred, true)
 			}
 			ctx.SemTable.QuerySignature.HashJoin = true
 			return join, Rewrote("use a hash join because we have LIMIT on the LHS")
 		}
 
-		join := NewApplyJoin(ctx, Clone(rhs), Clone(lhs), nil, joinType)
+		join := NewApplyJoin(ctx, Clone(rhs), Clone(lhs), nil, joinType, false)
 		for _, pred := range joinPredicates {
-			join.AddJoinPredicate(ctx, pred)
+			join.AddJoinPredicate(ctx, pred, true)
 		}
 		return join, Rewrote("logical join to applyJoin, switching side because LIMIT")
 	}
 
-	join := NewApplyJoin(ctx, Clone(lhs), Clone(rhs), nil, joinType)
+	join := NewApplyJoin(ctx, Clone(lhs), Clone(rhs), nil, joinType, false)
 	for _, pred := range joinPredicates {
-		join.AddJoinPredicate(ctx, pred)
+		join.AddJoinPredicate(ctx, pred, true)
 	}
 
 	return join, Rewrote("logical join to applyJoin ")

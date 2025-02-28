@@ -226,7 +226,7 @@ func (j *Join) IsInner() bool {
 	return j.JoinType.IsInner()
 }
 
-func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
+func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) {
 	j.Predicate = ctx.SemTable.AndExpressions(j.Predicate, expr)
 }
 
