@@ -610,7 +610,9 @@ func buildProjection(op *Projection, qb *queryBuilder) {
 
 func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
 	predicates := slice.Map(op.JoinPredicates.columns, func(jc applyJoinColumn) sqlparser.Expr {
-		qb.ctx.SkipJoinPredicates(jc.JoinPredicateID)
+		if jc.JoinPredicateID != nil {
+			qb.ctx.SkipJoinPredicates(*jc.JoinPredicateID)
+		}
 		return jc.Original
 	})
 	pred := sqlparser.AndExpressions(predicates...)

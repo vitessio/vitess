@@ -240,7 +240,9 @@ func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) *Route {
 	aj := NewApplyJoin(ctx, op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), jm.joinType, false)
 	for _, column := range aj.JoinPredicates.columns {
-		ctx.PredTracker.Set(column.JoinPredicateID, column.Original)
+		if column.JoinPredicateID != nil {
+			ctx.PredTracker.Set(*column.JoinPredicateID, column.Original)
+		}
 	}
 	return &Route{
 		unaryOperator: newUnaryOp(aj),

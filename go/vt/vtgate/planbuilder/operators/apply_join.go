@@ -71,7 +71,7 @@ type (
 	//     so they can be used for the result of this expression that is using data from both sides.
 	//     All fields will be used for these
 	applyJoinColumn struct {
-		JoinPredicateID predicates.ID
+		JoinPredicateID *predicates.ID
 		Original        sqlparser.Expr // this is the original expression being passed through
 		LHSExprs        []BindVarExpr  // These are the expressions we are pushing to the left hand side which we'll receive as bind variables
 		RHSExpr         sqlparser.Expr // This the expression that we'll evaluate on the right hand side. This is nil, if the right hand side has nothing.
@@ -163,7 +163,7 @@ func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sql
 			continue
 		}
 		newPred := ctx.PredTracker.NewJoinPredicate(col.RHSExpr)
-		col.JoinPredicateID = newPred.ID
+		col.JoinPredicateID = &newPred.ID
 		rhs = rhs.AddPredicate(ctx, newPred)
 	}
 	aj.RHS = rhs
