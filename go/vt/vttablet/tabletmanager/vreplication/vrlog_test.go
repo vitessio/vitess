@@ -37,7 +37,7 @@ func TestVrLog(t *testing.T) {
 		vrlogStatsHandler(ch, w, r)
 	}()
 	eventType, detail := "Test", "detail 1"
-	stats := NewVrLogStats(eventType)
+	stats := NewVrLogStats(eventType, time.Now())
 	stats.Send(detail)
 	var s string
 	select {

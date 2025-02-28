@@ -118,9 +118,7 @@ func TestOpen(t *testing.T) {
 	assert.Equal(t, 5, len(waitStarts))
 	// verify start times are monotonic increasing
 	for i := 1; i < len(waitStarts); i++ {
-		if waitStarts[i].Before(waitStarts[i-1]) {
-			t.Errorf("Expecting monotonic increasing start times")
-		}
+		assert.False(t, waitStarts[i].Before(waitStarts[i-1]), "Expecting monotonic increasing start times")
 	}
 	assert.NotZero(t, p.WaitTime())
 	assert.EqualValues(t, 5, lastID.Load())
@@ -534,9 +532,9 @@ func TestCreateFail(t *testing.T) {
 	p := NewResourcePool(FailFactory, 5, 5, time.Second, 0, logWait, nil, 0)
 	defer p.Close()
 
-	if _, err := p.Get(ctx); err.Error() != "Failed" {
-		t.Errorf("Expecting Failed, received %v", err)
-	}
+	_, err := p.Get(ctx)
+	assert.EqualError(t, err, "Failed", "Expecting Failed, received %v", err)
+
 	stats := p.StatsJSON()
 	expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeClosed": 0, "Exhausted": 0}`
 	assert.Equal(t, expected, stats)

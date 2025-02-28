@@ -57,15 +57,21 @@ func TestSplit(t *testing.T) {
 		n := Name("vreplication:vcopier")
 		parts := n.SplitStrings()
 		assert.Equal(t, []string{"vreplication", "vcopier"}, parts)
+		m := n.SplitMap()
+		assert.Equal(t, map[string]bool{"vreplication": true, "vcopier": true}, m)
 	}
 	{
 		n := VReplicationName
 		parts := n.SplitStrings()
 		assert.Equal(t, []string{"vreplication"}, parts)
+		m := n.SplitMap()
+		assert.Equal(t, map[string]bool{"vreplication": true}, m)
 	}
 	{
 		n := Name("")
 		parts := n.SplitStrings()
 		assert.Equal(t, []string{""}, parts)
+		m := n.SplitMap()
+		assert.Equal(t, map[string]bool{"": true}, m)
 	}
 }

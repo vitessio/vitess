@@ -76,12 +76,21 @@ func tryPushProjection(
 	ctx *plancontext.PlanningContext,
 	p *Projection,
 ) (Operator, *ApplyResult) {
+	if !p.isNeeded() && !p.isDerived() {
+		return p.Source, Rewrote("removed projection only passing through the input")
+	}
+
 	switch src := p.Source.(type) {
 	case *Route:
 		return Swap(p, src, "push projection under route")
 	case *Limit:
 		return Swap(p, src, "push projection under limit")
 	case *ApplyJoin:
+		op, res := p.compactWithJoin(ctx, src)
+		if res != NoRewrite {
+			return op, res
+		}
+
 		if p.FromAggr || !p.canPush(ctx) {
 			return p, NoRewrite
 		}
@@ -239,6 +248,7 @@ func pushProjectionInApplyJoin(
 		// we can't push down expression evaluation to the rhs if we are not sure if it will even be executed
 		return p, NoRewrite
 	}
+
 	if IsOuter(src) {
 		// for outer joins, we have to check that we can send down the projection to the rhs
 		for _, expr := range ap.GetColumns() {

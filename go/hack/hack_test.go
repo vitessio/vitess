@@ -19,6 +19,7 @@ limitations under the License.
 package hack
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,4 +47,49 @@ func TestStringToByte(t *testing.T) {
 	s = ""
 	b = StringBytes(s)
 	assert.Nil(t, b)
+}
+
+func testMapSize[K comparable, V any](t *testing.T, gen func(i int) (K, V)) {
+	for _, size := range []int{16 * 1024, 128 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024} {
+		var before, after runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&before)
+
+		m := make(map[K]V, size)
+		for i := 0; i < size; i++ {
+			k, v := gen(i)
+			m[k] = v
+		}
+
+		runtime.GC()
+		runtime.ReadMemStats(&after)
+
+		heapDiff := after.HeapAlloc - before.HeapAlloc
+		calcSize := RuntimeMapSize(m)
+
+		assert.InEpsilonf(t, heapDiff, calcSize, 0.1, "%Tx%v heapDiff = %v, calcSize = %v", m, size, heapDiff, calcSize)
+		runtime.KeepAlive(m)
+	}
+}
+
+func TestMapSize(t *testing.T) {
+	testMapSize(t, func(i int) (int, int) {
+		return i, i
+	})
+
+	testMapSize(t, func(i int) (uint32, uint32) {
+		return uint32(i), uint32(i)
+	})
+
+	testMapSize(t, func(i int) ([32]uint32, uint32) {
+		return [32]uint32{0: uint32(i)}, uint32(i)
+	})
+
+	testMapSize(t, func(i int) (uint32, [32]uint32) {
+		return uint32(i), [32]uint32{0: uint32(i)}
+	})
+
+	testMapSize(t, func(i int) ([32]uint32, [32]uint32) {
+		return [32]uint32{0: uint32(i)}, [32]uint32{0: uint32(i)}
+	})
 }

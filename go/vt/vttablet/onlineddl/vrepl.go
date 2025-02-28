@@ -226,19 +226,6 @@ func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnecti
 	return tableRows, err
 }
 
-// formalizeColumns
-func formalizeColumns(columnsLists ...*schemadiff.ColumnDefinitionEntityList) error {
-	for _, colList := range columnsLists {
-		for _, col := range colList.Entities {
-			col.SetExplicitDefaultAndNull()
-			if err := col.SetExplicitCharsetCollate(); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 func (v *VRepl) analyzeAlter() error {
 	if v.alterTableAnalysis.IsRenameTable {
 		return fmt.Errorf("renaming the table is not supported in ALTER TABLE")

@@ -30,12 +30,14 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -101,14 +103,6 @@ func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 	}
 }
 
-// ForceInitTablet is the tablet option to set the 'force' flag during InitTablet
-func ForceInitTablet() TabletOption {
-	return func(tablet *topodatapb.Tablet) {
-		// set the force_init field into the portmap as a hack
-		tablet.PortMap["force_init"] = 1
-	}
-}
-
 // StartHTTPServer is the tablet option to start the HTTP server when
 // starting a tablet.
 func StartHTTPServer() TabletOption {
@@ -166,6 +160,10 @@ func NewFakeTablet(t *testing.T, ts *topo.Server, cell string, uid uint32, table
 	}
 }
 
+var (
+	exporter = servenv.NewExporter("TestVtctldClientCommand", "")
+)
+
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.
 func (ft *FakeTablet) StartActionLoop(t *testing.T, ts *topo.Server) {
@@ -211,6 +209,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, ts *topo.Server) {
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
 		VREngine:            vreplication.NewTestEngine(ts, ft.Tablet.Alias.Cell, ft.FakeMysqlDaemon, binlogplayer.NewFakeDBClient, binlogplayer.NewFakeDBClient, topoproto.TabletDbName(ft.Tablet), nil),
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(ft.FakeMysqlDaemon.DB(), exporter),
 		Env:                 vtenv.NewTestEnv(),
 	}
 	if err := ft.TM.Start(ft.Tablet, nil); err != nil {

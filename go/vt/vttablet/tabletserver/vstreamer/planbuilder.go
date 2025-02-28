@@ -97,10 +97,16 @@ const (
 	GreaterThanEqual
 	// NotEqual is used to filter a comparable column if != specific value
 	NotEqual
-	// IsNotNull is used to filter a column if it is NULL
+	// IsNotNull is used to filter a column if it is not NULL
 	IsNotNull
+	// IsNull is used to filter a column if it is NULL
+	IsNull
 	// In is used to filter a comparable column if equals any of the values from a specific tuple
 	In
+	// Note that we do not implement filtering for BETWEEN because
+	// in the plan we rewrite `x BETWEEN a AND b` to `x >= a AND x <= b`
+	// NotBetween is used to filter a comparable column if it doesn't lie within a specific range
+	NotBetween
 )
 
 // Filter contains opcodes for filtering.
@@ -255,6 +261,10 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 			if values[filter.ColNum].IsNull() {
 				return false, nil
 			}
+		case IsNull:
+			if !values[filter.ColNum].IsNull() {
+				return false, nil
+			}
 		case In:
 			if filter.Values == nil {
 				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected empty filter values when performing IN operator")
@@ -272,6 +282,26 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 			}
 			if !found {
 				return false, nil
+			}
+		case NotBetween:
+			// Note that we do not implement filtering for BETWEEN because
+			// in the plan we rewrite `x BETWEEN a AND b` to `x >= a AND x <= b`
+			// This is the filtering for NOT BETWEEN since we don't have support
+			// for OR yet.
+			if filter.Values == nil || len(filter.Values) != 2 {
+				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected 2 filter values when performing NOT BETWEEN")
+			}
+			leftFilterValue, rightFilterValue := filter.Values[0], filter.Values[1]
+			isValueLessThanLeftFilter, err := compare(LessThan, values[filter.ColNum], leftFilterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
+			if err != nil {
+				return false, err
+			}
+			if isValueLessThanLeftFilter {
+				continue
+			}
+			isValueGreaterThanRightFilter, err := compare(GreaterThan, values[filter.ColNum], rightFilterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
+			if err != nil || !isValueGreaterThanRightFilter {
+				return false, err
 			}
 		default:
 			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value, plan.env.CollationEnv(), charsets[filter.ColNum])
@@ -570,6 +600,23 @@ func (plan *Plan) appendTupleFilter(values sqlparser.ValTuple, opcode Opcode, co
 	return nil
 }
 
+func (plan *Plan) getEvalResultForLiteral(expr sqlparser.Expr) (*evalengine.EvalResult, error) {
+	literalExpr, ok := expr.(*sqlparser.Literal)
+	if !ok {
+		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+	}
+	pv, err := evalengine.Translate(literalExpr, &evalengine.Config{
+		Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
+		Environment: plan.env,
+	})
+	if err != nil {
+		return nil, err
+	}
+	env := evalengine.EmptyExpressionEnv(plan.env)
+	resolved, err := env.Evaluate(pv)
+	return &resolved, err
+}
+
 func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) error {
 	if where == nil {
 		return nil
@@ -606,21 +653,11 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				if err != nil {
 					return err
 				}
+				// Add it to the expressions that get pushed down to mysqld.
+				plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
 				continue
 			}
-			val, ok := expr.Right.(*sqlparser.Literal)
-			if !ok {
-				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-			}
-			pv, err := evalengine.Translate(val, &evalengine.Config{
-				Collation:   plan.env.CollationEnv().DefaultConnectionCharset(),
-				Environment: plan.env,
-			})
-			if err != nil {
-				return err
-			}
-			env := evalengine.EmptyExpressionEnv(plan.env)
-			resolved, err := env.Evaluate(pv)
+			resolved, err := plan.getEvalResultForLiteral(expr.Right)
 			if err != nil {
 				return err
 			}
@@ -640,10 +677,7 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if err := plan.analyzeInKeyRange(vschema, expr.Exprs); err != nil {
 				return err
 			}
-		case *sqlparser.IsExpr: // Needed for CreateLookupVindex with ignore_nulls
-			if expr.Right != sqlparser.IsNotNullOp {
-				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
-			}
+		case *sqlparser.IsExpr:
 			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
 			if !ok {
 				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
@@ -655,9 +689,69 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 			if err != nil {
 				return err
 			}
+			switch expr.Right {
+			case sqlparser.IsNullOp:
+				plan.Filters = append(plan.Filters, Filter{
+					Opcode: IsNull,
+					ColNum: colnum,
+				})
+			case sqlparser.IsNotNullOp:
+				plan.Filters = append(plan.Filters, Filter{
+					Opcode: IsNotNull,
+					ColNum: colnum,
+				})
+			default:
+				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
+			}
+			// Add it to the expressions that get pushed down to mysqld.
+			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
+		case *sqlparser.BetweenExpr:
+			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
+			if !ok {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			if !qualifiedName.Qualifier.IsEmpty() {
+				return fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(qualifiedName))
+			}
+			colnum, err := findColumn(plan.Table, qualifiedName.Name)
+			if err != nil {
+				return err
+			}
+			fromResolved, err := plan.getEvalResultForLiteral(expr.From)
+			if err != nil {
+				return err
+			}
+			toResolved, err := plan.getEvalResultForLiteral(expr.To)
+			if err != nil {
+				return err
+			}
+
+			if !expr.IsBetween {
+				// `x NOT BETWEEN a AND b` means: `x < a OR x > b`
+				// Also, since we do not have OR implemented yet,
+				// NOT BETWEEN needs to be handled separately.
+				plan.Filters = append(plan.Filters, Filter{
+					Opcode: NotBetween,
+					ColNum: colnum,
+					Values: []sqltypes.Value{
+						fromResolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
+						toResolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
+					},
+				})
+				// Add it to the expressions that get pushed down to mysqld.
+				plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
+				continue
+			}
+
+			// `x BETWEEN a AND b` means: `x >= a AND x <= b`
 			plan.Filters = append(plan.Filters, Filter{
-				Opcode: IsNotNull,
+				Opcode: GreaterThanEqual,
 				ColNum: colnum,
+				Value:  fromResolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
+			}, Filter{
+				Opcode: LessThanEqual,
+				ColNum: colnum,
+				Value:  toResolved.Value(plan.env.CollationEnv().DefaultConnectionCharset()),
 			})
 			// Add it to the expressions that get pushed down to mysqld.
 			plan.whereExprsToPushDown = append(plan.whereExprsToPushDown, expr)
