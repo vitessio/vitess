@@ -402,7 +402,7 @@ func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.T
 	logStats.ExecuteTime = time.Since(execStart)
 
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
-	e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries))
+	e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
 
 	var errCount uint64
 	if err != nil {

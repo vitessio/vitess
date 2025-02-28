@@ -58,13 +58,30 @@ $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
 
 ### <a id="vtgate-metrics"/>VTGate Metrics
 
-Added two new metrics for queries with query type, plan type and tablet type as dimension.
-1. QueryProcessed - This counts the number of query executed.
-2. QueryRouted - This counts the number of shards the query was executed on.
+#### New Metrics Added:
+Three new metrics have been introduced for queries:
+1.	`QueryProcessed` – Counts the number of queries executed. **Dimensions:** Query type, Plan type, Tablet type.
+2.	`QueryRouted` – Counts the number of shards the query was executed on. **Dimensions:** Query type, Plan type, Tablet type.
+3.	`QueryTables` – Tracks queries processed at VTGate, with counts recorded per table. **Dimensions:** Query type, Table. 
 
-Deprecated:
-1. QueriesProcessed
-2. QueriesRouted
+Example: 
+```
+Query: select t1.a, t2.b from t1 join t2 on t1.id = t2.id
+Shards: 2
+Sharding Key: id for both tables
+
+Metrics Published:
+1. QueryProcessed – {select, scatter, primary}, 1
+2. QueryRouted – {select, scatter, primary}, 2
+3. QueryTables – {select, t1}, 1 and {select, t2}, 1
+```
+
+#### Deprecated Metrics:
+The following metrics have been deprecated:
+1.	`QueriesProcessed`
+2.	`QueriesRouted`
+3.	`QueriesProcessedByTable`
+4.	`QueriesRoutedByTable`
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 
