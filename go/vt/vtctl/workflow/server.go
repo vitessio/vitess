@@ -872,6 +872,20 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 
 	// Store the ReadVReplicationWorkflow response for later use.
 	readVReplicationWorkflowResp := make(map[string]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse)
+
+	lockName := fmt.Sprintf("%s/%s", req.Keyspace, req.Workflow)
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "MaterializeAddTables")
+	if lockErr != nil {
+		return vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
+	}
+	defer workflowUnlock(&err)
+
+	ctx, targetUnlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "MaterializeAddTables")
+	if lockErr != nil {
+		return vterrors.Wrapf(lockErr, "failed to lock the %s keyspace", req.Keyspace)
+	}
+	defer targetUnlock(&err)
+
 	var (
 		mu             sync.Mutex
 		sourceKeyspace string
@@ -891,18 +905,20 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 			return vterrors.Wrapf(err, "failed to read workflow %s on shard %s/%s", req.Workflow, req.Keyspace, tablet.Shard)
 		}
 
-		mu.Lock()
-		if len(res.Streams) > 0 && sourceKeyspace == "" {
-			sourceKeyspace = res.Streams[0].Bls.Keyspace
-		}
-		workflowType = res.WorkflowType
-		readVReplicationWorkflowResp[tablet.Shard] = res
-		mu.Unlock()
+		func() {
+			mu.Lock()
+			defer mu.Unlock()
+			if len(res.Streams) > 0 && sourceKeyspace == "" {
+				sourceKeyspace = res.Streams[0].Bls.Keyspace
+			}
+			workflowType = res.WorkflowType
+			readVReplicationWorkflowResp[tablet.Shard] = res
+		}()
 
 		for _, stream := range res.Streams {
 			for _, rule := range stream.Bls.Filter.Rules {
 				if tableSet.Has(rule.Match) {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "rule for %s already exists", rule.Match)
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "rule for table %s already exists", rule.Match)
 				}
 			}
 		}
@@ -990,10 +1006,13 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 			return err
 		}
 
-		mu.Lock()
-		res, ok := readVReplicationWorkflowResp[tablet.Shard]
-		mu.Unlock()
-		if !ok {
+		var res *tabletmanagerdatapb.ReadVReplicationWorkflowResponse
+		func() {
+			mu.Lock()
+			defer mu.Unlock()
+			res = readVReplicationWorkflowResp[tablet.Shard]
+		}()
+		if res == nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to read workflow %s on shard %s/%s", req.Workflow, req.Keyspace, tablet.Shard)
 		}
 

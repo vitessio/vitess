@@ -2755,7 +2755,7 @@ func TestMaterializeAddTables(t *testing.T) {
 					},
 				},
 			},
-			expectedErrContains: "rule for t1 already exists",
+			expectedErrContains: "rule for table t1 already exists",
 		},
 		{
 			name: "source table doesn't exist error",

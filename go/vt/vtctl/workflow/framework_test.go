@@ -547,9 +547,10 @@ func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tab
 		if expect.matchSqlOnly {
 			matched := false
 			if expect.change.SQL[0] == '/' {
-				matched = regexp.MustCompile(expect.change.SQL[1:]).MatchString(change.SQL)
+				matched = regexp.MustCompile("(?i)" + expect.change.SQL[1:]).MatchString(change.SQL)
+
 			} else {
-				matched = change.SQL == expect.change.SQL
+				matched = strings.EqualFold(change.SQL, expect.change.SQL)
 			}
 			if !matched {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ApplySchema request on tablet %s: got %+v, want %+v",
