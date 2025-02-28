@@ -1236,7 +1236,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 			return err
 		}
 	case ComStmtSendLongData:
-		stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
+		stmtID, paramID, chunk, ok := c.parseComStmtSendLongData(data)
 		c.recycleReadPacket()
 		if !ok {
 			err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
@@ -1258,9 +1258,6 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 			log.Error(err.Error())
 			return err
 		}
-
-		chunk := make([]byte, len(chunkData))
-		copy(chunk, chunkData)
 
 		key := fmt.Sprintf("v%d", paramID+1)
 		if val, ok := prepare.BindVars[key]; ok {
