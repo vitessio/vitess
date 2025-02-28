@@ -1236,7 +1236,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 			return err
 		}
 	case ComStmtSendLongData:
-		stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
+		stmtID, paramID, chunk, ok := c.parseComStmtSendLongData(data)
 		c.recycleReadPacket()
 		if !ok {
 			err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
@@ -1258,9 +1258,6 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 			log.Error(err.Error())
 			return err
 		}
-
-		chunk := make([]byte, len(chunkData))
-		copy(chunk, chunkData)
 
 		key := fmt.Sprintf("v%d", paramID+1)
 		if val, ok := prepare.BindVars[key]; ok {
@@ -1427,13 +1424,14 @@ func (c *Conn) handleComRegisterReplica(handler Handler, data []byte) (kontinue 
 		return true
 	}
 
-	c.recycleReadPacket()
-
 	replicaHost, replicaPort, replicaUser, replicaPassword, err := c.parseComRegisterReplica(data)
 	if err != nil {
 		log.Errorf("conn %v: parseComRegisterReplica failed: %v", c.ID(), err)
 		return false
 	}
+
+	c.recycleReadPacket()
+
 	if err := binlogReplicaHandler.ComRegisterReplica(c, replicaHost, replicaPort, replicaUser, replicaPassword); err != nil {
 		c.writeErrorPacketFromError(err)
 		return false
@@ -1452,7 +1450,6 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		return true
 	}
 
-	c.recycleReadPacket()
 	kontinue = true
 
 	c.startWriterBuffering()
@@ -1468,6 +1465,7 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
 		return false
 	}
+	c.recycleReadPacket()
 	if err := binlogReplicaHandler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
 		log.Error(err.Error())
 		c.writeErrorPacketFromError(err)
