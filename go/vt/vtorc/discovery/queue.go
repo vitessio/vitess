@@ -72,7 +72,7 @@ func (q *Queue) QueueLen() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	return len(q.queue) + len(q.enqueued)
+	return len(q.enqueued)
 }
 
 // Push enqueues a key if it is not on a queue and is not being
