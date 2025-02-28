@@ -79,9 +79,9 @@ var (
 	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Deprecated: Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Deprecated: Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 
-	queryExecutions = stats.NewCountersWithMultiLabels("QueryExecutions", "Counts queries executed at VTGate by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
-	queryRoutes     = stats.NewCountersWithMultiLabels("QueryRoutes", "Counts queries routed from VTGate to VTTablet by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
-	queriesByTable  = stats.NewCountersWithMultiLabels("QueryTables", "Counts queries executed at VTGate per table by query type and table.", []string{"Query", "Table"})
+	queryExecutions        = stats.NewCountersWithMultiLabels("QueryExecutions", "Counts queries executed at VTGate by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
+	queryRoutes            = stats.NewCountersWithMultiLabels("QueryRoutes", "Counts queries routed from VTGate to VTTablet by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
+	queryExecutionsByTable = stats.NewCountersWithMultiLabels("QueryExecutionsByTable", "Counts queries executed at VTGate per table by query type and table.", []string{"Query", "Table"})
 
 	// commitMode records the timing of the commit phase of a transaction.
 	// It also tracks between different transaction mode i.e. Single, Multi and TwoPC
@@ -1306,7 +1306,7 @@ func (e *Executor) updateQueryStats(queryType, planType, tabletType string, shar
 	queryExecutions.Add([]string{queryType, planType, tabletType}, 1)
 	queryRoutes.Add([]string{queryType, planType, tabletType}, shards)
 	for _, table := range tables {
-		queriesByTable.Add([]string{queryType, table}, 1)
+		queryExecutionsByTable.Add([]string{queryType, table}, 1)
 	}
 }
 
