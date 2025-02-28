@@ -61,9 +61,9 @@ $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
 
 #### New Metrics Added:
 Three new metrics have been introduced for queries:
-1.	`QueryProcessed` – Counts the number of queries executed. **Dimensions:** Query type, Plan type, Tablet type.
+1.	`QueryExecutions` – Counts the number of queries executed. **Dimensions:** Query type, Plan type, Tablet type.
 2.	`QueryRouted` – Counts the number of vttablets the query was executed on. **Dimensions:** Query type, Plan type, Tablet type.
-3.	`QueryTables` – Tracks queries processed at VTGate, with counts recorded per table. **Dimensions:** Query type, Table. 
+3.	`QueryTables` – Tracks queries executed at VTGate, with counts recorded per table. **Dimensions:** Query type, Table. 
 
 Example: 
 ```
@@ -72,7 +72,7 @@ Shards: 2
 Sharding Key: id for both tables
 
 Metrics Published:
-1. QueryProcessed – {select, scatter, primary}, 1
+1. QueryExecutions – {select, scatter, primary}, 1
 2. QueryRouted – {select, scatter, primary}, 2
 3. QueryTables – {select, t1}, 1 and {select, t2}, 1
 ```

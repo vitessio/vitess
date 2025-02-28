@@ -989,16 +989,16 @@ func TestQueryProcessedMetric(t *testing.T) {
 		tableMetrics: []string{"SELECT.ks_t1", "SELECT.ks_t2", "SELECT.ks_t3", "SELECT.ks_t4"},
 	}}
 
-	initialQP := getQPMetric(t, "Queries")
+	initialQP := getQPMetric(t, "QueryExecutions")
 	initialQR := getQPMetric(t, "QueryRoutes")
 	initialQT := getQPMetric(t, "QueryTables")
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
 			utils.Exec(t, conn, tc.sql)
-			updatedQP := getQPMetric(t, "Queries")
+			updatedQP := getQPMetric(t, "QueryExecutions")
 			updatedQR := getQPMetric(t, "QueryRoutes")
 			updatedQT := getQPMetric(t, "QueryTables")
-			assert.EqualValuesf(t, 1, getValue(updatedQP, tc.queryMetric)-getValue(initialQP, tc.queryMetric), "queries metric: %s", tc.queryMetric)
+			assert.EqualValuesf(t, 1, getValue(updatedQP, tc.queryMetric)-getValue(initialQP, tc.queryMetric), "queryExecutions metric: %s", tc.queryMetric)
 			assert.EqualValuesf(t, tc.shards, getValue(updatedQR, tc.queryMetric)-getValue(initialQR, tc.queryMetric), "queryRoutes metric: %s", tc.queryMetric)
 			for _, metric := range tc.tableMetrics {
 				assert.EqualValuesf(t, 1, getValue(updatedQT, metric)-getValue(initialQT, metric), "queryTables metric: %s", metric)
