@@ -3,6 +3,7 @@
     "comment": "prepare statement with select",
     "query": "prepare prep from 'select * from user where id = ?'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "PREPARE",
       "Original": "prepare prep from 'select * from user where id = ?'",
       "Instructions": {
@@ -17,6 +18,7 @@
     "comment": "prepare statement with delete",
     "query": "prepare prep from 'delete from user where id between ? and ?'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "PREPARE",
       "Original": "prepare prep from 'delete from user where id between ? and ?'",
       "Instructions": {
@@ -31,6 +33,7 @@
     "comment": "prepare statement with drop",
     "query": "prepare prep from 'drop table user'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "PREPARE",
       "Original": "prepare prep from 'drop table user'",
       "Instructions": {
@@ -45,6 +48,7 @@
     "comment": "prepare statement with user defined variable",
     "query": "prepare prep from @prep_stmt",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "PREPARE",
       "Original": "prepare prep from @prep_stmt",
       "Instructions": {
@@ -69,6 +73,7 @@
     "comment": "execute one param statement",
     "query": "execute prep_one_param using @foo",
     "plan": {
+      "Type": "Complex",
       "QueryType": "EXECUTE",
       "Original": "execute prep_one_param using @foo",
       "Instructions": {
@@ -103,6 +108,7 @@
     "comment": "execute in param statement",
     "query": "execute prep_in_param using @x, @y",
     "plan": {
+      "Type": "Complex",
       "QueryType": "EXECUTE",
       "Original": "execute prep_in_param using @x, @y",
       "Instructions": {
@@ -138,6 +144,7 @@
     "comment": "execute no param statement",
     "query": "execute prep_no_param",
     "plan": {
+      "Type": "Complex",
       "QueryType": "EXECUTE",
       "Original": "execute prep_no_param",
       "Instructions": {
@@ -181,6 +188,7 @@
     "comment": "prepare a dual query",
     "query": "prepare prep_dual from 'select 1+?, 10/?'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "PREPARE",
       "Original": "prepare prep_dual from 'select 1+?, 10/?'",
       "Instructions": {
@@ -195,7 +203,8 @@
     "comment": "drop prepare",
     "query": "drop prepare prep_no_param",
     "plan": {
-      "QueryType": "DEALLOCATE PREPARE",
+      "Type": "Passthrough",
+      "QueryType": "DEALLOCATE_PREPARE",
       "Original": "drop prepare prep_no_param",
       "Instructions": {
         "OperatorType": "Rows"
