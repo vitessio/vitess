@@ -1110,13 +1110,14 @@ func (e *Executor) fetchOrCreatePlan(
 		setVarComment = vcursor.PrepareSetVarComment()
 	}
 
+	var planKey engine.PlanKey
 	if preparedPlan {
-		planKey := buildPlanKey(ctx, vcursor, query, setVarComment)
+		planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
 		plan, logStats.CachedPlan = e.plans.Get(planKey.Hash(), e.epoch.Load())
 	}
 
 	if plan == nil {
-		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, preparedPlan)
+		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -1142,7 +1143,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	bindVars map[string]*querypb.BindVariable,
 	setVarComment string,
 	parameterize bool,
-	preparedPlan bool,
+	planKey engine.PlanKey,
 ) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
@@ -1166,6 +1167,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	vcursor.SetForeignKeyCheckState(qh.ForeignKeyChecks)
 
 	paramsCount := uint16(0)
+	preparedPlan := planKey.Query != ""
 	if preparedPlan {
 		// We need to count the number of arguments in the statement before we plan the query.
 		// Planning could add additional arguments to the statement.
@@ -1198,8 +1200,10 @@ func (e *Executor) getCachedOrBuildPlan(
 
 	planCachable := sqlparser.CachePlan(stmt) && vcursor.CachePlan()
 	if planCachable {
-		// build Plan key
-		planKey := buildPlanKey(ctx, vcursor, query, setVarComment)
+		if !preparedPlan {
+			// build Plan key
+			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
+		}
 		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
 			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
 		})

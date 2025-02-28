@@ -30,36 +30,39 @@ import (
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-// Plan represents the execution strategy for a given query.
-// For now it's a simple wrapper around the real instructions.
-// An instruction (aka Primitive) is typically a tree where
-// each node does its part by combining the results of the
-// sub-nodes.
-type Plan struct {
-	Type         sqlparser.StatementType // The type of query we have
-	Original     string                  // Original is the original query.
-	Instructions Primitive               // Instructions contains the instructions needed to fulfil the query.
-	BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
-	Warnings     []*query.QueryWarning   // Warnings that need to be yielded every time this query runs
-	TablesUsed   []string                // TablesUsed is the list of tables that this plan will query
-	QueryHints   sqlparser.QueryHints    // QueryHints are the SET_VAR hints that were used to generate this plan
-	ParamsCount  uint16                  // ParameterCount is the number of parameters in the query
+type (
+	// Plan represents the execution strategy for a given query in Vitess. It is
+	// primarily a wrapper around Primitives (the execution instructions). Each
+	// Primitive may form a subtree, combining results from its children to
+	// achieve the overall query result.
+	Plan struct {
+		Type         sqlparser.StatementType // Type indicates the SQL statement type (SELECT, UPDATE, etc.).
+		Original     string                  // Original holds the raw query text
+		Instructions Primitive               // Instructions define how the query is executed.
+		BindVarNeeds *sqlparser.BindVarNeeds // BindVarNeeds lists required bind vars discovered during planning.
+		Warnings     []*query.QueryWarning   // Warnings accumulates any warnings generated for this plan.
+		TablesUsed   []string                // TablesUsed enumerates the tables this query accesses.
+		QueryHints   sqlparser.QueryHints    // QueryHints stores any SET_VAR hints that influenced plan generation.
+		ParamsCount  uint16                  // ParamsCount is the total number of bind parameters (?) in the query.
 
-	ExecCount    uint64 // Count of times this plan was executed
-	ExecTime     uint64 // Total execution time
-	ShardQueries uint64 // Total number of shard queries
-	RowsReturned uint64 // Total number of rows
-	RowsAffected uint64 // Total number of rows
-	Errors       uint64 // Total number of errors
-}
+		ExecCount    uint64 // ExecCount is how many times this plan has been executed.
+		ExecTime     uint64 // ExecTime is the total accumulated execution time in nanoseconds.
+		ShardQueries uint64 // ShardQueries is the total count of shard-level queries performed.
+		RowsReturned uint64 // RowsReturned is the total number of rows returned to clients.
+		RowsAffected uint64 // RowsAffected is the total number of rows affected by DML operations.
+		Errors       uint64 // Errors is the total count of errors encountered during execution.
+	}
 
-type PlanKey struct {
-	CurrentKeyspace string
-	Destination     string
-	Query           string
-	SetVarComment   string
-	Collation       collations.ID
-}
+	// PlanKey identifies a plan uniquely based on keyspace, destination, query,
+	// SET_VAR comment, and collation. It is primarily used as a cache key.
+	PlanKey struct {
+		CurrentKeyspace string        // CurrentKeyspace is the name of the keyspace associated with the plan.
+		Destination     string        // Destination specifies the shard or routing destination for the plan.
+		Query           string        // Query is the original or normalized SQL statement used to build the plan.
+		SetVarComment   string        // SetVarComment holds any embedded SET_VAR hints within the query.
+		Collation       collations.ID // Collation is the character collation ID that governs string comparison.
+	}
+)
 
 func (pk PlanKey) DebugString() string {
 	return fmt.Sprintf("CurrentKeyspace: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
