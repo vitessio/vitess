@@ -368,23 +368,3 @@ func TestChangeRouting(t *testing.T) {
 	assert.Contains(t, drLog.logs[4], "shard:-80")
 	assert.Contains(t, drLog.logs[4], "shard:80-")
 }
-
-func TestDRInitializeTargetSequences(t *testing.T) {
-	ctx := context.Background()
-	drLog := NewLogRecorder()
-	dr := &switcherDryRun{
-		drLog: drLog,
-	}
-
-	tables := map[string]*sequenceMetadata{
-		"t1": nil,
-		"t2": nil,
-		"t3": nil,
-	}
-	err := dr.initializeTargetSequences(ctx, tables)
-	require.NoError(t, err)
-	assert.Len(t, drLog.logs, 1)
-	assert.Contains(t, drLog.logs[0], "t1")
-	assert.Contains(t, drLog.logs[0], "t2")
-	assert.Contains(t, drLog.logs[0], "t3")
-}

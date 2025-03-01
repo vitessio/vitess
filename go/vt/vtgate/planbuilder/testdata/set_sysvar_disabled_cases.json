@@ -3,6 +3,7 @@
     "comment": "set passthrough disabled - check and ignore plan",
     "query": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER'), @@sql_safe_updates = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SET",
       "Original": "set @@sql_mode = concat(@@sql_mode, ',NO_AUTO_CREATE_USER'), @@sql_safe_updates = 1",
       "Instructions": {
