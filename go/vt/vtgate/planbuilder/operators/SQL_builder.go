@@ -21,6 +21,8 @@ import (
 	"slices"
 	"sort"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
+
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -116,6 +118,12 @@ func (qb *queryBuilder) addTableExpr(
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
+	jp, ok := expr.(*predicates.JoinPredicate)
+	if ok {
+		// we have to strip out the join predicate containers,
+		// otherwise precedence calculations get messed up
+		expr = jp.Current()
+	}
 	if qb.ctx.ShouldSkip(expr) {
 		// This is a predicate that was added to the RHS of an ApplyJoin.
 		// The original predicate will be added, so we don't have to add this here
