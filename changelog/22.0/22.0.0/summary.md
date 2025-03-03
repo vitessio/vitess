@@ -30,13 +30,18 @@
 
 ## <a id="major-changes"/>Major Changes</a>
 
-### <a id="rpc-changes"/>RPC Changes</a>
-
-These are the RPC changes made in this release - 
-
-1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to facilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
-
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions</a>
+
+#### <a id="deletions"/>Deleted Metrics</a>
+
+| Component  |      Metric Name      | Was Deprecated In |                           PR                            |
+|------------|:---------------------:|:-----------------:|:-------------------------------------------------------:|
+| `vttablet` |  `QueryCacheLength`   |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
+| `vttablet` |   `QueryCacheSize`    |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
+| `vttablet` | `QueryCacheCapacity`  |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
+| `vttablet` | `QueryCacheEvictions` |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
+| `vttablet` |   `QueryCacheHits`    |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
+| `vttablet` |  `QueryCacheMisses`   |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
 
 #### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
 
@@ -56,6 +61,12 @@ The use of `gh-ost` and `pt-osc` as strategies as follows, yields an error:
 $ vtctldclient ApplySchema --ddl-strategy="gh-ost" ...
 $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
 ```
+
+### <a id="rpc-changes"/>RPC Changes</a>
+
+These are the RPC changes made in this release -
+
+1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to facilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
 
 ### <a id="vtgate-metrics"/>VTGate Metrics
 
