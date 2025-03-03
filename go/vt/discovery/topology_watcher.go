@@ -116,43 +116,33 @@ func (tw *TopologyWatcher) getTabletsByShard(keyspace string, shard string) ([]*
 
 // Start starts the topology watcher.
 func (tw *TopologyWatcher) Start() {
-	tw.wg.Add(2)
+	tw.wg.Add(1)
 	// Goroutine to refresh the tablets list periodically.
 	go func(t *TopologyWatcher) {
 		defer t.wg.Done()
 		ticker := time.NewTicker(t.refreshInterval)
 		defer ticker.Stop()
-		for {
-			// Since we are going to load all the tablets,
-			// we can clear out the entire list for reloading
-			// specific keyspace shards.
-			func() {
-				for {
-					select {
-					case <-tw.healthcheck.GetLoadTabletsTrigger():
-					default:
-						return
-					}
-				}
-			}()
-			t.loadTablets()
-			select {
-			case <-t.ctx.Done():
-				return
-			case <-ticker.C:
-			}
-		}
-	}(tw)
-	// Go routine to refresh tablets for a specific
-	// keyspace shard.
-	go func(t *TopologyWatcher) {
-		defer t.wg.Done()
+		t.loadTablets()
 		for {
 			select {
 			case <-t.ctx.Done():
 				return
 			case kss := <-tw.healthcheck.GetLoadTabletsTrigger():
 				t.loadTabletsForKeyspaceShard(kss.Keyspace, kss.Shard)
+			case <-ticker.C:
+				// Since we are going to load all the tablets,
+				// we can clear out the entire list for reloading
+				// specific keyspace shards.
+				func() {
+					for {
+						select {
+						case <-tw.healthcheck.GetLoadTabletsTrigger():
+						default:
+							return
+						}
+					}
+				}()
+				t.loadTablets()
 			}
 		}
 	}(tw)
