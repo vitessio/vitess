@@ -1075,8 +1075,8 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 			case 1:
 				c.Capabilities &^= CapabilityClientMultiStatements
 			default:
-				log.Errorf("Got unhandled packet (ComSetOption default) from client %v, returning error: %v", c.ConnectionID, data)
-				if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+				log.Errorf("Got unhandled packet (ComSetOption default) from client %v", c.ConnectionID)
+				if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling ComSetOption packet"); err != nil {
 					log.Errorf("Error writing error packet to client: %v", err)
 					return err
 				}
@@ -1086,8 +1086,8 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 				return err
 			}
 		} else {
-			log.Errorf("Got unhandled packet (ComSetOption else) from client %v, returning error: %v", c.ConnectionID, data)
-			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+			log.Errorf("Got unhandled packet (ComSetOption else) from client %v", c.ConnectionID)
+			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling ComSetOption packet"); err != nil {
 				log.Errorf("Error writing error packet to client: %v", err)
 				return err
 			}
@@ -1098,7 +1098,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 
 		if c.cs != nil {
 			log.Error("Received ComStmtPrepare with outstanding cursor")
-			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); werr != nil {
+			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling ComStmtPrepare packet"); werr != nil {
 				log.Errorf("Error writing error packet to client: %v", werr)
 				return werr
 			}
@@ -1194,7 +1194,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 		// outstanding cursor, error
 		if c.cs != nil {
 			log.Error("Received ComStmtExecute with outstanding cursor")
-			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); werr != nil {
+			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling ComStmtExecute packet"); werr != nil {
 				log.Errorf("Error writing error packet to client: %v", werr)
 				return werr
 			}
@@ -1239,7 +1239,7 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 		stmtID, paramID, chunk, ok := c.parseComStmtSendLongData(data)
 		c.recycleReadPacket()
 		if !ok {
-			err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
+			err := fmt.Errorf("error parsing statement send long data from client %v", c.ConnectionID)
 			log.Error(err.Error())
 			return err
 		}
@@ -1276,8 +1276,8 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 		stmtID, ok := c.parseComStmtReset(data)
 		c.recycleReadPacket()
 		if !ok {
-			log.Errorf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
-			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+			log.Errorf("Got unhandled ComStmtReset packet from client %v", c.ConnectionID)
+			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling ComStmtReset packet"); err != nil {
 				log.Errorf("Error writing error packet to client: %v", err)
 				return err
 			}
@@ -1285,8 +1285,8 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 
 		prepare, ok := c.PrepareData[stmtID]
 		if !ok {
-			log.Errorf("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
-			if werr := c.writeErrorPacket(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order: %v", data); werr != nil {
+			log.Errorf("Commands were executed in an improper order from client %v", c.ConnectionID)
+			if werr := c.writeErrorPacket(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order"); werr != nil {
 				log.Errorf("Error writing error packet to client: %v", err)
 				return werr
 			}
@@ -1320,8 +1320,8 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 
 		// fetching from wrong statement
 		if c.cs == nil || stmtID != c.cs.stmtID {
-			log.Errorf("Requested stmtID does not match stmtID of open cursor. Client %v, returning error: %v", c.ConnectionID, data)
-			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); werr != nil {
+			log.Errorf("Requested stmtID does not match stmtID of open cursor. Client %v", c.ConnectionID)
+			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling ComStmtFetch packet"); werr != nil {
 				log.Errorf("Error writing error packet to client: %v", err)
 				return werr
 			}
@@ -1394,15 +1394,17 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 
 	case ComBinlogDumpGTID:
 		ok := c.handleComBinlogDumpGTID(handler, data)
+		c.recycleReadPacket()
 		if !ok {
-			return fmt.Errorf("error handling ComBinlogDumpGTID packet: %v", data)
+			return fmt.Errorf("error handling ComBinlogDumpGTID packet")
 		}
 		return nil
 
 	case ComRegisterReplica:
 		ok := c.handleComRegisterReplica(handler, data)
+		c.recycleReadPacket()
 		if !ok {
-			return fmt.Errorf("error handling ComRegisterReplica packet: %v", data)
+			return fmt.Errorf("error handling ComRegisterReplica packet")
 		}
 		return nil
 
@@ -1430,8 +1432,6 @@ func (c *Conn) handleComRegisterReplica(handler Handler, data []byte) (kontinue 
 		log.Errorf("conn %v: parseComRegisterReplica failed: %v", c.ID(), err)
 		return false
 	}
-
-	c.recycleReadPacket()
 
 	if err := binlogReplicaHandler.ComRegisterReplica(c, replicaHost, replicaPort, replicaUser, replicaPassword); err != nil {
 		c.writeErrorPacketFromError(err)
@@ -1466,7 +1466,7 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
 		return false
 	}
-	c.recycleReadPacket()
+
 	if err := binlogReplicaHandler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
 		log.Error(err.Error())
 		c.writeErrorPacketFromError(err)
