@@ -593,12 +593,7 @@ func TestCustomQuery(t *testing.T) {
 				}
 			}
 		}
-	})
-	t.Run("validating OK response from throttler with custom query", func(t *testing.T) {
-		throttler.WaitForValidData(t, primaryTablet, throttlerEnabledTimeout)
-		resp, err := throttleCheck(primaryTablet, false)
-		require.NoError(t, err)
-		assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, resp.Check.ResponseCode, "Unexpected response from throttler: %+v", resp)
+		waitForThrottleCheckStatus(t, primaryTablet, tabletmanagerdatapb.CheckThrottlerResponseCode_OK)
 	})
 	t.Run("test threads running", func(t *testing.T) {
 		sleepDuration := 20 * time.Second
