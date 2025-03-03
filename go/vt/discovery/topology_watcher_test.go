@@ -147,7 +147,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	}
 	require.NoError(t, ts.CreateTablet(context.Background(), tablet), "CreateTablet failed for %v", tablet.Alias)
 
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "AddTablet": 1})
 	checkChecksum(t, tw, 3238442862)
 
@@ -172,7 +172,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 		Shard:    "shard",
 	}
 	require.NoError(t, ts.CreateTablet(context.Background(), tablet2), "CreateTablet failed for %v", tablet2.Alias)
-	tw.loadTablets("", "")
+	tw.loadTablets()
 
 	// Confirm second tablet triggers ListTablets + AddTablet calls.
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "AddTablet": 1})
@@ -192,7 +192,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 		Shard:    "shard",
 	}
 	require.NoError(t, ts.CreateTablet(context.Background(), tablet3), "CreateTablet failed for %v", tablet3.Alias)
-	tw.loadTablets("", "")
+	tw.loadTablets()
 
 	// Confirm filtered tablet did not trigger an AddTablet call.
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "AddTablet": 0})
@@ -220,7 +220,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	})
 	require.Nil(t, err, "UpdateTabletFields failed")
 
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	allTablets = fhc.GetAllTablets()
 	key = TabletToMapKey(tablet)
 
@@ -259,7 +259,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 			return nil
 		})
 		require.Nil(t, err, "UpdateTabletFields failed")
-		tw.loadTablets("", "")
+		tw.loadTablets()
 		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "ReplaceTablet": 2})
 		allTablets = fhc.GetAllTablets()
 		key2 := TabletToMapKey(tablet2)
@@ -281,7 +281,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 		})
 		require.Nil(t, err, "UpdateTabletFields failed")
 
-		tw.loadTablets("", "")
+		tw.loadTablets()
 		counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "ReplaceTablet": 2})
 	}
 
@@ -290,7 +290,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 
 	_, err = topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard")
 	require.Nil(t, err, "FixShardReplication failed")
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
 	checkChecksum(t, tw, 852159264)
 
@@ -309,7 +309,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	require.NoError(t, ts.DeleteTablet(context.Background(), tablet3.Alias))
 	_, err = topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard")
 	require.Nil(t, err, "FixShardReplication failed")
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
 	checkChecksum(t, tw, 0)
 
@@ -444,7 +444,7 @@ func TestFilterByKeyspace(t *testing.T) {
 		// Make this fatal because there is no point continuing if CreateTablet fails
 		require.NoError(t, ts.CreateTablet(context.Background(), tablet))
 
-		tw.loadTablets("", "")
+		tw.loadTablets()
 		key := TabletToMapKey(tablet)
 		allTablets := hc.GetAllTablets()
 
@@ -471,7 +471,7 @@ func TestFilterByKeyspace(t *testing.T) {
 		assert.Equal(t, test.expected, f.IsIncluded(tabletReplacement))
 		require.NoError(t, ts.CreateTablet(context.Background(), tabletReplacement))
 
-		tw.loadTablets("", "")
+		tw.loadTablets()
 		key = TabletToMapKey(tabletReplacement)
 		allTablets = hc.GetAllTablets()
 
@@ -531,7 +531,7 @@ func TestLoadTablets(t *testing.T) {
 
 	// Let's refresh the information for a different keyspace shard. We shouldn't
 	// reload either tablet's information.
-	tw.loadTablets("ks2", "shard")
+	tw.loadTabletsForKeyspaceShard("ks2", "shard")
 	key1 := TabletToMapKey(tablet1)
 	key2 := TabletToMapKey(tablet2)
 	allTablets := hc.GetAllTablets()
@@ -540,13 +540,13 @@ func TestLoadTablets(t *testing.T) {
 
 	// Now, if we reload the first tablet's shard, we should see this tablet
 	// but not the other.
-	tw.loadTablets("ks1", "shard")
+	tw.loadTabletsForKeyspaceShard("ks1", "shard")
 	allTablets = hc.GetAllTablets()
 	assert.Contains(t, allTablets, key1)
 	assert.NotContains(t, allTablets, key2)
 
 	// Finally, if we load all the tablets, both the tablets should be visible.
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	allTablets = hc.GetAllTablets()
 	assert.Contains(t, allTablets, key1)
 	assert.Contains(t, allTablets, key2)
@@ -587,7 +587,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	}
 	require.NoError(t, ts.CreateTablet(context.Background(), tablet))
 
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "AddTablet": 1})
 	checkChecksum(t, tw, 3238442862)
 
@@ -612,7 +612,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	}
 	require.NoError(t, ts.CreateTablet(context.Background(), tablet2))
 
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0})
 	checkChecksum(t, tw, 2762153755)
 
@@ -624,7 +624,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 
 	// Load the tablets again to show that when refreshKnownTablets is disabled,
 	// only the list is read from the topo and the checksum doesn't change
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0})
 	checkChecksum(t, tw, 2762153755)
 
@@ -636,7 +636,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0})
 	checkChecksum(t, tw, 2762153755)
 
@@ -652,7 +652,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	// Remove the tracked tablet from the topo and check that it is detected as being gone.
 	require.NoError(t, ts.DeleteTablet(context.Background(), tablet.Alias))
 
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
 	checkChecksum(t, tw, 789108290)
 	assert.Empty(t, fhc.GetAllTablets())
@@ -660,7 +660,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	// Remove ignored tablet and check that we didn't try to remove it from the health check
 	require.NoError(t, ts.DeleteTablet(context.Background(), tablet2.Alias))
 
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0})
 	checkChecksum(t, tw, 0)
 	assert.Empty(t, fhc.GetAllTablets())
@@ -728,7 +728,7 @@ func TestGetTabletErrorDoesNotRemoveFromHealthcheck(t *testing.T) {
 	}
 	require.NoError(t, ts.CreateTablet(ctx, tablet1), "CreateTablet failed for %v", tablet1.Alias)
 
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "AddTablet": 1})
 	checkChecksum(t, tw, 3238442862)
 
@@ -762,7 +762,7 @@ func TestGetTabletErrorDoesNotRemoveFromHealthcheck(t *testing.T) {
 	require.ErrorContains(t, err, "partial result")
 
 	// Now force the error during loadTablets.
-	tw.loadTablets("", "")
+	tw.loadTablets()
 	checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "AddTablet": 1})
 	checkChecksum(t, tw, 2762153755)
 
@@ -804,7 +804,7 @@ func TestDeadlockBetweenTopologyWatcherAndHealthCheck(t *testing.T) {
 	}
 	err := ts.CreateTablet(ctx, tablet1)
 	// Run the first loadTablets call to ensure the tablet is present in the topology watcher.
-	hc.topoWatchers[0].loadTablets("", "")
+	hc.topoWatchers[0].loadTablets()
 	require.NoError(t, err)
 
 	// We want to run updateHealth with arguments that always
