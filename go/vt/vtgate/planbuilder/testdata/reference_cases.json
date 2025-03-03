@@ -165,7 +165,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into ambiguous_ref_with_source(col) values (1)",
         "TableName": "ambiguous_ref_with_source"
       },
@@ -235,7 +234,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into ambiguous_ref_with_source(col) values (1)",
         "TableName": "ambiguous_ref_with_source"
       },
@@ -259,7 +257,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update ambiguous_ref_with_source set col = 1",
         "Table": "ambiguous_ref_with_source"
       },
@@ -283,7 +280,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update ambiguous_ref_with_source set col = 1",
         "Table": "ambiguous_ref_with_source"
       },
@@ -307,7 +303,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from ambiguous_ref_with_source where col = 1",
         "Table": "ambiguous_ref_with_source"
       },
@@ -331,7 +326,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from ambiguous_ref_with_source where col = 1",
         "Table": "ambiguous_ref_with_source"
       },
@@ -455,7 +449,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into global_ref(col) values (1)",
         "TableName": "global_ref"
       },
@@ -479,7 +472,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from source_of_ref where col = 1",
         "Table": "source_of_ref"
       },
@@ -503,7 +495,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update source_of_ref set x = 4 where col = 1",
         "Table": "source_of_ref"
       },
@@ -527,7 +518,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into source_of_ref(x) values (4)",
         "TableName": "source_of_ref"
       },
@@ -551,7 +541,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from source_of_ref where col = 1",
         "Table": "source_of_ref"
       },
@@ -575,7 +564,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update source_of_ref set x = 4 where col = 1",
         "Table": "source_of_ref"
       },
@@ -599,7 +587,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into source_of_ref(x) values (4)",
         "TableName": "source_of_ref"
       },
@@ -623,7 +610,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from source_of_ref where col = 1",
         "Table": "source_of_ref"
       },
@@ -647,7 +633,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update source_of_ref set x = 4 where col = 1",
         "Table": "source_of_ref"
       },
@@ -671,7 +656,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into source_of_ref(x) values (4)",
         "TableName": "source_of_ref"
       },
@@ -695,7 +679,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from source_of_ref where col = 1",
         "Table": "source_of_ref"
       },
@@ -719,7 +702,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update source_of_ref set x = 4 where col = 1",
         "Table": "source_of_ref"
       },
@@ -743,7 +725,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into source_of_ref(x) values (4)",
         "TableName": "source_of_ref"
       },
@@ -847,7 +828,6 @@
       "Original": "update main.source_of_ref as sr join main.rerouted_ref as rr on sr.id = rr.id inner join user.music as m on sr.col = m.col set sr.tt = 5 where m.user_id = 1",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -896,7 +876,6 @@
               "Name": "main",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update source_of_ref as sr set sr.tt = 5 where sr.id in ::dml_vals",
             "Table": "source_of_ref"
           }
@@ -918,7 +897,6 @@
       "Original": "delete sr from main.source_of_ref as sr join main.rerouted_ref as rr on sr.id = rr.id inner join user.music as m on sr.col = m.col where m.user_id = 1",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -967,7 +945,6 @@
               "Name": "main",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete from source_of_ref as sr where sr.id in ::dml_vals",
             "Table": "source_of_ref"
           }

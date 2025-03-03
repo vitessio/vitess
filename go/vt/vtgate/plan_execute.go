@@ -65,12 +65,11 @@ func (e *Executor) newExecute(
 	safeSession *econtext.SafeSession,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
 	logStats *logstats.LogStats,
 	execPlan planExec, // used when there is a plan to execute
 	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
 ) (err error) {
-	// 1: Prepare before planning and execution.
-
 	// Start an implicit transaction if necessary.
 	err = e.startTxIfNecessary(ctx, safeSession)
 	if err != nil {
@@ -81,19 +80,13 @@ func (e *Executor) newExecute(
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
 
-	query, comments := sqlparser.SplitMarginComments(sql)
-
-	// 2: Parse and Validate query.
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
-	if err != nil {
-		return err
-	}
-
 	var (
 		vs                 = e.VSchema()
 		lastVSchemaCreated = vs.GetCreated()
 		result             *sqltypes.Result
 		plan               *engine.Plan
+		vcursor            *econtext.VCursorImpl
+		stmt               sqlparser.Statement
 		cancel             context.CancelFunc
 	)
 
@@ -119,19 +112,14 @@ func (e *Executor) newExecute(
 			}
 		}
 
-		vcursor, err := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
-		if err != nil {
-			return err
-		}
-
-		// 3: Create a plan for the query.
+		// Create a plan for the query.
 		// If we are retrying, it is likely that the routing rules have changed and hence we need to
 		// replan the query since the target keyspace of the resolved shards may have changed as a
 		// result of MoveTables SwitchTraffic which does a RebuildSrvVSchema which in turn causes
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
 		// take full advatange of the cached plan.
-		plan, err = e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.config.Normalize, logStats)
+		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, e.config.Normalize, prepared, logStats)
 		execStart := e.logPlanningFinished(logStats, plan)
 
 		if err != nil {
@@ -160,14 +148,14 @@ func (e *Executor) newExecute(
 			return recResult(plan.QueryType, result)
 		}
 
-		// 4: Prepare for execution.
+		// Prepare for execution.
 		err = e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession)
 		if err != nil {
 			logStats.Error = err
 			return err
 		}
 
-		// 5: Execute the plan.
+		// Execute the plan.
 		if plan.Instructions.NeedsTransaction() {
 			err = e.insideTransaction(ctx, safeSession, logStats,
 				func() error {
@@ -181,10 +169,10 @@ func (e *Executor) newExecute(
 			return err
 		}
 
-		// 6: Retry if needed.
+		// Retry if needed.
 		rootCause := vterrors.RootCause(err)
 		if rootCause != nil && strings.Contains(rootCause.Error(), "enforce denied tables") {
-			log.V(2).Infof("Retry: %d, will retry query %s due to %v", try, query, err)
+			log.V(2).Infof("Retry: %d, will retry query %s due to %v", try, sql, err)
 			if try == 0 { // We are going to retry at least once
 				defer func() {
 					// Prevent any plan cache pollution from queries planned against the wrong keyspace during a MoveTables
@@ -219,7 +207,7 @@ func (e *Executor) newExecute(
 
 		return err
 	}
-	return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("query %s failed after retries: %v ", query, err))
+	return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("query %s failed after retries: %v ", sql, err))
 }
 
 // handleTransactions deals with transactional queries: begin, commit, rollback and savepoint management
@@ -371,7 +359,7 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 	rQuery := safeSession.GetRollbackOnPartialExec()
 	if rQuery != econtext.TxRollback {
 		safeSession.SavepointRollback()
-		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, logStats)
+		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, false, logStats)
 		// If no error, the revert is successful with the savepoint. Notify the reason as error to the client.
 		if err == nil {
 			errMsg.WriteString("reverted partial DML execution failure")

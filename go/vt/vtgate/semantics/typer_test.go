@@ -45,7 +45,7 @@ func TestNormalizerAndSemanticAnalysisIntegration(t *testing.T) {
 			require.NoError(t, err)
 
 			rv := sqlparser.NewReservedVars("", known)
-			out, err := sqlparser.PrepareAST(parse, rv, map[string]*querypb.BindVariable{}, true, "d", 0, "", map[string]string{}, nil, nil)
+			out, err := sqlparser.Normalize(parse, rv, map[string]*querypb.BindVariable{}, true, "d", 0, "", map[string]string{}, nil, nil)
 			require.NoError(t, err)
 
 			st, err := Analyze(out.AST, "d", fakeSchemaInfo())
@@ -73,7 +73,7 @@ func TestColumnCollations(t *testing.T) {
 			ast, err := sqlparser.NewTestParser().Parse(test.query)
 			require.NoError(t, err)
 
-			out, err := sqlparser.PrepareAST(ast, sqlparser.NewReservedVars("bv", sqlparser.BindVars{}), map[string]*querypb.BindVariable{}, true, "d", 0, "", map[string]string{}, nil, nil)
+			out, err := sqlparser.Normalize(ast, sqlparser.NewReservedVars("bv", sqlparser.BindVars{}), map[string]*querypb.BindVariable{}, true, "d", 0, "", map[string]string{}, nil, nil)
 			require.NoError(t, err)
 
 			st, err := Analyze(out.AST, "d", fakeSchemaInfo())

@@ -24,18 +24,18 @@ type PlannerVersion = querypb.ExecuteOptions_PlannerVersion
 // VSchema defines the interface for this package to fetch
 // info about tables.
 type VSchema interface {
-	FindTable(tablename sqlparser.TableName) (*vindexes.BaseTable, string, topodatapb.TabletType, key.Destination, error)
+	FindTable(tablename sqlparser.TableName) (*vindexes.BaseTable, string, topodatapb.TabletType, key.ShardDestination, error)
 	FindView(name sqlparser.TableName) sqlparser.TableStatement
 	// FindViewTarget finds the target keyspace for the view table provided.
 	FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error)
-	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
+	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error)
 
 	// SelectedKeyspace returns the current keyspace if set, otherwise returns an error
 	SelectedKeyspace() (*vindexes.Keyspace, error)
 	TargetString() string
-	Destination() key.Destination
+	ShardDestination() key.ShardDestination
 	TabletType() topodatapb.TabletType
-	TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error)
+	TargetDestination(qualifier string) (key.ShardDestination, *vindexes.Keyspace, topodatapb.TabletType, error)
 	AnyKeyspace() (*vindexes.Keyspace, error)
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
@@ -87,7 +87,7 @@ type VSchema interface {
 	GetUDV(name string) *querypb.BindVariable
 
 	// PlanPrepareStatement plans the prepared statement.
-	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error)
+	PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, error)
 
 	// ClearPrepareData clears the prepared data from the session.
 	ClearPrepareData(stmtName string)

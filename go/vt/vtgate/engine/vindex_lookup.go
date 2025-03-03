@@ -99,7 +99,7 @@ func (vr *VindexLookup) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 	return vr.SendTo.executeAfterLookup(ctx, vcursor, bindVars, wantfields, ids, dest)
 }
 
-func (vr *VindexLookup) mapVindexToDestination(ids []sqltypes.Value, results []*sqltypes.Result, bindVars map[string]*querypb.BindVariable) ([]key.Destination, error) {
+func (vr *VindexLookup) mapVindexToDestination(ids []sqltypes.Value, results []*sqltypes.Result, bindVars map[string]*querypb.BindVariable) ([]key.ShardDestination, error) {
 	dest, err := vr.Vindex.MapResult(ids, results)
 	if err != nil {
 		return nil, err

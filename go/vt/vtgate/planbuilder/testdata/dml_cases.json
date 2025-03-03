@@ -25,7 +25,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update m1 set val = 1",
         "Table": "m1"
       },
@@ -49,7 +48,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update unsharded set val = 1",
         "Table": "unsharded"
       },
@@ -73,7 +71,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update unsharded set col = (select col from unsharded limit 1)",
         "Table": "unsharded"
       },
@@ -97,7 +94,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)",
         "Table": "unsharded"
       },
@@ -121,7 +117,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)",
         "Table": "unsharded"
       },
@@ -145,7 +140,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000",
         "Table": "unsharded"
       },
@@ -169,7 +163,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update `user` as route1 set a = 1 where id = 1",
         "Table": "user",
         "Values": [
@@ -197,7 +190,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update unsharded_a set a = (select a from unsharded as route2)",
         "Table": "unsharded, unsharded_a"
       },
@@ -222,7 +214,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from unsharded",
         "Table": "unsharded"
       },
@@ -246,7 +237,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from seq",
         "Table": "seq"
       },
@@ -270,7 +260,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from unsharded_ref",
         "Table": "unsharded_ref"
       },
@@ -294,7 +283,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update `user` set val = 1 where id = 1",
         "Table": "user",
         "Values": [
@@ -322,7 +310,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update `user` as user_alias set val = 1 where user_alias.id = 1",
         "Table": "user",
         "Values": [
@@ -350,7 +337,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update `user` set val = 1 where id = 1",
         "Table": "user",
         "Values": [
@@ -378,7 +364,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update `user` set val = 1 where `name` = 'foo' and id = 1",
         "Table": "user",
         "Values": [
@@ -406,7 +391,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "email_user_map:4"
         ],
@@ -446,7 +430,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "address_user_map:5",
           "email_user_map:4"
@@ -481,7 +464,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "email_user_map:4"
         ],
@@ -515,7 +497,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "music_user_map:1"
         ],
@@ -549,7 +530,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update `user` set val = 1 where id = id2 and id = 1",
         "Table": "user",
         "Values": [
@@ -577,7 +557,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1",
         "Table": "user",
         "Values": [
@@ -605,7 +584,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = 1 for update",
@@ -636,7 +614,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1",
         "Table": "unsharded_a, unsharded_b"
       },
@@ -661,7 +638,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1",
         "Table": "unsharded_a, unsharded_b"
       },
@@ -686,7 +662,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
         "Table": "unsharded"
       },
@@ -710,7 +685,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as route1 where id = 1 for update",
@@ -741,7 +715,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from unsharded_a where a = (select a from unsharded as route2)",
         "Table": "unsharded, unsharded_a"
       },
@@ -766,7 +739,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update music set val = 1 where id = 1",
         "Table": "music",
         "Values": [
@@ -794,7 +766,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1",
         "Table": "unsharded_a, unsharded_b"
       },
@@ -819,7 +790,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1",
         "Table": "unsharded_a, unsharded_b"
       },
@@ -844,7 +814,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
@@ -875,7 +844,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from music_extra where user_id = 1",
         "Table": "music_extra",
         "Values": [
@@ -903,7 +871,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into unsharded values ()",
         "TableName": "unsharded"
       },
@@ -927,7 +894,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into unsharded values (1, 2)",
         "TableName": "unsharded"
       },
@@ -951,7 +917,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3",
         "TableName": "unsharded"
       },
@@ -975,7 +940,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "Query": "insert into unsharded_authoritative(col1, col2) values (:__seq0, 1)",
         "TableName": "unsharded_authoritative"
@@ -1000,7 +964,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "InsertIgnore": true,
         "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0) on duplicate key update user_id = values(user_id)",
         "TableName": "music",
@@ -1029,7 +992,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "InsertIgnore": true,
         "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0), (:_user_id_1, :_id_1) on duplicate key update user_id = values(user_id)",
         "TableName": "music",
@@ -1058,7 +1020,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into unsharded select id from unsharded_auto",
         "TableName": "unsharded"
       },
@@ -1083,7 +1044,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into unsharded select id from unsharded join unsharded_auto",
         "TableName": "unsharded"
       },
@@ -1108,7 +1068,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(18446744073709551616)",
         "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
         "TableName": "unsharded_auto"
@@ -1133,7 +1092,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
         "TableName": "unsharded_auto"
@@ -1158,7 +1116,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
         "TableName": "unsharded_auto"
@@ -1183,7 +1140,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
         "TableName": "unsharded_auto"
@@ -1208,7 +1164,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, null)",
         "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
         "TableName": "unsharded_auto"
@@ -1233,7 +1188,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into unsharded values (1, 1)",
         "TableName": "unsharded"
       },
@@ -1257,7 +1211,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "Query": "insert into `user`(id, val, `Name`, Costly) values (:_Id_0, 1, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1287,7 +1240,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1323,7 +1275,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, 2, 3)",
         "TableName": "authoritative",
         "VindexValues": {
@@ -1350,7 +1301,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1380,7 +1330,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1410,7 +1359,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "InsertIgnore": true,
         "Query": "insert ignore into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
@@ -1441,7 +1389,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "InsertIgnore": true,
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
@@ -1472,7 +1419,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(:aa)",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1502,7 +1448,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "insert into `user`(nonid, id, `Name`, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1532,7 +1477,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "insert into `user`(id, nonid, `Name`, Costly) values (:_Id_0, 2, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1562,7 +1506,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "insert into `user`(nonid, id, `Name`, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
         "TableName": "user",
@@ -1592,7 +1535,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "Query": "insert into `user`(nonid, `name`, id, Costly) values (2, :_Name_0, :_Id_0, :_Costly_0)",
         "TableName": "user",
@@ -1622,7 +1564,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
         "TableName": "user_extra",
@@ -1650,7 +1591,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c_0, 2)",
         "TableName": "weird`name",
         "VindexValues": {
@@ -1677,7 +1617,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into unsharded select 1 from dual union select 1 from dual",
         "TableName": "unsharded"
       },
@@ -1702,7 +1641,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(18446744073709551616)",
         "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
         "TableName": "user_extra",
@@ -1730,7 +1668,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into music_extra(music_id, user_id) values (:_music_id_0, :_user_id_0)",
         "TableName": "music_extra",
         "VindexValues": {
@@ -1770,7 +1707,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, 2)",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
         "TableName": "user",
@@ -1800,7 +1736,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, 2)",
         "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
         "QueryTimeout": 1,
@@ -1831,7 +1766,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, 2)",
         "MultiShardAutocommit": true,
         "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
@@ -1868,7 +1802,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "replace into unsharded values (1, 2)",
         "TableName": "unsharded"
       },
@@ -1892,7 +1825,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "replace into unsharded select id from unsharded_auto",
         "TableName": "unsharded"
       },
@@ -1917,7 +1849,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(18446744073709551616)",
         "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
         "TableName": "unsharded_auto"
@@ -1942,7 +1873,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
         "TableName": "unsharded_auto"
@@ -1967,7 +1897,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)",
         "TableName": "unsharded_auto"
@@ -1992,7 +1921,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, null)",
         "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
         "TableName": "unsharded_auto"
@@ -2023,7 +1951,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0)",
         "TableName": "multicolvin",
         "VindexValues": {
@@ -2052,7 +1979,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into overlap_vindex(kid, column_a, column_b) values (:_kid_0, :_column_a_0, 3)",
         "TableName": "overlap_vindex",
         "VindexValues": {
@@ -2080,7 +2006,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0), (:_column_a_1, :_column_b_1, :_column_c_1, :_kid_1)",
         "TableName": "multicolvin",
         "VindexValues": {
@@ -2109,7 +2034,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "kid_index",
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
@@ -2140,7 +2064,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "colb_colc_map:4"
         ],
@@ -2174,7 +2097,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "cola_map:4",
           "colb_colc_map:5"
@@ -2209,7 +2131,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update user_extra set val = 1",
         "Table": "user_extra"
       },
@@ -2233,7 +2154,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update user_extra set val = 1",
         "Table": "user_extra"
       },
@@ -2257,7 +2177,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "MultiShardAutocommit": true,
         "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user_extra set val = 1",
         "Table": "user_extra"
@@ -2282,7 +2201,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ user_extra set val = 1",
         "QueryTimeout": 1,
         "Table": "user_extra"
@@ -2307,7 +2225,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update user_extra set val = 1 where id between 1 and 2",
         "Table": "user_extra"
       },
@@ -2331,7 +2248,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update user_extra set val = 1 where user_id in ::__vals",
         "Table": "user_extra",
         "Values": [
@@ -2359,7 +2275,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update user_extra set val = 1 where `name` = 'foo'",
         "Table": "user_extra"
       },
@@ -2383,7 +2298,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update user_extra set val = 1 where id in (1, 2)",
         "Table": "user_extra"
       },
@@ -2407,7 +2321,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update user_extra set val = 1 where `name` = 'foo' or id = 1",
         "Table": "user_extra"
       },
@@ -2431,7 +2344,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "FetchLastInsertID": true,
         "Query": "update user_extra set col = last_insert_id(123)",
         "Table": "user_extra"
@@ -2455,7 +2367,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "FetchLastInsertID": true,
         "Query": "delete from user_extra where col = last_insert_id(123)",
         "Table": "user_extra"
@@ -2479,7 +2390,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from user_extra",
         "Table": "user_extra"
       },
@@ -2503,7 +2413,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from user_extra",
         "Table": "user_extra"
       },
@@ -2527,7 +2436,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from user_extra where user_id between 1 and 2",
         "Table": "user_extra"
       },
@@ -2551,7 +2459,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from user_extra where `name` = 'jose'",
         "Table": "user_extra"
       },
@@ -2575,7 +2482,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "MultiShardAutocommit": true,
         "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where `name` = 'jose'",
         "Table": "user_extra"
@@ -2600,7 +2506,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where `name` = 'jose'",
         "QueryTimeout": 1,
         "Table": "user_extra"
@@ -2625,7 +2530,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from user_extra where user_id in ::__vals",
         "Table": "user_extra",
         "Values": [
@@ -2653,7 +2557,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
         "Table": "unsharded, unsharded_a, unsharded_b"
       },
@@ -2679,7 +2582,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
         "Table": "unsharded, unsharded_a"
       },
@@ -2704,7 +2606,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "name_user_map:3"
         ],
@@ -2738,7 +2639,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into unsharded values (:__lastInsertId, 2)",
         "TableName": "unsharded"
       },
@@ -2762,7 +2662,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "FetchLastInsertID": true,
         "Query": "insert into unsharded values (last_insert_id(789), 2)",
         "TableName": "unsharded"
@@ -2787,7 +2686,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "name_user_map:3"
         ],
@@ -2821,7 +2719,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "name_user_map:3"
         ],
@@ -2851,7 +2748,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "name_user_map:3"
         ],
@@ -2881,7 +2777,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id in (1, 2, 3) for update",
@@ -2912,7 +2807,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id + 1 = 2 for update",
@@ -2939,7 +2833,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
@@ -2966,7 +2859,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
@@ -2997,7 +2889,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update `user` set val = 1",
         "Table": "user"
       },
@@ -3021,7 +2912,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
@@ -3048,7 +2938,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "colb_colc_map:4"
         ],
@@ -3082,7 +2971,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "name_user_map:3"
         ],
@@ -3116,7 +3004,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `name` = _binary 'abc' for update",
@@ -3147,7 +3034,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
@@ -3174,7 +3060,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "name_user_map:3"
         ],
@@ -3204,7 +3089,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update user_extra set val = 1",
         "Table": "user_extra"
       },
@@ -3228,7 +3112,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id * `user`.col = `user`.foo for update",
@@ -3273,7 +3156,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1)",
         "TableName": "user_privacy_consents"
       },
@@ -3298,7 +3180,6 @@
           "Name": "zlookup_unique",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "xxhash",
         "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 20 for update",
@@ -3325,7 +3206,6 @@
           "Name": "zlookup_unique",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "lookup_t1:3"
         ],
@@ -3355,7 +3235,6 @@
           "Name": "zlookup_unique",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "xxhash",
         "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 = 20 for update",
@@ -3386,7 +3265,6 @@
           "Name": "zlookup_unique",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "lookup_t1:3"
         ],
@@ -3420,7 +3298,6 @@
           "Name": "zlookup_unique",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "xxhash",
         "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 in (20, 21) for update",
@@ -3451,7 +3328,6 @@
           "Name": "zlookup_unique",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "lookup_t1:3"
         ],
@@ -3485,7 +3361,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "name_user_map:3"
         ],
@@ -3515,7 +3390,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.col > 20 for update",
@@ -3542,7 +3416,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
         "Table": "multicol_tbl",
         "Values": [
@@ -3571,7 +3444,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
         "Table": "multicol_tbl",
         "Values": [
@@ -3600,7 +3472,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update multicol_tbl set x = 1 where colb in ::__vals1 and cola = 1",
         "Table": "multicol_tbl",
         "Values": [
@@ -3629,7 +3500,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update multicol_tbl set x = 1 where colb in ::__vals1 and cola in ::__vals0",
         "Table": "multicol_tbl",
         "Values": [
@@ -3658,7 +3528,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 and colb = 2 for update",
@@ -3690,7 +3559,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb = 2 and cola = 1 for update",
@@ -3722,7 +3590,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb in (1, 2) and cola = 1 for update",
@@ -3754,7 +3621,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb in (1, 2) and cola in (3, 4) for update",
@@ -3786,7 +3652,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "colc_map:4"
         ],
@@ -3821,7 +3686,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update multicol_tbl set x = 42 where `name` = 'foo'",
         "Table": "multicol_tbl",
         "Values": [
@@ -3849,7 +3713,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update multicol_tbl set x = 42 where cola = 1",
         "Table": "multicol_tbl",
         "Values": [
@@ -3877,7 +3740,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "name_muticoltbl_map:4"
         ],
@@ -3911,7 +3773,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "ChangedVindexValues": [
           "name_muticoltbl_map:4"
         ],
@@ -3945,7 +3806,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update multicol_tbl set x = 1 where `name` = 'foo' and cola = 2",
         "Table": "multicol_tbl",
         "Values": [
@@ -3973,7 +3833,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' for update",
@@ -4004,7 +3863,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 for update",
@@ -4035,7 +3893,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola in (1, 2) for update",
@@ -4066,7 +3923,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 2,
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' and cola = 2 for update",
@@ -4097,7 +3953,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "TableName": "music",
         "VindexOffsetFromSelect": {
           "music_user_map": "[0]",
@@ -4156,7 +4011,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -4197,7 +4051,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -4238,7 +4091,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(0)",
         "TableName": "user",
         "VindexOffsetFromSelect": {
@@ -4281,7 +4133,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
         "TableName": "user",
         "VindexOffsetFromSelect": {
@@ -4330,7 +4181,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -4371,7 +4221,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into unsharded(col) select col from unsharded_auto",
         "TableName": "unsharded"
       },
@@ -4396,7 +4245,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -4437,7 +4285,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
         "TableName": "user_extra",
         "VindexOffsetFromSelect": {
@@ -4478,7 +4325,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "TableName": "unsharded",
         "Inputs": [
           {
@@ -4515,7 +4361,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "TableName": "unsharded",
         "Inputs": [
           {
@@ -4572,7 +4417,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update `user` set col = :__sq1",
             "Table": "user"
           }
@@ -4619,7 +4463,6 @@
               "Name": "main",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update unsharded set col = :__sq1",
             "Table": "unsharded"
           }
@@ -4692,7 +4535,6 @@
               "Name": "main",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update unsharded set col = :__sq1",
             "Table": "unsharded"
           }
@@ -4719,7 +4561,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = 5) where id = 5",
         "Table": "user",
         "Values": [
@@ -4748,7 +4589,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id = 5",
         "Table": "user",
         "Values": [
@@ -4777,7 +4617,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id > 5",
         "Table": "user"
       },
@@ -4802,7 +4641,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into authoritative(user_id) values (:_user_id_0)",
         "TableName": "authoritative",
         "VindexValues": {
@@ -4839,7 +4677,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
@@ -4872,7 +4709,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
@@ -4901,7 +4737,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete foo from unsharded as foo join (select id from unsharded as a join unsharded_b as b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
         "Table": "unsharded, unsharded_b"
       },
@@ -4926,7 +4761,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update `user` set col = 1 where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
         "Table": "user",
         "Values": [
@@ -4954,7 +4788,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd')) for update",
@@ -4985,7 +4818,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into ref(col) values (1)",
         "TableName": "ref"
       },
@@ -5009,7 +4841,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update m1 set foo = last_insert_id(foo + 1) where id = 12345",
         "Table": "m1"
       },
@@ -5033,7 +4864,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
         "QueryTimeout": 1,
         "Table": "unsharded"
@@ -5058,7 +4888,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into unsharded values ()",
         "QueryTimeout": 1,
         "TableName": "unsharded"
@@ -5083,7 +4912,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "InputAsNonStreaming": true,
         "TableName": "music",
         "VindexOffsetFromSelect": {
@@ -5128,7 +4956,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null, null, null)",
         "Query": "insert into mixed_tbl(shard_key, lkp_key) values (:_shard_key_0, :_lkp_key_0), (:_shard_key_1, :_lkp_key_1), (:_shard_key_2, :_lkp_key_2)",
         "TableName": "mixed_tbl",
@@ -5157,7 +4984,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, null, 27)",
         "Query": "insert into mixed_tbl(shard_key, lkp_key) values (:_shard_key_0, :_lkp_key_0), (:_shard_key_1, :_lkp_key_1), (:_shard_key_2, :_lkp_key_2)",
         "TableName": "mixed_tbl",
@@ -5186,7 +5012,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
         "TableName": "mixed_tbl",
         "VindexOffsetFromSelect": {
@@ -5232,7 +5057,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
         "TableName": "mixed_tbl",
         "VindexOffsetFromSelect": {
@@ -5284,7 +5108,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(0)",
         "InputAsNonStreaming": true,
         "TableName": "user",
@@ -5357,7 +5180,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "InsertIgnore": true,
         "Query": "insert into music(id, user_id, col) values (:_id_0, :_user_id_0, 3) on duplicate key update music.col = 5",
         "TableName": "music",
@@ -5386,7 +5208,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from source_of_ref where col = 1",
         "Table": "source_of_ref"
       },
@@ -5410,7 +5231,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from ref",
         "Table": "ref"
       },
@@ -5434,7 +5254,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` limit 20 for update",
@@ -5461,7 +5280,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u, ref_with_source as r where u.col = r.col for update",
@@ -5489,7 +5307,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u, music as m where u.id = m.user_id for update",
@@ -5512,7 +5329,6 @@
       "Original": "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -5561,7 +5377,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select `user`.Id, `user`.`Name`, `user`.Costly from `user` where `user`.id in ::dml_vals for update",
@@ -5590,7 +5405,6 @@
       "Original": "delete u from user u join music m on u.col = m.col",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -5635,7 +5449,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dml_vals for update",
@@ -5664,7 +5477,6 @@
       "Original": "delete u from music m join user u where u.col = m.col and m.foo = 42",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -5709,7 +5521,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dml_vals for update",
@@ -5743,7 +5554,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u, music as m where m.foo = 42 and u.id = m.user_id for update",
@@ -5766,7 +5576,6 @@
       "Original": "delete u from user u join music m on u.col = m.col join user_extra ue on m.user_id = ue.user_id where ue.foo = 20 and u.col = 30 and m.bar = 40",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -5811,7 +5620,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dml_vals for update",
@@ -5841,7 +5649,6 @@
       "Original": "delete m from user u join music m on u.col = m.col join user_extra ue on m.user_id = ue.user_id where ue.foo = 20 and u.col = 30 and m.bar = 40",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -5886,7 +5693,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select m.user_id, m.id from music as m where m.id in ::dml_vals for update",
@@ -5916,7 +5722,6 @@
       "Original": "delete from user limit 10",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -5945,7 +5750,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dml_vals for update",
@@ -5973,7 +5777,6 @@
       "Original": "delete from user order by name, col limit 5",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -6003,7 +5806,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dml_vals for update",
@@ -6031,7 +5833,6 @@
       "Original": "update user set val = 1 where (name = 'foo' or id = 1) limit 1",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -6060,7 +5861,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update `user` set val = 1 where `user`.id in ::dml_vals",
             "Table": "user",
             "Values": [
@@ -6085,7 +5885,6 @@
       "Original": "update user set name = 'abc' where id > 10 limit 1",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -6114,7 +5913,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "ChangedVindexValues": [
               "name_user_map:3"
             ],
@@ -6145,7 +5943,6 @@
       "Original": "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -6194,7 +5991,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "ChangedVindexValues": [
               "name_user_map:3"
             ],
@@ -6226,7 +6022,6 @@
       "Original": "update user join user_extra on user.id = user_extra.id set user.name = 'foo'",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -6275,7 +6070,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "ChangedVindexValues": [
               "name_user_map:3"
             ],
@@ -6307,7 +6101,6 @@
       "Original": "update user as u, user_extra as ue set u.col = ue.col where u.id = ue.id",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "BindVars": [
           "0:[ue_col:1]"
         ],
@@ -6359,7 +6152,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update `user` as u set u.col = :ue_col /* INT16 */ where u.id in ::dml_vals",
             "Table": "user",
             "Values": [
@@ -6385,7 +6177,6 @@
       "Original": "update user as u, user_extra as ue set u.col = ue.foo + ue.bar + u.baz where u.id = ue.id",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "BindVars": [
           "0:[ue_bar:2 ue_foo:1]"
         ],
@@ -6437,7 +6228,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update `user` as u set u.col = :ue_foo + :ue_bar + u.baz where u.id in ::dml_vals",
             "Table": "user",
             "Values": [
@@ -6463,7 +6253,6 @@
       "Original": "update user, user_extra ue set user.name = ue.id + 'foo', ue.bar = user.baz where user.id = ue.id and user.id = 1",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "BindVars": [
           "0:[ue_id:1]",
           "1:[user_baz:3]"
@@ -6517,7 +6306,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "ChangedVindexValues": [
               "name_user_map:3"
             ],
@@ -6538,7 +6326,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update user_extra as ue set ue.bar = :user_baz where (ue.id, ue.user_id) in ::dml_vals",
             "Table": "user_extra",
             "Values": [
@@ -6581,7 +6368,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select user_id, id from music as bar for update",
@@ -6608,7 +6394,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update music as bar set col = 23",
         "Table": "music"
       },
@@ -6632,7 +6417,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into music(id, user_id) values (:_id_0, :_user_id_0)",
         "TableName": "music",
         "VindexValues": {
@@ -6684,7 +6468,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = :__sq1 for update",
@@ -6738,7 +6521,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where col = :__sq1 for update",
@@ -6788,7 +6570,6 @@
               "Name": "main",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete from unsharded where col = :__sq1",
             "Table": "unsharded"
           }
@@ -6857,7 +6638,6 @@
               "Name": "main",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete from unsharded where col = :__sq1",
             "Table": "unsharded"
           }
@@ -6930,7 +6710,6 @@
               "Name": "main",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete from unsharded where col = :__sq1",
             "Table": "unsharded"
           }
@@ -6952,7 +6731,6 @@
       "Original": "delete u, m from user u, music m where u.col = m.col and u.foo = m.bar and u.baz = 12 and m.baz = 21",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]",
           "1:[1]"
@@ -6999,7 +6777,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.id in ::dml_vals for update",
@@ -7017,7 +6794,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select user_id, id from music as m where m.id in ::dml_vals for update",
@@ -7046,7 +6822,6 @@
       "Original": "delete music,user from music inner join user where music.id = user.id",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]",
           "1:[1]"
@@ -7096,7 +6871,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select user_id, id from music where music.id in ::dml_vals for update",
@@ -7114,7 +6888,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dml_vals for update",
@@ -7143,7 +6916,6 @@
       "Original": "delete u, m from user u join music m on u.id = m.user_id",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]",
           "1:[1]"
@@ -7167,7 +6939,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.id in ::dml_vals for update",
@@ -7185,7 +6956,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select user_id, id from music as m where m.id in ::dml_vals for update",
@@ -7214,7 +6984,6 @@
       "Original": "delete u, m from user u join music m on u.col = m.col",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]",
           "1:[1]"
@@ -7260,7 +7029,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.id in ::dml_vals for update",
@@ -7278,7 +7046,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select user_id, id from music as m where m.id in ::dml_vals for update",
@@ -7307,7 +7074,6 @@
       "Original": "delete u, ue from user u join user_extra ue on u.id = ue.user_id",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]",
           "1:[1 2]"
@@ -7331,7 +7097,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.id in ::dml_vals for update",
@@ -7349,7 +7114,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete from user_extra as ue where (ue.id, ue.user_id) in ::dml_vals",
             "Table": "user_extra",
             "Values": [
@@ -7375,7 +7139,6 @@
       "Original": "delete o, ev from `order` o join order_event ev where o.oid = ev.oid and ev.ename = 'a'",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0 1]",
           "1:[2 3]"
@@ -7399,7 +7162,6 @@
               "Name": "ordering",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete from order_event as ev where (ev.oid, ev.ename) in ::dml_vals",
             "Table": "order_event",
             "Values": [
@@ -7414,7 +7176,6 @@
               "Name": "ordering",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "KsidLength": 1,
             "KsidVindex": "xxhash",
             "OwnedVindexQuery": "select region_id, oid from `order` as o where (o.oid, o.region_id) in ::dml_vals for update",
@@ -7443,7 +7204,6 @@
       "Original": "update ignore user u, music m set u.foo = 21, m.bar = 'abc' where u.col = m.col",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]",
           "1:[1]"
@@ -7489,7 +7249,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update ignore `user` as u set u.foo = 21 where u.id in ::dml_vals",
             "Table": "user",
             "Values": [
@@ -7504,7 +7263,6 @@
               "Name": "user",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update ignore music as m set m.bar = 'abc' where m.id in ::dml_vals",
             "Table": "music",
             "Values": [
@@ -7535,7 +7293,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "InsertIgnore": true,
         "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, '2', 3), (:_user_id_1, '5', 6) as new on duplicate key update col2 = new.user_id + new.col1",
         "TableName": "authoritative",
@@ -7563,7 +7320,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "InsertIgnore": true,
         "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, '2', 3), (:_user_id_1, '5', 6) as new (a, b, c) on duplicate key update col1 = a + c",
         "TableName": "authoritative",
@@ -7591,7 +7347,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "InsertIgnore": true,
         "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, '2', 3), (:_user_id_1, '5', 6) as new on duplicate key update col2 = new.user_id + new.col1",
         "TableName": "authoritative",
@@ -7619,7 +7374,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "InsertIgnore": true,
         "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, '2', 3), (:_user_id_1, '5', 6) as new (a, b, c) on duplicate key update col1 = a + c",
         "TableName": "authoritative",
