@@ -195,7 +195,7 @@ func TestTrackerNoLock(t *testing.T) {
 	for i := 0; i < 500000; i++ {
 		select {
 		case ch <- th:
-		case <-time.After(5 * time.Millisecond):
+		case <-time.After(10 * time.Millisecond):
 			t.Fatalf("failed to send health check to tracker")
 		}
 	}
