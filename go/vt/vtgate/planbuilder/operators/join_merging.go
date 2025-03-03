@@ -27,7 +27,7 @@ import (
 // mergeJoinInputs checks whether two operators can be merged into a single one.
 // If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
-func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr) *Route {
+func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs Operator) *Route {
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
 		return nil
@@ -40,7 +40,7 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 		newRouting := rhsRoute.Routing.Clone()
 
 		rhsID := TableID(rhsRoute)
-		for _, predicate := range joinPredicates {
+		for _, predicate := range jm.predicates {
 			if ctx.SemTable.DirectDeps(predicate).IsSolvedBy(rhsID) {
 				newRouting = UpdateRoutingLogic(ctx, predicate, newRouting)
 			}
@@ -57,7 +57,7 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 
 	// As both are reference route. We need to merge the alternates as well.
 	case a == anyShard && b == anyShard && sameKeyspace:
-		newrouting := mergeAnyShardRoutings(ctx, routingA.(*AnyShardRouting), routingB.(*AnyShardRouting), joinPredicates, jm.joinType)
+		newrouting := mergeAnyShardRoutings(ctx, routingA.(*AnyShardRouting), routingB.(*AnyShardRouting), jm.predicates, jm.joinType)
 		return jm.merge(ctx, lhsRoute, rhsRoute, newrouting)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
@@ -78,7 +78,7 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 
 	// sharded routing is complex, so we handle it in a separate method
 	case a == sharded && b == sharded:
-		return tryMergeShardedRouting(ctx, lhsRoute, rhsRoute, jm, joinPredicates)
+		return tryMergeShardedRouting(ctx, lhsRoute, rhsRoute, jm, jm.predicates)
 
 	default:
 		return nil

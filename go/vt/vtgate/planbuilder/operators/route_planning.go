@@ -292,7 +292,7 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op Operator) (requ
 
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, joinType sqlparser.JoinType) (Operator, *ApplyResult) {
 	jm := newJoinMerge(joinPredicates, joinType)
-	newPlan := jm.mergeJoinInputs(ctx, lhs, rhs, joinPredicates)
+	newPlan := jm.mergeJoinInputs(ctx, lhs, rhs)
 	if newPlan != nil {
 		return newPlan, Rewrote("merge routes into single operator")
 	}
