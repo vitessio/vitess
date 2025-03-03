@@ -39,7 +39,8 @@ import (
 	"fmt"
 	"hash/crc32"
 	"net/http"
-	"runtime"
+	"os"
+	"runtime/pprof"
 	"sort"
 	"strings"
 	"sync"
@@ -649,9 +650,8 @@ func (hc *HealthCheckImpl) Unsubscribe(c chan *TabletHealth) {
 }
 
 var printStack = sync.OnceFunc(func() {
-	buf := make([]byte, 10240) // Allocate buffer large enough
-	n := runtime.Stack(buf, true)
-	fmt.Printf("All Goroutines Stack Trace:\n%s\n", buf[:n])
+	fmt.Printf("All Goroutines Stack Trace:\n")
+	_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 })
 
 func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {

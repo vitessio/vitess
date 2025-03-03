@@ -152,7 +152,7 @@ func TestHealthCheck(t *testing.T) {
 	conn := createFakeConn(tablet, input)
 
 	// create a channel and subscribe to healthcheck
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestHealthCheck")
 	testChecksum(t, 0, hc.stateChecksum())
 	hc.AddTablet(tablet)
 	testChecksum(t, 1027934207, hc.stateChecksum())
@@ -291,7 +291,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 
 	tablet := createTestTablet(0, "cell", "a")
 	input := make(chan *querypb.StreamHealthResponse)
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestHealthCheckStreamError")
 	fc := createFakeConn(tablet, input)
 	fc.errCh = make(chan error)
 	hc.AddTablet(tablet)
@@ -355,7 +355,7 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 
 	tablet := createTestTablet(0, "cell", "a")
 	input := make(chan *querypb.StreamHealthResponse)
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestHealthCheckErrorOnPrimary")
 	fc := createFakeConn(tablet, input)
 	fc.errCh = make(chan error)
 	hc.AddTablet(tablet)
@@ -416,7 +416,7 @@ func TestHealthCheckErrorOnPrimaryAfterExternalReparent(t *testing.T) {
 	hc := createTestHc(ctx, ts)
 	defer hc.Close()
 
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestHealthCheckErrorOnPrimaryAfterExternalReparent")
 
 	tablet1 := createTestTablet(0, "cell", "a")
 	input1 := make(chan *querypb.StreamHealthResponse)
@@ -500,7 +500,7 @@ func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	tablet := createTestTablet(0, "cell", "a")
 	input := make(chan *querypb.StreamHealthResponse, 1)
 	fc := createFakeConn(tablet, input)
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestHealthCheckVerifiesTabletAlias")
 
 	hc.AddTablet(tablet)
 
@@ -545,7 +545,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	tablet := createTestTablet(0, "cell", "a")
 	input := make(chan *querypb.StreamHealthResponse, 1)
 	createFakeConn(tablet, input)
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestHealthCheckCloseWaitsForGoRoutines")
 
 	hc.AddTablet(tablet)
 
@@ -612,7 +612,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	tablet := createTestTablet(0, "cell", "a")
 	input := make(chan *querypb.StreamHealthResponse)
 	fc := createFakeConn(tablet, input)
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestHealthCheckTimeout")
 	hc.AddTablet(tablet)
 	// Immediately after AddTablet() there will be the first notification.
 	want := &TabletHealth{
@@ -694,7 +694,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	createFakeConn(tablet, input)
 
 	// create a channel and subscribe to healthcheck
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestWaitForAllServingTablets")
 	hc.AddTablet(tablet)
 	// there will be a first result, get and discard it
 	<-resultChan
@@ -762,7 +762,7 @@ func TestRemoveTablet(t *testing.T) {
 	createFakeConn(tablet, input)
 
 	// create a channel and subscribe to healthcheck
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestRemoveTablet")
 	hc.AddTablet(tablet)
 	// there will be a first result, get and discard it
 	<-resultChan
@@ -898,7 +898,7 @@ func TestRemoveTabletDuringExternalReparenting(t *testing.T) {
 	thirdTabletConn := createFakeConn(thirdTablet, thirdTabletHealthStream)
 	thirdTabletConn.errCh = make(chan error)
 
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestRemoveTabletDuringExternalReparenting")
 
 	hc.AddTablet(firstTablet)
 	<-resultChan
@@ -993,7 +993,7 @@ func TestGetHealthyTablets(t *testing.T) {
 	createFakeConn(tablet, input)
 
 	// create a channel and subscribe to healthcheck
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestGetHealthyTablets")
 	hc.AddTablet(tablet)
 	// there will be a first result, get and discard it
 	<-resultChan
@@ -1183,7 +1183,7 @@ func TestPrimaryInOtherCell(t *testing.T) {
 	input := make(chan *querypb.StreamHealthResponse)
 	fc := createFakeConn(tablet, input)
 	// create a channel and subscribe to healthcheck
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestPrimaryInOtherCell")
 	hc.AddTablet(tablet)
 	// should get a result, but this will hang if multi-cell logic is broken
 	// so wait and timeout
@@ -1243,7 +1243,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 	input := make(chan *querypb.StreamHealthResponse)
 	fc := createFakeConn(local, input)
 	// create a channel and subscribe to healthcheck
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestReplicaInOtherCell")
 	hc.AddTablet(local)
 
 	ticker := time.NewTicker(1 * time.Second)
@@ -1288,7 +1288,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 	input2 := make(chan *querypb.StreamHealthResponse)
 	fc2 := createFakeConn(remote, input2)
 	// create a channel and subscribe to healthcheck
-	resultChan2 := hc.Subscribe("")
+	resultChan2 := hc.Subscribe("TestReplicaInOtherCell")
 	hc.AddTablet(remote)
 	// should get a result, but this will hang if multi-cell logic is broken
 	// so wait and timeout
@@ -1354,7 +1354,7 @@ func TestCellAliases(t *testing.T) {
 	input := make(chan *querypb.StreamHealthResponse)
 	fc := createFakeConn(tablet, input)
 	// create a channel and subscribe to healthcheck
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestCellAliases")
 	hc.AddTablet(tablet)
 	// should get a result, but this will hang if cell alias logic is broken
 	// so wait and timeout
@@ -1407,7 +1407,7 @@ func TestHealthCheckChecksGrpcPort(t *testing.T) {
 
 	tablet := createTestTablet(0, "cell", "a")
 	tablet.PortMap["grpc"] = 0
-	resultChan := hc.Subscribe("")
+	resultChan := hc.Subscribe("TestHealthCheckChecksGrpcPort")
 
 	// AddTablet should not add the tablet because port is 0
 	hc.AddTablet(tablet)
@@ -1519,7 +1519,7 @@ func TestConcurrentUpdates(t *testing.T) {
 
 	// Subscribe to the healthcheck
 	// Make the receiver keep track of the updates received.
-	ch := hc.Subscribe("")
+	ch := hc.Subscribe("TestConcurrentUpdates")
 	var totalCount atomic.Int32
 	go func() {
 		for range ch {
