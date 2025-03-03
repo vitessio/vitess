@@ -65,6 +65,7 @@ type SandboxConn struct {
 
 	// These Count vars report how often the corresponding
 	// functions were called.
+<<<<<<< HEAD
 	ExecCount                atomic.Int64
 	BeginCount               atomic.Int64
 	CommitCount              atomic.Int64
@@ -81,6 +82,26 @@ type SandboxConn struct {
 	ReserveCount             atomic.Int64
 	ReleaseCount             atomic.Int64
 	GetSchemaCount           atomic.Int64
+=======
+	ExecCount                   atomic.Int64
+	BeginCount                  atomic.Int64
+	CommitCount                 atomic.Int64
+	RollbackCount               atomic.Int64
+	AsTransactionCount          atomic.Int64
+	PrepareCount                atomic.Int64
+	CommitPreparedCount         atomic.Int64
+	RollbackPreparedCount       atomic.Int64
+	CreateTransactionCount      atomic.Int64
+	StartCommitCount            atomic.Int64
+	SetRollbackCount            atomic.Int64
+	ConcludeTransactionCount    atomic.Int64
+	ReadTransactionCount        atomic.Int64
+	UnresolvedTransactionsCount atomic.Int64
+	ReserveCount                atomic.Int64
+	ReleaseCount                atomic.Int64
+	GetSchemaCount              atomic.Int64
+	GetSchemaDelayResponse      time.Duration
+>>>>>>> 1582d5b7c8 (Fix: Separate Lock for Keyspace to Update Controller Mapping in Schema Tracking (#17873))
 
 	queriesRequireLocking bool
 	queriesMu             sync.Mutex
@@ -677,6 +698,9 @@ func (sbc *SandboxConn) Release(ctx context.Context, target *querypb.Target, tra
 // GetSchema implements the QueryService interface
 func (sbc *SandboxConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
 	sbc.GetSchemaCount.Add(1)
+	if sbc.GetSchemaDelayResponse > 0 {
+		time.Sleep(sbc.GetSchemaDelayResponse)
+	}
 	if len(sbc.getSchemaResult) == 0 {
 		return nil
 	}
