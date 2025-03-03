@@ -1361,6 +1361,10 @@ func materializeProduct(t *testing.T) {
 					t.Logf("Throttler status: %v", status)
 				}
 			}
+			// Wait for any cached check values to be cleared and the new
+			// status value to be in effect everywhere before returning.
+			time.Sleep(500 * time.Millisecond)
+
 			insertMoreProductsForSourceThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes. We
 			// expect it to NOT get them in the first place, we expect the additional rows
@@ -1411,6 +1415,10 @@ func materializeProduct(t *testing.T) {
 					t.Logf("Throttler status: %v", status)
 				}
 			}
+			// Wait for any cached check values to be cleared and the new
+			// status value to be in effect everywhere before returning.
+			time.Sleep(500 * time.Millisecond)
+
 			insertMoreProductsForTargetThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes.
 			// We expect it to NOT get them in the first place, we expect the additional

@@ -182,9 +182,6 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 // the provided app name in its self check.
 func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode) bool {
 	_, ok := throttler.WaitForCheckThrottlerResult(t, vc.VtctldClient, &cluster.Vttablet{Alias: tablet.Name}, throttlerApp, nil, wantCode, defaultTimeout)
-	// Wait for any cached check values to be cleared and the new
-	// status value to be in effect everywhere before returning.
-	time.Sleep(500 * time.Millisecond)
 	return ok
 }
 
