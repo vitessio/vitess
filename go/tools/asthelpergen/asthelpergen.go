@@ -110,6 +110,10 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 					panic(fmt.Errorf("interface %s implemented by %s (%s as %T) without ptr", iff.String(), baseType, tt.String(), tt))
 				}
 			}
+			if types.TypeString(baseType, noQualifier) == visitableName {
+				// skip the visitable interface
+				continue
+			}
 			if err := impl(baseType); err != nil {
 				return err
 			}
@@ -211,8 +215,8 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 		newEqualsGen(pName, &options.Equals),
 		newCloneGen(pName, &options.Clone),
 		newPathGen(pName, ifaceName),
-		newVisitGen(pName),
-		newRewriterGen(pName, types.TypeString(nt, noQualifier)),
+		newVisitGen(pName, ifaceName),
+		newRewriterGen(pName, ifaceName),
 		newCOWGen(pName, nt),
 	)
 

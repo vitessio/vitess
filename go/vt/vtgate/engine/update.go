@@ -88,7 +88,7 @@ func (upd *Update) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 // Note 2: While changes are being committed, the changing row could be
 // unreachable by either the new or old column values.
 func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
-	if len(upd.ChangedVindexValues) == 0 {
+	if !upd.isVindexModified() {
 		return nil
 	}
 	queries := make([]*querypb.BoundQuery, len(rss))
@@ -185,6 +185,10 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 		}
 	}
 	return nil
+}
+
+func (upd *Update) isVindexModified() bool {
+	return len(upd.ChangedVindexValues) != 0
 }
 
 func (upd *Update) description() PrimitiveDescription {

@@ -3,6 +3,7 @@
     "comment": "select from unqualified ambiguous reference routes to reference source",
     "query": "select * from ambiguous_ref_with_source",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from ambiguous_ref_with_source",
       "Instructions": {
@@ -26,6 +27,7 @@
     "comment": "join with unqualified ambiguous reference table routes to optimal keyspace",
     "query": "select user.col from user join ambiguous_ref_with_source",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.col from user join ambiguous_ref_with_source",
       "Instructions": {
@@ -50,6 +52,7 @@
     "comment": "ambiguous unqualified reference table self-join routes to reference source",
     "query": "select r1.col from ambiguous_ref_with_source r1 join ambiguous_ref_with_source",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select r1.col from ambiguous_ref_with_source r1 join ambiguous_ref_with_source",
       "Instructions": {
@@ -73,6 +76,7 @@
     "comment": "ambiguous unqualified reference table can merge with other opcodes left to right.",
     "query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join user",
       "Instructions": {
@@ -97,6 +101,7 @@
     "comment": "ambiguous unqualified reference table can merge with other opcodes left to right and vindex value is in the plan",
     "query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join (select aa from user where user.id=1) user",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join (select aa from user where user.id=1) user",
       "Instructions": {
@@ -125,6 +130,7 @@
     "comment": "qualified join to reference table routes to optimal keyspace",
     "query": "select user.col from user join main.ambiguous_ref_with_source",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.col from user join main.ambiguous_ref_with_source",
       "Instructions": {
@@ -149,6 +155,7 @@
     "comment": "insert into ambiguous unqualified reference table routes to source",
     "query": "insert into ambiguous_ref_with_source(col) values(1)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into ambiguous_ref_with_source(col) values(1)",
       "Instructions": {
@@ -171,6 +178,7 @@
     "comment": "Reference tables using left join with a derived table having a limit clause",
     "query": "SELECT u.id FROM ( SELECT a.id, a.u_id FROM user.ref_with_source AS a WHERE a.id IN (3) ORDER BY a.d_at LIMIT 1) as u LEFT JOIN user.ref_with_source AS u0 ON u.u_id = u0.u_uid ORDER BY u.id",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT u.id FROM ( SELECT a.id, a.u_id FROM user.ref_with_source AS a WHERE a.id IN (3) ORDER BY a.d_at LIMIT 1) as u LEFT JOIN user.ref_with_source AS u0 ON u.u_id = u0.u_uid ORDER BY u.id",
       "Instructions": {
@@ -216,6 +224,7 @@
     "comment": "insert into qualified ambiguous reference table routes to source",
     "query": "insert into user.ambiguous_ref_with_source(col) values(1)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into user.ambiguous_ref_with_source(col) values(1)",
       "Instructions": {
@@ -238,6 +247,7 @@
     "comment": "update unqualified ambiguous reference table routes to source",
     "query": "update ambiguous_ref_with_source set col = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update ambiguous_ref_with_source set col = 1",
       "Instructions": {
@@ -260,6 +270,7 @@
     "comment": "update qualified ambiguous reference table route to source",
     "query": "update user.ambiguous_ref_with_source set col = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update user.ambiguous_ref_with_source set col = 1",
       "Instructions": {
@@ -282,6 +293,7 @@
     "comment": "delete from unqualified ambiguous reference table routes to source",
     "query": "delete from ambiguous_ref_with_source where col = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DELETE",
       "Original": "delete from ambiguous_ref_with_source where col = 1",
       "Instructions": {
@@ -304,6 +316,7 @@
     "comment": "delete from qualified ambiguous reference table route to source",
     "query": "delete from user.ambiguous_ref_with_source where col = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DELETE",
       "Original": "delete from user.ambiguous_ref_with_source where col = 1",
       "Instructions": {
@@ -326,6 +339,7 @@
     "comment": "join with unqualified unambiguous ref with source routes to requested table",
     "query": "select user.col from user join ref_with_source",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.col from user join ref_with_source",
       "Instructions": {
@@ -350,6 +364,7 @@
     "comment": "join with unqualified reference optimize routes when source & reference have different names",
     "query": "select user.col from user join source_of_ref",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.col from user join source_of_ref",
       "Instructions": {
@@ -374,6 +389,7 @@
     "comment": "join with unqualified reference respects routing rules",
     "query": "select user.col from user join rerouted_ref",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.col from user join rerouted_ref",
       "Instructions": {
@@ -398,6 +414,7 @@
     "comment": "join with reference to unqualified source routes to optimal keyspace",
     "query": "select user.col from user join global_ref",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.col from user join global_ref",
       "Instructions": {
@@ -422,6 +439,7 @@
     "comment": "insert into qualified reference with unqualified source routes to source",
     "query": "insert into user.global_ref(col) values(1)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into user.global_ref(col) values(1)",
       "Instructions": {
@@ -444,6 +462,7 @@
     "comment": "delete from reference table with another name - query send to source table",
     "query": "delete from user.ref_with_source where col = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DELETE",
       "Original": "delete from user.ref_with_source where col = 1",
       "Instructions": {
@@ -466,6 +485,7 @@
     "comment": "update from reference table with another name - query send to source table",
     "query": "update user.ref_with_source set x = 4 where col = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update user.ref_with_source set x = 4 where col = 1",
       "Instructions": {
@@ -488,6 +508,7 @@
     "comment": "insert from reference table with another name - query send to source table",
     "query": "insert into user.ref_with_source(x) values(4)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into user.ref_with_source(x) values(4)",
       "Instructions": {
@@ -510,6 +531,7 @@
     "comment": "delete from reference table - query send to source table",
     "query": "delete from source_of_ref where col = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DELETE",
       "Original": "delete from source_of_ref where col = 1",
       "Instructions": {
@@ -532,6 +554,7 @@
     "comment": "update from reference table - query send to source table",
     "query": "update source_of_ref set x = 4 where col = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update source_of_ref set x = 4 where col = 1",
       "Instructions": {
@@ -554,6 +577,7 @@
     "comment": "insert from reference table - query send to source table",
     "query": "insert into source_of_ref(x) values(4)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into source_of_ref(x) values(4)",
       "Instructions": {
@@ -576,6 +600,7 @@
     "comment": "delete from reference table qualified with unsharded - query send to source table",
     "query": "delete from main.source_of_ref where col = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DELETE",
       "Original": "delete from main.source_of_ref where col = 1",
       "Instructions": {
@@ -598,6 +623,7 @@
     "comment": "update from reference table qualified with unsharded - query send to source table",
     "query": "update main.source_of_ref set x = 4 where col = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update main.source_of_ref set x = 4 where col = 1",
       "Instructions": {
@@ -620,6 +646,7 @@
     "comment": "insert from reference table qualified with unsharded - query send to source table",
     "query": "insert into main.source_of_ref(x) values(4)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into main.source_of_ref(x) values(4)",
       "Instructions": {
@@ -642,6 +669,7 @@
     "comment": "delete from reference table with another name - query send to source table",
     "query": "delete from user.ref_with_source where col = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DELETE",
       "Original": "delete from user.ref_with_source where col = 1",
       "Instructions": {
@@ -664,6 +692,7 @@
     "comment": "update from reference table with another name - query send to source table",
     "query": "update user.ref_with_source set x = 4 where col = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update user.ref_with_source set x = 4 where col = 1",
       "Instructions": {
@@ -686,6 +715,7 @@
     "comment": "insert from reference table with another name - query send to source table",
     "query": "insert into user.ref_with_source(x) values(4)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into user.ref_with_source(x) values(4)",
       "Instructions": {
@@ -708,6 +738,7 @@
     "comment": "select with join to reference table in sharded keyspace: should route shard-scoped",
     "query": "select * from user.ref_with_source ref, `user`.`user` u where ref.id = u.ref_id and u.id = 2",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user.ref_with_source ref, `user`.`user` u where ref.id = u.ref_id and u.id = 2",
       "Instructions": {
@@ -736,6 +767,7 @@
     "comment": "select with join to reference table in unsharded keyspace: should route shard-scoped",
     "query": "select * from source_of_ref ref, `user`.`user` u where ref.id = u.ref_id and u.id = 2",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from source_of_ref ref, `user`.`user` u where ref.id = u.ref_id and u.id = 2",
       "Instructions": {
@@ -764,6 +796,7 @@
     "comment": "two sharded and two unsharded reference table join - all should be merged into one route",
     "query": "select 1 from user u join user_extra ue on u.id = ue.user_id join main.source_of_ref sr on sr.foo = ue.foo join main.rerouted_ref rr on rr.bar = sr.bar",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select 1 from user u join user_extra ue on u.id = ue.user_id join main.source_of_ref sr on sr.foo = ue.foo join main.rerouted_ref rr on rr.bar = sr.bar",
       "Instructions": {
@@ -790,6 +823,7 @@
     "comment": "update reference table with join on sharded table",
     "query": "update main.source_of_ref as sr join main.rerouted_ref as rr on sr.id = rr.id inner join user.music as m on sr.col = m.col set sr.tt = 5 where m.user_id = 1",
     "plan": {
+      "Type": "Complex",
       "QueryType": "UPDATE",
       "Original": "update main.source_of_ref as sr join main.rerouted_ref as rr on sr.id = rr.id inner join user.music as m on sr.col = m.col set sr.tt = 5 where m.user_id = 1",
       "Instructions": {
@@ -858,6 +892,7 @@
     "comment": "delete from reference table with join on sharded table",
     "query": "delete sr from main.source_of_ref as sr join main.rerouted_ref as rr on sr.id = rr.id inner join user.music as m on sr.col = m.col where m.user_id = 1",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DELETE",
       "Original": "delete sr from main.source_of_ref as sr join main.rerouted_ref as rr on sr.id = rr.id inner join user.music as m on sr.col = m.col where m.user_id = 1",
       "Instructions": {

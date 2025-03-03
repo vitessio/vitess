@@ -3,6 +3,7 @@
     "comment": "No column referenced",
     "query": "select 1 from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select 1 from user",
       "Instructions": {
@@ -25,6 +26,7 @@
     "comment": "'*' expression for simple route",
     "query": "select user.* from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.* from user",
       "Instructions": {
@@ -47,6 +49,7 @@
     "comment": "unqualified '*' expression for simple route",
     "query": "select * from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from user",
       "Instructions": {
@@ -69,6 +72,7 @@
     "comment": "join on sharding column with limit - should be a simple scatter query and limit on top with non resolved columns",
     "query": "select * from user u join user_metadata um on u.id = um.user_id where foo=41 limit 20",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from user u join user_metadata um on u.id = um.user_id where foo=41 limit 20",
       "Instructions": {
@@ -99,6 +103,7 @@
     "comment": "select with timeout directive sets QueryTimeout in the route",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user",
       "Instructions": {
@@ -122,6 +127,7 @@
     "comment": "select aggregation with timeout directive sets QueryTimeout in the route",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user",
       "Instructions": {
@@ -152,6 +158,7 @@
     "comment": "select limit with timeout directive sets QueryTimeout in the route",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10",
       "Instructions": {
@@ -181,6 +188,7 @@
     "comment": "select limit with timeout directive sets QueryTimeout in the route",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from main.unsharded limit 10",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from main.unsharded limit 10",
       "Instructions": {
@@ -205,6 +213,7 @@
     "comment": "select with partial scatter directive",
     "query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user",
       "Instructions": {
@@ -228,6 +237,7 @@
     "comment": "select aggregation with partial scatter directive",
     "query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
       "Instructions": {
@@ -258,6 +268,7 @@
     "comment": "select aggregation with partial scatter directive - added comments to try to confuse the hint extraction",
     "query": "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
       "Instructions": {
@@ -288,6 +299,7 @@
     "comment": "select limit with partial scatter directive",
     "query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10",
       "Instructions": {
@@ -317,6 +329,7 @@
     "comment": "qualified '*' expression for simple route",
     "query": "select user.* from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.* from user",
       "Instructions": {
@@ -339,6 +352,7 @@
     "comment": "fully qualified '*' expression for simple route",
     "query": "select user.user.* from user.user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.user.* from user.user",
       "Instructions": {
@@ -361,6 +375,7 @@
     "comment": "select * from authoritative table",
     "query": "select * from authoritative",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from authoritative",
       "Instructions": {
@@ -383,6 +398,7 @@
     "comment": "select * from join of authoritative tables",
     "query": "select * from authoritative a join authoritative b on a.user_id=b.user_id",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from authoritative a join authoritative b on a.user_id=b.user_id",
       "Instructions": {
@@ -411,6 +427,7 @@
     "comment": "select * from qualified authoritative table",
     "query": "select a.* from authoritative a",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select a.* from authoritative a",
       "Instructions": {
@@ -433,6 +450,7 @@
     "comment": "select * from intermixing of authoritative table with non-authoritative results in no expansion",
     "query": "select * from authoritative join user on authoritative.user_id=user.id",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from authoritative join user on authoritative.user_id=user.id",
       "Instructions": {
@@ -456,6 +474,7 @@
     "comment": "select authoritative.* with intermixing still expands",
     "query": "select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
       "Instructions": {
@@ -480,6 +499,7 @@
     "comment": "auto-resolve anonymous columns for simple route",
     "query": "select anon_col from user join user_extra on user.id = user_extra.user_id",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select anon_col from user join user_extra on user.id = user_extra.user_id",
       "Instructions": {
@@ -504,6 +524,7 @@
     "comment": "json_arrayagg in single sharded query",
     "query": "select count(1) from user where id = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select count(1) from user where id = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
       "Instructions": {
@@ -531,6 +552,7 @@
     "comment": "json_objectagg in single sharded query",
     "query": "select count(1) from user where id = 'abc' group by n_id having json_objectagg(a_id, b_id) = '[]'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select count(1) from user where id = 'abc' group by n_id having json_objectagg(a_id, b_id) = '[]'",
       "Instructions": {
@@ -570,6 +592,7 @@
     "comment": "Auto-resolve should work if unique vindex columns are referenced",
     "query": "select id, user_id from user join user_extra",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select id, user_id from user join user_extra",
       "Instructions": {
@@ -613,6 +636,7 @@
     "comment": "database calls should be substituted",
     "query": "select database() from dual",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select database() from dual",
       "Instructions": {
@@ -636,6 +660,7 @@
     "comment": "last_insert_id for unsharded route",
     "query": "select last_insert_id() as x from main.unsharded",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select last_insert_id() as x from main.unsharded",
       "Instructions": {
@@ -659,6 +684,7 @@
     "comment": "select from dual on unqualified keyspace",
     "query": "select @@session.auto_increment_increment from dual",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select @@session.auto_increment_increment from dual",
       "Instructions": {
@@ -681,6 +707,7 @@
     "comment": "select from pinned table",
     "query": "select * from pin_test",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from pin_test",
       "Instructions": {
@@ -713,6 +740,7 @@
     "comment": "RHS route referenced",
     "query": "select user_extra.id from user join user_extra",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user_extra.id from user join user_extra",
       "Instructions": {
@@ -756,6 +784,7 @@
     "comment": "Both routes referenced",
     "query": "select user.col, user_extra.id from user join user_extra",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col, user_extra.id from user join user_extra",
       "Instructions": {
@@ -799,6 +828,7 @@
     "comment": "Expression with single-route reference",
     "query": "select user.col, user_extra.id + user_extra.col from user join user_extra",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col, user_extra.id + user_extra.col from user join user_extra",
       "Instructions": {
@@ -842,6 +872,7 @@
     "comment": "subquery with an aggregation in order by that can be merged into a single route",
     "query": "select col, trim((select user_name from user where id = 3)) val from user_extra where user_id = 3 group by col order by val",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select col, trim((select user_name from user where id = 3)) val from user_extra where user_id = 3 group by col order by val",
       "Instructions": {
@@ -870,6 +901,7 @@
     "comment": "Jumbled references",
     "query": "select user.col, user_extra.id, user.col2 from user join user_extra",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col, user_extra.id, user.col2 from user join user_extra",
       "Instructions": {
@@ -913,6 +945,7 @@
     "comment": "Comments",
     "query": "select /* comment */ user.col from user join user_extra",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select /* comment */ user.col from user join user_extra",
       "Instructions": {
@@ -956,6 +989,7 @@
     "comment": "for update",
     "query": "select user.col from user join user_extra for update",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user join user_extra for update",
       "Instructions": {
@@ -999,6 +1033,7 @@
     "comment": "Field query should work for joins select bind vars",
     "query": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
       "Instructions": {
@@ -1045,6 +1080,7 @@
     "comment": "Case preservation",
     "query": "select user.Col, user_extra.Id from user join user_extra",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.Col, user_extra.Id from user join user_extra",
       "Instructions": {
@@ -1094,6 +1130,7 @@
     "comment": "Hex number is not treated as a simple value",
     "query": "select * from user where id = 0x04",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where id = 0x04",
       "Instructions": {
@@ -1120,6 +1157,7 @@
     "comment": "Selection but explicitly ignore a vindex",
     "query": "select * from user ignore vindex (user_index) where id = 1",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from user ignore vindex (user_index) where id = 1",
       "Instructions": {
@@ -1143,6 +1181,7 @@
     "comment": "Selection but make the planner explicitly use a vindex",
     "query": "select intcol, id from user use vindex (name_user_map) where costly = 'aa' and name = 'bb' and id = 3",
     "plan": {
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select intcol, id from user use vindex (name_user_map) where costly = 'aa' and name = 'bb' and id = 3",
       "Instructions": {
@@ -1201,6 +1240,7 @@
     "comment": "sharded limit offset",
     "query": "select user_id from music order by user_id limit 10, 20",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user_id from music order by user_id limit 10, 20",
       "Instructions": {
@@ -1232,6 +1272,7 @@
     "comment": "sharded limit offset with arguments",
     "query": "select user_id from music order by user_id limit :limit, :offset",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user_id from music order by user_id limit :limit, :offset",
       "Instructions": {
@@ -1264,6 +1305,7 @@
     "comment": "Sharding Key Condition in Parenthesis",
     "query": "select * from user where name ='abc' AND (id = 4) limit 5",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where name ='abc' AND (id = 4) limit 5",
       "Instructions": {
@@ -1291,6 +1333,7 @@
     "comment": "Multiple parenthesized expressions",
     "query": "select * from user where (id = 4) AND (name ='abc') limit 5",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where (id = 4) AND (name ='abc') limit 5",
       "Instructions": {
@@ -1318,6 +1361,7 @@
     "comment": "Subquery inside subquery #1",
     "query": "select (select (select col from `user` where id = 1) from `user` where id = 1) from `user` where id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select (select (select col from `user` where id = 1) from `user` where id = 1) from `user` where id = 1",
       "Instructions": {
@@ -1344,6 +1388,7 @@
     "comment": "Subquery inside subquery #2",
     "query": "select 1 from `user` where id = 1 and 1 = (select (select intcol from `user` where id = 1) from `user` where id = 1)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select 1 from `user` where id = 1 and 1 = (select (select intcol from `user` where id = 1) from `user` where id = 1)",
       "Instructions": {
@@ -1370,6 +1415,7 @@
     "comment": "Multiple parenthesized expressions",
     "query": "select * from user where (id = 4 and name ='abc') limit 5",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where (id = 4 and name ='abc') limit 5",
       "Instructions": {
@@ -1397,6 +1443,7 @@
     "comment": "Column Aliasing with Table.Column",
     "query": "select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col desc limit 2",
       "Instructions": {
@@ -1423,6 +1470,7 @@
     "comment": "Column Aliasing with Column",
     "query": "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3",
       "Instructions": {
@@ -1449,6 +1497,7 @@
     "comment": "Booleans and parenthesis",
     "query": "select * from user where (id = 1) AND name = true limit 5",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where (id = 1) AND name = true limit 5",
       "Instructions": {
@@ -1476,6 +1525,7 @@
     "comment": "Column as boolean-ish",
     "query": "select * from user where (id = 1) AND name limit 5",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where (id = 1) AND name limit 5",
       "Instructions": {
@@ -1503,6 +1553,7 @@
     "comment": "PK as fake boolean, and column as boolean-ish",
     "query": "select * from user where (id = 5) AND name = true limit 5",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where (id = 5) AND name = true limit 5",
       "Instructions": {
@@ -1530,6 +1581,7 @@
     "comment": "top level subquery in select",
     "query": "select a, (select col from user) from unsharded",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select a, (select col from user) from unsharded",
       "Instructions": {
@@ -1576,6 +1628,7 @@
     "comment": "sub-expression subquery in select",
     "query": "select a, 1+(select col from user) from unsharded",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select a, 1+(select col from user) from unsharded",
       "Instructions": {
@@ -1622,6 +1675,7 @@
     "comment": "select * from derived table expands specific columns",
     "query": "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t",
       "Instructions": {
@@ -1677,6 +1731,7 @@
     "comment": "union with the same target shard",
     "query": "select * from music where user_id = 1 union select * from user where id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from music where user_id = 1 union select * from user where id = 1",
       "Instructions": {
@@ -1705,6 +1760,7 @@
     "comment": "union with the same target shard last_insert_id",
     "query": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
       "Instructions": {
@@ -1733,6 +1789,7 @@
     "comment": "unsharded union in derived table",
     "query": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
       "Instructions": {
@@ -1755,6 +1812,7 @@
     "comment": "unsharded union in subquery",
     "query": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
       "Instructions": {
@@ -1777,6 +1835,7 @@
     "comment": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
     "query": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
       "Instructions": {
@@ -1800,6 +1859,7 @@
     "comment": "unsharded union",
     "query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
       "Instructions": {
@@ -1823,6 +1883,7 @@
     "comment": "unsharded nested union",
     "query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
       "Instructions": {
@@ -1846,6 +1907,7 @@
     "comment": "unsharded nested union with limit",
     "query": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
       "Instructions": {
@@ -1868,6 +1930,7 @@
     "comment": "routing rules: ensure directives are not lost",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2",
       "Instructions": {
@@ -1892,6 +1955,7 @@
     "comment": "routing table on music",
     "query": "select * from second_user.bar where id > 2",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from second_user.bar where id > 2",
       "Instructions": {
@@ -1915,6 +1979,7 @@
     "comment": "testing SingleRow Projection",
     "query": "select 42",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 42",
       "Instructions": {
@@ -1937,6 +2002,7 @@
     "comment": "avg in sharded keyspace with group by without selecting the group by columns",
     "query": "select avg(intcol) as avg_col from user group by textcol1, textcol2 order by textcol1, textcol2;",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select avg(intcol) as avg_col from user group by textcol1, textcol2 order by textcol1, textcol2;",
       "Instructions": {
@@ -1987,6 +2053,7 @@
     "comment": "don't filter on the vtgate",
     "query": "select 42 from dual where false",
     "plan": {
+      "Type": "Local",
       "QueryType": "SELECT",
       "Original": "select 42 from dual where false",
       "Instructions": {
@@ -2009,6 +2076,7 @@
     "comment": "Complex expression in a subquery used in IN clause of an aggregate query",
     "query": "select count(*) from user where user.id = 2 or user.id in (select id from unsharded_a where colb = 2)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select count(*) from user where user.id = 2 or user.id in (select id from unsharded_a where colb = 2)",
       "Instructions": {
@@ -2063,6 +2131,7 @@
     "comment": "Complex expression in a subquery used in NOT IN clause of an aggregate query",
     "query": "select count(*) from user where user.id = 2 or user.id not in (select id from unsharded_a where colb = 2)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select count(*) from user where user.id = 2 or user.id not in (select id from unsharded_a where colb = 2)",
       "Instructions": {
@@ -2117,6 +2186,7 @@
     "comment": "testing SingleRow Projection with arithmetics",
     "query": "select 42+2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 42+2",
       "Instructions": {
@@ -2139,6 +2209,7 @@
     "comment": "sql_calc_found_rows without limit",
     "query": "select sql_calc_found_rows * from music where user_id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select sql_calc_found_rows * from music where user_id = 1",
       "Instructions": {
@@ -2165,6 +2236,7 @@
     "comment": "sql_calc_found_rows with limit",
     "query": "select sql_calc_found_rows * from music limit 100",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select sql_calc_found_rows * from music limit 100",
       "Instructions": {
@@ -2216,6 +2288,7 @@
     "comment": "sql_calc_found_rows with SelectEqualUnique plans",
     "query": "select sql_calc_found_rows * from music where user_id = 1 limit 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select sql_calc_found_rows * from music where user_id = 1 limit 2",
       "Instructions": {
@@ -2262,6 +2335,7 @@
     "comment": "sql_calc_found_rows with group by and having",
     "query": "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2",
       "Instructions": {
@@ -2327,6 +2401,7 @@
     "comment": "select from unsharded keyspace into dumpfile",
     "query": "select * from main.unsharded into Dumpfile 'x.txt'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from main.unsharded into Dumpfile 'x.txt'",
       "Instructions": {
@@ -2350,6 +2425,7 @@
     "comment": "select from unsharded keyspace into outfile",
     "query": "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
       "Instructions": {
@@ -2373,6 +2449,7 @@
     "comment": "select from unsharded keyspace into outfile s3",
     "query": "select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
       "Instructions": {
@@ -2396,6 +2473,7 @@
     "comment": "left join with a dual table on left - merge-able",
     "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id=1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id=1",
       "Instructions": {
@@ -2423,6 +2501,7 @@
     "comment": "left join with a dual table on left - non-merge-able",
     "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4",
       "Instructions": {
@@ -2465,6 +2544,7 @@
     "comment": "left join with dual non-merge-able with predicate with cross dependencies",
     "query": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4 and t.title = user.col",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.title, user.col from (select 'hello' as title) as t left join user on user.id <= 4 and t.title = user.col",
       "Instructions": {
@@ -2510,6 +2590,7 @@
     "comment": "right join with a dual table on left",
     "query": "select t.title, user.col from (select 'hello' as title) as t right join user on user.id<=4",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select t.title, user.col from (select 'hello' as title) as t right join user on user.id<=4",
       "Instructions": {
@@ -2533,6 +2614,7 @@
     "comment": "right join with a dual table on right - merge-able",
     "query": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id=1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id=1",
       "Instructions": {
@@ -2560,6 +2642,7 @@
     "comment": "right join with a dual table on right - non-merge-able",
     "query": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id>=4",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.title, user.col from user right join (select 'hello' as title) as t on user.id>=4",
       "Instructions": {
@@ -2620,6 +2703,7 @@
     "comment": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
     "query": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
       "Instructions": {
@@ -2646,6 +2730,7 @@
     "comment": "Add two tables with the same column in a join",
     "query": "select t.id, s.id from user t join user_extra s on t.id = s.user_id join unsharded",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.id, s.id from user t join user_extra s on t.id = s.user_id join unsharded",
       "Instructions": {
@@ -2690,6 +2775,7 @@
     "comment": "((((select 1))))",
     "query": "((((select 1))))",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "((((select 1))))",
       "Instructions": {
@@ -2712,6 +2798,7 @@
     "comment": "Merging dual with user",
     "query": "select 42, id from dual, user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select 42, id from dual, user",
       "Instructions": {
@@ -2736,6 +2823,7 @@
     "comment": "subquery in select expression of derived table",
     "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
       "Instructions": {
@@ -2807,6 +2895,7 @@
     "comment": "ORDER BY subquery",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
       "Instructions": {
@@ -2878,6 +2967,7 @@
     "comment": "plan test for a natural character set string",
     "query": "select N'string' from dual",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select N'string' from dual",
       "Instructions": {
@@ -2900,6 +2990,7 @@
     "comment": "select expression having dependencies on both sides of a join",
     "query": "select user.id * user_id as amount from user, user_extra",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.id * user_id as amount from user, user_extra",
       "Instructions": {
@@ -2946,6 +3037,7 @@
     "comment": "Straight Join ensures specific ordering of joins",
     "query": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.foo",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.foo",
       "Instructions": {
@@ -2992,6 +3084,7 @@
     "comment": "Dual query should be handled on the vtgate even with a LIMIT",
     "query": "select last_insert_id() limit 1",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select last_insert_id() limit 1",
       "Instructions": {
@@ -3014,6 +3107,7 @@
     "comment": "PullOut subquery with an aggregation that should be typed in the final output",
     "query": "select (select sum(col) from user) from user_extra",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select (select sum(col) from user) from user_extra",
       "Instructions": {
@@ -3067,6 +3161,7 @@
     "comment": "Straight Join preserved in MySQL query",
     "query": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.user_id",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.id, user_extra.user_id from user straight_join user_extra where user.id = user_extra.user_id",
       "Instructions": {
@@ -3091,6 +3186,7 @@
     "comment": "correlated subquery in exists clause",
     "query": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
       "Instructions": {
@@ -3150,6 +3246,7 @@
     "comment": "correlated subquery in exists clause with an order by",
     "query": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
       "Instructions": {
@@ -3210,6 +3307,7 @@
     "comment": "correlated subquery having dependencies on two tables",
     "query": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
       "Instructions": {
@@ -3284,6 +3382,7 @@
     "comment": "correlated subquery using a column twice",
     "query": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
       "Instructions": {
@@ -3342,6 +3441,7 @@
     "comment": "correlated subquery that is dependent on one side of a join, fully mergeable",
     "query": "SELECT music.id FROM music INNER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.id = (SELECT MAX(m2.id) FROM music m2 WHERE m2.user_id = user.id)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music INNER JOIN user ON music.user_id = user.id WHERE music.user_id = 5 AND music.id = (SELECT MAX(m2.id) FROM music m2 WHERE m2.user_id = user.id)",
       "Instructions": {
@@ -3369,6 +3469,7 @@
     "comment": "Complex join with multiple conditions merged into single route",
     "query": "select 0 from user as u join user_extra as s on u.id = s.user_id join music as m on m.user_id = u.id and (s.foo or m.bar)",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select 0 from user as u join user_extra as s on u.id = s.user_id join music as m on m.user_id = u.id and (s.foo or m.bar)",
       "Instructions": {
@@ -3394,6 +3495,7 @@
     "comment": "union as a derived table",
     "query": "select found from (select id as found from user union all (select id from unsharded)) as t",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select found from (select id as found from user union all (select id from unsharded)) as t",
       "Instructions": {
@@ -3433,6 +3535,7 @@
     "comment": "use output column containing data from both sides of the join",
     "query": "select user_extra.col + user.col from user join user_extra on user.id = user_extra.id",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user_extra.col + user.col from user join user_extra on user.id = user_extra.id",
       "Instructions": {
@@ -3484,6 +3587,7 @@
     "comment": "mergeable derived table with order by and limit",
     "query": "select 1 from (select col from main.unsharded order by main.unsharded.col1 desc limit 12 offset 0) as f left join unsharded as u on f.col = u.id",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select 1 from (select col from main.unsharded order by main.unsharded.col1 desc limit 12 offset 0) as f left join unsharded as u on f.col = u.id",
       "Instructions": {
@@ -3507,6 +3611,7 @@
     "comment": "mergeable derived table with group by and limit",
     "query": "select 1 from (select col, count(*) as a from main.unsharded group by col having a > 0 limit 12 offset 0) as f left join unsharded as u on f.col = u.id",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select 1 from (select col, count(*) as a from main.unsharded group by col having a > 0 limit 12 offset 0) as f left join unsharded as u on f.col = u.id",
       "Instructions": {
@@ -3530,6 +3635,7 @@
     "comment": "select user.id, trim(leading 'x' from user.name) from user",
     "query": "select user.id, trim(leading 'x' from user.name) from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.id, trim(leading 'x' from user.name) from user",
       "Instructions": {
@@ -3553,6 +3659,7 @@
     "comment": "json utility functions",
     "query": "select jcol, JSON_STORAGE_SIZE(jcol), JSON_STORAGE_FREE(jcol), JSON_PRETTY(jcol) from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select jcol, JSON_STORAGE_SIZE(jcol), JSON_STORAGE_FREE(jcol), JSON_PRETTY(jcol) from user",
       "Instructions": {
@@ -3576,6 +3683,7 @@
     "comment": "dual query with exists clause",
     "query": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select 1 from dual where exists (select 1 from information_schema.TABLES where information_schema.TABLES.TABLE_NAME = 'proc' and information_schema.TABLES.TABLE_SCHEMA = 'mysql')",
       "Instructions": {
@@ -3600,6 +3708,7 @@
     "comment": "json_quote, json_object and json_array",
     "query": "SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT JSON_QUOTE('null'), JSON_QUOTE('\"null\"'), JSON_OBJECT(BIN(1),2,'abc',ASCII(4)), JSON_ARRAY(1, \"abc\", NULL, TRUE, CURTIME())",
       "Instructions": {
@@ -3622,6 +3731,7 @@
     "comment": "select (select id from user order by id limit 1) from user_extra",
     "query": "select (select id from user order by id limit 1) from user_extra",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select (select id from user order by id limit 1) from user_extra",
       "Instructions": {
@@ -3675,6 +3785,7 @@
     "comment": "yeah, it does not make sense, but it's valid",
     "query": "select exists(select 1) from user where id = 5",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select exists(select 1) from user where id = 5",
       "Instructions": {
@@ -3702,6 +3813,7 @@
     "comment": "json schema validation functions",
     "query": "SELECT JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT JSON_SCHEMA_VALID('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), JSON_SCHEMA_VALIDATION_REPORT('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"')",
       "Instructions": {
@@ -3724,6 +3836,7 @@
     "comment": "json search functions",
     "query": "SELECT JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]')), JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}'), JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\"), JSON_SEARCH('[\"abc\"]', 'one', 'abc'), JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT JSON_CONTAINS('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), JSON_CONTAINS_PATH('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), JSON_EXTRACT('[10, 20, [30, 40]]', '$[1]'), JSON_UNQUOTE(JSON_EXTRACT('[\"a\",\"b\"]', '$[1]')), JSON_KEYS('{\"a\": 1, \"b\": {\"c\": 30}}'), JSON_OVERLAPS(\"[1,3,5,7]\", \"[2,5,7]\"), JSON_SEARCH('[\"abc\"]', 'one', 'abc'), JSON_VALUE('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), JSON_ARRAY(4,5) MEMBER OF('[[3,4],[4,5]]')",
       "Instructions": {
@@ -3746,6 +3859,7 @@
     "comment": "Json extract and json unquote shorthands",
     "query": "SELECT a->\"$[4]\", a->>\"$[3]\" FROM user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "SELECT a->\"$[4]\", a->>\"$[3]\" FROM user",
       "Instructions": {
@@ -3769,6 +3883,7 @@
     "comment": "groupe by with non aggregated columns and table alias",
     "query": "select u.id, u.age from user u group by u.id",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select u.id, u.age from user u group by u.id",
       "Instructions": {
@@ -3792,6 +3907,7 @@
     "comment": "Functions that return JSON value attributes",
     "query": "select JSON_DEPTH('{}'), JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a')), JSON_VALID('{\"a\": 1}')",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select JSON_DEPTH('{}'), JSON_LENGTH('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), JSON_TYPE(JSON_EXTRACT('{\"a\": [10, true]}', '$.a')), JSON_VALID('{\"a\": 1}')",
       "Instructions": {
@@ -3814,6 +3930,7 @@
     "comment": "Json array functions",
     "query": "select JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z'), JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select JSON_ARRAY_APPEND('{\"a\": 1}', '$', 'z'), JSON_ARRAY_INSERT('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), JSON_INSERT('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', CAST('[true, false]' AS JSON))",
       "Instructions": {
@@ -3836,6 +3953,7 @@
     "comment": "Json merge functions",
     "query": "select JSON_MERGE('[1, 2]', '[true, false]'), JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}'), JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select JSON_MERGE('[1, 2]', '[true, false]'), JSON_MERGE_PATCH('{\"name\": \"x\"}', '{\"id\": 47}'), JSON_MERGE_PRESERVE('[1, 2]', '{\"id\": 47}')",
       "Instructions": {
@@ -3858,6 +3976,7 @@
     "comment": "JSON modifier functions",
     "query": "select JSON_REMOVE('[1, [2, 3], 4]', '$[1]'), JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_SET('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_UNQUOTE('\"abc\"')",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select JSON_REMOVE('[1, [2, 3], 4]', '$[1]'), JSON_REPLACE('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_SET('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), JSON_UNQUOTE('\"abc\"')",
       "Instructions": {
@@ -3880,6 +3999,7 @@
     "comment": "Reference with a subquery which can be merged",
     "query": "select exists(select id from user where id = 4)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select exists(select id from user where id = 4)",
       "Instructions": {
@@ -3907,6 +4027,7 @@
     "comment": "Reference with a subquery which cannot be merged",
     "query": "select exists(select * from user)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select exists(select * from user)",
       "Instructions": {
@@ -3953,6 +4074,7 @@
     "comment": "insert function not requiring any table",
     "query": "select insert('Quadratic', 3, 4, 'What')",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select insert('Quadratic', 3, 4, 'What')",
       "Instructions": {
@@ -3975,6 +4097,7 @@
     "comment": "insert function using column names as arguments",
     "query": "select insert(tcol1, id, 3, tcol2) from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select insert(tcol1, id, 3, tcol2) from user",
       "Instructions": {
@@ -3998,6 +4121,7 @@
     "comment": "gtid functions",
     "query": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23','3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57')",
       "Instructions": {
@@ -4020,6 +4144,7 @@
     "comment": "Predicate in apply join which is merged",
     "query": "select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col, user_metadata.user_id from user join user_extra on user.col = user_extra.col join user_metadata on user_extra.user_id = user_metadata.user_id where user.textcol1 = 'alice@gmail.com'",
       "Instructions": {
@@ -4067,6 +4192,7 @@
     "comment": "Join across multiple tables, with conditions on different vindexes, but mergeable through join predicates",
     "query": "SELECT user.id FROM user INNER JOIN music_extra ON user.id = music_extra.user_id INNER JOIN music ON music_extra.user_id = music.user_id WHERE user.id = 123 and music.id = 456",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT user.id FROM user INNER JOIN music_extra ON user.id = music_extra.user_id INNER JOIN music ON music_extra.user_id = music.user_id WHERE user.id = 123 and music.id = 456",
       "Instructions": {
@@ -4096,6 +4222,7 @@
     "comment": "SQL_CALC_FOUND_ROWS with vindex lookup",
     "query": "select SQL_CALC_FOUND_ROWS id, name from user where name = 'aa' order by id limit 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select SQL_CALC_FOUND_ROWS id, name from user where name = 'aa' order by id limit 2",
       "Instructions": {
@@ -4208,6 +4335,7 @@
     "comment": "`None` route being merged with another route via join predicate on Vindex columns",
     "query": "SELECT `music`.id FROM `music` INNER JOIN `user` ON music.user_id = user.id WHERE music.user_id IN (NULL) AND user.id = 5",
     "plan": {
+      "Type": "Local",
       "QueryType": "SELECT",
       "Original": "SELECT `music`.id FROM `music` INNER JOIN `user` ON music.user_id = user.id WHERE music.user_id IN (NULL) AND user.id = 5",
       "Instructions": {
@@ -4231,6 +4359,7 @@
     "comment": "Treating single value tuples as `EqualUnique` routes",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (5)) AND music.user_id = 5",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (5)) AND music.user_id = 5",
       "Instructions": {
@@ -4258,6 +4387,7 @@
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3))",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3))",
       "Instructions": {
@@ -4284,6 +4414,7 @@
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, with derived table",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) _inner)",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) _inner)",
       "Instructions": {
@@ -4310,6 +4441,7 @@
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, with inner scatter query",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.foo = 'bar') AND music.user_id IN (3, 4, 5)",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.foo = 'bar') AND music.user_id IN (3, 4, 5)",
       "Instructions": {
@@ -4337,6 +4469,7 @@
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) and music.user_id = 5",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) and music.user_id = 5",
       "Instructions": {
@@ -4363,6 +4496,7 @@
     "comment": "Subquery with `IN` condition using columns with matching lookup vindexes, but not a top level predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (1, 2, 3)) OR music.user_id = 5",
       "Instructions": {
@@ -4385,6 +4519,7 @@
     "comment": "`IN` comparison on Vindex with `None` subquery, as routing predicate",
     "query": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
     "plan": {
+      "Type": "Local",
       "QueryType": "SELECT",
       "Original": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
       "Instructions": {
@@ -4407,6 +4542,7 @@
     "comment": "`IN` comparison on Vindex with `None` subquery, as non-routing predicate",
     "query": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "SELECT `music`.id FROM `music` WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5",
       "Instructions": {
@@ -4429,6 +4565,7 @@
     "comment": "Mergeable scatter subquery",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop')",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop')",
       "Instructions": {
@@ -4452,6 +4589,7 @@
     "comment": "Mergeable scatter subquery with `GROUP BY` on unique vindex column",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.id)",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.id)",
       "Instructions": {
@@ -4475,6 +4613,7 @@
     "comment": "Unmergeable scatter subquery with `GROUP BY` on-non vindex column",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.genre)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.genre)",
       "Instructions": {
@@ -4559,6 +4698,7 @@
     "comment": "Unmergeable scatter subquery with LIMIT",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' LIMIT 10)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' LIMIT 10)",
       "Instructions": {
@@ -4640,6 +4780,7 @@
     "comment": "Mergeable subquery with `MAX` aggregate and grouped by unique vindex",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6) GROUP BY music.user_id)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6) GROUP BY music.user_id)",
       "Instructions": {
@@ -4719,6 +4860,7 @@
     "comment": "Unmergeable subquery with `MAX` aggregate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6))",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6))",
       "Instructions": {
@@ -4804,6 +4946,7 @@
     "comment": "Mergeable subquery with `MAX` aggregate with `EqualUnique` route operator",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5)",
       "Instructions": {
@@ -4882,6 +5025,7 @@
     "comment": "Mergeable subquery with `LIMIT` due to `EqualUnique` route",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5 LIMIT 10)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5 LIMIT 10)",
       "Instructions": {
@@ -4961,6 +5105,7 @@
     "comment": "Mergeable subquery with multiple levels of derived statements",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id = 5 LIMIT 10) subquery_for_limit) subquery_for_limit)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id = 5 LIMIT 10) subquery_for_limit) subquery_for_limit)",
       "Instructions": {
@@ -4987,6 +5132,7 @@
     "comment": "Mergeable subquery with multiple levels of derived statements, using a single value `IN` predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5) LIMIT 10) subquery_for_limit) subquery_for_limit)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5) LIMIT 10) subquery_for_limit) subquery_for_limit)",
       "Instructions": {
@@ -5013,6 +5159,7 @@
     "comment": "We are using last_insert_id with argument, so we need to fetch all results",
     "query": "select last_insert_id(5) from user limit 12",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select last_insert_id(5) from user limit 12",
       "Instructions": {
@@ -5043,6 +5190,7 @@
     "comment": "Unmergeable subquery with multiple levels of derived statements, using a multi value `IN` predicate",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music WHERE music.user_id IN (5, 6) LIMIT 10) subquery_for_limit) subquery_for_limit)",
       "Instructions": {
@@ -5128,6 +5276,7 @@
     "comment": "Unmergeable subquery with multiple levels of derived statements",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT * FROM (SELECT * FROM (SELECT music.id FROM music LIMIT 10) subquery_for_limit) subquery_for_limit)",
       "Instructions": {
@@ -5209,6 +5358,7 @@
     "comment": "`None` subquery as top level predicate - outer query changes from `Scatter` to `None` on merge",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL))",
     "plan": {
+      "Type": "Local",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL))",
       "Instructions": {
@@ -5231,6 +5381,7 @@
     "comment": "`None` subquery as top level predicate - outer query changes from `EqualUnique` to `None` on merge",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
     "plan": {
+      "Type": "Local",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) AND music.user_id = 5",
       "Instructions": {
@@ -5253,6 +5404,7 @@
     "comment": "`None` subquery nested inside `OR` expression - outer query keeps routing information",
     "query": "SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE (music.id IN (SELECT music.id FROM music WHERE music.user_id IN (NULL)) OR music.user_id = 5)",
       "Instructions": {
@@ -5275,6 +5427,7 @@
     "comment": "Joining with a subquery that uses an aggregate column and an `EqualUnique` route can be merged together",
     "query": "SELECT music.id FROM music INNER JOIN (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other ON other.maxt = music.id",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music INNER JOIN (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other ON other.maxt = music.id",
       "Instructions": {
@@ -5301,6 +5454,7 @@
     "comment": "Joining with a subquery that uses an `EqualUnique` route can be merged",
     "query": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id = 5) other ON other.id = music.id",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id = 5) other ON other.id = music.id",
       "Instructions": {
@@ -5327,6 +5481,7 @@
     "comment": "Joining with a subquery that has an `IN` route can be merged",
     "query": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id IN (5, 6, 7)) other ON other.id = music.id",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id IN (5, 6, 7)) other ON other.id = music.id",
       "Instructions": {
@@ -5353,6 +5508,7 @@
     "comment": "limit on the vtgate has to be executed on the LHS of a join",
     "query": "select id from user join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select id from user join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
       "Instructions": {
@@ -5409,6 +5565,7 @@
     "comment": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
     "query": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
       "Instructions": {
@@ -5474,6 +5631,7 @@
     "comment": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
     "query": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
       "Instructions": {
@@ -5500,6 +5658,7 @@
     "comment": "Earlier columns are in scope in subqueries https://github.com/vitessio/vitess/issues/11246",
     "query": "SELECT 1 as x, (SELECT x)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT 1 as x, (SELECT x)",
       "Instructions": {
@@ -5522,6 +5681,7 @@
     "comment": "(OR 1 = 0) doesn't cause unnecessary scatter",
     "query": "select * from user where id = 1 or 1 = 0",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where id = 1 or 1 = 0",
       "Instructions": {
@@ -5548,6 +5708,7 @@
     "comment": "(OR 2 < 1) doesn't cause unnecessary scatter",
     "query": "select * from user where id = 1 or 2 < 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where id = 1 or 2 < 1",
       "Instructions": {
@@ -5574,6 +5735,7 @@
     "comment": "query with a derived table and dual table in unsharded keyspace",
     "query": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
       "Instructions": {
@@ -5598,6 +5760,7 @@
     "comment": "subquery having join table on clause, using column reference of outer select table",
     "query": "select (select 1 from user u1 join user u2 on u1.id = u2.id and u1.id = u3.id) subquery from user u3 where u3.id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select (select 1 from user u1 join user u2 on u1.id = u2.id and u1.id = u3.id) subquery from user u3 where u3.id = 1",
       "Instructions": {
@@ -5624,6 +5787,7 @@
     "comment": "SOME modifier on unsharded table works well",
     "query": "select 1 from unsharded where foo = SOME (select 1 from unsharded_a where foo = 1)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select 1 from unsharded where foo = SOME (select 1 from unsharded_a where foo = 1)",
       "Instructions": {
@@ -5648,6 +5812,7 @@
     "comment": "ALL modifier on unsharded table works well",
     "query": "select 1 from unsharded where foo = ALL (select 1 from unsharded_a where foo = 1)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select 1 from unsharded where foo = ALL (select 1 from unsharded_a where foo = 1)",
       "Instructions": {
@@ -5672,6 +5837,7 @@
     "comment": "allow last_insert_id with argument",
     "query": "select last_insert_id(id) from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select last_insert_id(id) from user",
       "Instructions": {
@@ -5695,6 +5861,7 @@
     "comment": "merge subquery using MAX and join into single route",
     "query": "select 1 from user join music_extra on user.id = music_extra.user_id where music_extra.music_id = (select max(music_id) from music_extra where user_id = user.id)",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select 1 from user join music_extra on user.id = music_extra.user_id where music_extra.music_id = (select max(music_id) from music_extra where user_id = user.id)",
       "Instructions": {
@@ -5719,6 +5886,7 @@
     "comment": "Query with non-plannable lookup vindex",
     "query": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
     "plan": {
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "SELECT * FROM user_metadata WHERE user_metadata.non_planable = 'foo'",
       "Instructions": {
@@ -5746,6 +5914,7 @@
     "comment": "join query with lookup and join on different vindex column",
     "query": "select u.id from user u, user_metadata um where u.name = 'foo' and u.id = um.user_id",
     "plan": {
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select u.id from user u, user_metadata um where u.name = 'foo' and u.id = um.user_id",
       "Instructions": {
@@ -5799,6 +5968,7 @@
     "comment": "pick email as vindex lookup",
     "query": "select * from customer where email = 'a@mail.com'",
     "plan": {
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select * from customer where email = 'a@mail.com'",
       "Instructions": {
@@ -5850,6 +6020,7 @@
     "comment": "phone is in backfill vindex - not selected for vindex lookup",
     "query": "select * from customer where phone = 123456",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from customer where phone = 123456",
       "Instructions": {
@@ -5872,6 +6043,7 @@
     "comment": "name is in backfill vindex - not selected for vindex lookup",
     "query": "select * from customer where name = 'x'",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from customer where name = 'x'",
       "Instructions": {
@@ -5895,6 +6067,7 @@
     "comment": "email vindex is costly than phone vindex - but phone vindex is backfiling hence ignored",
     "query": "select * from customer where email = 'a@mail.com' and phone = 123456",
     "plan": {
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select * from customer where email = 'a@mail.com' and phone = 123456",
       "Instructions": {
@@ -5946,6 +6119,7 @@
     "comment": "predicate order changed: email vindex is costly than phone vindex - but phone vindex is backfiling hence ignored",
     "query": "select * from customer where phone = 123456 and email = 'a@mail.com'",
     "plan": {
+      "Type": "Lookup",
       "QueryType": "SELECT",
       "Original": "select * from customer where phone = 123456 and email = 'a@mail.com'",
       "Instructions": {
@@ -5997,6 +6171,7 @@
     "comment": "invisible column is not expanded, but valid in predicate",
     "query": "select * from samecolvin where secret = 12",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from samecolvin where secret = 12",
       "Instructions": {
@@ -6020,6 +6195,7 @@
     "comment": "column with qualifier is correctly used",
     "query": "select u.foo, ue.foo as apa from user u, user_extra ue order by foo ",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.foo, ue.foo as apa from user u, user_extra ue order by foo ",
       "Instructions": {
@@ -6064,6 +6240,7 @@
     "comment": "Derived tables going to a single shard still need to expand derived table columns",
     "query": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM unsharded LIMIT 1) AS tables ON tables.table_name = c.table_name",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT c.column_name FROM user c JOIN (SELECT table_name FROM unsharded LIMIT 1) AS tables ON tables.table_name = c.table_name",
       "Instructions": {
@@ -6110,6 +6287,7 @@
     "comment": "column name aliases in outer join queries",
     "query": "select name as t0, name as t1 from user left outer join user_extra on user.cola = user_extra.cola",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select name as t0, name as t1 from user left outer join user_extra on user.cola = user_extra.cola",
       "Instructions": {
@@ -6166,6 +6344,7 @@
     "comment": "Over clause works for unsharded tables",
     "query": "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM unsharded_a",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT val, CUME_DIST() OVER w, ROW_NUMBER() OVER w, DENSE_RANK() OVER w, PERCENT_RANK() OVER w, RANK() OVER w AS 'cd' FROM unsharded_a",
       "Instructions": {
@@ -6189,6 +6368,7 @@
     "comment": "join with derived table with alias and join condition - merge into route",
     "query": "select 1 from user join (select id as uid from user) as t where t.uid = user.id",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select 1 from user join (select id as uid from user) as t where t.uid = user.id",
       "Instructions": {

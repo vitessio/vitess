@@ -74,7 +74,7 @@ func (del *Delete) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 // Note: the commit order may be different from the DML order because it's possible
 // for DMLs to reuse existing transactions.
 func (del *Delete) deleteVindexEntries(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
-	if del.OwnedVindexQuery == "" {
+	if !del.isVindexModified() {
 		return nil
 	}
 	queries := make([]*querypb.BoundQuery, len(rss))
@@ -112,6 +112,10 @@ func (del *Delete) deleteVindexEntries(ctx context.Context, vcursor VCursor, bin
 	}
 
 	return nil
+}
+
+func (del *Delete) isVindexModified() bool {
+	return del.OwnedVindexQuery != ""
 }
 
 func (del *Delete) description() PrimitiveDescription {

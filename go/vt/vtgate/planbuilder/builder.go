@@ -115,14 +115,7 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 		primitive = planResult.primitive
 		tablesUsed = planResult.tables
 	}
-	plan := &engine.Plan{
-		Type:         sqlparser.ASTToStatementType(stmt),
-		Original:     query,
-		Instructions: primitive,
-		BindVarNeeds: bindVarNeeds,
-		TablesUsed:   tablesUsed,
-	}
-	return plan, nil
+	return engine.NewPlan(query, stmt, primitive, bindVarNeeds, tablesUsed), nil
 }
 
 func getConfiguredPlanner(vschema plancontext.VSchema, stmt sqlparser.Statement, query string) (stmtPlanner, error) {

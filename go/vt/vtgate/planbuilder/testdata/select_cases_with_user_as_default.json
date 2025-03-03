@@ -3,6 +3,7 @@
     "comment": "EXISTS subquery",
     "query": "select exists(select * from user where id = 5)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select exists(select * from user where id = 5)",
       "Instructions": {

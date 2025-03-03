@@ -127,7 +127,7 @@ func (e *Executor) newExecute(
 			return err
 		}
 
-		if plan.Type != sqlparser.StmtShow {
+		if plan.QueryType != sqlparser.StmtShow {
 			safeSession.ClearWarnings()
 		}
 
@@ -145,7 +145,7 @@ func (e *Executor) newExecute(
 			return err
 		}
 		if result != nil {
-			return recResult(plan.Type, result)
+			return recResult(plan.QueryType, result)
 		}
 
 		// Prepare for execution.
@@ -222,36 +222,36 @@ func (e *Executor) handleTransactions(
 ) (*sqltypes.Result, error) {
 	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
 	// will fall through and be handled through planning
-	switch plan.Type {
+	switch plan.QueryType {
 	case sqlparser.StmtBegin:
-		qr, err := e.handleBegin(ctx, safeSession, logStats, stmt)
+		qr, err := e.handleBegin(ctx, vcursor, safeSession, logStats, stmt)
 		return qr, err
 	case sqlparser.StmtCommit:
-		qr, err := e.handleCommit(ctx, safeSession, logStats)
+		qr, err := e.handleCommit(ctx, vcursor, safeSession, logStats)
 		return qr, err
 	case sqlparser.StmtRollback:
-		qr, err := e.handleRollback(ctx, safeSession, logStats)
+		qr, err := e.handleRollback(ctx, vcursor, safeSession, logStats)
 		return qr, err
 	case sqlparser.StmtSavepoint:
-		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Savepoint", logStats, func(_ string) (*sqltypes.Result, error) {
+		qr, err := e.handleSavepoint(ctx, vcursor, safeSession, plan.Original, plan.QueryType.String(), logStats, func(_ string) (*sqltypes.Result, error) {
 			// Safely to ignore as there is no transaction.
 			return &sqltypes.Result{}, nil
 		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtSRollback:
-		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Rollback Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
+		qr, err := e.handleSavepoint(ctx, vcursor, safeSession, plan.Original, plan.QueryType.String(), logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
 		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtRelease:
-		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Release Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
+		qr, err := e.handleSavepoint(ctx, vcursor, safeSession, plan.Original, plan.QueryType.String(), logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
 		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtKill:
-		return e.handleKill(ctx, mysqlCtx, stmt, logStats)
+		return e.handleKill(ctx, mysqlCtx, vcursor, stmt, logStats)
 	}
 	return nil, nil
 }
@@ -378,18 +378,19 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 }
 
 func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *econtext.VCursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
-	logStats.StmtType = plan.Type.String()
+	logStats.StmtType = plan.QueryType.String()
 	logStats.ActiveKeyspace = vcursor.GetKeyspace()
 	logStats.TablesUsed = plan.TablesUsed
 	logStats.TabletType = vcursor.TabletType().String()
-	errCount := e.logExecutionEnd(logStats, execStart, plan, err, qr)
+	errCount := e.logExecutionEnd(logStats, execStart, plan, vcursor, err, qr)
 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
 }
 
-func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.Time, plan *engine.Plan, err error, qr *sqltypes.Result) uint64 {
+func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.Time, plan *engine.Plan, vcursor *econtext.VCursorImpl, err error, qr *sqltypes.Result) uint64 {
 	logStats.ExecuteTime = time.Since(execStart)
 
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
+	e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
 
 	var errCount uint64
 	if err != nil {
@@ -405,7 +406,7 @@ func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.T
 func (e *Executor) logPlanningFinished(logStats *logstats.LogStats, plan *engine.Plan) time.Time {
 	execStart := time.Now()
 	if plan != nil {
-		logStats.StmtType = plan.Type.String()
+		logStats.StmtType = plan.QueryType.String()
 	}
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	return execStart

@@ -8,6 +8,7 @@
     "comment": "Insertion in a table with shard-scoped foreign keys is allowed",
     "query": "insert into tbl2 (col2, coly) values (1, 3)",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into tbl2 (col2, coly) values (1, 3)",
       "Instructions": {
@@ -32,6 +33,7 @@
     "comment": "Insertion in a table with shard-scoped multiple column foreign key is allowed",
     "query": "insert into multicol_tbl2 (cola, colb, colc) values (1, 2, 3)",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into multicol_tbl2 (cola, colb, colc) values (1, 2, 3)",
       "Instructions": {
@@ -66,6 +68,7 @@
     "comment": "Delete in a table with shard-scoped multiple column foreign key with cascade",
     "query": "delete from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "DELETE",
       "Original": "delete from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
       "Instructions": {
@@ -143,6 +146,7 @@
     "comment": "Delete in a table with shard-scoped foreign keys with cascade",
     "query": "delete from tbl5",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "DELETE",
       "Original": "delete from tbl5",
       "Instructions": {
@@ -222,6 +226,7 @@
     "comment": "Delete in a table with unsharded foreign key with SET NULL",
     "query": "delete from u_tbl9 where col9 = 5",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "DELETE",
       "Original": "delete from u_tbl9 where col9 = 5",
       "Instructions": {
@@ -277,6 +282,7 @@
     "comment": "update in unsharded table with restrict",
     "query": "update u_tbl5 set col5 = 'foo' where id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update u_tbl5 set col5 = 'foo' where id = 1",
       "Instructions": {
@@ -298,6 +304,7 @@
     "comment": "update in unsharded table with cascade",
     "query": "update u_tbl2 set col2 = 'bar' where id = 1",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set col2 = 'bar' where id = 1",
       "Instructions": {
@@ -353,6 +360,7 @@
     "comment": "update in unsharded table with cascade - on non-referenced column",
     "query": "update u_tbl2 set col_no_ref = 'baz' where id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set col_no_ref = 'baz' where id = 1",
       "Instructions": {
@@ -379,6 +387,7 @@
     "comment": "Update in a table with cross-shard foreign keys, column not in update expression - allowed",
     "query": "update tbl1 set not_ref_col = 'foo' where id = 1",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "UPDATE",
       "Original": "update tbl1 set not_ref_col = 'foo' where id = 1",
       "Instructions": {
@@ -405,6 +414,7 @@
     "comment": "Update in a table with shard-scoped foreign keys with cascade",
     "query": "update tbl5 set t5col5 = 'foo'",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update tbl5 set t5col5 = 'foo'",
       "Instructions": {
@@ -465,6 +475,7 @@
     "comment": "Update a table with parent and child foreign keys - shard scoped",
     "query": "update tbl2 set col = 'foo'",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "UPDATE",
       "Original": "update tbl2 set col = 'foo'",
       "Instructions": {
@@ -486,6 +497,7 @@
     "comment": "update table with column's parent foreign key cross shard",
     "query": "update tbl10 set col = 'foo'",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update tbl10 set col = 'foo'",
       "Instructions": {
@@ -570,6 +582,7 @@
     "comment": "Delete table with cross-shard foreign key with set null - should be eventually allowed",
     "query": "delete from tbl9 where col9 = 34",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "DELETE",
       "Original": "delete from tbl9 where col9 = 34",
       "Instructions": {
@@ -633,6 +646,7 @@
     "comment": "update table with same column having reference to different tables, one with on update cascade other with on update set null - child table have further reference",
     "query": "update u_tbl1 set col1 = 'foo'",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl1 set col1 = 'foo'",
       "Instructions": {
@@ -772,6 +786,7 @@
     "comment": "update with limit with foreign keys",
     "query": "update u_tbl2 set col2 = 'bar' limit 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set col2 = 'bar' limit 2",
       "Instructions": {
@@ -846,6 +861,7 @@
     "comment": "update in a table with non-literal value - set null fail due to child update where condition",
     "query": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
       "Instructions": {
@@ -927,6 +943,7 @@
     "comment": "update in a table with non-literal value - with cascade fail as the cascade value is not known",
     "query": "update u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
       "Instructions": {
@@ -1080,6 +1097,7 @@
     "comment": "update in a table with set null, non-literal value on non-foreign key column - allowed",
     "query": "update u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1",
       "Instructions": {
@@ -1135,6 +1153,7 @@
     "comment": "update in a table with cascade, non-literal value on non-foreign key column - allowed",
     "query": "update u_tbl1 set m = x + 'bar', col1 = 2 where id = 1",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl1 set m = x + 'bar', col1 = 2 where id = 1",
       "Instructions": {
@@ -1279,6 +1298,7 @@
     "comment": "delete in a table with limit",
     "query": "delete from u_tbl2 limit 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DELETE",
       "Original": "delete from u_tbl2 limit 2",
       "Instructions": {
@@ -1353,6 +1373,7 @@
     "comment": "update with fk on cross-shard with a where condition on non-literal value - disallowed",
     "query": "update tbl3 set coly = colx + 10 where coly = 10",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update tbl3 set coly = colx + 10 where coly = 10",
       "Instructions": {
@@ -1435,6 +1456,7 @@
     "comment": "update with fk on cross-shard with a where condition",
     "query": "update tbl3 set coly = 20 where coly = 10",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update tbl3 set coly = 20 where coly = 10",
       "Instructions": {
@@ -1514,6 +1536,7 @@
     "comment": "Update in a table with shard-scoped foreign keys with cascade that requires a validation of a different parent foreign key",
     "query": "update u_tbl6 set col6 = 'foo'",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl6 set col6 = 'foo'",
       "Instructions": {
@@ -1588,6 +1611,7 @@
     "comment": "Update that cascades and requires parent fk and restrict child fk verification",
     "query": "update u_tbl7 set col7 = 'foo'",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl7 set col7 = 'foo'",
       "Instructions": {
@@ -1675,6 +1699,7 @@
     "comment": "Update that cascades and requires parent fk and restrict child fk verification - bindVariable",
     "query": "update u_tbl7 set col7 = :v1",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl7 set col7 = :v1",
       "Instructions": {
@@ -1762,6 +1787,7 @@
     "comment": "Insert with on duplicate key update - foreign keys disallowed",
     "query": "insert into u_tbl1 (id, col1) values (1, 3) on duplicate key update col1 = 5",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "INSERT",
       "Original": "insert into u_tbl1 (id, col1) values (1, 3) on duplicate key update col1 = 5",
       "Instructions": {
@@ -1919,6 +1945,7 @@
     "comment": "Insert with on duplicate key update - foreign keys not on update column - allowed",
     "query": "insert into u_tbl1 (id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into u_tbl1 (id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'",
       "Instructions": {
@@ -1945,6 +1972,7 @@
     "comment": "replace with fk reference unsupported",
     "query": "replace into u_tbl1 (id, col1) values (1, 2)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "INSERT",
       "Original": "replace into u_tbl1 (id, col1) values (1, 2)",
       "Instructions": {
@@ -2050,6 +2078,7 @@
     "comment": "update on a multicol foreign key that set nulls and then cascades",
     "query": "update u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
       "Instructions": {
@@ -2141,6 +2170,7 @@
     "comment": "update on a multicol foreign key that set nulls and then cascades - bindVariables",
     "query": "update /*+ SET_VAR(foreign_key_checks=On) */ u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update /*+ SET_VAR(foreign_key_checks=On) */ u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
       "Instructions": {
@@ -2232,6 +2262,7 @@
     "comment": "Cascaded delete run from prepared statement",
     "query": "execute prep_delete using @foo",
     "plan": {
+      "Type": "Complex",
       "QueryType": "EXECUTE",
       "Original": "execute prep_delete using @foo",
       "Instructions": {
@@ -2314,6 +2345,7 @@
     "comment": "Delete with foreign key checks off",
     "query": "delete /*+ SET_VAR(foreign_key_checks=off) */ from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DELETE",
       "Original": "delete /*+ SET_VAR(foreign_key_checks=off) */ from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
       "Instructions": {
@@ -2341,6 +2373,7 @@
     "comment": "Update with foreign key checks off",
     "query": "update /*+ SET_VAR(foreign_key_checks=0) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update /*+ SET_VAR(foreign_key_checks=0) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
       "Instructions": {
@@ -2362,6 +2395,7 @@
     "comment": "Insert with cross shard foreign keys and foreign key checks off",
     "query": "insert /*+ SET_VAR(foreign_key_checks=0) */ into tbl3 (col3, coly) values (1, 3)",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert /*+ SET_VAR(foreign_key_checks=0) */ into tbl3 (col3, coly) values (1, 3)",
       "Instructions": {

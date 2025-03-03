@@ -46,6 +46,8 @@ func VisitAST(in AST, f Visit) error {
 		return VisitValueContainer(in, f)
 	case ValueSliceContainer:
 		return VisitValueSliceContainer(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -186,6 +188,8 @@ func VisitSubIface(in SubIface, f Visit) error {
 	switch in := in.(type) {
 	case *SubImpl:
 		return VisitRefOfSubImpl(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -232,6 +236,15 @@ func VisitRefOfValueSliceContainer(in *ValueSliceContainer, f Visit) error {
 		}
 	}
 	if err := VisitLeafSlice(in.ASTImplementationElements, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitVisitable(in Visitable, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitAST(in.VisitThis(), f); err != nil {
 		return err
 	}
 	return nil
