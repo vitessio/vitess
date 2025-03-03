@@ -64,3 +64,7 @@ func (t *Tracker) NextID() ID {
 func (t *Tracker) Set(id ID, expr sqlparser.Expr) {
 	t.Expressions[id] = expr
 }
+
+func (t *Tracker) Skip(id ID) {
+	t.Expressions[id] = nil
+}

@@ -157,14 +157,12 @@ func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sql
 	for _, pred := range preds {
 		lhsID := TableID(aj.LHS)
 		col := breakExpressionInLHSandRHS(ctx, pred, lhsID)
-		aj.JoinPredicates.add(col)
-		if !pushDown {
-			// we are already under a route, so no need to push down predicates and track them
-			continue
+		if pushDown {
+			newPred := ctx.PredTracker.NewJoinPredicate(col.RHSExpr)
+			col.JoinPredicateID = &newPred.ID
+			rhs = rhs.AddPredicate(ctx, newPred)
 		}
-		newPred := ctx.PredTracker.NewJoinPredicate(col.RHSExpr)
-		col.JoinPredicateID = &newPred.ID
-		rhs = rhs.AddPredicate(ctx, newPred)
+		aj.JoinPredicates.add(col)
 	}
 	aj.RHS = rhs
 }

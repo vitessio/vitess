@@ -75,6 +75,19 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		switch in := in.(type) {
 		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
+		case *ApplyJoin:
+			jm := newJoinMerge(nil, in.JoinType)
+			r := jm.mergeJoinInputs(ctx, in.LHS, in.RHS)
+			if r != nil {
+				aj, ok := r.Source.(*ApplyJoin)
+				if !ok {
+					panic("expected apply join")
+				}
+				aj.JoinPredicates = in.JoinPredicates
+				return r, Rewrote("merged apply join inputs")
+			}
+
+			return in, NoRewrite
 		case *Join:
 			return optimizeJoin(ctx, in)
 		case *Projection:
@@ -103,7 +116,6 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 			return tryPushUpdate(in)
 		case *RecurseCTE:
 			return tryMergeRecurse(ctx, in)
-
 		default:
 			return in, NoRewrite
 		}

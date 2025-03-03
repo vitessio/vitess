@@ -118,16 +118,14 @@ func (qb *queryBuilder) addTableExpr(
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
-	// if qb.ctx.ShouldSkip(expr) {
-	// 	// This is a predicate that was added to the RHS of an ApplyJoin.
-	// 	// The original predicate will be added, so we don't have to add this here
-	// 	return
-	// }
 	jp, ok := expr.(*predicates.JoinPredicate)
 	if ok {
 		// we have to strip out the join predicate containers,
 		// otherwise precedence calculations get messed up
 		expr = jp.Current()
+	}
+	if expr == nil {
+		return
 	}
 
 	var addPred func(sqlparser.Expr)
@@ -618,6 +616,9 @@ func buildProjection(op *Projection, qb *queryBuilder) {
 
 func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
 	preds := slice.Map(op.JoinPredicates.columns, func(jc applyJoinColumn) sqlparser.Expr {
+		if jc.JoinPredicateID != nil {
+			qb.ctx.PredTracker.Skip(*jc.JoinPredicateID)
+		}
 		return jc.Original
 	})
 	pred := sqlparser.AndExpressions(preds...)

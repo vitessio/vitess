@@ -17,6 +17,8 @@ limitations under the License.
 package predicates
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -59,5 +61,6 @@ func (j *JoinPredicate) Format(buf *sqlparser.TrackedBuffer) {
 }
 
 func (j *JoinPredicate) FormatFast(buf *sqlparser.TrackedBuffer) {
+	buf.WriteString(fmt.Sprintf("JP(%d):", j.ID))
 	j.Current().FormatFast(buf)
 }
