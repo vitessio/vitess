@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 )
 
 var ErrTranslateExprNotSupported = "expr cannot be translated, not supported"
@@ -548,6 +549,8 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (IR, error) {
 		return ast.translateCaseExpr(node)
 	case *sqlparser.BetweenExpr:
 		return ast.translateBetweenExpr(node)
+	case *predicates.JoinPredicate:
+		return ast.translateExpr(node.Current())
 	default:
 		return nil, translateExprNotSupported(e)
 	}
