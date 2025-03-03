@@ -19,6 +19,8 @@ package predicates
 import (
 	"sync"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -30,7 +32,7 @@ type (
 	Tracker struct {
 		mu          sync.Mutex
 		lastID      ID
-		Expressions map[ID]sqlparser.Expr
+		expressions map[ID]sqlparser.Expr
 	}
 
 	// ID is a unique key that references the shape of a single expression.
@@ -40,13 +42,13 @@ type (
 
 func NewTracker() *Tracker {
 	return &Tracker{
-		Expressions: make(map[ID]sqlparser.Expr),
+		expressions: make(map[ID]sqlparser.Expr),
 	}
 }
 
 func (t *Tracker) NewJoinPredicate(org sqlparser.Expr) *JoinPredicate {
 	nextID := t.NextID()
-	t.Expressions[nextID] = org
+	t.expressions[nextID] = org
 	return &JoinPredicate{
 		ID:      nextID,
 		tracker: t,
@@ -62,9 +64,17 @@ func (t *Tracker) NextID() ID {
 }
 
 func (t *Tracker) Set(id ID, expr sqlparser.Expr) {
-	t.Expressions[id] = expr
+	t.expressions[id] = expr
+}
+
+func (t *Tracker) Get(id ID) (sqlparser.Expr, error) {
+	expr, found := t.expressions[id]
+	if !found {
+		return nil, vterrors.VT13001("expression not found")
+	}
+	return expr, nil
 }
 
 func (t *Tracker) Skip(id ID) {
-	t.Expressions[id] = nil
+	t.expressions[id] = nil
 }

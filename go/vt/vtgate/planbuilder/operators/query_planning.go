@@ -132,38 +132,51 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 	if !ok {
 		panic(vterrors.VT13001("expected apply join"))
 	}
-	// we need to remember the joinPredicates we had, and their predicate ID
+
+	// Copy the join predicates from the original ApplyJoin to the new one.
 	aj.JoinPredicates = in.JoinPredicates
+
+	//  - Rewrite join predicates already pushed down &&
+	//  - Save original join predicates if we have to bail out of the rewrite
 	original := map[predicates.ID]sqlparser.Expr{}
 	for _, col := range aj.JoinPredicates.columns {
 		if col.JoinPredicateID != nil {
-			// if we have pushed down a join predicate, we need to restore it to it's original shape, without the argument from the LHS
+			// if we have pushed down a join predicate, we need to restore it to its original shape, without the argument from the LHS
 			id := *col.JoinPredicateID
-			original[id] = ctx.PredTracker.Expressions[id]
+			oldExpr, err := ctx.PredTracker.Get(id)
+			if err != nil {
+				panic(err)
+			}
+			original[id] = oldExpr
 			ctx.PredTracker.Set(id, col.Original)
 		}
 	}
 
+	// Defer restoration of original predicates if no successful rewrite happens.
 	defer func() {
 		if res == NoRewrite {
-			// We need to restore the original predicates, if we didn't rewrite the ApplyJoin
 			for id, expr := range original {
 				ctx.PredTracker.Set(id, expr)
 			}
 		}
 	}()
 
-	// something that was coming from outside might have been merged in,
-	// so we need to update routing choices we've made
+	// After merging joins, routing logic may have changed. Re-evaluate routing decisions.
+	// Example scenario:
+	// Before merge: routing based on predicates like ':lhs_col = rhs.col'.
+	// After merge: predicate rewritten to 'lhs.col = rhs.col', making this predicate invalid for routing.
 	r.Routing = r.Routing.resetRoutingLogic(ctx)
 
+	// Verify if the LHS is a Route operator, which is required for this rewrite.
 	rb, ok := in.LHS.(*Route)
 	success := "pushed ApplyJoin under Route"
 	if !ok {
-		// This is not expected to happen
+		// Unexpected scenario: LHS is not a Route; abort rewrite.
 		return in, NoRewrite
 	}
 
+	// Special case: If LHS is a DualRouting AND the join isn't INNER or targeting a single shard,
+	// we cannot safely perform this rewrite.
 	if _, isDual := rb.Routing.(*DualRouting); isDual &&
 		!(jm.joinType.IsInner() || r.Routing.OpCode().IsSingleShard()) {
 		// to check the resulting opcode, we've used the original predicates.

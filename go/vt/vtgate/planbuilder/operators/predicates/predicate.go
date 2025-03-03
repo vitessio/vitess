@@ -36,7 +36,7 @@ func (j *JoinPredicate) Clone(inner sqlparser.SQLNode) sqlparser.SQLNode {
 	if !ok {
 		panic(vterrors.VT13001("unexpected type in JoinPredicate.Clone"))
 	}
-	j.tracker.Expressions[j.ID] = expr
+	j.tracker.expressions[j.ID] = expr
 	return &JoinPredicate{
 		ID:      j.ID,
 		tracker: j.tracker,
@@ -51,7 +51,7 @@ func (j *JoinPredicate) VisitThis() sqlparser.SQLNode {
 }
 
 func (j *JoinPredicate) Current() sqlparser.Expr {
-	return j.tracker.Expressions[j.ID]
+	return j.tracker.expressions[j.ID]
 }
 
 func (j *JoinPredicate) IsExpr() {}
