@@ -87,7 +87,7 @@ func TestLookupHashMap(t *testing.T) {
 
 	got, err := lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceIDs([][]byte{
 			[]byte("\x16k@\xb4J\xbaK\xd6"),
 			[]byte("\x06\xe7\xea\"Βp\x8f"),
@@ -108,7 +108,7 @@ func TestLookupHashMap(t *testing.T) {
 	)
 	got, err = lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
-	want = []key.Destination{key.DestinationKeyspaceIDs([][]byte{})}
+	want = []key.ShardDestination{key.DestinationKeyspaceIDs([][]byte{})}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %#v, want %#v", got, want)
 	}
@@ -129,7 +129,7 @@ func TestLookupHashMapAbsent(t *testing.T) {
 
 	got, err := lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationNone{},
 		key.DestinationNone{},
 	}
@@ -141,7 +141,7 @@ func TestLookupHashMapAbsent(t *testing.T) {
 	lookuphash = createLookup(t, "lookup_hash", true)
 	got, err = lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want = []key.Destination{
+	want = []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
 		},
@@ -160,7 +160,7 @@ func TestLookupHashMapNull(t *testing.T) {
 
 	got, err := lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NULL})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceIDs([][]byte{
 			[]byte("\x16k@\xb4J\xbaK\xd6"),
 		}),
@@ -173,7 +173,7 @@ func TestLookupHashMapNull(t *testing.T) {
 	lookuphash = createLookup(t, "lookup_hash", true)
 	got, err = lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NULL})
 	require.NoError(t, err)
-	want = []key.Destination{
+	want = []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
 		},

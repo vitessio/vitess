@@ -75,11 +75,18 @@ func (c *callerIDClient) checkCallerID(ctx context.Context, received string) (bo
 	return true, fmt.Errorf("SUCCESS: callerid matches")
 }
 
-func (c *callerIDClient) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (c *callerIDClient) Execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if ok, err := c.checkCallerID(ctx, sql); ok {
 		return session, nil, err
 	}
-	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables)
+	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables, prepared)
 }
 
 func (c *callerIDClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {

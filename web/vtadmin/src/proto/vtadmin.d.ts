@@ -48574,6 +48574,9 @@ export namespace replicationdata {
 
         /** FullStatus disk_stalled */
         disk_stalled?: (boolean|null);
+
+        /** FullStatus semi_sync_blocked */
+        semi_sync_blocked?: (boolean|null);
     }
 
     /** Represents a FullStatus. */
@@ -48653,6 +48656,9 @@ export namespace replicationdata {
 
         /** FullStatus disk_stalled. */
         public disk_stalled: boolean;
+
+        /** FullStatus semi_sync_blocked. */
+        public semi_sync_blocked: boolean;
 
         /**
          * Creates a new FullStatus instance using the specified properties.
@@ -68799,6 +68805,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest shards */
         shards?: (string[]|null);
+
+        /** MoveTablesCompleteRequest ignore_source_keyspace */
+        ignore_source_keyspace?: (boolean|null);
     }
 
     /** Represents a MoveTablesCompleteRequest. */
@@ -68830,6 +68839,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest shards. */
         public shards: string[];
+
+        /** MoveTablesCompleteRequest ignore_source_keyspace. */
+        public ignore_source_keyspace: boolean;
 
         /**
          * Creates a new MoveTablesCompleteRequest instance using the specified properties.
@@ -78767,6 +78779,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest delete_batch_size */
         delete_batch_size?: (number|Long|null);
+
+        /** WorkflowDeleteRequest ignore_source_keyspace */
+        ignore_source_keyspace?: (boolean|null);
     }
 
     /** Represents a WorkflowDeleteRequest. */
@@ -78795,6 +78810,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest delete_batch_size. */
         public delete_batch_size: (number|Long);
+
+        /** WorkflowDeleteRequest ignore_source_keyspace. */
+        public ignore_source_keyspace: boolean;
 
         /**
          * Creates a new WorkflowDeleteRequest instance using the specified properties.

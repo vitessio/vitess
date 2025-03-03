@@ -1424,6 +1424,9 @@ message MoveTablesCompleteRequest {
   bool rename_tables = 6;
   bool dry_run = 7;
   repeated string shards = 8;
+  // Set to true if the you know that the source keyspace is no
+  // longer available but still want to complete the workflow.
+  bool ignore_source_keyspace = 9;
 }
 
 message MoveTablesCompleteResponse {
@@ -2110,6 +2113,10 @@ message WorkflowDeleteRequest {
   // up the migrated data. This is only used with multi-tenant
   // MoveTables migrations.
   int64 delete_batch_size = 6;
+  // Set to true if the you know that the source keyspace is no
+  // longer available but still want to clean everything up on the
+  // target keyspace.
+  bool ignore_source_keyspace = 7;
 }
 
 message WorkflowDeleteResponse {

@@ -29,6 +29,7 @@ import (
 
 type compactable interface {
 	// Compact implement this interface for operators that have easy to see optimisations
+	// This is run after the normal planning phase and is used to optimise the operator tree
 	Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult)
 }
 

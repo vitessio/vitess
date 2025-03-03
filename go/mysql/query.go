@@ -630,7 +630,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 	newParamsBoundFlag, pos, ok := readByte(payload, pos)
 	if ok && newParamsBoundFlag == 0x01 {
 		var mysqlType, flags byte
-		for i := range uint16(prepare.ParamsCount) {
+		for i := range prepare.ParamsCount {
 			mysqlType, pos, ok = readByte(payload, pos)
 			if !ok {
 				return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "reading parameter type failed")
@@ -651,7 +651,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 		}
 	}
 
-	for i := range len(prepare.ParamsType) {
+	for i := range prepare.ParamsCount {
 		var val sqltypes.Value
 		parameterID := fmt.Sprintf("v%d", i+1)
 		if v, ok := prepare.BindVars[parameterID]; ok {

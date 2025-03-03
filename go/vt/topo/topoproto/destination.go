@@ -27,10 +27,10 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// ParseDestination parses the string representation of a Destination
+// ParseDestination parses the string representation of a ShardDestination
 // of the form keyspace:shard@tablet_type. You can use a / instead of a :.
-func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (string, topodatapb.TabletType, key.Destination, error) {
-	var dest key.Destination
+func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (string, topodatapb.TabletType, key.ShardDestination, error) {
+	var dest key.ShardDestination
 	var keyspace string
 	tabletType := defaultTabletType
 

@@ -27,7 +27,15 @@ type evalTuple struct {
 var _ eval = (*evalTuple)(nil)
 
 func (e *evalTuple) ToRawBytes() []byte {
-	return nil
+	var vals []sqltypes.Value
+	for _, e2 := range e.t {
+		v, err := sqltypes.NewValue(e2.SQLType(), e2.ToRawBytes())
+		if err != nil {
+			panic(err)
+		}
+		vals = append(vals, v)
+	}
+	return sqltypes.TupleToProto(vals).Value
 }
 
 func (e *evalTuple) SQLType() sqltypes.Type {

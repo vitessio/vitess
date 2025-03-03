@@ -767,11 +767,11 @@ func (asm *assembler) CmpDates() {
 	}, "CMP DATE(SP-2), DATE(SP-1)")
 }
 
-func (asm *assembler) Collate(col collations.ID) {
+func (asm *assembler) Collate(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		a := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		a.tt = int16(sqltypes.VarChar)
-		a.col.Collation = col
+		a.col = col
 		return 1
 	}, "COLLATE VARCHAR(SP-1), %d", col)
 }
@@ -1168,6 +1168,21 @@ func (asm *assembler) Convert_xDT(offset, prec int, allowZero bool) {
 		}
 		return 1
 	}, "CONV (SP-%d), DATETIME", offset)
+}
+
+func (asm *assembler) Convert_xDTs(offset, prec int, allowZero bool) {
+	asm.emit(func(env *ExpressionEnv) int {
+		// Need to explicitly check here or we otherwise
+		// store a nil wrapper in an interface vs. a direct
+		// nil.
+		dt := evalToTimestamp(env.vm.stack[env.vm.sp-offset], prec, env.now, allowZero)
+		if dt == nil {
+			env.vm.stack[env.vm.sp-offset] = nil
+		} else {
+			env.vm.stack[env.vm.sp-offset] = dt
+		}
+		return 1
+	}, "CONV (SP-%d), TIMESTAMP", offset)
 }
 
 func (asm *assembler) Convert_xT(offset, prec int) {
@@ -2668,6 +2683,40 @@ func (asm *assembler) Fn_MULTICMP_u(args int, lessThan bool) {
 		env.vm.sp -= args - 1
 		return 1
 	}, "FN MULTICMP UINT64(SP-%d)...UINT64(SP-1)", args)
+}
+
+func (asm *assembler) Fn_MULTICMP_temporal(args int, lessThan bool) {
+	asm.adjustStack(-(args - 1))
+
+	asm.emit(func(env *ExpressionEnv) int {
+		var x *evalTemporal
+		x, _ = env.vm.stack[env.vm.sp-args].(*evalTemporal)
+		for sp := env.vm.sp - args + 1; sp < env.vm.sp; sp++ {
+			if env.vm.stack[sp] == nil {
+				if lessThan {
+					x = nil
+				}
+				continue
+			}
+			y := env.vm.stack[sp].(*evalTemporal)
+			if lessThan == (y.compare(x) < 0) {
+				x = y
+			}
+		}
+		env.vm.stack[env.vm.sp-args] = x
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN MULTICMP TEMPORAL(SP-%d)...TEMPORAL(SP-1)", args)
+}
+
+func (asm *assembler) Fn_MULTICMP_temporal_fallback(f multiComparisonFunc, args int, cmp, prec int) {
+	asm.adjustStack(-(args - 1))
+
+	asm.emit(func(env *ExpressionEnv) int {
+		env.vm.stack[env.vm.sp-args], env.vm.err = f(env, env.vm.stack[env.vm.sp-args:env.vm.sp], cmp, prec)
+		env.vm.sp -= args - 1
+		return 1
+	}, "FN MULTICMP_FALLBACK TEMPORAL(SP-%d)...TEMPORAL(SP-1)", args)
 }
 
 func (asm *assembler) Fn_REPEAT(base sqltypes.Type, fallback sqltypes.Type) {

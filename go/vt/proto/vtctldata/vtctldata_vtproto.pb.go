@@ -3633,6 +3633,7 @@ func (m *MoveTablesCompleteRequest) CloneVT() *MoveTablesCompleteRequest {
 	r.KeepRoutingRules = m.KeepRoutingRules
 	r.RenameTables = m.RenameTables
 	r.DryRun = m.DryRun
+	r.IgnoreSourceKeyspace = m.IgnoreSourceKeyspace
 	if rhs := m.Shards; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -5572,6 +5573,7 @@ func (m *WorkflowDeleteRequest) CloneVT() *WorkflowDeleteRequest {
 	r.KeepData = m.KeepData
 	r.KeepRoutingRules = m.KeepRoutingRules
 	r.DeleteBatchSize = m.DeleteBatchSize
+	r.IgnoreSourceKeyspace = m.IgnoreSourceKeyspace
 	if rhs := m.Shards; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -15953,6 +15955,16 @@ func (m *MoveTablesCompleteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.IgnoreSourceKeyspace {
+		i--
+		if m.IgnoreSourceKeyspace {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x48
+	}
 	if len(m.Shards) > 0 {
 		for iNdEx := len(m.Shards) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.Shards[iNdEx])
@@ -21098,6 +21110,16 @@ func (m *WorkflowDeleteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.IgnoreSourceKeyspace {
+		i--
+		if m.IgnoreSourceKeyspace {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x38
+	}
 	if m.DeleteBatchSize != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.DeleteBatchSize))
 		i--
@@ -25923,6 +25945,9 @@ func (m *MoveTablesCompleteRequest) SizeVT() (n int) {
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
+	if m.IgnoreSourceKeyspace {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -27851,6 +27876,9 @@ func (m *WorkflowDeleteRequest) SizeVT() (n int) {
 	}
 	if m.DeleteBatchSize != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.DeleteBatchSize))
+	}
+	if m.IgnoreSourceKeyspace {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -53105,6 +53133,26 @@ func (m *MoveTablesCompleteRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Shards = append(m.Shards, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IgnoreSourceKeyspace", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IgnoreSourceKeyspace = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -65524,6 +65572,26 @@ func (m *WorkflowDeleteRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IgnoreSourceKeyspace", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IgnoreSourceKeyspace = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

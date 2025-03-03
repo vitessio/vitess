@@ -32,7 +32,7 @@ func TestParseDestination(t *testing.T) {
 
 	testcases := []struct {
 		targetString string
-		dest         key.Destination
+		dest         key.ShardDestination
 		keyspace     string
 		tabletType   topodatapb.TabletType
 	}{{

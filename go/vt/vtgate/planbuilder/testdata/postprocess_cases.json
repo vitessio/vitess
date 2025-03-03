@@ -3,6 +3,7 @@
     "comment": "HAVING implicitly references table col",
     "query": "select user.col1 from user having col2 = 2",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.col1 from user having col2 = 2",
       "Instructions": {
@@ -30,6 +31,7 @@
     "comment": "TODO: this should be 'Column 'col1' in having clause is ambiguous'\n# non-ambiguous symbol reference",
     "query": "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2",
       "Instructions": {
@@ -72,6 +74,7 @@
     "comment": "HAVING multi-route",
     "query": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
       "Instructions": {
@@ -114,6 +117,7 @@
     "comment": "HAVING uses subquery",
     "query": "select id from user having id in (select col from user)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select id from user having id in (select col from user)",
       "Instructions": {
@@ -163,6 +167,7 @@
     "comment": "ORDER BY, reference col from local table.",
     "query": "select col from user where id = 5 order by aa",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select col from user where id = 5 order by aa",
       "Instructions": {
@@ -189,6 +194,7 @@
     "comment": "ORDER BY uses column numbers",
     "query": "select col from user where id = 1 order by 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select col from user where id = 1 order by 1",
       "Instructions": {
@@ -215,6 +221,7 @@
     "comment": "ORDER BY on scatter",
     "query": "select col from user order by col",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select col from user order by col",
       "Instructions": {
@@ -238,6 +245,7 @@
     "comment": "ORDER BY works for select * from authoritative table",
     "query": "select * from authoritative order by user_id",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from authoritative order by user_id",
       "Instructions": {
@@ -262,6 +270,7 @@
     "comment": "Test that LIMIT can be pushed to the route even in the presence of an outer join",
     "query": "SELECT user_extra.`id` FROM user LEFT JOIN user_extra ON user_extra.`b` = 2 AND user.`c` = user_extra.`c` WHERE user.`a` = 1 LIMIT 1",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT user_extra.`id` FROM user LEFT JOIN user_extra ON user_extra.`b` = 2 AND user.`c` = user_extra.`c` WHERE user.`a` = 1 LIMIT 1",
       "Instructions": {
@@ -325,6 +334,7 @@
     "comment": "ORDER BY works for select * from authoritative table",
     "query": "select * from authoritative order by col1",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from authoritative order by col1",
       "Instructions": {
@@ -348,6 +358,7 @@
     "comment": "ORDER BY on scatter with text column",
     "query": "select a, textcol1, b from user order by a, textcol1, b",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select a, textcol1, b from user order by a, textcol1, b",
       "Instructions": {
@@ -372,6 +383,7 @@
     "comment": "ORDER BY on scatter with text column, qualified name TODO: can plan better",
     "query": "select a, user.textcol1, b from user order by a, textcol1, b",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select a, user.textcol1, b from user order by a, textcol1, b",
       "Instructions": {
@@ -396,6 +408,7 @@
     "comment": "ORDER BY on scatter with multiple text columns",
     "query": "select a, textcol1, b, textcol2 from user order by a, textcol1, b, textcol2",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select a, textcol1, b, textcol2 from user order by a, textcol1, b, textcol2",
       "Instructions": {
@@ -425,6 +438,7 @@
     "comment": "ORDER BY column offset",
     "query": "select id as foo from music order by 1",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select id as foo from music order by 1",
       "Instructions": {
@@ -449,6 +463,7 @@
     "comment": "ORDER BY NULL",
     "query": "select col from user order by null",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select col from user order by null",
       "Instructions": {
@@ -471,6 +486,7 @@
     "comment": "ORDER BY after pull-out subquery",
     "query": "select col from user where col in (select col2 from user) order by col",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select col from user where col in (select col2 from user) order by col",
       "Instructions": {
@@ -517,6 +533,7 @@
     "comment": "ORDER BY NULL for join",
     "query": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null",
       "Instructions": {
@@ -595,6 +612,7 @@
     "comment": "ORDER BY non-key column for join",
     "query": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a",
       "Instructions": {
@@ -673,6 +691,7 @@
     "comment": "ORDER BY non-key column for implicit join",
     "query": "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a",
       "Instructions": {
@@ -751,6 +770,7 @@
     "comment": "ORDER BY NULL after pull-out subquery",
     "query": "select col from user where col in (select col2 from user) order by null",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select col from user where col in (select col2 from user) order by null",
       "Instructions": {
@@ -796,6 +816,7 @@
     "comment": "ORDER BY RAND()",
     "query": "select col from user order by RAND()",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select col from user order by RAND()",
       "Instructions": {
@@ -818,6 +839,7 @@
     "comment": "ORDER BY RAND() for join",
     "query": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()",
       "Instructions": {
@@ -896,6 +918,7 @@
     "comment": "ORDER BY RAND() after pull-out subquery",
     "query": "select col from user where col in (select col2 from user) order by rand()",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select col from user where col in (select col2 from user) order by rand()",
       "Instructions": {
@@ -941,6 +964,7 @@
     "comment": "Order by, '*' expression",
     "query": "select * from user where id = 5 order by col",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where id = 5 order by col",
       "Instructions": {
@@ -967,6 +991,7 @@
     "comment": "Order by, qualified '*' expression",
     "query": "select user.* from user where id = 5 order by user.col",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select user.* from user where id = 5 order by user.col",
       "Instructions": {
@@ -993,6 +1018,7 @@
     "comment": "Order by, '*' expression with qualified reference",
     "query": "select * from user where id = 5 order by user.col",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where id = 5 order by user.col",
       "Instructions": {
@@ -1019,6 +1045,7 @@
     "comment": "Order by, '*' expression in a subquery",
     "query": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
       "Instructions": {
@@ -1064,6 +1091,7 @@
     "comment": "Order by, verify outer symtab is searched according to its own context.",
     "query": "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)",
       "Instructions": {
@@ -1101,6 +1129,7 @@
     "comment": "Order by, '*' expression with qualified reference and using collate",
     "query": "select * from user where id = 5 order by user.col collate utf8_general_ci",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where id = 5 order by user.col collate utf8_general_ci",
       "Instructions": {
@@ -1127,6 +1156,7 @@
     "comment": "Order by with math functions",
     "query": "select * from user where id = 5 order by -col1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where id = 5 order by -col1",
       "Instructions": {
@@ -1153,6 +1183,7 @@
     "comment": "Order by with string operations",
     "query": "select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc",
       "Instructions": {
@@ -1179,6 +1210,7 @@
     "comment": "Order by with math operations",
     "query": "select * from user where id = 5 order by id+col collate utf8_general_ci desc",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user where id = 5 order by id+col collate utf8_general_ci desc",
       "Instructions": {
@@ -1205,6 +1237,7 @@
     "comment": "Order by derived table column",
     "query": "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id",
       "Instructions": {
@@ -1232,6 +1265,7 @@
     "comment": "routing rules: order by gets pushed for routes",
     "query": "select col from route1 where id = 1 order by col",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select col from route1 where id = 1 order by col",
       "Instructions": {
@@ -1258,6 +1292,7 @@
     "comment": "LIMIT",
     "query": "select col1 from user where id = 1 limit 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select col1 from user where id = 1 limit 1",
       "Instructions": {
@@ -1284,6 +1319,7 @@
     "comment": "limit for joins. Can't push down the limit because result\n# counts get multiplied by join operations.",
     "query": "select user.col from user join user_extra limit 1",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col from user join user_extra limit 1",
       "Instructions": {
@@ -1338,6 +1374,7 @@
     "comment": "limit for scatter",
     "query": "select col from user limit 1",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select col from user limit 1",
       "Instructions": {
@@ -1366,6 +1403,7 @@
     "comment": "limit for scatter with bind var",
     "query": "select col from user limit :a",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select col from user limit :a",
       "Instructions": {
@@ -1394,6 +1432,7 @@
     "comment": "cross-shard expression in parenthesis with limit",
     "query": "select * from user where (id1 = 4 AND name1 ='abc') limit 5",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from user where (id1 = 4 AND name1 ='abc') limit 5",
       "Instructions": {
@@ -1422,6 +1461,7 @@
     "comment": "scatter limit after pullout subquery",
     "query": "select col from user where col in (select col1 from user) limit 1",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select col from user where col in (select col1 from user) limit 1",
       "Instructions": {
@@ -1473,6 +1513,7 @@
     "comment": "limit on reference table",
     "query": "select col from ref limit 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select col from ref limit 1",
       "Instructions": {
@@ -1495,6 +1536,7 @@
     "comment": "arithmetic limit",
     "query": "select id from user limit 1+1",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select id from user limit 1+1",
       "Instructions": {
@@ -1523,6 +1565,7 @@
     "comment": "order by column alias",
     "query": "select id as foo from music order by foo",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select id as foo from music order by foo",
       "Instructions": {
@@ -1547,6 +1590,7 @@
     "comment": "column alias for a table column in order by",
     "query": "select id as foo, id2 as id from music order by id",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select id as foo, id2 as id from music order by id",
       "Instructions": {
@@ -1571,6 +1615,7 @@
     "comment": "ordering on the left side of the join",
     "query": "select name from user, music order by name",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select name from user, music order by name",
       "Instructions": {
@@ -1614,6 +1659,7 @@
     "comment": "aggregation and non-aggregations column without group by",
     "query": "select count(id), num from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select count(id), num from user",
       "Instructions": {
@@ -1643,6 +1689,7 @@
     "comment": "aggregation and non-aggregations column with order by",
     "query": "select count(id), num from user order by 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select count(id), num from user order by 2",
       "Instructions": {
@@ -1680,6 +1727,7 @@
     "comment": "aggregation and non-aggregations column with group by",
     "query": "select count(id), num from user group by 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select count(id), num from user group by 2",
       "Instructions": {
@@ -1712,6 +1760,7 @@
     "comment": "aggregation and non-aggregations column with group by and order by",
     "query": "select count(id), num from user group by 2 order by 1",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select count(id), num from user group by 2 order by 1",
       "Instructions": {
@@ -1751,6 +1800,7 @@
     "comment": "join order by with ambiguous column reference ; valid in MySQL",
     "query": "select name, name from user, music order by name",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select name, name from user, music order by name",
       "Instructions": {
@@ -1794,6 +1844,7 @@
     "comment": "order by with ambiguous column reference ; valid in MySQL",
     "query": "select id, id from user order by id",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select id, id from user order by id",
       "Instructions": {
@@ -1818,6 +1869,7 @@
     "comment": "Scatter order by and aggregation: order by column must reference column from select list",
     "query": "select col, count(*) from user group by col order by c1",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select col, count(*) from user group by col order by c1",
       "Instructions": {
@@ -1857,6 +1909,7 @@
     "comment": "Distinct with cross shard query",
     "query": "select distinct user.a from user join user_extra",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select distinct user.a from user join user_extra",
       "Instructions": {
@@ -1908,6 +1961,7 @@
     "comment": "Distinct with column alias",
     "query": "select distinct a as c, a from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select distinct a as c, a from user",
       "Instructions": {
@@ -1940,6 +1994,7 @@
     "comment": "Distinct with same column",
     "query": "select distinct a, a from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select distinct a, a from user",
       "Instructions": {
@@ -1972,6 +2027,7 @@
     "comment": "Order by has subqueries",
     "query": "select id from unsharded order by (select id from unsharded)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select id from unsharded order by (select id from unsharded)",
       "Instructions": {
@@ -1994,6 +2050,7 @@
     "comment": "Equal filter with hexadecimal value",
     "query": "select count(*) a from user having a = 0x01",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a = 0x01",
       "Instructions": {
@@ -2029,6 +2086,7 @@
     "comment": "Order by uses cross-shard expression",
     "query": "select id from user order by id+1",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select id from user order by id+1",
       "Instructions": {
@@ -2053,6 +2111,7 @@
     "comment": "Order by column number with collate",
     "query": "select user.col1 as a from user order by 1 collate utf8_general_ci",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a from user order by 1 collate utf8_general_ci",
       "Instructions": {
@@ -2077,6 +2136,7 @@
     "comment": "Order by uses cross-shard expression",
     "query": "select id from user order by id+1",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select id from user order by id+1",
       "Instructions": {
@@ -2101,6 +2161,7 @@
     "comment": "Order by column number with collate",
     "query": "select user.col1 as a from user order by 1 collate utf8_general_ci",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a from user order by 1 collate utf8_general_ci",
       "Instructions": {
@@ -2125,6 +2186,7 @@
     "comment": "Order by column number with coalesce with columns from both sides",
     "query": "select id from user, user_extra order by coalesce(user.col, user_extra.col)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select id from user, user_extra order by coalesce(user.col, user_extra.col)",
       "Instructions": {
@@ -2178,6 +2240,7 @@
     "comment": "having filter with %",
     "query": "select a.tcol1 from user a join music b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like \"A\\%B\" order by a.tcol1",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select a.tcol1 from user a join music b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like \"A\\%B\" order by a.tcol1",
       "Instructions": {
@@ -2239,6 +2302,7 @@
     "comment": "distinct with order by using aggregation engine",
     "query": "select distinct col from user where id between :vtg1 and :vtg2 order by col asc",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select distinct col from user where id between :vtg1 and :vtg2 order by col asc",
       "Instructions": {
@@ -2269,6 +2333,7 @@
     "comment": "distinct with order by having additional non-order by columns in the selection using aggregation engine",
     "query": "select distinct foo, col from user where id between :vtg1 and :vtg2 order by col asc",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select distinct foo, col from user where id between :vtg1 and :vtg2 order by col asc",
       "Instructions": {
@@ -2300,6 +2365,7 @@
     "comment": "distinct with order by having no overalap with the selection columns - using distinct engine",
     "query": "select distinct foo from user where id between :vtg1 and :vtg2 order by col asc",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select distinct foo from user where id between :vtg1 and :vtg2 order by col asc",
       "Instructions": {
@@ -2339,6 +2405,7 @@
     "comment": "DISTINCT on an unsupported collation should fall back on weightstrings",
     "query": "select distinct textcol2 from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select distinct textcol2 from user",
       "Instructions": {
@@ -2370,6 +2437,7 @@
     "comment": "No weightstrings or derived table needed",
     "query": "select textcol1 from user union select textcol1 from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select textcol1 from user union select textcol1 from user",
       "Instructions": {
@@ -2400,6 +2468,7 @@
     "comment": "ORDER BY literal works fine even when the columns have the same name",
     "query": "select a.id, b.id from user as a, user_extra as b union all select 1, 2 order by 1",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select a.id, b.id from user as a, user_extra as b union all select 1, 2 order by 1",
       "Instructions": {
@@ -2467,6 +2536,7 @@
     "comment": "ORDER BY literal works fine even when the columns have the same name",
     "query": "select a.id, b.id from user as a, user_extra as b union all select 1, 2 order by 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select a.id, b.id from user as a, user_extra as b union all select 1, 2 order by 2",
       "Instructions": {

@@ -564,6 +564,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfWith(in, f)
 	case *XorExpr:
 		return VisitRefOfXorExpr(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4591,6 +4593,8 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 		return VisitRefOfVarSamp(in, f)
 	case *Variance:
 		return VisitRefOfVariance(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4645,6 +4649,8 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 		return VisitRefOfTablespaceOperation(in, f)
 	case *Validation:
 		return VisitRefOfValidation(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4811,6 +4817,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfValuesFuncExpr(in, f)
 	case *WeightStringFuncExpr:
 		return VisitRefOfWeightStringFuncExpr(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4827,6 +4835,8 @@ func VisitColTuple(in ColTuple, f Visit) error {
 		return VisitRefOfSubquery(in, f)
 	case ValTuple:
 		return VisitValTuple(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4841,6 +4851,8 @@ func VisitConstraintInfo(in ConstraintInfo, f Visit) error {
 		return VisitRefOfCheckConstraintDefinition(in, f)
 	case *ForeignKeyDefinition:
 		return VisitRefOfForeignKeyDefinition(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4857,6 +4869,8 @@ func VisitDBDDLStatement(in DBDDLStatement, f Visit) error {
 		return VisitRefOfCreateDatabase(in, f)
 	case *DropDatabase:
 		return VisitRefOfDropDatabase(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4883,6 +4897,8 @@ func VisitDDLStatement(in DDLStatement, f Visit) error {
 		return VisitRefOfRenameTable(in, f)
 	case *TruncateTable:
 		return VisitRefOfTruncateTable(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4897,6 +4913,8 @@ func VisitExplain(in Explain, f Visit) error {
 		return VisitRefOfExplainStmt(in, f)
 	case *ExplainTab:
 		return VisitRefOfExplainTab(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5141,6 +5159,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfWeightStringFuncExpr(in, f)
 	case *XorExpr:
 		return VisitRefOfXorExpr(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5159,6 +5179,8 @@ func VisitInsertRows(in InsertRows, f Visit) error {
 		return VisitValues(in, f)
 	case *ValuesStatement:
 		return VisitRefOfValuesStatement(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5175,6 +5197,8 @@ func VisitSelectExpr(in SelectExpr, f Visit) error {
 		return VisitRefOfNextval(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5189,6 +5213,8 @@ func VisitSelectStatement(in SelectStatement, f Visit) error {
 		return VisitRefOfSelect(in, f)
 	case *Union:
 		return VisitRefOfUnion(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5207,6 +5233,8 @@ func VisitShowInternal(in ShowInternal, f Visit) error {
 		return VisitRefOfShowOther(in, f)
 	case *ShowTransactionStatus:
 		return VisitRefOfShowTransactionStatus(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5221,6 +5249,8 @@ func VisitSimpleTableExpr(in SimpleTableExpr, f Visit) error {
 		return VisitRefOfDerivedTable(in, f)
 	case TableName:
 		return VisitTableName(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5331,6 +5361,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfVStream(in, f)
 	case *ValuesStatement:
 		return VisitRefOfValuesStatement(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5349,6 +5381,8 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 		return VisitRefOfJoinTableExpr(in, f)
 	case *ParenTableExpr:
 		return VisitRefOfParenTableExpr(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5365,6 +5399,8 @@ func VisitTableStatement(in TableStatement, f Visit) error {
 		return VisitRefOfUnion(in, f)
 	case *ValuesStatement:
 		return VisitRefOfValuesStatement(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5443,6 +5479,15 @@ func VisitRefOfVindexParam(in *VindexParam, f Visit) error {
 		return err
 	}
 	if err := VisitIdentifierCI(in.Key, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitVisitable(in Visitable, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSQLNode(in.VisitThis(), f); err != nil {
 		return err
 	}
 	return nil
