@@ -246,25 +246,35 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 	}
 }
 
-func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) {
-	query := fmt.Sprintf("select count(*) from %s", table)
-	wantRes := fmt.Sprintf("[[INT64(%d)]]", want)
+func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int64) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+
+	query := fmt.Sprintf("select count(*) as c from %s", table)
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
 		qr, err := vttablet.QueryTablet(query, database, true)
 		require.NoError(t, err)
 		require.NotNil(t, qr)
-		if wantRes == fmt.Sprintf("%v", qr.Rows) {
+		row := qr.Named().Row()
+		require.NotNil(t, row)
+		got := row.AsInt64("c", 0)
+		require.LessOrEqual(t, got, want)
+		if got == want {
 			log.Infof("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name)
 			return
 		}
 		select {
-		case <-timer.C:
-			require.FailNow(t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) on tablet %q before the timeout of %s; last seen result: %v",
-				table, want, vttablet.Name, defaultTimeout, qr.Rows))
-		default:
-			time.Sleep(defaultTick)
+		case <-ctx.Done():
+			require.FailNow(
+				t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) on tablet %q before the timeout of %s; last seen result: %v",
+					table, want, vttablet.Name, defaultTimeout, qr.Rows),
+			)
+			return
+		case <-ticker.C:
 		}
 	}
 }

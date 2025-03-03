@@ -1209,7 +1209,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 			if tablets[tabletName] == nil {
 				continue
 			}
-			waitForRowCountInTablet(t, tablets[tabletName], ksName, tableName, count)
+			waitForRowCountInTablet(t, tablets[tabletName], ksName, tableName, int64(count))
 		}
 	})
 }
