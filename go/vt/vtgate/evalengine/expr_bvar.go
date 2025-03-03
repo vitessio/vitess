@@ -125,10 +125,13 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 
 	switch tt := typ.Type; {
 	case sqltypes.IsSigned(tt):
+		typ.Type = sqltypes.Int64
 		c.asm.PushBVar_i(bvar.Key)
 	case sqltypes.IsUnsigned(tt):
+		typ.Type = sqltypes.Uint64
 		c.asm.PushBVar_u(bvar.Key)
 	case sqltypes.IsFloat(tt):
+		typ.Type = sqltypes.Float64
 		c.asm.PushBVar_f(bvar.Key)
 	case sqltypes.IsDecimal(tt):
 		c.asm.PushBVar_d(bvar.Key)
@@ -146,9 +149,11 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 			typ.Type = sqltypes.VarBinary
 			typ.Flag |= flagBit
 		} else {
+			typ.Type = sqltypes.VarChar
 			c.asm.PushBVar_text(bvar.Key, typ.Col)
 		}
 	case sqltypes.IsBinary(tt):
+		typ.Type = sqltypes.VarBinary
 		c.asm.PushBVar_bin(bvar.Key)
 	case sqltypes.IsNull(tt):
 		c.asm.PushNull()
