@@ -127,7 +127,7 @@ func (tw *TopologyWatcher) Start() {
 			select {
 			case <-t.ctx.Done():
 				return
-			case kss := <-tw.healthcheck.GetLoadTabletsTrigger():
+			case kss := <-t.healthcheck.GetLoadTabletsTrigger():
 				t.loadTabletsForKeyspaceShard(kss.Keyspace, kss.Shard)
 			case <-ticker.C:
 				// Since we are going to load all the tablets,
@@ -136,7 +136,7 @@ func (tw *TopologyWatcher) Start() {
 				func() {
 					for {
 						select {
-						case <-tw.healthcheck.GetLoadTabletsTrigger():
+						case <-t.healthcheck.GetLoadTabletsTrigger():
 						default:
 							return
 						}
