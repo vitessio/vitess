@@ -26,17 +26,15 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
 // SandboxConn satisfies the QueryService interface
@@ -65,24 +63,6 @@ type SandboxConn struct {
 
 	// These Count vars report how often the corresponding
 	// functions were called.
-<<<<<<< HEAD
-	ExecCount                atomic.Int64
-	BeginCount               atomic.Int64
-	CommitCount              atomic.Int64
-	RollbackCount            atomic.Int64
-	AsTransactionCount       atomic.Int64
-	PrepareCount             atomic.Int64
-	CommitPreparedCount      atomic.Int64
-	RollbackPreparedCount    atomic.Int64
-	CreateTransactionCount   atomic.Int64
-	StartCommitCount         atomic.Int64
-	SetRollbackCount         atomic.Int64
-	ConcludeTransactionCount atomic.Int64
-	ReadTransactionCount     atomic.Int64
-	ReserveCount             atomic.Int64
-	ReleaseCount             atomic.Int64
-	GetSchemaCount           atomic.Int64
-=======
 	ExecCount                   atomic.Int64
 	BeginCount                  atomic.Int64
 	CommitCount                 atomic.Int64
@@ -101,7 +81,6 @@ type SandboxConn struct {
 	ReleaseCount                atomic.Int64
 	GetSchemaCount              atomic.Int64
 	GetSchemaDelayResponse      time.Duration
->>>>>>> 1582d5b7c8 (Fix: Separate Lock for Keyspace to Update Controller Mapping in Schema Tracking (#17873))
 
 	queriesRequireLocking bool
 	queriesMu             sync.Mutex
