@@ -371,7 +371,7 @@ func findVSchemaTableAndCreateRoute(
 	)
 }
 
-func createTargetedRouting(ctx *plancontext.PlanningContext, target key.Destination, tabletType topodatapb.TabletType, vschemaTable *vindexes.BaseTable) Routing {
+func createTargetedRouting(ctx *plancontext.PlanningContext, target key.ShardDestination, tabletType topodatapb.TabletType, vschemaTable *vindexes.BaseTable) Routing {
 	switch ctx.Statement.(type) {
 	case *sqlparser.Update:
 		if tabletType != topodatapb.TabletType_PRIMARY {

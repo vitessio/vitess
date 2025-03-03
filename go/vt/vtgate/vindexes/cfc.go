@@ -257,9 +257,9 @@ func (vind *CFC) Verify(_ context.Context, _ VCursor, ids []sqltypes.Value, ksid
 	return vind.verify(ids, ksids)
 }
 
-// Map can map ids to key.Destination objects.
-func (vind *CFC) Map(_ context.Context, _ VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, len(ids))
+// Map can map ids to key.ShardDestination objects.
+func (vind *CFC) Map(_ context.Context, _ VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, len(ids))
 	for i, id := range ids {
 		idBytes, err := id.ToBytes()
 		if err != nil {
@@ -280,7 +280,7 @@ func (vind *CFC) PrefixVindex() SingleColumn {
 }
 
 // NewKeyRangeFromPrefix creates a keyspace range from a prefix of keyspace id.
-func NewKeyRangeFromPrefix(begin []byte) key.Destination {
+func NewKeyRangeFromPrefix(begin []byte) key.ShardDestination {
 	if len(begin) == 0 {
 		return key.DestinationAllShards{}
 	}
@@ -345,9 +345,9 @@ func (vind *prefixCFC) IsUnique() bool {
 	return false
 }
 
-// Map can map ids to key.Destination objects.
-func (vind *prefixCFC) Map(_ context.Context, _ VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, len(ids))
+// Map can map ids to key.ShardDestination objects.
+func (vind *prefixCFC) Map(_ context.Context, _ VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, len(ids))
 	for i, id := range ids {
 		value, err := id.ToBytes()
 		if err != nil {

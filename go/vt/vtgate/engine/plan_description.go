@@ -39,7 +39,7 @@ type PrimitiveDescription struct {
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace
 	// TargetDestination specifies an explicit target destination to send the query to.
-	TargetDestination key.Destination
+	TargetDestination key.ShardDestination
 	// TargetTabletType specifies an explicit target destination tablet type
 	// this is only used in conjunction with TargetDestination
 	TargetTabletType topodatapb.TabletType
@@ -82,7 +82,7 @@ func (pd PrimitiveDescription) MarshalJSON() ([]byte, error) {
 	}
 	if pd.TargetDestination != nil {
 		s := pd.TargetDestination.String()
-		dest := s[11:] // TODO: All these start with Destination. We should fix that instead if trimming it out here
+		dest := s[11:] // TODO: All these start with ShardDestination. We should fix that instead if trimming it out here
 
 		if err := marshalAdd(prepend, buf, "TargetDestination", dest); err != nil {
 			return nil, err

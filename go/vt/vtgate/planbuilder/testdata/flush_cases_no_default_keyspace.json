@@ -3,6 +3,7 @@
     "comment": "Flush statement",
     "query": "flush local tables user, unsharded_a, user_extra with read lock",
     "plan": {
+      "Type": "Complex",
       "QueryType": "FLUSH",
       "Original": "flush local tables user, unsharded_a, user_extra with read lock",
       "Instructions": {
@@ -41,6 +42,7 @@
     "comment": "Flush statement with flush options",
     "query": "flush no_write_to_binlog hosts, logs",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "FLUSH",
       "Original": "flush no_write_to_binlog hosts, logs",
       "Instructions": {
@@ -58,6 +60,7 @@
     "comment": "Flush statement with routing rules",
     "query": "flush local tables route1, route2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "FLUSH",
       "Original": "flush local tables route1, route2",
       "Instructions": {
@@ -98,6 +101,7 @@
     "comment": "Unknown tables in unsharded keyspaces are allowed",
     "query": "flush tables main.a with read lock",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "FLUSH",
       "Original": "flush tables main.a with read lock",
       "Instructions": {
@@ -119,6 +123,7 @@
     "comment": "Flush statement with 3 keyspaces",
     "query": "flush local tables user, unsharded_a, user_extra, unsharded_tab with read lock",
     "plan": {
+      "Type": "Complex",
       "QueryType": "FLUSH",
       "Original": "flush local tables user, unsharded_a, user_extra, unsharded_tab with read lock",
       "Instructions": {

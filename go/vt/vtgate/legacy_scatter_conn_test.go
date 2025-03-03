@@ -279,7 +279,7 @@ func TestMaxMemoryRows(t *testing.T) {
 
 	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 	rss, _, err := res.ResolveDestinations(ctx, "TestMaxMemoryRows", topodatapb.TabletType_REPLICA, nil,
-		[]key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
+		[]key.ShardDestination{key.DestinationShard("0"), key.DestinationShard("1")})
 	require.NoError(t, err)
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
@@ -331,7 +331,7 @@ func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
-	destinations := []key.Destination{key.DestinationShard("0")}
+	destinations := []key.ShardDestination{key.DestinationShard("0")}
 	rss, _, err := res.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_REPLICA, nil, destinations)
 	require.NoError(t, err)
 
@@ -348,12 +348,12 @@ func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 	require.Error(t, vterrors.Aggregate(errs))
 }
 
-func executeOnShards(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *econtext.SafeSession, destinations []key.Destination) {
+func executeOnShards(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *econtext.SafeSession, destinations []key.ShardDestination) {
 	t.Helper()
 	require.Empty(t, executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations))
 }
 
-func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *econtext.SafeSession, destinations []key.Destination) error {
+func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *econtext.SafeSession, destinations []key.ShardDestination) error {
 	t.Helper()
 	rss, _, err := res.ResolveDestinations(ctx, keyspace, topodatapb.TabletType_REPLICA, nil, destinations)
 	require.NoError(t, err)
@@ -611,7 +611,7 @@ func TestReservePrequeries(t *testing.T) {
 			"s2": "42",
 		},
 	})
-	destinations := []key.Destination{key.DestinationShard("0")}
+	destinations := []key.ShardDestination{key.DestinationShard("0")}
 
 	executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 1+1, len(sbc0.StringQueries()))

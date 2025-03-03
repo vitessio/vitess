@@ -145,7 +145,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if session == nil {
 		session = &vtgatepb.Session{Autocommit: true}
 	}
-	session, result, err := vtg.server.Execute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables)
+	session, result, err := vtg.server.Execute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, request.Prepared)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: session,
@@ -224,11 +224,12 @@ func (vtg *VTGate) Prepare(ctx context.Context, request *vtgatepb.PrepareRequest
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	session, fields, err := vtg.server.Prepare(ctx, session, request.Query.Sql, request.Query.BindVariables)
+	session, fields, paramsCount, err := vtg.server.Prepare(ctx, session, request.Query.Sql)
 	return &vtgatepb.PrepareResponse{
-		Fields:  fields,
-		Session: session,
-		Error:   vterrors.ToVTRPC(err),
+		Session:     session,
+		Fields:      fields,
+		ParamsCount: uint32(paramsCount),
+		Error:       vterrors.ToVTRPC(err),
 	}, nil
 }
 
