@@ -166,6 +166,8 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r R
 		if len(tuples) == 1 && sqlparser.IsNull(tuples[0]) {
 			return nr
 		}
+	default:
+		// We only have special handling of IN and NOT IN for now
 	}
 
 	return exit()

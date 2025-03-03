@@ -17,26 +17,21 @@ limitations under the License.
 package predicates
 
 import (
-	"sync"
-
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
-	// Tracker manages a global mapping of expression IDs to their "Shape".
-	// This allows the same logical expression to take different forms (shapes)
-	// depending on pushdown or join strategies. We lock around 'lastID' to ensure
-	// unique IDs in concurrent planning contexts.
+	// Tracker is used to track expressions in join predicates and their IDs.
+	// It is used to update predicates after being pushed down when the
+	// join they belong to changes - like being pushed under a route
 	Tracker struct {
-		mu          sync.Mutex
 		lastID      ID
 		expressions map[ID]sqlparser.Expr
 	}
 
-	// ID is a unique key that references the shape of a single expression.
-	// We use it so multiple references to an expression can share the same shape entry.
+	// ID is a unique key that references the current expression a join predicate represents.
 	ID int
 )
 
@@ -47,7 +42,7 @@ func NewTracker() *Tracker {
 }
 
 func (t *Tracker) NewJoinPredicate(org sqlparser.Expr) *JoinPredicate {
-	nextID := t.NextID()
+	nextID := t.nextID()
 	t.expressions[nextID] = org
 	return &JoinPredicate{
 		ID:      nextID,
@@ -55,9 +50,7 @@ func (t *Tracker) NewJoinPredicate(org sqlparser.Expr) *JoinPredicate {
 	}
 }
 
-func (t *Tracker) NextID() ID {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+func (t *Tracker) nextID() ID {
 	id := t.lastID
 	t.lastID++
 	return id
