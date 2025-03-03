@@ -14,7 +14,7 @@ env:
 jobs:
   test:
     name: {{.Name}}
-    runs-on: ubuntu-24.04
+    runs-on: {{.RunsOn}}
 
     steps:
     - name: Skip CI

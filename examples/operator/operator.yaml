@@ -4422,6 +4422,8 @@ spec:
                         maxItems: 2
                         minItems: 1
                         type: array
+                      sidecarDbName:
+                        type: string
                       turndownPolicy:
                         enum:
                           - RequireIdle
@@ -6239,6 +6241,8 @@ spec:
                   maxItems: 2
                   minItems: 1
                   type: array
+                sidecarDbName:
+                  type: string
                 topologyReconciliation:
                   properties:
                     pruneCells:

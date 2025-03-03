@@ -3,6 +3,7 @@
     "comment": "Tests in this file are for testing symtab functionality\n#\n# Column names need not be qualified if they are predefined in vschema and unambiguous.",
     "query": "select predef2, predef3 from user join unsharded on predef2 = predef3",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select predef2, predef3 from user join unsharded on predef2 = predef3",
       "Instructions": {

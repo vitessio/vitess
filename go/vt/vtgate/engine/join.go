@@ -220,10 +220,10 @@ func joinFields(lfields, rfields []*querypb.Field, cols []int) []*querypb.Field 
 	fields := make([]*querypb.Field, len(cols))
 	for i, index := range cols {
 		if index < 0 {
-			fields[i] = lfields[-index-1]
+			fields[i] = lfields[-index-1].CloneVT()
 			continue
 		}
-		fields[i] = rfields[index-1]
+		fields[i] = rfields[index-1].CloneVT()
 	}
 	return fields
 }

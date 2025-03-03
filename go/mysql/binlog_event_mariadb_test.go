@@ -17,7 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -43,86 +42,61 @@ var (
 
 func TestMariadbStandaloneGTIDEventIsGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
-	want := true
-	if got := input.IsGTID(); got != want {
-		t.Errorf("%#v.IsGTID() = %v, want %v", input, got, want)
-	}
+	assert.True(t, input.IsGTID(), "%#v", input)
 }
 
 func TestMariadbBeginGTIDEventIsGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
-	want := true
-	if got := input.IsGTID(); got != want {
-		t.Errorf("%#v.IsGTID() = %v, want %v", input, got, want)
-	}
+	assert.True(t, input.IsGTID(), "%#v", input)
 }
 
 func TestMariadbBinlogEventIsntGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbInsertEvent)}
-	want := false
-	if got := input.IsGTID(); got != want {
-		t.Errorf("%#v.IsGTID() = %v, want %v", input, got, want)
-	}
+	assert.False(t, input.IsGTID(), "%#v", input)
 }
 
 func TestMariadbNotBeginGTID(t *testing.T) {
 	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
+	require.NoError(t, err)
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
-	want := false
-	if _, got, err := input.GTID(f); got != want {
-		t.Errorf("%#v.GTID() = %v (%v), want %v", input, got, err, want)
-	}
+	_, got, err := input.GTID(f)
+	require.NoError(t, err)
+	assert.False(t, got, "%#v", input)
 }
 
 func TestMariadbIsBeginGTID(t *testing.T) {
 	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
+	require.NoError(t, err)
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
-	want := true
-	if _, got, err := input.GTID(f); got != want {
-		t.Errorf("%#v.IsBeginGTID() = %v (%v), want %v", input, got, err, want)
-	}
+	_, got, err := input.GTID(f)
+	require.NoError(t, err)
+	assert.True(t, got, "%#v", input)
 }
 
 func TestMariadbStandaloneBinlogEventGTID(t *testing.T) {
 	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
+	require.NoError(t, err)
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 9}
 	got, hasBegin, err := input.GTID(f)
-	assert.NoError(t, err, "unexpected error: %v", err)
-	assert.False(t, hasBegin, "unexpected hasBegin")
-	assert.True(t, reflect.DeepEqual(got, want), "%#v.GTID() = %#v, want %#v", input, got, want)
-
+	assert.NoError(t, err)
+	assert.False(t, hasBegin)
+	assert.Equal(t, want, got)
 }
 
 func TestMariadbBinlogEventGTID(t *testing.T) {
 	f, err := binlogEvent(mariadbFormatEvent).Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-		return
-	}
+	require.NoError(t, err)
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
 	want := replication.MariadbGTID{Domain: 0, Server: 62344, Sequence: 10}
 	got, hasBegin, err := input.GTID(f)
-	assert.NoError(t, err, "unexpected error: %v", err)
-	assert.True(t, hasBegin, "unexpected !hasBegin")
-	assert.True(t, reflect.DeepEqual(got, want), "%#v.GTID() = %#v, want %#v", input, got, want)
-
+	assert.NoError(t, err)
+	assert.True(t, hasBegin)
+	assert.Equal(t, want, got)
 }
 
 func TestMariadbBinlogEventFormat(t *testing.T) {
@@ -135,8 +109,8 @@ func TestMariadbBinlogEventFormat(t *testing.T) {
 		HeaderSizes:       mariadbFormatEvent[76 : len(mariadbFormatEvent)-5],
 	}
 	got, err := input.Format()
-	assert.NoError(t, err, "unexpected error: %v", err)
-	assert.True(t, reflect.DeepEqual(got, want), "%#v.Format() = %v, want %v", input, got, want)
+	assert.NoError(t, err)
+	assert.Equal(t, want, got)
 
 }
 
@@ -150,38 +124,33 @@ func TestMariadbBinlogEventChecksumFormat(t *testing.T) {
 		HeaderSizes:       mariadbChecksumFormatEvent[76 : len(mariadbChecksumFormatEvent)-5],
 	}
 	got, err := input.Format()
-	assert.NoError(t, err, "unexpected error: %v", err)
-	assert.True(t, reflect.DeepEqual(got, want), "%#v.Format() = %v, want %v", input, got, want)
-
+	assert.NoError(t, err)
+	assert.Equal(t, want, got)
 }
 
 func TestMariadbBinlogEventStripChecksum(t *testing.T) {
 	f, err := (mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumFormatEvent)}).Format()
-	require.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err)
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumQueryEvent)}
 	wantEvent := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumStrippedQueryEvent)}
 	wantChecksum := []byte{0xce, 0x49, 0x7a, 0x53}
 	gotEvent, gotChecksum, err := input.StripChecksum(f)
-	require.NoError(t, err, "unexpected error: %v", err)
-
-	if !reflect.DeepEqual(gotEvent, wantEvent) || !reflect.DeepEqual(gotChecksum, wantChecksum) {
-		t.Errorf("%#v.StripChecksum() = (%v, %v), want (%v, %v)", input, gotEvent, gotChecksum, wantEvent, wantChecksum)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, wantEvent, gotEvent)
+	assert.Equal(t, wantChecksum, gotChecksum)
 }
 
 func TestMariadbBinlogEventStripChecksumNone(t *testing.T) {
 	f, err := (mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbFormatEvent)}).Format()
-	require.NoError(t, err, "unexpected error: %v", err)
+	require.NoError(t, err)
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	want := input
 	gotEvent, gotChecksum, err := input.StripChecksum(f)
-	require.NoError(t, err, "unexpected error: %v", err)
-
-	if !reflect.DeepEqual(gotEvent, want) || gotChecksum != nil {
-		t.Errorf("%#v.StripChecksum() = (%v, %v), want (%v, nil)", input, gotEvent, gotChecksum, want)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, want, gotEvent)
+	assert.Nil(t, gotChecksum)
 }
 
 func TestMariaDBSemiSyncAck(t *testing.T) {

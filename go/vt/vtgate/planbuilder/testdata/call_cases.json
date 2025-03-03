@@ -3,6 +3,7 @@
     "comment": "simple call proc on current keyspace",
     "query": "call proc()",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "CALL_PROC",
       "Original": "call proc()",
       "Instructions": {
@@ -20,6 +21,7 @@
     "comment": "call qualified keyspace",
     "query": "call main.proc()",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "CALL_PROC",
       "Original": "call main.proc()",
       "Instructions": {
@@ -42,6 +44,7 @@
     "comment": "CALL with expressions and parameters",
     "query": "call proc(1, 'foo', @var)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "CALL_PROC",
       "Original": "call proc(1, 'foo', @var)",
       "Instructions": {

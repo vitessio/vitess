@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -46,6 +46,8 @@ func (c *cow) copyOnRewriteAST(n AST, parent AST) (out AST, changed bool) {
 		return c.copyOnRewriteValueContainer(n, parent)
 	case ValueSliceContainer:
 		return c.copyOnRewriteValueSliceContainer(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -262,19 +264,11 @@ func (c *cow) copyOnRewriteValueSliceContainer(n ValueSliceContainer, parent AST
 				changedASTElements = true
 			}
 		}
-		var changedASTImplementationElements bool
-		_ASTImplementationElements := make([]*Leaf, len(n.ASTImplementationElements))
-		for x, el := range n.ASTImplementationElements {
-			this, changed := c.copyOnRewriteRefOfLeaf(el, n)
-			_ASTImplementationElements[x] = this.(*Leaf)
-			if changed {
-				changedASTImplementationElements = true
-			}
-		}
+		_ASTImplementationElements, changedASTImplementationElements := c.copyOnRewriteLeafSlice(n.ASTImplementationElements, n)
 		if changedASTElements || changedASTImplementationElements {
 			res := n
 			res.ASTElements = _ASTElements
-			res.ASTImplementationElements = _ASTImplementationElements
+			res.ASTImplementationElements, _ = _ASTImplementationElements.(LeafSlice)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -294,6 +288,8 @@ func (c *cow) copyOnRewriteSubIface(n SubIface, parent AST) (out AST, changed bo
 	switch n := n.(type) {
 	case *SubImpl:
 		return c.copyOnRewriteRefOfSubImpl(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -364,23 +360,33 @@ func (c *cow) copyOnRewriteRefOfValueSliceContainer(n *ValueSliceContainer, pare
 				changedASTElements = true
 			}
 		}
-		var changedASTImplementationElements bool
-		_ASTImplementationElements := make([]*Leaf, len(n.ASTImplementationElements))
-		for x, el := range n.ASTImplementationElements {
-			this, changed := c.copyOnRewriteRefOfLeaf(el, n)
-			_ASTImplementationElements[x] = this.(*Leaf)
-			if changed {
-				changedASTImplementationElements = true
-			}
-		}
+		_ASTImplementationElements, changedASTImplementationElements := c.copyOnRewriteLeafSlice(n.ASTImplementationElements, n)
 		if changedASTElements || changedASTImplementationElements {
 			res := *n
 			res.ASTElements = _ASTElements
-			res.ASTImplementationElements = _ASTImplementationElements
+			res.ASTImplementationElements, _ = _ASTImplementationElements.(LeafSlice)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
 			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteVisitable(n Visitable, parent AST) (out AST, changed bool) {
+	if c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_inner, changedInner := c.copyOnRewriteAST(n.VisitThis(), n)
+		if changedInner {
+			res := n.Clone(_inner)
+			out = res
 			changed = true
 		}
 	}

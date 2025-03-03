@@ -761,10 +761,10 @@ func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) e
 	}
 }
 
-// SetDemotePrimaryStalled marks that demote primary is stalled in the state manager.
-func (tsv *TabletServer) SetDemotePrimaryStalled() {
+// SetDemotePrimaryStalled sets the demote primary stalled field to the provided value in the state manager.
+func (tsv *TabletServer) SetDemotePrimaryStalled(val bool) {
 	tsv.sm.mu.Lock()
-	tsv.sm.demotePrimaryStalled = true
+	tsv.sm.demotePrimaryStalled = val
 	tsv.sm.mu.Unlock()
 	tsv.BroadcastHealth()
 }

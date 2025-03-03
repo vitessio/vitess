@@ -3,6 +3,7 @@
     "comment": "stream table",
     "query": "stream * from music",
     "plan": {
+      "Type": "Complex",
       "QueryType": "STREAM",
       "Original": "stream * from music",
       "Instructions": {

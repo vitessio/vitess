@@ -3,6 +3,7 @@
     "comment": "union all between two scatter selects",
     "query": "select id from user union all select id from music",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select id from user union all select id from music",
       "Instructions": {
@@ -26,6 +27,7 @@
     "comment": "union distinct between two scatter selects",
     "query": "select id from user union select id from music",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select id from user union select id from music",
       "Instructions": {
@@ -58,6 +60,7 @@
     "comment": "union all between two SelectEqualUnique",
     "query": "select id from user where id = 1 union all select id from user where id = 5",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select id from user where id = 1 union all select id from user where id = 5",
       "Instructions": {
@@ -104,6 +107,7 @@
     "comment": "almost dereks query - two queries with order by and limit being scattered to two different sets of tablets",
     "query": "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)",
       "Instructions": {
@@ -166,6 +170,7 @@
     "comment": "Union all",
     "query": "select col1, col2 from user union all select col1, col2 from user_extra",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select col1, col2 from user union all select col1, col2 from user_extra",
       "Instructions": {
@@ -189,6 +194,7 @@
     "comment": "union operations in subqueries (FROM)",
     "query": "select * from (select * from user union all select * from user_extra) as t",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select * from (select * from user union all select * from user_extra) as t",
       "Instructions": {
@@ -212,6 +218,7 @@
     "comment": "union operations in derived table, without star expression (FROM)¡",
     "query": "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t",
       "Instructions": {
@@ -235,6 +242,7 @@
     "comment": "union all between two scatter selects, with order by",
     "query": "(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)",
       "Instructions": {
@@ -297,6 +305,7 @@
     "comment": "union all on scatter and single route",
     "query": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
       "Instructions": {
@@ -319,6 +328,7 @@
     "comment": "union of information_schema with normal table",
     "query": "select CHARACTER_SET_NAME from information_schema.CHARACTER_SETS union select user_name from unsharded",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select CHARACTER_SET_NAME from information_schema.CHARACTER_SETS union select user_name from unsharded",
       "Instructions": {
@@ -371,6 +381,7 @@
     "comment": "multi-shard union",
     "query": "(select id from user union select id from music) union select 1 from dual",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "(select id from user union select id from music) union select 1 from dual",
       "Instructions": {
@@ -403,6 +414,7 @@
     "comment": "union with the same target shard because of vindex",
     "query": "select * from music where user_id = 1 union select * from user where id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from music where user_id = 1 union select * from user where id = 1",
       "Instructions": {
@@ -435,6 +447,7 @@
     "comment": "union with different target shards",
     "query": "select 1 from music where id = 1 union select 1 from music where id = 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 1 from music where id = 1 union select 1 from music where id = 2",
       "Instructions": {
@@ -539,6 +552,7 @@
     "comment": "multiple select statement have inner order by with union - TODO (systay) no need to send down ORDER BY if we are going to loose it with UNION DISTINCT",
     "query": "(select id from user order by 1 desc) union (select id from user order by 1 asc)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "(select id from user order by 1 desc) union (select id from user order by 1 asc)",
       "Instructions": {
@@ -570,6 +584,7 @@
     "comment": "multiple unions",
     "query": "select 1 union select null union select 1.0 union select '1' union select 2 union select 2.0 from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 1 union select null union select 1.0 union select '1' union select 2 union select 2.0 from user",
       "Instructions": {
@@ -601,6 +616,7 @@
     "comment": "union distinct between a scatter query and a join (other side)",
     "query": "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user",
       "Instructions": {
@@ -669,6 +685,7 @@
     "comment": "union distinct between a scatter query and a join (other side)",
     "query": "select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')",
       "Instructions": {
@@ -737,6 +754,7 @@
     "comment": "unmergable because we are using aggregation",
     "query": "select count(*) as s from user union select count(*) as s from music",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select count(*) as s from user union select count(*) as s from music",
       "Instructions": {
@@ -798,6 +816,7 @@
     "comment": "Union in derived table with first SELECT being an UNION",
     "query": "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t",
       "Instructions": {
@@ -830,6 +849,7 @@
     "comment": "gen4 optimises away ORDER BY when it's safe to do",
     "query": "(select id from user union select id from music order by id) union select 1 from unsharded",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "(select id from user union select id from music order by id) union select 1 from unsharded",
       "Instructions": {
@@ -879,6 +899,7 @@
     "comment": "push down the ::upper_limit to the sources, since we are doing DISTINCT on them, it's safe",
     "query": "select id from user union select 3 limit 10",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select id from user union select 3 limit 10",
       "Instructions": {
@@ -916,6 +937,7 @@
     "comment": "silly query that should be collapsed into a single unsharded UNION route",
     "query": "(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by 1) union select 1 from unsharded union all select 1 from unsharded order by 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by 1) union select 1 from unsharded union all select 1 from unsharded order by 1",
       "Instructions": {
@@ -938,6 +960,7 @@
     "comment": "test handling of TEXT column type handling",
     "query": "select table_comment from information_schema.tables union select table_comment from information_schema.tables",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select table_comment from information_schema.tables union select table_comment from information_schema.tables",
       "Instructions": {
@@ -981,6 +1004,7 @@
     "comment": "UNION that needs to be reordered to be merged more aggressively. Gen4 is able to get it down to 2 routes",
     "query": "select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra",
       "Instructions": {
@@ -1030,6 +1054,7 @@
     "comment": "derived table with union",
     "query": "select tbl2.id FROM ((select id from user order by id limit 5) union all (select id from user order by id desc limit 5)) as tbl1 INNER JOIN user as tbl2  ON tbl1.id = tbl2.id",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select tbl2.id FROM ((select id from user order by id limit 5) union all (select id from user order by id desc limit 5)) as tbl1 INNER JOIN user as tbl2  ON tbl1.id = tbl2.id",
       "Instructions": {
@@ -1128,6 +1153,7 @@
     "comment": "union with invalid order by clause with table qualifier",
     "query": "select id from user union select 3 order by id",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select id from user union select 3 order by id",
       "Instructions": {
@@ -1168,6 +1194,7 @@
     "comment": "Conflicting column names in union",
     "query": "select id, id from user union select id, bar from user_extra order by 1",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select id, id from user union select id, bar from user_extra order by 1",
       "Instructions": {
@@ -1209,6 +1236,7 @@
     "comment": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
     "query": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
       "Instructions": {
@@ -1264,6 +1292,7 @@
     "comment": "systable union query in derived table with constraint on outside (without star projection)",
     "query": "select * from (select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `COLUMN_NAME` = 'primary'",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select * from (select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `COLUMN_NAME` = 'primary'",
       "Instructions": {
@@ -1317,6 +1346,7 @@
     "comment": "pushes predicate on both sides of UNION",
     "query": "select * from (select name, id as foo from user union select 'extra', user_id from user_extra) X where X.foo = 3",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from (select name, id as foo from user union select 'extra', user_id from user_extra) X where X.foo = 3",
       "Instructions": {
@@ -1344,6 +1374,7 @@
     "comment": "systable union query in derived table with constraint on outside (star projection)",
     "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
       "Instructions": {
@@ -1408,6 +1439,7 @@
     "comment": "unknown columns are OK as long as the whole query is unsharded",
     "query": "(SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'FAILED' ORDER BY buildNumber DESC LIMIT 1) AS last_failed) UNION ALL (SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'SUCCEEDED' ORDER BY buildNumber DESC LIMIT 1) AS last_succeeded) ORDER BY buildNumber DESC LIMIT 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "(SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'FAILED' ORDER BY buildNumber DESC LIMIT 1) AS last_failed) UNION ALL (SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'SUCCEEDED' ORDER BY buildNumber DESC LIMIT 1) AS last_succeeded) ORDER BY buildNumber DESC LIMIT 1",
       "Instructions": {
@@ -1430,6 +1462,7 @@
     "comment": "union of unsharded route with sharded join with involvement of weight string",
     "query": "select id, foo, bar from unsharded union select user.intcol, user.textcol2, authoritative.col2 from user join authoritative",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select id, foo, bar from unsharded union select user.intcol, user.textcol2, authoritative.col2 from user join authoritative",
       "Instructions": {
@@ -1500,6 +1533,7 @@
     "comment": "UNION ALL with repeating column on the LHS",
     "query": "select foo, foo, foo from user union all select bar, baz, toto from music",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select foo, foo, foo from user union all select bar, baz, toto from music",
       "Instructions": {
@@ -1523,6 +1557,7 @@
     "comment": "UNION ALL with repeating column on the RHS",
     "query": "select bar, baz, toto from music union all select foo, foo, foo from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select bar, baz, toto from music union all select foo, foo, foo from user",
       "Instructions": {
@@ -1546,6 +1581,7 @@
     "comment": "UNION with repeating column on the RHS",
     "query": "select bar, baz, toto from music union select foo, foo, foo from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select bar, baz, toto from music union select foo, foo, foo from user",
       "Instructions": {
@@ -1580,6 +1616,7 @@
     "comment": "UNION with repeating column on the LHS",
     "query": "select foo, foo, foo from user union select bar, baz, toto from music",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select foo, foo, foo from user union select bar, baz, toto from music",
       "Instructions": {
@@ -1614,6 +1651,7 @@
     "comment": "join between two derived tables containing UNION",
     "query": "select * from (select foo from user where bar = 12 union select foo from user where bar = 134) as t1 join (select bar from music where foo = 12 union select bar from music where foo = 1234) as t2 on t1.foo = t2.bar",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select * from (select foo from user where bar = 12 union select foo from user where bar = 134) as t1 join (select bar from music where foo = 12 union select bar from music where foo = 1234) as t2 on t1.foo = t2.bar",
       "Instructions": {
@@ -1675,6 +1713,7 @@
     "comment": "Select literals from table union Select literals from table",
     "query": "SELECT 1 from user UNION SELECT 2 from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "SELECT 1 from user UNION SELECT 2 from user",
       "Instructions": {
@@ -1705,6 +1744,7 @@
     "comment": "Select column from table union Select literals from table",
     "query": "select col1 from user union select 3 from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select col1 from user union select 3 from user",
       "Instructions": {
@@ -1735,6 +1775,7 @@
     "comment": "Select literals from table union Select column from table",
     "query": "select 3 from user union select col1 from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 3 from user union select col1 from user",
       "Instructions": {
@@ -1765,6 +1806,7 @@
     "comment": "Select literals from table union Select now() from table",
     "query": "select 3 from user union select now() from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 3 from user union select now() from user",
       "Instructions": {
@@ -1795,6 +1837,7 @@
     "comment": "Select now() from table union Select literals from table",
     "query": "select now() from user union select 3 from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select now() from user union select 3 from user",
       "Instructions": {
@@ -1825,6 +1868,7 @@
     "comment": "Select now() from table union Select column from table",
     "query": "select now() from user union select id from user",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select now() from user union select id from user",
       "Instructions": {
@@ -1855,6 +1899,7 @@
     "comment": "Literals in UNION can be problematic",
     "query": "select 'a' as type, 0 as id from user group by 2 union all select 'c' as type, 0 as id from user_extra as t",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 'a' as type, 0 as id from user group by 2 union all select 'c' as type, 0 as id from user_extra as t",
       "Instructions": {

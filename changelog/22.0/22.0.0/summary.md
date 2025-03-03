@@ -4,9 +4,11 @@
 
 - **[Major Changes](#major-changes)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated VTGate Metrics](#vtgate-metrics)
     - [Deprecated VTTablet Flags](#vttablet-flags)
     - [Removing gh-ost and pt-osc Online DDL strategies](#ghost-ptosc)
   - **[RPC Changes](#rpc-changes)**
+  - **[VTGate Metrics]**(#vtgate-metrics)
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
   - **[VTGate Config File Changes](#vtgate-config-file-changes)**
@@ -18,6 +20,7 @@
   - **[Update lite images to Debian Bookworm](#debian-bookworm)**
   - **[KeyRanges in `--clusters_to_watch` in VTOrc](#key-range-vtorc)**
   - **[Support for Filtering Query logs on Error](#query-logs)**
+  - **[Semi-sync monitor in vttablet](#semi-sync-monitor)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[VTTablet ACL enforcement and reloading](#reloading-vttablet-acl)**
@@ -53,6 +56,33 @@ The use of `gh-ost` and `pt-osc` as strategies as follows, yields an error:
 $ vtctldclient ApplySchema --ddl-strategy="gh-ost" ...
 $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
 ```
+
+### <a id="vtgate-metrics"/>VTGate Metrics
+
+#### New Metrics Added:
+Three new metrics have been introduced for queries:
+1.	`QueryExecutions` – Counts the number of queries executed. **Dimensions:** Query type, Plan type, Tablet type.
+2.	`QueryRoutes` – Counts the number of vttablets the query was executed on. **Dimensions:** Query type, Plan type, Tablet type.
+3.	`QueryExecutionsByTable` – Tracks queries executed at VTGate, with counts recorded per table. **Dimensions:** Query type, Table. 
+
+Example: 
+```
+Query: select t1.a, t2.b from t1 join t2 on t1.id = t2.id
+Shards: 2
+Sharding Key: id for both tables
+
+Metrics Published:
+1. QueryExecutions – {select, scatter, primary}, 1
+2. QueryRoutes – {select, scatter, primary}, 2
+3. QueryExecutionsByTable – {select, t1}, 1 and {select, t2}, 1
+```
+
+#### Deprecated Metrics:
+The following metrics have been deprecated:
+1.	`QueriesProcessed`
+2.	`QueriesRouted`
+3.	`QueriesProcessedByTable`
+4.	`QueriesRoutedByTable`
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 
@@ -161,6 +191,14 @@ Users can continue to specify exact keyranges. The new feature is backward compa
 ### <a id="query-logs"/>Support for Filtering Query logs on Error</a>
 
 The `querylog-mode` setting can be configured to `error` to log only queries that result in errors. This option is supported in both VTGate and VTTablet.
+
+### <a id="semi-sync-monitor"/>Semi-sync monitor in vttablet</a>
+
+A new component has been added to the vttablet binary to monitor the semi-sync status of primary vttablets. We've observed cases where a brief network disruption can cause the primary to get stuck indefinitely waiting for semi-sync ACKs. In rare scenarios, this can block reparent operations and render the primary unresponsive. More information can be found in the issues https://github.com/vitessio/vitess/issues/17709 and https://github.com/vitessio/vitess/issues/17749.
+
+To address this, the new component continuously monitors the semi-sync status. If the primary becomes stuck on semi-sync ACKs, it generates writes to unblock it. If this fails, VTOrc is notified of the issue and initiates an emergency reparent operation.
+
+The monitoring interval can be adjusted using the `--semi-sync-monitor-interval` flag, which defaults to 10 seconds.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 

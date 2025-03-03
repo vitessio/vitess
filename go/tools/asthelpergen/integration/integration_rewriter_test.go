@@ -105,7 +105,8 @@ func TestRewriteVisitValueSliceContainer(t *testing.T) {
 	leaf2 := &Leaf{2}
 	leaf3 := &Leaf{3}
 	leaf4 := &Leaf{4}
-	container := ValueSliceContainer{ASTElements: []AST{leaf1, leaf2}, ASTImplementationElements: []*Leaf{leaf3, leaf4}}
+	ls := LeafSlice{leaf3, leaf4}
+	container := ValueSliceContainer{ASTElements: []AST{leaf1, leaf2}, ASTImplementationElements: ls}
 	containerContainer := ValueSliceContainer{ASTElements: []AST{container}}
 
 	tv := &rewriteTestVisitor{}
@@ -119,10 +120,12 @@ func TestRewriteVisitValueSliceContainer(t *testing.T) {
 		Post{leaf1},
 		Pre{leaf2},
 		Post{leaf2},
+		Pre{ls},
 		Pre{leaf3},
 		Post{leaf3},
 		Pre{leaf4},
 		Post{leaf4},
+		Post{ls},
 		Post{container},
 		Post{containerContainer},
 	})
@@ -365,6 +368,25 @@ func TestRefSliceContainerReplace(t *testing.T) {
 	}, ast)
 }
 
+func TestVisitableRewrite(t *testing.T) {
+	leaf := &Leaf{v: 1}
+	visitable := &testVisitable{inner: leaf}
+	refContainer := &RefContainer{ASTType: visitable}
+
+	tv := &rewriteTestVisitor{}
+
+	_ = Rewrite(refContainer, tv.pre, tv.post)
+
+	tv.assertEquals(t, []step{
+		Pre{refContainer},
+		Pre{visitable},
+		Pre{leaf},
+		Post{leaf},
+		Post{visitable},
+		Post{refContainer},
+	})
+}
+
 type step interface {
 	String() string
 }
@@ -397,13 +419,19 @@ func (tv *rewriteTestVisitor) post(cursor *Cursor) bool {
 }
 func (tv *rewriteTestVisitor) assertEquals(t *testing.T, expected []step) {
 	t.Helper()
+	assertStepsEqual(t, tv.walk, expected)
+}
+
+func assertStepsEqual(t *testing.T, walk, expected []step) {
+	t.Helper()
 	var lines []string
 	error := false
 	expectedSize := len(expected)
-	for i, step := range tv.walk {
+	for i, step := range walk {
 		t.Run(fmt.Sprintf("step %d", i), func(t *testing.T) {
+			t.Helper()
 			if expectedSize <= i {
-				t.Fatalf("❌️ - Expected less elements %v", tv.walk[i:])
+				t.Fatalf("❌️ - Expected less elements %v", walk[i:])
 			} else {
 				e := expected[i]
 				if reflect.DeepEqual(e, step) {
@@ -426,7 +454,7 @@ func (tv *rewriteTestVisitor) assertEquals(t *testing.T, expected []step) {
 			}
 		})
 	}
-	walkSize := len(tv.walk)
+	walkSize := len(walk)
 	if expectedSize > walkSize {
 		t.Errorf("❌️ - Expected more elements %v", expected[walkSize:])
 	}
