@@ -1948,7 +1948,7 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			}
 		})
 	}
-	handle("/throttler/check_deprecated", base.ShardScope)
+	handle("/throttler/check-self", base.SelfScope)
 }
 
 // registerThrottlerHandlers registers all throttler handlers
