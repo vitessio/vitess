@@ -407,12 +407,12 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 
 		// Returns copies of the data, so we can recycle the buffer.
 		user, clientAuthMethod, clientAuthResponse, err = l.parseClientHandshakePacket(c, false, response)
+		c.recycleReadPacket()
 		if err != nil {
 			l.handleConnectionError(c, fmt.Sprintf(
 				"Cannot parse post-SSL client handshake response from %s: %v", c, err))
 			return
 		}
-		c.recycleReadPacket()
 
 		if con, ok := c.Conn.(*tls.Conn); ok {
 			connState := con.ConnectionState()
@@ -473,12 +473,19 @@ func (l *Listener) handle(ctx context.Context, conn net.Conn, connectionID uint3
 			return
 		}
 
-		clientAuthResponse, err = c.readEphemeralPacket(context.Background())
+		data, err := c.readEphemeralPacket(context.Background())
 		if err != nil {
 			l.handleConnectionError(c, fmt.Sprintf("Error reading auth switch response for %s: %v", c, err))
 			return
 		}
+
+		var ok bool
+		clientAuthResponse, _, ok = readBytesCopy(data, 0, len(data))
 		c.recycleReadPacket()
+		if !ok {
+			l.handleConnectionError(c, fmt.Sprintf("Unable to copy client auth response for %s", c))
+			return
+		}
 	}
 
 	userData, err := negotiatedAuthMethod.HandleAuthPluginData(c, user, serverAuthPluginData, clientAuthResponse, conn.RemoteAddr())
