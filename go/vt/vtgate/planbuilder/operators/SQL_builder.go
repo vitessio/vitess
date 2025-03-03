@@ -118,11 +118,11 @@ func (qb *queryBuilder) addTableExpr(
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
-	if qb.ctx.ShouldSkip(expr) {
-		// This is a predicate that was added to the RHS of an ApplyJoin.
-		// The original predicate will be added, so we don't have to add this here
-		return
-	}
+	// if qb.ctx.ShouldSkip(expr) {
+	// 	// This is a predicate that was added to the RHS of an ApplyJoin.
+	// 	// The original predicate will be added, so we don't have to add this here
+	// 	return
+	// }
 	jp, ok := expr.(*predicates.JoinPredicate)
 	if ok {
 		// we have to strip out the join predicate containers,
@@ -617,13 +617,10 @@ func buildProjection(op *Projection, qb *queryBuilder) {
 }
 
 func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
-	predicates := slice.Map(op.JoinPredicates.columns, func(jc applyJoinColumn) sqlparser.Expr {
-		if jc.JoinPredicateID != nil {
-			qb.ctx.SkipJoinPredicates(*jc.JoinPredicateID)
-		}
+	preds := slice.Map(op.JoinPredicates.columns, func(jc applyJoinColumn) sqlparser.Expr {
 		return jc.Original
 	})
-	pred := sqlparser.AndExpressions(predicates...)
+	pred := sqlparser.AndExpressions(preds...)
 
 	buildQuery(op.LHS, qb)
 
@@ -724,17 +721,9 @@ func buildHorizon(op *Horizon, qb *queryBuilder) {
 }
 
 func buildRecursiveCTE(op *RecurseCTE, qb *queryBuilder) {
-	predicates := slice.Map(op.Predicates, func(jc *plancontext.RecurseExpression) sqlparser.Expr {
-		if jc.JoinPredicateID != nil {
-			qb.ctx.SkipJoinPredicates(*jc.JoinPredicateID)
-		}
-		return jc.Original
-	})
-	pred := sqlparser.AndExpressions(predicates...)
 	buildQuery(op.Seed(), qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildQuery(op.Term(), qbR)
-	qbR.addPredicate(pred)
 	infoFor, err := qb.ctx.SemTable.TableInfoFor(op.OuterID)
 	if err != nil {
 		panic(err)

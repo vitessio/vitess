@@ -18,7 +18,6 @@ package plancontext
 
 import (
 	"io"
-	"slices"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 
@@ -35,10 +34,6 @@ type PlanningContext struct {
 	ReservedVars *sqlparser.ReservedVars
 	SemTable     *semantics.SemTable
 	VSchema      VSchema
-
-	// skipPredicates tracks predicates that should be skipped, typically when
-	// a join predicate is reverted to its original form during planning.
-	skipJoinPredicates []predicates.ID
 
 	PlannerVersion querypb.ExecuteOptions_PlannerVersion
 
@@ -134,33 +129,6 @@ func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
 	ctx.ReservedArguments[expr] = bvName
 
 	return bvName
-}
-
-// ShouldSkip determines if a given expression should be ignored in the SQL output building.
-// It checks against expressions that have been marked to be excluded from further processing.
-func (ctx *PlanningContext) ShouldSkip(expr sqlparser.Expr) bool {
-	var found bool
-	if jp, ok := expr.(*predicates.JoinPredicate); ok {
-		found = slices.Contains(ctx.skipJoinPredicates, jp.ID)
-	}
-	return found
-}
-
-func (ctx *PlanningContext) SkipJoinPredicates(id predicates.ID) {
-	ctx.skipJoinPredicates = append(ctx.skipJoinPredicates, id)
-}
-
-func (ctx *PlanningContext) RewriteDerivedTableExpression(expr sqlparser.Expr, tableInfo semantics.TableInfo) sqlparser.Expr {
-	modifiedExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
-	// for key, exprs := range ctx.joinPredicates {
-	//	for _, rhsExpr := range exprs {
-	//		if ctx.SemTable.EqualsExpr(expr, rhsExpr) {
-	//			ctx.joinPredicates[key] = append(ctx.joinPredicates[key], modifiedExpr)
-	//			return modifiedExpr
-	//		}
-	//	}
-	// }
-	return modifiedExpr
 }
 
 // TypeForExpr returns the type of the given expression, with nullable set if the expression is from an outer table.
@@ -436,8 +404,4 @@ func (ctx *PlanningContext) IsConstantBool(expr sqlparser.Expr) *bool {
 		return nil
 	}
 	return &b
-}
-
-func (ctx *PlanningContext) KeepPredicateInfo(other *PlanningContext) {
-	ctx.skipJoinPredicates = append(ctx.skipJoinPredicates, other.skipJoinPredicates...)
 }
