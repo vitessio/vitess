@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"slices"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -221,6 +223,10 @@ func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Ro
 }
 
 func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool) {
+	jp, ok := predicate.(*predicates.JoinPredicate)
+	if ok {
+		predicate = jp.Current()
+	}
 	newVindexFound := false
 	switch node := predicate.(type) {
 	case *sqlparser.BetweenExpr:

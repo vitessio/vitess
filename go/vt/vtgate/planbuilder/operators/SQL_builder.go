@@ -118,8 +118,7 @@ func (qb *queryBuilder) addTableExpr(
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
-	jp, ok := expr.(*predicates.JoinPredicate)
-	if ok {
+	if jp, ok := expr.(*predicates.JoinPredicate); ok {
 		// we have to strip out the join predicate containers,
 		// otherwise precedence calculations get messed up
 		expr = jp.Current()

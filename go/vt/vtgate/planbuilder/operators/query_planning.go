@@ -21,6 +21,8 @@ import (
 	"io"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -76,18 +78,7 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
 		case *ApplyJoin:
-			jm := newJoinMerge(nil, in.JoinType)
-			r := jm.mergeJoinInputs(ctx, in.LHS, in.RHS)
-			if r != nil {
-				aj, ok := r.Source.(*ApplyJoin)
-				if !ok {
-					panic("expected apply join")
-				}
-				aj.JoinPredicates = in.JoinPredicates
-				return r, Rewrote("merged apply join inputs")
-			}
-
-			return in, NoRewrite
+			return tryMergeApplyJoin(in, ctx)
 		case *Join:
 			return optimizeJoin(ctx, in)
 		case *Projection:
@@ -129,6 +120,49 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	}
 
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (Operator, *ApplyResult) {
+	jm := newJoinMerge(nil, in.JoinType)
+	r := jm.mergeJoinInputs(ctx, in.LHS, in.RHS)
+	if r != nil {
+		aj, ok := r.Source.(*ApplyJoin)
+		if !ok {
+			panic(vterrors.VT13001("expected apply join"))
+		}
+		// we need to remember the joinPredicates we had, and their predicate ID
+		aj.JoinPredicates = in.JoinPredicates
+		original := map[predicates.ID]sqlparser.Expr{}
+		for _, col := range aj.JoinPredicates.columns {
+			if col.JoinPredicateID != nil {
+				// if we have pushed down a join predicate, we need to restore it to it's original shape, without the argument from the LHS
+				id := *col.JoinPredicateID
+				original[id] = ctx.PredTracker.Expressions[id]
+				ctx.PredTracker.Set(id, col.Original)
+			}
+		}
+
+		// something that was coming from outside might have been merged in,
+		// so we need to update routing choices we've made
+		r.Routing = r.Routing.resetRoutingLogic(ctx)
+
+		_, isDual := in.LHS.(*Route).Routing.(*DualRouting)
+		if isDual {
+			if !(jm.joinType.IsInner() || r.Routing.OpCode().IsSingleShard()) {
+				// to check the resulting opcode, we've used the original predicates.
+				// Since we are not using them, we need to restore the argument versions of the predicates
+				for id, expr := range original {
+					ctx.PredTracker.Set(id, expr)
+				}
+				return in, NoRewrite
+			}
+
+		}
+
+		return r, Rewrote("pushed ApplyJoin under Route")
+	}
+
+	return in, NoRewrite
 }
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
@@ -345,9 +379,6 @@ func mergeOffsetExpressions(e1, e2 sqlparser.Expr) (expr sqlparser.Expr, failed 
 }
 
 // mergeLimitExpressions merges two LIMIT expressions with an OFFSET expression.
-
-// select tbl1.foo = tbl2.bar from tbl1, tbl2 where tbl1.foo = tbl2.bar
-
 // l1: First LIMIT expression.
 // l2: Second LIMIT expression.
 // off2: Second OFFSET expression.

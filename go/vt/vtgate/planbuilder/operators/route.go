@@ -105,11 +105,13 @@ type (
 		// updateRoutingLogic updates the routing to take predicates into account. This can be used for routing
 		// using vindexes or for figuring out which keyspace an information_schema query should be sent to.
 		updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing
+
+		resetRoutingLogic(ctx *plancontext.PlanningContext) Routing
 	}
 )
 
 // UpdateRoutingLogic first checks if we are dealing with a predicate that
-func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r Routing) Routing {
+func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r Routing) Routing {
 	ks := r.Keyspace()
 	if ks == nil {
 		var err error
@@ -120,17 +122,19 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 	}
 	nr := &NoneRouting{keyspace: ks}
 
+	expr := in
+	// If we have a JoinPredicate, let's get the inner expression
+	pred, isJP := in.(*predicates.JoinPredicate)
+	if isJP {
+		expr = pred.Current()
+	}
+
 	if b := ctx.IsConstantBool(expr); b != nil && !*b {
 		return nr
 	}
 
 	exit := func() Routing {
-		return r.updateRoutingLogic(ctx, expr)
-	}
-
-	// If we have a JoinPredicate, get it, otherwise do nothing
-	if pred, ok := expr.(*predicates.JoinPredicate); ok {
-		expr = pred.Current()
+		return r.updateRoutingLogic(ctx, in)
 	}
 
 	// For some expressions, even if we can't evaluate them, we know that they will always return false or null

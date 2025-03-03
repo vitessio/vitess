@@ -1204,7 +1204,6 @@
         },
         "FieldQuery": "select c.column_name from (select table_name from information_schema.`tables` where 1 != 1) as `tables`, information_schema.`columns` as c where 1 != 1",
         "Query": "select c.column_name from (select table_name from information_schema.`tables` where table_schema != 'information_schema' limit 1) as `tables`, information_schema.`columns` as c where `tables`.table_name = c.table_name",
-        "SysTableTableName": "[c_table_name::tables_table_name]",
         "Table": "information_schema.`columns`, information_schema.`tables`"
       }
     }
