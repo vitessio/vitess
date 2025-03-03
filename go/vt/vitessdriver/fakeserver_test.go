@@ -32,14 +32,26 @@ import (
 )
 
 // fakeVTGateService has the server side of this fake
-type fakeVTGateService struct{}
+type (
+	fakeVTGateService struct {
+		execMap map[string]execMapResponse
+	}
 
-// queryExecute contains all the fields we use to test Execute
-type queryExecute struct {
-	SQL           string
-	BindVariables map[string]*querypb.BindVariable
-	Session       *vtgatepb.Session
-}
+	execMapResponse struct {
+		execQuery   *queryExecute
+		paramsCount uint16
+		result      *sqltypes.Result
+		session     *vtgatepb.Session
+		err         error
+	}
+
+	// queryExecute contains all the fields we use to test Execute
+	queryExecute struct {
+		SQL           string
+		BindVariables map[string]*querypb.BindVariable
+		Session       *vtgatepb.Session
+	}
+)
 
 func (q *queryExecute) Equal(q2 *queryExecute) bool {
 	return q.SQL == q2.SQL &&
@@ -56,7 +68,7 @@ func (f *fakeVTGateService) Execute(
 	bindVariables map[string]*querypb.BindVariable,
 	prepared bool,
 ) (*vtgatepb.Session, *sqltypes.Result, error) {
-	execCase, ok := execMap[sql]
+	execCase, ok := f.execMap[sql]
 	if !ok {
 		return session, nil, fmt.Errorf("no match for: %s", sql)
 	}
@@ -78,7 +90,7 @@ func (f *fakeVTGateService) Execute(
 // ExecuteBatch is part of the VTGateService interface
 func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sql []string, bindVariables []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	if len(sql) == 1 {
-		execCase, ok := execMap[sql[0]]
+		execCase, ok := f.execMap[sql[0]]
 		if !ok {
 			return session, nil, fmt.Errorf("no match for: %s", sql)
 		}
@@ -106,7 +118,7 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.
 
 // StreamExecute is part of the VTGateService interface
 func (f *fakeVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
-	execCase, ok := execMap[sql]
+	execCase, ok := f.execMap[sql]
 	if !ok {
 		return session, fmt.Errorf("no match for: %s", sql)
 	}
@@ -139,7 +151,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgatese
 
 // Prepare is part of the VTGateService interface
 func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
-	execCase, ok := execMap[sql]
+	execCase, ok := f.execMap[sql]
 	if !ok {
 		return session, nil, 0, fmt.Errorf("no match for: %s", sql)
 	}
@@ -174,129 +186,127 @@ func (f *fakeVTGateService) HandlePanic(err *error) {
 
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer() vtgateservice.VTGateService {
-	return &fakeVTGateService{}
+	return &fakeVTGateService{
+		execMap: createExecMap(),
+	}
 }
 
-var execMap = map[string]struct {
-	execQuery   *queryExecute
-	paramsCount uint16
-	result      *sqltypes.Result
-	session     *vtgatepb.Session
-	err         error
-}{
-	"request": {
-		execQuery: &queryExecute{
-			SQL: "request",
-			BindVariables: map[string]*querypb.BindVariable{
-				"v1": sqltypes.Int64BindVariable(0),
-			},
-			Session: &vtgatepb.Session{
-				TargetString: "@rdonly",
-				Autocommit:   true,
-			},
-		},
-		result:      &result1,
-		paramsCount: 1,
-		session:     nil,
-	},
-	"requestDates": {
-		execQuery: &queryExecute{
-			SQL: "requestDates",
-			BindVariables: map[string]*querypb.BindVariable{
-				"v1": sqltypes.Int64BindVariable(0),
-			},
-			Session: &vtgatepb.Session{
-				TargetString: "@rdonly",
-				Autocommit:   true,
-			},
-		},
-		result:      &result2,
-		paramsCount: 1,
-		session:     nil,
-	},
-	"txRequest": {
-		execQuery: &queryExecute{
-			SQL: "txRequest",
-			BindVariables: map[string]*querypb.BindVariable{
-				"v1": sqltypes.Int64BindVariable(0),
-			},
-			Session: session1,
-		},
-		result:      &sqltypes.Result{},
-		paramsCount: 1,
-		session:     session2,
-	},
-	"distributedTxRequest": {
-		execQuery: &queryExecute{
-			SQL: "distributedTxRequest",
-			BindVariables: map[string]*querypb.BindVariable{
-				"v1": sqltypes.Int64BindVariable(1),
-			},
-			Session: &vtgatepb.Session{
-				InTransaction: true,
-				ShardSessions: []*vtgatepb.Session_ShardSession{
-					{
-						Target: &querypb.Target{
-							Keyspace:   "ks",
-							Shard:      "1",
-							TabletType: topodatapb.TabletType_PRIMARY,
-						},
-						TransactionId: 1,
-					},
+func createExecMap() map[string]execMapResponse {
+	return map[string]execMapResponse{
+		"request": {
+			execQuery: &queryExecute{
+				SQL: "request",
+				BindVariables: map[string]*querypb.BindVariable{
+					"v1": sqltypes.Int64BindVariable(0),
 				},
+				Session: &vtgatepb.Session{
+					TargetString: "@rdonly",
+					Autocommit:   true,
+				},
+			},
+			result:      &result1,
+			paramsCount: 1,
+			session:     nil,
+		},
+		"requestDates": {
+			execQuery: &queryExecute{
+				SQL: "requestDates",
+				BindVariables: map[string]*querypb.BindVariable{
+					"v1": sqltypes.Int64BindVariable(0),
+				},
+				Session: &vtgatepb.Session{
+					TargetString: "@rdonly",
+					Autocommit:   true,
+				},
+			},
+			result:      &result2,
+			paramsCount: 1,
+			session:     nil,
+		},
+		"txRequest": {
+			execQuery: &queryExecute{
+				SQL: "txRequest",
+				BindVariables: map[string]*querypb.BindVariable{
+					"v1": sqltypes.Int64BindVariable(0),
+				},
+				Session: session1,
+			},
+			result:      &sqltypes.Result{},
+			paramsCount: 1,
+			session:     session2,
+		},
+		"distributedTxRequest": {
+			execQuery: &queryExecute{
+				SQL: "distributedTxRequest",
+				BindVariables: map[string]*querypb.BindVariable{
+					"v1": sqltypes.Int64BindVariable(1),
+				},
+				Session: &vtgatepb.Session{
+					InTransaction: true,
+					ShardSessions: []*vtgatepb.Session_ShardSession{
+						{
+							Target: &querypb.Target{
+								Keyspace:   "ks",
+								Shard:      "1",
+								TabletType: topodatapb.TabletType_PRIMARY,
+							},
+							TransactionId: 1,
+						},
+					},
+					TargetString: "@rdonly",
+				},
+			},
+			result:      &sqltypes.Result{},
+			paramsCount: 1,
+			session:     session2,
+		},
+		"begin": {
+			execQuery: &queryExecute{
+				SQL: "begin",
+				Session: &vtgatepb.Session{
+					TargetString: "@primary",
+					Autocommit:   true,
+				},
+			},
+			result:  &sqltypes.Result{},
+			session: session1,
+		},
+		"commit": {
+			execQuery: &queryExecute{
+				SQL:     "commit",
+				Session: session2,
+			},
+			result: &sqltypes.Result{},
+			session: &vtgatepb.Session{
+				TargetString: "@primary",
+				Autocommit:   true,
+			},
+		},
+		"rollback": {
+			execQuery: &queryExecute{
+				SQL:     "rollback",
+				Session: session2,
+			},
+			result: &sqltypes.Result{},
+			session: &vtgatepb.Session{
+				TargetString: "@primary",
+			},
+		},
+		"use @rdonly": {
+			execQuery: &queryExecute{
+				SQL: "use @rdonly",
+				Session: &vtgatepb.Session{
+					TargetString: "@primary",
+					Autocommit:   true,
+				},
+			},
+			result: &sqltypes.Result{},
+			session: &vtgatepb.Session{
 				TargetString: "@rdonly",
+				SessionUUID:  "1111",
 			},
 		},
-		result:      &sqltypes.Result{},
-		paramsCount: 1,
-		session:     session2,
-	},
-	"begin": {
-		execQuery: &queryExecute{
-			SQL: "begin",
-			Session: &vtgatepb.Session{
-				TargetString: "@primary",
-				Autocommit:   true,
-			},
-		},
-		result:  &sqltypes.Result{},
-		session: session1,
-	},
-	"commit": {
-		execQuery: &queryExecute{
-			SQL:     "commit",
-			Session: session2,
-		},
-		result: &sqltypes.Result{},
-		session: &vtgatepb.Session{
-			TargetString: "@primary",
-			Autocommit:   true,
-		},
-	},
-	"rollback": {
-		execQuery: &queryExecute{
-			SQL:     "rollback",
-			Session: session2,
-		},
-		result: &sqltypes.Result{},
-		session: &vtgatepb.Session{
-			TargetString: "@primary",
-		},
-	},
-	"use @rdonly": {
-		execQuery: &queryExecute{
-			SQL: "use @rdonly",
-			Session: &vtgatepb.Session{
-				TargetString: "@primary",
-				Autocommit:   true,
-			},
-		},
-		result: &sqltypes.Result{},
-		session: &vtgatepb.Session{
-			TargetString: "@rdonly",
-			SessionUUID:  "1111",
-		},
-	},
+	}
 }
 
 var result1 = sqltypes.Result{
@@ -368,5 +378,3 @@ var session2 = &vtgatepb.Session{
 	},
 	TargetString: "@rdonly",
 }
-
-var dtid2 = "aa"
