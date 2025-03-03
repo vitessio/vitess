@@ -1518,16 +1518,16 @@ var (
 		input: "set @@transaction_isolation = 'read-committed'",
 	}, {
 		input:  "set transaction_isolation = 'repeatable read'",
-		output: "set @@transaction_isolation = 'repeatable read'",
+		output: "set @@session.transaction_isolation = 'repeatable read'",
 	}, {
 		input:  "set transaction_isolation = 'read committed'",
-		output: "set @@transaction_isolation = 'read committed'",
+		output: "set @@session.transaction_isolation = 'read committed'",
 	}, {
 		input:  "set transaction_isolation = 'read uncommitted'",
-		output: "set @@transaction_isolation = 'read uncommitted'",
+		output: "set @@session.transaction_isolation = 'read uncommitted'",
 	}, {
 		input:  "set transaction_isolation = 'serializable'",
-		output: "set @@transaction_isolation = 'serializable'",
+		output: "set @@session.transaction_isolation = 'serializable'",
 	}, {
 		input:  "set sql_safe_updates = 0",
 		output: "set @@sql_safe_updates = 0",
@@ -3075,7 +3075,7 @@ var (
 	}, {
 		input: `SELECT * FROM JSON_TABLE('[ {"c1": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt`,
 		output: `select * from json_table('[ {"c1": null} ]', '$[*]' columns(
-	c1 INT path '$.c1' error on error
+	c1 INT path '$.c1' error on error 
 	)
 ) as jt`,
 	}, {
@@ -3083,17 +3083,17 @@ var (
 		output: `select * from json_table('[{"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}]', '$[*]' columns(
 	a INT path '$.a' ,
 	nested path '$.b[*]' columns(
-	b1 INT path '$'
+	b1 INT path '$' 
 ),
 	nested path '$.b[*]' columns(
-	b2 INT path '$'
+	b2 INT path '$' 
 )
 	)
 ) as jt`,
 	}, {
 		input: `SELECT * FROM JSON_TABLE('[ {"c1": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt`,
 		output: `select * from json_table('[ {"c1": null} ]', '$[*]' columns(
-	c1 INT path '$.c1' error on error
+	c1 INT path '$.c1' error on error 
 	)
 ) as jt`,
 	}, {
@@ -3102,7 +3102,7 @@ var (
 	rowid for ordinality,
 	ac VARCHAR(100) path '$.a' default '111' on empty default '999' on error ,
 	aj JSON path '$.a' default '{"x": 333}' on empty ,
-	bx INT exists path '$.b'
+	bx INT exists path '$.b' 
 	)
 ) as tt`,
 	}, {
@@ -3110,7 +3110,7 @@ var (
 		output: `select * from json_table('[ {"a": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' columns(
 	a INT path '$.a' ,
 	nested path '$.b[*]' columns(
-	b INT path '$'
+	b INT path '$' 
 )
 	)
 ) as jt where b is not null`,
@@ -3118,7 +3118,7 @@ var (
 		input: `SELECT * FROM  JSON_TABLE(    '[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]',    "$[1]" COLUMNS(      xval VARCHAR(100) PATH "$.x",      yval VARCHAR(100) PATH "$.y"    )  ) AS  jt1`,
 		output: `select * from json_table('[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]', '$[1]' columns(
 	xval VARCHAR(100) path '$.x' ,
-	yval VARCHAR(100) path '$.y'
+	yval VARCHAR(100) path '$.y' 
 	)
 ) as jt1`,
 	}, {
@@ -3130,7 +3130,7 @@ var (
 	bpath VARCHAR(10) path '$.c' ,
 	ord for ordinality,
 	nested path '$.l[*]' columns(
-	lpath varchar(10) path '$'
+	lpath varchar(10) path '$' 
 )
 )
 	)
@@ -3139,7 +3139,7 @@ var (
 		input: `SELECT * FROM JSON_TABLE('[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]', "$[1]" COLUMNS( xval VARCHAR(100) PATH "$.x", yval VARCHAR(100) PATH "$.y")) AS  jt1;`,
 		output: `select * from json_table('[{"x":2,"y":"8"},{"x":"3","y":"7"},{"x":"4","y":6}]', '$[1]' columns(
 	xval VARCHAR(100) path '$.x' ,
-	yval VARCHAR(100) path '$.y'
+	yval VARCHAR(100) path '$.y' 
 	)
 ) as jt1`,
 	}, {
