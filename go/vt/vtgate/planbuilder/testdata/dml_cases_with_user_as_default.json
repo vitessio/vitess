@@ -13,7 +13,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update ambiguous_ref_with_source set done = true where id = 1",
         "Table": "ambiguous_ref_with_source"
       },

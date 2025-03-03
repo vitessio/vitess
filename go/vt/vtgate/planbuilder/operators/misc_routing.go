@@ -37,7 +37,7 @@ type (
 		keyspace *vindexes.Keyspace
 
 		// targetDestination specifies an explicit target destination tablet type
-		TargetDestination key.Destination
+		TargetDestination key.ShardDestination
 	}
 
 	// AnyShardRouting is used for routing logic where any shard in the keyspace can be used.

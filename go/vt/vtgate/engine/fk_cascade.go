@@ -23,8 +23,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // FkChild contains the Child Primitive to be executed collecting the values from the Selection Primitive using the column indexes.
@@ -54,6 +52,7 @@ type NonLiteralUpdateInfo struct {
 // On success, it executes the Parent Primitive.
 type FkCascade struct {
 	txNeeded
+	noFields
 
 	// Selection is the Primitive that is used to find the rows that are going to be modified in the child tables.
 	Selection Primitive
@@ -76,11 +75,6 @@ func (fkc *FkCascade) GetKeyspaceName() string {
 // GetTableName implements the Primitive interface.
 func (fkc *FkCascade) GetTableName() string {
 	return fkc.Parent.GetTableName()
-}
-
-// GetFields implements the Primitive interface.
-func (fkc *FkCascade) GetFields(_ context.Context, _ VCursor, _ map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields should not be called")
 }
 
 // TryExecute implements the Primitive interface.

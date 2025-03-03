@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var _ Primitive = (*Route)(nil)
@@ -57,10 +56,6 @@ type Route struct {
 
 	// Route does not need transaction handling
 	noTxNeeded
-
-	// TargetTabletType specifies an explicit target destination tablet type
-	// this is only used in conjunction with TargetDestination
-	TargetTabletType topodatapb.TabletType
 
 	// Query specifies the query to be executed.
 	Query string
@@ -345,7 +340,7 @@ func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map
 
 	// If not find, then pick any shard.
 	if rs == nil {
-		rss, _, err := vcursor.ResolveDestinations(ctx, route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+		rss, _, err := vcursor.ResolveDestinations(ctx, route.Keyspace.Name, nil, []key.ShardDestination{key.DestinationAnyShard{}})
 		if err != nil {
 			return nil, err
 		}
@@ -438,7 +433,7 @@ func (route *Route) executeAfterLookup(
 	bindVars map[string]*querypb.BindVariable,
 	wantfields bool,
 	ids []sqltypes.Value,
-	dest []key.Destination,
+	dest []key.ShardDestination,
 ) (*sqltypes.Result, error) {
 	protoIds := make([]*querypb.Value, 0, len(ids))
 	for _, id := range ids {
@@ -462,7 +457,7 @@ func (route *Route) streamExecuteAfterLookup(
 	wantfields bool,
 	callback func(*sqltypes.Result) error,
 	ids []sqltypes.Value,
-	dest []key.Destination,
+	dest []key.ShardDestination,
 ) error {
 	protoIds := make([]*querypb.Value, 0, len(ids))
 	for _, id := range ids {

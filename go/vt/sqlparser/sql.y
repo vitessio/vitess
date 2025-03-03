@@ -5709,7 +5709,7 @@ frame_point:
   {
     $$ = &FramePoint{Type:UnboundedFollowingType}
   }
-| NUM_literal PRECEDING
+| literal PRECEDING
   {
     $$ = &FramePoint{Type:ExprPrecedingType, Expr:$1}
   }
@@ -5717,7 +5717,7 @@ frame_point:
   {
     $$ = &FramePoint{Type:ExprPrecedingType, Expr:$2, Unit: $3}
   }
-| NUM_literal FOLLOWING
+| literal FOLLOWING
   {
     $$ = &FramePoint{Type:ExprFollowingType, Expr:$1}
   }
