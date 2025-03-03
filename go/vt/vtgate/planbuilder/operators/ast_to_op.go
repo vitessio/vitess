@@ -195,6 +195,7 @@ func createOpFromStmt(inCtx *plancontext.PlanningContext, stmt sqlparser.Stateme
 	if err != nil {
 		panic(err)
 	}
+	ctx.PredTracker = inCtx.PredTracker // we share this so that joinPredicates still get unique IDs
 
 	// TODO (@GuptaManan100, @harshit-gangal): When we add cross-shard foreign keys support,
 	// we should augment the semantic analysis to also tell us whether the given query has any cross shard parent foreign keys to validate.
@@ -229,9 +230,6 @@ func createOpFromStmt(inCtx *plancontext.PlanningContext, stmt sqlparser.Stateme
 	if err != nil {
 		panic(err)
 	}
-
-	// need to remember which predicates have been broken up during join planning
-	//inCtx.KeepPredicateInfo(ctx) TODO
 
 	return op
 }
