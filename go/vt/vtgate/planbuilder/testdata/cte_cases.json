@@ -2430,7 +2430,7 @@
               "Sharded": true
             },
             "FieldQuery": "select e.`name` as employee_name from `user` as e where 1 != 1",
-            "Query": "select e.`name` as employee_name from `user` as e where l.id = e.id",
+            "Query": "select e.`name` as employee_name from `user` as e where e.id = :l_id",
             "Table": "`user`",
             "Values": [
               ":l_id"

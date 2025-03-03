@@ -122,47 +122,56 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
 }
 
-func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (Operator, *ApplyResult) {
+func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Operator, res *ApplyResult) {
 	jm := newJoinMerge(nil, in.JoinType)
 	r := jm.mergeJoinInputs(ctx, in.LHS, in.RHS)
-	if r != nil {
-		aj, ok := r.Source.(*ApplyJoin)
-		if !ok {
-			panic(vterrors.VT13001("expected apply join"))
+	if r == nil {
+		return in, NoRewrite
+	}
+	aj, ok := r.Source.(*ApplyJoin)
+	if !ok {
+		panic(vterrors.VT13001("expected apply join"))
+	}
+	// we need to remember the joinPredicates we had, and their predicate ID
+	aj.JoinPredicates = in.JoinPredicates
+	original := map[predicates.ID]sqlparser.Expr{}
+	for _, col := range aj.JoinPredicates.columns {
+		if col.JoinPredicateID != nil {
+			// if we have pushed down a join predicate, we need to restore it to it's original shape, without the argument from the LHS
+			id := *col.JoinPredicateID
+			original[id] = ctx.PredTracker.Expressions[id]
+			ctx.PredTracker.Set(id, col.Original)
 		}
-		// we need to remember the joinPredicates we had, and their predicate ID
-		aj.JoinPredicates = in.JoinPredicates
-		original := map[predicates.ID]sqlparser.Expr{}
-		for _, col := range aj.JoinPredicates.columns {
-			if col.JoinPredicateID != nil {
-				// if we have pushed down a join predicate, we need to restore it to it's original shape, without the argument from the LHS
-				id := *col.JoinPredicateID
-				original[id] = ctx.PredTracker.Expressions[id]
-				ctx.PredTracker.Set(id, col.Original)
-			}
-		}
-
-		// something that was coming from outside might have been merged in,
-		// so we need to update routing choices we've made
-		r.Routing = r.Routing.resetRoutingLogic(ctx)
-
-		_, isDual := in.LHS.(*Route).Routing.(*DualRouting)
-		if isDual {
-			if !(jm.joinType.IsInner() || r.Routing.OpCode().IsSingleShard()) {
-				// to check the resulting opcode, we've used the original predicates.
-				// Since we are not using them, we need to restore the argument versions of the predicates
-				for id, expr := range original {
-					ctx.PredTracker.Set(id, expr)
-				}
-				return in, NoRewrite
-			}
-
-		}
-
-		return r, Rewrote("pushed ApplyJoin under Route")
 	}
 
-	return in, NoRewrite
+	defer func() {
+		if res == NoRewrite {
+			// We need to restore the original predicates, if we didn't rewrite the ApplyJoin
+			for id, expr := range original {
+				ctx.PredTracker.Set(id, expr)
+			}
+		}
+	}()
+
+	// something that was coming from outside might have been merged in,
+	// so we need to update routing choices we've made
+	r.Routing = r.Routing.resetRoutingLogic(ctx)
+
+	rb, ok := in.LHS.(*Route)
+	success := "pushed ApplyJoin under Route"
+	if !ok {
+		// This is not expected to happen
+		return in, NoRewrite
+	}
+
+	if _, isDual := rb.Routing.(*DualRouting); isDual &&
+		!(jm.joinType.IsInner() || r.Routing.OpCode().IsSingleShard()) {
+		// to check the resulting opcode, we've used the original predicates.
+		// Since we are not using them, we need to restore the argument versions of the predicates
+		return in, NoRewrite
+	}
+
+	return r, Rewrote(success)
 }
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {

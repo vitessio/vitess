@@ -1166,7 +1166,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from `user` as u where 1 != 1",
-                "Query": "select 1 from `user` as u where u.id = ue.x",
+                "Query": "select 1 from `user` as u where u.id = :ue_x /* INT64 */",
                 "Table": "`user`",
                 "Values": [
                   ":ue_x"
