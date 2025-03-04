@@ -26,17 +26,15 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
 // SandboxConn satisfies the QueryService interface
@@ -65,22 +63,24 @@ type SandboxConn struct {
 
 	// These Count vars report how often the corresponding
 	// functions were called.
-	ExecCount                atomic.Int64
-	BeginCount               atomic.Int64
-	CommitCount              atomic.Int64
-	RollbackCount            atomic.Int64
-	AsTransactionCount       atomic.Int64
-	PrepareCount             atomic.Int64
-	CommitPreparedCount      atomic.Int64
-	RollbackPreparedCount    atomic.Int64
-	CreateTransactionCount   atomic.Int64
-	StartCommitCount         atomic.Int64
-	SetRollbackCount         atomic.Int64
-	ConcludeTransactionCount atomic.Int64
-	ReadTransactionCount     atomic.Int64
-	ReserveCount             atomic.Int64
-	ReleaseCount             atomic.Int64
-	GetSchemaCount           atomic.Int64
+	ExecCount                   atomic.Int64
+	BeginCount                  atomic.Int64
+	CommitCount                 atomic.Int64
+	RollbackCount               atomic.Int64
+	AsTransactionCount          atomic.Int64
+	PrepareCount                atomic.Int64
+	CommitPreparedCount         atomic.Int64
+	RollbackPreparedCount       atomic.Int64
+	CreateTransactionCount      atomic.Int64
+	StartCommitCount            atomic.Int64
+	SetRollbackCount            atomic.Int64
+	ConcludeTransactionCount    atomic.Int64
+	ReadTransactionCount        atomic.Int64
+	UnresolvedTransactionsCount atomic.Int64
+	ReserveCount                atomic.Int64
+	ReleaseCount                atomic.Int64
+	GetSchemaCount              atomic.Int64
+	GetSchemaDelayResponse      time.Duration
 
 	queriesRequireLocking bool
 	queriesMu             sync.Mutex
@@ -677,6 +677,9 @@ func (sbc *SandboxConn) Release(ctx context.Context, target *querypb.Target, tra
 // GetSchema implements the QueryService interface
 func (sbc *SandboxConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
 	sbc.GetSchemaCount.Add(1)
+	if sbc.GetSchemaDelayResponse > 0 {
+		time.Sleep(sbc.GetSchemaDelayResponse)
+	}
 	if len(sbc.getSchemaResult) == 0 {
 		return nil
 	}
