@@ -203,6 +203,7 @@ func tryPushValues(ctx *plancontext.PlanningContext, in *Values) (Operator, *App
 		return Swap(in, src, "pushed values under filter")
 	case *Route:
 		src.Routing.AddValuesTableID(in.TableID)
+		src.Routing.resetRoutingLogic(ctx)
 		return Swap(in, src, "pushed values under route")
 	}
 	return in, NoRewrite

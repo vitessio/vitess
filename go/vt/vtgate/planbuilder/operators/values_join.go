@@ -171,9 +171,11 @@ func (vj *ValuesJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	exprs := ctx.GetColumns(vj.ValuesDestination)
 	for _, jc := range vj.JoinColumns {
 		newExprs := vj.planOffsetsForLHSExprs(ctx, jc.LHS)
+		for _, expr := range newExprs {
+			offset := vj.RHS.AddColumn(ctx, true, false, expr)
+			vj.Columns = append(vj.Columns, ToRightOffset(offset))
+		}
 		exprs = append(exprs, newExprs...)
-		offset := vj.RHS.AddColumn(ctx, true, false, aeWrap(jc.Original))
-		vj.Columns = append(vj.Columns, ToRightOffset(offset))
 	}
 	for _, jc := range vj.JoinPredicates {
 		// for join predicates, we only need to push the LHS dependencies. The RHS expressions are already pushed
@@ -184,13 +186,13 @@ func (vj *ValuesJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	return vj
 }
 
-func (vj *ValuesJoin) planOffsetsForLHSExprs(ctx *plancontext.PlanningContext, input []sqlparser.Expr) (exprs []*sqlparser.AliasedExpr) {
-	for _, lhsExpr := range input {
+func (vj *ValuesJoin) planOffsetsForLHSExprs(ctx *plancontext.PlanningContext, lhsCols []sqlparser.Expr) (exprs []*sqlparser.AliasedExpr) {
+	for _, lhsExpr := range lhsCols {
 		offset := vj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr))
 		// only add it if we don't already have it
 		if slices.Index(vj.CopyColumnsToRHS, offset) == -1 {
 			vj.CopyColumnsToRHS = append(vj.CopyColumnsToRHS, offset)
-			newCol := sqlparser.NewColName(getValuesJoinColName(ctx, vj.ValuesDestination, TableID(vj.LHS), lhsExpr))
+			newCol := sqlparser.NewColNameWithQualifier(getValuesJoinColName(ctx, vj.ValuesDestination, TableID(vj.LHS), lhsExpr), sqlparser.NewTableName(vj.ValuesDestination))
 			exprs = append(exprs, aeWrap(newCol))
 		}
 	}

@@ -754,6 +754,20 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		return nil
 	}
 
+	// if r.Routing.OpCode() == engine.MultiEqual {
+	// 	if sr, ok := r.Routing.(*ShardedRouting); ok {
+	// 		if trv, ok := sr.Selected.Values[0].(*evalengine.TupleBindVariable); ok {
+	// 			if tblName, ok := ctx.ValuesTableName[sr.ValuesTablesIDs]; ok {
+	// 				if cols, ok := ctx.ValuesJoinColumns[tblName]; ok {
+	// 					for idx, col := range cols {
+	// 						if ctx.SemTable.EqualsExpr(col, trv.Key)
+	// 					}
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
+
 	// if we are getting results from multiple shards, we need to do a merge-sort
 	// between them to get the final output correctly sorted
 	ordering := r.Source.GetOrdering(ctx)

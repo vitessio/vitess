@@ -79,6 +79,7 @@ type PlanningContext struct {
 
 	// ValuesJoinColumns stores the columns we need for each values statement in the plan.
 	ValuesJoinColumns map[string][]*sqlparser.AliasedExpr
+	ValuesTableName   map[semantics.TableSet]string
 
 	// ValueJoins contains one entry for each value join that has been created.
 	// The key is the value-join ops ValuesDestination, and the value is the Values op associated with it.
@@ -97,6 +98,7 @@ func CreateEmptyPlanningContext() *PlanningContext {
 		ReservedArguments:  make(map[sqlparser.Expr]string),
 		ValuesJoinColumns:  make(map[string][]*sqlparser.AliasedExpr),
 		ValueJoins:         make(map[string]string),
+		ValuesTableName:    make(map[semantics.TableSet]string),
 		PredTracker:        predicates.NewTracker(),
 	}
 }
@@ -134,6 +136,7 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		Statement:          stmt,
 		AllowValuesJoin:    sqlparser.AllowValuesJoinDirective(stmt),
 		ValueJoins:         make(map[string]string),
+		ValuesTableName:    make(map[semantics.TableSet]string),
 		PredTracker:        predicates.NewTracker(),
 	}, nil
 }

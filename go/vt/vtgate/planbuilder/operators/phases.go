@@ -145,6 +145,7 @@ func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operato
 			if pred.JoinPredicateID == nil {
 				panic(vterrors.VT13001("missing join predicate ID"))
 			}
+			vj.JoinPredicates = append(vj.JoinPredicates, breakValuesJoinExpressionInLHS(ctx, pred.Original, TableID(vj.LHS)))
 
 			newOriginal := sqlparser.Rewrite(pred.Original, nil, func(cursor *sqlparser.Cursor) bool {
 				col, isCol := cursor.Node().(*sqlparser.ColName)
@@ -159,9 +160,9 @@ func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operato
 				ctx.SemTable.CopyExprInfo(pred.Original, newCol)
 				cursor.Replace(newCol)
 				return true
-			})
+			}).(sqlparser.Expr)
 
-			ctx.PredTracker.Set(*pred.JoinPredicateID, newOriginal.(sqlparser.Expr))
+			ctx.PredTracker.Set(*pred.JoinPredicateID, newOriginal)
 		}
 
 		return vj, Rewrote("rewrote ApplyJoin to ValuesJoin")
@@ -186,16 +187,18 @@ func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType
 		return nil, semantics.EmptyTableSet()
 	}
 
-	bindVariableName := ctx.ReservedVars.ReserveVariable("values")
-	ctx.ValueJoins[bindVariableName] = bindVariableName
+	valuesTableID := TableID(lhs)
+	valuesDestination := ctx.ReservedVars.ReserveVariable("values")
+	ctx.ValueJoins[valuesDestination] = valuesDestination
+	ctx.ValuesTableName[valuesTableID] = valuesDestination
 	v := &Values{
 		unaryOperator: newUnaryOp(rhs),
-		Name:          bindVariableName,
-		TableID:       TableID(lhs),
+		Name:          valuesDestination,
+		TableID:       valuesTableID,
 	}
 	return &ValuesJoin{
 		binaryOperator:    newBinaryOp(lhs, v),
-		ValuesDestination: bindVariableName,
+		ValuesDestination: valuesDestination,
 	}, v.TableID
 }
 

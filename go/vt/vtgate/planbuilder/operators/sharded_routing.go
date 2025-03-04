@@ -537,8 +537,7 @@ func (tr *ShardedRouting) getLoweredNameAndIndex(colVindex *vindexes.ColumnVinde
 
 func (tr *ShardedRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sqlparser.ComparisonExpr) bool {
 	column, ok := node.Left.(*sqlparser.ColName)
-	other := node.Right
-	vdValue := other
+	vdValue := node.Right
 	if !ok {
 		column, ok = node.Right.(*sqlparser.ColName)
 		if !ok {
@@ -548,25 +547,53 @@ func (tr *ShardedRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sq
 		vdValue = node.Left
 	}
 	val := makeEvalEngineExpr(ctx, vdValue)
-	if val == nil {
-		col, ok := vdValue.(*sqlparser.ColName)
-		if !ok {
-			return false
-		}
-		from := ctx.SemTable.RecursiveDeps(col)
-		if from.IsSolvedBy(tr.ValuesTablesIDs) {
-			multiEqual := func(vindex *vindexes.ColumnVindex) engine.Opcode {
-				// TODO @harshit - what else should we do here?
-				return engine.MultiEqual
-			}
-			arg := sqlparser.NewListArg("values") // TODO: HACK - we need to store these names?
-
-			return tr.haveMatchingVindex(ctx, node, arg, column, val, multiEqual, justTheVindex)
-		}
-		return false
+	if val != nil {
+		return tr.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
 	}
 
-	return tr.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
+	cola, ok := node.Left.(*sqlparser.ColName)
+	if !ok {
+		return false
+	}
+	colb, ok := node.Right.(*sqlparser.ColName)
+	if !ok {
+		return false
+	}
+	_, rhsCol := cola, colb
+	if !ctx.SemTable.RecursiveDeps(cola).IsSolvedBy(tr.ValuesTablesIDs) {
+		if !ctx.SemTable.RecursiveDeps(colb).IsSolvedBy(tr.ValuesTablesIDs) {
+			return false
+		}
+		_, rhsCol = colb, cola
+	}
+	tblName, ok := ctx.ValuesTableName[tr.ValuesTablesIDs]
+	if !ok {
+		return false
+	}
+	// columns, ok := ctx.ValuesJoinColumns[tblName]
+	// if !ok {
+	// 	return false
+	// }
+
+	value := &evalengine.TupleBindVariable{
+		Key:   tblName,
+		Index: -1, // cannot set this before offset planning as join predicates are not added to output columns.
+	}
+	if typ, found := ctx.TypeForExpr(rhsCol); found {
+		value.Collation = typ.Collation()
+	}
+
+	// for idx, expr := range columns {
+	// 	if ctx.SemTable.EqualsExpr(lhsCol, expr.Expr) {
+	// 		arg.Index = idx
+	// 		break
+	// 	}
+	// }
+	// if arg.Index == -1 {
+	// 	return false
+	// }
+	opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.MultiEqual }
+	return tr.haveMatchingVindex(ctx, node, nil, rhsCol, value, opcode, justTheVindex)
 }
 
 func (tr *ShardedRouting) planCompositeInOpRecursive(

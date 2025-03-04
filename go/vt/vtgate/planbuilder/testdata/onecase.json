@@ -1,8 +1,56 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
-    "plan": {
+    "query": "select /*vt+ ALLOW_VALUES_JOIN */ user_extra.col as col from user join user_extra on user.id = user_extra.id limit 10",
+    "plan":{
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_VALUES_JOIN */ user_extra.col as col from user join user_extra on user.id = user_extra.id limit 10",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "10",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Values",
+            "BindVarName": "values",
+            "CopyColumnsToRHS": [
+              0,
+              1
+            ],
+            "RowID": "false",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_extra.col as col, user_extra.id from user_extra where 1 != 1",
+                "Query": "select /*vt+ ALLOW_VALUES_JOIN */ user_extra.col as col, user_extra.id from user_extra",
+                "Table": "user_extra"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "MultiEqual",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `values`.user_extra_col from (values ::values) as `values`(user_extra_col, user_extra_id), `user` where 1 != 1",
+                "Query": "select /*vt+ ALLOW_VALUES_JOIN */ `values`.user_extra_col from (values ::values) as `values`(user_extra_col, user_extra_id), `user` where `user`.id = `values`.user_extra_id limit 10",
+                "Table": "`user`",
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
     }
   }
 ]
