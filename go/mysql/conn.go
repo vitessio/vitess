@@ -1394,7 +1394,6 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 
 	case ComBinlogDumpGTID:
 		ok := c.handleComBinlogDumpGTID(handler, data)
-		c.recycleReadPacket()
 		if !ok {
 			return fmt.Errorf("error handling ComBinlogDumpGTID packet")
 		}
@@ -1402,7 +1401,6 @@ func (c *Conn) handleNextCommand(ctx context.Context, handler Handler) error {
 
 	case ComRegisterReplica:
 		ok := c.handleComRegisterReplica(handler, data)
-		c.recycleReadPacket()
 		if !ok {
 			return fmt.Errorf("error handling ComRegisterReplica packet")
 		}
@@ -1432,6 +1430,8 @@ func (c *Conn) handleComRegisterReplica(handler Handler, data []byte) (kontinue 
 		log.Errorf("conn %v: parseComRegisterReplica failed: %v", c.ID(), err)
 		return false
 	}
+
+	c.recycleReadPacket()
 
 	if err := binlogReplicaHandler.ComRegisterReplica(c, replicaHost, replicaPort, replicaUser, replicaPassword); err != nil {
 		c.writeErrorPacketFromError(err)
@@ -1466,6 +1466,8 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
 		return false
 	}
+
+	c.recycleReadPacket()
 
 	if err := binlogReplicaHandler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
 		log.Error(err.Error())
