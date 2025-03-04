@@ -170,6 +170,38 @@ func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 	assert.Nil(t, ks3.reloadKeyspace, "ks3 already initialized")
 }
 
+// TestTrackerNoLock tests that processing of health check is not blocked while tracking is making GetSchema rpc calls.
+func TestTrackerNoLock(t *testing.T) {
+	ch := make(chan *discovery.TabletHealth)
+	tracker := NewTracker(ch, true, false, sqlparser.NewTestParser())
+	tracker.consumeDelay = 1 * time.Millisecond
+	tracker.Start()
+	defer tracker.Stop()
+
+	target := &querypb.Target{Cell: cell, Keyspace: keyspace, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}
+
+	sbc := sandboxconn.NewSandboxConn(tablet)
+	sbc.GetSchemaDelayResponse = 100 * time.Millisecond
+
+	th := &discovery.TabletHealth{
+		Conn:    sbc,
+		Tablet:  tablet,
+		Target:  target,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{TableSchemaChanged: []string{"t1"}},
+	}
+
+	for i := 0; i < 500000; i++ {
+		select {
+		case ch <- th:
+		case <-time.After(10 * time.Millisecond):
+			t.Fatalf("failed to send health check to tracker")
+		}
+	}
+	require.GreaterOrEqual(t, sbc.GetSchemaCount.Load(), int64(1), "GetSchema rpc should be called")
+}
+
 type myTable struct {
 	name, create string
 }

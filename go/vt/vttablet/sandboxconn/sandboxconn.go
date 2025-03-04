@@ -80,6 +80,7 @@ type SandboxConn struct {
 	ReserveCount                atomic.Int64
 	ReleaseCount                atomic.Int64
 	GetSchemaCount              atomic.Int64
+	GetSchemaDelayResponse      time.Duration
 
 	queriesRequireLocking bool
 	queriesMu             sync.Mutex
@@ -688,6 +689,9 @@ func (sbc *SandboxConn) Release(ctx context.Context, target *querypb.Target, tra
 // GetSchema implements the QueryService interface
 func (sbc *SandboxConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
 	sbc.GetSchemaCount.Add(1)
+	if sbc.GetSchemaDelayResponse > 0 {
+		time.Sleep(sbc.GetSchemaDelayResponse)
+	}
 	if len(sbc.getSchemaResult) == 0 {
 		return nil
 	}
