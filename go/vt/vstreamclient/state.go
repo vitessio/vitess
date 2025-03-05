@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -57,7 +59,7 @@ func initVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, key
 		return nil, err
 	}
 
-	latestVgtidJSON, err := json.Marshal(vgtid)
+	latestVgtidJSON, err := protojson.Marshal(vgtid)
 	if err != nil {
 		return nil, fmt.Errorf("vstreamclient: failed to marshal latest vgtid: %w", err)
 	}
@@ -131,7 +133,7 @@ func getLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name
 	}
 
 	var latestVGtid binlogdatapb.VGtid
-	err = json.Unmarshal(latestVGtidJSON, &latestVGtid)
+	err = protojson.Unmarshal(latestVGtidJSON, &latestVGtid)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("vstreamclient: failed to unmarshal latest_vgtid: %w", err)
 	}
@@ -158,7 +160,7 @@ func getLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name
 }
 
 func updateLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, keyspaceName, tableName string, vgtid *binlogdatapb.VGtid) error {
-	latestVgtid, err := json.Marshal(vgtid)
+	latestVgtid, err := protojson.Marshal(vgtid)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to marshal latest_vgtid: %w", err)
 	}
