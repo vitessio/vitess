@@ -354,9 +354,14 @@ func Init(
 		si = st
 	}
 
-	keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
-	if err != nil {
-		log.Fatalf("Unable to get all keyspaces: %v", err)
+	var keyspaces []string
+	if discovery.FilteringKeyspaces() {
+		keyspaces = discovery.KeyspacesToWatch
+	} else {
+		keyspaces, err = srvResolver.GetAllKeyspaces(ctx)
+		if err != nil {
+			log.Fatalf("Unable to get all keyspaces: %v", err)
+		}
 	}
 
 	// executor sets a watch on SrvVSchema, so let's rebuild these before creating it
@@ -429,6 +434,7 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 		switch {
 		case err == nil:
 		case topo.IsErrType(err, topo.NoNode):
+			log.Infof("Rebuilding Serving Keyspace %v", ks)
 			if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), topoServer, ks, []string{cell}, false); err != nil {
 				return vterrors.Wrap(err, "vtgate Init: failed to RebuildKeyspace")
 			}
@@ -442,6 +448,7 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 	case err == nil:
 		for _, ks := range keyspaces {
 			if _, exists := srvVSchema.GetKeyspaces()[ks]; !exists {
+				log.Infof("Rebuilding Serving Vschema")
 				if err := topoServer.RebuildSrvVSchema(ctx, []string{cell}); err != nil {
 					return vterrors.Wrap(err, "vtgate Init: failed to RebuildSrvVSchema")
 				}
@@ -450,6 +457,7 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 			}
 		}
 	case topo.IsErrType(err, topo.NoNode):
+		log.Infof("Rebuilding Serving Vschema")
 		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
 		if err := topoServer.RebuildSrvVSchema(ctx, []string{cell}); err != nil {
 			return vterrors.Wrap(err, "vtgate Init: failed to RebuildSrvVSchema")
