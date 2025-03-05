@@ -121,12 +121,16 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 	}
 }
 
+// rewriteApplyToValues rewrites ApplyJoin to ValuesJoin.
 func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operator {
-
+	done := false
 	// Traverse the operator tree to convert ApplyJoin to ValuesJoin.
 	// Then add a Values node to the RHS of the new ValuesJoin,
 	// and usually a filter containing the join predicates is placed there.
 	visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+		if done {
+			return op, NoRewrite
+		}
 		aj, ok := op.(*ApplyJoin)
 		if !ok {
 			return op, NoRewrite
@@ -164,22 +168,11 @@ func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operato
 
 			ctx.PredTracker.Set(*pred.JoinPredicateID, newOriginal)
 		}
-
+		done = true
 		return vj, Rewrote("rewrote ApplyJoin to ValuesJoin")
 	}
 
-	shouldVisit := func(op Operator) VisitRule {
-		rb, ok := op.(*Route)
-		if !ok {
-			return VisitChildren
-		}
-
-		rb.Routing.resetRoutingLogic(ctx)
-
-		return SkipChildren
-	}
-
-	return TopDown(op, TableID, visit, shouldVisit)
+	return TopDown(op, TableID, visit, stopAtRoute)
 }
 
 const valuesName = "values"

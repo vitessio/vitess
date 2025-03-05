@@ -4637,6 +4637,74 @@
     }
   },
   {
+    "comment": "Values-Join and subquery",
+    "query": "select /*vt+ ALLOW_VALUES_JOIN */ unsharded.x, u1.x from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_VALUES_JOIN */ unsharded.x, u1.x from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Values",
+        "BindVarName": "values",
+        "CopyColumnsToRHS": [
+          0
+        ],
+        "RowID": "false",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.x from unsharded where 1 != 1",
+            "Query": "select /*vt+ ALLOW_VALUES_JOIN */ unsharded.x from unsharded",
+            "Table": "unsharded"
+          },
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "u1_bar": 2
+            },
+            "TableName": "`user`_unsharded",
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u1.x, `values`.unsharded_x as x, u1.bar from (values ::values) as `values`(unsharded_x), `user` as u1 where 1 != 1",
+                "Query": "select /*vt+ ALLOW_VALUES_JOIN */ u1.x, `values`.unsharded_x as x, u1.bar from (values ::values) as `values`(unsharded_x), `user` as u1",
+                "Table": "`user`"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
+                "Query": "select /*vt+ ALLOW_VALUES_JOIN */ 1 from unsharded as u2 where u2.baz = :u1_bar limit 1",
+                "Table": "unsharded"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "must merge subquery with the right side of the join",
     "query": "select 1 from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
     "plan": {

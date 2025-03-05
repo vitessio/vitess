@@ -196,15 +196,15 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 
 func tryPushValues(ctx *plancontext.PlanningContext, in *Values) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
-	case *ValuesJoin:
-		src.LHS = in.Clone([]Operator{src.LHS})
-		return src, Rewrote("pushed values to the LHS of values join")
 	case *Filter:
 		return Swap(in, src, "pushed values under filter")
 	case *Route:
 		src.Routing.AddValuesTableID(in.TableID)
 		src.Routing.resetRoutingLogic(ctx)
 		return Swap(in, src, "pushed values under route")
+	case *SubQueryContainer:
+		src.Outer, in.Source = in, src.Outer
+		return src, Rewrote("pushed values under subquery container")
 	}
 	return in, NoRewrite
 }
