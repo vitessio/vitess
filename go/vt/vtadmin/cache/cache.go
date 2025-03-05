@@ -162,7 +162,7 @@ func (c *Cache[Key, Value]) add(key string, val Value, d time.Duration) error {
 	c.m.Unlock()
 
 	_, expr, exists := c.cache.GetWithExpiration(key)
-	if exists && expr.After(time.Now()) {
+	if exists && (expr.IsZero() || expr.After(time.Now())) {
 		return c.cache.Replace(key, val, d)
 	} else {
 		// Then cache the actual value.
