@@ -462,9 +462,9 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from information_schema.table_constraints as tc where 1 != 1",
-            "Query": "select 1 from information_schema.table_constraints as tc where tc.table_schema = :__vtschemaname /* VARCHAR */ and tc.table_name = :tc_table_name /* VARCHAR */ and tc.constraint_name = :cc_constraint_name /* VARCHAR(64) */ and tc.constraint_schema = :__vtschemaname /* VARCHAR */",
+            "Query": "select 1 from information_schema.table_constraints as tc where tc.table_schema = :__vtschemaname /* VARCHAR */ and tc.table_name = :tc_table_name /* VARCHAR */ and tc.constraint_name = :cc_constraint_name /* VARCHAR(64) */ and tc.constraint_schema = :cc_constraint_schema /* VARCHAR(64) */",
             "SysTableTableName": "[tc_table_name:'table_name']",
-            "SysTableTableSchema": "['table_schema', :cc_constraint_schema]",
+            "SysTableTableSchema": "['table_schema']",
             "Table": "information_schema.table_constraints"
           }
         ]
@@ -1319,42 +1319,19 @@
     "comment": "LIMIT 1 inside derived table on the RHS should not be a problem",
     "query": "SELECT c.column_name FROM information_schema.columns c JOIN ( SELECT table_name FROM information_schema.tables WHERE table_schema != 'information_schema' LIMIT 1 ) AS tables ON tables.table_name = c.table_name",
     "plan": {
-      "Type": "Join",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT c.column_name FROM information_schema.columns c JOIN ( SELECT table_name FROM information_schema.tables WHERE table_schema != 'information_schema' LIMIT 1 ) AS tables ON tables.table_name = c.table_name",
       "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0",
-        "JoinVars": {
-          "tables_table_name": 0
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
         },
-        "TableName": "information_schema.`tables`_information_schema.`columns`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select `tables`.table_name from (select table_name from information_schema.`tables` where 1 != 1) as `tables` where 1 != 1",
-            "Query": "select `tables`.table_name from (select table_name from information_schema.`tables` where table_schema != 'information_schema' limit 1) as `tables`",
-            "Table": "information_schema.`tables`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select c.column_name from information_schema.`columns` as c where 1 != 1",
-            "Query": "select c.column_name from information_schema.`columns` as c where c.table_name = :c_table_name /* VARCHAR */",
-            "SysTableTableName": "[c_table_name::tables_table_name]",
-            "Table": "information_schema.`columns`"
-          }
-        ]
+        "FieldQuery": "select c.column_name from (select table_name from information_schema.`tables` where 1 != 1) as `tables`, information_schema.`columns` as c where 1 != 1",
+        "Query": "select c.column_name from (select table_name from information_schema.`tables` where table_schema != 'information_schema' limit 1) as `tables`, information_schema.`columns` as c where `tables`.table_name = c.table_name",
+        "Table": "information_schema.`columns`, information_schema.`tables`"
       }
     }
   }

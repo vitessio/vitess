@@ -79,6 +79,12 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 	hz := in.Horizon
 	hz.Source = term.Source
 	newTerm, _ := expandHorizon(ctx, hz)
+	for _, predicate := range in.Predicates {
+		if predicate.JoinPredicateID != nil {
+			ctx.PredTracker.Set(*predicate.JoinPredicateID, predicate.Original)
+		}
+	}
+
 	cte := &RecurseCTE{
 		binaryOperator: newBinaryOp(seed.Source, newTerm),
 		Predicates:     in.Predicates,
