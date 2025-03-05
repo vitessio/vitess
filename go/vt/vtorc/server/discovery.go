@@ -17,12 +17,14 @@ limitations under the License.
 package server
 
 import (
+	"context"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
 
 // StartVTOrcDiscovery starts VTOrc discovery serving
-func StartVTOrcDiscovery() {
+func StartVTOrcDiscovery(ctx context.Context) {
 	log.Info("Starting Discovery")
-	go logic.ContinuousDiscovery()
+	go logic.ContinuousDiscovery(ctx)
 }

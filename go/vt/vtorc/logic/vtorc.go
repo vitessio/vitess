@@ -107,14 +107,14 @@ func waitForLocksRelease() {
 
 // handleDiscoveryRequests iterates the discoveryQueue channel and calls upon
 // instance discovery per entry.
-func handleDiscoveryRequests() {
+func handleDiscoveryRequests(ctx context.Context) {
 	discoveryQueue = discovery.CreateQueue("DEFAULT")
 	// create a pool of discovery workers
 	for i := uint(0); i < config.DiscoveryMaxConcurrency; i++ {
 		go func() {
 			for {
 				tabletAlias := discoveryQueue.Consume()
-				DiscoverInstance(tabletAlias, false /* forceDiscovery */)
+				DiscoverInstance(ctx, tabletAlias, false /* forceDiscovery */)
 				discoveryQueue.Release(tabletAlias)
 			}
 		}()
@@ -124,7 +124,7 @@ func handleDiscoveryRequests() {
 // DiscoverInstance will attempt to discover (poll) an instance (unless
 // it is already up-to-date) and will also ensure that its primary and
 // replicas (if any) are also checked.
-func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
+func DiscoverInstance(ctx context.Context, tabletAlias string, forceDiscovery bool) {
 	if inst.InstanceIsForgotten(tabletAlias) {
 		log.Infof("discoverInstance: skipping discovery of %+v because it is set to be forgotten", tabletAlias)
 		return
@@ -173,7 +173,7 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	discoveriesCounter.Add(1)
 
 	// First we've ever heard of this instance. Continue investigation:
-	instance, err := inst.ReadTopologyInstanceBufferable(tabletAlias, latency)
+	instance, err := inst.ReadTopologyInstanceBufferable(ctx, tabletAlias, latency)
 	// panic can occur (IO stuff). Therefore it may happen
 	// that instance is nil. Check it, but first get the timing metrics.
 	totalLatency := latency.Elapsed("total")
@@ -217,9 +217,12 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	_ = discoveryMetrics.Append(metric)
 }
 
-// onHealthTick handles the actions to take to discover/poll instances
+// onHealthTick handles the actions to take to discover/poll instances.
 func onHealthTick() {
-	tabletAliases, err := inst.ReadOutdatedInstanceKeys()
+	// Push outdated tabletAliases to discovery queue.
+	err := inst.ReadOutdatedInstances(func(tabletAlias string) {
+		discoveryQueue.Push(tabletAlias)
+	})
 	if err != nil {
 		log.Error(err)
 	}
@@ -232,33 +235,25 @@ func onHealthTick() {
 
 		countSnapshotKeys := len(snapshotDiscoveryKeys)
 		for i := 0; i < countSnapshotKeys; i++ {
-			tabletAliases = append(tabletAliases, <-snapshotDiscoveryKeys)
+			discoveryQueue.Push(<-snapshotDiscoveryKeys)
 		}
 	}()
-	// avoid any logging unless there's something to be done
-	if len(tabletAliases) > 0 {
-		for _, tabletAlias := range tabletAliases {
-			if tabletAlias != "" {
-				discoveryQueue.Push(tabletAlias)
-			}
-		}
-	}
 }
 
 // ContinuousDiscovery starts an asynchronous infinite discovery process where instances are
 // periodically investigated and their status captured, and long since unseen instances are
 // purged and forgotten.
 // nolint SA1015: using time.Tick leaks the underlying ticker
-func ContinuousDiscovery() {
+func ContinuousDiscovery(ctx context.Context) {
 	log.Infof("continuous discovery: setting up")
 	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
 
-	go handleDiscoveryRequests()
+	go handleDiscoveryRequests(ctx)
 
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)
 	caretakingTick := time.Tick(time.Minute)
 	recoveryTick := time.Tick(config.GetRecoveryPollDuration())
-	tabletTopoTick := OpenTabletDiscovery()
+	tabletTopoTick := OpenTabletDiscovery(ctx)
 	var recoveryEntrance int64
 	var snapshotTopologiesTick <-chan time.Time
 	if config.GetSnapshotTopologyInterval() > 0 {
@@ -291,7 +286,6 @@ func ContinuousDiscovery() {
 		case <-recoveryTick:
 			go func() {
 				go inst.ExpireInstanceAnalysisChangelog()
-
 				go func() {
 					// This function is non re-entrant (it can only be running once at any point in time)
 					if atomic.CompareAndSwapInt64(&recoveryEntrance, 0, 1) {
@@ -299,7 +293,9 @@ func ContinuousDiscovery() {
 					} else {
 						return
 					}
-					CheckAndRecover()
+					carCtx, carCancel := context.WithTimeout(ctx, config.GetRecoveryPollDuration())
+					defer carCancel()
+					CheckAndRecover(carCtx)
 				}()
 			}()
 		case <-snapshotTopologiesTick:
@@ -307,7 +303,7 @@ func ContinuousDiscovery() {
 				go inst.SnapshotTopologies()
 			}()
 		case <-tabletTopoTick:
-			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
+			ctx, cancel := context.WithTimeout(ctx, config.GetTopoInformationRefreshDuration())
 			if err := refreshAllInformation(ctx); err != nil {
 				log.Errorf("failed to refresh topo information: %+v", err)
 			}

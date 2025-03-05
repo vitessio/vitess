@@ -25,7 +25,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -52,18 +51,15 @@ import (
 const maxBackendOpTime = time.Second * 5
 
 var (
-	instanceReadSem  = semaphore.NewWeighted(config.GetBackendReadConcurrency())
-	instanceWriteSem = semaphore.NewWeighted(config.GetBackendWriteConcurrency())
-)
+	readTopologyInstanceCounter *stats.Counter
+	readInstanceCounter         *stats.Counter
+	currentErrantGTIDCount      *stats.GaugesWithSingleLabel
 
-var forgetAliases *cache.Cache
-
-var (
-	readTopologyInstanceCounter = stats.NewCounter("InstanceReadTopology", "Number of times an instance was read from the topology")
-	readInstanceCounter         = stats.NewCounter("InstanceRead", "Number of times an instance was read")
-	currentErrantGTIDCount      = stats.NewGaugesWithSingleLabel("CurrentErrantGTIDCount", "Number of errant GTIDs a vttablet currently has", "TabletAlias")
-	backendWrites               = collection.CreateOrReturnCollection("BACKEND_WRITES")
-	writeBufferLatency          = stopwatch.NewNamedStopwatch()
+	forgetAliases      *cache.Cache
+	instanceReadSem    = semaphore.NewWeighted(config.GetBackendReadConcurrency())
+	instanceWriteSem   = semaphore.NewWeighted(config.GetBackendWriteConcurrency())
+	backendWrites      = collection.CreateOrReturnCollection("BACKEND_WRITES")
+	writeBufferLatency = stopwatch.NewNamedStopwatch()
 )
 
 var (
@@ -156,8 +152,11 @@ func logReadTopologyInstanceError(tabletAlias string, hint string, err error) er
 	return errors.New(msg)
 }
 
-// RegisterStats registers stats from the inst package
+// RegisterStats registers stats from the inst package.
 func RegisterStats() {
+	currentErrantGTIDCount = stats.NewGaugesWithSingleLabel("CurrentErrantGTIDCount", "Number of errant GTIDs a vttablet currently has", "TabletAlias")
+	readTopologyInstanceCounter = stats.NewCounter("InstanceReadTopology", "Number of times an instance was read from the topology")
+	readInstanceCounter = stats.NewCounter("InstanceRead", "Number of times an instance was read")
 	stats.NewGaugeFunc("ErrantGtidTabletCount", "Number of tablets with errant GTIDs", func() int64 {
 		instances, _ := ReadInstancesWithErrantGTIds("", "")
 		return int64(len(instances))
@@ -169,14 +168,13 @@ func RegisterStats() {
 // It writes the information retrieved into vtorc's backend.
 // - writes are optionally buffered.
 // - timing information can be collected for the stages performed.
-func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
+func ReadTopologyInstanceBufferable(ctx context.Context, tabletAlias string, latency *stopwatch.NamedStopwatch) (inst *Instance, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = logReadTopologyInstanceError(tabletAlias, "Unexpected, aborting", tb.Errorf("%+v", r))
 		}
 	}()
 
-	var waitGroup sync.WaitGroup
 	var tablet *topodatapb.Tablet
 	var fs *replicationdatapb.FullStatus
 	readingStartTime := time.Now()
@@ -209,7 +207,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		goto Cleanup
 	}
 
-	fs, err = fullStatus(tablet)
+	fs, err = fullStatus(ctx, tablet)
 	if err != nil {
 		goto Cleanup
 	}
@@ -347,7 +345,6 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	}
 
 Cleanup:
-	waitGroup.Wait()
 	close(errorChan)
 	err = func() error {
 		if err != nil {
@@ -457,23 +454,6 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 	return err
 }
 
-// getKeyspaceShardName returns a single string having both the keyspace and shard
-func getKeyspaceShardName(keyspace, shard string) string {
-	return fmt.Sprintf("%v:%v", keyspace, shard)
-}
-
-func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates, error) {
-	pos, err := replication.DecodePosition(position)
-	if err != nil || pos.GTIDSet == nil {
-		return BinlogCoordinates{}, err
-	}
-	binLogCoordinates, err := ParseBinlogCoordinates(pos.String())
-	if err != nil {
-		return BinlogCoordinates{}, err
-	}
-	return *binLogCoordinates, nil
-}
-
 // ReadInstanceClusterAttributes will return the cluster name for a given instance by looking at its primary
 // and getting it from there.
 // It is a non-recursive function and so-called-recursion is performed upon periodic reading of
@@ -490,7 +470,8 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		source_port,
 		ancestry_uuid,
 		executed_gtid_set
-	FROM database_instance
+	FROM
+		database_instance
 	WHERE
 		hostname = ?
 		AND port = ?`
@@ -711,38 +692,17 @@ func ReadInstancesWithErrantGTIds(keyspace string, shard string) ([]*Instance, e
 	return readInstancesByCondition(condition, args, "")
 }
 
-// GetKeyspaceShardName gets the keyspace shard name for the given instance key
-func GetKeyspaceShardName(tabletAlias string) (keyspace string, shard string, err error) {
-	query := `SELECT
-		keyspace,
-		shard
-	FROM
-		vitess_tablet
-	WHERE
-		alias = ?
-	`
-	err = db.QueryVTOrc(query, sqlutils.Args(tabletAlias), func(m sqlutils.RowMap) error {
-		keyspace = m.GetString("keyspace")
-		shard = m.GetString("shard")
-		return nil
-	})
-	if err != nil {
-		log.Error(err)
-	}
-	return keyspace, shard, err
-}
-
-// ReadOutdatedInstanceKeys reads and returns keys for all instances that are not up to date (i.e.
-// pre-configured time has passed since they were last checked) or the ones whose tablet information was read
-// but not the mysql information. This could happen if the durability policy of the keyspace wasn't
-// available at the time it was discovered. This would lead to not having the record of the tablet in the
-// database_instance table.
+// ReadOutdatedInstances reads all instances that are not up to date (i.e. pre-configured time has passed
+// since they were last checked) or the ones whose tablet information was read but not the mysql
+// information. This could happen if the durability policy of the keyspace wasn't available at the time
+// it was discovered. This would lead to not having the record of the tablet in the database_instance
+// table. The tabletAlias of the instances read are passed to the provided onTabletAliasFunc.
+//
 // We also check for the case where an attempt at instance checking has been made, that hasn't
 // resulted in an actual check! This can happen when TCP/IP connections are hung, in which case the "check"
 // never returns. In such case we multiply interval by a factor, so as not to open too many connections on
 // the instance.
-func ReadOutdatedInstanceKeys() ([]string, error) {
-	var res []string
+func ReadOutdatedInstances(onTabletAliasFunc func(tabletAlias string)) error {
 	query := `SELECT
 		alias
 	FROM
@@ -764,20 +724,15 @@ func ReadOutdatedInstanceKeys() ([]string, error) {
 		database_instance.alias IS NULL
 	`
 	args := sqlutils.Args(config.GetInstancePollSeconds(), 2*config.GetInstancePollSeconds())
-
-	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
+	return db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
 		tabletAlias := m.GetString("alias")
 		if !InstanceIsForgotten(tabletAlias) {
-			// only if not in "forget" cache
-			res = append(res, tabletAlias)
+			// Only if not in "forget" cache.
+			onTabletAliasFunc(tabletAlias)
 		}
-		// We don;t return an error because we want to keep filling the outdated instances list.
+		// We don't return an error because we want to keep filling the outdated instances list.
 		return nil
 	})
-	if err != nil {
-		log.Error(err)
-	}
-	return res, err
 }
 
 func mkInsert(table string, columns []string, values []string, nrRows int, insertIgnore bool) (string, error) {
@@ -1069,6 +1024,7 @@ func UpdateInstanceLastAttemptedCheck(tabletAlias string) error {
 	return ExecDBWriteFunc(writeFunc)
 }
 
+// InstanceIsForgotten returns true if an instance was recently forgotten.
 func InstanceIsForgotten(tabletAlias string) bool {
 	_, found := forgetAliases.Get(tabletAlias)
 	return found

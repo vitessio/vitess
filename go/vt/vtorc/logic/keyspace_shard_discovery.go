@@ -101,12 +101,12 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 }
 
 // RefreshKeyspaceAndShard refreshes the keyspace record and shard record for the given keyspace and shard.
-func RefreshKeyspaceAndShard(keyspaceName string, shardName string) error {
-	err := refreshKeyspace(keyspaceName)
+func RefreshKeyspaceAndShard(ctx context.Context, keyspaceName string, shardName string) error {
+	err := refreshKeyspace(ctx, keyspaceName)
 	if err != nil {
 		return err
 	}
-	return refreshShard(keyspaceName, shardName)
+	return refreshShard(ctx, keyspaceName, shardName)
 }
 
 // shouldWatchShard returns true if a shard is within the shardsToWatch
@@ -121,8 +121,9 @@ func shouldWatchShard(shard *topo.ShardInfo) bool {
 		return false
 	}
 
+	skr := shard.GetKeyRange()
 	for _, keyRange := range watchRanges {
-		if key.KeyRangeContainsKeyRange(keyRange, shard.GetKeyRange()) {
+		if key.KeyRangeContainsKeyRange(keyRange, skr) {
 			return true
 		}
 	}
@@ -130,15 +131,15 @@ func shouldWatchShard(shard *topo.ShardInfo) bool {
 }
 
 // refreshKeyspace refreshes the keyspace's information for the given keyspace from the topo
-func refreshKeyspace(keyspaceName string) error {
-	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+func refreshKeyspace(ctx context.Context, keyspaceName string) error {
+	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
 	return refreshKeyspaceHelper(refreshCtx, keyspaceName)
 }
 
 // refreshShard refreshes the shard's information for the given keyspace/shard from the topo
-func refreshShard(keyspaceName, shardName string) error {
-	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+func refreshShard(ctx context.Context, keyspaceName, shardName string) error {
+	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
 	return refreshSingleShardHelper(refreshCtx, keyspaceName, shardName)
 }

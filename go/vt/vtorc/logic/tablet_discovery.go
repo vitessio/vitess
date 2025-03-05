@@ -128,11 +128,11 @@ func shouldWatchTablet(tablet *topodatapb.Tablet) bool {
 
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
 // channel for polling.
-func OpenTabletDiscovery() <-chan time.Time {
+func OpenTabletDiscovery(ctx context.Context) <-chan time.Time {
 	ts = topo.Open()
 	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
-	if _, err := db.ExecVTOrc("DELETE FROM vitess_tablet"); err != nil {
+	if err := inst.DeleteAllTablets(); err != nil {
 		log.Error(err)
 	}
 	// Parse --clusters_to_watch into a filter.
@@ -142,7 +142,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	}
 	// We refresh all information from the topo once before we start the ticks to do
 	// it on a timer.
-	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	if err := refreshAllInformation(ctx); err != nil {
 		log.Errorf("failed to initialize topo information: %+v", err)
@@ -176,19 +176,24 @@ func getAllTablets(ctx context.Context, cells []string) (tabletsByCell map[strin
 	return tabletsByCell, failedCells
 }
 
+// getKnownCells returns all known cells in the topo.
+func getKnownCells(ctx context.Context) ([]string, error) {
+	cellsCtx, cellsCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cellsCancel()
+	return ts.GetKnownCells(cellsCtx)
+}
+
 // refreshAllTablets reloads the tablets from topo and discovers the ones which haven't been refreshed in a while
 func refreshAllTablets(ctx context.Context) error {
 	return refreshTabletsUsing(ctx, func(tabletAlias string) {
-		DiscoverInstance(tabletAlias, false /* forceDiscovery */)
+		DiscoverInstance(ctx, tabletAlias, false /* forceDiscovery */)
 	}, false /* forceRefresh */)
 }
 
 // refreshTabletsUsing refreshes tablets using a provided loader.
 func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), forceRefresh bool) error {
 	// Get all cells.
-	cellsCtx, cellsCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer cellsCancel()
-	cells, err := ts.GetKnownCells(cellsCtx)
+	cells, err := getKnownCells(ctx)
 	if err != nil {
 		return err
 	}
@@ -234,7 +239,7 @@ func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string, 
 	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
 	refreshTabletsInKeyspaceShard(refreshCtx, keyspace, shard, func(tabletAlias string) {
-		DiscoverInstance(tabletAlias, true)
+		DiscoverInstance(ctx, tabletAlias, true)
 	}, true, tabletsToIgnore)
 }
 

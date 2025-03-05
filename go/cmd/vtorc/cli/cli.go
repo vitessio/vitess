@@ -17,6 +17,8 @@ limitations under the License.
 package cli
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/acl"
@@ -53,6 +55,9 @@ func run(cmd *cobra.Command, args []string) {
 	servenv.Init()
 	inst.RegisterStats()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	log.Info("starting vtorc")
 	if config.GetAuditToSyslog() {
 		inst.EnableAuditSyslog()
@@ -61,7 +66,7 @@ func run(cmd *cobra.Command, args []string) {
 
 	// Log final config values to debug if something goes wrong.
 	log.Infof("Running with Configuration - %v", debug.AllSettings())
-	server.StartVTOrcDiscovery()
+	server.StartVTOrcDiscovery(ctx)
 
 	server.RegisterVTOrcAPIEndpoints()
 	servenv.OnRun(func() {

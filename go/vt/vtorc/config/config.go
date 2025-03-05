@@ -36,7 +36,7 @@ const (
 	DiscoveryQueueCapacity                = 100000
 	DiscoveryQueueMaxStatisticsSize       = 120
 	DiscoveryCollectionRetentionSeconds   = 120
-	UnseenInstanceForgetHours             = 240 // Number of hours after which an unseen instance is forgotten
+	UnseenInstanceForgetHours             = 12 // Number of hours after which an unseen instance is forgotten
 )
 
 var (

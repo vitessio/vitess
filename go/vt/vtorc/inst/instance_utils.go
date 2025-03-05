@@ -18,6 +18,9 @@ package inst
 
 import (
 	"strings"
+
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // MajorVersion returns a MySQL major version number (e.g. given "5.5.36" it returns "5.5")
@@ -27,4 +30,21 @@ func MajorVersion(version string) []string {
 		return []string{"0", "0"}
 	}
 	return tokens[:2]
+}
+
+// getKeyspaceShardName returns a single string having both the keyspace and shard
+func getKeyspaceShardName(keyspace, shard string) string {
+	return topoproto.KeyspaceShardString(keyspace, shard)
+}
+
+func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates, error) {
+	pos, err := replication.DecodePosition(position)
+	if err != nil || pos.GTIDSet == nil {
+		return BinlogCoordinates{}, err
+	}
+	binLogCoordinates, err := ParseBinlogCoordinates(pos.String())
+	if err != nil {
+		return BinlogCoordinates{}, err
+	}
+	return *binLogCoordinates, nil
 }

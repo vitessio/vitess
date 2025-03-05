@@ -204,7 +204,7 @@ func TestRefreshKeyspace(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			err := refreshKeyspace(tt.keyspaceName)
+			err := refreshKeyspace(ctx, tt.keyspaceName)
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)
 			} else {
@@ -290,7 +290,7 @@ func TestRefreshShard(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			err := refreshShard(tt.keyspaceName, tt.shardName)
+			err := refreshShard(ctx, tt.keyspaceName, tt.shardName)
 			if tt.err != "" {
 				require.EqualError(t, err, tt.err)
 			} else {

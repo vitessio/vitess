@@ -114,42 +114,10 @@ func fmtArgs(args []any) string {
 	return b.String()
 }
 
-func TestGetKeyspaceShardName(t *testing.T) {
-	orcDb, err := db.OpenVTOrc()
-	require.NoError(t, err)
-	defer func() {
-		_, err = orcDb.Exec("delete from vitess_tablet")
-		require.NoError(t, err)
-	}()
-
-	ks := "ks"
-	shard := "0"
-	hostname := "localhost"
-	var port int32 = 100
-	tab100 := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: "zone-1",
-			Uid:  100,
-		},
-		Hostname:      hostname,
-		Keyspace:      ks,
-		Shard:         shard,
-		Type:          topodatapb.TabletType_PRIMARY,
-		MysqlHostname: hostname,
-		MysqlPort:     port,
-	}
-
-	err = SaveTablet(tab100)
-	require.NoError(t, err)
-
-	keyspaceRead, shardRead, err := GetKeyspaceShardName(topoproto.TabletAliasString(tab100.Alias))
-	require.NoError(t, err)
-	require.Equal(t, ks, keyspaceRead)
-	require.Equal(t, shard, shardRead)
-}
-
 // TestReadInstance is used to test the functionality of ReadInstance and verify its failure modes and successes.
 func TestReadInstance(t *testing.T) {
+	RegisterStats()
+
 	tests := []struct {
 		name              string
 		tabletAliasToRead string
@@ -177,7 +145,6 @@ func TestReadInstance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			got, found, err := ReadInstance(tt.tabletAliasToRead)
 			require.NoError(t, err)
 			require.Equal(t, tt.instanceFound, found)
@@ -419,8 +386,8 @@ func TestReadInstancesByCondition(t *testing.T) {
 	}
 }
 
-// TestReadOutdatedInstanceKeys is used to test the functionality of ReadOutdatedInstanceKeys and verify its failure modes and successes.
-func TestReadOutdatedInstanceKeys(t *testing.T) {
+// TestReadOutdatedInstances is used to test the functionality of ReadOutdatedInstances and verify its failure modes and successes.
+func TestReadOutdatedInstances(t *testing.T) {
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
 	tests := []struct {
 		name              string
@@ -481,7 +448,10 @@ func TestReadOutdatedInstanceKeys(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			tabletAliases, err := ReadOutdatedInstanceKeys()
+			tabletAliases := make([]string, 0)
+			err := ReadOutdatedInstances(func(tabletAlias string) {
+				tabletAliases = append(tabletAliases, tabletAlias)
+			})
 
 			errInDataCollection := db.QueryVTOrcRowsMap(`select alias,
 last_checked,
