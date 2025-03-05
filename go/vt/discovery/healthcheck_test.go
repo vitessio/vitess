@@ -1227,6 +1227,68 @@ func TestPrimaryInOtherCell(t *testing.T) {
 	mustMatch(t, want, a[0], "Expecting healthy primary")
 }
 
+// TestLoadTabletsTrigger tests that we send the correct information on the load tablets trigger.
+func TestLoadTabletsTrigger(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// create a health check instance.
+	hc := NewHealthCheck(ctx, time.Hour, time.Hour, nil, "", "", nil)
+	defer hc.Close()
+
+	ks := "keyspace"
+	shard := "shard"
+	// Add a tablet to the topology.
+	tablet1 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Type:     topodatapb.TabletType_REPLICA,
+		Hostname: "host1",
+		PortMap: map[string]int32{
+			"grpc": 123,
+		},
+		Keyspace: ks,
+		Shard:    shard,
+	}
+
+	// We want to run updateHealth with arguments that always
+	// make it trigger load Tablets.
+	th := &TabletHealth{
+		Tablet: tablet1,
+		Target: &querypb.Target{
+			Keyspace:   ks,
+			Shard:      shard,
+			TabletType: topodatapb.TabletType_REPLICA,
+		},
+	}
+	prevTarget := &querypb.Target{
+		Keyspace:   ks,
+		Shard:      shard,
+		TabletType: topodatapb.TabletType_PRIMARY,
+	}
+	hc.AddTablet(tablet1)
+
+	numTriggers := 10
+	for i := 0; i < numTriggers; i++ {
+		// Since the previous target was a primary, and there are no other
+		// primary tablets for the given keyspace shard, we will see the healtcheck
+		// send on the loadTablets trigger. We just want to verify the information
+		// there is correct.
+		hc.updateHealth(th, prevTarget, false, false)
+	}
+
+	ch := hc.GetLoadTabletsTrigger()
+	require.Len(t, ch, numTriggers)
+	for i := 0; i < numTriggers; i++ {
+		// Read from the channel and verify we indeed have the right values.
+		kss := <-ch
+		require.EqualValues(t, ks, kss.Keyspace)
+		require.EqualValues(t, shard, kss.Shard)
+	}
+	require.Len(t, ch, 0)
+}
+
 func TestReplicaInOtherCell(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 

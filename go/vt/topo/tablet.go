@@ -252,6 +252,13 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string, opt *G
 		// In the etcd case, it is possible that the response is too large. We also fall
 		// back to fetching the tablets one by one in that case.
 		if IsErrType(err, NoImplementation) || IsErrType(err, ResourceExhausted) {
+			// Getting all the tablets individually gets all the tablet records and filters
+			// them afterward. This is inefficient especially if we want to filter by
+			// keyspace and shard. So, we check for that case and use the ShardReplication
+			// to our advantage to reduce the number of topo calls.
+			if opt != nil && opt.KeyspaceShard != nil && opt.KeyspaceShard.Keyspace != "" && opt.KeyspaceShard.Shard != "" {
+				return ts.GetTabletsByShardCell(ctx, opt.KeyspaceShard.Keyspace, opt.KeyspaceShard.Shard, []string{cellAlias})
+			}
 			return ts.GetTabletsIndividuallyByCell(ctx, cellAlias, opt)
 		}
 		if IsErrType(err, NoNode) {
@@ -509,12 +516,70 @@ func (ts *Server) GetTabletMap(ctx context.Context, tabletAliases []*topodatapb.
 					returnErr = NewError(PartialResult, tabletAlias.GetCell())
 				}
 			} else {
+				if opt != nil && opt.KeyspaceShard != nil {
+					if opt.KeyspaceShard.Keyspace != "" && opt.KeyspaceShard.Keyspace != tabletInfo.Keyspace {
+						return
+					}
+					if opt.KeyspaceShard.Shard != "" && opt.KeyspaceShard.Shard != tabletInfo.Shard {
+						return
+					}
+				}
 				tabletMap[topoproto.TabletAliasString(tabletAlias)] = tabletInfo
 			}
 		}(tabletAlias)
 	}
 	wg.Wait()
 	return tabletMap, returnErr
+}
+
+// GetTabletList tries to read all the tablets in the provided list,
+// and returns them in a list.
+// If error is ErrPartialResult, the results in the list are
+// incomplete, meaning some tablets couldn't be read.
+func (ts *Server) GetTabletList(ctx context.Context, tabletAliases []*topodatapb.TabletAlias, opt *GetTabletsByCellOptions) ([]*TabletInfo, error) {
+	span, ctx := trace.NewSpan(ctx, "topo.GetTabletList")
+	span.Annotate("num_tablets", len(tabletAliases))
+	defer span.Finish()
+
+	var (
+		mu         sync.Mutex
+		wg         sync.WaitGroup
+		tabletList = make([]*TabletInfo, 0)
+		returnErr  error
+	)
+
+	for _, tabletAlias := range tabletAliases {
+		if tabletAlias == nil {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "nil tablet alias in list")
+		}
+		wg.Add(1)
+		go func(tabletAlias *topodatapb.TabletAlias) {
+			defer wg.Done()
+			tabletInfo, err := ts.GetTablet(ctx, tabletAlias)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				log.Warningf("%v: %v", tabletAlias, err)
+				// There can be data races removing nodes - ignore them for now.
+				// We only need to set this on first error.
+				if returnErr == nil && !IsErrType(err, NoNode) {
+					returnErr = NewError(PartialResult, tabletAlias.GetCell())
+				}
+			} else {
+				if opt != nil && opt.KeyspaceShard != nil {
+					if opt.KeyspaceShard.Keyspace != "" && opt.KeyspaceShard.Keyspace != tabletInfo.Keyspace {
+						return
+					}
+					if opt.KeyspaceShard.Shard != "" && opt.KeyspaceShard.Shard != tabletInfo.Shard {
+						return
+					}
+				}
+				tabletList = append(tabletList, tabletInfo)
+			}
+		}(tabletAlias)
+	}
+	wg.Wait()
+	return tabletList, returnErr
 }
 
 // InitTablet creates or updates a tablet. If no parent is specified

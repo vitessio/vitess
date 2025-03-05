@@ -192,7 +192,7 @@ func (fhc *FakeHealthCheck) Unsubscribe(c chan *TabletHealth) {
 }
 
 // GetLoadTabletsTrigger is not implemented.
-func (fhc *FakeHealthCheck) GetLoadTabletsTrigger() chan struct{} {
+func (fhc *FakeHealthCheck) GetLoadTabletsTrigger() chan topo.KeyspaceShard {
 	return nil
 }
 
