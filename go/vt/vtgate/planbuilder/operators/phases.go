@@ -182,15 +182,16 @@ func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operato
 	return TopDown(op, TableID, visit, shouldVisit)
 }
 
+const valuesName = "values"
+
 func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) (*ValuesJoin, semantics.TableSet) {
 	if !joinType.IsInner() {
 		return nil, semantics.EmptyTableSet()
 	}
 
 	valuesTableID := TableID(lhs)
-	valuesDestination := ctx.ReservedVars.ReserveVariable("values")
-	ctx.ValueJoins[valuesDestination] = valuesDestination
-	ctx.ValuesTableName[valuesTableID] = valuesDestination
+	valuesDestination := ctx.ReservedVars.ReserveVariable(valuesName)
+	ctx.AddValueJoinTable(valuesTableID, valuesDestination)
 	v := &Values{
 		unaryOperator: newUnaryOp(rhs),
 		Name:          valuesDestination,

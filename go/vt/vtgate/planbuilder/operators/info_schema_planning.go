@@ -119,6 +119,8 @@ func (isr *InfoSchemaRouting) resetRoutingLogic(ctx *plancontext.PlanningContext
 	return routing
 }
 
+func (isr *InfoSchemaRouting) planOffsets(_ *plancontext.PlanningContext) {}
+
 func (isr *InfoSchemaRouting) AddValuesTableID(id semantics.TableSet) {
 	panic(vterrors.VT13001("think about values and info schema routing"))
 }

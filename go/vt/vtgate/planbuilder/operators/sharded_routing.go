@@ -192,8 +192,8 @@ func (tr *ShardedRouting) Clone() Routing {
 	}
 }
 
-func (sr *ShardedRouting) AddValuesTableID(id semantics.TableSet) {
-	sr.ValuesTablesIDs = sr.ValuesTablesIDs.Merge(id)
+func (tr *ShardedRouting) AddValuesTableID(id semantics.TableSet) {
+	tr.ValuesTablesIDs = tr.ValuesTablesIDs.Merge(id)
 }
 
 func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
@@ -551,6 +551,12 @@ func (tr *ShardedRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sq
 		return tr.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
 	}
 
+	return tr.planValueJoinsPredicate(ctx, node)
+}
+
+// planValueJoinsPredicate is a special case where we have a predicate that is a join between two columns,
+// one of which is a values derived table
+func (tr *ShardedRouting) planValueJoinsPredicate(ctx *plancontext.PlanningContext, node *sqlparser.ComparisonExpr) bool {
 	cola, ok := node.Left.(*sqlparser.ColName)
 	if !ok {
 		return false
@@ -559,41 +565,62 @@ func (tr *ShardedRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sq
 	if !ok {
 		return false
 	}
-	_, rhsCol := cola, colb
+	lhsCol, rhsCol := cola, colb
 	if !ctx.SemTable.RecursiveDeps(cola).IsSolvedBy(tr.ValuesTablesIDs) {
 		if !ctx.SemTable.RecursiveDeps(colb).IsSolvedBy(tr.ValuesTablesIDs) {
 			return false
 		}
-		_, rhsCol = colb, cola
+		lhsCol, rhsCol = colb, cola
 	}
-	tblName, ok := ctx.ValuesTableName[tr.ValuesTablesIDs]
-	if !ok {
+	tblName, err := ctx.GetValueJoinTableName(tr.ValuesTablesIDs)
+	if err != nil {
 		return false
 	}
-	// columns, ok := ctx.ValuesJoinColumns[tblName]
-	// if !ok {
-	// 	return false
-	// }
 
 	value := &evalengine.TupleBindVariable{
 		Key:   tblName,
-		Index: -1, // cannot set this before offset planning as join predicates are not added to output columns.
+		Index: -1, // we don't know the index yet, we will set it at planOffset time
 	}
+
 	if typ, found := ctx.TypeForExpr(rhsCol); found {
 		value.Collation = typ.Collation()
 	}
 
-	// for idx, expr := range columns {
-	// 	if ctx.SemTable.EqualsExpr(lhsCol, expr.Expr) {
-	// 		arg.Index = idx
-	// 		break
-	// 	}
-	// }
-	// if arg.Index == -1 {
-	// 	return false
-	// }
 	opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.MultiEqual }
-	return tr.haveMatchingVindex(ctx, node, nil, rhsCol, value, opcode, justTheVindex)
+	return tr.haveMatchingVindex(ctx, node, lhsCol, rhsCol, value, opcode, justTheVindex)
+}
+
+func (tr *ShardedRouting) planOffsets(ctx *plancontext.PlanningContext) {
+	if tr.RouteOpCode != engine.MultiEqual {
+		return
+	}
+
+	trv, ok := tr.Selected.Values[0].(*evalengine.TupleBindVariable)
+	if !ok {
+		return
+	}
+
+	if len(tr.Selected.ValueExprs) != 1 {
+		// this is not a value-join predicate
+		return
+	}
+
+	lhsCol := tr.Selected.ValueExprs[0]
+	columns := ctx.GetColumns(trv.Key)
+	for idx, expr := range columns {
+		if ctx.SemTable.EqualsExpr(lhsCol, expr.Expr) {
+			trv.Index = idx
+			break
+		}
+	}
+
+	if trv.Index != -1 {
+		return
+	}
+
+	columns = append(columns, aeWrap(sqlparser.NewStrLiteral("unknown")))
+	trv.Index = len(columns) - 1
+	ctx.SetColumns(trv.Key, columns)
 }
 
 func (tr *ShardedRouting) planCompositeInOpRecursive(

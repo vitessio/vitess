@@ -84,6 +84,8 @@ func (tr *TargetedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) R
 	return tr
 }
 
+func (*TargetedRouting) planOffsets(_ *plancontext.PlanningContext) {}
+
 func (tr *TargetedRouting) Cost() int {
 	return 1
 }
@@ -111,6 +113,8 @@ func (n *NoneRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser
 func (n *NoneRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
 	return n
 }
+
+func (*NoneRouting) planOffsets(_ *plancontext.PlanningContext) {}
 
 func (*NoneRouting) AddValuesTableID(semantics.TableSet) {}
 
@@ -144,6 +148,8 @@ func (rr *AnyShardRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlp
 func (rr *AnyShardRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
 	return rr
 }
+
+func (*AnyShardRouting) planOffsets(_ *plancontext.PlanningContext) {}
 
 func (tr *AnyShardRouting) AddValuesTableID(semantics.TableSet) {}
 
@@ -188,6 +194,8 @@ func (dr *DualRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routi
 	return dr
 }
 
+func (*DualRouting) planOffsets(_ *plancontext.PlanningContext) {}
+
 func (tr *DualRouting) AddValuesTableID(semantics.TableSet) {}
 
 func (dr *DualRouting) Cost() int {
@@ -218,6 +226,8 @@ func (sr *SequenceRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlp
 func (sr *SequenceRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
 	return sr
 }
+
+func (*SequenceRouting) planOffsets(_ *plancontext.PlanningContext) {}
 
 func (*SequenceRouting) AddValuesTableID(semantics.TableSet) {}
 

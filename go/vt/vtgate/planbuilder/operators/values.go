@@ -62,25 +62,20 @@ func (v *Values) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, 
 }
 
 func (v *Values) getColumnNamesFromCtx(ctx *plancontext.PlanningContext) sqlparser.Columns {
-	columns, found := ctx.ValuesJoinColumns[v.Name]
-	if !found {
-		panic(vterrors.VT13001("columns not found"))
-	}
+	columns := ctx.GetColumns(v.Name)
 	return slice.Map(columns, func(ae *sqlparser.AliasedExpr) sqlparser.IdentifierCI {
 		return sqlparser.NewIdentifierCI(ae.ColumnName())
 	})
 }
 
 func (v *Values) getExprsFromCtx(ctx *plancontext.PlanningContext) []sqlparser.Expr {
-	columns := ctx.ValuesJoinColumns[v.Name]
-	return slice.Map(columns, func(ae *sqlparser.AliasedExpr) sqlparser.Expr {
+	return slice.Map(ctx.GetColumns(v.Name), func(ae *sqlparser.AliasedExpr) sqlparser.Expr {
 		return ae.Expr
 	})
 }
 
 func (v *Values) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	columns := ctx.ValuesJoinColumns[v.Name]
-	return columns
+	return ctx.GetColumns(v.Name)
 }
 
 func (v *Values) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {

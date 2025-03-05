@@ -519,6 +519,7 @@
     "comment": "Query using VALUES JOIN",
     "query": "select /*vt+ ALLOW_VALUES_JOIN */ user.foo, user_extra.user_id from user, user_extra where user.id = user_extra.toto and user.foo = 1 and user_extra.bar = 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select /*vt+ ALLOW_VALUES_JOIN */ user.foo, user_extra.user_id from user, user_extra where user.id = user_extra.toto and user.foo = 1 and user_extra.bar = 2",
       "Instructions": {
@@ -549,11 +550,11 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.foo, user_extra.user_id from (values ::values) as `values`(user_id, toto), `user` where 1 != 1",
-            "Query": "select /*vt+ ALLOW_VALUES_JOIN */ `user`.foo, values.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_toto), `user` where `user`.foo = 1 and `user`.id = values.user_extra_toto",
+            "FieldQuery": "select `values`.user_extra_user_id from (values ::values) as `values`(user_extra_user_id, user_extra_toto), `user` where 1 != 1",
+            "Query": "select /*vt+ ALLOW_VALUES_JOIN */ `user`.foo, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_toto), `user` where `user`.foo = 1 and `user`.id = `values`.user_extra_toto",
             "Table": "`user`",
             "Values": [
-              "user_extra_toto:1"
+              "values:1"
             ],
             "Vindex": "user_index"
           }

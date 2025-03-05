@@ -112,7 +112,7 @@ func buildValues(op *Values, qb *queryBuilder) {
 	}
 
 	deps := semantics.EmptyTableSet()
-	for _, ae := range qb.ctx.ValuesJoinColumns[op.Name] {
+	for _, ae := range qb.ctx.GetColumns(op.Name) {
 		deps = deps.Merge(qb.ctx.SemTable.RecursiveDeps(ae.Expr))
 	}
 

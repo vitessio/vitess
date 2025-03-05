@@ -78,13 +78,8 @@ type PlanningContext struct {
 	isMirrored bool
 
 	// ValuesJoinColumns stores the columns we need for each values statement in the plan.
-	ValuesJoinColumns map[string][]*sqlparser.AliasedExpr
-	ValuesTableName   map[semantics.TableSet]string
-
-	// ValueJoins contains one entry for each value join that has been created.
-	// The key is the value-join ops ValuesDestination, and the value is the Values op associated with it.
-	// When first created, these are one-to-one, but the Values are merged if they end up in the same route
-	ValueJoins map[string]string
+	valuesJoinColumns map[string][]*sqlparser.AliasedExpr
+	valuesTableName   map[semantics.TableSet]string
 
 	emptyEnv    *evalengine.ExpressionEnv
 	constantCfg *evalengine.Config
@@ -96,10 +91,10 @@ func CreateEmptyPlanningContext() *PlanningContext {
 	return &PlanningContext{
 		skipValuesArgument: make(map[string]any),
 		ReservedArguments:  make(map[sqlparser.Expr]string),
-		ValuesJoinColumns:  make(map[string][]*sqlparser.AliasedExpr),
-		ValueJoins:         make(map[string]string),
-		ValuesTableName:    make(map[semantics.TableSet]string),
+		valuesJoinColumns:  make(map[string][]*sqlparser.AliasedExpr),
+		valuesTableName:    make(map[semantics.TableSet]string),
 		PredTracker:        predicates.NewTracker(),
+		SemTable:           semantics.EmptySemTable(),
 	}
 }
 
@@ -132,11 +127,10 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		skipValuesArgument: map[string]any{},
 		PlannerVersion:     version,
 		ReservedArguments:  map[sqlparser.Expr]string{},
-		ValuesJoinColumns:  make(map[string][]*sqlparser.AliasedExpr),
+		valuesJoinColumns:  make(map[string][]*sqlparser.AliasedExpr),
 		Statement:          stmt,
 		AllowValuesJoin:    sqlparser.AllowValuesJoinDirective(stmt),
-		ValueJoins:         make(map[string]string),
-		ValuesTableName:    make(map[semantics.TableSet]string),
+		valuesTableName:    make(map[semantics.TableSet]string),
 		PredTracker:        predicates.NewTracker(),
 	}, nil
 }
@@ -385,12 +379,10 @@ func (ctx *PlanningContext) ActiveCTE() *ContextCTE {
 }
 
 func (ctx *PlanningContext) GetColumns(joinName string) []*sqlparser.AliasedExpr {
-	valuesName := ctx.ValueJoins[joinName]
-	return ctx.ValuesJoinColumns[valuesName]
+	return ctx.valuesJoinColumns[joinName]
 }
 func (ctx *PlanningContext) SetColumns(joinName string, cols []*sqlparser.AliasedExpr) {
-	valuesName := ctx.ValueJoins[joinName]
-	ctx.ValuesJoinColumns[valuesName] = cols
+	ctx.valuesJoinColumns[joinName] = cols
 }
 
 func (ctx *PlanningContext) UseMirror() *PlanningContext {
@@ -415,7 +407,7 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		emptyEnv:          ctx.emptyEnv,
 		PredTracker:       ctx.PredTracker,
 		isMirrored:        true,
-		ValuesJoinColumns: ctx.ValuesJoinColumns,
+		valuesJoinColumns: ctx.valuesJoinColumns,
 	}
 	return ctx.mirror
 }
@@ -456,4 +448,16 @@ func (ctx *PlanningContext) IsConstantBool(expr sqlparser.Expr) *bool {
 		return nil
 	}
 	return &b
+}
+
+func (ctx *PlanningContext) AddValueJoinTable(id semantics.TableSet, name string) {
+	ctx.valuesTableName[id] = name
+}
+
+func (ctx *PlanningContext) GetValueJoinTableName(id semantics.TableSet) (string, error) {
+	name, found := ctx.valuesTableName[id]
+	if !found {
+		return "", vterrors.VT13001("value join table not found")
+	}
+	return name, nil
 }
