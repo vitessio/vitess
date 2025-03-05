@@ -51,7 +51,7 @@ func TestJoinPredicates(t *testing.T) {
 		Left:     lcol,
 		Right:    rcol,
 	}
-	hj.AddJoinPredicate(ctx, cmp)
+	hj.AddJoinPredicate(ctx, cmp, false)
 	require.Len(t, hj.JoinComparisons, 1)
 	hj.planOffsets(ctx)
 	require.Len(t, hj.LHSKeys, 1)

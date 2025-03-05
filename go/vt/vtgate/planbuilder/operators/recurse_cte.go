@@ -64,7 +64,6 @@ type RecurseCTE struct {
 var _ Operator = (*RecurseCTE)(nil)
 
 func newRecurse(
-	ctx *plancontext.PlanningContext,
 	def *semantics.CTE,
 	seed, term Operator,
 	predicates []*plancontext.RecurseExpression,
@@ -72,9 +71,6 @@ func newRecurse(
 	leftID, outerID semantics.TableSet,
 	distinct bool,
 ) *RecurseCTE {
-	for _, pred := range predicates {
-		ctx.AddJoinPredicates(pred.Original, pred.RightExpr)
-	}
 	return &RecurseCTE{
 		binaryOperator: newBinaryOp(seed, term),
 		Def:            def,

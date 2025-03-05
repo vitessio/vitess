@@ -1127,6 +1127,63 @@
     }
   },
   {
+    "comment": "derived table that contains literals merged with outer query",
+    "query": "select 1 from (select 1 as x) ue left join user u on u.id = ue.x",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1 from (select 1 as x) ue left join user u on u.id = ue.x",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "1 as 1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinVars": {
+              "ue_x": 0
+            },
+            "TableName": "dual_`user`",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select ue.x from (select 1 as x from dual where 1 != 1) as ue where 1 != 1",
+                "Query": "select ue.x from (select 1 as x from dual) as ue",
+                "Table": "dual"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from `user` as u where 1 != 1",
+                "Query": "select 1 from `user` as u where u.id = :ue_x /* INT64 */",
+                "Table": "`user`",
+                "Values": [
+                  ":ue_x"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "mergeable sharded join on unique vindex",
     "query": "select user.col from user join user_extra on user.id = user_extra.user_id",
     "plan": {

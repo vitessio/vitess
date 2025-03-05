@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics/bitset"
 )
@@ -39,6 +40,22 @@ func (ts TableSet) Format(f fmt.State, verb rune) {
 		}
 	})
 	fmt.Fprintf(f, "}")
+}
+
+func (ts TableSet) DebugString() string {
+	var f strings.Builder
+	first := true
+	f.WriteString("TableSet{")
+	bitset.Bitset(ts).ForEach(func(tid int) {
+		if first {
+			f.WriteString(fmt.Sprintf("%d", tid))
+			first = false
+		} else {
+			f.WriteString(fmt.Sprintf(",%d", tid))
+		}
+	})
+	f.WriteString("}")
+	return f.String()
 }
 
 // IsOverlapping returns true if at least one table exists in both sets

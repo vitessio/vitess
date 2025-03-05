@@ -58,13 +58,13 @@ func checkValid(op Operator) {
 	})
 }
 
-func Clone(op Operator) Operator {
+func Clone[K Operator](op K) K {
 	inputs := op.Inputs()
 	clones := make([]Operator, len(inputs))
 	for i, input := range inputs {
 		clones[i] = Clone(input)
 	}
-	return op.Clone(clones)
+	return op.Clone(clones).(K)
 }
 
 // tableIDIntroducer is used to signal that this operator introduces data from a new source
