@@ -51,6 +51,12 @@ const (
 	defaultRunnerName = "ubuntu-24.04"
 )
 
+// To support a private git repository, set goPrivate to a repo in
+// github.com/org/repo format. This assumes a GitHub PAT token is
+// set as a repo secret named GH_ACCESS_TOKEN. The GitHub PAT must
+// have read access to your vitess fork/repo.
+const goPrivate = ""
+
 const (
 	workflowConfigDir = "../.github/workflows"
 
@@ -169,7 +175,7 @@ var (
 )
 
 type unitTest struct {
-	Name, RunsOn, Platform, FileName, Evalengine string
+	Name, RunsOn, Platform, FileName, GoPrivate, Evalengine string
 }
 
 type clusterTest struct {
@@ -177,6 +183,7 @@ type clusterTest struct {
 	FileName                           string
 	BuildTag                           string
 	RunsOn                             string
+	GoPrivate                          string
 	MemoryCheck                        bool
 	MakeTools, InstallXtraBackup       bool
 	Docker                             bool
@@ -188,10 +195,11 @@ type clusterTest struct {
 }
 
 type vitessTesterTest struct {
-	FileName string
-	Name     string
-	RunsOn   string
-	Path     string
+	FileName  string
+	Name      string
+	RunsOn    string
+	GoPrivate string
+	Path      string
 }
 
 // clusterMySQLVersions return list of mysql versions (one or more) that this cluster needs to test against
@@ -247,9 +255,10 @@ func canonnizeList(list []string) []string {
 func generateVitessTesterWorkflows(mp map[string]string, tpl string) {
 	for test, testPath := range mp {
 		tt := &vitessTesterTest{
-			Name:   fmt.Sprintf("Vitess Tester (%v)", test),
-			RunsOn: defaultRunnerName,
-			Path:   testPath,
+			Name:      fmt.Sprintf("Vitess Tester (%v)", test),
+			RunsOn:    defaultRunnerName,
+			GoPrivate: goPrivate,
+			Path:      testPath,
 		}
 
 		templateFileName := tpl
@@ -267,10 +276,11 @@ func generateClusterWorkflows(list []string, tpl string) {
 	for _, cluster := range clusters {
 		for _, mysqlVersion := range clusterMySQLVersions() {
 			test := &clusterTest{
-				Name:     fmt.Sprintf("Cluster (%s)", cluster),
-				Shard:    cluster,
-				BuildTag: buildTag[cluster],
-				RunsOn:   defaultRunnerName,
+				Name:      fmt.Sprintf("Cluster (%s)", cluster),
+				Shard:     cluster,
+				BuildTag:  buildTag[cluster],
+				RunsOn:    defaultRunnerName,
+				GoPrivate: goPrivate,
 			}
 			cores16Clusters := canonnizeList(clusterRequiring16CoresMachines)
 			for _, cores16Cluster := range cores16Clusters {
@@ -349,6 +359,7 @@ func generateUnitTestWorkflows() {
 				Name:       fmt.Sprintf("Unit Test (%s%s)", evalengineToString(evalengine), platform),
 				RunsOn:     defaultRunnerName,
 				Platform:   string(platform),
+				GoPrivate:  goPrivate,
 				Evalengine: evalengine,
 			}
 			test.FileName = fmt.Sprintf("unit_test_%s%s.yml", evalengineToString(evalengine), platform)
