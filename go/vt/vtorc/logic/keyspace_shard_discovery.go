@@ -23,6 +23,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -108,6 +109,26 @@ func RefreshKeyspaceAndShard(keyspaceName string, shardName string) error {
 	return refreshShard(keyspaceName, shardName)
 }
 
+// shouldWatchShard returns true if a shard is within the shardsToWatch
+// ranges for it's keyspace.
+func shouldWatchShard(shard *topo.ShardInfo) bool {
+	if len(shardsToWatch) == 0 {
+		return true
+	}
+
+	watchRanges, found := shardsToWatch[shard.Keyspace()]
+	if !found {
+		return false
+	}
+
+	for _, keyRange := range watchRanges {
+		if key.KeyRangeContainsKeyRange(keyRange, shard.GetKeyRange()) {
+			return true
+		}
+	}
+	return false
+}
+
 // refreshKeyspace refreshes the keyspace's information for the given keyspace from the topo
 func refreshKeyspace(keyspaceName string) error {
 	refreshCtx, refreshCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
@@ -149,10 +170,14 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		log.Error(err)
 		return err
 	}
+
+	// save shards that should be watched.
 	savedShards := make(map[string]bool, len(shardInfos))
 	for _, shardInfo := range shardInfos {
-		err = inst.SaveShard(shardInfo)
-		if err != nil {
+		if !shouldWatchShard(shardInfo) {
+			continue
+		}
+		if err = inst.SaveShard(shardInfo); err != nil {
 			log.Error(err)
 			return err
 		}
@@ -171,8 +196,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		}
 		shardName := topoproto.KeyspaceShardString(keyspaceName, shard)
 		log.Infof("Forgetting shard: %s", shardName)
-		err = inst.DeleteShard(keyspaceName, shard)
-		if err != nil {
+		if err = inst.DeleteShard(keyspaceName, shard); err != nil {
 			log.Errorf("Failed to delete shard %s: %+v", shardName, err)
 			return err
 		}
