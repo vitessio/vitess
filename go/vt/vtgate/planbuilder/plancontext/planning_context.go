@@ -124,14 +124,14 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		ReservedVars:       reservedVars,
 		SemTable:           semTable,
 		VSchema:            vschema,
-		skipValuesArgument: map[string]any{},
 		PlannerVersion:     version,
 		ReservedArguments:  map[sqlparser.Expr]string{},
-		valuesJoinColumns:  make(map[string][]*sqlparser.AliasedExpr),
 		Statement:          stmt,
+		PredTracker:        predicates.NewTracker(),
+		skipValuesArgument: map[string]any{},
+		valuesJoinColumns:  make(map[string][]*sqlparser.AliasedExpr),
 		AllowValuesJoin:    sqlparser.AllowValuesJoinDirective(stmt),
 		valuesTableName:    make(map[semantics.TableSet]string),
-		PredTracker:        predicates.NewTracker(),
 	}, nil
 }
 
