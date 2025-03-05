@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Fail if onecase.json is staged for commit
+if git diff --cached --name-only | grep -q "onecase.json"; then
+  echo "ERROR: Changes to onecase.json are not allowed in commits."
+  exit 1
+fi
