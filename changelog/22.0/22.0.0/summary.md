@@ -3,12 +3,15 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
-  - **[Deprecations and Deletions](#deprecations-and-deletions)**
+  - **[Deletions](#deletions)**
+    - [Metrics](#deleted-metrics)
+    - [CLI Flags](#deleted-cli-flags)
+    - [gh-ost and pt-osc Online DDL strategies](#deleted-ghost-ptosc)
+  - **[Deprecations](#deprecations)**
     - [Deprecated VTGate Metrics](#vtgate-metrics)
     - [Deprecated VTTablet Flags](#vttablet-flags)
-    - [Removing gh-ost and pt-osc Online DDL strategies](#ghost-ptosc)
   - **[RPC Changes](#rpc-changes)**
-  - **[VTGate Metrics]**(#vtgate-metrics)
+  - **[VTGate Metrics](#vtgate-metrics)**
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
   - **[VTGate Config File Changes](#vtgate-config-file-changes)**
@@ -30,19 +33,26 @@
 
 ## <a id="major-changes"/>Major Changes</a>
 
-### <a id="rpc-changes"/>RPC Changes</a>
+### <a id="deletions"/>Deletions</a>
 
-These are the RPC changes made in this release - 
+#### <a id="deleted-metrics"/>Metrics</a>
 
-1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to facilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
+| Component  |      Metric Name      | Was Deprecated In |                     Deprecation PR                      |
+|------------|:---------------------:|:-----------------:|:-------------------------------------------------------:|
+| `vttablet` |  `QueryCacheLength`   |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
+| `vttablet` |   `QueryCacheSize`    |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
+| `vttablet` | `QueryCacheCapacity`  |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
+| `vttablet` | `QueryCacheEvictions` |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
+| `vttablet` |   `QueryCacheHits`    |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
+| `vttablet` |  `QueryCacheMisses`   |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
 
-### <a id="deprecations-and-deletions"/>Deprecations and Deletions</a>
+#### <a id="deleted-cli-flags">CLI Flags</a>
 
-#### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
+| Component  |             Flag Name              | Was Deprecated In |                     Deprecation PR                      |
+|------------|:----------------------------------:|:-----------------:|:-------------------------------------------------------:|
+| `vttablet` | `queryserver-enable-settings-pool` |     `v21.0.0`     | [#16280](https://github.com/vitessio/vitess/pull/16280) |
 
-- `twopc_enable` flag is deprecated. Usage of TwoPC commit will be determined by the `transaction_mode` set on VTGate via flag or session variable.
-
-#### <a id="ghost-ptosc"/>Removing gh-ost and pt-osc Online DDL strategies</a>
+#### <a id="deleted-ghost-ptosc"/>gh-ost and pt-osc Online DDL strategies</a>
 
 Vitess no longer recognizes the `gh-ost` and `pt-osc` (`pt-online-schema-change`) Online DDL strategies. The `vitess` strategy is the recommended way to make schema changes at scale. `mysql` and `direct` strategies continue to be supported.
 
@@ -56,6 +66,18 @@ The use of `gh-ost` and `pt-osc` as strategies as follows, yields an error:
 $ vtctldclient ApplySchema --ddl-strategy="gh-ost" ...
 $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
 ```
+
+### <a id="deprecations"/>Deprecations</a>
+
+#### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
+
+- `twopc_enable` flag is deprecated. Usage of TwoPC commit will be determined by the `transaction_mode` set on VTGate via flag or session variable.
+
+### <a id="rpc-changes"/>RPC Changes</a>
+
+These are the RPC changes made in this release -
+
+1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to facilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
 
 ### <a id="vtgate-metrics"/>VTGate Metrics
 
