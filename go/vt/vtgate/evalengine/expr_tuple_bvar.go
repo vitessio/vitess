@@ -50,8 +50,8 @@ func (bv *TupleBindVariable) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	if bvar.Type != sqltypes.Tuple {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' must be a tuple (is %s)", bv.Key, bvar.Type.String())
+	if bvar.Type != sqltypes.Tuple && bvar.Type != sqltypes.RowTuple {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' must be a tuple or row tuple (is %s)", bv.Key, bvar.Type.String())
 	}
 
 	tuple := make([]eval, 0, len(bvar.Values))
