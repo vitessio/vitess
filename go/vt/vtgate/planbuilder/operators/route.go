@@ -614,6 +614,8 @@ func addColumnToInput(
 		src, updateSrc = op.Source, func(newSrc Operator) { op.Source = newSrc }
 	case *LockAndComment:
 		src, updateSrc = op.Source, func(newSrc Operator) { op.Source = newSrc }
+	case *Values:
+		src, updateSrc = op.Source, func(newSrc Operator) { op.Source = newSrc }
 
 	// Union needs special handling, we can't really add new columns to all inputs
 	case *Union:
