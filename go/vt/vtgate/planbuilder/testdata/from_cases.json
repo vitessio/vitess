@@ -550,7 +550,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `values`.user_extra_user_id from (values ::values) as `values`(user_extra_user_id, user_extra_toto), `user` where 1 != 1",
+            "FieldQuery": "select `user`.foo, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_toto), `user` where 1 != 1",
             "Query": "select /*vt+ ALLOW_VALUES_JOIN */ `user`.foo, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_toto), `user` where `user`.foo = 1 and `user`.id = `values`.user_extra_toto",
             "Table": "`user`",
             "Values": [

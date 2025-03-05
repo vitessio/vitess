@@ -145,7 +145,7 @@ func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operato
 			if pred.JoinPredicateID == nil {
 				panic(vterrors.VT13001("missing join predicate ID"))
 			}
-			vj.JoinPredicates = append(vj.JoinPredicates, breakValuesJoinExpressionInLHS(ctx, pred.Original, TableID(vj.LHS)))
+			vj.JoinPredicates = append(vj.JoinPredicates, breakValuesJoinExpressionInLHS(ctx, aeWrap(pred.Original), TableID(vj.LHS)))
 
 			newOriginal := sqlparser.Rewrite(pred.Original, nil, func(cursor *sqlparser.Cursor) bool {
 				col, isCol := cursor.Node().(*sqlparser.ColName)
