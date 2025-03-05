@@ -76,7 +76,7 @@ func (p Phase) shouldRun(ctx *plancontext.PlanningContext) bool {
 	s := ctx.SemTable.QuerySignature
 	switch p {
 	case rewriteApplyJoin:
-		return ctx.AllowValuesJoin
+		return ctx.IsCommentDirectiveSet(sqlparser.DirectiveAllowValuesJoin)
 	case pullDistinctFromUnion:
 		return s.Union
 	case delegateAggregation:

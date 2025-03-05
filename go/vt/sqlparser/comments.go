@@ -556,10 +556,6 @@ func AllowScatterDirective(stmt Statement) bool {
 	return checkDirective(stmt, DirectiveAllowScatter)
 }
 
-func AllowValuesJoinDirective(stmt Statement) bool {
-	return checkDirective(stmt, DirectiveAllowValuesJoin)
-}
-
 func checkDirective(stmt Statement, key string) bool {
 	cmt, ok := stmt.(Commented)
 	if ok {

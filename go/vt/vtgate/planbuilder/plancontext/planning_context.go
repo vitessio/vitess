@@ -43,8 +43,6 @@ type PlanningContext struct {
 
 	PlannerVersion querypb.ExecuteOptions_PlannerVersion
 
-	AllowValuesJoin bool
-
 	// If we during planning have turned this expression into an argument name,
 	// we can continue using the same argument name
 	ReservedArguments map[sqlparser.Expr]string
@@ -85,6 +83,8 @@ type PlanningContext struct {
 	constantCfg *evalengine.Config
 
 	PredTracker *predicates.Tracker
+
+	commentDirectives *sqlparser.CommentDirectives
 }
 
 func CreateEmptyPlanningContext() *PlanningContext {
@@ -120,6 +120,12 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
+	var commentDirectives *sqlparser.CommentDirectives
+	cmt, ok := stmt.(sqlparser.Commented)
+	if ok {
+		commentDirectives = cmt.GetParsedComments().Directives()
+	}
+
 	return &PlanningContext{
 		ReservedVars:       reservedVars,
 		SemTable:           semTable,
@@ -130,8 +136,8 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 		PredTracker:        predicates.NewTracker(),
 		skipValuesArgument: map[string]any{},
 		valuesJoinColumns:  make(map[string][]*sqlparser.AliasedExpr),
-		AllowValuesJoin:    sqlparser.AllowValuesJoinDirective(stmt),
 		valuesTableName:    make(map[semantics.TableSet]string),
+		commentDirectives:  commentDirectives,
 	}, nil
 }
 
@@ -460,4 +466,8 @@ func (ctx *PlanningContext) GetValueJoinTableName(id semantics.TableSet) (string
 		return "", vterrors.VT13001("value join table not found")
 	}
 	return name, nil
+}
+
+func (ctx *PlanningContext) IsCommentDirectiveSet(hint string) bool {
+	return ctx.commentDirectives != nil && ctx.commentDirectives.IsSet(hint)
 }
