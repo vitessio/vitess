@@ -48,7 +48,7 @@ var (
 func TestMain(m *testing.M) {
 	flag.Parse()
 
-	exitCode := func() int {
+	exitcode, err := func() (int, error) {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
 		clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval", "1s", "--shutdown_grace_period", "3s"}
 		defer clusterInstance.Teardown()
@@ -56,7 +56,7 @@ func TestMain(m *testing.M) {
 		// Start topo server
 		err := clusterInstance.StartTopo()
 		if err != nil {
-			return 1
+			return 1, err
 		}
 
 		// Start keyspace
@@ -67,7 +67,7 @@ func TestMain(m *testing.M) {
 		}
 		err = clusterInstance.StartUnshardedKeyspace(*customerKeyspace, 1, true)
 		if err != nil {
-			return 1
+			return 1, err
 		}
 
 		commerceKeyspace := &cluster.Keyspace{
@@ -77,14 +77,14 @@ func TestMain(m *testing.M) {
 		}
 		err = clusterInstance.StartUnshardedKeyspace(*commerceKeyspace, 1, true)
 		if err != nil {
-			return 1
+			return 1, err
 		}
 
 		vtgateInstance := clusterInstance.NewVtgateInstance()
 		// Start vtgate
 		err = vtgateInstance.Setup()
 		if err != nil {
-			return 1
+			return 1, err
 		}
 		// ensure it is torn down during cluster TearDown
 		clusterInstance.VtgateProcess = *vtgateInstance
@@ -93,7 +93,12 @@ func TestMain(m *testing.M) {
 			Port: clusterInstance.VtgateMySQLPort,
 		}
 		vtgateGrpcAddress = fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
-		return m.Run()
+		return m.Run(), nil
 	}()
-	os.Exit(exitCode)
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		os.Exit(1)
+	}
+
+	os.Exit(exitcode)
 }
