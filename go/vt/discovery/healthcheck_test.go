@@ -1606,6 +1606,40 @@ func TestConcurrentUpdates(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond, "expected all updates to be processed")
 }
 
+// TestHealthCheckBufferFull tests that we print the stack trace when the buffer gets full.
+func TestHealthCheckBufferFull(t *testing.T) {
+	origPrintStack := printStack
+	defer func() {
+		printStack = origPrintStack
+		hcChannelFullCounter.Reset()
+	}()
+
+	ctx := utils.LeakCheckContext(t)
+	hcChannelFullCounter.Reset()
+	// Create a new healthcheck.
+	hc := NewHealthCheck(ctx, time.Hour, time.Hour, nil, "", "", nil)
+	defer hc.Close()
+
+	// Create a subscriber
+	ch := hc.Subscribe("TestHealthCheckBufferFull")
+	defer hc.Unsubscribe(ch)
+
+	// Send many broadcasting updates that the user doesn't consume.
+	// See that we print the stack trace.
+	var printStackCalled atomic.Bool
+	printStack = func() {
+		printStackCalled.Store(true)
+	}
+	hcUpdateCount := 2050
+	for i := 0; i < hcUpdateCount; i++ {
+		hc.broadcast(&TabletHealth{Tablet: topo.NewTablet(0, "cell", "host")})
+	}
+
+	// Check in the end that we have the print stack called.
+	require.True(t, printStackCalled.Load(), "expected printStack to be called")
+	require.Greater(t, int(hcChannelFullCounter.Get()), 1, "expected hcChannelFullCounter to be greater than 1")
+}
+
 func tabletDialer(ctx context.Context, tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservice.QueryService, error) {
 	connMapMu.Lock()
 	defer connMapMu.Unlock()
