@@ -5,6 +5,7 @@
 - **[Major Changes](#major-changes)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated VTGate Metrics](#vtgate-metrics)
+    - [Deprecated VTGate Flags](#vtgate-flags)
     - [Deprecated VTTablet Flags](#vttablet-flags)
     - [Removing gh-ost and pt-osc Online DDL strategies](#ghost-ptosc)
   - **[RPC Changes](#rpc-changes)**
@@ -37,6 +38,10 @@ These are the RPC changes made in this release -
 1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to facilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions</a>
+
+#### <a id="vtgate-flags"/>Deprecated VTGate Flags</a>
+
+- `grpc-send-session-in-streaming` flag is deprecated. Session will be sent as part of response on StreamExecute API call.
 
 #### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
 
