@@ -62,8 +62,10 @@ import (
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/schema"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
@@ -649,7 +651,16 @@ func waitForThrottleCheckStatus(t *testing.T, throttlerApp throttlerapp.Name, ta
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
+	flags := &throttle.CheckFlags{SkipRequestHeartbeats: true}
+	expectResponseCode := throttle.ResponseCodeFromStatus(tabletmanagerdatapb.CheckThrottlerResponseCode_UNDEFINED, wantCode)
 	for {
+		if resp, err := throttler.CheckThrottler(clusterInstance, tablet, throttlerApp, flags); err == nil {
+			// For Upgrade test, because higher version tablet does not aupport HTTP, only gRPC
+			if resp.Check.ResponseCode == expectResponseCode {
+				return
+			}
+		}
+
 		respBody, statusCode, err := throttlerCheck(tablet.VttabletProcess, throttlerApp)
 		require.NoError(t, err)
 
