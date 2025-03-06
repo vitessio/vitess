@@ -352,6 +352,13 @@ func (se *Engine) MakePrimary(serving bool) {
 	se.isServingPrimary = serving
 }
 
+// IsServingPrimary returns true if the tablet is currently serving as primary.
+func (se *Engine) IsServingPrimary() bool {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	return se.isServingPrimary
+}
+
 // EnableHistorian forces tracking to be on or off.
 // Only used for testing.
 func (se *Engine) EnableHistorian(enabled bool) error {
@@ -477,7 +484,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	}
 
 	// On the primary tablet, we also check the data we have stored in our schema tables to see what all needs reloading.
-	shouldUseDatabase := se.isServingPrimary && se.schemaCopy
+	shouldUseDatabase := se.IsServingPrimary() && se.schemaCopy
 
 	// changedViews are the views that have changed. We can't use the same createTime logic for views because, MySQL
 	// doesn't update the create_time field for views when they are altered. This is annoying, but something we have to work around.
