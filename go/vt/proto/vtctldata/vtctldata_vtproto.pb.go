@@ -813,6 +813,7 @@ func (m *BackupRequest) CloneVT() *BackupRequest {
 	r.Concurrency = m.Concurrency
 	r.IncrementalFromPos = m.IncrementalFromPos
 	r.UpgradeSafe = m.UpgradeSafe
+	r.MysqlShutdownTimeout = m.MysqlShutdownTimeout.CloneVT()
 	if rhs := m.BackupEngine; rhs != nil {
 		tmpVal := *rhs
 		r.BackupEngine = &tmpVal
@@ -859,6 +860,7 @@ func (m *BackupShardRequest) CloneVT() *BackupShardRequest {
 	r.Concurrency = m.Concurrency
 	r.UpgradeSafe = m.UpgradeSafe
 	r.IncrementalFromPos = m.IncrementalFromPos
+	r.MysqlShutdownTimeout = m.MysqlShutdownTimeout.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -8495,6 +8497,16 @@ func (m *BackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.MysqlShutdownTimeout != nil {
+		size, err := m.MysqlShutdownTimeout.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x3a
+	}
 	if m.BackupEngine != nil {
 		i -= len(*m.BackupEngine)
 		copy(dAtA[i:], *m.BackupEngine)
@@ -8643,6 +8655,16 @@ func (m *BackupShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.MysqlShutdownTimeout != nil {
+		size, err := m.MysqlShutdownTimeout.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x3a
 	}
 	if len(m.IncrementalFromPos) > 0 {
 		i -= len(m.IncrementalFromPos)
@@ -23209,6 +23231,10 @@ func (m *BackupRequest) SizeVT() (n int) {
 		l = len(*m.BackupEngine)
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.MysqlShutdownTimeout != nil {
+		l = m.MysqlShutdownTimeout.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -23264,6 +23290,10 @@ func (m *BackupShardRequest) SizeVT() (n int) {
 	}
 	l = len(m.IncrementalFromPos)
 	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.MysqlShutdownTimeout != nil {
+		l = m.MysqlShutdownTimeout.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -35433,6 +35463,42 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 			s := string(dAtA[iNdEx:postIndex])
 			m.BackupEngine = &s
 			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MysqlShutdownTimeout", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.MysqlShutdownTimeout == nil {
+				m.MysqlShutdownTimeout = &vttime.Duration{}
+			}
+			if err := m.MysqlShutdownTimeout.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -35825,6 +35891,42 @@ func (m *BackupShardRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.IncrementalFromPos = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MysqlShutdownTimeout", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.MysqlShutdownTimeout == nil {
+				m.MysqlShutdownTimeout = &vttime.Duration{}
+			}
+			if err := m.MysqlShutdownTimeout.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
