@@ -531,8 +531,14 @@ func TestStreamRowsCancel(t *testing.T) {
 
 	var options binlogdatapb.VStreamOptions
 	options.ConfigOverrides = make(map[string]string)
-	options.ConfigOverrides["vstream_dynamic_packet_size"] = "false"
-	options.ConfigOverrides["vstream_packet_size"] = "10"
+	
+    // Support both formats for backwards compatibility
+    // TODO(v25): Remove underscore versions
+    options.ConfigOverrides["vstream-dynamic-packet-size"] = "false"
+    options.ConfigOverrides["vstream-packet-size"] = "10"
+    options.ConfigOverrides["vstream_dynamic_packet_size"] = "false"
+    options.ConfigOverrides["vstream_packet_size"] = "10"
+	
 	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		cancel()
 		return nil
@@ -554,8 +560,14 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 		defer close(ch)
 		var options binlogdatapb.VStreamOptions
 		options.ConfigOverrides = make(map[string]string)
-		options.ConfigOverrides["vstream_dynamic_packet_size"] = strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
-		options.ConfigOverrides["vstream_packet_size"] = strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
+		
+        // Support both formats for backwards compatibility
+        // TODO(v25): Remove underscore versions
+        options.ConfigOverrides["vstream-dynamic-packet-size"] = strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
+        options.ConfigOverrides["vstream-packet-size"] = strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
+        options.ConfigOverrides["vstream_dynamic_packet_size"] = strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
+        options.ConfigOverrides["vstream_packet_size"] = strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
+
 		err := engine.StreamRows(context.Background(), query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			if first {
 				if rows.Gtid == "" {
