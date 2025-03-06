@@ -35,6 +35,8 @@ vtctld \
  --pid_file $VTDATAROOT/tmp/vtctld.pid \
   > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 
+echo "Curling \"http://${hostname}:${vtctld_web_port}/debug/status\" to check if vtctld is up"
+
 for _ in {0..300}; do
  curl -I "http://${hostname}:${vtctld_web_port}/debug/status" &>/dev/null && break
  sleep 0.1
