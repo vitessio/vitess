@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/exp/maps"
@@ -72,7 +71,7 @@ type Engine struct {
 	mu         sync.Mutex
 	isOpen     bool
 	tables     map[string]*Table
-	lastChange atomic.Int64
+	lastChange int64
 	// the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
 	reloadAtPos replication.Position
 	notifierMu  sync.Mutex
@@ -273,7 +272,7 @@ func (se *Engine) Open() error {
 
 	se.ticks.Start(func() {
 		// update stats on periodic reloads
-		if err := se.reload(ctx, true); err != nil {
+		if err := se.reloadAndIncludeStats(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
@@ -320,7 +319,7 @@ func (se *Engine) closeLocked() {
 	se.conns.Close()
 
 	se.tables = make(map[string]*Table)
-	se.lastChange.Store(0)
+	se.lastChange = 0
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = false
 
@@ -352,13 +351,6 @@ func (se *Engine) MakePrimary(serving bool) {
 	se.isServingPrimary = serving
 }
 
-// IsServingPrimary returns true if the tablet is currently serving as primary.
-func (se *Engine) IsServingPrimary() bool {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	return se.isServingPrimary
-}
-
 // EnableHistorian forces tracking to be on or off.
 // Only used for testing.
 func (se *Engine) EnableHistorian(enabled bool) error {
@@ -371,6 +363,11 @@ func (se *Engine) EnableHistorian(enabled bool) error {
 // emitted, as they can be expensive to calculate for a large number of tables
 func (se *Engine) Reload(ctx context.Context) error {
 	return se.ReloadAt(ctx, replication.Position{})
+}
+
+// reloadAndIncludeStats calls the ReloadAtEx function with includeStats set to true.
+func (se *Engine) reloadAndIncludeStats(ctx context.Context) error {
+	return se.ReloadAtEx(ctx, replication.Position{}, true)
 }
 
 // ReloadAt reloads the schema info from the db.
@@ -484,7 +481,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	}
 
 	// On the primary tablet, we also check the data we have stored in our schema tables to see what all needs reloading.
-	shouldUseDatabase := se.IsServingPrimary() && se.schemaCopy
+	shouldUseDatabase := se.isServingPrimary && se.schemaCopy
 
 	// changedViews are the views that have changed. We can't use the same createTime logic for views because, MySQL
 	// doesn't update the create_time field for views when they are altered. This is annoying, but something we have to work around.
@@ -561,7 +558,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		tbl, isInTablesMap := se.tables[tableName]
 		_, isInChangedViewMap := changedViews[tableName]
 		_, isInMismatchTableMap := mismatchTables[tableName]
-		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange.Load() && !isInChangedViewMap && !isInMismatchTableMap {
+		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange && !isInChangedViewMap && !isInMismatchTableMap {
 			if includeStats {
 				tbl.FileSize = fileSize
 				tbl.AllocatedSize = allocatedSize
@@ -624,7 +621,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	for k, t := range changedTables {
 		se.tables[k] = t
 	}
-	se.lastChange.Store(curTime)
+	se.lastChange = curTime
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
 		log.Infof("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped))
 	}
