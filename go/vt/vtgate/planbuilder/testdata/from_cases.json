@@ -526,11 +526,6 @@
         "OperatorType": "Join",
         "Variant": "Values",
         "BindVarName": "values",
-        "CopyColumnsToRHS": [
-          0,
-          1
-        ],
-        "RowID": "false",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -5078,6 +5073,61 @@
       "TablesUsed": [
         "user.user",
         "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Values Join with using",
+    "query": "select /*vt+ ALLOW_VALUES_JOIN */ t2.tcol1, t2.id, t2.tcol2, t3.id, t3.tcol2 from t2 join t3 using (tcol1)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_VALUES_JOIN */ t2.tcol1, t2.id, t2.tcol2, t3.id, t3.tcol2 from t2 join t3 using (tcol1)",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:tcol1",
+          "1:id",
+          "2:tcol2",
+          "3:id",
+          "4:tcol2"
+        ],
+        "Columns": "2,3,4,0,1",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Values",
+            "BindVarName": "values",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t2.tcol1, t2.id, t2.tcol2 from t2 where 1 != 1",
+                "Query": "select /*vt+ ALLOW_VALUES_JOIN */ t2.tcol1, t2.id, t2.tcol2 from t2",
+                "Table": "t2"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t3.id, t3.tcol2, `values`.t2_tcol1 as tcol1, `values`.t2_id as id, `values`.t2_tcol2 as tcol2 from (values ::values) as `values`(t2_tcol1, t2_id, t2_tcol2), t3 where 1 != 1",
+                "Query": "select /*vt+ ALLOW_VALUES_JOIN */ t3.id, t3.tcol2, `values`.t2_tcol1 as tcol1, `values`.t2_id as id, `values`.t2_tcol2 as tcol2 from (values ::values) as `values`(t2_tcol1, t2_id, t2_tcol2), t3 where `values`.t2_tcol1 = t3.tcol1",
+                "Table": "t3"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.t2",
+        "user.t3"
       ]
     }
   }

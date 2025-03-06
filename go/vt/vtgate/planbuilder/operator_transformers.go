@@ -99,12 +99,9 @@ func transformValuesJoin(ctx *plancontext.PlanningContext, op *operators.ValuesJ
 	}
 
 	return &engine.ValuesJoin{
-		Left:             lhs,
-		Right:            rhs,
-		CopyColumnsToRHS: op.CopyColumnsToRHS,
-		BindVarName:      op.ValuesDestination,
-		Cols:             op.Columns,
-		ColNames:         op.ColumnName,
+		Left:        lhs,
+		Right:       rhs,
+		BindVarName: op.ValuesDestination,
 	}, nil
 }
 

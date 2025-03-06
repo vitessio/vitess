@@ -606,7 +606,7 @@ func (tr *ShardedRouting) planOffsets(ctx *plancontext.PlanningContext) {
 	}
 
 	lhsCol := tr.Selected.ValueExprs[0]
-	columns := ctx.GetColumns(trv.Key)
+	columns := ctx.GetValuesColumns(trv.Key)
 	for idx, expr := range columns {
 		if ctx.SemTable.EqualsExpr(lhsCol, expr.Expr) {
 			trv.Index = idx
@@ -620,7 +620,7 @@ func (tr *ShardedRouting) planOffsets(ctx *plancontext.PlanningContext) {
 
 	columns = append(columns, aeWrap(sqlparser.NewStrLiteral("unknown")))
 	trv.Index = len(columns) - 1
-	ctx.SetColumns(trv.Key, columns)
+	ctx.SetValuesColumns(trv.Key, columns)
 }
 
 func (tr *ShardedRouting) planCompositeInOpRecursive(

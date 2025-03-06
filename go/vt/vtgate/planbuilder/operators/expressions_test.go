@@ -49,10 +49,10 @@ func TestSplitComplexPredicateToLHS(t *testing.T) {
 		return false, nil
 	}, ast)
 
-	valuesJoinCols := breakValuesJoinExpressionInLHS(ctx, aeWrap(ast), lID)
-	nodes := slice.Map(valuesJoinCols.LHS, func(from sqlparser.Expr) string {
-		return sqlparser.String(from)
+	valuesJoinCols, _ := breakValuesJoinExpressionInLHS(ctx, ast, lID, "values")
+	nodes := slice.Map(valuesJoinCols.LHS, func(from leftHandSideExpression) string {
+		return sqlparser.String(from.RightHandVersion)
 	})
 
-	assert.Equal(t, []string{"l.foo", "l.baz"}, nodes)
+	assert.Equal(t, []string{"`values`.l_foo", "`values`.l_baz"}, nodes)
 }

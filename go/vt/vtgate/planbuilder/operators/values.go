@@ -19,11 +19,14 @@ package operators
 import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+// Values is used to represent a VALUES derived table clause in a query.
+// Its only function is to add the `FROM (VALUES ::ARG) AS values(tbl_col1, tbl_col2, ...)` clause to the query.
+// That is why we pass everything through it. Also - since it can only add itself to the SQL query,
+// it _must_ be pushed under a route.
 type Values struct {
 	unaryOperator
 
@@ -40,51 +43,36 @@ func (v *Values) Clone(inputs []Operator) Operator {
 	return &clone
 }
 
-func (v *Values) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	return newFilter(v, expr)
+func (v *Values) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+	v.Source = v.Source.AddPredicate(ctx, expr)
+	return v
 }
 
-func (v *Values) AddColumn(*plancontext.PlanningContext, bool, bool, *sqlparser.AliasedExpr) int {
-	panic(vterrors.VT13001("we cannot add new columns to a Values operator"))
+func (v *Values) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
+	return v.Source.AddColumn(ctx, reuseExisting, addToGroupBy, expr)
 }
 
-func (v *Values) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
-	panic(vterrors.VT13001("we cannot add new columns to a Values operator"))
+func (v *Values) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return v.Source.AddWSColumn(ctx, offset, underRoute)
 }
 
-func (v *Values) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
-	for i, column := range v.getExprsFromCtx(ctx) {
-		if ctx.SemTable.EqualsExpr(column, expr) {
-			return i
-		}
-	}
-	return -1
+func (v *Values) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+	return v.Source.FindCol(ctx, expr, underRoute)
 }
 
 func (v *Values) getColumnNamesFromCtx(ctx *plancontext.PlanningContext) sqlparser.Columns {
-	columns := ctx.GetColumns(v.Name)
+	columns := ctx.GetValuesColumns(v.Name)
 	return slice.Map(columns, func(ae *sqlparser.AliasedExpr) sqlparser.IdentifierCI {
 		return sqlparser.NewIdentifierCI(ae.ColumnName())
 	})
 }
 
-func (v *Values) getExprsFromCtx(ctx *plancontext.PlanningContext) []sqlparser.Expr {
-	return slice.Map(ctx.GetColumns(v.Name), func(ae *sqlparser.AliasedExpr) sqlparser.Expr {
-		return ae.Expr
-	})
-}
-
 func (v *Values) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return ctx.GetColumns(v.Name)
+	return v.Source.GetColumns(ctx)
 }
 
 func (v *Values) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
-	r := v.GetColumns(ctx)
-	var selectExprs []sqlparser.SelectExpr
-	for _, expr := range r {
-		selectExprs = append(selectExprs, expr)
-	}
-	return selectExprs
+	return v.Source.GetSelectExprs(ctx)
 }
 
 func (v *Values) ShortDescription() string {

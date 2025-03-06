@@ -136,7 +136,7 @@ func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operato
 			return op, NoRewrite
 		}
 
-		vj, valuesTableID := newValuesJoin(ctx, aj.LHS, aj.RHS, aj.JoinType)
+		vj := newValuesJoin(ctx, aj.LHS, aj.RHS, aj.JoinType)
 		if vj == nil {
 			return op, NoRewrite
 		}
@@ -149,24 +149,8 @@ func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operato
 			if pred.JoinPredicateID == nil {
 				panic(vterrors.VT13001("missing join predicate ID"))
 			}
-			vj.JoinPredicates = append(vj.JoinPredicates, breakValuesJoinExpressionInLHS(ctx, aeWrap(pred.Original), TableID(vj.LHS)))
-
-			newOriginal := sqlparser.Rewrite(pred.Original, nil, func(cursor *sqlparser.Cursor) bool {
-				col, isCol := cursor.Node().(*sqlparser.ColName)
-				if !isCol || ctx.SemTable.RecursiveDeps(col) != valuesTableID {
-					return true
-				}
-
-				newCol := &sqlparser.ColName{
-					Name:      sqlparser.NewIdentifierCI(getValuesJoinColName(ctx, vj.ValuesDestination, valuesTableID, col)),
-					Qualifier: sqlparser.NewTableName(vj.ValuesDestination),
-				}
-				ctx.SemTable.CopyExprInfo(pred.Original, newCol)
-				cursor.Replace(newCol)
-				return true
-			}).(sqlparser.Expr)
-
-			ctx.PredTracker.Set(*pred.JoinPredicateID, newOriginal)
+			jc := vj.addJoinPredicate(ctx, pred.Original, false)
+			ctx.PredTracker.Set(*pred.JoinPredicateID, jc.RHS)
 		}
 		done = true
 		return vj, Rewrote("rewrote ApplyJoin to ValuesJoin")
@@ -177,9 +161,9 @@ func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operato
 
 const valuesName = "values"
 
-func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) (*ValuesJoin, semantics.TableSet) {
+func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) *ValuesJoin {
 	if !joinType.IsInner() {
-		return nil, semantics.EmptyTableSet()
+		return nil
 	}
 
 	valuesTableID := TableID(lhs)
@@ -193,7 +177,7 @@ func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType
 	return &ValuesJoin{
 		binaryOperator:    newBinaryOp(lhs, v),
 		ValuesDestination: valuesDestination,
-	}, v.TableID
+	}
 }
 
 type phaser struct {

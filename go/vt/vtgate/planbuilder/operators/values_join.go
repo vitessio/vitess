@@ -18,7 +18,6 @@ package operators
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"vitess.io/vitess/go/slice"
@@ -33,44 +32,49 @@ type (
 
 		ValuesDestination string
 
-		JoinColumns    []valuesJoinColumn
 		JoinPredicates []valuesJoinColumn
-
-		// After offset planning
-
-		// CopyColumnsToRHS are the offsets of columns from LHS we are copying over to the RHS
-		// []int{0,2} means that the first column in the t-o-t is the first offset from the left and the second column is the third offset
-		CopyColumnsToRHS []int
-
-		Columns    []int
-		ColumnName []string
 	}
 
+	// select tbl1.baz+tbl2.baz from tbl1, tbl2
 	valuesJoinColumn struct {
-		Original *sqlparser.AliasedExpr
-		RHS      sqlparser.Expr
-		LHS      []sqlparser.Expr
-		PureLHS  bool
+		Original sqlparser.Expr           // tbl1.baz+tbl2.baz
+		RHS      sqlparser.Expr           // tbl1_baz+tbl2.baz
+		LHS      []leftHandSideExpression // tbl1.baz|tbl1_baz
+	}
+
+	leftHandSideExpression struct {
+		Original         *sqlparser.ColName
+		RightHandVersion sqlparser.Expr
 	}
 )
 
 func (c valuesJoinColumn) String() string {
-	return fmt.Sprintf("[%s:%s]", sqlparser.SliceString(c.LHS), sqlparser.String(c.Original))
+	return fmt.Sprintf("[%s:%s]", sqlparser.String(c.RHS), sqlparser.String(c.Original))
+}
+
+func (c valuesJoinColumn) PureLHS() bool {
+	return len(c.LHS) == 1 && sqlparser.Equals.Expr(c.LHS[0].RightHandVersion, c.RHS)
 }
 
 var _ Operator = (*ValuesJoin)(nil)
 var _ JoinOp = (*ValuesJoin)(nil)
 
-func (vj *ValuesJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
+func (vj *ValuesJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) int {
 	if reuseExisting {
-		if offset := vj.FindCol(ctx, expr.Expr, false); offset >= 0 {
+		if offset := vj.FindCol(ctx, ae.Expr, false); offset >= 0 {
 			return offset
 		}
 	}
 
-	vj.JoinColumns = append(vj.JoinColumns, breakValuesJoinExpressionInLHS(ctx, expr, TableID(vj.LHS)))
-	vj.ColumnName = append(vj.ColumnName, expr.ColumnName())
-	return len(vj.JoinColumns) - 1
+	jc, _ := breakValuesJoinExpressionInLHS(ctx, ae.Expr, TableID(vj.LHS), vj.ValuesDestination)
+	for _, lhsExpr := range jc.LHS {
+		_ = vj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr.Original))
+		ctx.AddValuesColumn(vj.ValuesDestination, lhsExpr.RightHandVersion)
+	}
+
+	rhsCol := sqlparser.NewAliasedExpr(jc.RHS, ae.ColumnName())
+
+	return vj.RHS.AddColumn(ctx, reuseExisting, addToGroupBy, rhsCol)
 }
 
 // AddWSColumn is used to add a weight_string column to the operator
@@ -79,24 +83,15 @@ func (vj *ValuesJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, 
 }
 
 func (vj *ValuesJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
-	for offset, column := range vj.JoinColumns {
-		if ctx.SemTable.EqualsExpr(column.Original.Expr, expr) {
-			return offset
-		}
-	}
-	return -1
+	return vj.RHS.FindCol(ctx, expr, underRoute)
 }
 
 func (vj *ValuesJoin) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	results := make([]*sqlparser.AliasedExpr, len(vj.JoinColumns))
-	for i, column := range vj.JoinColumns {
-		results[i] = sqlparser.NewAliasedExpr(column.Original.Expr, vj.ColumnName[i])
-	}
-	return results
+	return vj.RHS.GetColumns(ctx)
 }
 
 func (vj *ValuesJoin) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
-	return transformColumnsToSelectExprs(ctx, vj)
+	return vj.RHS.GetSelectExprs(ctx)
 }
 
 func (vj *ValuesJoin) GetLHS() Operator {
@@ -127,20 +122,35 @@ func (vj *ValuesJoin) IsInner() bool {
 	return true
 }
 
-func (vj *ValuesJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, pushDown bool) {
+func (vj *ValuesJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, pushDown bool) valuesJoinColumn {
 	if expr == nil {
-		return
+		return valuesJoinColumn{}
 	}
 	lID := TableID(vj.LHS)
-	lhsJoinCols := breakValuesJoinExpressionInLHS(ctx, aeWrap(expr), lID)
-	if pushDown {
-		if lhsJoinCols.PureLHS {
-			vj.LHS = vj.LHS.AddPredicate(ctx, expr)
-			return
-		}
-		vj.RHS = vj.RHS.AddPredicate(ctx, expr)
+
+	jc, pureLHS := breakValuesJoinExpressionInLHS(ctx, expr, lID, vj.ValuesDestination)
+	if !pushDown {
+		vj.JoinPredicates = append(vj.JoinPredicates, jc)
+		return jc
 	}
-	vj.JoinPredicates = append(vj.JoinPredicates, lhsJoinCols)
+
+	if pureLHS {
+		vj.LHS = vj.LHS.AddPredicate(ctx, expr)
+		return jc
+	}
+
+	vj.RHS = vj.RHS.AddPredicate(ctx, jc.RHS)
+	if len(jc.LHS) == 0 {
+		// this is a pure RHS predicate, let's push it there and forget about it
+		return jc
+	}
+
+	vj.JoinPredicates = append(vj.JoinPredicates, jc)
+	return jc
+}
+
+func (vj *ValuesJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, pushDown bool) {
+	vj.addJoinPredicate(ctx, expr, pushDown)
 }
 
 func (vj *ValuesJoin) Clone(inputs []Operator) Operator {
@@ -158,7 +168,7 @@ func (vj *ValuesJoin) ShortDescription() string {
 		return strings.Join(out, ", ")
 	}
 
-	firstPart := fmt.Sprintf("%s on %s columns: %s", vj.ValuesDestination, fn(vj.JoinPredicates), fn(vj.JoinColumns))
+	firstPart := fmt.Sprintf("%s on %s", vj.ValuesDestination, fn(vj.JoinPredicates))
 
 	return firstPart
 }
@@ -168,38 +178,14 @@ func (vj *ValuesJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 }
 
 func (vj *ValuesJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
-	columns := ctx.GetColumns(vj.ValuesDestination)
-	for _, jc := range vj.JoinColumns {
-		newExprs := vj.planOffsetsForLHSExprs(ctx, jc.LHS)
-		for _, expr := range newExprs {
-			aliasedExpr := sqlparser.NewAliasedExpr(expr, jc.Original.ColumnName())
-			offset := vj.RHS.AddColumn(ctx, true, false, aliasedExpr)
-			vj.Columns = append(vj.Columns, ToRightOffset(offset))
-			columns = append(columns, aeWrap(expr))
-		}
-	}
 	for _, jc := range vj.JoinPredicates {
 		// for join predicates, we only need to push the LHS dependencies. The RHS expressions are already pushed
-		newExprs := vj.planOffsetsForLHSExprs(ctx, jc.LHS)
-		for _, expr := range newExprs {
-			columns = append(columns, aeWrap(expr))
+		for _, lh := range jc.LHS {
+			vj.LHS.AddColumn(ctx, true, false, aeWrap(lh.Original))
+			ctx.AddValuesColumn(vj.ValuesDestination, lh.RightHandVersion)
 		}
 	}
-	ctx.SetColumns(vj.ValuesDestination, columns)
 	return vj
-}
-
-func (vj *ValuesJoin) planOffsetsForLHSExprs(ctx *plancontext.PlanningContext, lhsCols []sqlparser.Expr) (exprs []sqlparser.Expr) {
-	for _, lhsExpr := range lhsCols {
-		offset := vj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr))
-		// only add it if we don't already have it
-		if slices.Index(vj.CopyColumnsToRHS, offset) == -1 {
-			vj.CopyColumnsToRHS = append(vj.CopyColumnsToRHS, offset)
-			newCol := sqlparser.NewColNameWithQualifier(getValuesJoinColName(ctx, vj.ValuesDestination, TableID(vj.LHS), lhsExpr), sqlparser.NewTableName(vj.ValuesDestination))
-			exprs = append(exprs, newCol)
-		}
-	}
-	return exprs
 }
 
 func getValuesJoinColName(ctx *plancontext.PlanningContext, valuesDestination string, tableID semantics.TableSet, expr sqlparser.Expr) string {

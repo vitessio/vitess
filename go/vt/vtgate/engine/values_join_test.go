@@ -18,7 +18,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,7 +30,6 @@ import (
 func TestJoinValuesExecute(t *testing.T) {
 
 	type testCase struct {
-		rowID            bool
 		cols             []int
 		CopyColumnsToRHS []int
 		rhsResults       []*sqltypes.Result
@@ -43,35 +41,9 @@ func TestJoinValuesExecute(t *testing.T) {
 			/*
 				select col1, col2, col3, col4, col5, col6 from left join right on left.col1 = right.col4
 				LHS: select col1, col2, col3 from left
-				RHS: select col5, col6, id from (values row(1,2), ...) left(id,col1) join right on left.col1 = right.col4
-			*/
-
-			rowID:            true,
-			cols:             []int{-1, -2, -3, -1, 1, 2},
-			CopyColumnsToRHS: []int{0},
-			rhsResults: []*sqltypes.Result{
-				sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields(
-						"col5|col6|id",
-						"varchar|varchar|int64",
-					),
-					"d|dd|0",
-					"e|ee|1",
-					"f|ff|2",
-					"g|gg|3",
-				),
-			},
-			expectedRHSLog: []string{
-				`Execute a: type:INT64 value:"10" v: [[INT64(1) INT64(0)][INT64(2) INT64(1)][INT64(3) INT64(2)][INT64(4) INT64(3)]] true`,
-			},
-		}, {
-			/*
-				select col1, col2, col3, col4, col5, col6 from left join right on left.col1 = right.col4
-				LHS: select col1, col2, col3 from left
 				RHS: select col1, col2, col3, col4, col5, col6 from (values row(1,2,3), ...) left(col1,col2,col3) join right on left.col1 = right.col4
 			*/
 
-			rowID: false,
 			rhsResults: []*sqltypes.Result{
 				sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
@@ -91,7 +63,7 @@ func TestJoinValuesExecute(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("rowID:%t", tc.rowID), func(t *testing.T) {
+		t.Run("toto", func(t *testing.T) {
 			leftPrim := &fakePrimitive{
 				useNewPrintBindVars: true,
 				results: []*sqltypes.Result{
@@ -117,13 +89,9 @@ func TestJoinValuesExecute(t *testing.T) {
 			}
 
 			vjn := &ValuesJoin{
-				Left:             leftPrim,
-				Right:            rightPrim,
-				CopyColumnsToRHS: tc.CopyColumnsToRHS,
-				BindVarName:      "v",
-				Cols:             tc.cols,
-				ColNames:         []string{"col1", "col2", "col3", "col4", "col5", "col6"},
-				RowID:            tc.rowID,
+				Left:        leftPrim,
+				Right:       rightPrim,
+				BindVarName: "v",
 			}
 
 			r, err := vjn.TryExecute(context.Background(), &noopVCursor{}, bv, true)

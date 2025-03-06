@@ -1428,7 +1428,7 @@ func (cached *ValuesJoin) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(48)
 	}
 	// field Left vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Left.(cachedObject); ok {
@@ -1440,21 +1440,6 @@ func (cached *ValuesJoin) CachedSize(alloc bool) int64 {
 	}
 	// field BindVarName string
 	size += hack.RuntimeAllocSize(int64(len(cached.BindVarName)))
-	// field CopyColumnsToRHS []int
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.CopyColumnsToRHS)) * int64(8))
-	}
-	// field Cols []int
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
-	}
-	// field ColNames []string
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.ColNames)) * int64(16))
-		for _, elem := range cached.ColNames {
-			size += hack.RuntimeAllocSize(int64(len(elem)))
-		}
-	}
 	return size
 }
 func (cached *Verify) CachedSize(alloc bool) int64 {

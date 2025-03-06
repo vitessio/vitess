@@ -18,6 +18,7 @@ package plancontext
 
 import (
 	"io"
+	"slices"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 
@@ -76,7 +77,7 @@ type PlanningContext struct {
 	isMirrored bool
 
 	// ValuesJoinColumns stores the columns we need for each values statement in the plan.
-	valuesJoinColumns map[string][]*sqlparser.AliasedExpr
+	valuesJoinColumns map[string][]*sqlparser.AliasedExpr // TODO: this should be a map[string][]*sqlparser.ColName
 	valuesTableName   map[semantics.TableSet]string
 
 	emptyEnv    *evalengine.ExpressionEnv
@@ -384,10 +385,24 @@ func (ctx *PlanningContext) ActiveCTE() *ContextCTE {
 	return ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
 }
 
-func (ctx *PlanningContext) GetColumns(joinName string) []*sqlparser.AliasedExpr {
+func (ctx *PlanningContext) GetValuesColumns(joinName string) []*sqlparser.AliasedExpr {
 	return ctx.valuesJoinColumns[joinName]
 }
-func (ctx *PlanningContext) SetColumns(joinName string, cols []*sqlparser.AliasedExpr) {
+func (ctx *PlanningContext) SetValuesColumns(joinName string, cols []*sqlparser.AliasedExpr) {
+	ctx.valuesJoinColumns[joinName] = cols
+}
+
+func (ctx *PlanningContext) AddValuesColumn(joinName string, expr sqlparser.Expr) {
+	cols := ctx.valuesJoinColumns[joinName]
+	idx := slices.IndexFunc(cols, func(ae *sqlparser.AliasedExpr) bool {
+		return sqlparser.Equals.Expr(ae.Expr, expr)
+	})
+
+	if idx != -1 {
+		return
+	}
+
+	cols = append(cols, sqlparser.NewAliasedExpr(expr, ""))
 	ctx.valuesJoinColumns[joinName] = cols
 }
 

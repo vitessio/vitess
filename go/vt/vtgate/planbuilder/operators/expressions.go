@@ -131,26 +131,31 @@ func getFirstSelect(selStmt sqlparser.TableStatement) *sqlparser.Select {
 }
 
 func breakValuesJoinExpressionInLHS(ctx *plancontext.PlanningContext,
-	ae *sqlparser.AliasedExpr,
+	expr sqlparser.Expr,
 	lhs semantics.TableSet,
-) (result valuesJoinColumn) {
-	result.Original = sqlparser.Clone(ae)
-	result.PureLHS = true
-	result.RHS = ae.Expr
-	_ = sqlparser.Rewrite(ae, func(cursor *sqlparser.Cursor) bool { // TODO: rewrite to use Walk instead (no pun intended, promise!)
+	valuesName string,
+) (result valuesJoinColumn, pureLHS bool) {
+	result.Original = sqlparser.Clone(expr)
+	pureLHS = true
+	result.RHS = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
 		node := cursor.Node()
 		col, ok := node.(*sqlparser.ColName)
-		if !ok {
+		if !ok || ctx.SemTable.RecursiveDeps(col) != lhs {
+			// we are only interested in ColNames from the LHS
+			pureLHS = false
 			return true
 		}
-		if ctx.SemTable.RecursiveDeps(col) == lhs {
-			result.LHS = append(result.LHS, col)
-			// TODO: Fine all the LHS columns, and
-			// rewrite the expression to use the value join name and the column.
-		} else {
-			result.PureLHS = false
-		}
+
+		colName := getValuesJoinColName(ctx, valuesName, lhs, col)
+		qualifier := sqlparser.NewTableName(valuesName)
+		rhsExpr := sqlparser.NewColNameWithQualifier(colName, qualifier)
+		result.LHS = append(result.LHS, leftHandSideExpression{
+			Original:         col,
+			RightHandVersion: rhsExpr,
+		})
+		ctx.SemTable.CopyExprInfo(col, rhsExpr)
+		cursor.Replace(rhsExpr)
 		return true
-	}, nil)
+	}, nil).(sqlparser.Expr)
 	return
 }
