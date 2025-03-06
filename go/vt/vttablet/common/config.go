@@ -220,7 +220,7 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 			} else {
 				c.ParallelInsertWorkers = value
 			}
-		case "vstream_packet_size":
+		case "vstream-packet-size", "vstream_packet_size":
 			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
@@ -228,7 +228,7 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				c.VStreamPacketSizeOverride = true
 				c.VStreamPacketSize = value
 			}
-		case "vstream_dynamic_packet_size":
+		case "vstream-dynamic-packet-size", "vstream_dynamic_packet_size":
 			value, err := strconv.ParseBool(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
@@ -271,7 +271,9 @@ func (c VReplicationConfig) Map() map[string]string {
 		"vreplication_heartbeat_update_interval":  strconv.Itoa(c.HeartbeatUpdateInterval),
 		"vreplication_store_compressed_gtid":      strconv.FormatBool(c.StoreCompressedGTID),
 		"vreplication-parallel-insert-workers":    strconv.Itoa(c.ParallelInsertWorkers),
+		"vstream-packet-size":                     strconv.Itoa(c.VStreamPacketSize),
 		"vstream_packet_size":                     strconv.Itoa(c.VStreamPacketSize),
+		"vstream-dynamic-packet-size":             strconv.FormatBool(c.VStreamDynamicPacketSize),
 		"vstream_dynamic_packet_size":             strconv.FormatBool(c.VStreamDynamicPacketSize),
 		"vstream_binlog_rotation_threshold":       strconv.FormatInt(c.VStreamBinlogRotationThreshold, 10),
 	}
