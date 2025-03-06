@@ -4708,7 +4708,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "must merge subquery with the right side of the join",
