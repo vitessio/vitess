@@ -711,10 +711,14 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 				q.SetErr(err)
 			}
 		} else {
-			qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
-			startTime := time.Now()
-			q.Wait()
-			qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
+			waiterCap := qre.tsv.config.ConsolidatorQueryWaiterCap
+			if waiterCap == 0 || *q.AddWaiterCounter(0) <= waiterCap {
+				qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
+				startTime := time.Now()
+				q.Wait()
+				qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
+			}
+			q.AddWaiterCounter(-1)
 		}
 		if q.Err() != nil {
 			return nil, q.Err()
