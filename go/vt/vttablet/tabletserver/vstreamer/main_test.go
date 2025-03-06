@@ -318,13 +318,13 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 	var options binlogdatapb.VStreamOptions
 	options.ConfigOverrides = make(map[string]string)
 	dynamicPacketSize := strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
-    	packetSize := strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
-    	// Support both formats for backwards compatibility
-    	// TODO(v25): Remove underscore versions
-    	options.ConfigOverrides["vstream-dynamic-packet-size"] = dynamicPacketSize
-    	options.ConfigOverrides["vstream-packet-size"] = packetSize
-    	options.ConfigOverrides["vstream_dynamic_packet_size"] = dynamicPacketSize
-    	options.ConfigOverrides["vstream_packet_size"] = packetSize
+    packetSize := strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
+    // Support both formats for backwards compatibility
+    // TODO(v25): Remove underscore versions
+    options.ConfigOverrides["vstream-dynamic-packet-size"] = dynamicPacketSize
+    options.ConfigOverrides["vstream-packet-size"] = packetSize
+    options.ConfigOverrides["vstream_dynamic_packet_size"] = dynamicPacketSize
+    options.ConfigOverrides["vstream_packet_size"] = packetSize
 
 	return engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
 		timer := time.NewTimer(2 * time.Second)
