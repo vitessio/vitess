@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/exp/maps"
@@ -70,7 +71,7 @@ type Engine struct {
 	mu         sync.Mutex
 	isOpen     bool
 	tables     map[string]*Table
-	lastChange int64
+	lastChange atomic.Int64
 	// the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
 	reloadAtPos replication.Position
 	notifierMu  sync.Mutex
@@ -316,7 +317,7 @@ func (se *Engine) closeLocked() {
 	se.conns.Close()
 
 	se.tables = make(map[string]*Table)
-	se.lastChange = 0
+	se.lastChange.Store(0)
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = false
 
@@ -496,7 +497,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		tbl, isInTablesMap := se.tables[tableName]
 		_, isInChangedViewMap := changedViews[tableName]
 		_, isInMismatchTableMap := mismatchTables[tableName]
-		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange && !isInChangedViewMap && !isInMismatchTableMap {
+		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange.Load() && !isInChangedViewMap && !isInMismatchTableMap {
 			if includeStats {
 				tbl.FileSize = fileSize
 				tbl.AllocatedSize = allocatedSize
@@ -553,7 +554,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	for k, t := range changedTables {
 		se.tables[k] = t
 	}
-	se.lastChange = curTime
+	se.lastChange.Store(curTime)
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
 		log.Infof("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped))
 	}

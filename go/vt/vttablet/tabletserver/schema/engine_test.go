@@ -1198,7 +1198,7 @@ func TestEngineReload(t *testing.T) {
 	require.NoError(t, err)
 
 	se.SkipMetaCheck = false
-	se.lastChange = 987654321
+	se.lastChange.Store(987654321)
 
 	// Initial tables in the schema engine
 	se.tables = map[string]*Table{
