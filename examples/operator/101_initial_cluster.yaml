@@ -6,6 +6,7 @@ apiVersion: planetscale.com/v2
 kind: VitessCluster
 metadata:
   name: example
+  namespace: example
 spec:
   backup:
     engine: xtrabackup
@@ -126,6 +127,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: example-cluster-config
+  namespace: example
 type: Opaque
 stringData:
   users.json: |

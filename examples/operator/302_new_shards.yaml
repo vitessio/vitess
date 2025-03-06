@@ -2,6 +2,7 @@ apiVersion: planetscale.com/v2
 kind: VitessCluster
 metadata:
   name: example
+  namespace: example
 spec:
   backup:
     engine: xtrabackup
