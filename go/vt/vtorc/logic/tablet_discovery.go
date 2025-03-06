@@ -31,6 +31,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -53,6 +54,20 @@ var (
 	// We store the key range for all the shards that we want to watch.
 	// This is populated by parsing `--clusters_to_watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
+	statsMu       sync.Mutex
+
+	// tabletsWatchedByCell is a map of the number of tablets watched by cell.
+	tabletsWatchedByCell map[string]int64
+	statsTabletsWatched  = stats.NewGaugesFuncWithMultiLabels(
+		"TabletsWatched",
+		"Number of tablets watched by cell",
+		[]string{"cell"},
+		func() map[string]int64 {
+			statsMu.Lock()
+			defer statsMu.Unlock()
+			return tabletsWatchedByCell
+		},
+	)
 
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
@@ -207,6 +222,7 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 
 	// Update each cell that provided a response. This ensures only cells that provided a
 	// response are updated in the backend and are considered for forgetting stale tablets.
+	newTabletsWatchedByCell := make(map[string]int64)
 	for cell, tablets := range tabletsByCell {
 		// Filter tablets that should not be watched using func shouldWatchTablet.
 		matchedTablets := make([]*topo.TabletInfo, 0, len(tablets))
@@ -222,7 +238,12 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 		query := "select alias from vitess_tablet where cell = ?"
 		args := sqlutils.Args(cell)
 		refreshTablets(matchedTablets, query, args, loader, forceRefresh, nil)
+		newTabletsWatchedByCell[cell] = int64(len(matchedTablets))
 	}
+
+	statsMu.Lock()
+	defer statsMu.Unlock()
+	tabletsWatchedByCell = newTabletsWatchedByCell
 
 	return nil
 }
