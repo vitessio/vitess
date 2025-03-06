@@ -61,8 +61,10 @@ import (
 )
 
 var (
-	normalizeQueries = true
-	streamBufferSize = 32 * 1024
+	normalizeQueries    = true
+	streamBufferSize    = 32 * 1024
+	schemaTrackerHcName = "SchemaTracker"
+	txResolverHcName    = "TxResolver"
 
 	terseErrors      bool
 	truncateErrorLen int
@@ -319,7 +321,7 @@ func Init(
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw)
 	// TxResolver depends on TxConn to complete distributed transaction.
-	tr := txresolver.NewTxResolver(gw.hc.Subscribe(), tc)
+	tr := txresolver.NewTxResolver(gw.hc.Subscribe(txResolverHcName), tc)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
@@ -345,7 +347,7 @@ func Init(
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews, enableUdfs, env.Parser())
+		st = vtschema.NewTracker(gw.hc.Subscribe(schemaTrackerHcName), enableViews, enableUdfs, env.Parser())
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}

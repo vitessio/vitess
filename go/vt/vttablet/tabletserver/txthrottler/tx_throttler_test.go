@@ -67,8 +67,8 @@ func TestEnabledThrottler(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 
 	mockHealthCheck := NewMockHealthCheck(mockCtrl)
-	hcCall1 := mockHealthCheck.EXPECT().Subscribe()
-	hcCall1.Do(func() {})
+	hcCall1 := mockHealthCheck.EXPECT().Subscribe("TxThrottler")
+	hcCall1.Do(func(string) {})
 	hcCall2 := mockHealthCheck.EXPECT().RegisterStats()
 	hcCall2.Do(func() {})
 	hcCall2.After(hcCall1)

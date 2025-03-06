@@ -209,17 +209,17 @@ func (mr *MockHealthCheckMockRecorder) ReplaceTablet(old, new any) *gomock.Call 
 }
 
 // Subscribe mocks base method.
-func (m *MockHealthCheck) Subscribe() chan *discovery.TabletHealth {
+func (m *MockHealthCheck) Subscribe(name string) chan *discovery.TabletHealth {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Subscribe")
+	ret := m.ctrl.Call(m, "Subscribe", name)
 	ret0, _ := ret[0].(chan *discovery.TabletHealth)
 	return ret0
 }
 
 // Subscribe indicates an expected call of Subscribe.
-func (mr *MockHealthCheckMockRecorder) Subscribe() *gomock.Call {
+func (mr *MockHealthCheckMockRecorder) Subscribe(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Subscribe", reflect.TypeOf((*MockHealthCheck)(nil).Subscribe))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Subscribe", reflect.TypeOf((*MockHealthCheck)(nil).Subscribe), name)
 }
 
 // TabletConnection mocks base method.

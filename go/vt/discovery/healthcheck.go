@@ -39,6 +39,8 @@ import (
 	"fmt"
 	"hash/crc32"
 	"net/http"
+	"os"
+	"runtime/pprof"
 	"sort"
 	"strings"
 	"sync"
@@ -241,7 +243,7 @@ type HealthCheck interface {
 	GetTabletHealthByAlias(alias *topodata.TabletAlias) (*TabletHealth, error)
 
 	// Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
-	Subscribe() chan *TabletHealth
+	Subscribe(name string) chan *TabletHealth
 
 	// Unsubscribe removes a listener.
 	Unsubscribe(c chan *TabletHealth)
@@ -296,7 +298,7 @@ type HealthCheckImpl struct {
 	// mutex to protect subscribers
 	subMu sync.Mutex
 	// subscribers
-	subscribers map[chan *TabletHealth]struct{}
+	subscribers map[chan *TabletHealth]string
 	// loadTabletsTrigger is used to immediately load information about tablets of a specific shard.
 	loadTabletsTrigger chan topo.KeyspaceShard
 }
@@ -361,7 +363,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		healthByAlias:      make(map[tabletAliasString]*tabletHealthCheck),
 		healthData:         make(map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
 		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
-		subscribers:        make(map[chan *TabletHealth]struct{}),
+		subscribers:        make(map[chan *TabletHealth]string),
 		cellAliases:        make(map[string]string),
 		loadTabletsTrigger: make(chan topo.KeyspaceShard, 1024),
 	}
@@ -635,11 +637,11 @@ func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 }
 
 // Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
-func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
+func (hc *HealthCheckImpl) Subscribe(subscriber string) chan *TabletHealth {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
 	c := make(chan *TabletHealth, 2048)
-	hc.subscribers[c] = struct{}{}
+	hc.subscribers[c] = subscriber
 	return c
 }
 
@@ -650,16 +652,23 @@ func (hc *HealthCheckImpl) Unsubscribe(c chan *TabletHealth) {
 	delete(hc.subscribers, c)
 }
 
+var printStack = sync.OnceFunc(func() {
+	fmt.Printf("All Goroutines Stack Trace:\n")
+	_ = pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+})
+
 func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
-	for c := range hc.subscribers {
+	for c, subscriber := range hc.subscribers {
 		select {
 		case c <- th:
 		default:
 			// If the channel is full, we drop the message.
 			hcChannelFullCounter.Add(1)
-			log.Warningf("HealthCheck broadcast channel is full, dropping message for %s", topotools.TabletIdent(th.Tablet))
+			log.Warningf("HealthCheck broadcast channel is full for %v, dropping message for %s", subscriber, topotools.TabletIdent(th.Tablet))
+			// Print the stack trace only once.
+			printStack()
 		}
 	}
 }
