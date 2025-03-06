@@ -416,6 +416,7 @@ spec:
                 cluster:
                   type: string
                 concurrencyPolicy:
+                  default: Forbid
                   enum:
                     - Allow
                     - Forbid
@@ -491,8 +492,6 @@ spec:
                         example: commerce
                         type: string
                       name:
-                        enum:
-                          - BackupShard
                         type: string
                       shard:
                         example: '-'
@@ -542,6 +541,11 @@ spec:
                 lastScheduledTime:
                   format: date-time
                   type: string
+                lastScheduledTimes:
+                  additionalProperties:
+                    format: date-time
+                    type: string
+                  type: object
               type: object
           type: object
       served: true
@@ -2028,6 +2032,7 @@ spec:
                               type: string
                             type: object
                           concurrencyPolicy:
+                            default: Forbid
                             enum:
                               - Allow
                               - Forbid
@@ -2099,8 +2104,6 @@ spec:
                                   example: commerce
                                   type: string
                                 name:
-                                  enum:
-                                    - BackupShard
                                   type: string
                                 shard:
                                   example: '-'
