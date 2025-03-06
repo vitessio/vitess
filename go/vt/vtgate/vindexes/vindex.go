@@ -95,12 +95,12 @@ type (
 	// SingleColumn defines the interface for a single column vindex.
 	SingleColumn interface {
 		Vindex
-		// Map can map ids to key.Destination objects.
+		// Map can map ids to key.ShardDestination objects.
 		// If the Vindex is unique, each id would map to either
 		// a KeyRange, or a single KeyspaceID.
 		// If the Vindex is non-unique, each id would map to either
 		// a KeyRange, or a list of KeyspaceID.
-		Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
+		Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error)
 
 		// Verify returns true for every id that successfully maps to the
 		// specified keyspace id.
@@ -110,7 +110,7 @@ type (
 	// MultiColumn defines the interface for a multi-column vindex.
 	MultiColumn interface {
 		Vindex
-		Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error)
+		Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.ShardDestination, error)
 		Verify(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error)
 		// PartialVindex returns true if subset of columns can be passed in to the vindex Map and Verify function.
 		PartialVindex() bool
@@ -134,7 +134,7 @@ type (
 	// instead of a single keyspace id. It's being used to reduce the fan out for
 	// 'BETWEEN' expressions.
 	Sequential interface {
-		RangeMap(ctx context.Context, vcursor VCursor, startId sqltypes.Value, endId sqltypes.Value) ([]key.Destination, error)
+		RangeMap(ctx context.Context, vcursor VCursor, startId sqltypes.Value, endId sqltypes.Value) ([]key.ShardDestination, error)
 	}
 
 	// A Prefixable vindex is one that maps the prefix of a id to a keyspace range
@@ -168,7 +168,7 @@ type (
 	LookupPlanable interface {
 		String() string
 		Query() (selQuery string, arguments []string)
-		MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.Destination, error)
+		MapResult(ids []sqltypes.Value, results []*sqltypes.Result) ([]key.ShardDestination, error)
 		AllowBatch() bool
 		GetCommitOrder() vtgatepb.CommitOrder
 		AutoCommitEnabled() bool
@@ -216,7 +216,7 @@ func CreateVindex(vindexType, name string, params map[string]string) (vindex Vin
 }
 
 // Map invokes the Map implementation supplied by the vindex.
-func Map(ctx context.Context, vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func Map(ctx context.Context, vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.ShardDestination, error) {
 	switch vindex := vindex.(type) {
 	case MultiColumn:
 		return vindex.Map(ctx, vcursor, rowsColValues)

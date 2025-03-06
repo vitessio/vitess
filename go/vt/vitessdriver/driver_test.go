@@ -730,7 +730,7 @@ func TestStreamExec(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	for k, v := range execMap {
+	for k, v := range createExecMap() {
 		t.Run(k, func(t *testing.T) {
 			s, err := db.Prepare(k)
 			require.NoError(t, err)

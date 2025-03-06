@@ -18,6 +18,7 @@ import (
 	discovery "vitess.io/vitess/go/vt/discovery"
 	query "vitess.io/vitess/go/vt/proto/query"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
+	topo "vitess.io/vitess/go/vt/topo"
 	queryservice "vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
@@ -114,10 +115,10 @@ func (mr *MockHealthCheckMockRecorder) GetHealthyTabletStats(target any) *gomock
 }
 
 // GetLoadTabletsTrigger mocks base method.
-func (m *MockHealthCheck) GetLoadTabletsTrigger() chan struct{} {
+func (m *MockHealthCheck) GetLoadTabletsTrigger() chan topo.KeyspaceShard {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetLoadTabletsTrigger")
-	ret0, _ := ret[0].(chan struct{})
+	ret0, _ := ret[0].(chan topo.KeyspaceShard)
 	return ret0
 }
 

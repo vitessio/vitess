@@ -48,7 +48,7 @@ func NewResolver(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string, s
 
 // MessageStream streams messages.
 func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
-	var destination key.Destination
+	var destination key.ShardDestination
 	if shard != "" {
 		// If we pass in a shard, resolve the keyspace/shard
 		// following redirects.

@@ -53,34 +53,20 @@ func prepareStmt(ctx context.Context, vschema plancontext.VSchema, pStmt *sqlpar
 		return nil, err
 	}
 
-	plan, stmt, err := vschema.PlanPrepareStatement(ctx, pQuery)
+	plan, err := vschema.PlanPrepareStatement(ctx, pQuery)
 	if err != nil {
 		return nil, err
 	}
 
-	count := countArguments(stmt)
 	vschema.StorePrepareData(stmtName, &vtgatepb.PrepareData{
-		PrepareStatement: sqlparser.String(stmt),
-		ParamsCount:      count,
+		PrepareStatement: plan.Original,
+		ParamsCount:      int32(plan.ParamsCount),
 	})
 
 	return &planResult{
 		primitive: engine.NewRowsPrimitive(nil, nil),
 		tables:    plan.TablesUsed,
 	}, nil
-}
-
-func countArguments(stmt sqlparser.Statement) (paramsCount int32) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		switch node := node.(type) {
-		case *sqlparser.Argument:
-			if regexParams.MatchString(node.Name) {
-				paramsCount++
-			}
-		}
-		return true, nil
-	}, stmt)
-	return
 }
 
 func fetchUDVValue(vschema plancontext.VSchema, udv string) (string, error) {
@@ -105,7 +91,7 @@ func buildExecuteStmtPlan(ctx context.Context, vschema plancontext.VSchema, eStm
 		return nil, vterrors.VT03025("EXECUTE")
 	}
 
-	plan, _, err := vschema.PlanPrepareStatement(ctx, prepareData.PrepareStatement)
+	plan, err := vschema.PlanPrepareStatement(ctx, prepareData.PrepareStatement)
 	if err != nil {
 		return nil, err
 	}

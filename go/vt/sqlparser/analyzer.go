@@ -57,8 +57,7 @@ const (
 	StmtUnlockTables
 	StmtFlush
 	StmtCallProc
-	StmtRevert
-	StmtShowMigrationLogs
+	StmtMigration
 	StmtCommentOnly
 	StmtPrepare
 	StmtExecute
@@ -83,10 +82,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtShow
 	case DDLStatement, DBDDLStatement, *AlterVschema:
 		return StmtDDL
-	case *RevertMigration:
-		return StmtRevert
-	case *ShowMigrationLogs:
-		return StmtShowMigrationLogs
+	case *AlterMigration, *RevertMigration, *ShowMigrationLogs:
+		return StmtMigration
 	case *Use:
 		return StmtUse
 	case *OtherAdmin, *Load:
@@ -145,12 +142,11 @@ func CanNormalize(stmt Statement) bool {
 
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
-	switch stmt.(type) {
-	case *Select, *Insert, *Update, *Delete, *Union, *Stream:
-		return !checkDirective(stmt, DirectiveSkipQueryPlanCache)
-	default:
+	_, supportSetVar := stmt.(SupportOptimizerHint)
+	if !supportSetVar {
 		return false
 	}
+	return !checkDirective(stmt, DirectiveSkipQueryPlanCache)
 }
 
 // MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
@@ -195,7 +191,7 @@ func Preview(sql string) StatementType {
 	case "vstream":
 		return StmtVStream
 	case "revert":
-		return StmtRevert
+		return StmtMigration
 	case "insert":
 		return StmtInsert
 	case "replace":
@@ -262,8 +258,8 @@ func (s StatementType) String() string {
 		return "STREAM"
 	case StmtVStream:
 		return "VSTREAM"
-	case StmtRevert:
-		return "REVERT"
+	case StmtMigration:
+		return "MIGRATION"
 	case StmtInsert:
 		return "INSERT"
 	case StmtReplace:
@@ -315,7 +311,7 @@ func (s StatementType) String() string {
 	case StmtExecute:
 		return "EXECUTE"
 	case StmtDeallocate:
-		return "DEALLOCATE PREPARE"
+		return "DEALLOCATE_PREPARE"
 	case StmtKill:
 		return "KILL"
 	default:
@@ -425,11 +421,11 @@ func IsSimpleTuple(node Expr) bool {
 	return false
 }
 
-// IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
-func IsLockingFunc(node Expr) bool {
-	switch node.(type) {
-	case *LockingFunc:
+func SupportsOptimizerHint(stmt StatementType) bool {
+	switch stmt {
+	case StmtSelect, StmtInsert, StmtUpdate, StmtDelete, StmtStream, StmtVStream:
 		return true
+	default:
+		return false
 	}
-	return false
 }

@@ -70,7 +70,6 @@ func PlanQuery(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (resu
 		fmt.Println(ToTree(op))
 	}
 
-	op = compact(ctx, op)
 	checkValid(op)
 	op = planQuery(ctx, op)
 

@@ -520,7 +520,23 @@ func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequenc
 	// Sort keys for deterministic output.
 	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
 	slices.Sort(sortedBackingTableNames)
-	dr.drLog.Log(fmt.Sprintf("The following sequence backing tables used by tables being moved will be initialized: %s",
-		strings.Join(sortedBackingTableNames, ",")))
+
+	maxValues, err := dr.ts.getMaxSequenceValues(ctx, sequencesByBackingTable)
+	if err != nil {
+		dr.drLog.Logf("Error getting max sequence values: %v", err)
+		return err
+	}
+	curValues, err := dr.ts.getCurrentSequenceValues(ctx, sequencesByBackingTable)
+	if err != nil {
+		dr.drLog.Logf("Error getting current sequence values: %v", err)
+		return err
+	}
+
+	dr.drLog.Log("The following sequence backing tables used by tables being moved will be initialized:")
+	for _, backingTable := range sortedBackingTableNames {
+		dr.drLog.Logf("\tBacking table: %s, current value %d, new value %d",
+			backingTable, curValues[backingTable], maxValues[backingTable]+1)
+	}
+
 	return nil
 }

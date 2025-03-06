@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -177,10 +179,9 @@ func prepareContextAndFindColumns(t *testing.T, query string) (ctx *PlanningCont
 func createPlanContext(st *semantics.SemTable) *PlanningContext {
 	return &PlanningContext{
 		SemTable:          st,
-		joinPredicates:    map[sqlparser.Expr][]sqlparser.Expr{},
-		skipPredicates:    map[sqlparser.Expr]any{},
 		ReservedArguments: map[sqlparser.Expr]string{},
 		VSchema:           &vschema{},
+		PredTracker:       predicates.NewTracker(),
 	}
 }
 
@@ -191,7 +192,7 @@ func (v *vschema) FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, 
 	panic("implement me")
 }
 
-func (v *vschema) FindTable(tablename sqlparser.TableName) (*vindexes.BaseTable, string, topodatapb.TabletType, key.Destination, error) {
+func (v *vschema) FindTable(tablename sqlparser.TableName) (*vindexes.BaseTable, string, topodatapb.TabletType, key.ShardDestination, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -201,7 +202,7 @@ func (v *vschema) FindView(name sqlparser.TableName) sqlparser.TableStatement {
 	panic("implement me")
 }
 
-func (v *vschema) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+func (v *vschema) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -216,7 +217,7 @@ func (v *vschema) TargetString() string {
 	panic("implement me")
 }
 
-func (v *vschema) Destination() key.Destination {
+func (v *vschema) ShardDestination() key.ShardDestination {
 	// TODO implement me
 	panic("implement me")
 }
@@ -226,7 +227,7 @@ func (v *vschema) TabletType() topodatapb.TabletType {
 	panic("implement me")
 }
 
-func (v *vschema) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
+func (v *vschema) TargetDestination(qualifier string) (key.ShardDestination, *vindexes.Keyspace, topodatapb.TabletType, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -345,7 +346,7 @@ func (v *vschema) GetUDV(name string) *querypb.BindVariable {
 	panic("implement me")
 }
 
-func (v *vschema) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
+func (v *vschema) PlanPrepareStatement(context.Context, string) (*engine.Plan, error) {
 	// TODO implement me
 	panic("implement me")
 }

@@ -127,7 +127,7 @@ func TestResolveDestinations(t *testing.T) {
 		name           string
 		keyspace       string
 		ids            []*querypb.Value
-		destinations   []key.Destination
+		destinations   []key.ShardDestination
 		errString      string
 		expectedShards []string
 		expectedValues [][]*querypb.Value
@@ -135,7 +135,7 @@ func TestResolveDestinations(t *testing.T) {
 		{
 			name:     "unsharded keyspace, regular shard, no ids",
 			keyspace: "uks",
-			destinations: []key.Destination{
+			destinations: []key.ShardDestination{
 				key.DestinationShard("0"),
 			},
 			expectedShards: []string{"0"},
@@ -144,7 +144,7 @@ func TestResolveDestinations(t *testing.T) {
 			name:     "unsharded keyspace, regular shard, with ids",
 			keyspace: "uks",
 			ids:      []*querypb.Value{id1, id2},
-			destinations: []key.Destination{
+			destinations: []key.ShardDestination{
 				key.DestinationShard("0"),
 				key.DestinationShard("0"),
 			},
@@ -157,7 +157,7 @@ func TestResolveDestinations(t *testing.T) {
 			name:     "sharded keyspace, keyrange destinations, with ids",
 			keyspace: "sks",
 			ids:      []*querypb.Value{id1, id2},
-			destinations: []key.Destination{
+			destinations: []key.ShardDestination{
 				key.DestinationExactKeyRange{KeyRange: kr2040},
 				key.DestinationExactKeyRange{KeyRange: kr80a0},
 			},
@@ -171,7 +171,7 @@ func TestResolveDestinations(t *testing.T) {
 			name:     "sharded keyspace, keyspace id destinations, with ids",
 			keyspace: "sks",
 			ids:      []*querypb.Value{id1, id2},
-			destinations: []key.Destination{
+			destinations: []key.ShardDestination{
 				key.DestinationKeyspaceID{0x28},
 				key.DestinationKeyspaceID{0x78, 0x23},
 			},
@@ -185,7 +185,7 @@ func TestResolveDestinations(t *testing.T) {
 			name:     "sharded keyspace, multi keyspace id destinations, with ids",
 			keyspace: "sks",
 			ids:      []*querypb.Value{id1, id2},
-			destinations: []key.Destination{
+			destinations: []key.ShardDestination{
 				key.DestinationKeyspaceIDs{
 					{0x28},
 					{0x47},
@@ -205,7 +205,7 @@ func TestResolveDestinations(t *testing.T) {
 		{
 			name:     "using non-mapping keyranges should fail",
 			keyspace: "sks",
-			destinations: []key.Destination{
+			destinations: []key.ShardDestination{
 				key.DestinationExactKeyRange{
 					KeyRange: kr2830,
 				},
