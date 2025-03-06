@@ -467,7 +467,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	defer db.Close()
 	schematest.AddDefaultQueries(db)
 	want := "injected error"
-	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf(want))
+	db.AddRejectedQuery(mysql.BaseShowTables, errors.New(want))
 	se := newEngine(1*time.Second, 1*time.Second, 0, db)
 	err := se.Open()
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -1198,7 +1198,7 @@ func TestEngineReload(t *testing.T) {
 	require.NoError(t, err)
 
 	se.SkipMetaCheck = false
-	se.lastChange = 987654321
+	se.lastChange.Store(987654321)
 
 	// Initial tables in the schema engine
 	se.tables = map[string]*Table{
