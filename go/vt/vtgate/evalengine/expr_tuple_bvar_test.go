@@ -50,7 +50,7 @@ func TestTupleBindVarEval(t *testing.T) {
 	}, {
 		tName:  "bind variable provided - wrong type",
 		bv:     sqltypes.Int64BindVariable(1),
-		expErr: "query argument 'vals' must be a tuple (is INT64)",
+		expErr: "query argument 'vals' must be a tuple or row tuple (is INT64)",
 	}, {
 		tName: "bind variable provided",
 		bv: &querypb.BindVariable{
