@@ -7698,8 +7698,7 @@ spec:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: vitess-operator
-          image: docker.io/planetscale/vitess-operator:latest
-          imagePullPolicy: Never
+          image: planetscale/vitess-operator:latest
           name: vitess-operator
           resources:
             limits:
