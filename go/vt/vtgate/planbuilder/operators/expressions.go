@@ -140,7 +140,7 @@ func breakValuesJoinExpressionInLHS(ctx *plancontext.PlanningContext,
 	result.RHS = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
 		node := cursor.Node()
 		col, ok := node.(*sqlparser.ColName)
-		if !ok || ctx.SemTable.RecursiveDeps(col) != lhs {
+		if !ok || !ctx.SemTable.RecursiveDeps(col).IsSolvedBy(lhs) {
 			// we are only interested in ColNames from the LHS
 			pureLHS = false
 			return true
