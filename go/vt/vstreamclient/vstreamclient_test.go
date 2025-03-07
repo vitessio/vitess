@@ -184,7 +184,7 @@ func (customer *CustomerWithScan) VStreamScan(fields []*querypb.Field, row []sql
 			}
 
 		case "created_at":
-			customer.CreatedAt, err = row[i].ToTime()
+			customer.CreatedAt, err = row[i].ToTime(time.UTC)
 		}
 		if err != nil {
 			return fmt.Errorf("error processing field %s: %w", fields[i].Name, err)
