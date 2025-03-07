@@ -48,7 +48,7 @@ func TestNewVReplicationConfig(t *testing.T) {
 				"vreplication_heartbeat_update_interval":  "2",
 				"vreplication_store_compressed_gtid":      "true",
 				"vreplication-parallel-insert-workers":    "4",
-				"vstream-packet_-ize":                     "1024",
+				"vstream-packet-size":                     "1024",
 				"vstream_packet_size":                     "1024",
 				"vstream-dynamic-packet-size":             "false",
 				"vstream_dynamic_packet_size":             "false",
