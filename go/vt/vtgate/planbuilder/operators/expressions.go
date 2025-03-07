@@ -22,9 +22,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// breakExpressionInLHSandRHS takes an expression and
+// breakApplyJoinExpressionInLHSandRHS takes an expression and
 // extracts the parts that are coming from one of the sides into `ColName`s that are needed
-func breakExpressionInLHSandRHS(
+func breakApplyJoinExpressionInLHSandRHS(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
@@ -128,4 +128,34 @@ func getFirstSelect(selStmt sqlparser.TableStatement) *sqlparser.Select {
 		panic(err)
 	}
 	return firstSelect
+}
+
+func breakValuesJoinExpressionInLHS(ctx *plancontext.PlanningContext,
+	expr sqlparser.Expr,
+	lhs semantics.TableSet,
+	valuesName string,
+) (result valuesJoinColumn, pureLHS bool) {
+	result.Original = sqlparser.Clone(expr)
+	pureLHS = true
+	result.RHS = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+		node := cursor.Node()
+		col, ok := node.(*sqlparser.ColName)
+		if !ok || !ctx.SemTable.RecursiveDeps(col).IsSolvedBy(lhs) {
+			// we are only interested in ColNames from the LHS
+			pureLHS = false
+			return true
+		}
+
+		colName := getValuesJoinColName(ctx, valuesName, lhs, col)
+		qualifier := sqlparser.NewTableName(valuesName)
+		rhsExpr := sqlparser.NewColNameWithQualifier(colName, qualifier)
+		result.LHS = append(result.LHS, leftHandSideExpression{
+			Original:         col,
+			RightHandVersion: rhsExpr,
+		})
+		ctx.SemTable.CopyExprInfo(col, rhsExpr)
+		cursor.Replace(rhsExpr)
+		return true
+	}, nil).(sqlparser.Expr)
+	return
 }

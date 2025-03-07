@@ -973,7 +973,7 @@ func printBindVars(bindvars map[string]*querypb.BindVariable) string {
 			fmt.Fprintf(buf, " ")
 		}
 
-		if bindvars[k].Type == querypb.Type_TUPLE {
+		if bindvars[k].Type == querypb.Type_ROW_TUPLE {
 			fmt.Fprintf(buf, "%s: [", k)
 			for _, val := range bindvars[k].Values {
 				if val.Type != querypb.Type_TUPLE {

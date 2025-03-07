@@ -34,6 +34,7 @@ type (
 const (
 	physicalTransform Phase = iota
 	initialPlanning
+	rewriteApplyJoin
 	pullDistinctFromUnion
 	delegateAggregation
 	recursiveCTEHorizons
@@ -50,6 +51,8 @@ func (p Phase) String() string {
 		return "physicalTransform"
 	case initialPlanning:
 		return "initial horizon planning optimization"
+	case rewriteApplyJoin:
+		return "rewrite ApplyJoin to ValuesJoin"
 	case pullDistinctFromUnion:
 		return "pull distinct from UNION"
 	case delegateAggregation:
@@ -69,8 +72,11 @@ func (p Phase) String() string {
 	}
 }
 
-func (p Phase) shouldRun(s semantics.QuerySignature) bool {
+func (p Phase) shouldRun(ctx *plancontext.PlanningContext) bool {
+	s := ctx.SemTable.QuerySignature
 	switch p {
+	case rewriteApplyJoin:
+		return true
 	case pullDistinctFromUnion:
 		return s.Union
 	case delegateAggregation:
@@ -85,6 +91,7 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 		return s.SubQueries
 	case dmlWithInput:
 		return s.DML
+
 	default:
 		return true
 	}
@@ -106,8 +113,70 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 		return settleSubqueries(ctx, op)
 	case dmlWithInput:
 		return findDMLAboveRoute(ctx, op)
+	case rewriteApplyJoin:
+		return rewriteApplyToValues(ctx, op)
+
 	default:
 		return op
+	}
+}
+
+// rewriteApplyToValues rewrites ApplyJoin to ValuesJoin.
+func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operator {
+	done := false
+	// Traverse the operator tree to convert ApplyJoin to ValuesJoin.
+	// Then add a Values node to the RHS of the new ValuesJoin,
+	// and usually a filter containing the join predicates is placed there.
+	visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+		if done {
+			return op, NoRewrite
+		}
+		aj, ok := op.(*ApplyJoin)
+		if !ok {
+			return op, NoRewrite
+		}
+
+		vj := newValuesJoin(ctx, aj.LHS, aj.RHS, aj.JoinType)
+		if vj == nil {
+			return op, NoRewrite
+		}
+
+		for _, column := range aj.JoinColumns.columns {
+			vj.AddColumn(ctx, true, false, aeWrap(column.Original))
+		}
+
+		for _, pred := range aj.JoinPredicates.columns {
+			if pred.JoinPredicateID == nil {
+				panic(vterrors.VT13001("missing join predicate ID"))
+			}
+			jc := vj.addJoinPredicate(ctx, pred.Original, false)
+			ctx.PredTracker.Set(*pred.JoinPredicateID, jc.RHS)
+		}
+		done = true
+		return vj, Rewrote("rewrote ApplyJoin to ValuesJoin")
+	}
+
+	return TopDown(op, TableID, visit, stopAtRoute)
+}
+
+const valuesName = "values"
+
+func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) *ValuesJoin {
+	if !joinType.IsInner() {
+		return nil
+	}
+
+	valuesTableID := TableID(lhs)
+	valuesDestination := ctx.ReservedVars.ReserveVariable(valuesName)
+	ctx.AddValueJoinTable(valuesTableID, valuesDestination)
+	v := &Values{
+		unaryOperator: newUnaryOp(rhs),
+		Name:          valuesDestination,
+		TableID:       valuesTableID,
+	}
+	return &ValuesJoin{
+		binaryOperator:    newBinaryOp(lhs, v),
+		ValuesDestination: valuesDestination,
 	}
 }
 
@@ -124,7 +193,7 @@ func (p *phaser) next(ctx *plancontext.PlanningContext) Phase {
 
 		p.current++
 
-		if curr.shouldRun(ctx.SemTable.QuerySignature) {
+		if curr.shouldRun(ctx) {
 			return curr
 		}
 	}

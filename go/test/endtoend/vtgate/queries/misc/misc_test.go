@@ -19,6 +19,7 @@ package misc
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -34,7 +35,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
+func start(t testing.TB) (utils.MySQLCompare, func()) {
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
@@ -50,6 +51,96 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	return mcmp, func() {
 		deleteAll()
 		mcmp.Close()
+	}
+}
+
+func BenchmarkValuesJoin(b *testing.B) {
+	mcmp, closer := start(b)
+	defer closer()
+
+	type Rep struct {
+		QueriesRouted map[string]int `json:"QueriesRouted"`
+	}
+
+	getQueriesRouted := func(thisB *testing.B) int {
+		_, response, _ := clusterInstance.VtgateProcess.MakeAPICall("/debug/vars")
+		r := Rep{}
+		err := json.Unmarshal([]byte(response), &r)
+		require.NoError(thisB, err)
+
+		var res int
+		for _, c := range r.QueriesRouted {
+			res += c
+		}
+		return res
+	}
+
+	b.ReportAllocs()
+
+	lhsRowCount := 0
+	rhsRowCount := 0
+
+	insertLHS := func(count int) {
+		for ; lhsRowCount < count; lhsRowCount++ {
+			mcmp.Exec(fmt.Sprintf("insert into t1(id1, id2) values (%d, %d)", lhsRowCount, lhsRowCount))
+		}
+	}
+	insertRHS := func(count int) {
+		for ; rhsRowCount < count; rhsRowCount++ {
+			mcmp.Exec(fmt.Sprintf("insert into tbl(id, unq_col, nonunq_col) values (%d, %d, %d)", rhsRowCount, rhsRowCount, rhsRowCount))
+		}
+	}
+
+	testCases := []struct {
+		lhsRowCount int
+		rhsRowCount int
+	}{
+		{
+			lhsRowCount: 20,
+			rhsRowCount: 10,
+		},
+		{
+			lhsRowCount: 50,
+			rhsRowCount: 25,
+		},
+		{
+			lhsRowCount: 100,
+			rhsRowCount: 50,
+		},
+		{
+			lhsRowCount: 200,
+			rhsRowCount: 100,
+		},
+		{
+			lhsRowCount: 500,
+			rhsRowCount: 250,
+		},
+		{
+			lhsRowCount: 1000,
+			rhsRowCount: 500,
+		},
+		{
+			lhsRowCount: 2000,
+			rhsRowCount: 1000,
+		},
+	}
+
+	var previousQueriesRoutedSum int
+	for _, testCase := range testCases {
+		insertLHS(testCase.lhsRowCount)
+		insertRHS(testCase.rhsRowCount)
+
+		b.Run(fmt.Sprintf("LHS(%d) RHS(%d)", testCase.lhsRowCount, testCase.rhsRowCount), func(b *testing.B) {
+			for range b.N {
+				mcmp.Exec("select t1.id1, tbl.id from t1, tbl where t1.id2 = tbl.nonunq_col")
+			}
+			b.StopTimer()
+
+			totalQueriesRouted := getQueriesRouted(b)
+			queriesRouted := totalQueriesRouted - previousQueriesRoutedSum
+			previousQueriesRoutedSum = totalQueriesRouted
+			b.ReportMetric(float64(queriesRouted/b.N), "queries_routed/op")
+		})
 	}
 }
 
