@@ -17,38 +17,14 @@ limitations under the License.
 package inst
 
 import (
-	"context"
-	"errors"
-
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
-
-// ErrTabletAliasNil is a fixed error message.
-var ErrTabletAliasNil = errors.New("tablet alias is nil")
-var tmc tmclient.TabletManagerClient
-
-// InitializeTMC initializes the tablet manager client to use for all VTOrc RPC calls.
-func InitializeTMC() tmclient.TabletManagerClient {
-	tmc = tmclient.NewTabletManagerClient()
-	return tmc
-}
-
-// fullStatus gets the full status of the MySQL running in vttablet.
-func fullStatus(tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
-	tmcCtx, tmcCancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-	defer tmcCancel()
-	return tmc.FullStatus(tmcCtx, tablet)
-}
 
 // ReadTablet reads the vitess tablet record.
 func ReadTablet(tabletAlias string) (*topodatapb.Tablet, error) {
@@ -112,5 +88,12 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 		protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(),
 		tabletp,
 	)
+	return err
+}
+
+// DeleteAllTablets deletes all rows in the vitess_tablet table,
+// clearing the local cache.
+func DeleteAllTablets() error {
+	_, err := db.ExecVTOrc("DELETE FROM vitess_tablet")
 	return err
 }
