@@ -222,9 +222,6 @@ service VTAdmin {
     rpc ValidateVersionShard(ValidateVersionShardRequest) returns (vtctldata.ValidateVersionShardResponse) {};
     rpc VDiffCreate(VDiffCreateRequest) returns (vtctldata.VDiffCreateResponse) {};
     rpc VDiffShow(VDiffShowRequest) returns (VDiffShowResponse) {};
-    // VTExplain provides information on how Vitess plans to execute a
-    // particular query.
-    rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
     // VExplain provides information on how Vitess plans to execute a
     // particular query.
     rpc VExplain(VExplainRequest) returns (VExplainResponse) {};
@@ -1089,16 +1086,6 @@ message VDiffShardReport {
 
 message VDiffShowResponse {
     map<string, VDiffShardReport> shard_report = 1;
-}
-
-message VTExplainRequest {
-    string cluster = 1;
-    string keyspace = 2;
-    string sql = 3;
-}
-
-message VTExplainResponse {
-    string response = 1;
 }
 
 message VExplainRequest {
