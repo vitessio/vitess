@@ -35,6 +35,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
+// TestReconcileExtraRows tests reconcileExtraRows() by providing different types of source and target slices and validating
+// that the matching rows are correctly identified and removed.
 func TestReconcileExtraRows(t *testing.T) {
 	vdenv := newTestVDiffEnv(t)
 	defer vdenv.close()
@@ -72,6 +74,7 @@ func TestReconcileExtraRows(t *testing.T) {
 		wantMatchingCount   int64
 		wantMismatchedCount int64
 	}
+
 	testCases := []testCase{
 		{
 			name: "no extra rows, same order",
@@ -103,15 +106,15 @@ func TestReconcileExtraRows(t *testing.T) {
 			name: "extra rows, same count of extras on both",
 			extraDiffsSource: []*RowDiff{
 				{Row: map[string]string{"1": "c1"}},
-				{Row: map[string]string{"2": "c2"}},
 				{Row: map[string]string{"3a": "c3a"}},
+				{Row: map[string]string{"2": "c2"}},
 				{Row: map[string]string{"3b": "c3b"}},
 			},
 			extraDiffsTarget: []*RowDiff{
 				{Row: map[string]string{"2": "c2"}},
 				{Row: map[string]string{"4a": "c4a"}},
-				{Row: map[string]string{"1": "c1"}},
 				{Row: map[string]string{"4b": "c4b"}},
+				{Row: map[string]string{"1": "c1"}},
 			},
 			wantExtraSource: []*RowDiff{
 				{Row: map[string]string{"3a": "c3a"}},

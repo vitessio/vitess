@@ -61,8 +61,6 @@ func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions) (
 // reconcileExtraRows compares the extra rows in the source and target tables. If there are any matching rows, they are
 // removed from the extra rows. The number of extra rows to compare is limited by vdiff option maxExtraRowsToCompare.
 func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64) {
-	log.Infof("Reconciling extra rows for table %s in vdiff %s, extra source rows %d, extra target rows %d",
-		dr.TableName, wd.ct.uuid, dr.ExtraRowsSource, dr.ExtraRowsTarget)
 	if dr.ExtraRowsSource == 0 || dr.ExtraRowsTarget == 0 {
 		return
 	}
@@ -74,11 +72,14 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 	if maxRows > int(maxExtraRowsToCompare) {
 		maxRows = int(maxExtraRowsToCompare)
 	}
+	log.Infof("Reconciling extra rows for table %s in vdiff %s, extra source rows %d, extra target rows %d, max rows %d",
+		dr.TableName, wd.ct.uuid, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows)
 
 	// Find the matching extra rows
 	for i := 0; i < maxRows; i++ {
-		for j := 0; j < len(dr.ExtraRowsTargetDiffs); j++ {
+		for j := 0; j < int(dr.ExtraRowsTarget); j++ {
 			if matchedTargetDiffs[j] {
+				// previously matched
 				continue
 			}
 			if reflect.DeepEqual(dr.ExtraRowsSourceDiffs[i], dr.ExtraRowsTargetDiffs[j]) {
@@ -89,11 +90,15 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 			}
 		}
 	}
-	if matchedDiffs != 0 {
+
+	if matchedDiffs == 0 {
+		log.Infof("No matching extra rows found for table %s in vdiff %s, checked %d rows",
+			dr.TableName, maxRows, wd.ct.uuid)
+	} else {
 		// Now remove the matching extra rows
 		newExtraRowsSourceDiffs := make([]*RowDiff, 0, dr.ExtraRowsSource-matchedDiffs)
 		newExtraRowsTargetDiffs := make([]*RowDiff, 0, dr.ExtraRowsTarget-matchedDiffs)
-		for i := 0; i < len(dr.ExtraRowsSourceDiffs); i++ {
+		for i := 0; i < int(dr.ExtraRowsSource); i++ {
 			if !matchedSourceDiffs[i] {
 				newExtraRowsSourceDiffs = append(newExtraRowsSourceDiffs, dr.ExtraRowsSourceDiffs[i])
 			}
@@ -101,7 +106,7 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 				break
 			}
 		}
-		for i := 0; i < len(dr.ExtraRowsTargetDiffs); i++ {
+		for i := 0; i < int(dr.ExtraRowsTarget); i++ {
 			if !matchedTargetDiffs[i] {
 				newExtraRowsTargetDiffs = append(newExtraRowsTargetDiffs, dr.ExtraRowsTargetDiffs[i])
 			}
@@ -120,13 +125,10 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 		dr.ProcessedRows += matchedDiffs
 		log.Infof("Reconciled extra rows for table %s in vdiff %s, matching rows %d, extra source rows %d, extra target rows %d. Max compared rows %d",
 			dr.TableName, wd.ct.uuid, matchedDiffs, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows)
-	} else {
-		log.Infof("No matching extra rows found for table %s in vdiff %s, checked %d rows",
-			dr.TableName, maxRows, wd.ct.uuid)
 	}
 
 	// Trim the extra rows diffs to the maxVDiffReportSampleRows value. Note we need to do this after updating
-	// the counts above, since maxExtraRowsToCompare can be greater than maxVDiffReportSampleRows.
+	// the slices and counts above, since maxExtraRowsToCompare can be greater than maxVDiffReportSampleRows.
 	if len(dr.ExtraRowsSourceDiffs) > maxVDiffReportSampleRows {
 		log.Infof("Trimming extra source rows for table %s in vdiff %s to %d rows",
 			dr.TableName, wd.ct.uuid, maxVDiffReportSampleRows)
