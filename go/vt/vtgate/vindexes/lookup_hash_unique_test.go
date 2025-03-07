@@ -97,7 +97,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 
 	got, err := lhu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x16k@\xb4J\xbaK\xd6")),
 		key.DestinationNone{},
 	}
@@ -108,7 +108,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	vc.numRows = 0
 	got, err = lhu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want = []key.Destination{
+	want = []key.ShardDestination{
 		key.DestinationNone{},
 		key.DestinationNone{},
 	}
@@ -130,7 +130,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	)
 	got, err = lhu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
-	want = []key.Destination{
+	want = []key.ShardDestination{
 		key.DestinationNone{},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -153,7 +153,7 @@ func TestLookupHashUniqueMapWriteOnly(t *testing.T) {
 
 	got, err := lhu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
 		},

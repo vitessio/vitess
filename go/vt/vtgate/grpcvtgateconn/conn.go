@@ -107,7 +107,13 @@ func DialWithOpts(_ context.Context, opts ...grpc.DialOption) vtgateconn.DialerF
 	return Dial(opts...)
 }
 
-func (conn *vtgateConn) Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (conn *vtgateConn) Execute(
+	ctx context.Context,
+	session *vtgatepb.Session,
+	query string,
+	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
 	request := &vtgatepb.ExecuteRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Session:  session,
@@ -115,6 +121,7 @@ func (conn *vtgateConn) Execute(ctx context.Context, session *vtgatepb.Session, 
 			Sql:           query,
 			BindVariables: bindVars,
 		},
+		Prepared: prepared,
 	}
 	response, err := conn.c.Execute(ctx, request)
 	if err != nil {
@@ -200,23 +207,22 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, session *vtgatepb.Ses
 	}, nil
 }
 
-func (conn *vtgateConn) Prepare(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+func (conn *vtgateConn) Prepare(ctx context.Context, session *vtgatepb.Session, query string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
 	request := &vtgatepb.PrepareRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		Session:  session,
 		Query: &querypb.BoundQuery{
-			Sql:           query,
-			BindVariables: bindVars,
+			Sql: query,
 		},
 	}
 	response, err := conn.c.Prepare(ctx, request)
 	if err != nil {
-		return session, nil, vterrors.FromGRPC(err)
+		return session, nil, 0, vterrors.FromGRPC(err)
 	}
 	if response.Error != nil {
-		return response.Session, nil, vterrors.FromVTRPC(response.Error)
+		return response.Session, nil, 0, vterrors.FromVTRPC(response.Error)
 	}
-	return response.Session, response.Fields, nil
+	return response.Session, response.Fields, uint16(response.ParamsCount), nil
 }
 
 func (conn *vtgateConn) CloseSession(ctx context.Context, session *vtgatepb.Session) error {

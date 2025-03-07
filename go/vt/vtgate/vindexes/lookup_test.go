@@ -383,7 +383,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 
 	got, err := lnu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceIDs([][]byte{
 			[]byte("1"),
 			[]byte("2"),
@@ -425,7 +425,7 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 
 	got, err := lnu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceIDs([][]byte{
 			[]byte("1"),
 			[]byte("2"),
@@ -455,7 +455,7 @@ func TestLookupNonUniqueMapWriteOnly(t *testing.T) {
 
 	got, err := lnu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
 		},
@@ -472,7 +472,7 @@ func TestLookupNonUniqueMapAbsent(t *testing.T) {
 
 	got, err := lnu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationNone{},
 		key.DestinationNone{},
 	}
@@ -774,7 +774,7 @@ func TestLookupMapResult(t *testing.T) {
 
 	got, err := lookup.(LookupPlanable).MapResult(ids, results)
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceIDs([][]byte{
 			[]byte("1"),
 			[]byte("3"),
@@ -798,7 +798,7 @@ func TestLookupUniqueMapResult(t *testing.T) {
 
 	got, err := lookup.(LookupPlanable).MapResult(ids, results)
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceID("1"),
 	}
 	utils.MustMatch(t, want, got)

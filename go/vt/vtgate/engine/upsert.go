@@ -22,7 +22,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -33,6 +32,8 @@ var _ Primitive = (*Upsert)(nil)
 // if there is `Duplicate Key` error, it executes the update primitive.
 type Upsert struct {
 	txNeeded
+	noFields
+
 	Upserts []upsert
 }
 
@@ -68,11 +69,6 @@ func (u *Upsert) GetTableName() string {
 		return u.Upserts[0].Insert.GetTableName()
 	}
 	return ""
-}
-
-// GetFields implements Primitive interface type.
-func (u *Upsert) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.VT13001("unexpected to receive GetFields call for insert on duplicate key update query")
 }
 
 // TryExecute implements Primitive interface type.
@@ -131,7 +127,6 @@ func (u *Upsert) Inputs() ([]Primitive, []map[string]any) {
 
 func (u *Upsert) description() PrimitiveDescription {
 	return PrimitiveDescription{
-		OperatorType:     "Upsert",
-		TargetTabletType: topodatapb.TabletType_PRIMARY,
+		OperatorType: "Upsert",
 	}
 }

@@ -47,7 +47,7 @@ var (
 )
 
 const (
-	cores16RunnerName = "gh-hosted-runners-16cores-1-24.04"
+	cores16RunnerName = "oracle-16cpu-64gb-x86-64"
 	defaultRunnerName = "ubuntu-24.04"
 )
 

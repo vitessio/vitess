@@ -27,8 +27,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/protoutil"
@@ -648,47 +646,20 @@ func (ts *Server) GetTabletsByShardCell(ctx context.Context, keyspace, shard str
 	defer span.Finish()
 	var err error
 
-	if len(cells) == 0 {
-		cells, err = ts.GetCellInfoNames(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if len(cells) == 0 { // Nothing to do
-			return nil, nil
-		}
+	// if we get a partial result, we keep going. It most likely means
+	// a cell is out of commission.
+	aliases, err := ts.FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, cells)
+	if err != nil && !IsErrType(err, PartialResult) {
+		return nil, err
 	}
 
-	mu := sync.Mutex{}
-	eg, ctx := errgroup.WithContext(ctx)
-
-	tablets := make([]*TabletInfo, 0, len(cells))
-	var kss *KeyspaceShard
-	if keyspace != "" {
-		kss = &KeyspaceShard{
-			Keyspace: keyspace,
-			Shard:    shard,
-		}
+	// get the tablets for the cells we were able to reach, forward
+	// ErrPartialResult from FindAllTabletAliasesInShard
+	result, gerr := ts.GetTabletList(ctx, aliases, nil)
+	if gerr == nil && err != nil {
+		gerr = err
 	}
-	options := &GetTabletsByCellOptions{
-		KeyspaceShard: kss,
-	}
-	for _, cell := range cells {
-		eg.Go(func() error {
-			t, err := ts.GetTabletsByCell(ctx, cell, options)
-			if err != nil {
-				return vterrors.Wrapf(err, "GetTabletsByCell for %v failed.", cell)
-			}
-			mu.Lock()
-			defer mu.Unlock()
-			tablets = append(tablets, t...)
-			return nil
-		})
-	}
-	if err := eg.Wait(); err != nil {
-		log.Warningf("GetTabletsByShardCell(%v,%v): got partial result: %v", keyspace, shard, err)
-		return tablets, NewError(PartialResult, shard)
-	}
-	return tablets, nil
+	return result, gerr
 }
 
 // GetTabletMapForShard returns the tablets for a shard. It can return

@@ -3,6 +3,13 @@ kind: VitessCluster
 metadata:
   name: example
 spec:
+  backup:
+    engine: xtrabackup
+    locations:
+      - volume:
+          hostPath:
+            path: /tmp
+            type: Directory
   images:
     vtctld: vitess/lite:latest
     vtadmin: vitess/vtadmin:latest

@@ -317,7 +317,7 @@ func newTestThrottler() *Throttler {
 		}
 		return selfMetrics
 	}
-	throttler.ThrottleApp(throttlerapp.TestingAlwaysThrottlerName.String(), time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
+	throttler.ThrottleApp(throttlerapp.TestingAlwaysThrottledName.String(), time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
 
 	return throttler
 }

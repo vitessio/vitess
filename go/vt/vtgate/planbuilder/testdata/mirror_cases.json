@@ -262,7 +262,6 @@
           "Name": "unsharded_src1",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into t1(id) values (1)",
         "TableName": "t1"
       },
@@ -285,7 +284,6 @@
           "Name": "unsharded_src1",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update t1 set `data` = 'a' where id = 1",
         "Table": "t1"
       },
@@ -308,7 +306,6 @@
           "Name": "unsharded_src1",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from t1 where id = 1",
         "Table": "t1"
       },

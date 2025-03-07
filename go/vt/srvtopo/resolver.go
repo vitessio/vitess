@@ -168,7 +168,7 @@ func (r *Resolver) GetAllKeyspaces(ctx context.Context) ([]string, error) {
 // If dst1 is in shard1, and dst2 and dst3 are in shard2, the output will be:
 // - []*ResolvedShard:   shard1, 			shard2
 // - [][][]sqltypes.Value: [[id1a,id1b]],  [[id2a,id2b], [id3a,id3b]]
-func (r *Resolver) ResolveDestinationsMultiCol(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ids [][]sqltypes.Value, destinations []key.Destination) ([]*ResolvedShard, [][][]sqltypes.Value, error) {
+func (r *Resolver) ResolveDestinationsMultiCol(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ids [][]sqltypes.Value, destinations []key.ShardDestination) ([]*ResolvedShard, [][][]sqltypes.Value, error) {
 	keyspace, _, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
 	if err != nil {
 		return nil, nil, err
@@ -245,7 +245,7 @@ func (acc *resultAcc) resolveShard(idx int) func(shard string) error {
 // If dst1 is in shard1, and dst2 and dst3 are in shard2, the output will be:
 // - []*ResolvedShard:   shard1, shard2
 // - [][]*querypb.Value: [id1],  [id2, id3]
-func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ids []*querypb.Value, destinations []key.Destination) ([]*ResolvedShard, [][]*querypb.Value, error) {
+func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, ids []*querypb.Value, destinations []key.ShardDestination) ([]*ResolvedShard, [][]*querypb.Value, error) {
 	keyspace, _, allShards, err := r.GetKeyspaceShards(ctx, keyspace, tabletType)
 	if err != nil {
 		return nil, nil, err
@@ -290,9 +290,9 @@ func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tab
 }
 
 // ResolveDestination is a shortcut to ResolveDestinations with only
-// one Destination, and no ids.
-func (r *Resolver) ResolveDestination(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, destination key.Destination) ([]*ResolvedShard, error) {
-	rss, _, err := r.ResolveDestinations(ctx, keyspace, tabletType, nil, []key.Destination{destination})
+// one ShardDestination, and no ids.
+func (r *Resolver) ResolveDestination(ctx context.Context, keyspace string, tabletType topodatapb.TabletType, destination key.ShardDestination) ([]*ResolvedShard, error) {
+	rss, _, err := r.ResolveDestinations(ctx, keyspace, tabletType, nil, []key.ShardDestination{destination})
 	return rss, err
 }
 

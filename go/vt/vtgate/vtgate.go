@@ -61,8 +61,10 @@ import (
 )
 
 var (
-	normalizeQueries = true
-	streamBufferSize = 32 * 1024
+	normalizeQueries    = true
+	streamBufferSize    = 32 * 1024
+	schemaTrackerHcName = "SchemaTracker"
+	txResolverHcName    = "TxResolver"
 
 	terseErrors      bool
 	truncateErrorLen int
@@ -319,7 +321,7 @@ func Init(
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw)
 	// TxResolver depends on TxConn to complete distributed transaction.
-	tr := txresolver.NewTxResolver(gw.hc.Subscribe(), tc)
+	tr := txresolver.NewTxResolver(gw.hc.Subscribe(txResolverHcName), tc)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
@@ -345,7 +347,7 @@ func Init(
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews, enableUdfs, env.Parser())
+		st = vtschema.NewTracker(gw.hc.Subscribe(schemaTrackerHcName), enableViews, enableUdfs, env.Parser())
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
@@ -488,7 +490,14 @@ func (vtg *VTGate) Gateway() *TabletGateway {
 }
 
 // Execute executes a non-streaming query.
-func (vtg *VTGate) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
+func (vtg *VTGate) Execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
@@ -498,7 +507,7 @@ func (vtg *VTGate) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
 		safeSession := econtext.NewSafeSession(session)
-		qr, err = vtg.executor.Execute(ctx, mysqlCtx, "Execute", safeSession, sql, bindVariables)
+		qr, err = vtg.executor.Execute(ctx, mysqlCtx, "Execute", safeSession, sql, bindVariables, prepared)
 		safeSession.RemoveInternalSavepoint()
 	}
 	if err == nil {
@@ -536,7 +545,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 		if len(bindVariablesList) != 0 {
 			bv = bindVariablesList[i]
 		}
-		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, nil, session, sql, bv)
+		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, nil, session, sql, bv, false)
 		if qr := qrl[i].QueryResult; qr != nil {
 			vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 			vtg.rowsAffected.Add(statsKey, int64(qr.RowsAffected))
@@ -592,30 +601,23 @@ func (vtg *VTGate) CloseSession(ctx context.Context, session *vtgatepb.Session) 
 }
 
 // Prepare supports non-streaming prepare statement query with multi shards
-func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
+func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (newSession *vtgatepb.Session, fld []*querypb.Field, paramsCount uint16, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Prepare", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
-	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
-		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
-		goto handleError
-	}
-
-	fld, err = vtg.executor.Prepare(ctx, "Prepare", econtext.NewSafeSession(session), sql, bindVariables)
+	fld, paramsCount, err = vtg.executor.Prepare(ctx, "Prepare", econtext.NewSafeSession(session), sql)
 	if err == nil {
-		return session, fld, nil
+		return session, fld, paramsCount, nil
 	}
 
-handleError:
 	query := map[string]any{
-		"Sql":           sql,
-		"BindVariables": bindVariables,
-		"Session":       session,
+		"Sql":     sql,
+		"Session": session,
 	}
 	err = recordAndAnnotateError(err, statsKey, query, vtg.logPrepare, vtg.executor.vm.parser)
-	return session, nil, err
+	return session, nil, 0, err
 }
 
 // VStream streams binlog events.

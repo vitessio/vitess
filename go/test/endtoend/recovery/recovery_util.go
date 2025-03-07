@@ -45,7 +45,7 @@ var (
 
 // VerifyQueriesUsingVtgate verifies queries using vtgate.
 func VerifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string, value string) {
-	qr, err := session.Execute(context.Background(), query, nil)
+	qr, err := session.Execute(context.Background(), query, nil, false)
 	require.Nil(t, err)
 	assert.Equal(t, value, fmt.Sprintf("%v", qr.Rows[0][0]))
 }

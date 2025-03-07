@@ -137,9 +137,7 @@ func addJoinPredicates(
 
 		// if we are inside a CTE, we need to check if we depend on the recursion table
 		if cte := ctx.ActiveCTE(); cte != nil && ctx.SemTable.DirectDeps(pred).IsOverlapping(cte.Id) {
-			original := pred
 			pred = addCTEPredicate(ctx, pred, cte)
-			ctx.AddJoinPredicates(original, pred)
 		}
 		op = op.AddPredicate(ctx, pred)
 	}
@@ -153,8 +151,12 @@ func addCTEPredicate(
 	cte *plancontext.ContextCTE,
 ) sqlparser.Expr {
 	expr := breakCTEExpressionInLhsAndRhs(ctx, pred, cte.Id)
+	predicate := ctx.PredTracker.NewJoinPredicate(expr.RightExpr)
+	expr.JoinPredicateID = &predicate.ID
+	expr.RightExpr = predicate
+
 	cte.Predicates = append(cte.Predicates, expr)
-	return expr.RightExpr
+	return predicate
 }
 
 func breakCTEExpressionInLhsAndRhs(ctx *plancontext.PlanningContext, pred sqlparser.Expr, lhsID semantics.TableSet) *plancontext.RecurseExpression {
@@ -226,7 +228,7 @@ func (j *Join) IsInner() bool {
 	return j.JoinType.IsInner()
 }
 
-func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
+func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) {
 	j.Predicate = ctx.SemTable.AndExpressions(j.Predicate, expr)
 }
 

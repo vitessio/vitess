@@ -165,7 +165,7 @@ type (
 
 	// SchemaInformation is used to provide table information from Vschema.
 	SchemaInformation interface {
-		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
+		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error)
 		ConnCollation() collations.ID
 		Environment() *vtenv.Environment
 		// ForeignKeyMode returns the foreign_key flag value
@@ -732,7 +732,9 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 		}
 
 		set, found := d[expr]
-		deps = deps.Merge(set)
+		if found {
+			deps = deps.Merge(set)
+		}
 
 		// if we found a cached value, there is no need to continue down to visit children
 		return !found, nil

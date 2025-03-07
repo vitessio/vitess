@@ -42,6 +42,7 @@ import (
 var (
 	// waitConsistentKeyspacesCheck is the amount of time to wait for between checks to verify the keyspace is consistent.
 	waitConsistentKeyspacesCheck = 100 * time.Millisecond
+	kewHcSubscriberName          = "KeyspaceEventWatcher"
 )
 
 // KeyspaceEventWatcher is an auxiliary watcher that watches all availability incidents
@@ -221,7 +222,7 @@ func (kew *KeyspaceEventWatcher) broadcast(ev *KeyspaceEvent) {
 }
 
 func (kew *KeyspaceEventWatcher) run(ctx context.Context) {
-	hcChan := kew.hc.Subscribe()
+	hcChan := kew.hc.Subscribe(kewHcSubscriberName)
 	bufferCtx, bufferCancel := context.WithCancel(ctx)
 
 	go func() {
