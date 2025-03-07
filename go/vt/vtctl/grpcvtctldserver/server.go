@@ -584,6 +584,7 @@ func (s *VtctldServer) CancelSchemaMigration(ctx context.Context, req *vtctldata
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -803,6 +804,7 @@ func (s *VtctldServer) CleanupSchemaMigration(ctx context.Context, req *vtctldat
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -834,6 +836,7 @@ func (s *VtctldServer) ForceCutOverSchemaMigration(ctx context.Context, req *vtc
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -865,6 +868,7 @@ func (s *VtctldServer) CompleteSchemaMigration(ctx context.Context, req *vtctlda
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -3021,6 +3025,7 @@ func (s *VtctldServer) LaunchSchemaMigration(ctx context.Context, req *vtctldata
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -3803,6 +3808,7 @@ func (s *VtctldServer) RetrySchemaMigration(ctx context.Context, req *vtctldatap
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
