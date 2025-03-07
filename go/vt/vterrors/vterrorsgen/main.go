@@ -23,6 +23,7 @@ import (
 	"text/template"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -31,9 +32,13 @@ const (
 	tmpl = `
 | ID | Description | Error | MySQL Error Code | SQL State |
 | --- | --- | --- | --- | --- |
-{{- range $err := . }}
+{{- range $err := .Errors }}
 {{- $data := (call $err) }}
 | {{ $data.ID }} | {{ $data.Description }} | {{ FormatError $data.Err }} | {{ ConvertStateToMySQLErrorCode $data.State }} | {{ ConvertStateToMySQLState $data.State }} |
+{{- end }}
+{{- range $err := .ErrorsWithNoCode }}
+{{- $data := (call $err 0) }}
+| {{ $data.ID }} | {{ $data.Description }} | {{ FormatError $data.Err }} |  | {{ ConvertStateToMySQLState $data.State }} |
 {{- end }}
 `
 )
@@ -53,7 +58,16 @@ func main() {
 	})
 	t = template.Must(t.Parse(tmpl))
 
-	err := t.ExecuteTemplate(os.Stdout, "template", vterrors.Errors)
+	type data struct {
+		Errors           []func(args ...any) *vterrors.VitessError
+		ErrorsWithNoCode []func(code vtrpcpb.Code, args ...any) *vterrors.VitessError
+	}
+	d := data{
+		Errors:           vterrors.Errors,
+		ErrorsWithNoCode: vterrors.ErrorsWithNoCode,
+	}
+
+	err := t.ExecuteTemplate(os.Stdout, "template", d)
 	if err != nil {
 		log.Fatal(err)
 	}
