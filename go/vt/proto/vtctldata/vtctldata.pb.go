@@ -2534,11 +2534,12 @@ func (x *BackupShardRequest) GetIncrementalFromPos() string {
 }
 
 type CancelSchemaMigrationRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Keyspace      string                 `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
-	Uuid          string                 `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+   state         protoimpl.MessageState `protogen:"open.v1"`
+   Keyspace      string                 `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+   Uuid          string                 `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	CallerId      *vtrpc.CallerID       `protobuf:"bytes,3,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
+   unknownFields protoimpl.UnknownFields
+   sizeCache     protoimpl.SizeCache
 }
 
 func (x *CancelSchemaMigrationRequest) Reset() {
@@ -2578,11 +2579,19 @@ func (x *CancelSchemaMigrationRequest) GetKeyspace() string {
 	return ""
 }
 
+
 func (x *CancelSchemaMigrationRequest) GetUuid() string {
 	if x != nil {
 		return x.Uuid
 	}
 	return ""
+}
+
+	func (x *CancelSchemaMigrationRequest) GetCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.CallerId
+	}
+	return nil
 }
 
 type CancelSchemaMigrationResponse struct {
@@ -2995,6 +3004,7 @@ type CleanupSchemaMigrationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Keyspace      string                 `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	Uuid          string                 `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	CallerId      *vtrpc.CallerID       `protobuf:"bytes,3,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3034,6 +3044,13 @@ func (x *CleanupSchemaMigrationRequest) GetKeyspace() string {
 		return x.Keyspace
 	}
 	return ""
+}
+
+	func (x *CleanupSchemaMigrationRequest) GetCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.CallerId
+	}
+	return nil
 }
 
 func (x *CleanupSchemaMigrationRequest) GetUuid() string {
@@ -3091,6 +3108,7 @@ type CompleteSchemaMigrationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Keyspace      string                 `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	Uuid          string                 `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	CallerId      *vtrpc.CallerID       `protobuf:"bytes,3,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3137,6 +3155,13 @@ func (x *CompleteSchemaMigrationRequest) GetUuid() string {
 		return x.Uuid
 	}
 	return ""
+}
+
+	func (x *CompleteSchemaMigrationRequest) GetCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.CallerId
+	}
+	return nil
 }
 
 type CompleteSchemaMigrationResponse struct {
@@ -4927,6 +4952,7 @@ type ForceCutOverSchemaMigrationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Keyspace      string                 `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	Uuid          string                 `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	CallerId      *vtrpc.CallerID       `protobuf:"bytes,3,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4973,6 +4999,13 @@ func (x *ForceCutOverSchemaMigrationRequest) GetUuid() string {
 		return x.Uuid
 	}
 	return ""
+}
+
+	func (x *ForceCutOverSchemaMigrationRequest) GetCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.CallerId
+	}
+	return nil
 }
 
 type ForceCutOverSchemaMigrationResponse struct {
@@ -8327,6 +8360,7 @@ type LaunchSchemaMigrationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Keyspace      string                 `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	Uuid          string                 `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	CallerId      *vtrpc.CallerID       `protobuf:"bytes,3,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -8373,6 +8407,13 @@ func (x *LaunchSchemaMigrationRequest) GetUuid() string {
 		return x.Uuid
 	}
 	return ""
+}
+
+	func (x *LaunchSchemaMigrationRequest) GetCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.CallerId
+	}
+	return nil
 }
 
 type LaunchSchemaMigrationResponse struct {
@@ -11767,6 +11808,7 @@ type RetrySchemaMigrationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Keyspace      string                 `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	Uuid          string                 `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	CallerId      *vtrpc.CallerID       `protobuf:"bytes,3,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -11813,6 +11855,13 @@ func (x *RetrySchemaMigrationRequest) GetUuid() string {
 		return x.Uuid
 	}
 	return ""
+}
+
+	func (x *RetrySchemaMigrationRequest) GetCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.CallerId
+	}
+	return nil
 }
 
 type RetrySchemaMigrationResponse struct {
