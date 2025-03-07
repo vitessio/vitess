@@ -437,15 +437,9 @@ func (v Value) String() string {
 	return fmt.Sprintf("%v(%s)", Type(v.typ), v.val)
 }
 
-// ToTime returns the value as a time.Time in UTC.
+// ToTime returns the value as a time.Time in the provided location.
 // NULL values are returned as zero time.
-func (v Value) ToTime() (time.Time, error) {
-	return v.ToTimeInLocation(time.UTC)
-}
-
-// ToTimeInLocation returns the value as a time.Time in the provided location.
-// NULL values are returned as zero time.
-func (v Value) ToTimeInLocation(loc *time.Location) (time.Time, error) {
+func (v Value) ToTime(loc *time.Location) (time.Time, error) {
 	if v.Type() == Null {
 		return time.Time{}, nil
 	}
