@@ -57,7 +57,7 @@ func copyRowToStruct(shard shardConfig, row []sqltypes.Value, vPtr reflect.Value
 		case reflect.Struct:
 			switch m.structType.(type) {
 			case time.Time, *time.Time:
-				rowVal, err := row[m.rowIndex].ToTime()
+				rowVal, err := row[m.rowIndex].ToTime(time.UTC) // TODO: make timezone configurable
 				if err != nil {
 					return fmt.Errorf("error converting row value to time.Time for field %s: %w", fieldName, err)
 				}
