@@ -45,7 +45,7 @@ func initStateTable(ctx context.Context, session *vtgateconn.VTGateSession, keys
 
 	fmt.Println("query: ", query)
 
-	_, err := session.Execute(ctx, query, nil)
+	_, err := session.Execute(ctx, query, nil, false)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to create state table: %w", err)
 	}
@@ -76,7 +76,7 @@ func initVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name, key
 		"name":         {Type: querypb.Type_VARBINARY, Value: []byte(name)},
 		"latest_vgtid": {Type: querypb.Type_JSON, Value: latestVgtidJSON},
 		"table_config": {Type: querypb.Type_JSON, Value: tablesJSON},
-	})
+	}, false)
 	if err != nil {
 		return nil, fmt.Errorf("vstreamclient: failed to get latest vgtid for %s.%s: %w", keyspaceName, tableName, err)
 	}
@@ -116,7 +116,7 @@ func getLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, name
 
 	result, err := session.Execute(ctx, query, map[string]*querypb.BindVariable{
 		"name": {Type: querypb.Type_VARBINARY, Value: []byte(name)},
-	})
+	}, false)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("vstreamclient: failed to get latest vgtid for %s.%s: %w", keyspaceName, tableName, err)
 	}
@@ -171,7 +171,7 @@ func updateLatestVGtid(ctx context.Context, session *vtgateconn.VTGateSession, n
 	_, err = session.Execute(ctx, query, map[string]*querypb.BindVariable{
 		"latest_vgtid": {Type: querypb.Type_JSON, Value: latestVgtid},
 		"name":         {Type: querypb.Type_VARBINARY, Value: []byte(name)},
-	})
+	}, false)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to update latest_vgtid for %s.%s: %w", keyspaceName, tableName, err)
 	}
@@ -185,7 +185,7 @@ func setCopyCompleted(ctx context.Context, session *vtgateconn.VTGateSession, na
 	)
 	_, err := session.Execute(ctx, query, map[string]*querypb.BindVariable{
 		"name": {Type: querypb.Type_VARBINARY, Value: []byte(name)},
-	})
+	}, false)
 	if err != nil {
 		return fmt.Errorf("vstreamclient: failed to set copy_completed for %s.%s: %w", keyspaceName, tableName, err)
 	}
