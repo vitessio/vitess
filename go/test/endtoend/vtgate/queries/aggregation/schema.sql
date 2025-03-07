@@ -105,3 +105,9 @@ CREATE TABLE bet_logs (
     game_id bigint,
     PRIMARY KEY (id)
 ) ENGINE InnoDB;
+
+create table example (
+    id bigint unsigned not null,
+    foo enum('a','b') not null,
+    primary key (id)
+) Engine = InnoDB;

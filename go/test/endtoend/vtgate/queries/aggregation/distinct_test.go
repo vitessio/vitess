@@ -45,6 +45,10 @@ func TestDistinctIt(t *testing.T) {
 	mcmp.AssertMatchesNoOrder("select distinct val2 from aggr_test", `[[INT64(1)] [INT64(4)] [INT64(3)] [NULL]]`)
 	mcmp.AssertMatchesNoOrder("select distinct id from aggr_test", `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]`)
 
+	// Ensure DISTINCT on enum columns across shards works correctly.
+	mcmp.Exec("insert into example(id, foo) values (1, 'a'), (2, 'b')")
+	mcmp.AssertMatchesNoOrder("select distinct foo from example", `[[ENUM("a")] [ENUM("b")]]`)
+
 	if utils.BinaryIsAtLeastAtVersion(17, "vtgate") {
 		mcmp.AssertMatches("select distinct val1 from aggr_test order by val1 desc", `[[VARCHAR("e")] [VARCHAR("d")] [VARCHAR("c")] [VARCHAR("b")] [VARCHAR("a")]]`)
 		mcmp.AssertMatchesNoOrder("select distinct val1, count(*) from aggr_test group by val1", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
