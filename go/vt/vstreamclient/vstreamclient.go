@@ -202,7 +202,7 @@ func (v *VStreamClient) Close(ctx context.Context) error {
 
 func getShardsByKeyspace(ctx context.Context, session *vtgateconn.VTGateSession) (map[string][]string, error) {
 	query := "SHOW VITESS_SHARDS"
-	result, err := session.Execute(ctx, query, nil)
+	result, err := session.Execute(ctx, query, nil, false)
 	if err != nil {
 		return nil, fmt.Errorf("vstreamclient: failed to get shards by keyspace: %w", err)
 	}

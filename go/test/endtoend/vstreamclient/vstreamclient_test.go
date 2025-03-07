@@ -114,7 +114,7 @@ func TestVStreamClient(t *testing.T) {
 				"id":    {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(customer.ID), 10))},
 				"email": {Type: querypb.Type_VARCHAR, Value: []byte(customer.Email)},
 			}
-			_, err = vtgateSession.Execute(qCtx, insertQuery, bindVariables)
+			_, err = vtgateSession.Execute(qCtx, insertQuery, bindVariables, false)
 			require.NoError(t, err)
 		}
 
@@ -152,7 +152,7 @@ func TestVStreamClient(t *testing.T) {
 				"id":    {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(customer.ID), 10))},
 				"email": {Type: querypb.Type_VARCHAR, Value: []byte(customer.Email)},
 			}
-			_, err = vtgateSession.Execute(qCtx, updateQuery, bindVariables)
+			_, err = vtgateSession.Execute(qCtx, updateQuery, bindVariables, false)
 			require.NoError(t, err)
 		}
 
@@ -179,7 +179,7 @@ func TestVStreamClient(t *testing.T) {
 			bindVariables := map[string]*querypb.BindVariable{
 				"id": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(id), 10))},
 			}
-			_, err = vtgateSession.Execute(qCtx, deleteQuery, bindVariables)
+			_, err = vtgateSession.Execute(qCtx, deleteQuery, bindVariables, false)
 			require.NoError(t, err)
 		}
 
