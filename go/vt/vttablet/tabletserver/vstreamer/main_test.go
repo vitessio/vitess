@@ -28,22 +28,22 @@ import (
 	"testing"
 	"time"
 
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
-
 	"github.com/stretchr/testify/require"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 var (
@@ -319,12 +319,11 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 	options.ConfigOverrides = make(map[string]string)
 	dynamicPacketSize := strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
 	packetSize := strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
+
 	// Support both formats for backwards compatibility
 	// TODO(v25): Remove underscore versions
-	options.ConfigOverrides["vstream-dynamic-packet-size"] = dynamicPacketSize
-	options.ConfigOverrides["vstream-packet-size"] = packetSize
-	options.ConfigOverrides["vstream_dynamic_packet_size"] = dynamicPacketSize
-	options.ConfigOverrides["vstream_packet_size"] = packetSize
+	utils.SetFlagVariants(options.ConfigOverrides, "vstream-dynamic-packet-size", dynamicPacketSize)
+	utils.SetFlagVariants(options.ConfigOverrides, "vstream-packet-size", packetSize)
 
 	return engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
 		timer := time.NewTimer(2 * time.Second)

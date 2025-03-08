@@ -19,6 +19,8 @@ package vstreamer
 import (
 	"time"
 
+	"vitess.io/vitess/go/vt/utils"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mathstats"
@@ -33,18 +35,11 @@ func init() {
 
 func registerPacketSizeFlags(fs *pflag.FlagSet) {
 	// defaultPacketSize is the suggested packet size for VReplication streamer.
-	fs.IntVar(&vttablet.VStreamerDefaultPacketSize, "vstream-packet-size", vttablet.VStreamerDefaultPacketSize, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
-	// Register both versions of packet size flag
-	fs.IntVar(&vttablet.VStreamerDefaultPacketSize, "vstream_packet_size", vttablet.VStreamerDefaultPacketSize, "")
-	fs.MarkHidden("vstream_packet_size")
-	fs.MarkDeprecated("vstream_packet_size", "use vstream-packet-size instead")
-
+	utils.SetFlagIntVar(fs, &vttablet.VStreamerDefaultPacketSize, "vstream-packet-size",
+		vttablet.VStreamerDefaultPacketSize, "Suggested packet size for vstreamers. The actual packet size may be more or less than this amount.")
 	// useDynamicPacketSize controls whether to use dynamic packet size adjustments to increase performance while streaming
-	fs.BoolVar(&vttablet.VStreamerUseDynamicPacketSize, "vstream-dynamic-packet-size", vttablet.VStreamerUseDynamicPacketSize, "Enable dynamic packet sizing for VReplication. This will adjust the packet size during replication to improve performance.")
-	// Register both versions of dynamic packet size flag
-	fs.BoolVar(&vttablet.VStreamerUseDynamicPacketSize, "vstream_dynamic_packet_size", vttablet.VStreamerUseDynamicPacketSize, "")
-	fs.MarkHidden("vstream_dynamic_packet_size")
-	fs.MarkDeprecated("vstream_dynamic_packet_size", "use vstream-dynamic-packet-size instead")
+	utils.SetFlagBoolVar(fs, &vttablet.VStreamerUseDynamicPacketSize, "vstream-dynamic-packet-size",
+		vttablet.VStreamerUseDynamicPacketSize, "Enable dynamic packet sizing for vstreamers. This will adjust the packet size in vreplication workflows to improve performance.")
 }
 
 // PacketSizer is a controller that adjusts the size of the packets being sent by the vstreamer at runtime
