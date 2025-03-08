@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"testing"
 
+	"vitess.io/vitess/go/vt/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -534,10 +536,8 @@ func TestStreamRowsCancel(t *testing.T) {
 
 	// Support both formats for backwards compatibility
 	// TODO(v25): Remove underscore versions
-	options.ConfigOverrides["vstream-dynamic-packet-size"] = "false"
-	options.ConfigOverrides["vstream-packet-size"] = "10"
-	options.ConfigOverrides["vstream_dynamic_packet_size"] = "false"
-	options.ConfigOverrides["vstream_packet_size"] = "10"
+	utils.SetFlagVariants(options.ConfigOverrides, "vstream-dynamic-packet-size", "false")
+	utils.SetFlagVariants(options.ConfigOverrides, "vstream-packet-size", "10")
 
 	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		cancel()
@@ -563,10 +563,8 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 
 		// Support both formats for backwards compatibility
 		// TODO(v25): Remove underscore versions
-		options.ConfigOverrides["vstream-dynamic-packet-size"] = strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
-		options.ConfigOverrides["vstream-packet-size"] = strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
-		options.ConfigOverrides["vstream_dynamic_packet_size"] = strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
-		options.ConfigOverrides["vstream_packet_size"] = strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
+		utils.SetFlagVariants(options.ConfigOverrides, "vstream-dynamic-packet-size", strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize))
+		utils.SetFlagVariants(options.ConfigOverrides, "vstream-packet-size", strconv.Itoa(vttablet.VStreamerDefaultPacketSize))
 
 		err := engine.StreamRows(context.Background(), query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			if first {
