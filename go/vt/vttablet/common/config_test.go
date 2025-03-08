@@ -98,7 +98,7 @@ func TestNewVReplicationConfig(t *testing.T) {
 				"vstream_dynamic_packet_size":             "waar",
 				"vstream_binlog_rotation_threshold":       "invalid",
 			},
-			wantErr: 15,
+			wantErr: 17,
 		},
 		{
 			name: "Partial values",
