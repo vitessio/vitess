@@ -140,8 +140,8 @@ func (e *Executor) newExecute(
 		ctx, cancel = vcursor.GetContextWithTimeOut(ctx)
 		defer cancel()
 
-		// If we have previously issued a VT15001 error, we block every queries on this session until we receive a ROLLBACK or "show warnings".
-		if shouldBlockQuery(plan, safeSession) {
+		// If we have previously issued a VT15001 error, we block any new queries on this session until we receive a ROLLBACK or "show warnings".
+		if shouldBlockQueries(plan, safeSession) {
 			return vterrors.VT09032()
 		}
 
@@ -434,7 +434,7 @@ func (e *Executor) logPlanningFinished(logStats *logstats.LogStats, plan *engine
 	return execStart
 }
 
-func shouldBlockQuery(plan *engine.Plan, safeSession *econtext.SafeSession) bool {
+func shouldBlockQueries(plan *engine.Plan, safeSession *econtext.SafeSession) bool {
 	block := safeSession.IsErrorUntilRollback()
 	if plan.QueryType != sqlparser.StmtRollback && block {
 		return true
