@@ -293,6 +293,27 @@ func Init(
 	tabletTypesToWait []topodatapb.TabletType,
 	pv plancontext.PlannerVersion,
 ) *VTGate {
+	ts, err := serv.GetTopoServer()
+	if err != nil {
+		log.Fatalf("Unable to get Topo server: %v", err)
+	}
+
+	// We need to get the keyspaces and rebuild the keyspace graphs
+	// before we make the topo-server read-only incase we are filtering by
+	// keyspaces.
+	var keyspaces []string
+	if discovery.FilteringKeyspaces() {
+		keyspaces = discovery.KeyspacesToWatch
+	} else {
+		keyspaces, err = ts.GetSrvKeyspaceNames(ctx, cell)
+		if err != nil {
+			log.Fatalf("Unable to get all keyspaces: %v", err)
+		}
+	}
+	// executor sets a watch on SrvVSchema, so let's rebuild these before creating it
+	if err := rebuildTopoGraphs(ctx, ts, cell, keyspaces); err != nil {
+		log.Fatalf("rebuildTopoGraphs failed: %v", err)
+	}
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
@@ -328,10 +349,6 @@ func Init(
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
 
-	ts, err := serv.GetTopoServer()
-	if err != nil {
-		log.Fatalf("Unable to get Topo server: %v", err)
-	}
 	// Create a global cache to use for lookups of the sidecar database
 	// identifier in use by each keyspace.
 	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
@@ -352,21 +369,6 @@ func Init(
 		st = vtschema.NewTracker(gw.hc.Subscribe(schemaTrackerHcName), enableViews, enableUdfs, env.Parser())
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
-	}
-
-	var keyspaces []string
-	if discovery.FilteringKeyspaces() {
-		keyspaces = discovery.KeyspacesToWatch
-	} else {
-		keyspaces, err = srvResolver.GetAllKeyspaces(ctx)
-		if err != nil {
-			log.Fatalf("Unable to get all keyspaces: %v", err)
-		}
-	}
-
-	// executor sets a watch on SrvVSchema, so let's rebuild these before creating it
-	if err := rebuildTopoGraphs(ctx, ts, cell, keyspaces); err != nil {
-		log.Fatalf("rebuildTopoGraphs failed: %v", err)
 	}
 
 	plans := DefaultPlanCache()
