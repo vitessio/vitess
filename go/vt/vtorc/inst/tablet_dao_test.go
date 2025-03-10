@@ -112,3 +112,33 @@ func TestReadTabletCountsByCell(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, map[string]int64{"cell1": 100}, tabletCounts)
 }
+
+func TestReadTabletCountsByShard(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+
+	var uid uint32
+	for _, shard := range []string{"-40", "40-80", "80-c0", "c0-"} {
+		for i := 0; i < 100; i++ {
+			require.NoError(t, SaveTablet(&topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell1",
+					Uid:  uid,
+				},
+				Keyspace: "test",
+				Shard:    shard,
+			}))
+			uid++
+		}
+	}
+	tabletCounts, err := ReadTabletCountsByShard()
+	require.NoError(t, err)
+	require.Equal(t, map[string]int64{
+		"test.-40":   100,
+		"test.40-80": 100,
+		"test.80-c0": 100,
+		"test.c0-":   100,
+	}, tabletCounts)
+}

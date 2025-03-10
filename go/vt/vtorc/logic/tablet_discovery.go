@@ -55,23 +55,39 @@ var (
 	// This is populated by parsing `--clusters_to_watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
 
-	statsTabletsWatched = stats.NewGaugesFuncWithMultiLabels(
-		"TabletsWatched",
+	// tablet stats
+	statsTabletsWatchedByCell = stats.NewGaugesFuncWithMultiLabels(
+		"TabletsWatchedByCell",
 		"Number of tablets watched by cell",
 		[]string{"cell"},
-		getTabletsWatchedByCell,
+		getTabletsWatchedByCellStats,
 	)
+	statsTabletsWatchedByShards = stats.NewGaugesFuncWithMultiLabels(
+		"TabletsWatchedByShard",
+		"Number of tablets watched by keyspace/shard",
+		[]string{"Keyspace", "Shard"},
+		getTabletsWatchedByShardStats)
 
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
 )
 
-func getTabletsWatchedByCell() map[string]int64 {
+// getTabletsWatchedByCellStats returns the number of tablets watched by cell in stats format.
+func getTabletsWatchedByCellStats() map[string]int64 {
 	tabletsCountsByCell, err := inst.ReadTabletCountsByCell()
 	if err != nil {
 		log.Errorf("Failed to read tablet counts by cell: %+v", err)
 	}
 	return tabletsCountsByCell
+}
+
+// getTabletsWatchedByShardStats returns the number of tablets watched by keyspace/shard in stats format.
+func getTabletsWatchedByShardStats() map[string]int64 {
+	tabletsCountsByShard, err := inst.ReadTabletCountsByShard()
+	if err != nil {
+		log.Errorf("Failed to read tablet counts by shard: %+v", err)
+	}
+	return tabletsCountsByShard
 }
 
 // RegisterFlags registers the flags required by VTOrc
