@@ -71,7 +71,12 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 
 // TryStreamExecute performs a streaming exec.
 func (jv *ValuesJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	// TODO: Implement streaming. This is a placeholder implementation.
+	rs, err := jv.TryExecute(ctx, vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(rs)
 }
 
 // GetFields fetches the field info.
