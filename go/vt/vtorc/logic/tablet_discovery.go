@@ -67,16 +67,12 @@ var (
 )
 
 func getTabletsWatchedByCell() map[string]int64 {
-	tabletsWatchedByCell := make(map[string]int64)
-	tabletsByCell, err := inst.ReadTabletCountsByCell()
-	if err == nil {
+	tabletsCountsByCell, err := inst.ReadTabletCountsByCell()
+	if err != nil {
 		log.Errorf("Failed to read tablet counts by cell: %+v", err)
-		return tabletsWatchedByCell
+		return tabletsCountsByCell
 	}
-	for cell, tabletCount := range tabletsByCell {
-		tabletsWatchedByCell[cell] = tabletCount
-	}
-	return tabletsWatchedByCell
+	return tabletsCountsByCell
 }
 
 // RegisterFlags registers the flags required by VTOrc
