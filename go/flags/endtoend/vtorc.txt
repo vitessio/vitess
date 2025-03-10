@@ -34,6 +34,7 @@ Flags:
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul_auth_static_file string                              JSON File to read the topos/tokens from.
+      --discovery-workers int                                       Number of workers used for tablet discovery (default 300)
       --emit_stats                                                  If set, emit stats to push-based monitoring and stats backends
       --grpc_auth_static_client_creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy

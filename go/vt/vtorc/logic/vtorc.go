@@ -53,14 +53,19 @@ var snapshotDiscoveryKeys chan string
 var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
 
-var discoveriesCounter = stats.NewCounter("discoveries.attempt", "Number of discoveries attempted")
-var failedDiscoveriesCounter = stats.NewCounter("discoveries.fail", "Number of failed discoveries")
-var instancePollSecondsExceededCounter = stats.NewCounter("discoveries.instance_poll_seconds_exceeded", "Number of instances that took longer than InstancePollSeconds to poll")
-var discoveryQueueLengthGauge = stats.NewGauge("discoveries.queue_length", "Length of the discovery queue")
-var discoveryRecentCountGauge = stats.NewGauge("discoveries.recent_count", "Number of recent discoveries")
+var (
+	discoveriesCounter                 = stats.NewCounter("discoveries.attempt", "Number of discoveries attempted")
+	failedDiscoveriesCounter           = stats.NewCounter("discoveries.fail", "Number of failed discoveries")
+	instancePollSecondsExceededCounter = stats.NewCounter("discoveries.instance_poll_seconds_exceeded", "Number of instances that took longer than InstancePollSeconds to poll")
+	discoveryQueueLengthGauge          = stats.NewGauge("discoveries.queue_length", "Length of the discovery queue")
+	discoveryRecentCountGauge          = stats.NewGauge("discoveries.recent_count", "Number of recent discoveries")
+	discoveryWorkersGauge              = stats.NewGauge("DiscoveryWorkers", "Number of discovery workers")
+	discoveryWorkersActiveGauge        = stats.NewGauge("DiscoveryWorkersActive", "Number of discovery workers actively discovering tablets")
+	isElectedGauge                     = stats.NewGauge("elect.is_elected", "Elected state")
+	isHealthyGauge                     = stats.NewGauge("health.is_healthy", "Healthy state")
+)
+
 var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
-var isElectedGauge = stats.NewGauge("elect.is_elected", "Elected state")
-var isHealthyGauge = stats.NewGauge("health.is_healthy", "Healthy state")
 
 var isElectedNode int64
 
@@ -148,12 +153,16 @@ func waitForLocksRelease() {
 // handleDiscoveryRequests iterates the discoveryQueue channel and calls upon
 // instance discovery per entry.
 func handleDiscoveryRequests() {
-	discoveryQueue = discovery.CreateOrReturnQueue("DEFAULT")
+	discoveryQueue = discovery.NewQueue()
 	// create a pool of discovery workers
-	for i := uint(0); i < config.DiscoveryMaxConcurrency; i++ {
+	for i := uint(0); i < config.Config.DiscoveryWorkers; i++ {
+		discoveryWorkersGauge.Add(1)
 		go func() {
 			for {
+				// .Consume() blocks until there is a new key to process.
+				// We are not "active" until we got a tablet alias.
 				tabletAlias := discoveryQueue.Consume()
+
 				// Possibly this used to be the elected node, but has
 				// been demoted, while still the queue is full.
 				if !IsLeaderOrActive() {
@@ -163,8 +172,13 @@ func handleDiscoveryRequests() {
 					continue
 				}
 
-				DiscoverInstance(tabletAlias, false /* forceDiscovery */)
-				discoveryQueue.Release(tabletAlias)
+				func() {
+					discoveryWorkersActiveGauge.Add(1)
+					defer discoveryWorkersActiveGauge.Add(-1)
+
+					DiscoverInstance(tabletAlias, false /* forceDiscovery */)
+					discoveryQueue.Release(tabletAlias)
+				}()
 			}
 		}()
 	}

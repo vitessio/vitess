@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/key"
@@ -77,7 +78,8 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 
 	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer refreshCancel()
-	var wg sync.WaitGroup
+
+	eg, _ := errgroup.WithContext(ctx)
 	for idx, keyspace := range keyspaces {
 		// Check if the current keyspace name is the same as the last one.
 		// If it is, then we know we have already refreshed its information.
@@ -85,19 +87,16 @@ func RefreshAllKeyspacesAndShards(ctx context.Context) error {
 		if idx != 0 && keyspace == keyspaces[idx-1] {
 			continue
 		}
-		wg.Add(2)
-		go func(keyspace string) {
-			defer wg.Done()
-			_ = refreshKeyspaceHelper(refreshCtx, keyspace)
-		}(keyspace)
-		go func(keyspace string) {
-			defer wg.Done()
-			_ = refreshAllShards(refreshCtx, keyspace)
-		}(keyspace)
-	}
-	wg.Wait()
 
-	return nil
+		eg.Go(func() error {
+			return refreshKeyspaceHelper(refreshCtx, keyspace)
+		})
+
+		eg.Go(func() error {
+			return refreshAllShards(refreshCtx, keyspace)
+		})
+	}
+	return eg.Wait()
 }
 
 // RefreshKeyspaceAndShard refreshes the keyspace record and shard record for the given keyspace and shard.

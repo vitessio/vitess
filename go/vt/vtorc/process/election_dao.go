@@ -107,32 +107,6 @@ func AttemptElection() (bool, error) {
 	return false, nil
 }
 
-// GrabElection forcibly grabs leadership. Use with care!!
-func GrabElection() error {
-	_, err := db.ExecVTOrc(`
-			replace into active_node (
-					anchor, hostname, token, first_seen_active, last_seen_active
-				) values (
-					1, ?, ?, datetime('now'), datetime('now')
-				)
-			`,
-		ThisHostname, util.ProcessToken.Hash,
-	)
-	if err != nil {
-		log.Error(err)
-	}
-	return err
-}
-
-// Reelect clears the way for re-elections. Active node is immediately demoted.
-func Reelect() error {
-	_, err := db.ExecVTOrc(`delete from active_node where anchor = 1`)
-	if err != nil {
-		log.Error(err)
-	}
-	return err
-}
-
 // ElectedNode returns the details of the elected node, as well as answering the question "is this process the elected one"?
 func ElectedNode() (node *NodeHealth, isElected bool, err error) {
 	node = &NodeHealth{}

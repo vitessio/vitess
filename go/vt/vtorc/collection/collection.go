@@ -128,13 +128,6 @@ func (c *Collection) SetExpirePeriod(duration time.Duration) {
 	c.expirePeriod = duration
 }
 
-// ExpirePeriod returns the currently configured expiration period
-func (c *Collection) ExpirePeriod() time.Duration {
-	c.Lock()
-	defer c.Unlock()
-	return c.expirePeriod
-}
-
 // StopAutoExpiration prepares to stop by terminating the auto-expiration process
 func (c *Collection) StopAutoExpiration() {
 	if c == nil {
@@ -179,20 +172,6 @@ func (c *Collection) StartAutoExpiration() {
 			return
 		}
 	}
-}
-
-// Metrics returns a slice containing all the metric values
-func (c *Collection) Metrics() []Metric {
-	if c == nil {
-		return nil
-	}
-	c.Lock()
-	defer c.Unlock()
-
-	if len(c.collection) == 0 {
-		return nil // nothing to return
-	}
-	return c.collection
 }
 
 // Since returns the Metrics on or after the given time. We assume

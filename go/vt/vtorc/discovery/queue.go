@@ -33,142 +33,78 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
-// QueueMetric contains the queue's active and queued sizes
-type QueueMetric struct {
-	Active int
-	Queued int
+// queueItem represents an item in the discovery.Queue.
+type queueItem struct {
+	Key      string
+	PushedAt time.Time
 }
 
-// Queue contains information for managing discovery requests
+// Queue is an ordered queue with deduplication.
 type Queue struct {
-	sync.Mutex
-
-	name         string
-	done         chan struct{}
-	queue        chan string
-	queuedKeys   map[string]time.Time
-	consumedKeys map[string]time.Time
-	metrics      []QueueMetric
+	mu       sync.Mutex
+	enqueued map[string]struct{}
+	queue    chan queueItem
 }
 
-// DiscoveryQueue contains the discovery queue which can then be accessed via an API call for monitoring.
-// Currently this is accessed by ContinuousDiscovery() but also from http api calls.
-// I may need to protect this better?
-var discoveryQueue map[string](*Queue)
-var dcLock sync.Mutex
-
-func init() {
-	discoveryQueue = make(map[string](*Queue))
-}
-
-// CreateOrReturnQueue allows for creation of a new discovery queue or
-// returning a pointer to an existing one given the name.
-func CreateOrReturnQueue(name string) *Queue {
-	dcLock.Lock()
-	defer dcLock.Unlock()
-	if q, found := discoveryQueue[name]; found {
-		return q
-	}
-
-	q := &Queue{
-		name:         name,
-		queuedKeys:   make(map[string]time.Time),
-		consumedKeys: make(map[string]time.Time),
-		queue:        make(chan string, config.DiscoveryQueueCapacity),
-	}
-	go q.startMonitoring()
-
-	discoveryQueue[name] = q
-
-	return q
-}
-
-// monitoring queue sizes until we are told to stop
-func (q *Queue) startMonitoring() {
-	log.Infof("Queue.startMonitoring(%s)", q.name)
-	ticker := time.NewTicker(time.Second) // hard-coded at every second
-
-	for {
-		select {
-		case <-ticker.C: // do the periodic expiry
-			q.collectStatistics()
-		case <-q.done:
-			return
-		}
+// NewQueue creates a new queue.
+func NewQueue() *Queue {
+	return &Queue{
+		enqueued: make(map[string]struct{}),
+		queue:    make(chan queueItem, config.DiscoveryQueueCapacity),
 	}
 }
 
-// do a check of the entries in the queue, both those active and queued
-func (q *Queue) collectStatistics() {
-	q.Lock()
-	defer q.Unlock()
+// setKeyCheckEnqueued returns true if a key is already enqueued, if
+// not the key will be marked as enqueued and false is returned.
+func (q *Queue) setKeyCheckEnqueued(key string) (alreadyEnqueued bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
-	q.metrics = append(q.metrics, QueueMetric{Queued: len(q.queuedKeys), Active: len(q.consumedKeys)})
-
-	// remove old entries if we get too big
-	if len(q.metrics) > config.DiscoveryQueueMaxStatisticsSize {
-		q.metrics = q.metrics[len(q.metrics)-config.DiscoveryQueueMaxStatisticsSize:]
+	_, alreadyEnqueued = q.enqueued[key]
+	if !alreadyEnqueued {
+		q.enqueued[key] = struct{}{}
 	}
+	return alreadyEnqueued
 }
 
-// QueueLen returns the length of the queue (channel size + queued size)
+// QueueLen returns the length of the queue.
 func (q *Queue) QueueLen() int {
-	q.Lock()
-	defer q.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
-	return len(q.queue) + len(q.queuedKeys)
+	return len(q.enqueued)
 }
 
 // Push enqueues a key if it is not on a queue and is not being
 // processed; silently returns otherwise.
 func (q *Queue) Push(key string) {
-	q.Lock()
-	defer q.Unlock()
-
-	// is it enqueued already?
-	if _, found := q.queuedKeys[key]; found {
+	if q.setKeyCheckEnqueued(key) {
 		return
 	}
-
-	// is it being processed now?
-	if _, found := q.consumedKeys[key]; found {
-		return
+	q.queue <- queueItem{
+		Key:      key,
+		PushedAt: time.Now(),
 	}
-
-	q.queuedKeys[key] = time.Now()
-	q.queue <- key
 }
 
 // Consume fetches a key to process; blocks if queue is empty.
 // Release must be called once after Consume.
 func (q *Queue) Consume() string {
-	q.Lock()
-	queue := q.queue
-	q.Unlock()
+	item := <-q.queue
 
-	key := <-queue
-
-	q.Lock()
-	defer q.Unlock()
-
-	// alarm if have been waiting for too long
-	timeOnQueue := time.Since(q.queuedKeys[key])
+	timeOnQueue := time.Since(item.PushedAt)
 	if timeOnQueue > time.Duration(config.Config.InstancePollSeconds)*time.Second {
-		log.Warningf("key %v spent %.4fs waiting on a discoveryQueue", key, timeOnQueue.Seconds())
+		log.Warningf("key %v spent %.4fs waiting on a discovery queue", item.Key, timeOnQueue.Seconds())
 	}
 
-	q.consumedKeys[key] = q.queuedKeys[key]
-
-	delete(q.queuedKeys, key)
-
-	return key
+	return item.Key
 }
 
 // Release removes a key from a list of being processed keys
 // which allows that key to be pushed into the queue again.
 func (q *Queue) Release(key string) {
-	q.Lock()
-	defer q.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
-	delete(q.consumedKeys, key)
+	delete(q.enqueued, key)
 }
