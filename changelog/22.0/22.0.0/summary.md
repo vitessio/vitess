@@ -46,6 +46,7 @@ These are the RPC changes made in this release -
 #### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
 
 - `twopc_enable` flag is deprecated. Usage of TwoPC commit will be determined by the `transaction_mode` set on VTGate via flag or session variable.
+- `--disable_active_reparents` flag that was previously deprecated, has now been removed.
 
 #### <a id="ghost-ptosc"/>Removing gh-ost and pt-osc Online DDL strategies</a>
 
