@@ -136,7 +136,7 @@ func TestReadTabletCountsByKeyspaceShard(t *testing.T) {
 	tabletCounts, err := ReadTabletCountsByKeyspaceShard()
 	require.NoError(t, err)
 	require.Equal(t, map[string]map[string]int64{
-		"test": map[string]int64{
+		"test": {
 			"-40":   100,
 			"40-80": 100,
 			"80-c0": 100,
