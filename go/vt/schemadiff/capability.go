@@ -1,6 +1,7 @@
 package schemadiff
 
 import (
+	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/capabilities"
@@ -14,6 +15,7 @@ const (
 // alterOptionAvailableViaInstantDDL checks if the specific alter option is eligible to run via ALGORITHM=INSTANT
 // reference: https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html
 func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTable *sqlparser.CreateTable, capableOf capabilities.CapableOf) (bool, error) {
+	fmt.Println("alterOptionCapableOfInstantDDL: ", sqlparser.String(alterOption))
 	// A table with FULLTEXT index won't support adding/removing columns instantly.
 	tableHasFulltextIndex := false
 	for _, key := range createTable.TableSpec.Indexes {
@@ -223,6 +225,9 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			return capableOf(capabilities.InstantChangeColumnVisibilityCapability)
 		}
 		return false, nil
+	case sqlparser.AlgorithmValue:
+		// We accept an explicit ALGORITHM=INSTANT option.
+		return strings.EqualFold(string(opt), sqlparser.InstantStr), nil
 	default:
 		return false, nil
 	}
