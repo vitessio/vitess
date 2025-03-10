@@ -26,7 +26,7 @@ vtgate \
 
 Flags:
       --allow-kill-statement                                             Allows the execution of kill statement
-      --allow-values-joins                                               Allows the use of values-based joins instead of traditional apply joins (default true)
+      --allow-values-joins                                               Allows the use of values-based joins instead of traditional apply joins
       --allowed_tablet_types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
       --alsologtostderr                                                  log to standard error as well as files
       --balancer-keyspaces strings                                       When in balanced mode, a comma-separated list of keyspaces for which to use the balancer (optional)
