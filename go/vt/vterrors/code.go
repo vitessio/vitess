@@ -18,6 +18,7 @@ package vterrors
 
 import (
 	"fmt"
+	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -120,6 +121,9 @@ var (
 	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "cannot find keyspace for: %s", "The specified keyspace could not be found.")
 	VT14005 = errorWithoutState("VT14005", vtrpcpb.Code_UNAVAILABLE, "cannot lookup sidecar database for keyspace: %s", "Failed to read sidecar database identifier.")
 
+	VT15001 = errorWithNoCode("VT15001", "transaction error, issue ROLLBACK and retry the transaction: %s", "The opened transaction must be ROLLBACK by the application and re-tried.")
+	VT15002 = errorWithoutState("VT15002", vtrpcpb.Code_FAILED_PRECONDITION, "previous transaction failed fatally. Issue a ROLLBACK query to resolve the failure.", "This error occurs after a VT15001 error was sent to the client. Future queries in the same session will continue to fail until the client resolves the issue by sending a ROLLBACK query.")
+
 	// Errors is a list of errors that must match all the variables
 	// defined above to enable auto-documentation of error codes.
 	Errors = []func(args ...any) *VitessError{
@@ -206,6 +210,11 @@ var (
 		VT14003,
 		VT14004,
 		VT14005,
+		VT15002,
+	}
+
+	ErrorsWithNoCode = []func(code vtrpcpb.Code, args ...any) *VitessError{
+		VT15001,
 	}
 )
 
@@ -226,6 +235,7 @@ func (o *VitessError) Cause() error {
 
 var _ error = (*VitessError)(nil)
 
+// errorWithoutState is an error that does not have any state, e.g. the state will be unknown
 func errorWithoutState(id string, code vtrpcpb.Code, short, long string) func(args ...any) *VitessError {
 	return func(args ...any) *VitessError {
 		s := short
@@ -257,4 +267,28 @@ func errorWithState(id string, code vtrpcpb.Code, state State, short, long strin
 			State:       state,
 		}
 	}
+}
+
+// errorWithNoCode creates a VitessError where the error code is set by the user when creating the error
+// instead of having a static error code that is declared in this file.
+func errorWithNoCode(id string, short, long string) func(code vtrpcpb.Code, args ...any) *VitessError {
+	return func(code vtrpcpb.Code, args ...any) *VitessError {
+		s := short
+		if len(args) != 0 {
+			s = fmt.Sprintf(s, args...)
+		}
+
+		return &VitessError{
+			Err:         New(code, id+": "+s),
+			Description: long,
+			ID:          id,
+		}
+	}
+}
+
+func IsVT15001(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), VT15001(0).ID)
 }

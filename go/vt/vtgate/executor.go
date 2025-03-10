@@ -360,6 +360,9 @@ func (e *Executor) StreamExecute(
 
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
+			if safeSession.InTransaction() && e.rollbackOnFatalTxError(ctx, safeSession, err) {
+				return err
+			}
 			if !canReturnRows(plan.QueryType) {
 				return e.rollbackExecIfNeeded(ctx, safeSession, bindVars, logStats, err)
 			}
