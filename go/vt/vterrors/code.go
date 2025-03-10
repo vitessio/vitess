@@ -104,6 +104,7 @@ var (
 	VT09029 = errorWithState("VT09029", vtrpcpb.Code_FAILED_PRECONDITION, CTERecursiveRequiresSingleReference, "In recursive query block of Recursive Common Table Expression %s, the recursive table must be referenced only once, and not in any subquery", "")
 	VT09030 = errorWithState("VT09030", vtrpcpb.Code_FAILED_PRECONDITION, CTEMaxRecursionDepth, "Recursive query aborted after 1000 iterations.", "")
 	VT09031 = errorWithoutState("VT09031", vtrpcpb.Code_FAILED_PRECONDITION, "Primary demotion is stalled", "")
+	VT09032 = errorWithoutState("VT09032", vtrpcpb.Code_FAILED_PRECONDITION, "previous transaction failed fatally. Issue a ROLLBACK query to resolve the failure.", "This error occurs after a VT15001 error was sent to the client. Future queries in the same session will continue to fail until the client resolves the issue by sending a ROLLBACK query.")
 
 	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed", "Foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.")
 	VT10002 = errorWithoutState("VT10002", vtrpcpb.Code_ABORTED, "atomic distributed transaction not allowed: %s", "The distributed transaction cannot be committed. A rollback decision is taken.")
@@ -122,7 +123,6 @@ var (
 	VT14005 = errorWithoutState("VT14005", vtrpcpb.Code_UNAVAILABLE, "cannot lookup sidecar database for keyspace: %s", "Failed to read sidecar database identifier.")
 
 	VT15001 = errorWithNoCode("VT15001", "transaction error, issue ROLLBACK and retry the transaction: %s", "The opened transaction must be ROLLBACK by the application and re-tried.")
-	VT15002 = errorWithoutState("VT15002", vtrpcpb.Code_FAILED_PRECONDITION, "previous transaction failed fatally. Issue a ROLLBACK query to resolve the failure.", "This error occurs after a VT15001 error was sent to the client. Future queries in the same session will continue to fail until the client resolves the issue by sending a ROLLBACK query.")
 
 	// Errors is a list of errors that must match all the variables
 	// defined above to enable auto-documentation of error codes.
@@ -199,6 +199,7 @@ var (
 		VT09029,
 		VT09030,
 		VT09031,
+		VT09032,
 		VT10001,
 		VT10002,
 		VT12001,
@@ -210,7 +211,6 @@ var (
 		VT14003,
 		VT14004,
 		VT14005,
-		VT15002,
 	}
 
 	ErrorsWithNoCode = []func(code vtrpcpb.Code, args ...any) *VitessError{

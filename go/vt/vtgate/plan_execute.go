@@ -142,7 +142,7 @@ func (e *Executor) newExecute(
 
 		// If we have previously issued a VT15001 error, we block every queries on this session until we receive a ROLLBACK or "show warnings".
 		if shouldBlockQuery(plan, safeSession) {
-			return vterrors.VT15002()
+			return vterrors.VT09032()
 		}
 
 		result, err = e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)

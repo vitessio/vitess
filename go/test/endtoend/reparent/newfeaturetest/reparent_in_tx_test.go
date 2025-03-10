@@ -54,7 +54,7 @@ func testCommitError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.Lo
 }
 
 // This test ensures that we are getting a VT15001 when executing a query on an open transaction
-// while the primary is down. Subsequent queries should fail with a VT15002 until a ROLLBACK
+// while the primary is down. Subsequent queries should fail with a VT09032 until a ROLLBACK
 // or SHOW WARNINGS is issued.
 func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.LocalProcessCluster, tablets []*cluster.Vttablet) {
 	tabletStopped := make(chan bool)
@@ -68,9 +68,9 @@ func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.L
 		_, err := conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
 		require.ErrorContains(t, err, "VT15001")
 
-		// Subsequent queries after a VT15001 should start returning a VT15002 error until we issue a ROLLBACK
+		// Subsequent queries after a VT15001 should start returning a VT09032 error until we issue a ROLLBACK
 		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
-		require.ErrorContains(t, err, "VT15002")
+		require.ErrorContains(t, err, "VT09032")
 
 		_, err = conn.ExecuteFetch("rollback", 0, false)
 		require.NoError(t, err)
@@ -98,9 +98,9 @@ func testExecuteErrorWhileTabletIsNotServing(t *testing.T, conn *mysql.Conn, clu
 		require.ErrorContains(t, err, "VT15001")
 		require.ErrorContains(t, err, vterrors.WrongTablet)
 
-		// Subsequent queries after a VT15001 should start returning a VT15002 error until we issue a ROLLBACK
+		// Subsequent queries after a VT15001 should start returning a VT09032 error until we issue a ROLLBACK
 		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
-		require.ErrorContains(t, err, "VT15002")
+		require.ErrorContains(t, err, "VT09032")
 
 		_, err = conn.ExecuteFetch("rollback", 0, false)
 		require.NoError(t, err)

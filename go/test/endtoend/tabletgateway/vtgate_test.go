@@ -271,7 +271,7 @@ func TestReplicaTransactions(t *testing.T) {
 	require.NoError(t, err)
 	serving := replicaTablet.VttabletProcess.WaitForStatus("SERVING", 60*time.Second)
 	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
-	utils.AssertContainsError(t, readConn, fetchAllCustomers, "VT15002")
+	utils.AssertContainsError(t, readConn, fetchAllCustomers, "VT09032")
 	utils.Exec(t, readConn, "rollback")
 
 	// create a new connection, should be able to query again
