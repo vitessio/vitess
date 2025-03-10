@@ -59,14 +59,15 @@ var (
 	statsTabletsWatchedByCell = stats.NewGaugesFuncWithMultiLabels(
 		"TabletsWatchedByCell",
 		"Number of tablets watched by cell",
-		[]string{"cell"},
+		[]string{"Cell"},
 		getTabletsWatchedByCellStats,
 	)
 	statsTabletsWatchedByShards = stats.NewGaugesFuncWithMultiLabels(
 		"TabletsWatchedByShard",
 		"Number of tablets watched by keyspace/shard",
 		[]string{"Keyspace", "Shard"},
-		getTabletsWatchedByShardStats)
+		getTabletsWatchedByShardStats,
+	)
 
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
