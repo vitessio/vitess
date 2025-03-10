@@ -54,24 +54,30 @@ var (
 	// We store the key range for all the shards that we want to watch.
 	// This is populated by parsing `--clusters_to_watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
-	statsMu       sync.Mutex
 
-	// tabletsWatchedByCell is a map of the number of tablets watched by cell.
-	tabletsWatchedByCell map[string]int64
-	statsTabletsWatched  = stats.NewGaugesFuncWithMultiLabels(
+	statsTabletsWatched = stats.NewGaugesFuncWithMultiLabels(
 		"TabletsWatched",
 		"Number of tablets watched by cell",
 		[]string{"cell"},
-		func() map[string]int64 {
-			statsMu.Lock()
-			defer statsMu.Unlock()
-			return tabletsWatchedByCell
-		},
+		getTabletsWatchedByCell,
 	)
 
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
 )
+
+func getTabletsWatchedByCell() map[string]int64 {
+	tabletsWatchedByCell := make(map[string]int64)
+	tabletsByCell, err := inst.ReadTabletCountsByCell()
+	if err == nil {
+		log.Errorf("Failed to read tablet counts by cell: %+v", err)
+		return tabletsWatchedByCell
+	}
+	for cell, tabletCount := range tabletsByCell {
+		tabletsWatchedByCell[cell] = tabletCount
+	}
+	return tabletsWatchedByCell
+}
 
 // RegisterFlags registers the flags required by VTOrc
 func RegisterFlags(fs *pflag.FlagSet) {
@@ -240,10 +246,6 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 		refreshTablets(matchedTablets, query, args, loader, forceRefresh, nil)
 		newTabletsWatchedByCell[cell] = int64(len(matchedTablets))
 	}
-
-	statsMu.Lock()
-	defer statsMu.Unlock()
-	tabletsWatchedByCell = newTabletsWatchedByCell
 
 	return nil
 }

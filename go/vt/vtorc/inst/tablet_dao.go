@@ -74,6 +74,25 @@ func ReadTablet(tabletAlias string) (*topodatapb.Tablet, error) {
 	return tablet, nil
 }
 
+// ReadTabletCountsByCell returns the count of tablets watched by cell.
+// The backend query uses an index by "cell": cell_idx_vitess_tablet.
+func ReadTabletCountsByCell() (map[string]int64, error) {
+	tabletCounts := make(map[string]int64)
+	query := `SELECT
+		cell,
+		COUNT() AS count
+	FROM
+		vitess_tablet
+	GROUP BY
+		cell`
+	err := db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
+		cell := row.GetString("cell")
+		tabletCounts[cell] = row.GetInt64("count")
+		return nil
+	})
+	return tabletCounts, err
+}
+
 // SaveTablet saves the tablet record against the instanceKey.
 func SaveTablet(tablet *topodatapb.Tablet) error {
 	tabletp, err := prototext.Marshal(tablet)
