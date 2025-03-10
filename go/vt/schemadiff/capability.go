@@ -223,6 +223,9 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			return capableOf(capabilities.InstantChangeColumnVisibilityCapability)
 		}
 		return false, nil
+	case sqlparser.AlgorithmValue:
+		// We accept an explicit ALGORITHM=INSTANT option.
+		return strings.EqualFold(string(opt), sqlparser.InstantStr), nil
 	default:
 		return false, nil
 	}
