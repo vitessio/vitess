@@ -226,7 +226,7 @@ Flags:
       --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
-      --mysql-shutdown-timeout duration                                  timeout to use when MySQL is being shut down. (default 5m0s)
+      --mysql-shutdown-timeout duration                                  Timeout to use when MySQL is being shut down. (default 5m0s)
       --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
       --mysql_default_workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
