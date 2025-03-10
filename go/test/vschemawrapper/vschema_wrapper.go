@@ -55,6 +55,7 @@ type VSchemaWrapper struct {
 	ForeignKeyChecksState *bool
 	Version               plancontext.PlannerVersion
 	EnableViews           bool
+	AllowValuesJoins      bool
 	TestBuilder           func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
 	Env                   *vtenv.Environment
 }
@@ -341,6 +342,10 @@ func (vw *VSchemaWrapper) FindRoutedShard(keyspace, shard string) (string, error
 
 func (vw *VSchemaWrapper) IsViewsEnabled() bool {
 	return vw.EnableViews
+}
+
+func (vw *VSchemaWrapper) IsValuesJoinsEnabled() bool {
+	return vw.AllowValuesJoins
 }
 
 // FindMirrorRule finds the mirror rule for the requested keyspace, table

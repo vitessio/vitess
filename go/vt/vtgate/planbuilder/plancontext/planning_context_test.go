@@ -341,6 +341,11 @@ func (v *vschema) IsViewsEnabled() bool {
 	panic("implement me")
 }
 
+func (v *vschema) IsValuesJoinsEnabled() bool {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (v *vschema) GetUDV(name string) *querypb.BindVariable {
 	// TODO implement me
 	panic("implement me")
