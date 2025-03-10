@@ -138,10 +138,14 @@ chmod 777 /tmp/mavencache
 args="$args -v /tmp/mavencache:/home/vitess/.m2"
 
 # Add in the vitess user
+# Override this setting if it's a GitHub Action (CNCF-Hosted fix)
+# This is required to avoid permission issues with the mounted VTDATAROOT.
 args="$args --user vitess"
+
 args="$args -v $PWD/test/bin:/tmp/bin"
 
 # Mount in host VTDATAROOT if one exists, since it might be a RAM disk or SSD.
+# Override this setting if it's a GitHub Action (CNCF-Hosted fix)
 if [[ -n "$VTDATAROOT" ]]; then
   hostdir=`mktemp -d $VTDATAROOT/test-XXX`
   testid=`basename $hostdir`
@@ -164,10 +168,8 @@ esac
 bashcmd=""
 
 if [[ -z "$existing_cache_image" ]]; then
-
-  # Construct "cp" command to copy the source code.
-  bashcmd=$(append_cmd "$bashcmd" "cp -R /tmp/src/!(vtdataroot|dist|bin|lib|vthook) . && cp -R /tmp/src/.git .")
-
+    # Construct "cp" command to copy the source code.
+    bashcmd=$(append_cmd "$bashcmd" "cp -R /tmp/src/!(vtdataroot|dist|bin|lib|vthook) . && cp -R /tmp/src/.git .")
 fi
 
 # Reset the environment if this was an old bootstrap. We can detect this from VTTOP presence.

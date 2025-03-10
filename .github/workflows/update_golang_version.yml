@@ -37,9 +37,9 @@ jobs:
           old_go_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get go-version)
           echo "old-go-version=${old_go_version}" >> $GITHUB_OUTPUT
 
-          if [ ${{ matrix.branch }} == "main" ]; then
+          if [ "${{ matrix.branch }}" == "main" ]; then
             go run ./go/tools/go-upgrade/go-upgrade.go upgrade --main --allow-major-upgrade
-          elif [ ${{ matrix.branch }} == "release-21.0" ]; then
+          elif [ "${{ matrix.branch }}" == "release-21.0" ]; then
             go run ./go/tools/go-upgrade/go-upgrade.go upgrade
           else
             go run ./go/tools/go-upgrade/go-upgrade.go upgrade --workflow-update=false

@@ -208,6 +208,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		}
 
 		cmd = exec.Command(path.Join(dir, "docker/test/run.sh"), args...)
+
 	} else {
 		cmd = exec.Command(testCmd[0], testCmd[1:]...)
 	}
@@ -542,7 +543,6 @@ func main() {
 							test.logf("WARNING: can't remove temporary VTDATAROOT: %v", err)
 						}
 					}
-
 					if err != nil {
 						// This try failed.
 						test.logf("FAILED (try %v/%v) in %v: %v", try, tryMax, round(duration), err)
