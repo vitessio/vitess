@@ -83,11 +83,17 @@ func getTabletsWatchedByCellStats() map[string]int64 {
 
 // getTabletsWatchedByShardStats returns the number of tablets watched by keyspace/shard in stats format.
 func getTabletsWatchedByShardStats() map[string]int64 {
-	tabletsCountsByShard, err := inst.ReadTabletCountsByShard()
+	tabletsWatchedByShard := make(map[string]int64)
+	tabletsCountsByKS, err := inst.ReadTabletCountsByKeyspaceShard()
 	if err != nil {
 		log.Errorf("Failed to read tablet counts by shard: %+v", err)
 	}
-	return tabletsCountsByShard
+	for keyspace, countsByShard := range tabletsCountsByKS {
+		for shard, tabletCount := range countsByShard {
+			tabletsWatchedByShard[keyspace+"."+shard] = tabletCount
+		}
+	}
+	return tabletsWatchedByShard
 }
 
 // RegisterFlags registers the flags required by VTOrc

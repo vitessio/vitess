@@ -93,10 +93,10 @@ func ReadTabletCountsByCell() (map[string]int64, error) {
 	return tabletCounts, err
 }
 
-// ReadTabletCountsByShard returns the count of tablets watched by keyspace/shard.
+// ReadTabletCountsByKeyspaceShard returns the count of tablets watched by keyspace/shard.
 // The backend query uses an index by "keyspace, shard": ks_idx_vitess_tablet.
-func ReadTabletCountsByShard() (map[string]int64, error) {
-	tabletCounts := make(map[string]int64)
+func ReadTabletCountsByKeyspaceShard() (map[string]map[string]int64, error) {
+	tabletCounts := make(map[string]map[string]int64)
 	query := `SELECT
 		keyspace,
 		shard,
@@ -109,7 +109,10 @@ func ReadTabletCountsByShard() (map[string]int64, error) {
 	err := db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
 		keyspace := row.GetString("keyspace")
 		shard := row.GetString("shard")
-		tabletCounts[keyspace+"."+shard] = row.GetInt64("count")
+		if _, found := tabletCounts[keyspace]; !found {
+			tabletCounts[keyspace] = make(map[string]int64)
+		}
+		tabletCounts[keyspace][shard] = row.GetInt64("count")
 		return nil
 	})
 	return tabletCounts, err

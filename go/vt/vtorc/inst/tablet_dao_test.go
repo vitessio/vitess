@@ -113,7 +113,7 @@ func TestReadTabletCountsByCell(t *testing.T) {
 	require.Equal(t, map[string]int64{"cell1": 100}, tabletCounts)
 }
 
-func TestReadTabletCountsByShard(t *testing.T) {
+func TestReadTabletCountsByKeyspaceShard(t *testing.T) {
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
 	defer func() {
 		db.ClearVTOrcDatabase()
@@ -133,12 +133,14 @@ func TestReadTabletCountsByShard(t *testing.T) {
 			uid++
 		}
 	}
-	tabletCounts, err := ReadTabletCountsByShard()
+	tabletCounts, err := ReadTabletCountsByKeyspaceShard()
 	require.NoError(t, err)
-	require.Equal(t, map[string]int64{
-		"test.-40":   100,
-		"test.40-80": 100,
-		"test.80-c0": 100,
-		"test.c0-":   100,
+	require.Equal(t, map[string]map[string]int64{
+		"test": map[string]int64{
+			"-40":   100,
+			"40-80": 100,
+			"80-c0": 100,
+			"c0-":   100,
+		},
 	}, tabletCounts)
 }
