@@ -357,6 +357,12 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			alter:                     "alter table t1 add column i2 int, algorithm=INSTANT",
 			expectCapableOfInstantDDL: true,
 		},
+		{
+			name:                      "reject if ALGORITHM=COPY",
+			create:                    "create table t1 (id int, i1 int)",
+			alter:                     "alter table t1 add column i2 int, algorithm=COPY",
+			expectCapableOfInstantDDL: false,
+		},
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
