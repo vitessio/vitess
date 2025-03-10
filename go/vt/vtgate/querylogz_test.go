@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -43,12 +44,15 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	logStats.StartTime, _ = time.Parse("Jan 2 15:04:05", "Nov 29 13:33:09")
 	logStats.PlanTime = 1 * time.Millisecond
 	logStats.ExecuteTime = 2 * time.Millisecond
+	logStats.MirrorSourceExecuteTime = 2 * time.Millisecond
+	logStats.MirrorTargetExecuteTime = 1 * time.Millisecond
 	logStats.CommitTime = 3 * time.Millisecond
 	logStats.Ctx = callerid.NewContext(
 		context.Background(),
 		callerid.NewEffectiveCallerID("effective-caller", "component", "subcomponent"),
 		callerid.NewImmediateCallerID("immediate-caller"),
 	)
+	logStats.MirrorTargetError = errors.New("mirror target error")
 
 	// fast query
 	fastQueryPattern := []string{
@@ -63,12 +67,15 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 		`<td>0.001</td>`,
 		`<td>0.001</td>`,
 		`<td>0.002</td>`,
+		`<td>0.002</td>`,
+		`<td>0.001</td>`,
 		`<td>0.003</td>`,
 		`<td>select</td>`,
 		regexp.QuoteMeta(`<td>select name,​ &#39;inject &lt;script&gt;alert()​;&lt;/script&gt;&#39; from test_table limit 1000</td>`),
 		`<td>1</td>`,
 		`<td>1000</td>`,
 		`<td></td>`,
+		`<td>mirror target error</td>`,
 		`</tr>`,
 	}
 	logStats.EndTime = logStats.StartTime.Add(1 * time.Millisecond)
@@ -93,12 +100,15 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 		`<td>0.02</td>`,
 		`<td>0.001</td>`,
 		`<td>0.002</td>`,
+		`<td>0.002</td>`,
+		`<td>0.001</td>`,
 		`<td>0.003</td>`,
 		`<td>select</td>`,
 		regexp.QuoteMeta(`<td>select name,​ &#39;inject &lt;script&gt;alert()​;&lt;/script&gt;&#39; from test_table limit 1000</td>`),
 		`<td>1</td>`,
 		`<td>1000</td>`,
 		`<td></td>`,
+		`<td>mirror target error</td>`,
 		`</tr>`,
 	}
 	logStats.EndTime = logStats.StartTime.Add(20 * time.Millisecond)
@@ -123,12 +133,15 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 		`<td>0.5</td>`,
 		`<td>0.001</td>`,
 		`<td>0.002</td>`,
+		`<td>0.002</td>`,
+		`<td>0.001</td>`,
 		`<td>0.003</td>`,
 		`<td>select</td>`,
 		regexp.QuoteMeta(`<td>select name,​ &#39;inject &lt;script&gt;alert()​;&lt;/script&gt;&#39; from test_table limit 1000</td>`),
 		`<td>1</td>`,
 		`<td>1000</td>`,
 		`<td></td>`,
+		`<td>mirror target error</td>`,
 		`</tr>`,
 	}
 	logStats.EndTime = logStats.StartTime.Add(500 * time.Millisecond)
@@ -147,7 +160,6 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	close(ch)
 	body, _ = io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
-
 }
 
 func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *logstats.LogStats, page []byte) {
