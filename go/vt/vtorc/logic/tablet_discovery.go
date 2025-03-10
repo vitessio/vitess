@@ -228,7 +228,6 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 
 	// Update each cell that provided a response. This ensures only cells that provided a
 	// response are updated in the backend and are considered for forgetting stale tablets.
-	newTabletsWatchedByCell := make(map[string]int64)
 	for cell, tablets := range tabletsByCell {
 		// Filter tablets that should not be watched using func shouldWatchTablet.
 		matchedTablets := make([]*topo.TabletInfo, 0, len(tablets))
@@ -244,7 +243,6 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 		query := "select alias from vitess_tablet where cell = ?"
 		args := sqlutils.Args(cell)
 		refreshTablets(matchedTablets, query, args, loader, forceRefresh, nil)
-		newTabletsWatchedByCell[cell] = int64(len(matchedTablets))
 	}
 
 	return nil
