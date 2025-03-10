@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var _ Primitive = (*ValuesJoin)(nil)
@@ -34,10 +33,8 @@ type ValuesJoin struct {
 	// of the Join. They can be any primitive.
 	Left, Right Primitive
 
-	Vars              []int
-	RowConstructorArg string
-	Cols              []int
-	ColNames          []string
+	// The name for the bind var containing the tuple-of-tuples being sent to the RHS
+	BindVarName string
 }
 
 // TryExecute performs a non-streaming exec.
@@ -47,7 +44,7 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil, err
 	}
 	bv := &querypb.BindVariable{
-		Type: querypb.Type_TUPLE,
+		Type: querypb.Type_ROW_TUPLE,
 	}
 	if len(lresult.Rows) == 0 && wantfields {
 		// If there are no rows, we still need to construct a single row
@@ -60,49 +57,26 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		}
 		bv.Values = append(bv.Values, sqltypes.TupleToProto(vals))
 
-		bindVars[jv.RowConstructorArg] = bv
+		bindVars[jv.BindVarName] = bv
 		return jv.Right.GetFields(ctx, vcursor, bindVars)
 	}
 
-	for i, row := range lresult.Rows {
-		newRow := make(sqltypes.Row, 0, len(jv.Vars)+1)      // +1 since we always add the row ID
-		newRow = append(newRow, sqltypes.NewInt64(int64(i))) // Adding the LHS row ID
-
-		for _, loffset := range jv.Vars {
-			newRow = append(newRow, row[loffset])
-		}
-
-		bv.Values = append(bv.Values, sqltypes.TupleToProto(newRow))
+	for _, row := range lresult.Rows {
+		bv.Values = append(bv.Values, sqltypes.TupleToProto(row))
 	}
 
-	bindVars[jv.RowConstructorArg] = bv
-	rresult, err := vcursor.ExecutePrimitive(ctx, jv.Right, bindVars, wantfields)
-	if err != nil {
-		return nil, err
-	}
-
-	result := &sqltypes.Result{}
-
-	result.Fields = joinFields(lresult.Fields, rresult.Fields, jv.Cols)
-	for i := range result.Fields {
-		result.Fields[i].Name = jv.ColNames[i]
-	}
-
-	for _, rrow := range rresult.Rows {
-		lhsRowID, err := rrow[len(rrow)-1].ToCastInt64()
-		if err != nil {
-			return nil, vterrors.VT13001("values joins cannot fetch lhs row ID: " + err.Error())
-		}
-
-		result.Rows = append(result.Rows, joinRows(lresult.Rows[lhsRowID], rrow, jv.Cols))
-	}
-
-	return result, nil
+	bindVars[jv.BindVarName] = bv
+	return vcursor.ExecutePrimitive(ctx, jv.Right, bindVars, wantfields)
 }
 
 // TryStreamExecute performs a streaming exec.
 func (jv *ValuesJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	// TODO: Implement streaming. This is a placeholder implementation.
+	rs, err := jv.TryExecute(ctx, vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(rs)
 }
 
 // GetFields fetches the field info.
@@ -143,8 +117,7 @@ func (jv *ValuesJoin) description() PrimitiveDescription {
 		OperatorType: "Join",
 		Variant:      "Values",
 		Other: map[string]any{
-			"ValuesArg": jv.RowConstructorArg,
-			"Vars":      jv.Vars,
+			"BindVarName": jv.BindVarName,
 		},
 	}
 }
