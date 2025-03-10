@@ -30,11 +30,16 @@ import (
 var auditOperationCounter = stats.NewCounter("AuditWrite", "Number of audit operations performed")
 
 // AuditOperation creates and writes a new audit entry by given params
-func AuditOperation(auditType string, tabletAlias string, message string) error {
+func AuditOperation(auditType, tabletAlias, message string) error {
 	keyspace := ""
 	shard := ""
 	if tabletAlias != "" {
-		keyspace, shard, _ = GetKeyspaceShardName(tabletAlias)
+		tablet, err := ReadTablet(tabletAlias)
+		if err != nil {
+			return err
+		}
+		keyspace = tablet.Keyspace
+		shard = tablet.Shard
 	}
 
 	auditWrittenToFile := false
