@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/exp/maps"
@@ -72,7 +71,7 @@ type Engine struct {
 	mu         sync.Mutex
 	isOpen     bool
 	tables     map[string]*Table
-	lastChange atomic.Int64
+	lastChange int64
 	// the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
 	reloadAtPos replication.Position
 	notifierMu  sync.Mutex
@@ -273,7 +272,7 @@ func (se *Engine) Open() error {
 
 	se.ticks.Start(func() {
 		// update stats on periodic reloads
-		if err := se.reload(ctx, true); err != nil {
+		if err := se.reloadAndIncludeStats(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
@@ -320,7 +319,7 @@ func (se *Engine) closeLocked() {
 	se.conns.Close()
 
 	se.tables = make(map[string]*Table)
-	se.lastChange.Store(0)
+	se.lastChange = 0
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = false
 
@@ -364,6 +363,11 @@ func (se *Engine) EnableHistorian(enabled bool) error {
 // emitted, as they can be expensive to calculate for a large number of tables
 func (se *Engine) Reload(ctx context.Context) error {
 	return se.ReloadAt(ctx, replication.Position{})
+}
+
+// reloadAndIncludeStats calls the ReloadAtEx function with includeStats set to true.
+func (se *Engine) reloadAndIncludeStats(ctx context.Context) error {
+	return se.ReloadAtEx(ctx, replication.Position{}, true)
 }
 
 // ReloadAt reloads the schema info from the db.
@@ -554,7 +558,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		tbl, isInTablesMap := se.tables[tableName]
 		_, isInChangedViewMap := changedViews[tableName]
 		_, isInMismatchTableMap := mismatchTables[tableName]
-		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange.Load() && !isInChangedViewMap && !isInMismatchTableMap {
+		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange && !isInChangedViewMap && !isInMismatchTableMap {
 			if includeStats {
 				tbl.FileSize = fileSize
 				tbl.AllocatedSize = allocatedSize
@@ -617,7 +621,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	for k, t := range changedTables {
 		se.tables[k] = t
 	}
-	se.lastChange.Store(curTime)
+	se.lastChange = curTime
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
 		log.Infof("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped))
 	}
