@@ -269,6 +269,9 @@ func errorWithState(id string, code vtrpcpb.Code, state State, short, long strin
 	}
 }
 
+// ErrorWithNoCode refers to error code that do not have a predefined error code.
+type ErrorWithNoCode func(code vtrpcpb.Code, args ...any) *VitessError
+
 // errorWithNoCode creates a VitessError where the error code is set by the user when creating the error
 // instead of having a static error code that is declared in this file.
 func errorWithNoCode(id string, short, long string) func(code vtrpcpb.Code, args ...any) *VitessError {
@@ -286,9 +289,9 @@ func errorWithNoCode(id string, short, long string) func(code vtrpcpb.Code, args
 	}
 }
 
-func IsVT15001(err error) bool {
+func IsError(err error, code string) bool {
 	if err == nil {
 		return false
 	}
-	return strings.Contains(err.Error(), VT15001(0).ID)
+	return strings.Contains(err.Error(), code)
 }

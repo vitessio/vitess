@@ -352,7 +352,7 @@ func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *econte
 }
 
 func (e *Executor) rollbackOnFatalTxError(ctx context.Context, safeSession *econtext.SafeSession, err error) bool {
-	if !vterrors.IsVT15001(err) {
+	if !vterrors.IsError(err, vterrors.VT15001(0).ID) {
 		return false
 	}
 	// we already know one or more shards are going to fail rolling back, the error can be discarded

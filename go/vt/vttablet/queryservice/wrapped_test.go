@@ -46,7 +46,7 @@ func TestWrapInVT15001(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := wrapInVT15001(tt.args.err, tt.args.inTx)
+			err := wrapFatalTxErrorInVTError(tt.args.err, tt.args.inTx, vterrors.VT15001)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
