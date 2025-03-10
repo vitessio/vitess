@@ -164,10 +164,8 @@ esac
 bashcmd=""
 
 if [[ -z "$existing_cache_image" ]]; then
-
   # Construct "cp" command to copy the source code.
   bashcmd=$(append_cmd "$bashcmd" "cp -R /tmp/src/!(vtdataroot|dist|bin|lib|vthook) . && cp -R /tmp/src/.git .")
-
 fi
 
 # Reset the environment if this was an old bootstrap. We can detect this from VTTOP presence.
