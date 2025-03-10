@@ -31,6 +31,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -54,9 +55,29 @@ var (
 	// This is populated by parsing `--clusters_to_watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
 
+	statsTabletsWatched = stats.NewGaugesFuncWithMultiLabels(
+		"TabletsWatched",
+		"Number of tablets watched by cell",
+		[]string{"cell"},
+		getTabletsWatchedByCell,
+	)
+
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
 )
+
+func getTabletsWatchedByCell() map[string]int64 {
+	tabletsWatchedByCell := make(map[string]int64)
+	tabletsByCell, err := inst.ReadTabletCountsByCell()
+	if err == nil {
+		log.Errorf("Failed to read tablet counts by cell: %+v", err)
+		return tabletsWatchedByCell
+	}
+	for cell, tabletCount := range tabletsByCell {
+		tabletsWatchedByCell[cell] = tabletCount
+	}
+	return tabletsWatchedByCell
+}
 
 // RegisterFlags registers the flags required by VTOrc
 func RegisterFlags(fs *pflag.FlagSet) {
