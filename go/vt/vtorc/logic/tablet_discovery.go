@@ -70,7 +70,6 @@ func getTabletsWatchedByCell() map[string]int64 {
 	tabletsCountsByCell, err := inst.ReadTabletCountsByCell()
 	if err != nil {
 		log.Errorf("Failed to read tablet counts by cell: %+v", err)
-		return tabletsCountsByCell
 	}
 	return tabletsCountsByCell
 }
