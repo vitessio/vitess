@@ -4638,11 +4638,11 @@
   },
   {
     "comment": "Values-Join and subquery",
-    "query": "select /*vt+ ALLOW_VALUES_JOIN */ unsharded.x, u1.x from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ unsharded.x, u1.x from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select /*vt+ ALLOW_VALUES_JOIN */ unsharded.x, u1.x from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ unsharded.x, u1.x from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
@@ -4653,7 +4653,7 @@
         "Inputs": [
           {
             "OperatorType": "Join",
-            "Variant": "Values",
+            "Variant": "Block",
             "BindVarName": "values",
             "Inputs": [
               {
@@ -4664,7 +4664,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select unsharded.x from unsharded where 1 != 1",
-                "Query": "select /*vt+ ALLOW_VALUES_JOIN */ unsharded.x from unsharded",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ unsharded.x from unsharded",
                 "Table": "unsharded"
               },
               {
@@ -4683,7 +4683,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select u1.x, `values`.unsharded_x as x, u1.bar from (values ::values) as `values`(unsharded_x), `user` as u1 where 1 != 1",
-                    "Query": "select /*vt+ ALLOW_VALUES_JOIN */ u1.x, `values`.unsharded_x as x, u1.bar from (values ::values) as `values`(unsharded_x), `user` as u1",
+                    "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ u1.x, `values`.unsharded_x as x, u1.bar from (values ::values) as `values`(unsharded_x), `user` as u1",
                     "Table": "`user`"
                   },
                   {
@@ -4695,7 +4695,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
-                    "Query": "select /*vt+ ALLOW_VALUES_JOIN */ 1 from unsharded as u2 where u2.baz = :u1_bar limit 1",
+                    "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ 1 from unsharded as u2 where u2.baz = :u1_bar limit 1",
                     "Table": "unsharded"
                   }
                 ]

@@ -785,11 +785,11 @@ func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (Operator, *App
 		}
 		src.Outer, in.Source = in, src.Outer
 		return src, Rewrote("push filter to outer query in subquery container")
-	case *ValuesJoin:
+	case *BlockJoin:
 		for _, pred := range in.Predicates {
 			src.AddPredicate(ctx, pred)
 		}
-		return src, Rewrote("pushed filter predicates through values join")
+		return src, Rewrote("pushed filter predicates through block join")
 	case *Filter:
 		if len(in.Predicates) == 0 {
 			return in.Source, Rewrote("filter with no predicates removed")

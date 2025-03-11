@@ -130,11 +130,11 @@ func getFirstSelect(selStmt sqlparser.TableStatement) *sqlparser.Select {
 	return firstSelect
 }
 
-func breakValuesJoinExpressionInLHS(ctx *plancontext.PlanningContext,
+func breakBlockJoinExpressionInLHS(ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
 	valuesName string,
-) (result valuesJoinColumn, pureLHS bool) {
+) (result blockJoinColumn, pureLHS bool) {
 	result.Original = sqlparser.Clone(expr)
 	pureLHS = true
 	result.RHS = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
@@ -146,7 +146,7 @@ func breakValuesJoinExpressionInLHS(ctx *plancontext.PlanningContext,
 			return true
 		}
 
-		colName := getValuesJoinColName(ctx, valuesName, lhs, col)
+		colName := getBlockJoinColName(ctx, valuesName, lhs, col)
 		qualifier := sqlparser.NewTableName(valuesName)
 		rhsExpr := sqlparser.NewColNameWithQualifier(colName, qualifier)
 		result.LHS = append(result.LHS, leftHandSideExpression{

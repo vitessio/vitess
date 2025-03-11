@@ -11,8 +11,8 @@ Usage:
 
 Flags:
       --action_timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
+      --allow-block-joins                                                Allows the use of experimental block joins instead of traditional apply joins
       --allow-kill-statement                                             Allows the execution of kill statement
-      --allow-values-joins                                               Allows the use of values-based joins instead of traditional apply joins
       --allowed_tablet_types strings                                     Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.
       --alsologtostderr                                                  log to standard error as well as files
       --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)

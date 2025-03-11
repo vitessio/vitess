@@ -551,12 +551,12 @@ func (tr *ShardedRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sq
 		return tr.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
 	}
 
-	return tr.planValueJoinsPredicate(ctx, node)
+	return tr.planBlockJoinsPredicate(ctx, node)
 }
 
-// planValueJoinsPredicate is a special case where we have a predicate that is a join between two columns,
+// planBlockJoinsPredicate is a special case where we have a predicate that is a join between two columns,
 // one of which is a values derived table
-func (tr *ShardedRouting) planValueJoinsPredicate(ctx *plancontext.PlanningContext, node *sqlparser.ComparisonExpr) bool {
+func (tr *ShardedRouting) planBlockJoinsPredicate(ctx *plancontext.PlanningContext, node *sqlparser.ComparisonExpr) bool {
 	cola, ok := node.Left.(*sqlparser.ColName)
 	if !ok {
 		return false
@@ -572,7 +572,7 @@ func (tr *ShardedRouting) planValueJoinsPredicate(ctx *plancontext.PlanningConte
 		}
 		lhsCol, rhsCol = colb, cola
 	}
-	tblName, err := ctx.GetValueJoinTableName(tr.ValuesTablesIDs)
+	tblName, err := ctx.GetBlockJoinTableName(tr.ValuesTablesIDs)
 	if err != nil {
 		return false
 	}
@@ -601,7 +601,7 @@ func (tr *ShardedRouting) planOffsets(ctx *plancontext.PlanningContext) {
 	}
 
 	if len(tr.Selected.ValueExprs) != 1 {
-		// this is not a value-join predicate
+		// this is not a block-join predicate
 		return
 	}
 

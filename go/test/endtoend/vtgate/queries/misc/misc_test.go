@@ -54,7 +54,7 @@ func start(t testing.TB) (utils.MySQLCompare, func()) {
 	}
 }
 
-func BenchmarkValuesJoin(b *testing.B) {
+func BenchmarkBlockJoin(b *testing.B) {
 	mcmp, closer := start(b)
 	defer closer()
 

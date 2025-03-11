@@ -52,7 +52,7 @@ func (p Phase) String() string {
 	case initialPlanning:
 		return "initial horizon planning optimization"
 	case rewriteApplyJoin:
-		return "rewrite ApplyJoin to ValuesJoin"
+		return "rewrite ApplyJoin to BlockJoin"
 	case pullDistinctFromUnion:
 		return "pull distinct from UNION"
 	case delegateAggregation:
@@ -76,7 +76,7 @@ func (p Phase) shouldRun(ctx *plancontext.PlanningContext) bool {
 	s := ctx.SemTable.QuerySignature
 	switch p {
 	case rewriteApplyJoin:
-		return ctx.VSchema.IsValuesJoinsEnabled() || ctx.IsCommentDirectiveSet(sqlparser.DirectiveAllowValuesJoin)
+		return ctx.VSchema.AreBlockJoinsEnabled() || ctx.IsCommentDirectiveSet(sqlparser.DirectiveAllowBlockJoin)
 	case pullDistinctFromUnion:
 		return s.Union
 	case delegateAggregation:
@@ -121,11 +121,11 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 	}
 }
 
-// rewriteApplyToValues rewrites ApplyJoin to ValuesJoin.
+// rewriteApplyToValues rewrites ApplyJoin to BlockJoin.
 func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operator {
 	done := false
-	// Traverse the operator tree to convert ApplyJoin to ValuesJoin.
-	// Then add a Values node to the RHS of the new ValuesJoin,
+	// Traverse the operator tree to convert ApplyJoin to BlockJoin.
+	// Then add a Values node to the RHS of the new BlockJoin,
 	// and usually a filter containing the join predicates is placed there.
 	visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		if done {
@@ -136,7 +136,7 @@ func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operato
 			return op, NoRewrite
 		}
 
-		vj := newValuesJoin(ctx, aj.LHS, aj.RHS, aj.JoinType)
+		vj := newBlockJoin(ctx, aj.LHS, aj.RHS, aj.JoinType)
 		if vj == nil {
 			return op, NoRewrite
 		}
@@ -153,7 +153,7 @@ func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operato
 			ctx.PredTracker.Set(*pred.JoinPredicateID, jc.RHS)
 		}
 		done = true
-		return vj, Rewrote("rewrote ApplyJoin to ValuesJoin")
+		return vj, Rewrote("rewrote ApplyJoin to BlockJoin")
 	}
 
 	return TopDown(op, TableID, visit, stopAtRoute)
@@ -161,22 +161,22 @@ func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operato
 
 const valuesName = "values"
 
-func newValuesJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) *ValuesJoin {
+func newBlockJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) *BlockJoin {
 	if !joinType.IsInner() {
 		return nil
 	}
 
-	valuesTableID := TableID(lhs)
-	valuesDestination := ctx.ReservedVars.ReserveVariable(valuesName)
-	ctx.AddValueJoinTable(valuesTableID, valuesDestination)
+	lhsID := TableID(lhs)
+	destination := ctx.ReservedVars.ReserveVariable(valuesName)
+	ctx.AddBlockJoinTable(lhsID, destination)
 	v := &Values{
 		unaryOperator: newUnaryOp(rhs),
-		Name:          valuesDestination,
-		TableID:       valuesTableID,
+		Name:          destination,
+		TableID:       lhsID,
 	}
-	return &ValuesJoin{
-		binaryOperator:    newBinaryOp(lhs, v),
-		ValuesDestination: valuesDestination,
+	return &BlockJoin{
+		binaryOperator: newBinaryOp(lhs, v),
+		Destination:    destination,
 	}
 }
 

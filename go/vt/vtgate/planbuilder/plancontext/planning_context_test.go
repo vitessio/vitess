@@ -341,7 +341,7 @@ func (v *vschema) IsViewsEnabled() bool {
 	panic("implement me")
 }
 
-func (v *vschema) IsValuesJoinsEnabled() bool {
+func (v *vschema) AreBlockJoinsEnabled() bool {
 	// TODO implement me
 	panic("implement me")
 }

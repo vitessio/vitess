@@ -74,8 +74,8 @@ func buildAST(op Operator, qb *queryBuilder) {
 		buildRecursiveCTE(op, qb)
 	case *Values:
 		buildValues(op, qb)
-	case *ValuesJoin:
-		buildValuesJoin(op, qb)
+	case *BlockJoin:
+		buildBlockJoin(op, qb)
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("unknown operator to convert to SQL: %T", op)))
 	}
@@ -91,8 +91,8 @@ func buildDistinct(op *Distinct, qb *queryBuilder) {
 	d.MakeDistinct()
 }
 
-func buildValuesJoin(op *ValuesJoin, qb *queryBuilder) {
-	qb.ctx.SkipValuesArgument(op.ValuesDestination)
+func buildBlockJoin(op *BlockJoin, qb *queryBuilder) {
+	qb.ctx.SkipValuesArgument(op.Destination)
 	buildAST(op.LHS, qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildAST(op.RHS, qbR)

@@ -77,8 +77,8 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 		return transformRecurseCTE(ctx, op)
 	case *operators.PercentBasedMirror:
 		return transformPercentBasedMirror(ctx, op)
-	case *operators.ValuesJoin:
-		return transformValuesJoin(ctx, op)
+	case *operators.BlockJoin:
+		return transformBlockJoin(ctx, op)
 	case *operators.Values:
 		panic("should have been pushed under a route")
 	case *operators.Horizon:
@@ -88,7 +88,7 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToPrimitive)", op))
 }
 
-func transformValuesJoin(ctx *plancontext.PlanningContext, op *operators.ValuesJoin) (engine.Primitive, error) {
+func transformBlockJoin(ctx *plancontext.PlanningContext, op *operators.BlockJoin) (engine.Primitive, error) {
 	lhs, err := transformToPrimitive(ctx, op.LHS)
 	if err != nil {
 		return nil, err
@@ -98,10 +98,10 @@ func transformValuesJoin(ctx *plancontext.PlanningContext, op *operators.ValuesJ
 		return nil, err
 	}
 
-	return &engine.ValuesJoin{
+	return &engine.BlockJoin{
 		Left:        lhs,
 		Right:       rhs,
-		BindVarName: op.ValuesDestination,
+		BindVarName: op.Destination,
 	}, nil
 }
 

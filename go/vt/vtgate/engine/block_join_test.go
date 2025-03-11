@@ -88,7 +88,7 @@ func TestJoinValuesExecute(t *testing.T) {
 				"a": sqltypes.Int64BindVariable(10),
 			}
 
-			vjn := &ValuesJoin{
+			vjn := &BlockJoin{
 				Left:        leftPrim,
 				Right:       rightPrim,
 				BindVarName: "v",

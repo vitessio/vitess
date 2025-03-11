@@ -516,15 +516,15 @@
     }
   },
   {
-    "comment": "Query using VALUES JOIN",
-    "query": "select /*vt+ ALLOW_VALUES_JOIN */ user.foo, user_extra.user_id from user, user_extra where user.id = user_extra.toto and user.foo = 1 and user_extra.bar = 2",
+    "comment": "Query using BLOCK JOIN",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user.foo, user_extra.user_id from user, user_extra where user.id = user_extra.toto and user.foo = 1 and user_extra.bar = 2",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select /*vt+ ALLOW_VALUES_JOIN */ user.foo, user_extra.user_id from user, user_extra where user.id = user_extra.toto and user.foo = 1 and user_extra.bar = 2",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user.foo, user_extra.user_id from user, user_extra where user.id = user_extra.toto and user.foo = 1 and user_extra.bar = 2",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Values",
+        "Variant": "Block",
         "BindVarName": "values",
         "Inputs": [
           {
@@ -535,7 +535,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.user_id, user_extra.toto from user_extra where 1 != 1",
-            "Query": "select /*vt+ ALLOW_VALUES_JOIN */ user_extra.user_id, user_extra.toto from user_extra where user_extra.bar = 2",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user_extra.toto from user_extra where user_extra.bar = 2",
             "Table": "user_extra"
           },
           {
@@ -546,7 +546,7 @@
               "Sharded": true
             },
             "FieldQuery": "select `user`.foo, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_toto), `user` where 1 != 1",
-            "Query": "select /*vt+ ALLOW_VALUES_JOIN */ `user`.foo, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_toto), `user` where `user`.foo = 1 and `user`.id = `values`.user_extra_toto",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.foo, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_toto), `user` where `user`.foo = 1 and `user`.id = `values`.user_extra_toto",
             "Table": "`user`",
             "Values": [
               "values:1"
@@ -5077,12 +5077,12 @@
     }
   },
   {
-    "comment": "Values Join with using",
-    "query": "select /*vt+ ALLOW_VALUES_JOIN */ t2.tcol1, t2.id, t2.tcol2, t3.id, t3.tcol2 from t2 join t3 using (tcol1)",
+    "comment": "Block Join with using",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ t2.tcol1, t2.id, t2.tcol2, t3.id, t3.tcol2 from t2 join t3 using (tcol1)",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select /*vt+ ALLOW_VALUES_JOIN */ t2.tcol1, t2.id, t2.tcol2, t3.id, t3.tcol2 from t2 join t3 using (tcol1)",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ t2.tcol1, t2.id, t2.tcol2, t3.id, t3.tcol2 from t2 join t3 using (tcol1)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
@@ -5096,7 +5096,7 @@
         "Inputs": [
           {
             "OperatorType": "Join",
-            "Variant": "Values",
+            "Variant": "Block",
             "BindVarName": "values",
             "Inputs": [
               {
@@ -5107,7 +5107,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select t2.tcol1, t2.id, t2.tcol2 from t2 where 1 != 1",
-                "Query": "select /*vt+ ALLOW_VALUES_JOIN */ t2.tcol1, t2.id, t2.tcol2 from t2",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ t2.tcol1, t2.id, t2.tcol2 from t2",
                 "Table": "t2"
               },
               {
@@ -5118,7 +5118,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select t3.id, t3.tcol2, `values`.t2_tcol1 as tcol1, `values`.t2_id as id, `values`.t2_tcol2 as tcol2 from (values ::values) as `values`(t2_tcol1, t2_id, t2_tcol2), t3 where 1 != 1",
-                "Query": "select /*vt+ ALLOW_VALUES_JOIN */ t3.id, t3.tcol2, `values`.t2_tcol1 as tcol1, `values`.t2_id as id, `values`.t2_tcol2 as tcol2 from (values ::values) as `values`(t2_tcol1, t2_id, t2_tcol2), t3 where `values`.t2_tcol1 = t3.tcol1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ t3.id, t3.tcol2, `values`.t2_tcol1 as tcol1, `values`.t2_id as id, `values`.t2_tcol2 as tcol2 from (values ::values) as `values`(t2_tcol1, t2_id, t2_tcol2), t3 where `values`.t2_tcol1 = t3.tcol1",
                 "Table": "t3"
               }
             ]
