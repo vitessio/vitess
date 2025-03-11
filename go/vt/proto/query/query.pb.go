@@ -322,7 +322,8 @@ const (
 	// RAW specifies a type which won't be quoted but the value used as-is while encoding.
 	// Properties: 36, None.
 	Type_RAW Type = 2084
-	// ROW_TUPLE represents multiple rows.
+	// ROW_TUPLE represents multiple rows. It's a tuple of tuples. They will be serialized as:
+	// ROW(<tuple>), ROW(<tuple>), ...
 	// Properties: 37, None.
 	Type_ROW_TUPLE Type = 2085
 )
