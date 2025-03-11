@@ -71,6 +71,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfAvg(parent, node, replacer)
 	case *Begin:
 		return a.rewriteRefOfBegin(parent, node, replacer)
+	case *BeginEndStatement:
+		return a.rewriteRefOfBeginEndStatement(parent, node, replacer)
 	case *BetweenExpr:
 		return a.rewriteRefOfBetweenExpr(parent, node, replacer)
 	case *BinaryExpr:
@@ -467,8 +469,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowThrottlerStatus(parent, node, replacer)
 	case *ShowTransactionStatus:
 		return a.rewriteRefOfShowTransactionStatus(parent, node, replacer)
-	case SingleStatement:
-		return a.rewriteSingleStatement(parent, node, replacer)
+	case *SingleStatement:
+		return a.rewriteRefOfSingleStatement(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	case *Std:
@@ -1700,6 +1702,54 @@ func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer re
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfBeginEndStatement(parent SQLNode, node *BeginEndStatement, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	for x, el := range node.Statements {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfBeginEndStatementStatementsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
+		if !a.rewriteCompoundStatement(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*BeginEndStatement).Statements[idx] = newNode.(CompoundStatement)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -11281,8 +11331,11 @@ func (a *application) rewriteRefOfShowTransactionStatus(parent SQLNode, node *Sh
 	return true
 }
 
-// Function Generation Source: StructMethod
-func (a *application) rewriteSingleStatement(parent SQLNode, node SingleStatement, replacer replacerFunc) bool {
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfSingleStatement(parent SQLNode, node *SingleStatement, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -11297,10 +11350,10 @@ func (a *application) rewriteSingleStatement(parent SQLNode, node SingleStatemen
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(SingleStatementStatement))
+		a.cur.current.AddStep(uint16(RefOfSingleStatementStatement))
 	}
 	if !a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
-		panic("[BUG] tried to replace 'Statement' on 'SingleStatement'")
+		parent.(*SingleStatement).Statement = newNode.(Statement)
 	}) {
 		return false
 	}
@@ -14259,6 +14312,8 @@ func (a *application) rewriteCompoundStatement(parent SQLNode, node CompoundStat
 		return true
 	}
 	switch node := node.(type) {
+	case *BeginEndStatement:
+		return a.rewriteRefOfBeginEndStatement(parent, node, replacer)
 	case *SingleStatement:
 		return a.rewriteRefOfSingleStatement(parent, node, replacer)
 	case Visitable:
@@ -14793,8 +14848,6 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
 	case *ShowThrottlerStatus:
 		return a.rewriteRefOfShowThrottlerStatus(parent, node, replacer)
-	case SingleStatement:
-		return a.rewriteSingleStatement(parent, node, replacer)
 	case *Stream:
 		return a.rewriteRefOfStream(parent, node, replacer)
 	case *TruncateTable:
@@ -15088,46 +15141,6 @@ func (a *application) rewriteRefOfRootNode(parent SQLNode, node *RootNode, repla
 	}
 	if !a.rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
 		parent.(*RootNode).SQLNode = newNode.(SQLNode)
-	}) {
-		return false
-	}
-	if a.collectPaths {
-		a.cur.current.Pop()
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-
-// Function Generation Source: PtrToStructMethod
-func (a *application) rewriteRefOfSingleStatement(parent SQLNode, node *SingleStatement, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		kontinue := !a.pre(&a.cur)
-		if a.cur.revisit {
-			a.cur.revisit = false
-			return a.rewriteSQLNode(parent, a.cur.node, replacer)
-		}
-		if kontinue {
-			return true
-		}
-	}
-	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfSingleStatementStatement))
-	}
-	if !a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
-		parent.(*SingleStatement).Statement = newNode.(Statement)
 	}) {
 		return false
 	}

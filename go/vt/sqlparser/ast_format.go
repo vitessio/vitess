@@ -380,8 +380,23 @@ func (node *CreateProcedure) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v", node.Statement)
 }
 
+// Format formats the node.
 func (pp *ProcParameter) Format(buf *TrackedBuffer) {
 	buf.astPrintf(pp, "%s %v %v", pp.Mode.ToString(), pp.Name, pp.Type)
+}
+
+// Format formats the node.
+func (s *SingleStatement) Format(buf *TrackedBuffer) {
+	buf.astPrintf(s, "%v;", s.Statement)
+}
+
+// Format formats the node.
+func (bes *BeginEndStatement) Format(buf *TrackedBuffer) {
+	buf.literal("begin ")
+	for _, stmt := range bes.Statements {
+		buf.astPrintf(bes, "%v ", stmt)
+	}
+	buf.literal("end;")
 }
 
 // Format formats the node.

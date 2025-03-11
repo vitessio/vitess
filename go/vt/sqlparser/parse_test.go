@@ -2133,11 +2133,16 @@ var (
 		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
 		output: "create definer = 'sa'@`b.c.d` view a(b, c, d) as select * from e",
 	}, {
-		input:  `CREATE PROCEDURE p1 (IN country CHAR(3), OUT cities INT) BEGIN SELECT COUNT(*) FROM x WHERE d = e; END`,
-		output: "",
+		input: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
+	}, {
+		input:  "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end",
+		output: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
 	}, {
 		input:  `CREATE PROCEDURE p1 (IN a CHAR(3), OUT b INT) SELECT COUNT(*) FROM x WHERE d = e`,
-		output: "create procedure p1 (in a CHAR(3), out b INT) select count(*) from x where d = e",
+		output: "create procedure p1 (in a CHAR(3), out b INT) select count(*) from x where d = e;",
+	}, {
+		input:  `CREATE PROCEDURE p1 (IN country CHAR(3), OUT cities INT) begin create table t1(a int); begin end; end;`,
+		output: "create procedure p1 (in country CHAR(3), out cities INT) begin create table t1 (\n\ta int\n); begin end; end;",
 	}, {
 		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {

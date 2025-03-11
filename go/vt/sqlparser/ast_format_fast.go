@@ -523,12 +523,29 @@ func (node *CreateProcedure) FormatFast(buf *TrackedBuffer) {
 	node.Statement.FormatFast(buf)
 }
 
+// FormatFast formats the node.
 func (pp *ProcParameter) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString(pp.Mode.ToString())
 	buf.WriteByte(' ')
 	pp.Name.FormatFast(buf)
 	buf.WriteByte(' ')
 	pp.Type.FormatFast(buf)
+}
+
+// FormatFast formats the node.
+func (s *SingleStatement) FormatFast(buf *TrackedBuffer) {
+	s.Statement.FormatFast(buf)
+	buf.WriteByte(';')
+}
+
+// FormatFast formats the node.
+func (bes *BeginEndStatement) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("begin ")
+	for _, stmt := range bes.Statements {
+		stmt.FormatFast(buf)
+		buf.WriteByte(' ')
+	}
+	buf.WriteString("end;")
 }
 
 // FormatFast formats the node.

@@ -70,6 +70,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfAvg(n, parent)
 	case *Begin:
 		return c.copyOnRewriteRefOfBegin(n, parent)
+	case *BeginEndStatement:
+		return c.copyOnRewriteRefOfBeginEndStatement(n, parent)
 	case *BetweenExpr:
 		return c.copyOnRewriteRefOfBetweenExpr(n, parent)
 	case *BinaryExpr:
@@ -466,8 +468,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfShowThrottlerStatus(n, parent)
 	case *ShowTransactionStatus:
 		return c.copyOnRewriteRefOfShowTransactionStatus(n, parent)
-	case SingleStatement:
-		return c.copyOnRewriteSingleStatement(n, parent)
+	case *SingleStatement:
+		return c.copyOnRewriteRefOfSingleStatement(n, parent)
 	case *StarExpr:
 		return c.copyOnRewriteRefOfStarExpr(n, parent)
 	case *Std:
@@ -1117,6 +1119,36 @@ func (c *cow) copyOnRewriteRefOfBegin(n *Begin, parent SQLNode) (out SQLNode, ch
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfBeginEndStatement(n *BeginEndStatement, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		var changedStatements bool
+		_Statements := make([]CompoundStatement, len(n.Statements))
+		for x, el := range n.Statements {
+			this, changed := c.copyOnRewriteCompoundStatement(el, n)
+			_Statements[x] = this.(CompoundStatement)
+			if changed {
+				changedStatements = true
+			}
+		}
+		if changedStatements {
+			res := *n
+			res.Statements = _Statements
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -5739,12 +5771,15 @@ func (c *cow) copyOnRewriteRefOfShowTransactionStatus(n *ShowTransactionStatus, 
 	}
 	return
 }
-func (c *cow) copyOnRewriteSingleStatement(n SingleStatement, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfSingleStatement(n *SingleStatement, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Statement, changedStatement := c.copyOnRewriteStatement(n.Statement, n)
 		if changedStatement {
-			res := n
+			res := *n
 			res.Statement, _ = _Statement.(Statement)
 			out = &res
 			if c.cloned != nil {
@@ -7311,6 +7346,8 @@ func (c *cow) copyOnRewriteCompoundStatement(n CompoundStatement, parent SQLNode
 		return n, false
 	}
 	switch n := n.(type) {
+	case *BeginEndStatement:
+		return c.copyOnRewriteRefOfBeginEndStatement(n, parent)
 	case *SingleStatement:
 		return c.copyOnRewriteRefOfSingleStatement(n, parent)
 	case Visitable:
@@ -7823,8 +7860,6 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfShowThrottledApps(n, parent)
 	case *ShowThrottlerStatus:
 		return c.copyOnRewriteRefOfShowThrottlerStatus(n, parent)
-	case SingleStatement:
-		return c.copyOnRewriteSingleStatement(n, parent)
 	case *Stream:
 		return c.copyOnRewriteRefOfStream(n, parent)
 	case *TruncateTable:
@@ -7992,28 +8027,6 @@ func (c *cow) copyOnRewriteRefOfRootNode(n *RootNode, parent SQLNode) (out SQLNo
 		if changedSQLNode {
 			res := *n
 			res.SQLNode, _ = _SQLNode.(SQLNode)
-			out = &res
-			if c.cloned != nil {
-				c.cloned(n, out)
-			}
-			changed = true
-		}
-	}
-	if c.post != nil {
-		out, changed = c.postVisit(out, parent, changed)
-	}
-	return
-}
-func (c *cow) copyOnRewriteRefOfSingleStatement(n *SingleStatement, parent SQLNode) (out SQLNode, changed bool) {
-	if n == nil || c.cursor.stop {
-		return n, false
-	}
-	out = n
-	if c.pre == nil || c.pre(n, parent) {
-		_Statement, changedStatement := c.copyOnRewriteStatement(n.Statement, n)
-		if changedStatement {
-			res := *n
-			res.Statement, _ = _Statement.(Statement)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

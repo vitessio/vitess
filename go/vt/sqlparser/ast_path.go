@@ -63,6 +63,7 @@ const (
 	RefOfAutoIncSpecSequence
 	RefOfAvgArg
 	RefOfAvgOverClause
+	RefOfBeginEndStatementStatementsOffset
 	RefOfBetweenExprLeft
 	RefOfBetweenExprFrom
 	RefOfBetweenExprTo
@@ -420,7 +421,7 @@ const (
 	RefOfShowCreateOp
 	RefOfShowFilterFilter
 	RefOfShowMigrationLogsComments
-	SingleStatementStatement
+	RefOfSingleStatementStatement
 	RefOfStarExprTableName
 	RefOfStdArg
 	RefOfStdOverClause
@@ -528,6 +529,7 @@ const (
 	SliceOfRefOfColumnDefinitionOffset
 	SliceOfAlterOptionOffset
 	SliceOfIdentifierCIOffset
+	SliceOfCompoundStatementOffset
 	SliceOfExprOffset
 	SliceOfRefOfWhenOffset
 	RefOfColumnTypeOptionsDefault
@@ -555,7 +557,6 @@ const (
 	SliceOfRefOfPartitionDefinitionOffset
 	RefOfRootNodeSQLNode
 	SliceOfSelectExprOffset
-	RefOfSingleStatementStatement
 	RefOfTableNameName
 	RefOfTableNameQualifier
 	RefOfTableOptionValue
@@ -661,6 +662,8 @@ func (s ASTStep) DebugString() string {
 		return "(*Avg).Arg"
 	case RefOfAvgOverClause:
 		return "(*Avg).OverClause"
+	case RefOfBeginEndStatementStatementsOffset:
+		return "(*BeginEndStatement).StatementsOffset"
 	case RefOfBetweenExprLeft:
 		return "(*BetweenExpr).Left"
 	case RefOfBetweenExprFrom:
@@ -1375,8 +1378,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ShowFilter).Filter"
 	case RefOfShowMigrationLogsComments:
 		return "(*ShowMigrationLogs).Comments"
-	case SingleStatementStatement:
-		return "(SingleStatement).Statement"
+	case RefOfSingleStatementStatement:
+		return "(*SingleStatement).Statement"
 	case RefOfStarExprTableName:
 		return "(*StarExpr).TableName"
 	case RefOfStdArg:
@@ -1591,6 +1594,8 @@ func (s ASTStep) DebugString() string {
 		return "([]AlterOption)[]Offset"
 	case SliceOfIdentifierCIOffset:
 		return "([]IdentifierCI)[]Offset"
+	case SliceOfCompoundStatementOffset:
+		return "([]CompoundStatement)[]Offset"
 	case SliceOfExprOffset:
 		return "([]Expr)[]Offset"
 	case SliceOfRefOfWhenOffset:
@@ -1645,8 +1650,6 @@ func (s ASTStep) DebugString() string {
 		return "(*RootNode).SQLNode"
 	case SliceOfSelectExprOffset:
 		return "([]SelectExpr)[]Offset"
-	case RefOfSingleStatementStatement:
-		return "(*SingleStatement).Statement"
 	case RefOfTableNameName:
 		return "(*TableName).Name"
 	case RefOfTableNameQualifier:
@@ -1777,6 +1780,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*Avg).Arg
 		case RefOfAvgOverClause:
 			node = node.(*Avg).OverClause
+		case RefOfBeginEndStatementStatementsOffset:
+			idx, bytesRead := path.nextPathOffset()
+			path = path[bytesRead:]
+			node = node.(*BeginEndStatement).Statements[idx]
 		case RefOfBetweenExprLeft:
 			node = node.(*BetweenExpr).Left
 		case RefOfBetweenExprFrom:
@@ -2571,8 +2578,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*ShowFilter).Filter
 		case RefOfShowMigrationLogsComments:
 			node = node.(*ShowMigrationLogs).Comments
-		case SingleStatementStatement:
-			node = node.(SingleStatement).Statement
+		case RefOfSingleStatementStatement:
+			node = node.(*SingleStatement).Statement
 		case RefOfStarExprTableName:
 			node = node.(*StarExpr).TableName
 		case RefOfStdArg:
@@ -2811,8 +2818,6 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*XorExpr).Right
 		case RefOfRootNodeSQLNode:
 			node = node.(*RootNode).SQLNode
-		case RefOfSingleStatementStatement:
-			node = node.(*SingleStatement).Statement
 		case RefOfTableNameName:
 			node = node.(*TableName).Name
 		case RefOfTableNameQualifier:

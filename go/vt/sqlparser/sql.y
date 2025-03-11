@@ -63,6 +63,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   statement       Statement
   selStmt         SelectStatement
   compoundStatement CompoundStatement
+  compoundStatements []CompoundStatement
   tableStmt    TableStatement
   tableExpr       TableExpr
   expr            Expr
@@ -438,7 +439,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 %type <partitionByType> range_or_list
 %type <integer> partitions_opt algorithm_opt subpartitions_opt partition_max_rows partition_min_rows
-%type <statement> command kill_statement
+%type <statement> command command_opt kill_statement
 %type <statement> explain_statement explainable_statement vexplain_statement
 %type <statement> prepare_statement execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
@@ -460,7 +461,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <databaseOption> collate character_set encryption
 %type <databaseOptions> create_options create_options_opt
 %type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt partition_storage_opt
-%type <compoundStatement> compound_statement
+%type <compoundStatement> compound_statement compound_statement_without_semicolon compound_statement_with_semicolon
+%type <compoundStatements> compound_statement_list_opt compound_statement_list
 %type <statement> analyze_statement show_statement use_statement purge_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
@@ -642,7 +644,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %%
 
 any_command:
-  comment_opt command semicolon_opt
+  comment_opt command_opt semicolon_opt
   {
     stmt := $2
     // If the statement is empty and we have comments
@@ -658,6 +660,16 @@ any_command:
 semicolon_opt:
 /*empty*/ {}
 | ';' {}
+
+command_opt:
+  command
+  {
+    $$ = $1
+  }
+| /*empty*/
+  {
+    setParseTree(yylex, nil)
+  }
 
 command:
   select_statement
@@ -699,15 +711,44 @@ command:
 | execute_statement
 | deallocate_statement
 | kill_statement
-| /*empty*/
-{
-  setParseTree(yylex, nil)
-}
 
-compound_statement:
-  command semicolon_opt
+compound_statement_without_semicolon:
+  command
   {
     $$ = &SingleStatement{Statement: $1}
+  }
+| BEGIN compound_statement_list_opt END
+  {
+    $$ = &BeginEndStatement{Statements: $2}
+  }
+
+compound_statement_with_semicolon:
+  compound_statement_without_semicolon ';'
+  {
+    $$ = $1
+  }
+
+compound_statement:
+  compound_statement_without_semicolon
+| compound_statement_with_semicolon
+
+compound_statement_list_opt:
+  {
+    $$ = nil
+  }
+| compound_statement_list
+  {
+    $$ = $1
+  }
+
+compound_statement_list:
+  compound_statement_with_semicolon
+  {
+    $$ = []CompoundStatement{$1}
+  }
+| compound_statement_list compound_statement_with_semicolon
+  {
+    $$ = append($1, $2)
   }
 
 user_defined_variable:

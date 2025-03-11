@@ -765,13 +765,19 @@ type (
 
 // Compound Statements
 type (
+	// BeginEndStatement represents a BEGIN ... END block.
+	BeginEndStatement struct {
+		Statements []CompoundStatement
+	}
+
 	// SingleStatement represents a single statement.
 	SingleStatement struct {
-		Statement
+		Statement Statement
 	}
 )
 
-func (*SingleStatement) iCompoundStatement() {}
+func (*SingleStatement) iCompoundStatement()   {}
+func (*BeginEndStatement) iCompoundStatement() {}
 
 var _ OrderAndLimit = (*Select)(nil)
 var _ OrderAndLimit = (*Update)(nil)

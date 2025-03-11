@@ -70,6 +70,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAvg(in, f)
 	case *Begin:
 		return VisitRefOfBegin(in, f)
+	case *BeginEndStatement:
+		return VisitRefOfBeginEndStatement(in, f)
 	case *BetweenExpr:
 		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:
@@ -466,8 +468,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowThrottlerStatus(in, f)
 	case *ShowTransactionStatus:
 		return VisitRefOfShowTransactionStatus(in, f)
-	case SingleStatement:
-		return VisitSingleStatement(in, f)
+	case *SingleStatement:
+		return VisitRefOfSingleStatement(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
 	case *Std:
@@ -916,6 +918,20 @@ func VisitRefOfBegin(in *Begin, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+func VisitRefOfBeginEndStatement(in *BeginEndStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.Statements {
+		if err := VisitCompoundStatement(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -3807,7 +3823,10 @@ func VisitRefOfShowTransactionStatus(in *ShowTransactionStatus, f Visit) error {
 	}
 	return nil
 }
-func VisitSingleStatement(in SingleStatement, f Visit) error {
+func VisitRefOfSingleStatement(in *SingleStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
@@ -4903,6 +4922,8 @@ func VisitCompoundStatement(in CompoundStatement, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
+	case *BeginEndStatement:
+		return VisitRefOfBeginEndStatement(in, f)
 	case *SingleStatement:
 		return VisitRefOfSingleStatement(in, f)
 	case Visitable:
@@ -5415,8 +5436,6 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfShowThrottledApps(in, f)
 	case *ShowThrottlerStatus:
 		return VisitRefOfShowThrottlerStatus(in, f)
-	case SingleStatement:
-		return VisitSingleStatement(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
 	case *TruncateTable:
@@ -5526,18 +5545,6 @@ func VisitRefOfRootNode(in *RootNode, f Visit) error {
 		return err
 	}
 	if err := VisitSQLNode(in.SQLNode, f); err != nil {
-		return err
-	}
-	return nil
-}
-func VisitRefOfSingleStatement(in *SingleStatement, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitStatement(in.Statement, f); err != nil {
 		return err
 	}
 	return nil

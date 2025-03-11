@@ -170,6 +170,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfBegin(a, b)
+	case *BeginEndStatement:
+		b, ok := inB.(*BeginEndStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfBeginEndStatement(a, b)
 	case *BetweenExpr:
 		b, ok := inB.(*BetweenExpr)
 		if !ok {
@@ -1358,12 +1364,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfShowTransactionStatus(a, b)
-	case SingleStatement:
-		b, ok := inB.(SingleStatement)
+	case *SingleStatement:
+		b, ok := inB.(*SingleStatement)
 		if !ok {
 			return false
 		}
-		return cmp.SingleStatement(a, b)
+		return cmp.RefOfSingleStatement(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -1976,6 +1982,17 @@ func (cmp *Comparator) RefOfBegin(a, b *Begin) bool {
 		return false
 	}
 	return cmp.SliceOfTxAccessMode(a.TxAccessModes, b.TxAccessModes)
+}
+
+// RefOfBeginEndStatement does deep equals between the two objects.
+func (cmp *Comparator) RefOfBeginEndStatement(a, b *BeginEndStatement) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.SliceOfCompoundStatement(a.Statements, b.Statements)
 }
 
 // RefOfBetweenExpr does deep equals between the two objects.
@@ -4436,8 +4453,14 @@ func (cmp *Comparator) RefOfShowTransactionStatus(a, b *ShowTransactionStatus) b
 		a.TransactionID == b.TransactionID
 }
 
-// SingleStatement does deep equals between the two objects.
-func (cmp *Comparator) SingleStatement(a, b SingleStatement) bool {
+// RefOfSingleStatement does deep equals between the two objects.
+func (cmp *Comparator) RefOfSingleStatement(a, b *SingleStatement) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
 	return cmp.Statement(a.Statement, b.Statement)
 }
 
@@ -5890,6 +5913,12 @@ func (cmp *Comparator) CompoundStatement(inA, inB CompoundStatement) bool {
 		return false
 	}
 	switch a := inA.(type) {
+	case *BeginEndStatement:
+		b, ok := inB.(*BeginEndStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfBeginEndStatement(a, b)
 	case *SingleStatement:
 		b, ok := inB.(*SingleStatement)
 		if !ok {
@@ -7195,12 +7224,6 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfShowThrottlerStatus(a, b)
-	case SingleStatement:
-		b, ok := inB.(SingleStatement)
-		if !ok {
-			return false
-		}
-		return cmp.SingleStatement(a, b)
 	case *Stream:
 		b, ok := inB.(*Stream)
 		if !ok {
@@ -7403,6 +7426,19 @@ func (cmp *Comparator) SliceOfTxAccessMode(a, b []TxAccessMode) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// SliceOfCompoundStatement does deep equals between the two objects.
+func (cmp *Comparator) SliceOfCompoundStatement(a, b []CompoundStatement) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.CompoundStatement(a[i], b[i]) {
 			return false
 		}
 	}
@@ -7731,17 +7767,6 @@ func (cmp *Comparator) SliceOfSelectExpr(a, b []SelectExpr) bool {
 		}
 	}
 	return true
-}
-
-// RefOfSingleStatement does deep equals between the two objects.
-func (cmp *Comparator) RefOfSingleStatement(a, b *SingleStatement) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return cmp.Statement(a.Statement, b.Statement)
 }
 
 // RefOfTableName does deep equals between the two objects.

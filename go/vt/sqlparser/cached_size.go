@@ -429,6 +429,25 @@ func (cached *Begin) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *BeginEndStatement) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Statements []vitess.io/vitess/go/vt/sqlparser.CompoundStatement
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Statements)) * int64(16))
+		for _, elem := range cached.Statements {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
 func (cached *BetweenExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

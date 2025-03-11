@@ -71,6 +71,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAvg(in)
 	case *Begin:
 		return CloneRefOfBegin(in)
+	case *BeginEndStatement:
+		return CloneRefOfBeginEndStatement(in)
 	case *BetweenExpr:
 		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:
@@ -467,8 +469,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowThrottlerStatus(in)
 	case *ShowTransactionStatus:
 		return CloneRefOfShowTransactionStatus(in)
-	case SingleStatement:
-		return CloneSingleStatement(in)
+	case *SingleStatement:
+		return CloneRefOfSingleStatement(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
 	case *Std:
@@ -827,6 +829,16 @@ func CloneRefOfBegin(n *Begin) *Begin {
 	}
 	out := *n
 	out.TxAccessModes = CloneSliceOfTxAccessMode(n.TxAccessModes)
+	return &out
+}
+
+// CloneRefOfBeginEndStatement creates a deep clone of the input.
+func CloneRefOfBeginEndStatement(n *BeginEndStatement) *BeginEndStatement {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Statements = CloneSliceOfCompoundStatement(n.Statements)
 	return &out
 }
 
@@ -2950,9 +2962,14 @@ func CloneRefOfShowTransactionStatus(n *ShowTransactionStatus) *ShowTransactionS
 	return &out
 }
 
-// CloneSingleStatement creates a deep clone of the input.
-func CloneSingleStatement(n SingleStatement) SingleStatement {
-	return *CloneRefOfSingleStatement(&n)
+// CloneRefOfSingleStatement creates a deep clone of the input.
+func CloneRefOfSingleStatement(n *SingleStatement) *SingleStatement {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Statement = CloneStatement(n.Statement)
+	return &out
 }
 
 // CloneRefOfStarExpr creates a deep clone of the input.
@@ -3825,6 +3842,8 @@ func CloneCompoundStatement(in CompoundStatement) CompoundStatement {
 		return nil
 	}
 	switch in := in.(type) {
+	case *BeginEndStatement:
+		return CloneRefOfBeginEndStatement(in)
 	case *SingleStatement:
 		return CloneRefOfSingleStatement(in)
 	default:
@@ -4337,8 +4356,6 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfShowThrottledApps(in)
 	case *ShowThrottlerStatus:
 		return CloneRefOfShowThrottlerStatus(in)
-	case SingleStatement:
-		return CloneSingleStatement(in)
 	case *Stream:
 		return CloneRefOfStream(in)
 	case *TruncateTable:
@@ -4465,6 +4482,18 @@ func CloneSliceOfTxAccessMode(n []TxAccessMode) []TxAccessMode {
 	}
 	res := make([]TxAccessMode, len(n))
 	copy(res, n)
+	return res
+}
+
+// CloneSliceOfCompoundStatement creates a deep clone of the input.
+func CloneSliceOfCompoundStatement(n []CompoundStatement) []CompoundStatement {
+	if n == nil {
+		return nil
+	}
+	res := make([]CompoundStatement, len(n))
+	for i, x := range n {
+		res[i] = CloneCompoundStatement(x)
+	}
 	return res
 }
 
@@ -4752,16 +4781,6 @@ func CloneSliceOfSelectExpr(n []SelectExpr) []SelectExpr {
 		res[i] = CloneSelectExpr(x)
 	}
 	return res
-}
-
-// CloneRefOfSingleStatement creates a deep clone of the input.
-func CloneRefOfSingleStatement(n *SingleStatement) *SingleStatement {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Statement = CloneStatement(n.Statement)
-	return &out
 }
 
 // CloneRefOfTableName creates a deep clone of the input.
