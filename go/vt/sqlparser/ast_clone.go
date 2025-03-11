@@ -115,6 +115,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCommonTableExpr(in)
 	case *ComparisonExpr:
 		return CloneRefOfComparisonExpr(in)
+	case CompoundStatements:
+		return CloneCompoundStatements(in)
 	case *ConstraintDefinition:
 		return CloneRefOfConstraintDefinition(in)
 	case *ConvertExpr:
@@ -157,6 +159,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfDropTable(in)
 	case *DropView:
 		return CloneRefOfDropView(in)
+	case *ElseIfBlock:
+		return CloneRefOfElseIfBlock(in)
 	case *ExecuteStmt:
 		return CloneRefOfExecuteStmt(in)
 	case *ExistsExpr:
@@ -217,6 +221,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneIdentifierCI(in)
 	case IdentifierCS:
 		return CloneIdentifierCS(in)
+	case *IfStatement:
+		return CloneRefOfIfStatement(in)
 	case *IndexDefinition:
 		return CloneRefOfIndexDefinition(in)
 	case *IndexHint:
@@ -838,7 +844,7 @@ func CloneRefOfBeginEndStatement(n *BeginEndStatement) *BeginEndStatement {
 		return nil
 	}
 	out := *n
-	out.Statements = CloneSliceOfCompoundStatement(n.Statements)
+	out.Statements = CloneCompoundStatements(n.Statements)
 	return &out
 }
 
@@ -1057,6 +1063,18 @@ func CloneRefOfComparisonExpr(n *ComparisonExpr) *ComparisonExpr {
 	out.Right = CloneExpr(n.Right)
 	out.Escape = CloneExpr(n.Escape)
 	return &out
+}
+
+// CloneCompoundStatements creates a deep clone of the input.
+func CloneCompoundStatements(n CompoundStatements) CompoundStatements {
+	if n == nil {
+		return nil
+	}
+	res := make(CompoundStatements, len(n))
+	for i, x := range n {
+		res[i] = CloneCompoundStatement(x)
+	}
+	return res
 }
 
 // CloneRefOfConstraintDefinition creates a deep clone of the input.
@@ -1293,6 +1311,17 @@ func CloneRefOfDropView(n *DropView) *DropView {
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
+	return &out
+}
+
+// CloneRefOfElseIfBlock creates a deep clone of the input.
+func CloneRefOfElseIfBlock(n *ElseIfBlock) *ElseIfBlock {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.SearchCondition = CloneExpr(n.SearchCondition)
+	out.ThenStatements = CloneCompoundStatements(n.ThenStatements)
 	return &out
 }
 
@@ -1613,6 +1642,19 @@ func CloneIdentifierCI(n IdentifierCI) IdentifierCI {
 // CloneIdentifierCS creates a deep clone of the input.
 func CloneIdentifierCS(n IdentifierCS) IdentifierCS {
 	return *CloneRefOfIdentifierCS(&n)
+}
+
+// CloneRefOfIfStatement creates a deep clone of the input.
+func CloneRefOfIfStatement(n *IfStatement) *IfStatement {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.SearchCondition = CloneExpr(n.SearchCondition)
+	out.ThenStatements = CloneCompoundStatements(n.ThenStatements)
+	out.ElseIfBlocks = CloneSliceOfRefOfElseIfBlock(n.ElseIfBlocks)
+	out.ElseStatements = CloneCompoundStatements(n.ElseStatements)
+	return &out
 }
 
 // CloneRefOfIndexDefinition creates a deep clone of the input.
@@ -3844,6 +3886,8 @@ func CloneCompoundStatement(in CompoundStatement) CompoundStatement {
 	switch in := in.(type) {
 	case *BeginEndStatement:
 		return CloneRefOfBeginEndStatement(in)
+	case *IfStatement:
+		return CloneRefOfIfStatement(in)
 	case *SingleStatement:
 		return CloneRefOfSingleStatement(in)
 	default:
@@ -4485,18 +4529,6 @@ func CloneSliceOfTxAccessMode(n []TxAccessMode) []TxAccessMode {
 	return res
 }
 
-// CloneSliceOfCompoundStatement creates a deep clone of the input.
-func CloneSliceOfCompoundStatement(n []CompoundStatement) []CompoundStatement {
-	if n == nil {
-		return nil
-	}
-	res := make([]CompoundStatement, len(n))
-	for i, x := range n {
-		res[i] = CloneCompoundStatement(x)
-	}
-	return res
-}
-
 // CloneSliceOfExpr creates a deep clone of the input.
 func CloneSliceOfExpr(n []Expr) []Expr {
 	if n == nil {
@@ -4616,6 +4648,18 @@ func CloneRefOfIdentifierCS(n *IdentifierCS) *IdentifierCS {
 	}
 	out := *n
 	return &out
+}
+
+// CloneSliceOfRefOfElseIfBlock creates a deep clone of the input.
+func CloneSliceOfRefOfElseIfBlock(n []*ElseIfBlock) []*ElseIfBlock {
+	if n == nil {
+		return nil
+	}
+	res := make([]*ElseIfBlock, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfElseIfBlock(x)
+	}
+	return res
 }
 
 // CloneSliceOfRefOfIndexColumn creates a deep clone of the input.

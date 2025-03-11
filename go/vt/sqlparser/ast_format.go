@@ -392,11 +392,32 @@ func (s *SingleStatement) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (bes *BeginEndStatement) Format(buf *TrackedBuffer) {
-	buf.literal("begin ")
-	for _, stmt := range bes.Statements {
-		buf.astPrintf(bes, "%v ", stmt)
+	buf.astPrintf(bes, "begin%v end;", bes.Statements)
+}
+
+// Format formats the node.
+func (cs CompoundStatements) Format(buf *TrackedBuffer) {
+	for _, stmt := range cs {
+		buf.astPrintf(cs, " %v", stmt)
 	}
-	buf.literal("end;")
+}
+
+// Format formats the node.
+func (is *IfStatement) Format(buf *TrackedBuffer) {
+	buf.astPrintf(is, "if %v then%v", is.SearchCondition, is.ThenStatements)
+
+	for _, elifBlock := range is.ElseIfBlocks {
+		buf.astPrintf(is, " %v", elifBlock)
+	}
+	if is.ElseStatements != nil {
+		buf.astPrintf(is, " else%v", is.ElseStatements)
+	}
+	buf.literal(" end if;")
+}
+
+// Format formats the node.
+func (eib *ElseIfBlock) Format(buf *TrackedBuffer) {
+	buf.astPrintf(eib, "elseif %v then%v", eib.SearchCondition, eib.ThenStatements)
 }
 
 // Format formats the node.

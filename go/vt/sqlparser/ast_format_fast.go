@@ -540,12 +540,43 @@ func (s *SingleStatement) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (bes *BeginEndStatement) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("begin ")
-	for _, stmt := range bes.Statements {
-		stmt.FormatFast(buf)
+	buf.WriteString("begin")
+	bes.Statements.FormatFast(buf)
+	buf.WriteString(" end;")
+}
+
+// FormatFast formats the node.
+func (cs CompoundStatements) FormatFast(buf *TrackedBuffer) {
+	for _, stmt := range cs {
 		buf.WriteByte(' ')
+		stmt.FormatFast(buf)
 	}
-	buf.WriteString("end;")
+}
+
+// FormatFast formats the node.
+func (is *IfStatement) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("if ")
+	is.SearchCondition.FormatFast(buf)
+	buf.WriteString(" then")
+	is.ThenStatements.FormatFast(buf)
+
+	for _, elifBlock := range is.ElseIfBlocks {
+		buf.WriteByte(' ')
+		elifBlock.FormatFast(buf)
+	}
+	if is.ElseStatements != nil {
+		buf.WriteString(" else")
+		is.ElseStatements.FormatFast(buf)
+	}
+	buf.WriteString(" end if;")
+}
+
+// FormatFast formats the node.
+func (eib *ElseIfBlock) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("elseif ")
+	eib.SearchCondition.FormatFast(buf)
+	buf.WriteString(" then")
+	eib.ThenStatements.FormatFast(buf)
 }
 
 // FormatFast formats the node.

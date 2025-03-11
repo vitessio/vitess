@@ -2144,6 +2144,9 @@ var (
 		input:  `CREATE PROCEDURE p1 (IN country CHAR(3), OUT cities INT) begin create table t1(a int); begin end; end;`,
 		output: "create procedure p1 (in country CHAR(3), out cities INT) begin create table t1 (\n\ta int\n); begin end; end;",
 	}, {
+		input:  `CREATE PROCEDURE compare (IN n INT, IN m INT, INOUT s VARCHAR(50)) BEGIN IF n = m THEN SET s = 'equals'; ELSE IF n > m THEN SET s = 'greater'; ELSE SET s = 'less'; END IF; SET s = CONCAT('is ', s, ' than'); END IF; SET s = CONCAT(n, ' ', s, ' ', m, '.'); END`,
+		output: `create procedure compare (in n INT, in m INT, inout s VARCHAR(50)) begin if n = m then set s = 'equals'; else if n > m then set s = 'greater'; else set s = 'less'; end if; set s = CONCAT('is ', s, ' than'); end if; set s = CONCAT(n, ' ', s, ' ', m, '.'); end;`,
+	}, {
 		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {
 		input: "alter view a as select * from t",

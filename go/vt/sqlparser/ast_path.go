@@ -63,7 +63,7 @@ const (
 	RefOfAutoIncSpecSequence
 	RefOfAvgArg
 	RefOfAvgOverClause
-	RefOfBeginEndStatementStatementsOffset
+	RefOfBeginEndStatementStatements
 	RefOfBetweenExprLeft
 	RefOfBetweenExprFrom
 	RefOfBetweenExprTo
@@ -99,6 +99,7 @@ const (
 	RefOfComparisonExprLeft
 	RefOfComparisonExprRight
 	RefOfComparisonExprEscape
+	CompoundStatementsOffset
 	RefOfConstraintDefinitionName
 	RefOfConstraintDefinitionDetails
 	RefOfConvertExprExpr
@@ -143,6 +144,8 @@ const (
 	RefOfDropTableComments
 	RefOfDropViewFromTables
 	RefOfDropViewComments
+	RefOfElseIfBlockSearchCondition
+	RefOfElseIfBlockThenStatements
 	RefOfExecuteStmtName
 	RefOfExecuteStmtComments
 	RefOfExecuteStmtArgumentsOffset
@@ -199,6 +202,10 @@ const (
 	RefOfGroupConcatExprExprsOffset
 	RefOfGroupConcatExprOrderBy
 	RefOfGroupConcatExprLimit
+	RefOfIfStatementSearchCondition
+	RefOfIfStatementThenStatements
+	RefOfIfStatementElseIfBlocksOffset
+	RefOfIfStatementElseStatements
 	RefOfIndexDefinitionInfo
 	RefOfIndexHintIndexesOffset
 	IndexHintsOffset
@@ -529,7 +536,6 @@ const (
 	SliceOfRefOfColumnDefinitionOffset
 	SliceOfAlterOptionOffset
 	SliceOfIdentifierCIOffset
-	SliceOfCompoundStatementOffset
 	SliceOfExprOffset
 	SliceOfRefOfWhenOffset
 	RefOfColumnTypeOptionsDefault
@@ -543,6 +549,7 @@ const (
 	SliceOfRefOfProcParameterOffset
 	SliceOfTableExprOffset
 	SliceOfRefOfVariableOffset
+	SliceOfRefOfElseIfBlockOffset
 	SliceOfRefOfJSONObjectParamOffset
 	SliceOfRefOfJtColumnDefinitionOffset
 	RefOfJtOrdinalColDefName
@@ -662,8 +669,8 @@ func (s ASTStep) DebugString() string {
 		return "(*Avg).Arg"
 	case RefOfAvgOverClause:
 		return "(*Avg).OverClause"
-	case RefOfBeginEndStatementStatementsOffset:
-		return "(*BeginEndStatement).StatementsOffset"
+	case RefOfBeginEndStatementStatements:
+		return "(*BeginEndStatement).Statements"
 	case RefOfBetweenExprLeft:
 		return "(*BetweenExpr).Left"
 	case RefOfBetweenExprFrom:
@@ -734,6 +741,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ComparisonExpr).Right"
 	case RefOfComparisonExprEscape:
 		return "(*ComparisonExpr).Escape"
+	case CompoundStatementsOffset:
+		return "(CompoundStatements)[]Offset"
 	case RefOfConstraintDefinitionName:
 		return "(*ConstraintDefinition).Name"
 	case RefOfConstraintDefinitionDetails:
@@ -822,6 +831,10 @@ func (s ASTStep) DebugString() string {
 		return "(*DropView).FromTables"
 	case RefOfDropViewComments:
 		return "(*DropView).Comments"
+	case RefOfElseIfBlockSearchCondition:
+		return "(*ElseIfBlock).SearchCondition"
+	case RefOfElseIfBlockThenStatements:
+		return "(*ElseIfBlock).ThenStatements"
 	case RefOfExecuteStmtName:
 		return "(*ExecuteStmt).Name"
 	case RefOfExecuteStmtComments:
@@ -934,6 +947,14 @@ func (s ASTStep) DebugString() string {
 		return "(*GroupConcatExpr).OrderBy"
 	case RefOfGroupConcatExprLimit:
 		return "(*GroupConcatExpr).Limit"
+	case RefOfIfStatementSearchCondition:
+		return "(*IfStatement).SearchCondition"
+	case RefOfIfStatementThenStatements:
+		return "(*IfStatement).ThenStatements"
+	case RefOfIfStatementElseIfBlocksOffset:
+		return "(*IfStatement).ElseIfBlocksOffset"
+	case RefOfIfStatementElseStatements:
+		return "(*IfStatement).ElseStatements"
 	case RefOfIndexDefinitionInfo:
 		return "(*IndexDefinition).Info"
 	case RefOfIndexHintIndexesOffset:
@@ -1594,8 +1615,6 @@ func (s ASTStep) DebugString() string {
 		return "([]AlterOption)[]Offset"
 	case SliceOfIdentifierCIOffset:
 		return "([]IdentifierCI)[]Offset"
-	case SliceOfCompoundStatementOffset:
-		return "([]CompoundStatement)[]Offset"
 	case SliceOfExprOffset:
 		return "([]Expr)[]Offset"
 	case SliceOfRefOfWhenOffset:
@@ -1622,6 +1641,8 @@ func (s ASTStep) DebugString() string {
 		return "([]TableExpr)[]Offset"
 	case SliceOfRefOfVariableOffset:
 		return "([]*Variable)[]Offset"
+	case SliceOfRefOfElseIfBlockOffset:
+		return "([]*ElseIfBlock)[]Offset"
 	case SliceOfRefOfJSONObjectParamOffset:
 		return "([]*JSONObjectParam)[]Offset"
 	case SliceOfRefOfJtColumnDefinitionOffset:
@@ -1780,10 +1801,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*Avg).Arg
 		case RefOfAvgOverClause:
 			node = node.(*Avg).OverClause
-		case RefOfBeginEndStatementStatementsOffset:
-			idx, bytesRead := path.nextPathOffset()
-			path = path[bytesRead:]
-			node = node.(*BeginEndStatement).Statements[idx]
+		case RefOfBeginEndStatementStatements:
+			node = node.(*BeginEndStatement).Statements
 		case RefOfBetweenExprLeft:
 			node = node.(*BetweenExpr).Left
 		case RefOfBetweenExprFrom:
@@ -1862,6 +1881,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*ComparisonExpr).Right
 		case RefOfComparisonExprEscape:
 			node = node.(*ComparisonExpr).Escape
+		case CompoundStatementsOffset:
+			idx, bytesRead := path.nextPathOffset()
+			path = path[bytesRead:]
+			node = node.(CompoundStatements)[idx]
 		case RefOfConstraintDefinitionName:
 			node = node.(*ConstraintDefinition).Name
 		case RefOfConstraintDefinitionDetails:
@@ -1956,6 +1979,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*DropView).FromTables
 		case RefOfDropViewComments:
 			node = node.(*DropView).Comments
+		case RefOfElseIfBlockSearchCondition:
+			node = node.(*ElseIfBlock).SearchCondition
+		case RefOfElseIfBlockThenStatements:
+			node = node.(*ElseIfBlock).ThenStatements
 		case RefOfExecuteStmtName:
 			node = node.(*ExecuteStmt).Name
 		case RefOfExecuteStmtComments:
@@ -2078,6 +2105,16 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*GroupConcatExpr).OrderBy
 		case RefOfGroupConcatExprLimit:
 			node = node.(*GroupConcatExpr).Limit
+		case RefOfIfStatementSearchCondition:
+			node = node.(*IfStatement).SearchCondition
+		case RefOfIfStatementThenStatements:
+			node = node.(*IfStatement).ThenStatements
+		case RefOfIfStatementElseIfBlocksOffset:
+			idx, bytesRead := path.nextPathOffset()
+			path = path[bytesRead:]
+			node = node.(*IfStatement).ElseIfBlocks[idx]
+		case RefOfIfStatementElseStatements:
+			node = node.(*IfStatement).ElseStatements
 		case RefOfIndexDefinitionInfo:
 			node = node.(*IndexDefinition).Info
 		case RefOfIndexHintIndexesOffset:

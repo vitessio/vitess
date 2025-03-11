@@ -302,6 +302,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfComparisonExpr(a, b)
+	case CompoundStatements:
+		b, ok := inB.(CompoundStatements)
+		if !ok {
+			return false
+		}
+		return cmp.CompoundStatements(a, b)
 	case *ConstraintDefinition:
 		b, ok := inB.(*ConstraintDefinition)
 		if !ok {
@@ -428,6 +434,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfDropView(a, b)
+	case *ElseIfBlock:
+		b, ok := inB.(*ElseIfBlock)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfElseIfBlock(a, b)
 	case *ExecuteStmt:
 		b, ok := inB.(*ExecuteStmt)
 		if !ok {
@@ -608,6 +620,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.IdentifierCS(a, b)
+	case *IfStatement:
+		b, ok := inB.(*IfStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfIfStatement(a, b)
 	case *IndexDefinition:
 		b, ok := inB.(*IndexDefinition)
 		if !ok {
@@ -1992,7 +2010,7 @@ func (cmp *Comparator) RefOfBeginEndStatement(a, b *BeginEndStatement) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.SliceOfCompoundStatement(a.Statements, b.Statements)
+	return cmp.CompoundStatements(a.Statements, b.Statements)
 }
 
 // RefOfBetweenExpr does deep equals between the two objects.
@@ -2252,6 +2270,19 @@ func (cmp *Comparator) RefOfComparisonExpr(a, b *ComparisonExpr) bool {
 		cmp.Expr(a.Left, b.Left) &&
 		cmp.Expr(a.Right, b.Right) &&
 		cmp.Expr(a.Escape, b.Escape)
+}
+
+// CompoundStatements does deep equals between the two objects.
+func (cmp *Comparator) CompoundStatements(a, b CompoundStatements) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.CompoundStatement(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // RefOfConstraintDefinition does deep equals between the two objects.
@@ -2534,6 +2565,18 @@ func (cmp *Comparator) RefOfDropView(a, b *DropView) bool {
 	return a.IfExists == b.IfExists &&
 		cmp.TableNames(a.FromTables, b.FromTables) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments)
+}
+
+// RefOfElseIfBlock does deep equals between the two objects.
+func (cmp *Comparator) RefOfElseIfBlock(a, b *ElseIfBlock) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.SearchCondition, b.SearchCondition) &&
+		cmp.CompoundStatements(a.ThenStatements, b.ThenStatements)
 }
 
 // RefOfExecuteStmt does deep equals between the two objects.
@@ -2904,6 +2947,20 @@ func (cmp *Comparator) IdentifierCI(a, b IdentifierCI) bool {
 // IdentifierCS does deep equals between the two objects.
 func (cmp *Comparator) IdentifierCS(a, b IdentifierCS) bool {
 	return a.v == b.v
+}
+
+// RefOfIfStatement does deep equals between the two objects.
+func (cmp *Comparator) RefOfIfStatement(a, b *IfStatement) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.SearchCondition, b.SearchCondition) &&
+		cmp.CompoundStatements(a.ThenStatements, b.ThenStatements) &&
+		cmp.SliceOfRefOfElseIfBlock(a.ElseIfBlocks, b.ElseIfBlocks) &&
+		cmp.CompoundStatements(a.ElseStatements, b.ElseStatements)
 }
 
 // RefOfIndexDefinition does deep equals between the two objects.
@@ -5919,6 +5976,12 @@ func (cmp *Comparator) CompoundStatement(inA, inB CompoundStatement) bool {
 			return false
 		}
 		return cmp.RefOfBeginEndStatement(a, b)
+	case *IfStatement:
+		b, ok := inB.(*IfStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfIfStatement(a, b)
 	case *SingleStatement:
 		b, ok := inB.(*SingleStatement)
 		if !ok {
@@ -7432,19 +7495,6 @@ func (cmp *Comparator) SliceOfTxAccessMode(a, b []TxAccessMode) bool {
 	return true
 }
 
-// SliceOfCompoundStatement does deep equals between the two objects.
-func (cmp *Comparator) SliceOfCompoundStatement(a, b []CompoundStatement) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.CompoundStatement(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
 // SliceOfExpr does deep equals between the two objects.
 func (cmp *Comparator) SliceOfExpr(a, b []Expr) bool {
 	if len(a) != len(b) {
@@ -7587,6 +7637,19 @@ func (cmp *Comparator) RefOfIdentifierCS(a, b *IdentifierCS) bool {
 		return false
 	}
 	return a.v == b.v
+}
+
+// SliceOfRefOfElseIfBlock does deep equals between the two objects.
+func (cmp *Comparator) SliceOfRefOfElseIfBlock(a, b []*ElseIfBlock) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.RefOfElseIfBlock(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // SliceOfRefOfIndexColumn does deep equals between the two objects.

@@ -437,7 +437,7 @@ func (cached *BeginEndStatement) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	// field Statements []vitess.io/vitess/go/vt/sqlparser.CompoundStatement
+	// field Statements vitess.io/vitess/go/vt/sqlparser.CompoundStatements
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Statements)) * int64(16))
 		for _, elem := range cached.Statements {
@@ -911,6 +911,22 @@ func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *CompoundStatements) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(16))
+	for _, elem := range *cached {
+		if cc, ok := elem.(cachedObject); ok {
+			size += cc.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *ConstraintDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1309,6 +1325,29 @@ func (cached *DropView) CachedSize(alloc bool) int64 {
 	}
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
+	return size
+}
+func (cached *ElseIfBlock) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field SearchCondition vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.SearchCondition.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field ThenStatements vitess.io/vitess/go/vt/sqlparser.CompoundStatements
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ThenStatements)) * int64(16))
+		for _, elem := range cached.ThenStatements {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
 	return size
 }
 func (cached *ExecuteStmt) CachedSize(alloc bool) int64 {
@@ -1817,6 +1856,45 @@ func (cached *IdentifierCS) CachedSize(alloc bool) int64 {
 	}
 	// field v string
 	size += hack.RuntimeAllocSize(int64(len(cached.v)))
+	return size
+}
+func (cached *IfStatement) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(96)
+	}
+	// field SearchCondition vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.SearchCondition.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field ThenStatements vitess.io/vitess/go/vt/sqlparser.CompoundStatements
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ThenStatements)) * int64(16))
+		for _, elem := range cached.ThenStatements {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	// field ElseIfBlocks []*vitess.io/vitess/go/vt/sqlparser.ElseIfBlock
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ElseIfBlocks)) * int64(8))
+		for _, elem := range cached.ElseIfBlocks {
+			size += elem.CachedSize(true)
+		}
+	}
+	// field ElseStatements vitess.io/vitess/go/vt/sqlparser.CompoundStatements
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ElseStatements)) * int64(16))
+		for _, elem := range cached.ElseStatements {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
 	return size
 }
 func (cached *IndexColumn) CachedSize(alloc bool) int64 {

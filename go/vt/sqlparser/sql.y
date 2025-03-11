@@ -63,7 +63,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   statement       Statement
   selStmt         SelectStatement
   compoundStatement CompoundStatement
-  compoundStatements []CompoundStatement
+  compoundStatements CompoundStatements
   tableStmt    TableStatement
   tableExpr       TableExpr
   expr            Expr
@@ -120,6 +120,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
   constraintDefinition *ConstraintDefinition
   revertMigration *RevertMigration
   alterMigration  *AlterMigration
+  elseIf          *ElseIfBlock
+  elseIfs	  []*ElseIfBlock
   trimType        TrimType
   frameClause     *FrameClause
   framePoint 	  *FramePoint
@@ -301,7 +303,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %left <str> XOR
 %left <str> AND
 %right <str> NOT '!'
-%left <str> BETWEEN CASE WHEN THEN ELSE END
+%left <str> BETWEEN CASE WHEN THEN ELSE ELSEIF END
 %left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP RLIKE IN ASSIGNMENT_OPT
 %left <str> '&'
 %left <str> SHIFT_LEFT SHIFT_RIGHT
@@ -462,7 +464,9 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <databaseOptions> create_options create_options_opt
 %type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt partition_storage_opt
 %type <compoundStatement> compound_statement compound_statement_without_semicolon compound_statement_with_semicolon
-%type <compoundStatements> compound_statement_list_opt compound_statement_list
+%type <compoundStatements> compound_statement_list_opt compound_statement_list else_opt
+%type <elseIf> elseif_expression
+%type <elseIfs> elseif_list elseif_list_opt
 %type <statement> analyze_statement show_statement use_statement purge_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
@@ -721,6 +725,10 @@ compound_statement_without_semicolon:
   {
     $$ = &BeginEndStatement{Statements: $2}
   }
+| IF expression THEN compound_statement_list elseif_list_opt else_opt END IF
+  {
+    $$ = &IfStatement{SearchCondition: $2, ThenStatements: $4, ElseIfBlocks: $5, ElseStatements: $6}
+  }
 
 compound_statement_with_semicolon:
   compound_statement_without_semicolon ';'
@@ -744,11 +752,45 @@ compound_statement_list_opt:
 compound_statement_list:
   compound_statement_with_semicolon
   {
-    $$ = []CompoundStatement{$1}
+    $$ = CompoundStatements{$1}
   }
 | compound_statement_list compound_statement_with_semicolon
   {
     $$ = append($1, $2)
+  }
+
+else_opt:
+  {
+    $$ = nil
+  }
+| ELSE compound_statement_list
+  {
+    $$ = $2
+  }
+
+elseif_list_opt:
+  {
+    $$ = nil
+  }
+| elseif_list
+  {
+    $$ = $1
+  }
+
+elseif_list:
+  elseif_list elseif_expression
+  {
+    $$ = append($1, $2)
+  }
+| elseif_expression
+  {
+    $$ = []*ElseIfBlock{ $1 }
+  }
+
+elseif_expression:
+  ELSEIF expression THEN compound_statement_list
+  {
+    $$ = &ElseIfBlock{SearchCondition: $2, ThenStatements: $4}
   }
 
 user_defined_variable:
@@ -1143,7 +1185,7 @@ set_expression:
 set_variable:
   ID
   {
-    $$ = NewSetVariable(string($1), SessionScope)
+    $$ = NewSetVariable(string($1), NoScope)
   }
 | variable_expr
   {
@@ -8318,6 +8360,7 @@ reserved_keyword:
 | DIV
 | DROP
 | ELSE
+| ELSEIF
 | EMPTY
 | ESCAPE
 | EXISTS

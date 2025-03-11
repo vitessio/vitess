@@ -765,19 +765,37 @@ type (
 
 // Compound Statements
 type (
-	// BeginEndStatement represents a BEGIN ... END block.
-	BeginEndStatement struct {
-		Statements []CompoundStatement
-	}
+	// CompoundStatements represents a list of compound statements.
+	CompoundStatements []CompoundStatement
 
 	// SingleStatement represents a single statement.
 	SingleStatement struct {
 		Statement Statement
 	}
+
+	// BeginEndStatement represents a BEGIN ... END block.
+	BeginEndStatement struct {
+		Statements CompoundStatements
+	}
+
+	// IfStatement represents a IF ... ELSEIF ... ELSE ... END IF block.
+	IfStatement struct {
+		SearchCondition Expr
+		ThenStatements  CompoundStatements
+		ElseIfBlocks    []*ElseIfBlock
+		ElseStatements  CompoundStatements
+	}
+
+	// ElseIfBlock represents a ELSEIF block in an IF statement.
+	ElseIfBlock struct {
+		SearchCondition Expr
+		ThenStatements  CompoundStatements
+	}
 )
 
 func (*SingleStatement) iCompoundStatement()   {}
 func (*BeginEndStatement) iCompoundStatement() {}
+func (*IfStatement) iCompoundStatement()       {}
 
 var _ OrderAndLimit = (*Select)(nil)
 var _ OrderAndLimit = (*Update)(nil)

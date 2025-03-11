@@ -115,6 +115,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCommonTableExpr(parent, node, replacer)
 	case *ComparisonExpr:
 		return a.rewriteRefOfComparisonExpr(parent, node, replacer)
+	case CompoundStatements:
+		return a.rewriteCompoundStatements(parent, node, replacer)
 	case *ConstraintDefinition:
 		return a.rewriteRefOfConstraintDefinition(parent, node, replacer)
 	case *ConvertExpr:
@@ -157,6 +159,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfDropTable(parent, node, replacer)
 	case *DropView:
 		return a.rewriteRefOfDropView(parent, node, replacer)
+	case *ElseIfBlock:
+		return a.rewriteRefOfElseIfBlock(parent, node, replacer)
 	case *ExecuteStmt:
 		return a.rewriteRefOfExecuteStmt(parent, node, replacer)
 	case *ExistsExpr:
@@ -217,6 +221,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteIdentifierCI(parent, node, replacer)
 	case IdentifierCS:
 		return a.rewriteIdentifierCS(parent, node, replacer)
+	case *IfStatement:
+		return a.rewriteRefOfIfStatement(parent, node, replacer)
 	case *IndexDefinition:
 		return a.rewriteRefOfIndexDefinition(parent, node, replacer)
 	case *IndexHint:
@@ -1727,21 +1733,13 @@ func (a *application) rewriteRefOfBeginEndStatement(parent SQLNode, node *BeginE
 			return true
 		}
 	}
-	for x, el := range node.Statements {
-		if a.collectPaths {
-			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(RefOfBeginEndStatementStatementsOffset))
-			} else {
-				a.cur.current.ChangeOffset(x)
-			}
-		}
-		if !a.rewriteCompoundStatement(node, el, func(idx int) replacerFunc {
-			return func(newNode, parent SQLNode) {
-				parent.(*BeginEndStatement).Statements[idx] = newNode.(CompoundStatement)
-			}
-		}(x)) {
-			return false
-		}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfBeginEndStatementStatements))
+	}
+	if !a.rewriteCompoundStatements(node, node.Statements, func(newNode, parent SQLNode) {
+		parent.(*BeginEndStatement).Statements = newNode.(CompoundStatements)
+	}) {
+		return false
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
@@ -2715,6 +2713,54 @@ func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *Compariso
 		return false
 	}
 	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: SliceMethod
+func (a *application) rewriteCompoundStatements(parent SQLNode, node CompoundStatements, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(CompoundStatementsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
+		if !a.rewriteCompoundStatement(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(CompoundStatements)[idx] = newNode.(CompoundStatement)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.collectPaths && len(node) > 0 {
 		a.cur.current.Pop()
 	}
 	if a.post != nil {
@@ -3786,6 +3832,55 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*DropView).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfElseIfBlock(parent SQLNode, node *ElseIfBlock, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfElseIfBlockSearchCondition))
+	}
+	if !a.rewriteExpr(node, node.SearchCondition, func(newNode, parent SQLNode) {
+		parent.(*ElseIfBlock).SearchCondition = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfElseIfBlockThenStatements))
+	}
+	if !a.rewriteCompoundStatements(node, node.ThenStatements, func(newNode, parent SQLNode) {
+		parent.(*ElseIfBlock).ThenStatements = newNode.(CompoundStatements)
 	}) {
 		return false
 	}
@@ -5268,6 +5363,83 @@ func (a *application) rewriteIdentifierCS(parent SQLNode, node IdentifierCS, rep
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfIfStatement(parent SQLNode, node *IfStatement, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfIfStatementSearchCondition))
+	}
+	if !a.rewriteExpr(node, node.SearchCondition, func(newNode, parent SQLNode) {
+		parent.(*IfStatement).SearchCondition = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfIfStatementThenStatements))
+	}
+	if !a.rewriteCompoundStatements(node, node.ThenStatements, func(newNode, parent SQLNode) {
+		parent.(*IfStatement).ThenStatements = newNode.(CompoundStatements)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	for x, el := range node.ElseIfBlocks {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfIfStatementElseIfBlocksOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
+		if !a.rewriteRefOfElseIfBlock(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*IfStatement).ElseIfBlocks[idx] = newNode.(*ElseIfBlock)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.collectPaths && len(node.ElseIfBlocks) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfIfStatementElseStatements))
+	}
+	if !a.rewriteCompoundStatements(node, node.ElseStatements, func(newNode, parent SQLNode) {
+		parent.(*IfStatement).ElseStatements = newNode.(CompoundStatements)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -14314,6 +14486,8 @@ func (a *application) rewriteCompoundStatement(parent SQLNode, node CompoundStat
 	switch node := node.(type) {
 	case *BeginEndStatement:
 		return a.rewriteRefOfBeginEndStatement(parent, node, replacer)
+	case *IfStatement:
+		return a.rewriteRefOfIfStatement(parent, node, replacer)
 	case *SingleStatement:
 		return a.rewriteRefOfSingleStatement(parent, node, replacer)
 	case Visitable:

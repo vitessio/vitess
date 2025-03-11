@@ -114,6 +114,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfCommonTableExpr(n, parent)
 	case *ComparisonExpr:
 		return c.copyOnRewriteRefOfComparisonExpr(n, parent)
+	case CompoundStatements:
+		return c.copyOnRewriteCompoundStatements(n, parent)
 	case *ConstraintDefinition:
 		return c.copyOnRewriteRefOfConstraintDefinition(n, parent)
 	case *ConvertExpr:
@@ -156,6 +158,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfDropTable(n, parent)
 	case *DropView:
 		return c.copyOnRewriteRefOfDropView(n, parent)
+	case *ElseIfBlock:
+		return c.copyOnRewriteRefOfElseIfBlock(n, parent)
 	case *ExecuteStmt:
 		return c.copyOnRewriteRefOfExecuteStmt(n, parent)
 	case *ExistsExpr:
@@ -216,6 +220,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteIdentifierCI(n, parent)
 	case IdentifierCS:
 		return c.copyOnRewriteIdentifierCS(n, parent)
+	case *IfStatement:
+		return c.copyOnRewriteRefOfIfStatement(n, parent)
 	case *IndexDefinition:
 		return c.copyOnRewriteRefOfIndexDefinition(n, parent)
 	case *IndexHint:
@@ -1131,18 +1137,10 @@ func (c *cow) copyOnRewriteRefOfBeginEndStatement(n *BeginEndStatement, parent S
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		var changedStatements bool
-		_Statements := make([]CompoundStatement, len(n.Statements))
-		for x, el := range n.Statements {
-			this, changed := c.copyOnRewriteCompoundStatement(el, n)
-			_Statements[x] = this.(CompoundStatement)
-			if changed {
-				changedStatements = true
-			}
-		}
+		_Statements, changedStatements := c.copyOnRewriteCompoundStatements(n.Statements, n)
 		if changedStatements {
 			res := *n
-			res.Statements = _Statements
+			res.Statements, _ = _Statements.(CompoundStatements)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1619,6 +1617,29 @@ func (c *cow) copyOnRewriteRefOfComparisonExpr(n *ComparisonExpr, parent SQLNode
 				c.cloned(n, out)
 			}
 			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteCompoundStatements(n CompoundStatements, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		res := make(CompoundStatements, len(n))
+		for x, el := range n {
+			this, change := c.copyOnRewriteCompoundStatement(el, n)
+			res[x] = this.(CompoundStatement)
+			if change {
+				changed = true
+			}
+		}
+		if changed {
+			out = res
 		}
 	}
 	if c.post != nil {
@@ -2122,6 +2143,30 @@ func (c *cow) copyOnRewriteRefOfDropView(n *DropView, parent SQLNode) (out SQLNo
 			res := *n
 			res.FromTables, _ = _FromTables.(TableNames)
 			res.Comments, _ = _Comments.(*ParsedComments)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfElseIfBlock(n *ElseIfBlock, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_SearchCondition, changedSearchCondition := c.copyOnRewriteExpr(n.SearchCondition, n)
+		_ThenStatements, changedThenStatements := c.copyOnRewriteCompoundStatements(n.ThenStatements, n)
+		if changedSearchCondition || changedThenStatements {
+			res := *n
+			res.SearchCondition, _ = _SearchCondition.(Expr)
+			res.ThenStatements, _ = _ThenStatements.(CompoundStatements)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -2842,6 +2887,42 @@ func (c *cow) copyOnRewriteIdentifierCI(n IdentifierCI, parent SQLNode) (out SQL
 func (c *cow) copyOnRewriteIdentifierCS(n IdentifierCS, parent SQLNode) (out SQLNode, changed bool) {
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfIfStatement(n *IfStatement, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_SearchCondition, changedSearchCondition := c.copyOnRewriteExpr(n.SearchCondition, n)
+		_ThenStatements, changedThenStatements := c.copyOnRewriteCompoundStatements(n.ThenStatements, n)
+		var changedElseIfBlocks bool
+		_ElseIfBlocks := make([]*ElseIfBlock, len(n.ElseIfBlocks))
+		for x, el := range n.ElseIfBlocks {
+			this, changed := c.copyOnRewriteRefOfElseIfBlock(el, n)
+			_ElseIfBlocks[x] = this.(*ElseIfBlock)
+			if changed {
+				changedElseIfBlocks = true
+			}
+		}
+		_ElseStatements, changedElseStatements := c.copyOnRewriteCompoundStatements(n.ElseStatements, n)
+		if changedSearchCondition || changedThenStatements || changedElseIfBlocks || changedElseStatements {
+			res := *n
+			res.SearchCondition, _ = _SearchCondition.(Expr)
+			res.ThenStatements, _ = _ThenStatements.(CompoundStatements)
+			res.ElseIfBlocks = _ElseIfBlocks
+			res.ElseStatements, _ = _ElseStatements.(CompoundStatements)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -7348,6 +7429,8 @@ func (c *cow) copyOnRewriteCompoundStatement(n CompoundStatement, parent SQLNode
 	switch n := n.(type) {
 	case *BeginEndStatement:
 		return c.copyOnRewriteRefOfBeginEndStatement(n, parent)
+	case *IfStatement:
+		return c.copyOnRewriteRefOfIfStatement(n, parent)
 	case *SingleStatement:
 		return c.copyOnRewriteRefOfSingleStatement(n, parent)
 	case Visitable:

@@ -114,6 +114,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCommonTableExpr(in, f)
 	case *ComparisonExpr:
 		return VisitRefOfComparisonExpr(in, f)
+	case CompoundStatements:
+		return VisitCompoundStatements(in, f)
 	case *ConstraintDefinition:
 		return VisitRefOfConstraintDefinition(in, f)
 	case *ConvertExpr:
@@ -156,6 +158,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfDropTable(in, f)
 	case *DropView:
 		return VisitRefOfDropView(in, f)
+	case *ElseIfBlock:
+		return VisitRefOfElseIfBlock(in, f)
 	case *ExecuteStmt:
 		return VisitRefOfExecuteStmt(in, f)
 	case *ExistsExpr:
@@ -216,6 +220,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitIdentifierCI(in, f)
 	case IdentifierCS:
 		return VisitIdentifierCS(in, f)
+	case *IfStatement:
+		return VisitRefOfIfStatement(in, f)
 	case *IndexDefinition:
 		return VisitRefOfIndexDefinition(in, f)
 	case *IndexHint:
@@ -928,10 +934,8 @@ func VisitRefOfBeginEndStatement(in *BeginEndStatement, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in.Statements {
-		if err := VisitCompoundStatement(el, f); err != nil {
-			return err
-		}
+	if err := VisitCompoundStatements(in.Statements, f); err != nil {
+		return err
 	}
 	return nil
 }
@@ -1225,6 +1229,20 @@ func VisitRefOfComparisonExpr(in *ComparisonExpr, f Visit) error {
 	}
 	if err := VisitExpr(in.Escape, f); err != nil {
 		return err
+	}
+	return nil
+}
+func VisitCompoundStatements(in CompoundStatements, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitCompoundStatement(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1551,6 +1569,21 @@ func VisitRefOfDropView(in *DropView, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfElseIfBlock(in *ElseIfBlock, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.SearchCondition, f); err != nil {
+		return err
+	}
+	if err := VisitCompoundStatements(in.ThenStatements, f); err != nil {
 		return err
 	}
 	return nil
@@ -1993,6 +2026,29 @@ func VisitIdentifierCI(in IdentifierCI, f Visit) error {
 }
 func VisitIdentifierCS(in IdentifierCS, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfIfStatement(in *IfStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.SearchCondition, f); err != nil {
+		return err
+	}
+	if err := VisitCompoundStatements(in.ThenStatements, f); err != nil {
+		return err
+	}
+	for _, el := range in.ElseIfBlocks {
+		if err := VisitRefOfElseIfBlock(el, f); err != nil {
+			return err
+		}
+	}
+	if err := VisitCompoundStatements(in.ElseStatements, f); err != nil {
 		return err
 	}
 	return nil
@@ -4924,6 +4980,8 @@ func VisitCompoundStatement(in CompoundStatement, f Visit) error {
 	switch in := in.(type) {
 	case *BeginEndStatement:
 		return VisitRefOfBeginEndStatement(in, f)
+	case *IfStatement:
+		return VisitRefOfIfStatement(in, f)
 	case *SingleStatement:
 		return VisitRefOfSingleStatement(in, f)
 	case Visitable:

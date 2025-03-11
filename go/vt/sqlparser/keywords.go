@@ -246,7 +246,7 @@ var keywords = []keyword{
 	{"dynamic", DYNAMIC},
 	{"each", UNUSED},
 	{"else", ELSE},
-	{"elseif", UNUSED},
+	{"elseif", ELSEIF},
 	{"empty", EMPTY},
 	{"enable", ENABLE},
 	{"enclosed", ENCLOSED},
