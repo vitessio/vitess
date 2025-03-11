@@ -126,6 +126,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfCountStar(n, parent)
 	case *CreateDatabase:
 		return c.copyOnRewriteRefOfCreateDatabase(n, parent)
+	case *CreateProcedure:
+		return c.copyOnRewriteRefOfCreateProcedure(n, parent)
 	case *CreateTable:
 		return c.copyOnRewriteRefOfCreateTable(n, parent)
 	case *CreateView:
@@ -1736,6 +1738,32 @@ func (c *cow) copyOnRewriteRefOfCreateDatabase(n *CreateDatabase, parent SQLNode
 			res := *n
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.DBName, _ = _DBName.(IdentifierCS)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfCreateProcedure(n *CreateProcedure, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Name, changedName := c.copyOnRewriteIdentifierCS(n.Name, n)
+		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
+		_Definer, changedDefiner := c.copyOnRewriteRefOfDefiner(n.Definer, n)
+		if changedName || changedComments || changedDefiner {
+			res := *n
+			res.Name, _ = _Name.(IdentifierCS)
+			res.Comments, _ = _Comments.(*ParsedComments)
+			res.Definer, _ = _Definer.(*Definer)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -7660,6 +7688,8 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfCommit(n, parent)
 	case *CreateDatabase:
 		return c.copyOnRewriteRefOfCreateDatabase(n, parent)
+	case *CreateProcedure:
+		return c.copyOnRewriteRefOfCreateProcedure(n, parent)
 	case *CreateTable:
 		return c.copyOnRewriteRefOfCreateTable(n, parent)
 	case *CreateView:

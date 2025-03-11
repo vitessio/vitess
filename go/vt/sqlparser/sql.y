@@ -105,6 +105,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
   createDatabase  *CreateDatabase
   alterDatabase  *AlterDatabase
   createTable      *CreateTable
+  createView      *CreateView
+  createProcedure  *CreateProcedure
   tableAndLockType *TableAndLockType
   alterTable       *AlterTable
   tableOption      *TableOption
@@ -442,6 +444,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <ctes> with_list
 %type <renameTablePairs> rename_list
 %type <createTable> create_table_prefix
+%type <createProcedure> create_procedure
+%type <createView> create_view_prefix
 %type <alterTable> alter_table_prefix
 %type <alterOption> alter_option alter_commands_modifier lock_index algorithm_index
 %type <alterOptions> alter_options alter_commands_list alter_commands_modifier_list algorithm_lock_opt
@@ -488,13 +492,13 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <intervalType> interval timestampadd_interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt maxvalue
 %type <matchExprOption> match_option
-%type <boolean> distinct_opt union_op replace_opt local_opt
+%type <boolean> distinct_opt union_op replace local_opt
 %type <selectExprs> select_expression_list
 %type <selectExpr> select_expression
 %type <strs> select_options select_options_opt flush_option_list
-%type <str> select_option algorithm_view security_view security_view_opt
+%type <str> select_option algorithm_view_opt algorithm_view security_view security_view_opt
 %type <str> generated_always_opt user_username address_opt
-%type <definer> definer_opt user
+%type <definer> definer_opt definer user
 %type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
 %type <expr> simple_expr literal NUM_literal text_start text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
 %type <tableExprs> from_opt table_references from_clause
@@ -1174,6 +1178,10 @@ create_statement:
     $1.FullyParsed = true
     $$ = $1
   }
+| create_procedure
+  {
+    $$ = $1
+  }
 | create_index_prefix '(' index_column_list ')' index_option_list_opt algorithm_lock_opt
   {
     indexDef := $1.AlterOptions[0].(*AddIndexDefinition).IndexDefinition
@@ -1183,9 +1191,12 @@ create_statement:
     $1.FullyParsed = true
     $$ = $1
   }
-| CREATE comment_opt replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
+| create_view_prefix column_list_opt AS select_statement check_option_opt
   {
-    $$ = &CreateView{ViewName: $8, Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns:$9, Select: $11, CheckOption: $12 }
+    $1.Columns = $2
+    $1.Select = $4
+    $1.CheckOption = $5
+    $$ = $1
   }
 | create_database_prefix create_options_opt
   {
@@ -1194,11 +1205,8 @@ create_statement:
     $$ = $1
   }
 
-replace_opt:
-  {
-    $$ = false
-  }
-| OR REPLACE
+replace:
+  OR REPLACE
   {
     $$ = true
   }
@@ -1270,12 +1278,46 @@ json_object_param:
     $$ = &JSONObjectParam{Key:$1, Value:$3}
   }
 
+create_procedure:
+  CREATE comment_opt definer_opt PROCEDURE not_exists_opt table_id
+  {
+    $$ = &CreateProcedure{Comments: Comments($2).Parsed(), Name: $6, IfNotExists: $5, Definer: $3}
+    setDDL(yylex, $$)
+  }
+
 create_table_prefix:
   CREATE comment_opt temp_opt TABLE not_exists_opt table_name
   {
     $$ = &CreateTable{Comments: Comments($2).Parsed(), Table: $6, IfNotExists: $5, Temp: $3}
     setDDL(yylex, $$)
   }
+
+// We have to split the create_view_prefix into multiple elements
+// instead of using a signle replace_opt algorith_view_opt definer_opt
+// because that causes a shift reduce conflict on seeing a definer after having
+// seen CREATE with CREATE PROCEDURE. To conflict arises because the parser
+// doesn't know if it should reduce both replace_opt and algorithm_view_opt or not
+// and since it only has 1 token lookahead, it can't make that decision.
+// We have to therefore split the cases into multiple elements to resolve the conflict.
+// We now explicitly have cases where replace is defined, and a case where explicitly
+// algorithm for the view is defined.
+create_view_prefix:
+  CREATE comment_opt definer_opt security_view_opt VIEW table_name
+  {
+    $$ = &CreateView{ViewName: $6, Comments: Comments($2).Parsed(), Definer: $3 ,Security:$4}
+    setDDL(yylex, $$)
+  }
+| CREATE comment_opt replace algorithm_view_opt definer_opt security_view_opt VIEW table_name
+  {
+    $$ = &CreateView{ViewName: $8, Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6}
+    setDDL(yylex, $$)
+  }
+| CREATE comment_opt algorithm_view definer_opt security_view_opt VIEW table_name
+  {
+    $$ = &CreateView{ViewName: $7, Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5}
+    setDDL(yylex, $$)
+  }
+
 
 alter_table_prefix:
   ALTER comment_opt TABLE table_name
@@ -3219,7 +3261,7 @@ alter_statement:
     $1.PartitionSpec = $2
     $$ = $1
   }
-| ALTER comment_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
+| ALTER comment_opt algorithm_view_opt definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
     $$ = &AlterView{ViewName: $7, Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
@@ -7561,11 +7603,14 @@ algorithm_index:
     $$ = AlgorithmValue($3)
   }
 
-algorithm_view:
+algorithm_view_opt:
   {
     $$ = ""
   }
-| ALGORITHM '=' UNDEFINED
+| algorithm_view
+
+algorithm_view:
+  ALGORITHM '=' UNDEFINED
   {
     $$ = string($3)
   }
@@ -7623,7 +7668,10 @@ definer_opt:
   {
     $$ = nil
   }
-| DEFINER '=' user
+| definer
+
+definer:
+DEFINER '=' user
   {
     $$ = $3
   }

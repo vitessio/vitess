@@ -499,6 +499,11 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (node *CreateProcedure) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("create procedure")
+}
+
+// FormatFast formats the node.
 func (node *RevertMigration) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("revert ")
 	node.Comments.FormatFast(buf)

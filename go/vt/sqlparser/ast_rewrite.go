@@ -127,6 +127,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCountStar(parent, node, replacer)
 	case *CreateDatabase:
 		return a.rewriteRefOfCreateDatabase(parent, node, replacer)
+	case *CreateProcedure:
+		return a.rewriteRefOfCreateProcedure(parent, node, replacer)
 	case *CreateTable:
 		return a.rewriteRefOfCreateTable(parent, node, replacer)
 	case *CreateView:
@@ -2970,6 +2972,64 @@ func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDat
 	}
 	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
 		parent.(*CreateDatabase).DBName = newNode.(IdentifierCS)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfCreateProcedure(parent SQLNode, node *CreateProcedure, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCreateProcedureName))
+	}
+	if !a.rewriteIdentifierCS(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*CreateProcedure).Name = newNode.(IdentifierCS)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateProcedureComments))
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateProcedure).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateProcedureDefiner))
+	}
+	if !a.rewriteRefOfDefiner(node, node.Definer, func(newNode, parent SQLNode) {
+		parent.(*CreateProcedure).Definer = newNode.(*Definer)
 	}) {
 		return false
 	}
@@ -14537,6 +14597,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfCommit(parent, node, replacer)
 	case *CreateDatabase:
 		return a.rewriteRefOfCreateDatabase(parent, node, replacer)
+	case *CreateProcedure:
+		return a.rewriteRefOfCreateProcedure(parent, node, replacer)
 	case *CreateTable:
 		return a.rewriteRefOfCreateTable(parent, node, replacer)
 	case *CreateView:

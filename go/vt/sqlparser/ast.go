@@ -522,6 +522,14 @@ type (
 		Shards    string
 	}
 
+	// CreateProcedure represents a CREATE PROCEDURE statement.
+	CreateProcedure struct {
+		Name        IdentifierCS
+		Comments    *ParsedComments
+		IfNotExists bool
+		Definer     *Definer
+	}
+
 	// AlterTable represents a ALTER TABLE statement.
 	AlterTable struct {
 		Table           TableName
@@ -790,6 +798,7 @@ func (*UnlockTables) iStatement()          {}
 func (*AlterTable) iStatement()            {}
 func (*AlterVschema) iStatement()          {}
 func (*AlterMigration) iStatement()        {}
+func (*CreateProcedure) iStatement()       {}
 func (*RevertMigration) iStatement()       {}
 func (*ShowMigrationLogs) iStatement()     {}
 func (*ShowThrottledApps) iStatement()     {}

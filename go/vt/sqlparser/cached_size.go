@@ -1012,6 +1012,22 @@ func (cached *CreateDatabase) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *CreateProcedure) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCS
+	size += cached.Name.CachedSize(false)
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
+	// field Definer *vitess.io/vitess/go/vt/sqlparser.Definer
+	size += cached.Definer.CachedSize(true)
+	return size
+}
 func (cached *CreateTable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

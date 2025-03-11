@@ -108,6 +108,9 @@ const (
 	RefOfCountStarOverClause
 	RefOfCreateDatabaseComments
 	RefOfCreateDatabaseDBName
+	RefOfCreateProcedureName
+	RefOfCreateProcedureComments
+	RefOfCreateProcedureDefiner
 	RefOfCreateTableTable
 	RefOfCreateTableTableSpec
 	RefOfCreateTableOptLike
@@ -741,6 +744,12 @@ func (s ASTStep) DebugString() string {
 		return "(*CreateDatabase).Comments"
 	case RefOfCreateDatabaseDBName:
 		return "(*CreateDatabase).DBName"
+	case RefOfCreateProcedureName:
+		return "(*CreateProcedure).Name"
+	case RefOfCreateProcedureComments:
+		return "(*CreateProcedure).Comments"
+	case RefOfCreateProcedureDefiner:
+		return "(*CreateProcedure).Definer"
 	case RefOfCreateTableTable:
 		return "(*CreateTable).Table"
 	case RefOfCreateTableTableSpec:
@@ -1847,6 +1856,12 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*CreateDatabase).Comments
 		case RefOfCreateDatabaseDBName:
 			node = node.(*CreateDatabase).DBName
+		case RefOfCreateProcedureName:
+			node = node.(*CreateProcedure).Name
+		case RefOfCreateProcedureComments:
+			node = node.(*CreateProcedure).Comments
+		case RefOfCreateProcedureDefiner:
+			node = node.(*CreateProcedure).Definer
 		case RefOfCreateTableTable:
 			node = node.(*CreateTable).Table
 		case RefOfCreateTableTableSpec:

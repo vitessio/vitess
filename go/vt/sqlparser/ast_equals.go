@@ -338,6 +338,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfCreateDatabase(a, b)
+	case *CreateProcedure:
+		b, ok := inB.(*CreateProcedure)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfCreateProcedure(a, b)
 	case *CreateTable:
 		b, ok := inB.(*CreateTable)
 		if !ok {
@@ -2306,6 +2312,20 @@ func (cmp *Comparator) RefOfCreateDatabase(a, b *CreateDatabase) bool {
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCS(a.DBName, b.DBName) &&
 		cmp.SliceOfDatabaseOption(a.CreateOptions, b.CreateOptions)
+}
+
+// RefOfCreateProcedure does deep equals between the two objects.
+func (cmp *Comparator) RefOfCreateProcedure(a, b *CreateProcedure) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IfNotExists == b.IfNotExists &&
+		cmp.IdentifierCS(a.Name, b.Name) &&
+		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
+		cmp.RefOfDefiner(a.Definer, b.Definer)
 }
 
 // RefOfCreateTable does deep equals between the two objects.
@@ -6936,6 +6956,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfCreateDatabase(a, b)
+	case *CreateProcedure:
+		b, ok := inB.(*CreateProcedure)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfCreateProcedure(a, b)
 	case *CreateTable:
 		b, ok := inB.(*CreateTable)
 		if !ok {

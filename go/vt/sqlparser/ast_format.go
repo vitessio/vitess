@@ -361,6 +361,11 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *CreateProcedure) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "create procedure")
+}
+
+// Format formats the node.
 func (node *RevertMigration) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "revert %vvitess_migration '%#s'", node.Comments, node.UUID)
 }

@@ -126,6 +126,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCountStar(in, f)
 	case *CreateDatabase:
 		return VisitRefOfCreateDatabase(in, f)
+	case *CreateProcedure:
+		return VisitRefOfCreateProcedure(in, f)
 	case *CreateTable:
 		return VisitRefOfCreateTable(in, f)
 	case *CreateView:
@@ -1297,6 +1299,24 @@ func VisitRefOfCreateDatabase(in *CreateDatabase, f Visit) error {
 		return err
 	}
 	if err := VisitIdentifierCS(in.DBName, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfCreateProcedure(in *CreateProcedure, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCS(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfDefiner(in.Definer, f); err != nil {
 		return err
 	}
 	return nil
@@ -5283,6 +5303,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfCommit(in, f)
 	case *CreateDatabase:
 		return VisitRefOfCreateDatabase(in, f)
+	case *CreateProcedure:
+		return VisitRefOfCreateProcedure(in, f)
 	case *CreateTable:
 		return VisitRefOfCreateTable(in, f)
 	case *CreateView:

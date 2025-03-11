@@ -127,6 +127,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCountStar(in)
 	case *CreateDatabase:
 		return CloneRefOfCreateDatabase(in)
+	case *CreateProcedure:
+		return CloneRefOfCreateProcedure(in)
 	case *CreateTable:
 		return CloneRefOfCreateTable(in)
 	case *CreateView:
@@ -1115,6 +1117,18 @@ func CloneRefOfCreateDatabase(n *CreateDatabase) *CreateDatabase {
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.DBName = CloneIdentifierCS(n.DBName)
 	out.CreateOptions = CloneSliceOfDatabaseOption(n.CreateOptions)
+	return &out
+}
+
+// CloneRefOfCreateProcedure creates a deep clone of the input.
+func CloneRefOfCreateProcedure(n *CreateProcedure) *CreateProcedure {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneIdentifierCS(n.Name)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
+	out.Definer = CloneRefOfDefiner(n.Definer)
 	return &out
 }
 
@@ -4225,6 +4239,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfCommit(in)
 	case *CreateDatabase:
 		return CloneRefOfCreateDatabase(in)
+	case *CreateProcedure:
+		return CloneRefOfCreateProcedure(in)
 	case *CreateTable:
 		return CloneRefOfCreateTable(in)
 	case *CreateView:

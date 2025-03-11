@@ -2133,6 +2133,9 @@ var (
 		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
 		output: "create definer = 'sa'@`b.c.d` view a(b, c, d) as select * from e",
 	}, {
+		input:  `CREATE PROCEDURE citycount (IN country CHAR(3), OUT cities INT) BEGIN SELECT COUNT(*) INTO cities FROM world.city WHERE CountryCode = country; END`,
+		output: "",
+	}, {
 		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {
 		input: "alter view a as select * from t",
