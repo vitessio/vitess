@@ -69,9 +69,6 @@ func runPhases(ctx *plancontext.PlanningContext, root Operator) Operator {
 		op = runPushDownRewriters(ctx, op)
 	}
 
-	ctx.CurrentPhase = int(DONE)
-
-	op = runPushDownRewriters(ctx, op)
 	op = compact(ctx, op)
 
 	return addGroupByOnRHSOfJoin(op)

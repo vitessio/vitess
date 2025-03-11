@@ -29,6 +29,8 @@ import (
 )
 
 func TestSplitComplexPredicateToLHS(t *testing.T) {
+	// Test case where the predicate is a complex expression
+	// It tests that columns from the LHS are extracted and named correctly
 	ast, err := sqlparser.NewTestParser().ParseExpr("l.foo + r.bar - l.baz / r.tata = 0")
 	require.NoError(t, err)
 	lID := semantics.SingleTableSet(0)
