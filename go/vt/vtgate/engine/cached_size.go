@@ -59,6 +59,26 @@ func (cached *AlterVSchema) CachedSize(alloc bool) int64 {
 	size += cached.AlterVschemaDDL.CachedSize(true)
 	return size
 }
+func (cached *BlockJoin) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Left vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Left.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Right vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Right.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field BindVarName string
+	size += hack.RuntimeAllocSize(int64(len(cached.BindVarName)))
+	return size
+}
 func (cached *CheckCol) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1420,26 +1440,6 @@ func (cached *VStream) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	// field Position string
 	size += hack.RuntimeAllocSize(int64(len(cached.Position)))
-	return size
-}
-func (cached *BlockJoin) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(48)
-	}
-	// field Left vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Left.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field Right vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Right.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field BindVarName string
-	size += hack.RuntimeAllocSize(int64(len(cached.BindVarName)))
 	return size
 }
 func (cached *Verify) CachedSize(alloc bool) int64 {
