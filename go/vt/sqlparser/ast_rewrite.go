@@ -399,6 +399,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfPolygonPropertyFuncExpr(parent, node, replacer)
 	case *PrepareStmt:
 		return a.rewriteRefOfPrepareStmt(parent, node, replacer)
+	case *ProcParameter:
+		return a.rewriteRefOfProcParameter(parent, node, replacer)
 	case *PurgeBinaryLogs:
 		return a.rewriteRefOfPurgeBinaryLogs(parent, node, replacer)
 	case ReferenceAction:
@@ -465,6 +467,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowThrottlerStatus(parent, node, replacer)
 	case *ShowTransactionStatus:
 		return a.rewriteRefOfShowTransactionStatus(parent, node, replacer)
+	case SingleStatement:
+		return a.rewriteSingleStatement(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	case *Std:
@@ -3030,6 +3034,34 @@ func (a *application) rewriteRefOfCreateProcedure(parent SQLNode, node *CreatePr
 	}
 	if !a.rewriteRefOfDefiner(node, node.Definer, func(newNode, parent SQLNode) {
 		parent.(*CreateProcedure).Definer = newNode.(*Definer)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	for x, el := range node.Params {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfCreateProcedureParamsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
+		if !a.rewriteRefOfProcParameter(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*CreateProcedure).Params[idx] = newNode.(*ProcParameter)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.collectPaths && len(node.Params) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateProcedureStatement))
+	}
+	if !a.rewriteCompoundStatement(node, node.Statement, func(newNode, parent SQLNode) {
+		parent.(*CreateProcedure).Statement = newNode.(CompoundStatement)
 	}) {
 		return false
 	}
@@ -9637,6 +9669,55 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 }
 
 // Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfProcParameter(parent SQLNode, node *ProcParameter, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfProcParameterName))
+	}
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ProcParameter).Name = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfProcParameterType))
+	}
+	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*ProcParameter).Type = newNode.(*ColumnType)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPurgeBinaryLogs(parent SQLNode, node *PurgeBinaryLogs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11193,6 +11274,43 @@ func (a *application) rewriteRefOfShowTransactionStatus(parent SQLNode, node *Sh
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: StructMethod
+func (a *application) rewriteSingleStatement(parent SQLNode, node SingleStatement, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(SingleStatementStatement))
+	}
+	if !a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
+		panic("[BUG] tried to replace 'Statement' on 'SingleStatement'")
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -14136,6 +14254,22 @@ func (a *application) rewriteColTuple(parent SQLNode, node ColTuple, replacer re
 }
 
 // Function Generation Source: InterfaceMethod
+func (a *application) rewriteCompoundStatement(parent SQLNode, node CompoundStatement, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	switch node := node.(type) {
+	case *SingleStatement:
+		return a.rewriteRefOfSingleStatement(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
+	default:
+		// this should never happen
+		return true
+	}
+}
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteConstraintInfo(parent SQLNode, node ConstraintInfo, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -14659,6 +14793,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
 	case *ShowThrottlerStatus:
 		return a.rewriteRefOfShowThrottlerStatus(parent, node, replacer)
+	case SingleStatement:
+		return a.rewriteSingleStatement(parent, node, replacer)
 	case *Stream:
 		return a.rewriteRefOfStream(parent, node, replacer)
 	case *TruncateTable:
@@ -14952,6 +15088,46 @@ func (a *application) rewriteRefOfRootNode(parent SQLNode, node *RootNode, repla
 	}
 	if !a.rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
 		parent.(*RootNode).SQLNode = newNode.(SQLNode)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfSingleStatement(parent SQLNode, node *SingleStatement, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSingleStatementStatement))
+	}
+	if !a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
+		parent.(*SingleStatement).Statement = newNode.(Statement)
 	}) {
 		return false
 	}

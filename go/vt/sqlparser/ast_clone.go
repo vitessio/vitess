@@ -399,6 +399,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPolygonPropertyFuncExpr(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
+	case *ProcParameter:
+		return CloneRefOfProcParameter(in)
 	case *PurgeBinaryLogs:
 		return CloneRefOfPurgeBinaryLogs(in)
 	case ReferenceAction:
@@ -465,6 +467,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowThrottlerStatus(in)
 	case *ShowTransactionStatus:
 		return CloneRefOfShowTransactionStatus(in)
+	case SingleStatement:
+		return CloneSingleStatement(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
 	case *Std:
@@ -1129,6 +1133,8 @@ func CloneRefOfCreateProcedure(n *CreateProcedure) *CreateProcedure {
 	out.Name = CloneIdentifierCS(n.Name)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Definer = CloneRefOfDefiner(n.Definer)
+	out.Params = CloneSliceOfRefOfProcParameter(n.Params)
+	out.Statement = CloneCompoundStatement(n.Statement)
 	return &out
 }
 
@@ -2585,6 +2591,17 @@ func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 	return &out
 }
 
+// CloneRefOfProcParameter creates a deep clone of the input.
+func CloneRefOfProcParameter(n *ProcParameter) *ProcParameter {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneIdentifierCI(n.Name)
+	out.Type = CloneRefOfColumnType(n.Type)
+	return &out
+}
+
 // CloneRefOfPurgeBinaryLogs creates a deep clone of the input.
 func CloneRefOfPurgeBinaryLogs(n *PurgeBinaryLogs) *PurgeBinaryLogs {
 	if n == nil {
@@ -2931,6 +2948,11 @@ func CloneRefOfShowTransactionStatus(n *ShowTransactionStatus) *ShowTransactionS
 	}
 	out := *n
 	return &out
+}
+
+// CloneSingleStatement creates a deep clone of the input.
+func CloneSingleStatement(n SingleStatement) SingleStatement {
+	return *CloneRefOfSingleStatement(&n)
 }
 
 // CloneRefOfStarExpr creates a deep clone of the input.
@@ -3797,6 +3819,20 @@ func CloneColTuple(in ColTuple) ColTuple {
 	}
 }
 
+// CloneCompoundStatement creates a deep clone of the input.
+func CloneCompoundStatement(in CompoundStatement) CompoundStatement {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *SingleStatement:
+		return CloneRefOfSingleStatement(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // CloneConstraintInfo creates a deep clone of the input.
 func CloneConstraintInfo(in ConstraintInfo) ConstraintInfo {
 	if in == nil {
@@ -4301,6 +4337,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfShowThrottledApps(in)
 	case *ShowThrottlerStatus:
 		return CloneRefOfShowThrottlerStatus(in)
+	case SingleStatement:
+		return CloneSingleStatement(in)
 	case *Stream:
 		return CloneRefOfStream(in)
 	case *TruncateTable:
@@ -4494,6 +4532,18 @@ func CloneSliceOfString(n []string) []string {
 	}
 	res := make([]string, len(n))
 	copy(res, n)
+	return res
+}
+
+// CloneSliceOfRefOfProcParameter creates a deep clone of the input.
+func CloneSliceOfRefOfProcParameter(n []*ProcParameter) []*ProcParameter {
+	if n == nil {
+		return nil
+	}
+	res := make([]*ProcParameter, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfProcParameter(x)
+	}
 	return res
 }
 
@@ -4702,6 +4752,16 @@ func CloneSliceOfSelectExpr(n []SelectExpr) []SelectExpr {
 		res[i] = CloneSelectExpr(x)
 	}
 	return res
+}
+
+// CloneRefOfSingleStatement creates a deep clone of the input.
+func CloneRefOfSingleStatement(n *SingleStatement) *SingleStatement {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Statement = CloneStatement(n.Statement)
+	return &out
 }
 
 // CloneRefOfTableName creates a deep clone of the input.

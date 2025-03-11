@@ -111,6 +111,8 @@ const (
 	RefOfCreateProcedureName
 	RefOfCreateProcedureComments
 	RefOfCreateProcedureDefiner
+	RefOfCreateProcedureParamsOffset
+	RefOfCreateProcedureStatement
 	RefOfCreateTableTable
 	RefOfCreateTableTableSpec
 	RefOfCreateTableOptLike
@@ -355,6 +357,8 @@ const (
 	RefOfPrepareStmtName
 	RefOfPrepareStmtStatement
 	RefOfPrepareStmtComments
+	RefOfProcParameterName
+	RefOfProcParameterType
 	RefOfReferenceDefinitionReferencedTable
 	RefOfReferenceDefinitionReferencedColumns
 	RefOfReferenceDefinitionMatch
@@ -416,6 +420,7 @@ const (
 	RefOfShowCreateOp
 	RefOfShowFilterFilter
 	RefOfShowMigrationLogsComments
+	SingleStatementStatement
 	RefOfStarExprTableName
 	RefOfStdArg
 	RefOfStdOverClause
@@ -533,6 +538,7 @@ const (
 	RefOfColumnTypeOptionsEngineAttribute
 	RefOfColumnTypeOptionsSecondaryEngineAttribute
 	RefOfColumnTypeOptionsSRID
+	SliceOfRefOfProcParameterOffset
 	SliceOfTableExprOffset
 	SliceOfRefOfVariableOffset
 	SliceOfRefOfJSONObjectParamOffset
@@ -549,6 +555,7 @@ const (
 	SliceOfRefOfPartitionDefinitionOffset
 	RefOfRootNodeSQLNode
 	SliceOfSelectExprOffset
+	RefOfSingleStatementStatement
 	RefOfTableNameName
 	RefOfTableNameQualifier
 	RefOfTableOptionValue
@@ -750,6 +757,10 @@ func (s ASTStep) DebugString() string {
 		return "(*CreateProcedure).Comments"
 	case RefOfCreateProcedureDefiner:
 		return "(*CreateProcedure).Definer"
+	case RefOfCreateProcedureParamsOffset:
+		return "(*CreateProcedure).ParamsOffset"
+	case RefOfCreateProcedureStatement:
+		return "(*CreateProcedure).Statement"
 	case RefOfCreateTableTable:
 		return "(*CreateTable).Table"
 	case RefOfCreateTableTableSpec:
@@ -1238,6 +1249,10 @@ func (s ASTStep) DebugString() string {
 		return "(*PrepareStmt).Statement"
 	case RefOfPrepareStmtComments:
 		return "(*PrepareStmt).Comments"
+	case RefOfProcParameterName:
+		return "(*ProcParameter).Name"
+	case RefOfProcParameterType:
+		return "(*ProcParameter).Type"
 	case RefOfReferenceDefinitionReferencedTable:
 		return "(*ReferenceDefinition).ReferencedTable"
 	case RefOfReferenceDefinitionReferencedColumns:
@@ -1360,6 +1375,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ShowFilter).Filter"
 	case RefOfShowMigrationLogsComments:
 		return "(*ShowMigrationLogs).Comments"
+	case SingleStatementStatement:
+		return "(SingleStatement).Statement"
 	case RefOfStarExprTableName:
 		return "(*StarExpr).TableName"
 	case RefOfStdArg:
@@ -1594,6 +1611,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ColumnTypeOptions).SecondaryEngineAttribute"
 	case RefOfColumnTypeOptionsSRID:
 		return "(*ColumnTypeOptions).SRID"
+	case SliceOfRefOfProcParameterOffset:
+		return "([]*ProcParameter)[]Offset"
 	case SliceOfTableExprOffset:
 		return "([]TableExpr)[]Offset"
 	case SliceOfRefOfVariableOffset:
@@ -1626,6 +1645,8 @@ func (s ASTStep) DebugString() string {
 		return "(*RootNode).SQLNode"
 	case SliceOfSelectExprOffset:
 		return "([]SelectExpr)[]Offset"
+	case RefOfSingleStatementStatement:
+		return "(*SingleStatement).Statement"
 	case RefOfTableNameName:
 		return "(*TableName).Name"
 	case RefOfTableNameQualifier:
@@ -1862,6 +1883,12 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*CreateProcedure).Comments
 		case RefOfCreateProcedureDefiner:
 			node = node.(*CreateProcedure).Definer
+		case RefOfCreateProcedureParamsOffset:
+			idx, bytesRead := path.nextPathOffset()
+			path = path[bytesRead:]
+			node = node.(*CreateProcedure).Params[idx]
+		case RefOfCreateProcedureStatement:
+			node = node.(*CreateProcedure).Statement
 		case RefOfCreateTableTable:
 			node = node.(*CreateTable).Table
 		case RefOfCreateTableTableSpec:
@@ -2412,6 +2439,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*PrepareStmt).Statement
 		case RefOfPrepareStmtComments:
 			node = node.(*PrepareStmt).Comments
+		case RefOfProcParameterName:
+			node = node.(*ProcParameter).Name
+		case RefOfProcParameterType:
+			node = node.(*ProcParameter).Type
 		case RefOfReferenceDefinitionReferencedTable:
 			node = node.(*ReferenceDefinition).ReferencedTable
 		case RefOfReferenceDefinitionReferencedColumns:
@@ -2540,6 +2571,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*ShowFilter).Filter
 		case RefOfShowMigrationLogsComments:
 			node = node.(*ShowMigrationLogs).Comments
+		case SingleStatementStatement:
+			node = node.(SingleStatement).Statement
 		case RefOfStarExprTableName:
 			node = node.(*StarExpr).TableName
 		case RefOfStdArg:
@@ -2778,6 +2811,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*XorExpr).Right
 		case RefOfRootNodeSQLNode:
 			node = node.(*RootNode).SQLNode
+		case RefOfSingleStatementStatement:
+			node = node.(*SingleStatement).Statement
 		case RefOfTableNameName:
 			node = node.(*TableName).Name
 		case RefOfTableNameQualifier:

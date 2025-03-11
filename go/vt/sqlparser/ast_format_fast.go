@@ -500,7 +500,35 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *CreateProcedure) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("create procedure")
+	buf.WriteString("create ")
+	node.Comments.FormatFast(buf)
+	if node.Definer != nil {
+		buf.WriteString("definer = ")
+		node.Definer.FormatFast(buf)
+		buf.WriteByte(' ')
+	}
+	buf.WriteString("procedure ")
+	if node.IfNotExists {
+		buf.WriteString("if not exists ")
+	}
+	node.Name.FormatFast(buf)
+	buf.WriteString(" (")
+	prefix := ""
+	for _, param := range node.Params {
+		buf.WriteString(prefix)
+		param.FormatFast(buf)
+		prefix = ", "
+	}
+	buf.WriteString(") ")
+	node.Statement.FormatFast(buf)
+}
+
+func (pp *ProcParameter) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString(pp.Mode.ToString())
+	buf.WriteByte(' ')
+	pp.Name.FormatFast(buf)
+	buf.WriteByte(' ')
+	pp.Type.FormatFast(buf)
 }
 
 // FormatFast formats the node.

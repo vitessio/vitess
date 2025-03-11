@@ -1154,6 +1154,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfPrepareStmt(a, b)
+	case *ProcParameter:
+		b, ok := inB.(*ProcParameter)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfProcParameter(a, b)
 	case *PurgeBinaryLogs:
 		b, ok := inB.(*PurgeBinaryLogs)
 		if !ok {
@@ -1352,6 +1358,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfShowTransactionStatus(a, b)
+	case SingleStatement:
+		b, ok := inB.(SingleStatement)
+		if !ok {
+			return false
+		}
+		return cmp.SingleStatement(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -2325,7 +2337,9 @@ func (cmp *Comparator) RefOfCreateProcedure(a, b *CreateProcedure) bool {
 	return a.IfNotExists == b.IfNotExists &&
 		cmp.IdentifierCS(a.Name, b.Name) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
-		cmp.RefOfDefiner(a.Definer, b.Definer)
+		cmp.RefOfDefiner(a.Definer, b.Definer) &&
+		cmp.SliceOfRefOfProcParameter(a.Params, b.Params) &&
+		cmp.CompoundStatement(a.Statement, b.Statement)
 }
 
 // RefOfCreateTable does deep equals between the two objects.
@@ -4001,6 +4015,19 @@ func (cmp *Comparator) RefOfPrepareStmt(a, b *PrepareStmt) bool {
 		cmp.RefOfParsedComments(a.Comments, b.Comments)
 }
 
+// RefOfProcParameter does deep equals between the two objects.
+func (cmp *Comparator) RefOfProcParameter(a, b *ProcParameter) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Mode == b.Mode &&
+		cmp.IdentifierCI(a.Name, b.Name) &&
+		cmp.RefOfColumnType(a.Type, b.Type)
+}
+
 // RefOfPurgeBinaryLogs does deep equals between the two objects.
 func (cmp *Comparator) RefOfPurgeBinaryLogs(a, b *PurgeBinaryLogs) bool {
 	if a == b {
@@ -4407,6 +4434,11 @@ func (cmp *Comparator) RefOfShowTransactionStatus(a, b *ShowTransactionStatus) b
 	}
 	return a.Keyspace == b.Keyspace &&
 		a.TransactionID == b.TransactionID
+}
+
+// SingleStatement does deep equals between the two objects.
+func (cmp *Comparator) SingleStatement(a, b SingleStatement) bool {
+	return cmp.Statement(a.Statement, b.Statement)
 }
 
 // RefOfStarExpr does deep equals between the two objects.
@@ -5849,6 +5881,27 @@ func (cmp *Comparator) ColTuple(inA, inB ColTuple) bool {
 	}
 }
 
+// CompoundStatement does deep equals between the two objects.
+func (cmp *Comparator) CompoundStatement(inA, inB CompoundStatement) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *SingleStatement:
+		b, ok := inB.(*SingleStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSingleStatement(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // ConstraintInfo does deep equals between the two objects.
 func (cmp *Comparator) ConstraintInfo(inA, inB ConstraintInfo) bool {
 	if inA == nil && inB == nil {
@@ -7142,6 +7195,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfShowThrottlerStatus(a, b)
+	case SingleStatement:
+		b, ok := inB.(SingleStatement)
+		if !ok {
+			return false
+		}
+		return cmp.SingleStatement(a, b)
 	case *Stream:
 		b, ok := inB.(*Stream)
 		if !ok {
@@ -7432,6 +7491,19 @@ func (cmp *Comparator) SliceOfString(a, b []string) bool {
 	return true
 }
 
+// SliceOfRefOfProcParameter does deep equals between the two objects.
+func (cmp *Comparator) SliceOfRefOfProcParameter(a, b []*ProcParameter) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.RefOfProcParameter(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // SliceOfTableExpr does deep equals between the two objects.
 func (cmp *Comparator) SliceOfTableExpr(a, b []TableExpr) bool {
 	if len(a) != len(b) {
@@ -7659,6 +7731,17 @@ func (cmp *Comparator) SliceOfSelectExpr(a, b []SelectExpr) bool {
 		}
 	}
 	return true
+}
+
+// RefOfSingleStatement does deep equals between the two objects.
+func (cmp *Comparator) RefOfSingleStatement(a, b *SingleStatement) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Statement(a.Statement, b.Statement)
 }
 
 // RefOfTableName does deep equals between the two objects.

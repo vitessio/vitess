@@ -62,6 +62,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %union {
   statement       Statement
   selStmt         SelectStatement
+  compoundStatement CompoundStatement
   tableStmt    TableStatement
   tableExpr       TableExpr
   expr            Expr
@@ -147,6 +148,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
   jsonObjectParams []*JSONObjectParam
+  procParam  *ProcParameter
+  procParams []*ProcParameter
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partitionEngine *PartitionEngine
@@ -169,6 +172,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
   colKeyOpt     ColumnKeyOption
   referenceAction ReferenceAction
+  procParamMode ProcParameterMode
   matchAction MatchAction
   insertAction InsertAction
   scope 	Scope
@@ -405,6 +409,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE SECONDARY_LOAD SECONDARY_UNLOAD SIMPLE SKIP SRID
 %token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE RETURNING
 %token <str> MANUAL PARALLEL QUALIFY TABLESAMPLE
+%token <str> OUT INOUT
 
 // Performance Schema Functions
 %token <str> FORMAT_BYTES FORMAT_PICO_TIME PS_CURRENT_THREAD_ID PS_THREAD_ID
@@ -455,6 +460,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <databaseOption> collate character_set encryption
 %type <databaseOptions> create_options create_options_opt
 %type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt partition_storage_opt
+%type <compoundStatement> compound_statement
 %type <statement> analyze_statement show_statement use_statement purge_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
@@ -606,6 +612,9 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <partitionValueRange> partition_value_range
 %type <partitionEngine> partition_engine
 %type <partSpec> partition_operation
+%type <procParam> proc_param
+%type <procParamMode> proc_param_mode
+%type <procParams> proc_params_list
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <jsonObjectParam> json_object_param
@@ -694,6 +703,12 @@ command:
 {
   setParseTree(yylex, nil)
 }
+
+compound_statement:
+  command semicolon_opt
+  {
+    $$ = &SingleStatement{Statement: $1}
+  }
 
 user_defined_variable:
   AT_ID
@@ -1279,9 +1294,9 @@ json_object_param:
   }
 
 create_procedure:
-  CREATE comment_opt definer_opt PROCEDURE not_exists_opt table_id
+  CREATE comment_opt definer_opt PROCEDURE not_exists_opt table_id openb proc_params_list closeb compound_statement
   {
-    $$ = &CreateProcedure{Comments: Comments($2).Parsed(), Name: $6, IfNotExists: $5, Definer: $3}
+    $$ = &CreateProcedure{Comments: Comments($2).Parsed(), Name: $6, IfNotExists: $5, Definer: $3, Params: $8, Statement: $10}
     setDDL(yylex, $$)
   }
 
@@ -7664,6 +7679,36 @@ cascade_or_local_opt:
     $$ = string($1)
   }
 
+proc_params_list:
+  proc_param
+  {
+    $$ = []*ProcParameter{$1}
+  }
+| proc_params_list ',' proc_param
+  {
+    $$ = append($$, $3)
+  }
+
+proc_param:
+  proc_param_mode sql_id column_type
+  {
+    $$ = &ProcParameter{Mode: $1, Name: $2, Type: $3}
+  }
+
+proc_param_mode:
+  IN
+  {
+    $$ = InMode
+  }
+| INOUT
+  {
+    $$ = InoutMode
+  }
+| OUT
+  {
+    $$ = OutMode
+  }
+
 definer_opt:
   {
     $$ = nil
@@ -8255,6 +8300,7 @@ reserved_keyword:
 | IN
 | INDEX
 | INNER
+| INOUT
 | INSERT
 | INTERVAL
 | INTO
@@ -8293,6 +8339,7 @@ reserved_keyword:
 | OPTIMIZER_COSTS
 | OR
 | ORDER
+| OUT
 | OUTER
 | OUTFILE
 | OVER

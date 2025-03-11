@@ -1483,6 +1483,20 @@ func (action DDLAction) ToString() string {
 	}
 }
 
+// ToString returns the string associated with the ProcParameterMode Enum
+func (action ProcParameterMode) ToString() string {
+	switch action {
+	case InMode:
+		return InStr
+	case OutMode:
+		return OutStr
+	case InoutMode:
+		return InoutStr
+	default:
+		return "Unknown Proc Parameter Mode"
+	}
+}
+
 // ToString returns the string associated with the Scope enum
 func (scope Scope) ToString() string {
 	switch scope {

@@ -160,6 +160,10 @@ const (
 	RegexpStr        = "regexp"
 	NotRegexpStr     = "not regexp"
 
+	// ProcParameterMode
+	OutStr   = "out"
+	InoutStr = "inout"
+
 	// IsExpr.Operator
 	IsNullStr     = "is null"
 	IsNotNullStr  = "is not null"
@@ -773,6 +777,13 @@ const (
 	RepairAction
 	RemoveAction
 	UpgradeAction
+)
+
+// Constant for Enum Type - ProcParameterMode
+const (
+	InMode ProcParameterMode = iota
+	OutMode
+	InoutMode
 )
 
 // Constant for Enum Type - PartitionByType

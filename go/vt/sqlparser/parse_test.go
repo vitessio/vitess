@@ -2133,8 +2133,11 @@ var (
 		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
 		output: "create definer = 'sa'@`b.c.d` view a(b, c, d) as select * from e",
 	}, {
-		input:  `CREATE PROCEDURE citycount (IN country CHAR(3), OUT cities INT) BEGIN SELECT COUNT(*) INTO cities FROM world.city WHERE CountryCode = country; END`,
+		input:  `CREATE PROCEDURE p1 (IN country CHAR(3), OUT cities INT) BEGIN SELECT COUNT(*) FROM x WHERE d = e; END`,
 		output: "",
+	}, {
+		input:  `CREATE PROCEDURE p1 (IN a CHAR(3), OUT b INT) SELECT COUNT(*) FROM x WHERE d = e`,
+		output: "create procedure p1 (in a CHAR(3), out b INT) select count(*) from x where d = e",
 	}, {
 		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {

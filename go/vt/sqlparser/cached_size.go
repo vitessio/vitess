@@ -1018,7 +1018,7 @@ func (cached *CreateProcedure) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(80)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCS
 	size += cached.Name.CachedSize(false)
@@ -1026,6 +1026,17 @@ func (cached *CreateProcedure) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	// field Definer *vitess.io/vitess/go/vt/sqlparser.Definer
 	size += cached.Definer.CachedSize(true)
+	// field Params []*vitess.io/vitess/go/vt/sqlparser.ProcParameter
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Params)) * int64(8))
+		for _, elem := range cached.Params {
+			size += elem.CachedSize(true)
+		}
+	}
+	// field Statement vitess.io/vitess/go/vt/sqlparser.CompoundStatement
+	if cc, ok := cached.Statement.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *CreateTable) CachedSize(alloc bool) int64 {
@@ -3514,6 +3525,20 @@ func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
+func (cached *ProcParameter) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
+	size += cached.Name.CachedSize(false)
+	// field Type *vitess.io/vitess/go/vt/sqlparser.ColumnType
+	size += cached.Type.CachedSize(true)
+	return size
+}
 func (cached *PurgeBinaryLogs) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4096,6 +4121,20 @@ func (cached *ShowTransactionStatus) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Keyspace)))
 	// field TransactionID string
 	size += hack.RuntimeAllocSize(int64(len(cached.TransactionID)))
+	return size
+}
+func (cached *SingleStatement) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Statement vitess.io/vitess/go/vt/sqlparser.Statement
+	if cc, ok := cached.Statement.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *StarExpr) CachedSize(alloc bool) int64 {

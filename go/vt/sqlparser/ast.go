@@ -43,6 +43,12 @@ type (
 		SQLNode
 	}
 
+	// CompoundStatement represents a compound statement that can be part of a create procedure call.
+	CompoundStatement interface {
+		iCompoundStatement()
+		SQLNode
+	}
+
 	Commented interface {
 		SetComments(comments Comments)
 		GetParsedComments() *ParsedComments
@@ -528,6 +534,8 @@ type (
 		Comments    *ParsedComments
 		IfNotExists bool
 		Definer     *Definer
+		Params      []*ProcParameter
+		Statement   CompoundStatement
 	}
 
 	// AlterTable represents a ALTER TABLE statement.
@@ -754,6 +762,16 @@ type (
 	// IndexType is the type of index in a DDL statement
 	IndexType int8
 )
+
+// Compound Statements
+type (
+	// SingleStatement represents a single statement.
+	SingleStatement struct {
+		Statement
+	}
+)
+
+func (*SingleStatement) iCompoundStatement() {}
 
 var _ OrderAndLimit = (*Select)(nil)
 var _ OrderAndLimit = (*Update)(nil)
@@ -1748,6 +1766,16 @@ func (*ValuesStatement) iInsertRows() {}
 type OptLike struct {
 	LikeTable TableName
 }
+
+// ProcParameter represents a procedure parameter
+type ProcParameter struct {
+	Mode ProcParameterMode
+	Name IdentifierCI
+	Type *ColumnType
+}
+
+// ProcParameterMode is an enum for ProcParameter.Mode
+type ProcParameterMode int8
 
 // PartitionSpec describe partition actions (for alter statements)
 type PartitionSpec struct {

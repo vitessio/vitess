@@ -362,7 +362,26 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateProcedure) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "create procedure")
+	buf.astPrintf(node, "create %v", node.Comments)
+	if node.Definer != nil {
+		buf.astPrintf(node, "definer = %v ", node.Definer)
+	}
+	buf.literal("procedure ")
+	if node.IfNotExists {
+		buf.literal("if not exists ")
+	}
+	buf.astPrintf(node, "%v (", node.Name)
+	prefix := ""
+	for _, param := range node.Params {
+		buf.astPrintf(node, "%s%v", prefix, param)
+		prefix = ", "
+	}
+	buf.literal(") ")
+	buf.astPrintf(node, "%v", node.Statement)
+}
+
+func (pp *ProcParameter) Format(buf *TrackedBuffer) {
+	buf.astPrintf(pp, "%s %v %v", pp.Mode.ToString(), pp.Name, pp.Type)
 }
 
 // Format formats the node.

@@ -398,6 +398,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfPolygonPropertyFuncExpr(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
+	case *ProcParameter:
+		return VisitRefOfProcParameter(in, f)
 	case *PurgeBinaryLogs:
 		return VisitRefOfPurgeBinaryLogs(in, f)
 	case ReferenceAction:
@@ -464,6 +466,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowThrottlerStatus(in, f)
 	case *ShowTransactionStatus:
 		return VisitRefOfShowTransactionStatus(in, f)
+	case SingleStatement:
+		return VisitSingleStatement(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
 	case *Std:
@@ -1317,6 +1321,14 @@ func VisitRefOfCreateProcedure(in *CreateProcedure, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfDefiner(in.Definer, f); err != nil {
+		return err
+	}
+	for _, el := range in.Params {
+		if err := VisitRefOfProcParameter(el, f); err != nil {
+			return err
+		}
+	}
+	if err := VisitCompoundStatement(in.Statement, f); err != nil {
 		return err
 	}
 	return nil
@@ -3306,6 +3318,21 @@ func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfProcParameter(in *ProcParameter, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfColumnType(in.Type, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfPurgeBinaryLogs(in *PurgeBinaryLogs, f Visit) error {
 	if in == nil {
 		return nil
@@ -3776,6 +3803,15 @@ func VisitRefOfShowTransactionStatus(in *ShowTransactionStatus, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitSingleStatement(in SingleStatement, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitStatement(in.Statement, f); err != nil {
 		return err
 	}
 	return nil
@@ -4862,6 +4898,20 @@ func VisitColTuple(in ColTuple, f Visit) error {
 		return nil
 	}
 }
+func VisitCompoundStatement(in CompoundStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *SingleStatement:
+		return VisitRefOfSingleStatement(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
 func VisitConstraintInfo(in ConstraintInfo, f Visit) error {
 	if in == nil {
 		return nil
@@ -5365,6 +5415,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfShowThrottledApps(in, f)
 	case *ShowThrottlerStatus:
 		return VisitRefOfShowThrottlerStatus(in, f)
+	case SingleStatement:
+		return VisitSingleStatement(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
 	case *TruncateTable:
@@ -5474,6 +5526,18 @@ func VisitRefOfRootNode(in *RootNode, f Visit) error {
 		return err
 	}
 	if err := VisitSQLNode(in.SQLNode, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfSingleStatement(in *SingleStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitStatement(in.Statement, f); err != nil {
 		return err
 	}
 	return nil
