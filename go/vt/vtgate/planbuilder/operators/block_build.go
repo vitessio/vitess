@@ -23,18 +23,19 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// Values is used to represent a VALUES derived table clause in a query.
-// Its only function is to add the `FROM (VALUES ::ARG) AS values(tbl_col1, tbl_col2, ...)` clause to the query.
+// BlockBuild is used to represent a VALUES derived table or a temp table clause in a query.
+// Its only function is to add the receiving table on the RHS query. It is used to add the
+// `FROM (VALUES ::ARG) AS values(tbl_col1, tbl_col2, ...)` clause to the query.
 // That is why we pass everything through it. Also - since it can only add itself to the SQL query,
 // it _must_ be pushed under a route.
-type Values struct {
+type BlockBuild struct {
 	unaryOperator
 
 	Name    string
 	TableID semantics.TableSet
 }
 
-func (v *Values) Clone(inputs []Operator) Operator {
+func (v *BlockBuild) Clone(inputs []Operator) Operator {
 	clone := *v
 
 	if len(inputs) > 0 {
@@ -43,46 +44,46 @@ func (v *Values) Clone(inputs []Operator) Operator {
 	return &clone
 }
 
-func (v *Values) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+func (v *BlockBuild) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	v.Source = v.Source.AddPredicate(ctx, expr)
 	return v
 }
 
-func (v *Values) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
+func (v *BlockBuild) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, expr *sqlparser.AliasedExpr) int {
 	return v.Source.AddColumn(ctx, reuseExisting, addToGroupBy, expr)
 }
 
-func (v *Values) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+func (v *BlockBuild) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
 	return v.Source.AddWSColumn(ctx, offset, underRoute)
 }
 
-func (v *Values) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+func (v *BlockBuild) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
 	return v.Source.FindCol(ctx, expr, underRoute)
 }
 
-func (v *Values) getColumnNamesFromCtx(ctx *plancontext.PlanningContext) sqlparser.Columns {
+func (v *BlockBuild) getColumnNamesFromCtx(ctx *plancontext.PlanningContext) sqlparser.Columns {
 	columns := ctx.GetValuesColumns(v.Name)
 	return slice.Map(columns, func(ae *sqlparser.AliasedExpr) sqlparser.IdentifierCI {
 		return sqlparser.NewIdentifierCI(ae.ColumnName())
 	})
 }
 
-func (v *Values) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+func (v *BlockBuild) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
 	return v.Source.GetColumns(ctx)
 }
 
-func (v *Values) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
+func (v *BlockBuild) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return v.Source.GetSelectExprs(ctx)
 }
 
-func (v *Values) ShortDescription() string {
+func (v *BlockBuild) ShortDescription() string {
 	return v.Name
 }
 
-func (v *Values) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
+func (v *BlockBuild) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return v.Source.GetOrdering(ctx)
 }
 
-func (v *Values) introducesTableID() semantics.TableSet {
+func (v *BlockBuild) introducesTableID() semantics.TableSet {
 	return v.TableID
 }

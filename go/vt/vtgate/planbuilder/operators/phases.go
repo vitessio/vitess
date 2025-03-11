@@ -114,18 +114,18 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 	case dmlWithInput:
 		return findDMLAboveRoute(ctx, op)
 	case rewriteApplyJoin:
-		return rewriteApplyToValues(ctx, op)
+		return rewriteApplyToBlock(ctx, op)
 
 	default:
 		return op
 	}
 }
 
-// rewriteApplyToValues rewrites ApplyJoin to BlockJoin.
-func rewriteApplyToValues(ctx *plancontext.PlanningContext, op Operator) Operator {
+// rewriteApplyToBlock rewrites ApplyJoin to BlockJoin.
+func rewriteApplyToBlock(ctx *plancontext.PlanningContext, op Operator) Operator {
 	done := false
 	// Traverse the operator tree to convert ApplyJoin to BlockJoin.
-	// Then add a Values node to the RHS of the new BlockJoin,
+	// Then add a BlockBuild node to the RHS of the new BlockJoin,
 	// and usually a filter containing the join predicates is placed there.
 	visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		if done {
@@ -169,7 +169,7 @@ func newBlockJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType 
 	lhsID := TableID(lhs)
 	destination := ctx.ReservedVars.ReserveVariable(valuesName)
 	ctx.AddBlockJoinTable(lhsID, destination)
-	v := &Values{
+	v := &BlockBuild{
 		unaryOperator: newUnaryOp(rhs),
 		Name:          destination,
 		TableID:       lhsID,

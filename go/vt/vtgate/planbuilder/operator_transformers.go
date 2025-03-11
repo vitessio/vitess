@@ -79,7 +79,7 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 		return transformPercentBasedMirror(ctx, op)
 	case *operators.BlockJoin:
 		return transformBlockJoin(ctx, op)
-	case *operators.Values:
+	case *operators.BlockBuild:
 		panic("should have been pushed under a route")
 	case *operators.Horizon:
 		panic("should have been solved in the operator")

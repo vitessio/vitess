@@ -72,8 +72,8 @@ func buildAST(op Operator, qb *queryBuilder) {
 		buildDML(op, qb)
 	case *RecurseCTE:
 		buildRecursiveCTE(op, qb)
-	case *Values:
-		buildValues(op, qb)
+	case *BlockBuild:
+		buildBlockBuild(op, qb)
 	case *BlockJoin:
 		buildBlockJoin(op, qb)
 	default:
@@ -99,7 +99,7 @@ func buildBlockJoin(op *BlockJoin, qb *queryBuilder) {
 	qb.joinWith(qbR, nil, sqlparser.NormalJoinType)
 }
 
-func buildValues(op *Values, qb *queryBuilder) {
+func buildBlockBuild(op *BlockBuild, qb *queryBuilder) {
 	buildAST(op.Source, qb)
 	if qb.ctx.IsValuesArgumentSkipped(op.Name) {
 		return

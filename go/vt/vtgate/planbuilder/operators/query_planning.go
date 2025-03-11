@@ -109,8 +109,8 @@ func runPushDownRewriters(ctx *plancontext.PlanningContext, root Operator) Opera
 			return tryPushUpdate(in)
 		case *RecurseCTE:
 			return tryMergeRecurse(ctx, in)
-		case *Values:
-			return tryPushValues(ctx, in)
+		case *BlockBuild:
+			return tryPushBlockBuild(ctx, in)
 		default:
 			return in, NoRewrite
 		}
@@ -191,7 +191,7 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 	return r, Rewrote(success)
 }
 
-func tryPushValues(ctx *plancontext.PlanningContext, in *Values) (Operator, *ApplyResult) {
+func tryPushBlockBuild(ctx *plancontext.PlanningContext, in *BlockBuild) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
 	case *Filter:
 		return Swap(in, src, "pushed values under filter")
