@@ -62,7 +62,7 @@ var (
 		[]string{"Cell"},
 		getTabletsWatchedByCellStats,
 	)
-	statsTabletsWatchedByShards = stats.NewGaugesFuncWithMultiLabels(
+	statsTabletsWatchedByShard = stats.NewGaugesFuncWithMultiLabels(
 		"TabletsWatchedByShard",
 		"Number of tablets watched by keyspace/shard",
 		[]string{"Keyspace", "Shard"},
@@ -75,21 +75,21 @@ var (
 
 // getTabletsWatchedByCellStats returns the number of tablets watched by cell in stats format.
 func getTabletsWatchedByCellStats() map[string]int64 {
-	tabletsCountsByCell, err := inst.ReadTabletCountsByCell()
+	tabletCountsByCell, err := inst.ReadTabletCountsByCell()
 	if err != nil {
 		log.Errorf("Failed to read tablet counts by cell: %+v", err)
 	}
-	return tabletsCountsByCell
+	return tabletCountsByCell
 }
 
 // getTabletsWatchedByShardStats returns the number of tablets watched by keyspace/shard in stats format.
 func getTabletsWatchedByShardStats() map[string]int64 {
 	tabletsWatchedByShard := make(map[string]int64)
-	tabletsCountsByKS, err := inst.ReadTabletCountsByKeyspaceShard()
+	tabletCountsByKS, err := inst.ReadTabletCountsByKeyspaceShard()
 	if err != nil {
 		log.Errorf("Failed to read tablet counts by shard: %+v", err)
 	}
-	for keyspace, countsByShard := range tabletsCountsByKS {
+	for keyspace, countsByShard := range tabletCountsByKS {
 		for shard, tabletCount := range countsByShard {
 			tabletsWatchedByShard[keyspace+"."+shard] = tabletCount
 		}
