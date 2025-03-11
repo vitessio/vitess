@@ -361,7 +361,19 @@ func findVSchemaTableAndCreateRoute(
 	tableName sqlparser.TableName,
 	planAlternates bool,
 ) *Route {
-	vschemaTable, _, _, tabletType, target, err := ctx.VSchema.FindTableOrVindex(tableName)
+	var (
+		vschemaTable *vindexes.BaseTable
+		tabletType   topodatapb.TabletType
+		target       key.ShardDestination
+		err          error
+	)
+
+	if ctx.IsMirrored() {
+		vschemaTable, _, tabletType, target, err = ctx.VSchema.FindTable(tableName)
+	} else {
+		vschemaTable, _, _, tabletType, target, err = ctx.VSchema.FindTableOrVindex(tableName)
+	}
+
 	if err != nil {
 		panic(err)
 	}

@@ -42,6 +42,132 @@
     }
   },
   {
+    "comment": "select from source of unsharded, unqualified, table mirrored to unsharded table with routing rules",
+    "query": "select t4.id from t4 where t4.id = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select t4.id from t4 where t4.id = 1",
+      "Instructions": {
+        "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 10,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_src1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t4.id from t4 where 1 != 1",
+            "Query": "select t4.id from t4 where t4.id = 1",
+            "Table": "t4"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_dst1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t4.id from t4 where 1 != 1",
+            "Query": "select t4.id from t4 where t4.id = 1",
+            "Table": "t4"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_dst1.t4",
+        "unsharded_src1.t4"
+      ]
+    }
+  },
+  {
+    "comment": "select from source of unsharded, qualified, table mirrored to unsharded table with routing rules",
+    "query": "select t4.id from unsharded_src1.t4 where t4.id = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select t4.id from unsharded_src1.t4 where t4.id = 1",
+      "Instructions": {
+        "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 10,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_src1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t4.id from t4 where 1 != 1",
+            "Query": "select t4.id from t4 where t4.id = 1",
+            "Table": "t4"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_dst1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t4.id from t4 where 1 != 1",
+            "Query": "select t4.id from t4 where t4.id = 1",
+            "Table": "t4"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_dst1.t4",
+        "unsharded_src1.t4"
+      ]
+    }
+  },
+  {
+    "comment": "select from destination of unsharded, qualified, table mirrored to unsharded table with routing rules",
+    "query": "select t4.id from unsharded_dst1.t4 where t4.id = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select t4.id from unsharded_dst1.t4 where t4.id = 1",
+      "Instructions": {
+        "OperatorType": "Mirror",
+        "Variant": "PercentBased",
+        "Percent": 10,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_src1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t4.id from t4 where 1 != 1",
+            "Query": "select t4.id from t4 where t4.id = 1",
+            "Table": "t4"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "unsharded_dst1",
+              "Sharded": false
+            },
+            "FieldQuery": "select t4.id from t4 where 1 != 1",
+            "Query": "select t4.id from t4 where t4.id = 1",
+            "Table": "t4"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "unsharded_dst1.t4",
+        "unsharded_src1.t4"
+      ]
+    }
+  },
+  {
     "comment": "select unsharded, qualified, table mirrored to unsharded table with zero percentage",
     "query": "select t3.id from unsharded_src1.t3 where t3.id = 1",
     "plan": {

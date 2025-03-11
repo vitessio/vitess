@@ -45,6 +45,69 @@
         "from_table": "unsharded_src1.t3",
         "to_table": "unsharded_dst1.t2",
         "percent": 0
+      },
+      {
+        "from_table": "unsharded_src1.t4",
+        "to_table": "unsharded_dst1.t4",
+        "percent": 10
+      }
+    ]
+  },
+  "routing_rules": {
+    "rules": [
+      {
+        "from_table": "t4",
+        "to_tables": [
+          "unsharded_src1.t4"
+        ]
+      },
+      {
+        "from_table": "t4@replica",
+        "to_tables": [
+          "unsharded_src1.t4"
+        ]
+      },
+      {
+        "from_table": "t4@rdonly",
+        "to_tables": [
+          "unsharded_src1.t4"
+        ]
+      },
+      {
+        "from_table": "unsharded_src1.t4",
+        "to_tables": [
+          "unsharded_src1.t4"
+        ]
+      },
+      {
+        "from_table": "unsharded_src1.t4@replica",
+        "to_tables": [
+          "unsharded_src1.t4"
+        ]
+      },
+      {
+        "from_table": "unsharded_src1.t4@rdonly",
+        "to_tables": [
+          "unsharded_src1.t4"
+        ]
+      },
+      {
+        "from_table": "unsharded_dst1.t4",
+        "to_tables": [
+          "unsharded_src1.t4"
+        ]
+      },
+      {
+        "from_table": "unsharded_dst1.t4@replica",
+        "to_tables": [
+          "unsharded_src1.t4"
+        ]
+      },
+      {
+        "from_table": "unsharded_dst1.t4@rdonly",
+        "to_tables": [
+          "unsharded_src1.t4"
+        ]
       }
     ]
   },
