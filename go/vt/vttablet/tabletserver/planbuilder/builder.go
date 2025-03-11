@@ -28,11 +28,24 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
-	plan = &Plan{
-		PlanID:    PlanSelect,
-		FullQuery: GenerateLimitQuery(sel),
+func analyzeUnion(stmt *sqlparser.Union, noRowslimit bool) *Plan {
+	if noRowslimit {
+		return &Plan{PlanID: PlanSelect, FullQuery: GenerateFullQuery(stmt)}
 	}
+	return &Plan{PlanID: PlanSelect, FullQuery: GenerateLimitQuery(stmt)}
+}
+
+func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[string]*schema.Table, noRowsLimit bool) (plan *Plan, err error) {
+	plan = &Plan{}
+
+	if noRowsLimit {
+		plan.PlanID = PlanSelectNoLimit
+		plan.FullQuery = GenerateFullQuery(sel)
+	} else {
+		plan.PlanID = PlanSelect
+		plan.FullQuery = GenerateLimitQuery(sel)
+	}
+
 	plan.Table = lookupTables(sel.From, tables)
 
 	if sel.Where != nil {

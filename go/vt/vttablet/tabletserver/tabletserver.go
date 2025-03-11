@@ -553,7 +553,7 @@ func (tsv *TabletServer) begin(
 				return err
 			}
 			for _, query := range postBeginQueries {
-				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true)
+				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
 				if err != nil {
 					return err
 				}
@@ -902,7 +902,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
 
-			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options))
+			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options), options.GetInDmlExecution() && tsv.config.PassthroughDML)
 			if err != nil {
 				return err
 			}
@@ -1138,7 +1138,7 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]*querypb.BindVariable) (string, string) {
 	// Strip trailing comments so we don't pollute the query cache.
 	sql, _ = sqlparser.SplitMarginComments(sql)
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false)
 	if err != nil {
 		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)
 		return "", ""
@@ -1345,7 +1345,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 			}
 
 			for _, query := range postBeginQueries {
-				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true)
+				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
 				if err != nil {
 					return err
 				}

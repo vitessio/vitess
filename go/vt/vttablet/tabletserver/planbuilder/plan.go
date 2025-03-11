@@ -60,6 +60,7 @@ const (
 	PlanOtherRead
 	// PlanOtherAdmin is for statements like repair, lock table, etc.
 	PlanOtherAdmin
+	PlanSelectNoLimit
 	PlanSelectStream
 	// PlanMessageStream is for "stream" statements.
 	PlanMessageStream
@@ -71,7 +72,6 @@ const (
 	PlanLoad
 	// PlanFlush is for FLUSH statements
 	PlanFlush
-	PlanLockTables
 	PlanUnlockTables
 	PlanCallProc
 	PlanAlterMigration
@@ -99,6 +99,7 @@ var planName = []string{
 	"Set",
 	"OtherRead",
 	"OtherAdmin",
+	"SelectNoLimit",
 	"SelectStream",
 	"MessageStream",
 	"Savepoint",
@@ -107,7 +108,6 @@ var planName = []string{
 	"Show",
 	"Load",
 	"Flush",
-	"LockTables",
 	"UnlockTables",
 	"CallProcedure",
 	"AlterMigration",
@@ -202,12 +202,12 @@ func (plan *Plan) TableNames() (names []string) {
 }
 
 // Build builds a plan based on the schema.
-func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, viewsEnabled bool) (plan *Plan, err error) {
+func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, noRowsLimit bool) (plan *Plan, err error) {
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
-		plan = &Plan{PlanID: PlanSelect, FullQuery: GenerateLimitQuery(stmt)}
+		plan = analyzeUnion(stmt, noRowsLimit)
 	case *sqlparser.Select:
-		plan, err = analyzeSelect(env, stmt, tables)
+		plan, err = analyzeSelect(env, stmt, tables, noRowsLimit)
 	case *sqlparser.Insert:
 		plan, err = analyzeInsert(stmt, tables)
 	case *sqlparser.Update:
