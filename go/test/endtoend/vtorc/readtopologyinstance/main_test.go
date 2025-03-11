@@ -17,6 +17,7 @@ limitations under the License.
 package readtopologyinstance
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -57,7 +58,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	servenv.ParseFlags("vtorc")
 	config.SetInstancePollTime(1 * time.Second)
 	config.MarkConfigurationLoaded()
-	server.StartVTOrcDiscovery()
+	server.StartVTOrcDiscovery(context.Background())
 
 	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
 	assert.NotNil(t, primary, "should have elected a primary")
@@ -69,7 +70,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 		}
 	}
 
-	primaryInstance, err := inst.ReadTopologyInstanceBufferable(primary.Alias, nil)
+	primaryInstance, err := inst.ReadTopologyInstanceBufferable(context.Background(), primary.Alias, nil)
 	require.NoError(t, err)
 	require.NotNil(t, primaryInstance)
 	assert.Equal(t, utils.Hostname, primaryInstance.Hostname)
@@ -120,7 +121,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	err = logic.EnableRecovery()
 	require.NoError(t, err)
 
-	replicaInstance, err := inst.ReadTopologyInstanceBufferable(replica.Alias, nil)
+	replicaInstance, err := inst.ReadTopologyInstanceBufferable(context.Background(), replica.Alias, nil)
 	require.NoError(t, err)
 	require.NotNil(t, replicaInstance)
 	assert.Equal(t, utils.Hostname, replicaInstance.Hostname)
