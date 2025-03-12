@@ -337,7 +337,7 @@ func TestVStreamMulti(t *testing.T) {
 	}
 }
 
-func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
+func TestVStreamsMetrics(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cell := "aa"
@@ -348,9 +348,12 @@ func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
 	vsm := newTestVStreamManager(ctx, hc, st, cell)
 	vsm.vstreamsCreated.ResetAll()
 	vsm.vstreamsLag.ResetAll()
+	vsm.vstreamsCount.ResetAll()
+	vsm.vstreamsEventsStreamed.ResetAll()
+	vsm.vstreamsEndedWithErrors.ResetAll()
 	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
-	sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 := hc.AddTestTablet(cell, "1.1.1.2", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
 
 	send0 := []*binlogdatapb.VEvent{
@@ -379,15 +382,96 @@ func TestVStreamsCreatedAndLagMetrics(t *testing.T) {
 	ch := startVStream(ctx, t, vsm, vgtid, nil)
 	<-ch
 	<-ch
+	expectedLabels1 := "TestVStream.-20.PRIMARY"
+	expectedLabels2 := "TestVStream.20-40.PRIMARY"
 	wantVStreamsCreated := make(map[string]int64)
-	wantVStreamsCreated["TestVStream.-20.PRIMARY"] = 1
-	wantVStreamsCreated["TestVStream.20-40.PRIMARY"] = 1
+	wantVStreamsCreated[expectedLabels1] = 1
+	wantVStreamsCreated[expectedLabels2] = 1
 	assert.Equal(t, wantVStreamsCreated, vsm.vstreamsCreated.Counts(), "vstreamsCreated matches")
 
 	wantVStreamsLag := make(map[string]int64)
-	wantVStreamsLag["TestVStream.-20.PRIMARY"] = 5
-	wantVStreamsLag["TestVStream.20-40.PRIMARY"] = 7
+	wantVStreamsLag[expectedLabels1] = 5
+	wantVStreamsLag[expectedLabels2] = 7
 	assert.Equal(t, wantVStreamsLag, vsm.vstreamsLag.Counts(), "vstreamsLag matches")
+
+	wantVStreamsCount := make(map[string]int64)
+	wantVStreamsCount[expectedLabels1] = 1
+	wantVStreamsCount[expectedLabels2] = 1
+	assert.Equal(t, wantVStreamsCount, vsm.vstreamsCount.Counts(), "vstreamsCount matches")
+
+	wantVStreamsEventsStreamed := make(map[string]int64)
+	wantVStreamsEventsStreamed[expectedLabels1] = 2
+	wantVStreamsEventsStreamed[expectedLabels2] = 2
+	assert.Equal(t, wantVStreamsEventsStreamed, vsm.vstreamsEventsStreamed.Counts(), "vstreamsEventsStreamed matches")
+
+	wantVStreamsEndedWithErrors := make(map[string]int64)
+	wantVStreamsEndedWithErrors[expectedLabels1] = 0
+	wantVStreamsEndedWithErrors[expectedLabels2] = 0
+	assert.Equal(t, wantVStreamsEndedWithErrors, vsm.vstreamsEndedWithErrors.Counts(), "vstreamsEndedWithErrors matches")
+}
+
+func TestVStreamsMetricsErrors(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20", "20-40"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	vsm.vstreamsCreated.ResetAll()
+	vsm.vstreamsLag.ResetAll()
+	vsm.vstreamsCount.ResetAll()
+	vsm.vstreamsEventsStreamed.ResetAll()
+	vsm.vstreamsEndedWithErrors.ResetAll()
+	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+	sbc1 := hc.AddTestTablet(cell, "1.1.1.2", 1002, ks, "20-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "20-40", sbc1.Tablet())
+
+	const wantErr = "Invalid arg message"
+	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, wantErr))
+
+	send1 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid02"},
+		{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 10, CurrentTime: 17 * 1e9},
+	}
+	sbc1.AddVStreamEvents(send1, nil)
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: ks,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}, {
+			Keyspace: ks,
+			Shard:    "20-40",
+			Gtid:     "pos",
+		}},
+	}
+	ch := make(chan *binlogdatapb.VStreamResponse)
+	done := make(chan struct{})
+	go func() {
+		err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+			ch <- &binlogdatapb.VStreamResponse{Events: events}
+			return nil
+		})
+
+		if err == nil || !strings.Contains(err.Error(), wantErr) {
+			require.ErrorContains(t, err, wantErr)
+		}
+		close(done)
+	}()
+	<-ch
+	<-done
+
+	expectedLabels1 := "TestVStream.-20.PRIMARY"
+	expectedLabels2 := "TestVStream.20-40.PRIMARY"
+
+	wantVStreamsEndedWithErrors := make(map[string]int64)
+	wantVStreamsEndedWithErrors[expectedLabels1] = 1
+	wantVStreamsEndedWithErrors[expectedLabels2] = 0
+	assert.Equal(t, wantVStreamsEndedWithErrors, vsm.vstreamsEndedWithErrors.Counts(), "vstreamsEndedWithErrors matches")
 }
 
 func TestVStreamRetriableErrors(t *testing.T) {

@@ -22,6 +22,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -77,11 +78,13 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{HeartbeatInterval: 3600}
-	done := false
+	done := atomic.Bool{}
+	done.Store(false)
 
 	// don't insert while PRS is going on
 	var insertMu sync.Mutex
-	stopInserting := false
+	stopInserting := atomic.Bool{}
+	stopInserting.Store(false)
 	id := 0
 
 	vtgateConn := vc.GetVTGateConn(t)
@@ -90,7 +93,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	// first goroutine that keeps inserting rows into table being streamed until some time elapses after second PRS
 	go func() {
 		for {
-			if stopInserting {
+			if stopInserting.Load() {
 				return
 			}
 			insertMu.Lock()
@@ -122,7 +125,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 				log.Infof("%s:: remote error: %v", time.Now(), err)
 			}
 
-			if done {
+			if done.Load() {
 				return
 			}
 		}
@@ -154,12 +157,12 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 				require.NoError(t, err)
 			}
 			time.Sleep(100 * time.Millisecond)
-			stopInserting = true
-			time.Sleep(2 * time.Second)
-			done = true
+			stopInserting.Store(true)
+			time.Sleep(10 * time.Second) // Give the vstream plenty of time to catchup
+			done.Store(true)
 		}
 
-		if done {
+		if done.Load() {
 			break
 		}
 	}
