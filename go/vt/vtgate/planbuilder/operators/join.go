@@ -49,16 +49,16 @@ func (j *Join) GetOrdering(*plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult) {
+func (j *Join) tryCompact(ctx *plancontext.PlanningContext) Operator {
 	if !j.JoinType.IsCommutative() {
 		// if we can't move tables around, we can't merge these inputs
-		return j, NoRewrite
+		return nil
 	}
 
 	lqg, lok := j.LHS.(*QueryGraph)
 	rqg, rok := j.RHS.(*QueryGraph)
 	if !lok || !rok {
-		return j, NoRewrite
+		return nil
 	}
 
 	newOp := &QueryGraph{
@@ -69,7 +69,7 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult
 	if j.Predicate != nil {
 		newOp.collectPredicate(ctx, j.Predicate)
 	}
-	return newOp, Rewrote("merge querygraphs into a single one")
+	return newOp
 }
 
 func createStraightJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
@@ -103,7 +103,7 @@ func createLeftOuterJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinT
 
 	// for outer joins we have to be careful with the predicates we use
 	var op Operator
-	subq, _ := getSubQuery(join.Condition.On)
+	subq, _, _ := getSubQuery(join.Condition.On)
 	if subq != nil {
 		panic(vterrors.VT12001("subquery in outer join predicate"))
 	}
@@ -137,9 +137,7 @@ func addJoinPredicates(
 
 		// if we are inside a CTE, we need to check if we depend on the recursion table
 		if cte := ctx.ActiveCTE(); cte != nil && ctx.SemTable.DirectDeps(pred).IsOverlapping(cte.Id) {
-			original := pred
 			pred = addCTEPredicate(ctx, pred, cte)
-			ctx.AddJoinPredicates(original, pred)
 		}
 		op = op.AddPredicate(ctx, pred)
 	}
@@ -153,8 +151,12 @@ func addCTEPredicate(
 	cte *plancontext.ContextCTE,
 ) sqlparser.Expr {
 	expr := breakCTEExpressionInLhsAndRhs(ctx, pred, cte.Id)
+	predicate := ctx.PredTracker.NewJoinPredicate(expr.RightExpr)
+	expr.JoinPredicateID = &predicate.ID
+	expr.RightExpr = predicate
+
 	cte.Predicates = append(cte.Predicates, expr)
-	return expr.RightExpr
+	return predicate
 }
 
 func breakCTEExpressionInLhsAndRhs(ctx *plancontext.PlanningContext, pred sqlparser.Expr, lhsID semantics.TableSet) *plancontext.RecurseExpression {
@@ -226,7 +228,7 @@ func (j *Join) IsInner() bool {
 	return j.JoinType.IsInner()
 }
 
-func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
+func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) {
 	j.Predicate = ctx.SemTable.AndExpressions(j.Predicate, expr)
 }
 

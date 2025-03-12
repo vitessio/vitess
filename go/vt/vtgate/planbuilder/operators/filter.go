@@ -92,26 +92,12 @@ func (f *Filter) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.Alias
 	return truncate(f, f.Source.GetColumns(ctx))
 }
 
-func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (f *Filter) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return truncate(f, f.Source.GetSelectExprs(ctx))
 }
 
 func (f *Filter) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return f.Source.GetOrdering(ctx)
-}
-
-func (f *Filter) Compact(*plancontext.PlanningContext) (Operator, *ApplyResult) {
-	if len(f.Predicates) == 0 {
-		return f.Source, Rewrote("filter with no predicates removed")
-	}
-
-	other, isFilter := f.Source.(*Filter)
-	if !isFilter {
-		return f, NoRewrite
-	}
-	f.Source = other.Source
-	f.Predicates = append(f.Predicates, other.Predicates...)
-	return f, Rewrote("two filters merged into one")
 }
 
 func (f *Filter) planOffsets(ctx *plancontext.PlanningContext) Operator {

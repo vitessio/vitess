@@ -82,7 +82,7 @@ func gen4UpdateStmtPlanner(
 	return newPlanResult(plan, operators.TablesUsed(op)...), nil
 }
 
-func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tables []*vindexes.Table) engine.Primitive {
+func updateUnshardedShortcut(stmt *sqlparser.Update, ks *vindexes.Keyspace, tables []*vindexes.BaseTable) engine.Primitive {
 	edml := engine.NewDML()
 	edml.Keyspace = ks
 	edml.Opcode = engine.Unsharded

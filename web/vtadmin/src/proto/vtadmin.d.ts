@@ -1004,6 +1004,20 @@ export namespace vtadmin {
         public vTExplain(request: vtadmin.IVTExplainRequest): Promise<vtadmin.VTExplainResponse>;
 
         /**
+         * Calls VExplain.
+         * @param request VExplainRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VExplainResponse
+         */
+        public vExplain(request: vtadmin.IVExplainRequest, callback: vtadmin.VTAdmin.VExplainCallback): void;
+
+        /**
+         * Calls VExplain.
+         * @param request VExplainRequest message or plain object
+         * @returns Promise
+         */
+        public vExplain(request: vtadmin.IVExplainRequest): Promise<vtadmin.VExplainResponse>;
+
+        /**
          * Calls WorkflowDelete.
          * @param request WorkflowDeleteRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and WorkflowDeleteResponse
@@ -1523,6 +1537,13 @@ export namespace vtadmin {
          * @param [response] VTExplainResponse
          */
         type VTExplainCallback = (error: (Error|null), response?: vtadmin.VTExplainResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vExplain}.
+         * @param error Error, if any
+         * @param [response] VExplainResponse
+         */
+        type VExplainCallback = (error: (Error|null), response?: vtadmin.VExplainResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#workflowDelete}.
@@ -15376,6 +15397,212 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for VTExplainResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VExplainRequest. */
+    interface IVExplainRequest {
+
+        /** VExplainRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** VExplainRequest keyspace */
+        keyspace?: (string|null);
+
+        /** VExplainRequest sql */
+        sql?: (string|null);
+    }
+
+    /** Represents a VExplainRequest. */
+    class VExplainRequest implements IVExplainRequest {
+
+        /**
+         * Constructs a new VExplainRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVExplainRequest);
+
+        /** VExplainRequest cluster_id. */
+        public cluster_id: string;
+
+        /** VExplainRequest keyspace. */
+        public keyspace: string;
+
+        /** VExplainRequest sql. */
+        public sql: string;
+
+        /**
+         * Creates a new VExplainRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VExplainRequest instance
+         */
+        public static create(properties?: vtadmin.IVExplainRequest): vtadmin.VExplainRequest;
+
+        /**
+         * Encodes the specified VExplainRequest message. Does not implicitly {@link vtadmin.VExplainRequest.verify|verify} messages.
+         * @param message VExplainRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVExplainRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VExplainRequest message, length delimited. Does not implicitly {@link vtadmin.VExplainRequest.verify|verify} messages.
+         * @param message VExplainRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVExplainRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VExplainRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VExplainRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VExplainRequest;
+
+        /**
+         * Decodes a VExplainRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VExplainRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VExplainRequest;
+
+        /**
+         * Verifies a VExplainRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VExplainRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VExplainRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VExplainRequest;
+
+        /**
+         * Creates a plain object from a VExplainRequest message. Also converts values to other types if specified.
+         * @param message VExplainRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VExplainRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VExplainRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VExplainRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VExplainResponse. */
+    interface IVExplainResponse {
+
+        /** VExplainResponse response */
+        response?: (string|null);
+    }
+
+    /** Represents a VExplainResponse. */
+    class VExplainResponse implements IVExplainResponse {
+
+        /**
+         * Constructs a new VExplainResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVExplainResponse);
+
+        /** VExplainResponse response. */
+        public response: string;
+
+        /**
+         * Creates a new VExplainResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VExplainResponse instance
+         */
+        public static create(properties?: vtadmin.IVExplainResponse): vtadmin.VExplainResponse;
+
+        /**
+         * Encodes the specified VExplainResponse message. Does not implicitly {@link vtadmin.VExplainResponse.verify|verify} messages.
+         * @param message VExplainResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVExplainResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VExplainResponse message, length delimited. Does not implicitly {@link vtadmin.VExplainResponse.verify|verify} messages.
+         * @param message VExplainResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVExplainResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VExplainResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VExplainResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VExplainResponse;
+
+        /**
+         * Decodes a VExplainResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VExplainResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VExplainResponse;
+
+        /**
+         * Verifies a VExplainResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VExplainResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VExplainResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VExplainResponse;
+
+        /**
+         * Creates a plain object from a VExplainResponse message. Also converts values to other types if specified.
+         * @param message VExplainResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VExplainResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VExplainResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VExplainResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -31301,6 +31528,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest backup_engine */
         backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a BackupRequest. */
@@ -31326,6 +31556,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -34903,9 +35136,6 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest ok_if_not_exists */
         ok_if_not_exists?: (boolean|null);
-
-        /** CheckThrottlerRequest multi_metrics_enabled */
-        multi_metrics_enabled?: (boolean|null);
     }
 
     /** Represents a CheckThrottlerRequest. */
@@ -34928,9 +35158,6 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest ok_if_not_exists. */
         public ok_if_not_exists: boolean;
-
-        /** CheckThrottlerRequest multi_metrics_enabled. */
-        public multi_metrics_enabled: boolean;
 
         /**
          * Creates a new CheckThrottlerRequest instance using the specified properties.
@@ -35023,9 +35250,6 @@ export namespace tabletmanagerdata {
     /** Properties of a CheckThrottlerResponse. */
     interface ICheckThrottlerResponse {
 
-        /** CheckThrottlerResponse status_code */
-        status_code?: (number|null);
-
         /** CheckThrottlerResponse value */
         value?: (number|null);
 
@@ -35062,9 +35286,6 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.ICheckThrottlerResponse);
-
-        /** CheckThrottlerResponse status_code. */
-        public status_code: number;
 
         /** CheckThrottlerResponse value. */
         public value: number;
@@ -35179,9 +35400,6 @@ export namespace tabletmanagerdata {
             /** Metric name */
             name?: (string|null);
 
-            /** Metric status_code */
-            status_code?: (number|null);
-
             /** Metric value */
             value?: (number|null);
 
@@ -35212,9 +35430,6 @@ export namespace tabletmanagerdata {
 
             /** Metric name. */
             public name: string;
-
-            /** Metric status_code. */
-            public status_code: number;
 
             /** Metric value. */
             public value: number;
@@ -35817,9 +36032,6 @@ export namespace tabletmanagerdata {
             /** RecentApp checked_at */
             checked_at?: (vttime.ITime|null);
 
-            /** RecentApp status_code */
-            status_code?: (number|null);
-
             /** RecentApp response_code */
             response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
         }
@@ -35835,9 +36047,6 @@ export namespace tabletmanagerdata {
 
             /** RecentApp checked_at. */
             public checked_at?: (vttime.ITime|null);
-
-            /** RecentApp status_code. */
-            public status_code: number;
 
             /** RecentApp response_code. */
             public response_code: tabletmanagerdata.CheckThrottlerResponseCode;
@@ -48632,6 +48841,12 @@ export namespace replicationdata {
 
         /** FullStatus replication_configuration */
         replication_configuration?: (replicationdata.IConfiguration|null);
+
+        /** FullStatus disk_stalled */
+        disk_stalled?: (boolean|null);
+
+        /** FullStatus semi_sync_blocked */
+        semi_sync_blocked?: (boolean|null);
     }
 
     /** Represents a FullStatus. */
@@ -48708,6 +48923,12 @@ export namespace replicationdata {
 
         /** FullStatus replication_configuration. */
         public replication_configuration?: (replicationdata.IConfiguration|null);
+
+        /** FullStatus disk_stalled. */
+        public disk_stalled: boolean;
+
+        /** FullStatus semi_sync_blocked. */
+        public semi_sync_blocked: boolean;
 
         /**
          * Creates a new FullStatus instance using the specified properties.
@@ -51614,8 +51835,6 @@ export namespace vtctldata {
         enum Strategy {
             VITESS = 0,
             ONLINE = 0,
-            GHOST = 1,
-            PTOSC = 2,
             DIRECT = 3,
             MYSQL = 4
         }
@@ -54393,6 +54612,9 @@ export namespace vtctldata {
 
         /** BackupRequest backup_engine */
         backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a BackupRequest. */
@@ -54421,6 +54643,9 @@ export namespace vtctldata {
 
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -54635,6 +54860,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest incremental_from_pos */
         incremental_from_pos?: (string|null);
+
+        /** BackupShardRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -54663,6 +54891,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest incremental_from_pos. */
         public incremental_from_pos: string;
+
+        /** BackupShardRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.
@@ -68856,6 +69087,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest shards */
         shards?: (string[]|null);
+
+        /** MoveTablesCompleteRequest ignore_source_keyspace */
+        ignore_source_keyspace?: (boolean|null);
     }
 
     /** Represents a MoveTablesCompleteRequest. */
@@ -68887,6 +69121,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest shards. */
         public shards: string[];
+
+        /** MoveTablesCompleteRequest ignore_source_keyspace. */
+        public ignore_source_keyspace: boolean;
 
         /**
          * Creates a new MoveTablesCompleteRequest instance using the specified properties.
@@ -78824,6 +79061,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest delete_batch_size */
         delete_batch_size?: (number|Long|null);
+
+        /** WorkflowDeleteRequest ignore_source_keyspace */
+        ignore_source_keyspace?: (boolean|null);
     }
 
     /** Represents a WorkflowDeleteRequest. */
@@ -78852,6 +79092,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest delete_batch_size. */
         public delete_batch_size: (number|Long);
+
+        /** WorkflowDeleteRequest ignore_source_keyspace. */
+        public ignore_source_keyspace: boolean;
 
         /**
          * Creates a new WorkflowDeleteRequest instance using the specified properties.

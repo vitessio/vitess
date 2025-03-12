@@ -8,6 +8,7 @@
     "comment": "Insertion in a table with shard-scoped foreign keys is allowed",
     "query": "insert into tbl2 (col2, coly) values (1, 3)",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into tbl2 (col2, coly) values (1, 3)",
       "Instructions": {
@@ -17,7 +18,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into tbl2(col2, coly) values (:_col2_0, 3)",
         "TableName": "tbl2",
         "VindexValues": {
@@ -33,6 +33,7 @@
     "comment": "Insertion in a table with shard-scoped multiple column foreign key is allowed",
     "query": "insert into multicol_tbl2 (cola, colb, colc) values (1, 2, 3)",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert into multicol_tbl2 (cola, colb, colc) values (1, 2, 3)",
       "Instructions": {
@@ -42,7 +43,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into multicol_tbl2(cola, colb, colc) values (:_cola_0, :_colb_0, :_colc_0)",
         "TableName": "multicol_tbl2",
         "VindexValues": {
@@ -68,6 +68,7 @@
     "comment": "Delete in a table with shard-scoped multiple column foreign key with cascade",
     "query": "delete from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "DELETE",
       "Original": "delete from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
       "Instructions": {
@@ -99,7 +100,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0,
@@ -125,7 +125,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
             "Table": "multicol_tbl1",
             "Values": [
@@ -147,6 +146,7 @@
     "comment": "Delete in a table with shard-scoped foreign keys with cascade",
     "query": "delete from tbl5",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "DELETE",
       "Original": "delete from tbl5",
       "Instructions": {
@@ -172,7 +172,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -192,7 +191,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals1",
             "Cols": [
               1
@@ -208,7 +206,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete from tbl5",
             "Table": "tbl5"
           }
@@ -229,6 +226,7 @@
     "comment": "Delete in a table with unsharded foreign key with SET NULL",
     "query": "delete from u_tbl9 where col9 = 5",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "DELETE",
       "Original": "delete from u_tbl9 where col9 = 5",
       "Instructions": {
@@ -254,7 +252,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -270,7 +267,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete from u_tbl9 where col9 = 5",
             "Table": "u_tbl9"
           }
@@ -286,6 +282,7 @@
     "comment": "update in unsharded table with restrict",
     "query": "update u_tbl5 set col5 = 'foo' where id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update u_tbl5 set col5 = 'foo' where id = 1",
       "Instructions": {
@@ -295,7 +292,6 @@
           "Name": "unsharded_fk_allow",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update u_tbl5 set col5 = 'foo' where id = 1",
         "Table": "u_tbl5"
       },
@@ -308,6 +304,7 @@
     "comment": "update in unsharded table with cascade",
     "query": "update u_tbl2 set col2 = 'bar' where id = 1",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set col2 = 'bar' where id = 1",
       "Instructions": {
@@ -333,7 +330,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -349,7 +345,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update u_tbl2 set col2 = 'bar' where id = 1",
             "Table": "u_tbl2"
           }
@@ -365,6 +360,7 @@
     "comment": "update in unsharded table with cascade - on non-referenced column",
     "query": "update u_tbl2 set col_no_ref = 'baz' where id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set col_no_ref = 'baz' where id = 1",
       "Instructions": {
@@ -374,7 +370,6 @@
           "Name": "unsharded_fk_allow",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update u_tbl2 set col_no_ref = 'baz' where id = 1",
         "Table": "u_tbl2"
       },
@@ -392,6 +387,7 @@
     "comment": "Update in a table with cross-shard foreign keys, column not in update expression - allowed",
     "query": "update tbl1 set not_ref_col = 'foo' where id = 1",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "UPDATE",
       "Original": "update tbl1 set not_ref_col = 'foo' where id = 1",
       "Instructions": {
@@ -401,7 +397,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update tbl1 set not_ref_col = 'foo' where id = 1",
         "Table": "tbl1"
       },
@@ -419,6 +414,7 @@
     "comment": "Update in a table with shard-scoped foreign keys with cascade",
     "query": "update tbl5 set t5col5 = 'foo'",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update tbl5 set t5col5 = 'foo'",
       "Instructions": {
@@ -444,7 +440,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -460,7 +455,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update tbl5 set t5col5 = 'foo'",
             "Table": "tbl5"
           }
@@ -481,6 +475,7 @@
     "comment": "Update a table with parent and child foreign keys - shard scoped",
     "query": "update tbl2 set col = 'foo'",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "UPDATE",
       "Original": "update tbl2 set col = 'foo'",
       "Instructions": {
@@ -490,7 +485,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update tbl2 set col = 'foo'",
         "Table": "tbl2"
       },
@@ -503,6 +497,7 @@
     "comment": "update table with column's parent foreign key cross shard",
     "query": "update tbl10 set col = 'foo'",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update tbl10 set col = 'foo'",
       "Instructions": {
@@ -567,7 +562,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update tbl10 set col = 'foo'",
             "Table": "tbl10"
           }
@@ -588,6 +582,7 @@
     "comment": "Delete table with cross-shard foreign key with set null - should be eventually allowed",
     "query": "delete from tbl9 where col9 = 34",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "DELETE",
       "Original": "delete from tbl9 where col9 = 34",
       "Instructions": {
@@ -617,7 +612,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -633,7 +627,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete from tbl9 where col9 = 34",
             "Table": "tbl9",
             "Values": [
@@ -653,6 +646,7 @@
     "comment": "update table with same column having reference to different tables, one with on update cascade other with on update set null - child table have further reference",
     "query": "update u_tbl1 set col1 = 'foo'",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl1 set col1 = 'foo'",
       "Instructions": {
@@ -698,7 +692,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   0
@@ -714,7 +707,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'foo' where (col2) in ::fkc_vals",
                 "Table": "u_tbl2"
               }
@@ -748,7 +740,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals3",
                 "Cols": [
                   0
@@ -764,7 +755,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR)))",
                 "Table": "u_tbl9"
               }
@@ -778,7 +768,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update u_tbl1 set col1 = 'foo'",
             "Table": "u_tbl1"
           }
@@ -797,6 +786,7 @@
     "comment": "update in a table with non-literal value - set null",
     "query": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
       "Instructions": {
@@ -838,7 +828,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -861,7 +850,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set m = 2, col2 = col1 + 'bar' where id = 1",
                 "Table": "u_tbl2"
               }
@@ -880,6 +868,7 @@
     "comment": "update in a table with non-literal value - with cascade",
     "query": "update u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
       "Instructions": {
@@ -932,7 +921,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   0
@@ -948,7 +936,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = :fkc_upd where (col2) in ::fkc_vals",
                 "Table": "u_tbl2"
               }
@@ -989,7 +976,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals3",
                 "Cols": [
                   0
@@ -1005,7 +991,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (:fkc_upd1 is null or (col9) not in ((:fkc_upd1)))",
                 "Table": "u_tbl9"
               }
@@ -1019,7 +1004,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set m = 2, col1 = x + 'bar' where id = 1",
             "Table": "u_tbl1"
           }
@@ -1038,6 +1022,7 @@
     "comment": "update in a table with set null, non-literal value on non-foreign key column",
     "query": "update u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1",
       "Instructions": {
@@ -1063,7 +1048,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "BvName": "fkc_vals",
             "Cols": [
               0
@@ -1079,7 +1063,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update u_tbl2 set m = col1 + 'bar', col2 = 2 where id = 1",
             "Table": "u_tbl2"
           }
@@ -1095,6 +1078,7 @@
     "comment": "update in a table with cascade, non-literal value on non-foreign key column",
     "query": "update u_tbl1 set m = x + 'bar', col1 = 2 where id = 1",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl1 set m = x + 'bar', col1 = 2 where id = 1",
       "Instructions": {
@@ -1140,7 +1124,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   0
@@ -1156,7 +1139,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 2 where (col2) in ::fkc_vals",
                 "Table": "u_tbl2"
               }
@@ -1190,7 +1172,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals3",
                 "Cols": [
                   0
@@ -1206,7 +1187,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(2 as CHAR)))",
                 "Table": "u_tbl9"
               }
@@ -1220,7 +1200,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update u_tbl1 set m = x + 'bar', col1 = 2 where id = 1",
             "Table": "u_tbl1"
           }
@@ -1244,11 +1223,11 @@
     "comment": "delete in a table with limit",
     "query": "delete from u_tbl2 limit 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DELETE",
       "Original": "delete from u_tbl2 limit 2",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -1287,7 +1266,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -1303,7 +1281,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete from u_tbl2 where u_tbl2.id in ::dml_vals",
                 "Table": "u_tbl2"
               }
@@ -1321,6 +1298,7 @@
     "comment": "update with fk on cross-shard with a update condition on non-literal value",
     "query": "update tbl3 set coly = colx + 10 where coly = 10",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update tbl3 set coly = colx + 10 where coly = 10",
       "Instructions": {
@@ -1388,7 +1366,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ tbl3 set coly = colx + 10 where coly = 10",
             "Table": "tbl3"
           }
@@ -1404,6 +1381,7 @@
     "comment": "update with fk on cross-shard with a where condition",
     "query": "update tbl3 set coly = 20 where coly = 10",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update tbl3 set coly = 20 where coly = 10",
       "Instructions": {
@@ -1468,7 +1446,6 @@
               "Name": "sharded_fk_allow",
               "Sharded": true
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update tbl3 set coly = 20 where coly = 10",
             "Table": "tbl3"
           }
@@ -1484,6 +1461,7 @@
     "comment": "Update in a table with shard-scoped foreign keys with cascade that requires a validation of a different parent foreign key",
     "query": "update u_tbl6 set col6 = 'foo'",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl6 set col6 = 'foo'",
       "Instructions": {
@@ -1529,7 +1507,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = 'foo' where (col8) in ::fkc_vals",
                 "Table": "u_tbl8"
               }
@@ -1543,7 +1520,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update u_tbl6 set col6 = 'foo'",
             "Table": "u_tbl6"
           }
@@ -1560,6 +1536,7 @@
     "comment": "Update that cascades and requires parent fk and restrict child fk verification",
     "query": "update u_tbl7 set col7 = 'foo'",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl7 set col7 = 'foo'",
       "Instructions": {
@@ -1617,7 +1594,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = 'foo' where (col4) in ::fkc_vals",
                 "Table": "u_tbl4"
               }
@@ -1631,7 +1607,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update u_tbl7 set col7 = 'foo'",
             "Table": "u_tbl7"
           }
@@ -1649,6 +1624,7 @@
     "comment": "Update that cascades and requires parent fk and restrict child fk verification - bindVariable",
     "query": "update u_tbl7 set col7 = :v1",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl7 set col7 = :v1",
       "Instructions": {
@@ -1706,7 +1682,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = :v1 where (col4) in ::fkc_vals",
                 "Table": "u_tbl4"
               }
@@ -1720,7 +1695,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update u_tbl7 set col7 = :v1",
             "Table": "u_tbl7"
           }
@@ -1738,11 +1712,11 @@
     "comment": "Insert with on duplicate key update - foreign key with new value",
     "query": "insert into u_tbl1 (id, col1) values (1, 3) on duplicate key update col1 = 5",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "INSERT",
       "Original": "insert into u_tbl1 (id, col1) values (1, 3) on duplicate key update col1 = 5",
       "Instructions": {
         "OperatorType": "Upsert",
-        "TargetTabletType": "PRIMARY",
         "Inputs": [
           {
             "InputName": "Insert-1",
@@ -1752,7 +1726,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
             "Query": "insert into u_tbl1(id, col1) values (1, 3)",
             "TableName": "u_tbl1"
@@ -1801,7 +1774,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals1",
                     "Cols": [
                       0
@@ -1817,7 +1789,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 5 where (col2) in ::fkc_vals",
                     "Table": "u_tbl2"
                   }
@@ -1851,7 +1822,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals3",
                     "Cols": [
                       0
@@ -1867,7 +1837,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(5 as CHAR)))",
                     "Table": "u_tbl9"
                   }
@@ -1881,7 +1850,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_tbl1 set col1 = 5 where id = 1",
                 "Table": "u_tbl1"
               }
@@ -1902,6 +1870,7 @@
     "comment": "Insert with on duplicate key update - foreign keys not on update column - allowed",
     "query": "insert into u_tbl1 (id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into u_tbl1 (id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'",
       "Instructions": {
@@ -1911,7 +1880,6 @@
           "Name": "unsharded_fk_allow",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into u_tbl1(id, col1, foo) values (1, 3, 'bar') on duplicate key update foo = 'baz'",
         "TableName": "u_tbl1"
       },
@@ -1929,6 +1897,7 @@
     "comment": "replace into with table having primary key",
     "query": "replace into u_tbl1 (id, col1) values (1, 2)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "INSERT",
       "Original": "replace into u_tbl1 (id, col1) values (1, 2)",
       "Instructions": {
@@ -1977,7 +1946,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals1",
                     "Cols": [
                       0
@@ -1993,7 +1961,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
                     "Table": "u_tbl2"
                   }
@@ -2007,7 +1974,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete from u_tbl1 where (id) in ((1))",
                 "Table": "u_tbl1"
               }
@@ -2020,7 +1986,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
             "Query": "insert into u_tbl1(id, col1) values (1, 2)",
             "TableName": "u_tbl1"
@@ -2038,6 +2003,7 @@
     "comment": "update on a multicol foreign key that set nulls and then cascades",
     "query": "update u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
       "Instructions": {
@@ -2084,7 +2050,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   0,
@@ -2101,7 +2066,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (cola, colb) not in ((1, 2))",
                 "Table": "u_multicol_tbl2"
               }
@@ -2115,7 +2079,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
             "Table": "u_multicol_tbl1"
           }
@@ -2132,6 +2095,7 @@
     "comment": "update on a multicol foreign key that set nulls and then cascades - bindVariables",
     "query": "update u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
       "Instructions": {
@@ -2178,7 +2142,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   0,
@@ -2195,7 +2158,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:v2 is null or (:v1 is null or (cola, colb) not in ((:v1, :v2))))",
                 "Table": "u_multicol_tbl2"
               }
@@ -2209,7 +2171,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update u_multicol_tbl1 set cola = :v1, colb = :v2 where id = :v3",
             "Table": "u_multicol_tbl1"
           }
@@ -2226,6 +2187,7 @@
     "comment": "Cascaded delete run from prepared statement",
     "query": "execute prep_delete using @foo",
     "plan": {
+      "Type": "Complex",
       "QueryType": "EXECUTE",
       "Original": "execute prep_delete using @foo",
       "Instructions": {
@@ -2257,7 +2219,6 @@
                   "Name": "sharded_fk_allow",
                   "Sharded": true
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -2277,7 +2238,6 @@
                   "Name": "sharded_fk_allow",
                   "Sharded": true
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   1
@@ -2293,7 +2253,6 @@
                   "Name": "sharded_fk_allow",
                   "Sharded": true
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete from tbl5 where id = :v1",
                 "Table": "tbl5"
               }
@@ -2316,6 +2275,7 @@
     "comment": "foreign key column updated by using a column which is also getting updated - self reference column is allowed",
     "query": "update u_tbl7 set foo = 100, col7 = baz + 1 + col7 where bar = 42",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl7 set foo = 100, col7 = baz + 1 + col7 where bar = 42",
       "Instructions": {
@@ -2380,7 +2340,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col4 = :fkc_upd where (col4) in ::fkc_vals",
                 "Table": "u_tbl4"
               }
@@ -2394,7 +2353,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl7 set foo = 100, col7 = baz + 1 + col7 where bar = 42",
             "Table": "u_tbl7"
           }
@@ -2412,6 +2370,7 @@
     "comment": "Single column updated in a multi-col table",
     "query": "update u_multicol_tbl1 set cola = cola + 3 where id = 3",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_multicol_tbl1 set cola = cola + 3 where id = 3",
       "Instructions": {
@@ -2465,7 +2424,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   0,
@@ -2482,7 +2440,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals and (:fkc_upd is null or (cola) not in ((:fkc_upd)))",
                 "Table": "u_multicol_tbl2"
               }
@@ -2496,7 +2453,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl1 set cola = cola + 3 where id = 3",
             "Table": "u_multicol_tbl1"
           }
@@ -2518,6 +2474,7 @@
     "comment": "multicol foreign key updates with one literal and one non-literal update",
     "query": "update u_multicol_tbl2 set cola = 2, colb = colc - (2) where id = 7",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_multicol_tbl2 set cola = 2, colb = colc - (2) where id = 7",
       "Instructions": {
@@ -2559,7 +2516,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0,
@@ -2588,7 +2544,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_multicol_tbl2 set cola = 2, colb = colc - 2 where id = 7",
                 "Table": "u_multicol_tbl2"
               }
@@ -2607,6 +2562,7 @@
     "comment": "replace into with table having unique key and primary key",
     "query": "replace into u_tbl9(id, col9) values (1, 10),(2, 20),(3, 30)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "INSERT",
       "Original": "replace into u_tbl9(id, col9) values (1, 10),(2, 20),(3, 30)",
       "Instructions": {
@@ -2635,7 +2591,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -2651,7 +2606,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete from u_tbl9 where (col9) in ((10), (20), (30)) or (col9 * foo) in ((10 * null), (20 * null), (30 * null)) or (bar, col9) in ((1, 10), (1, 20), (1, 30)) or (id) in ((1), (2), (3))",
                 "Table": "u_tbl9"
               }
@@ -2664,7 +2618,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
             "Query": "insert into u_tbl9(id, col9) values (1, 10), (2, 20), (3, 30)",
             "TableName": "u_tbl9"
@@ -2681,6 +2634,7 @@
     "comment": "Delete with foreign key checks off",
     "query": "delete /*+ SET_VAR(foreign_key_checks=off) */ from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DELETE",
       "Original": "delete /*+ SET_VAR(foreign_key_checks=off) */ from multicol_tbl1 where cola = 1 and  colb = 2 and colc = 3",
       "Instructions": {
@@ -2690,7 +2644,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete /*+ SET_VAR(foreign_key_checks=Off) */ from multicol_tbl1 where cola = 1 and colb = 2 and colc = 3",
         "Table": "multicol_tbl1",
         "Values": [
@@ -2709,6 +2662,7 @@
     "comment": "Update with foreign key checks off",
     "query": "update /*+ SET_VAR(foreign_key_checks=0) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update /*+ SET_VAR(foreign_key_checks=0) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
       "Instructions": {
@@ -2718,7 +2672,6 @@
           "Name": "unsharded_fk_allow",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update /*+ SET_VAR(foreign_key_checks=Off) */ u_multicol_tbl1 set cola = 1, colb = 2 where id = 3",
         "Table": "u_multicol_tbl1"
       },
@@ -2731,6 +2684,7 @@
     "comment": "Insert with cross shard foreign keys and foreign key checks off",
     "query": "insert /*+ SET_VAR(foreign_key_checks=0) */ into tbl3 (col3, coly) values (1, 3)",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "INSERT",
       "Original": "insert /*+ SET_VAR(foreign_key_checks=0) */ into tbl3 (col3, coly) values (1, 3)",
       "Instructions": {
@@ -2740,7 +2694,6 @@
           "Name": "sharded_fk_allow",
           "Sharded": true
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert /*+ SET_VAR(foreign_key_checks=Off) */ into tbl3(col3, coly) values (:_col3_0, 3)",
         "TableName": "tbl3",
         "VindexValues": {
@@ -2756,11 +2709,11 @@
     "comment": "Insert with on duplicate key update - foreign key with values function",
     "query": "insert into u_tbl1 (id, col1) values (1, 3) on duplicate key update col1 = values(col1)",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "INSERT",
       "Original": "insert into u_tbl1 (id, col1) values (1, 3) on duplicate key update col1 = values(col1)",
       "Instructions": {
         "OperatorType": "Upsert",
-        "TargetTabletType": "PRIMARY",
         "Inputs": [
           {
             "InputName": "Insert-1",
@@ -2770,7 +2723,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
             "Query": "insert into u_tbl1(id, col1) values (1, 3)",
             "TableName": "u_tbl1"
@@ -2819,7 +2771,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals1",
                     "Cols": [
                       0
@@ -2835,7 +2786,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 3 where (col2) in ::fkc_vals",
                     "Table": "u_tbl2"
                   }
@@ -2869,7 +2819,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals3",
                     "Cols": [
                       0
@@ -2885,7 +2834,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast(3 as CHAR)))",
                     "Table": "u_tbl9"
                   }
@@ -2899,7 +2847,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_tbl1 set col1 = 3 where id = 1",
                 "Table": "u_tbl1"
               }
@@ -2920,11 +2867,11 @@
     "comment": "insert with on duplicate key update with multiple rows",
     "query": "insert into u_tbl2 (id, col2) values (:v1, :v2),(:v3, :v4), (:v5, :v6) on duplicate key update col2 = values(col2)",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "INSERT",
       "Original": "insert into u_tbl2 (id, col2) values (:v1, :v2),(:v3, :v4), (:v5, :v6) on duplicate key update col2 = values(col2)",
       "Instructions": {
         "OperatorType": "Upsert",
-        "TargetTabletType": "PRIMARY",
         "Inputs": [
           {
             "InputName": "Insert-1",
@@ -2934,7 +2881,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
             "Query": "insert into u_tbl2(id, col2) values (:v1, :v2)",
             "TableName": "u_tbl2"
@@ -2963,7 +2909,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -2979,7 +2924,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_tbl2 set col2 = :v2 where id = :v1",
                 "Table": "u_tbl2"
               }
@@ -2993,7 +2937,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
             "Query": "insert into u_tbl2(id, col2) values (:v3, :v4)",
             "TableName": "u_tbl2"
@@ -3022,7 +2965,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals1",
                 "Cols": [
                   0
@@ -3038,7 +2980,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_tbl2 set col2 = :v4 where id = :v3",
                 "Table": "u_tbl2"
               }
@@ -3052,7 +2993,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "NoAutoCommit": true,
             "Query": "insert into u_tbl2(id, col2) values (:v5, :v6)",
             "TableName": "u_tbl2"
@@ -3081,7 +3021,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals2",
                 "Cols": [
                   0
@@ -3097,7 +3036,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_tbl2 set col2 = :v6 where id = :v5",
                 "Table": "u_tbl2"
               }
@@ -3120,11 +3058,11 @@
     "comment": "Unsharded multi-table delete with foreign keys",
     "query": "delete u from u_tbl6 u join u_tbl5 m on u.col = m.col where u.col2 = 4 and m.col3 = 6",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DELETE",
       "Original": "delete u from u_tbl6 u join u_tbl5 m on u.col = m.col where u.col2 = 4 and m.col3 = 6",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -3163,7 +3101,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -3179,7 +3116,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete from u_tbl6 as u where u.id in ::dml_vals",
                 "Table": "u_tbl6"
               }
@@ -3198,11 +3134,11 @@
     "comment": "Multi table delete with using",
     "query": "delete u_tbl10 from u_tbl10 join u_tbl11 using (id) where id = 5",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DELETE",
       "Original": "delete u_tbl10 from u_tbl10 join u_tbl11 using (id) where id = 5",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -3241,7 +3177,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -3257,7 +3192,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete from u_tbl10 where u_tbl10.id in ::dml_vals",
                 "Table": "u_tbl10"
               }
@@ -3275,11 +3209,11 @@
     "comment": "Multi table delete with unrelated tables",
     "query": "delete u_tbl1 from u_tbl10 join u_tbl1 on u_tbl10.col = u_tbl1.col",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DELETE",
       "Original": "delete u_tbl1 from u_tbl10 join u_tbl1 on u_tbl10.col = u_tbl1.col",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -3338,7 +3272,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals1",
                     "Cols": [
                       0
@@ -3354,7 +3287,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
                     "Table": "u_tbl2"
                   }
@@ -3368,7 +3300,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete from u_tbl1 where u_tbl1.id in ::dml_vals",
                 "Table": "u_tbl1"
               }
@@ -3388,11 +3319,11 @@
     "comment": "Delete with limit",
     "query": "delete from u_tbl1 order by id limit 1",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DELETE",
       "Original": "delete from u_tbl1 order by id limit 1",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -3451,7 +3382,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals1",
                     "Cols": [
                       0
@@ -3467,7 +3397,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "delete from u_tbl2 where (col2) in ::fkc_vals",
                     "Table": "u_tbl2"
                   }
@@ -3481,7 +3410,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete from u_tbl1 where u_tbl1.id in ::dml_vals",
                 "Table": "u_tbl1"
               }
@@ -3500,6 +3428,7 @@
     "comment": "update query with an uncorrelated subquery",
     "query": "update u_tbl4 set col41 = (select col14 from u_tbl1 where x = 2 and y = 4) where col4 = 3",
     "plan": {
+      "Type": "Complex",
       "QueryType": "UPDATE",
       "Original": "update u_tbl4 set col41 = (select col14 from u_tbl1 where x = 2 and y = 4) where col4 = 3",
       "Instructions": {
@@ -3545,7 +3474,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl4 set col41 = :__sq1 where col4 = 3",
                 "Table": "u_tbl4"
               }
@@ -3563,6 +3491,7 @@
     "comment": "update with a subquery",
     "query": "update u_tbl1 set col1 = (select foo from u_tbl1 where id = 1) order by id desc",
     "plan": {
+      "Type": "Complex",
       "QueryType": "UPDATE",
       "Original": "update u_tbl1 set col1 = (select foo from u_tbl1 where id = 1) order by id desc",
       "Instructions": {
@@ -3628,7 +3557,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals1",
                     "Cols": [
                       0
@@ -3644,7 +3572,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = :__sq1 where (col2) in ::fkc_vals",
                     "Table": "u_tbl2"
                   }
@@ -3678,7 +3605,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals3",
                     "Cols": [
                       0
@@ -3694,7 +3620,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (cast(:__sq1 as CHAR) is null or (col9) not in ((cast(:__sq1 as CHAR))))",
                     "Table": "u_tbl9"
                   }
@@ -3708,7 +3633,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl1 set col1 = :__sq1 order by id desc",
                 "Table": "u_tbl1"
               }
@@ -3729,11 +3653,11 @@
     "comment": "Multi table delete such that the two tables are foreign key related",
     "query": "delete u_tbl6 from u_tbl6 join u_tbl8 on u_tbl6.id = u_tbl8.id where u_tbl6.id = 4",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DELETE",
       "Original": "delete u_tbl6 from u_tbl6 join u_tbl8 on u_tbl6.id = u_tbl8.id where u_tbl6.id = 4",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -3772,7 +3696,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -3788,7 +3711,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete from u_tbl6 where u_tbl6.id in ::dml_vals",
                 "Table": "u_tbl6"
               }
@@ -3806,11 +3728,11 @@
     "comment": "multi table delete on foreign key enabled tables",
     "query": "delete u, m from u_tbl6 u join u_tbl5 m on u.col = m.col where u.col2 = 4 and m.col3 = 6",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DELETE",
       "Original": "delete u, m from u_tbl6 u join u_tbl5 m on u.col = m.col where u.col2 = 4 and m.col3 = 6",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]",
           "1:[1]"
@@ -3850,7 +3772,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -3866,7 +3787,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "delete from u_tbl6 as u where u.id in ::dml_vals",
                 "Table": "u_tbl6"
               }
@@ -3879,7 +3799,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "delete from u_tbl5 as m where m.id in ::dml_vals",
             "Table": "u_tbl5"
           }
@@ -3896,11 +3815,11 @@
     "comment": "update with limit with foreign keys",
     "query": "update u_tbl2 set col2 = 'bar' limit 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set col2 = 'bar' limit 2",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -3939,7 +3858,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "BvName": "fkc_vals",
                 "Cols": [
                   0
@@ -3955,7 +3873,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_tbl2 set col2 = 'bar' where u_tbl2.id in ::dml_vals",
                 "Table": "u_tbl2"
               }
@@ -3973,11 +3890,11 @@
     "comment": "non literal update with order by and limit",
     "query": "update u_tbl2 set col2 = id + 1 order by id limit 2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "UPDATE",
       "Original": "update u_tbl2 set col2 = id + 1 order by id limit 2",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]"
         ],
@@ -4032,7 +3949,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals",
                     "Cols": [
                       0
@@ -4055,7 +3971,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = id + 1 where u_tbl2.id in ::dml_vals order by id asc",
                     "Table": "u_tbl2"
                   }
@@ -4076,6 +3991,7 @@
     "comment": "multi table update",
     "query": "update u_tbl6 u join u_tbl5 m on u.col = m.col set u.col6 = 'foo' where u.col2 = 4 and m.col3 = 6",
     "plan": {
+      "Type": "ForeignKey",
       "QueryType": "UPDATE",
       "Original": "update u_tbl6 u join u_tbl5 m on u.col = m.col set u.col6 = 'foo' where u.col2 = 4 and m.col3 = 6",
       "Instructions": {
@@ -4121,7 +4037,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl8 set col8 = 'foo' where (col8) in ::fkc_vals",
                 "Table": "u_tbl8"
               }
@@ -4135,7 +4050,6 @@
               "Name": "unsharded_fk_allow",
               "Sharded": false
             },
-            "TargetTabletType": "PRIMARY",
             "Query": "update u_tbl6 as u, u_tbl5 as m set u.col6 = 'foo' where u.col2 = 4 and m.col3 = 6 and u.col = m.col",
             "Table": "u_tbl6"
           }
@@ -4153,11 +4067,11 @@
     "comment": "multi target update",
     "query": "update u_tbl1 u join u_multicol_tbl1 m on u.col = m.col set u.col1 = 'foo', m.cola = 'bar' where u.foo = 4 and m.bar = 6",
     "plan": {
+      "Type": "Complex",
       "QueryType": "UPDATE",
       "Original": "update u_tbl1 u join u_multicol_tbl1 m on u.col = m.col set u.col1 = 'foo', m.cola = 'bar' where u.foo = 4 and m.bar = 6",
       "Instructions": {
         "OperatorType": "DMLWithInput",
-        "TargetTabletType": "PRIMARY",
         "Offset": [
           "0:[0]",
           "1:[1]"
@@ -4217,7 +4131,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals1",
                     "Cols": [
                       0
@@ -4233,7 +4146,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "update /*+ SET_VAR(foreign_key_checks=OFF) */ u_tbl2 set col2 = 'foo' where (col2) in ::fkc_vals",
                     "Table": "u_tbl2"
                   }
@@ -4267,7 +4179,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals3",
                     "Cols": [
                       0
@@ -4283,7 +4194,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "update u_tbl9 set col9 = null where (col9) in ::fkc_vals2 and (col9) not in ((cast('foo' as CHAR)))",
                     "Table": "u_tbl9"
                   }
@@ -4297,7 +4207,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_tbl1 as u set u.col1 = 'foo' where u.id in ::dml_vals",
                 "Table": "u_tbl1"
               }
@@ -4347,7 +4256,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "BvName": "fkc_vals5",
                     "Cols": [
                       0,
@@ -4364,7 +4272,6 @@
                       "Name": "unsharded_fk_allow",
                       "Sharded": false
                     },
-                    "TargetTabletType": "PRIMARY",
                     "Query": "update u_multicol_tbl2 set cola = null, colb = null where (cola, colb) in ::fkc_vals4 and (cola) not in (('bar'))",
                     "Table": "u_multicol_tbl2"
                   }
@@ -4378,7 +4285,6 @@
                   "Name": "unsharded_fk_allow",
                   "Sharded": false
                 },
-                "TargetTabletType": "PRIMARY",
                 "Query": "update u_multicol_tbl1 as m set m.cola = 'bar' where m.id in ::dml_vals",
                 "Table": "u_multicol_tbl1"
               }

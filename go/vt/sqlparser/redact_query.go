@@ -28,10 +28,10 @@ func (p *Parser) RedactSQLQuery(sql string) (string, error) {
 		return "", err
 	}
 
-	err = Normalize(stmt, NewReservedVars("redacted", reservedVars), bv)
+	out, err := Normalize(stmt, NewReservedVars("redacted", reservedVars), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 	if err != nil {
 		return "", err
 	}
 
-	return comments.Leading + String(stmt) + comments.Trailing, nil
+	return comments.Leading + String(out.AST) + comments.Trailing, nil
 }

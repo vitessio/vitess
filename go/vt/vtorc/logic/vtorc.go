@@ -108,9 +108,9 @@ func waitForLocksRelease() {
 // handleDiscoveryRequests iterates the discoveryQueue channel and calls upon
 // instance discovery per entry.
 func handleDiscoveryRequests() {
-	discoveryQueue = discovery.CreateQueue("DEFAULT")
+	discoveryQueue = discovery.NewQueue()
 	// create a pool of discovery workers
-	for i := uint(0); i < config.DiscoveryMaxConcurrency; i++ {
+	for i := uint(0); i < config.GetDiscoveryWorkers(); i++ {
 		go func() {
 			for {
 				tabletAlias := discoveryQueue.Consume()
@@ -324,12 +324,6 @@ func refreshAllInformation(ctx context.Context) error {
 	// Refresh all keyspace information.
 	eg.Go(func() error {
 		return RefreshAllKeyspacesAndShards(ctx)
-	})
-
-	// Refresh shards to watch.
-	eg.Go(func() error {
-		updateShardsToWatch()
-		return nil
 	})
 
 	// Refresh all tablets.

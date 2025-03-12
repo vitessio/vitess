@@ -139,7 +139,7 @@ func (dml *DML) execMultiShard(ctx context.Context, primitive Primitive, vcursor
 }
 
 func resolveKeyspaceID(ctx context.Context, vcursor VCursor, vindex vindexes.Vindex, vindexKey []sqltypes.Value) ([]byte, error) {
-	var destinations []key.Destination
+	var destinations []key.ShardDestination
 	var err error
 	switch vdx := vindex.(type) {
 	case vindexes.MultiColumn:

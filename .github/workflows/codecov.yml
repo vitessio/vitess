@@ -80,8 +80,8 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         mkdir -p dist bin
-        curl -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
-        mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
+        curl -s -L https://github.com/coreos/etcd/releases/download/v3.5.17/etcd-v3.5.17-linux-amd64.tar.gz | tar -zxC dist
+        mv dist/etcd-v3.5.17-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
         go install golang.org/x/tools/cmd/goimports@latest

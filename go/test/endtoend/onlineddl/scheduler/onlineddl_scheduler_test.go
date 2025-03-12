@@ -224,7 +224,7 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 		case <-ticker.C:
 		case <-ctx.Done():
 			{
-				resp, err := throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.TestingName, nil)
+				resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.TestingName, nil)
 				assert.NoError(t, err)
 				fmt.Println("Throttler check response: ", resp)
 
@@ -260,7 +260,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
-			"--migration_check_interval", "5s",
+			"--migration_check_interval", "2s",
 			"--watch_replication_stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
@@ -656,7 +656,7 @@ func testScheduler(t *testing.T) {
 					ticker := time.NewTicker(time.Second)
 					defer ticker.Stop()
 					for {
-						throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.OnlineDDLName, nil)
+						throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.OnlineDDLName, nil)
 						select {
 						case <-ticker.C:
 						case <-ctx.Done():
@@ -750,7 +750,7 @@ func testScheduler(t *testing.T) {
 					ticker := time.NewTicker(time.Second)
 					defer ticker.Stop()
 					for {
-						throttler.CheckThrottler(clusterInstance, primaryTablet, throttlerapp.OnlineDDLName, nil)
+						throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.OnlineDDLName, nil)
 						select {
 						case <-ticker.C:
 						case <-ctx.Done():
@@ -889,8 +889,8 @@ func testScheduler(t *testing.T) {
 		onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
 
 		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running
-		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true)) // skip wait
-		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true)) // skip wait
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true)) // skip wait
+		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true)) // skip wait
 
 		testAllowConcurrent(t, "t1", t1uuid, 1)
 		testAllowConcurrent(t, "t2", t2uuid, 1)
@@ -903,6 +903,20 @@ func testScheduler(t *testing.T) {
 			// both should be still running!
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
+
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
+				assert.EqualValues(t, 1.0, userThrotteRatio)
+			}
+			// t2uuid migration is not in 'running' state, hence 'user_throttle_ratio' is not updated
+			rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
+				assert.EqualValues(t, 0, userThrotteRatio)
+			}
 		})
 
 		t.Run("check ready to complete (before)", func(t *testing.T) {
@@ -918,6 +932,39 @@ func testScheduler(t *testing.T) {
 			// both should be still running!
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
+
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
+				assert.EqualValues(t, 0, userThrotteRatio)
+			}
+			rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
+				assert.EqualValues(t, 0, userThrotteRatio)
+			}
+		})
+		t.Run("throttle t2", func(t *testing.T) {
+			throttler.ThrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.Name(t2uuid))
+			time.Sleep(ensureStateNotChangedTime)
+			rs := onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
+				assert.EqualValues(t, 1.0, userThrotteRatio)
+			}
+		})
+		t.Run("unthrottle t2", func(t *testing.T) {
+			throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.Name(t2uuid))
+			time.Sleep(ensureStateNotChangedTime)
+			rs := onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
+				assert.EqualValues(t, 0, userThrotteRatio)
+			}
 		})
 		t.Run("complete t2", func(t *testing.T) {
 			// Issue a complete and wait for successful completion

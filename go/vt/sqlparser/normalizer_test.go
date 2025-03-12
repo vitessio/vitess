@@ -25,8 +25,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/vt/sysvars"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -316,12 +317,10 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
 		},
 	}, {
-		// EXPLAIN queries
-		in:      "explain select * from t where v1 in (1, '2')",
-		outstmt: "explain select * from t where v1 in ::bv1",
-		outbv: map[string]*querypb.BindVariable{
-			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
-		},
+		// EXPLAIN query will be normalized and not parameterized
+		in:      "explain select @x from t where v1 in (1, '2')",
+		outstmt: "explain select :__vtudvx as `@x` from t where v1 in (1, '2')",
+		outbv:   map[string]*querypb.BindVariable{},
 	}, {
 		// NOT IN clause
 		in:      "select * from t where v1 not in (1, '2')",
@@ -377,9 +376,9 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Datetime, []byte("2022-08-06 17:05:12"))),
 		},
 	}, {
-		// TimestampVal should also be normalized
-		in:      `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = 'rjve634shXzaavKHbAH16ql6OrxJ' limit 1,1`,
-		outstmt: `explain select comms_by_companies.* from comms_by_companies where comms_by_companies.id = :comms_by_companies_id /* VARCHAR */ limit :bv1 /* INT64 */, :bv2 /* INT64 */`,
+		// TimestampVal should also be parameterized
+		in:      `select comms_by_companies.* from comms_by_companies where comms_by_companies.id = 'rjve634shXzaavKHbAH16ql6OrxJ' limit 1,1`,
+		outstmt: `select comms_by_companies.* from comms_by_companies where comms_by_companies.id = :comms_by_companies_id /* VARCHAR */ limit :bv1 /* INT64 */, :bv2 /* INT64 */`,
 		outbv: map[string]*querypb.BindVariable{
 			"bv1":                   sqltypes.Int64BindVariable(1),
 			"bv2":                   sqltypes.Int64BindVariable(1),
@@ -448,10 +447,11 @@ func TestNormalize(t *testing.T) {
 		t.Run(tc.in, func(t *testing.T) {
 			stmt, err := parser.Parse(tc.in)
 			require.NoError(t, err)
-			known := GetBindvars(stmt)
+			known := getBindvars(stmt)
 			bv := make(map[string]*querypb.BindVariable)
-			require.NoError(t, Normalize(stmt, NewReservedVars(prefix, known), bv))
-			assert.Equal(t, tc.outstmt, String(stmt))
+			out, err := Normalize(stmt, NewReservedVars(prefix, known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.outstmt, String(out.AST))
 			assert.Equal(t, tc.outbv, bv)
 		})
 	}
@@ -476,9 +476,10 @@ func TestNormalizeInvalidDates(t *testing.T) {
 		t.Run(tc.in, func(t *testing.T) {
 			stmt, err := parser.Parse(tc.in)
 			require.NoError(t, err)
-			known := GetBindvars(stmt)
+			known := getBindvars(stmt)
 			bv := make(map[string]*querypb.BindVariable)
-			require.EqualError(t, Normalize(stmt, NewReservedVars("bv", known), bv), tc.err.Error())
+			_, err = Normalize(stmt, NewReservedVars("bv", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
+			require.EqualError(t, err, tc.err.Error())
 		})
 	}
 }
@@ -498,9 +499,10 @@ func TestNormalizeValidSQL(t *testing.T) {
 			}
 			bv := make(map[string]*querypb.BindVariable)
 			known := make(BindVars)
-			err = Normalize(tree, NewReservedVars("vtg", known), bv)
+
+			out, err := Normalize(tree, NewReservedVars("vtg", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 			require.NoError(t, err)
-			normalizerOutput := String(tree)
+			normalizerOutput := String(out.AST)
 			if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 				return
 			}
@@ -529,9 +531,9 @@ func TestNormalizeOneCasae(t *testing.T) {
 	}
 	bv := make(map[string]*querypb.BindVariable)
 	known := make(BindVars)
-	err = Normalize(tree, NewReservedVars("vtg", known), bv)
+	out, err := Normalize(tree, NewReservedVars("vtg", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 	require.NoError(t, err)
-	normalizerOutput := String(tree)
+	normalizerOutput := String(out.AST)
 	require.EqualValues(t, testOne.output, normalizerOutput)
 	if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 		return
@@ -546,7 +548,7 @@ func TestGetBindVars(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := GetBindvars(stmt)
+	got := getBindvars(stmt)
 	want := map[string]struct{}{
 		"v1": {},
 		"v2": {},
@@ -556,6 +558,586 @@ func TestGetBindVars(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("GetBindVars: %v, want: %v", got, want)
+	}
+}
+
+type testCaseSetVar struct {
+	in, expected, setVarComment string
+}
+
+type testCaseSysVar struct {
+	in, expected string
+	sysVar       map[string]string
+}
+
+type myTestCase struct {
+	in, expected                                                                            string
+	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID                       bool
+	ddlStrategy, migrationContext, sessionUUID, sessionEnableSystemSettings                 bool
+	udv                                                                                     int
+	autocommit, foreignKeyChecks, clientFoundRows, skipQueryPlanCache, socket, queryTimeout bool
+	sqlSelectLimit, transactionMode, workload, version, versionComment                      bool
+}
+
+func TestRewrites(in *testing.T) {
+	tests := []myTestCase{{
+		in:       "SELECT 42",
+		expected: "SELECT 42",
+		// no bindvar needs
+	}, {
+		in:       "SELECT @@version",
+		expected: "SELECT :__vtversion as `@@version`",
+		version:  true,
+	}, {
+		in:           "SELECT @@query_timeout",
+		expected:     "SELECT :__vtquery_timeout as `@@query_timeout`",
+		queryTimeout: true,
+	}, {
+		in:             "SELECT @@version_comment",
+		expected:       "SELECT :__vtversion_comment as `@@version_comment`",
+		versionComment: true,
+	}, {
+		in:                          "SELECT @@enable_system_settings",
+		expected:                    "SELECT :__vtenable_system_settings as `@@enable_system_settings`",
+		sessionEnableSystemSettings: true,
+	}, {
+		in:       "SELECT last_insert_id()",
+		expected: "SELECT :__lastInsertId as `last_insert_id()`",
+		liid:     true,
+	}, {
+		in:       "SELECT database()",
+		expected: "SELECT :__vtdbname as `database()`",
+		db:       true,
+	}, {
+		in:       "SELECT database() from test",
+		expected: "SELECT database() from test",
+		// no bindvar needs
+	}, {
+		in:       "SELECT last_insert_id() as test",
+		expected: "SELECT :__lastInsertId as test",
+		liid:     true,
+	}, {
+		in:       "SELECT last_insert_id() + database()",
+		expected: "SELECT :__lastInsertId + :__vtdbname as `last_insert_id() + database()`",
+		db:       true, liid: true,
+	}, {
+		// unnest database() call
+		in:       "select (select database()) from test",
+		expected: "select database() as `(select database() from dual)` from test",
+		// no bindvar needs
+	}, {
+		// unnest database() call
+		in:       "select (select database() from dual) from test",
+		expected: "select database() as `(select database() from dual)` from test",
+		// no bindvar needs
+	}, {
+		in:       "select (select database() from dual) from dual",
+		expected: "select :__vtdbname as `(select database() from dual)` from dual",
+		db:       true,
+	}, {
+		// don't unnest solo columns
+		in:       "select 1 as foobar, (select foobar)",
+		expected: "select 1 as foobar, (select foobar from dual) from dual",
+	}, {
+		in:       "select id from user where database()",
+		expected: "select id from user where database()",
+		// no bindvar needs
+	}, {
+		in:       "select table_name from information_schema.tables where table_schema = database()",
+		expected: "select table_name from information_schema.tables where table_schema = database()",
+		// no bindvar needs
+	}, {
+		in:       "select schema()",
+		expected: "select :__vtdbname as `schema()`",
+		db:       true,
+	}, {
+		in:        "select found_rows()",
+		expected:  "select :__vtfrows as `found_rows()`",
+		foundRows: true,
+	}, {
+		in:       "select @`x y`",
+		expected: "select :__vtudvx_y as `@``x y``` from dual",
+		udv:      1,
+	}, {
+		in:       "select id from t where id = @x and val = @y",
+		expected: "select id from t where id = :__vtudvx and val = :__vtudvy",
+		db:       false, udv: 2,
+	}, {
+		in:       "insert into t(id) values(@xyx)",
+		expected: "insert into t(id) values(:__vtudvxyx)",
+		db:       false, udv: 1,
+	}, {
+		in:       "select row_count()",
+		expected: "select :__vtrcount as `row_count()`",
+		rowCount: true,
+	}, {
+		in:       "SELECT lower(database())",
+		expected: "SELECT lower(:__vtdbname) as `lower(database())`",
+		db:       true,
+	}, {
+		in:         "SELECT @@autocommit",
+		expected:   "SELECT :__vtautocommit as `@@autocommit`",
+		autocommit: true,
+	}, {
+		in:              "SELECT @@client_found_rows",
+		expected:        "SELECT :__vtclient_found_rows as `@@client_found_rows`",
+		clientFoundRows: true,
+	}, {
+		in:                 "SELECT @@skip_query_plan_cache",
+		expected:           "SELECT :__vtskip_query_plan_cache as `@@skip_query_plan_cache`",
+		skipQueryPlanCache: true,
+	}, {
+		in:             "SELECT @@sql_select_limit",
+		expected:       "SELECT :__vtsql_select_limit as `@@sql_select_limit`",
+		sqlSelectLimit: true,
+	}, {
+		in:              "SELECT @@transaction_mode",
+		expected:        "SELECT :__vttransaction_mode as `@@transaction_mode`",
+		transactionMode: true,
+	}, {
+		in:       "SELECT @@workload",
+		expected: "SELECT :__vtworkload as `@@workload`",
+		workload: true,
+	}, {
+		in:       "SELECT @@socket",
+		expected: "SELECT :__vtsocket as `@@socket`",
+		socket:   true,
+	}, {
+		in:       "select (select 42) from dual",
+		expected: "select 42 as `(select 42 from dual)` from dual",
+	}, {
+		in:       "select * from user where col = (select 42)",
+		expected: "select * from user where col = 42",
+	}, {
+		in:       "select * from (select 42) as t", // this is not an expression, and should not be rewritten
+		expected: "select * from (select 42) as t",
+	}, {
+		in:       `select (select (select (select (select (select last_insert_id()))))) as x`,
+		expected: "select :__lastInsertId as x from dual",
+		liid:     true,
+	}, {
+		in:       `select * from (select last_insert_id()) as t`,
+		expected: "select * from (select :__lastInsertId as `last_insert_id()` from dual) as t",
+		liid:     true,
+	}, {
+		in:          `select * from user where col = @@ddl_strategy`,
+		expected:    "select * from user where col = :__vtddl_strategy",
+		ddlStrategy: true,
+	}, {
+		in:               `select * from user where col = @@migration_context`,
+		expected:         "select * from user where col = :__vtmigration_context",
+		migrationContext: true,
+	}, {
+		in:       `select * from user where col = @@read_after_write_gtid OR col = @@read_after_write_timeout OR col = @@session_track_gtids`,
+		expected: "select * from user where col = :__vtread_after_write_gtid or col = :__vtread_after_write_timeout or col = :__vtsession_track_gtids",
+		rawGTID:  true, rawTimeout: true, sessTrackGTID: true,
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual)",
+		expected: "SELECT * FROM tbl WHERE id IN (1)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT last_insert_id() FROM dual)",
+		expected: "SELECT * FROM tbl WHERE id IN (:__lastInsertId)",
+		liid:     true,
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT (SELECT 1 FROM dual WHERE 1 = 0) FROM dual)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual WHERE 1 = 0)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual WHERE 1 = 0)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual WHERE 1 = 0)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1,2 FROM dual)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1,2 FROM dual)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual ORDER BY 1)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual ORDER BY 1)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT id FROM user GROUP BY id)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT id FROM user GROUP BY id)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual, user)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual, user)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",
+	}, {
+		// SELECT * behaves different depending the join type used, so if that has been used, we won't rewrite
+		in:       "SELECT * FROM A JOIN B USING (id1,id2,id3)",
+		expected: "SELECT * FROM A JOIN B USING (id1,id2,id3)",
+	}, {
+		in:       "CALL proc(@foo)",
+		expected: "CALL proc(:__vtudvfoo)",
+		udv:      1,
+	}, {
+		in:       "SELECT * FROM tbl WHERE NOT id = 42",
+		expected: "SELECT * FROM tbl WHERE id != 42",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id < 12",
+		expected: "SELECT * FROM tbl WHERE id >= 12",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id > 12",
+		expected: "SELECT * FROM tbl WHERE id <= 12",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id <= 33",
+		expected: "SELECT * FROM tbl WHERE id > 33",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id >= 33",
+		expected: "SELECT * FROM tbl WHERE id < 33",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id != 33",
+		expected: "SELECT * FROM tbl WHERE id = 33",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id in (1,2,3)",
+		expected: "SELECT * FROM tbl WHERE id not in (1,2,3)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id not in (1,2,3)",
+		expected: "SELECT * FROM tbl WHERE id in (1,2,3)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id not in (1,2,3)",
+		expected: "SELECT * FROM tbl WHERE id in (1,2,3)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id like '%foobar'",
+		expected: "SELECT * FROM tbl WHERE id not like '%foobar'",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id not like '%foobar'",
+		expected: "SELECT * FROM tbl WHERE id like '%foobar'",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id regexp '%foobar'",
+		expected: "SELECT * FROM tbl WHERE id not regexp '%foobar'",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id not regexp '%foobar'",
+		expected: "select * from tbl where id regexp '%foobar'",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar limit 100 offset 34)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar limit 100 offset 34)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2 from other_table where foo > bar group by col1, col2)",
+		expected: "SELECT * FROM tbl WHERE exists(select 1 from other_table where foo > bar)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select count(*) from other_table where foo > bar)",
+		expected: "SELECT * FROM tbl WHERE true",
+	}, {
+		in:       "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3)",
+		expected: "SELECT * FROM tbl WHERE exists(select col1, col2, count(*) from other_table where foo > bar group by col1, col2 having count(*) > 3)",
+	}, {
+		in:       "SELECT id, name, salary FROM user_details",
+		expected: "SELECT id, name, salary FROM (select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id) as user_details",
+	}, {
+		in:       "select max(distinct c1), min(distinct c2), avg(distinct c3), sum(distinct c4), count(distinct c5), group_concat(distinct c6) from tbl",
+		expected: "select max(c1) as `max(distinct c1)`, min(c2) as `min(distinct c2)`, avg(distinct c3), sum(distinct c4), count(distinct c5), group_concat(distinct c6) from tbl",
+	}, {
+		in:                          "SHOW VARIABLES",
+		expected:                    "SHOW VARIABLES",
+		autocommit:                  true,
+		foreignKeyChecks:            true,
+		clientFoundRows:             true,
+		skipQueryPlanCache:          true,
+		sqlSelectLimit:              true,
+		transactionMode:             true,
+		workload:                    true,
+		version:                     true,
+		versionComment:              true,
+		ddlStrategy:                 true,
+		migrationContext:            true,
+		sessionUUID:                 true,
+		sessionEnableSystemSettings: true,
+		rawGTID:                     true,
+		rawTimeout:                  true,
+		sessTrackGTID:               true,
+		socket:                      true,
+		queryTimeout:                true,
+	}, {
+		in:                          "SHOW GLOBAL VARIABLES",
+		expected:                    "SHOW GLOBAL VARIABLES",
+		autocommit:                  true,
+		foreignKeyChecks:            true,
+		clientFoundRows:             true,
+		skipQueryPlanCache:          true,
+		sqlSelectLimit:              true,
+		transactionMode:             true,
+		workload:                    true,
+		version:                     true,
+		versionComment:              true,
+		ddlStrategy:                 true,
+		migrationContext:            true,
+		sessionUUID:                 true,
+		sessionEnableSystemSettings: true,
+		rawGTID:                     true,
+		rawTimeout:                  true,
+		sessTrackGTID:               true,
+		socket:                      true,
+		queryTimeout:                true,
+	}}
+	parser := NewTestParser()
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, known, err := parser.Parse2(tc.in)
+			require.NoError(err)
+			vars := NewReservedVars("v", known)
+			result, err := Normalize(
+				stmt,
+				vars,
+				map[string]*querypb.BindVariable{},
+				false,
+				"ks",
+				0,
+				"",
+				map[string]string{},
+				nil,
+				&fakeViews{},
+			)
+			require.NoError(err)
+
+			expected, err := parser.Parse(tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
+
+			s := String(expected)
+			assert := assert.New(t)
+			assert.Equal(s, String(result.AST))
+			assert.Equal(tc.liid, result.NeedsFuncResult(LastInsertIDName), "should need last insert id")
+			assert.Equal(tc.db, result.NeedsFuncResult(DBVarName), "should need database name")
+			assert.Equal(tc.foundRows, result.NeedsFuncResult(FoundRowsName), "should need found rows")
+			assert.Equal(tc.rowCount, result.NeedsFuncResult(RowCountName), "should need row count")
+			assert.Equal(tc.udv, len(result.NeedUserDefinedVariables), "count of user defined variables")
+			assert.Equal(tc.autocommit, result.NeedsSysVar(sysvars.Autocommit.Name), "should need :__vtautocommit")
+			assert.Equal(tc.foreignKeyChecks, result.NeedsSysVar(sysvars.ForeignKeyChecks), "should need :__vtforeignKeyChecks")
+			assert.Equal(tc.clientFoundRows, result.NeedsSysVar(sysvars.ClientFoundRows.Name), "should need :__vtclientFoundRows")
+			assert.Equal(tc.skipQueryPlanCache, result.NeedsSysVar(sysvars.SkipQueryPlanCache.Name), "should need :__vtskipQueryPlanCache")
+			assert.Equal(tc.sqlSelectLimit, result.NeedsSysVar(sysvars.SQLSelectLimit.Name), "should need :__vtsqlSelectLimit")
+			assert.Equal(tc.transactionMode, result.NeedsSysVar(sysvars.TransactionMode.Name), "should need :__vttransactionMode")
+			assert.Equal(tc.workload, result.NeedsSysVar(sysvars.Workload.Name), "should need :__vtworkload")
+			assert.Equal(tc.queryTimeout, result.NeedsSysVar(sysvars.QueryTimeout.Name), "should need :__vtquery_timeout")
+			assert.Equal(tc.ddlStrategy, result.NeedsSysVar(sysvars.DDLStrategy.Name), "should need ddlStrategy")
+			assert.Equal(tc.migrationContext, result.NeedsSysVar(sysvars.MigrationContext.Name), "should need migrationContext")
+			assert.Equal(tc.sessionUUID, result.NeedsSysVar(sysvars.SessionUUID.Name), "should need sessionUUID")
+			assert.Equal(tc.sessionEnableSystemSettings, result.NeedsSysVar(sysvars.SessionEnableSystemSettings.Name), "should need sessionEnableSystemSettings")
+			assert.Equal(tc.rawGTID, result.NeedsSysVar(sysvars.ReadAfterWriteGTID.Name), "should need rawGTID")
+			assert.Equal(tc.rawTimeout, result.NeedsSysVar(sysvars.ReadAfterWriteTimeOut.Name), "should need rawTimeout")
+			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
+			assert.Equal(tc.version, result.NeedsSysVar(sysvars.Version.Name), "should need Vitess version")
+			assert.Equal(tc.versionComment, result.NeedsSysVar(sysvars.VersionComment.Name), "should need Vitess version")
+			assert.Equal(tc.socket, result.NeedsSysVar(sysvars.Socket.Name), "should need :__vtsocket")
+		})
+	}
+}
+
+type fakeViews struct{}
+
+func (*fakeViews) FindView(name TableName) TableStatement {
+	if name.Name.String() != "user_details" {
+		return nil
+	}
+	parser := NewTestParser()
+	statement, err := parser.Parse("select user.id, user.name, user_extra.salary from user join user_extra where user.id = user_extra.user_id")
+	if err != nil {
+		return nil
+	}
+	return statement.(TableStatement)
+}
+
+func TestRewritesWithSetVarComment(in *testing.T) {
+	tests := []testCaseSetVar{{
+		in:            "select 1",
+		expected:      "select 1",
+		setVarComment: "",
+	}, {
+		in:            "select 1",
+		expected:      "select /*+ AA(a) */ 1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "insert /* toto */ into t(id) values(1)",
+		expected:      "insert /*+ AA(a) */ /* toto */ into t(id) values(1)",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "select  /* toto */ * from t union select * from s",
+		expected:      "select /*+ AA(a) */ /* toto */ * from t union select /*+ AA(a) */ * from s",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "vstream /* toto */ * from t1",
+		expected:      "vstream /*+ AA(a) */ /* toto */ * from t1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "stream /* toto */ t from t1",
+		expected:      "stream /*+ AA(a) */ /* toto */ t from t1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "update /* toto */ t set id = 1",
+		expected:      "update /*+ AA(a) */ /* toto */ t set id = 1",
+		setVarComment: "AA(a)",
+	}, {
+		in:            "delete /* toto */ from t",
+		expected:      "delete /*+ AA(a) */ /* toto */ from t",
+		setVarComment: "AA(a)",
+	}}
+
+	parser := NewTestParser()
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := parser.Parse(tc.in)
+			require.NoError(err)
+			vars := NewReservedVars("v", nil)
+			result, err := Normalize(
+				stmt,
+				vars,
+				map[string]*querypb.BindVariable{},
+				false,
+				"ks",
+				0,
+				tc.setVarComment,
+				map[string]string{},
+				nil,
+				&fakeViews{},
+			)
+
+			require.NoError(err)
+
+			expected, err := parser.Parse(tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
+
+			assert.Equal(t, String(expected), String(result.AST))
+		})
+	}
+}
+
+func TestRewritesSysVar(in *testing.T) {
+	tests := []testCaseSysVar{{
+		in:       "select @x = @@sql_mode",
+		expected: "select :__vtudvx = @@sql_mode as `@x = @@sql_mode` from dual",
+	}, {
+		in:       "select @x = @@sql_mode",
+		expected: "select :__vtudvx = :__vtsql_mode as `@x = @@sql_mode` from dual",
+		sysVar:   map[string]string{"sql_mode": "' '"},
+	}, {
+		in:       "SELECT @@tx_isolation",
+		expected: "select @@tx_isolation from dual",
+	}, {
+		in:       "SELECT @@transaction_isolation",
+		expected: "select @@transaction_isolation from dual",
+	}, {
+		in:       "SELECT @@session.transaction_isolation",
+		expected: "select @@session.transaction_isolation from dual",
+	}, {
+		in:       "SELECT @@tx_isolation",
+		sysVar:   map[string]string{"tx_isolation": "'READ-COMMITTED'"},
+		expected: "select :__vttx_isolation as `@@tx_isolation` from dual",
+	}, {
+		in:       "SELECT @@transaction_isolation",
+		sysVar:   map[string]string{"transaction_isolation": "'READ-COMMITTED'"},
+		expected: "select :__vttransaction_isolation as `@@transaction_isolation` from dual",
+	}, {
+		in:       "SELECT @@session.transaction_isolation",
+		sysVar:   map[string]string{"transaction_isolation": "'READ-COMMITTED'"},
+		expected: "select :__vttransaction_isolation as `@@session.transaction_isolation` from dual",
+	}}
+
+	parser := NewTestParser()
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := parser.Parse(tc.in)
+			require.NoError(err)
+			vars := NewReservedVars("v", nil)
+			result, err := Normalize(
+				stmt,
+				vars,
+				map[string]*querypb.BindVariable{},
+				false,
+				"ks",
+				0,
+				"",
+				tc.sysVar,
+				nil,
+				&fakeViews{},
+			)
+
+			require.NoError(err)
+
+			expected, err := parser.Parse(tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
+
+			assert.Equal(t, String(expected), String(result.AST))
+		})
+	}
+}
+
+func TestRewritesWithDefaultKeyspace(in *testing.T) {
+	tests := []myTestCase{{
+		in:       "SELECT 1 from x.test",
+		expected: "SELECT 1 from x.test", // no change
+	}, {
+		in:       "SELECT x.col as c from x.test",
+		expected: "SELECT x.col as c from x.test", // no change
+	}, {
+		in:       "SELECT 1 from test",
+		expected: "SELECT 1 from sys.test",
+	}, {
+		in:       "SELECT 1 from test as t",
+		expected: "SELECT 1 from sys.test as t",
+	}, {
+		in:       "SELECT 1 from `test 24` as t",
+		expected: "SELECT 1 from sys.`test 24` as t",
+	}, {
+		in:       "SELECT 1, (select 1 from test) from x.y",
+		expected: "SELECT 1, (select 1 from sys.test) from x.y",
+	}, {
+		in:       "SELECT 1 from (select 2 from test) t",
+		expected: "SELECT 1 from (select 2 from sys.test) t",
+	}, {
+		in:       "SELECT 1 from test where exists(select 2 from test)",
+		expected: "SELECT 1 from sys.test where exists(select 1 from sys.test)",
+	}, {
+		in:       "SELECT 1 from dual",
+		expected: "SELECT 1 from dual",
+	}, {
+		in:       "SELECT (select 2 from dual) from DUAL",
+		expected: "SELECT 2 as `(select 2 from dual)` from DUAL",
+	}}
+
+	parser := NewTestParser()
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := parser.Parse(tc.in)
+			require.NoError(err)
+			vars := NewReservedVars("v", nil)
+			result, err := Normalize(
+				stmt,
+				vars,
+				map[string]*querypb.BindVariable{},
+				false,
+				"sys",
+				0,
+				"",
+				map[string]string{},
+				nil,
+				&fakeViews{},
+			)
+
+			require.NoError(err)
+
+			expected, err := parser.Parse(tc.expected)
+			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
+
+			assert.Equal(t, String(expected), String(result.AST))
+		})
+	}
+}
+
+func TestReservedVars(t *testing.T) {
+	for _, prefix := range []string{"vtg", "bv"} {
+		t.Run("prefix_"+prefix, func(t *testing.T) {
+			reserved := NewReservedVars(prefix, make(BindVars))
+			for i := 1; i < 1000; i++ {
+				require.Equal(t, fmt.Sprintf("%s%d", prefix, i), reserved.nextUnusedVar())
+			}
+		})
 	}
 }
 
@@ -573,7 +1155,8 @@ func BenchmarkNormalize(b *testing.B) {
 		b.Fatal(err)
 	}
 	for i := 0; i < b.N; i++ {
-		require.NoError(b, Normalize(ast, NewReservedVars("", reservedVars), map[string]*querypb.BindVariable{}))
+		_, err := Normalize(ast, NewReservedVars("", reservedVars), map[string]*querypb.BindVariable{}, true, "ks", 0, "", map[string]string{}, nil, nil)
+		require.NoError(b, err)
 	}
 }
 
@@ -602,7 +1185,8 @@ func BenchmarkNormalizeTraces(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				for i, query := range parsed {
-					_ = Normalize(query, NewReservedVars("", reservedVars[i]), map[string]*querypb.BindVariable{})
+					_, err := Normalize(query, NewReservedVars("", reservedVars[i]), map[string]*querypb.BindVariable{}, true, "ks", 0, "", map[string]string{}, nil, nil)
+					require.NoError(b, err)
 				}
 			}
 		})
@@ -636,7 +1220,7 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 
 			// Normalize if possible and retry.
 			if CanNormalize(stmt) || MustRewriteAST(stmt, false) {
-				result, err := PrepareAST(
+				result, err := Normalize(
 					stmt,
 					NewReservedVars("vtg", reservedVars),
 					bindVars,
@@ -928,7 +1512,7 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
 			}
 
 			reservedVars := NewReservedVars("vtg", reserved)
-			_, err = PrepareAST(
+			_, err = Normalize(
 				stmt,
 				reservedVars,
 				make(map[string]*querypb.BindVariable),

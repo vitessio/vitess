@@ -206,12 +206,7 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 			query:       "CREATE TABLE t(id int)",
 			isOnlineDDL: false,
 		},
-		{
-			query:       "CREATE TABLE t(id int)",
-			ddlStrategy: "gh-ost",
-			isOnlineDDL: true,
-			strategy:    schema.DDLStrategyGhost,
-		},
+
 		{
 			query:       "ALTER TABLE t ADD COLUMN i INT",
 			ddlStrategy: "online",
@@ -231,16 +226,16 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 		},
 		{
 			query:       "ALTER TABLE t ADD COLUMN i INT",
-			ddlStrategy: "gh-ost",
+			ddlStrategy: "vitess",
 			isOnlineDDL: true,
-			strategy:    schema.DDLStrategyGhost,
+			strategy:    schema.DDLStrategyVitess,
 		},
 		{
 			query:       "ALTER TABLE t ADD COLUMN i INT",
-			ddlStrategy: "gh-ost --max-load=Threads_running=100",
+			ddlStrategy: "vitess --declarative",
 			isOnlineDDL: true,
-			strategy:    schema.DDLStrategyGhost,
-			options:     "--max-load=Threads_running=100",
+			strategy:    schema.DDLStrategyVitess,
+			options:     "--declarative",
 		},
 		{
 			query:       "TRUNCATE TABLE t",
@@ -249,12 +244,12 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 		},
 		{
 			query:       "TRUNCATE TABLE t",
-			ddlStrategy: "gh-ost",
+			ddlStrategy: "vitess",
 			isOnlineDDL: false,
 		},
 		{
 			query:       "RENAME TABLE t to t2",
-			ddlStrategy: "gh-ost",
+			ddlStrategy: "vitess",
 			isOnlineDDL: false,
 		},
 	}

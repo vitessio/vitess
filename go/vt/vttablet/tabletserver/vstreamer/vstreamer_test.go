@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -371,9 +372,15 @@ func TestVersion(t *testing.T) {
 	}
 	blob, _ := dbSchema.MarshalVT()
 	gtid := "MariaDB/0-41983-20"
+	// We serialize a blob here, encodeString is for strings only
+	// and should not be used for binary data.
+	blobVal := sqltypes.MakeTrusted(sqltypes.VarBinary, blob)
+	buf := bytes2.Buffer{}
+	blobVal.EncodeSQLBytes2(&buf)
+
 	testcases := []testcase{{
 		input: []string{
-			fmt.Sprintf("insert into _vt.schema_version values(1, '%s', 123, 'create table t1', %v)", gtid, encodeString(string(blob))),
+			fmt.Sprintf("insert into _vt.schema_version values(1, '%s', 123, 'create table t1', %v)", gtid, buf.String()),
 		},
 		// External table events don't get sent.
 		output: [][]string{{
@@ -2107,4 +2114,196 @@ func TestFilteredInOperator(t *testing.T) {
 		{"commit", nil},
 	}}
 	ts.Run()
+}
+
+func TestFilteredBetweenOperator(t *testing.T) {
+	testCases := []struct {
+		name        string
+		filter      string
+		testQueries []*TestQuery
+	}{
+		{
+			name:   "between-int",
+			filter: "select id1, val from t1 where id1 between 2 and 5",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'aaa')", noEvents},
+				{"insert into t1 values (2, 200, 'bbb')", nil},
+				{"insert into t1 values (3, 100, 'ccc')", nil},
+				{"insert into t1 values (4, 200, 'ddd')", nil},
+				{"insert into t1 values (5, 200, 'eee')", nil},
+				{"insert into t1 values (6, 200, 'fff')", noEvents},
+				{"commit", nil},
+			},
+		},
+		{
+			name:   "between-varchar",
+			filter: "select id1, val from t1 where val between 'c' and 'e'",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'a')", noEvents},
+				{"insert into t1 values (2, 200, 'b')", noEvents},
+				{"insert into t1 values (3, 100, 'c')", nil},
+				{"insert into t1 values (4, 200, 'd')", nil},
+				{"insert into t1 values (5, 200, 'e')", nil},
+				{"insert into t1 values (6, 200, 'f')", noEvents},
+				{"commit", nil},
+			},
+		},
+		{
+			name:   "not-between-int",
+			filter: "select id1, val from t1 where id1 not between 3 and 5",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'aaa')", nil},
+				{"insert into t1 values (2, 200, 'bbb')", nil},
+				{"insert into t1 values (3, 100, 'ccc')", noEvents},
+				{"insert into t1 values (4, 200, 'ddd')", noEvents},
+				{"insert into t1 values (5, 200, 'eee')", noEvents},
+				{"insert into t1 values (6, 200, 'fff')", nil},
+				{"commit", nil},
+			},
+		},
+		{
+			name:   "not-between-varchar",
+			filter: "select id1, val from t1 where val not between 'b' and 'e'",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'a')", nil},
+				{"insert into t1 values (2, 200, 'b')", noEvents},
+				{"insert into t1 values (3, 100, 'c')", noEvents},
+				{"insert into t1 values (4, 200, 'd')", noEvents},
+				{"insert into t1 values (5, 200, 'e')", noEvents},
+				{"insert into t1 values (6, 200, 'f')", nil},
+				{"insert into t1 values (7, 100, 'g')", nil},
+				{"commit", nil},
+			},
+		},
+		{
+			name:   "between-and-not-between",
+			filter: "select id1, val from t1 where id1 between 2 and 6 and val not between 'd' and 'f'",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'a')", noEvents},
+				{"insert into t1 values (2, 200, 'b')", nil},
+				{"insert into t1 values (3, 100, 'c')", nil},
+				{"insert into t1 values (4, 200, 'd')", noEvents},
+				{"insert into t1 values (5, 200, 'e')", noEvents},
+				{"insert into t1 values (6, 200, 'f')", noEvents},
+				{"insert into t1 values (7, 100, 'g')", noEvents},
+				{"commit", nil},
+			},
+		},
+		{
+			name:   "between-and-not-between-and-additional-compare",
+			filter: "select id1, val from t1 where id1 between 2 and 10 and id1 != 9 and val not between 'd' and 'f' and val in ('a','e')",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'a')", noEvents},
+				{"insert into t1 values (2, 200, 'b')", noEvents},
+				{"insert into t1 values (3, 100, 'c')", noEvents},
+				{"insert into t1 values (4, 200, 'd')", noEvents},
+				{"insert into t1 values (5, 200, 'e')", noEvents},
+				{"insert into t1 values (6, 200, 'f')", noEvents},
+				{"insert into t1 values (7, 100, 'g')", noEvents},
+				{"insert into t1 values (8, 100, 'a')", nil},
+				{"insert into t1 values (9, 100, 'a')", noEvents},
+				{"commit", nil},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := &TestSpec{
+				t: t,
+				ddls: []string{
+					"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+				},
+				options: &TestSpecOptions{
+					filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{{
+							Match:  "t1",
+							Filter: tc.filter,
+						}},
+					},
+				},
+			}
+			defer ts.Close()
+			ts.Init()
+			ts.fieldEvents["t1"].cols[1].skip = true
+			ts.tests = [][]*TestQuery{tc.testQueries}
+			ts.Run()
+		})
+	}
+}
+
+func TestFilteredIsNullOperator(t *testing.T) {
+	testCases := []struct {
+		name        string
+		filter      string
+		testQueries []*TestQuery
+	}{
+		{
+			name:   "is-null",
+			filter: "select id1, val from t1 where val is null",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'aaa')", noEvents},
+				{"insert into t1 values (2, 200, 'bbb')", noEvents},
+				{"insert into t1 values (3, 100, 'ccc')", noEvents},
+				{"insert into t1 values (4, 200, NULL)", nil},
+				{"insert into t1 values (5, 200, NULL)", nil},
+				{"commit", nil},
+			},
+		},
+		{
+			name:   "is-null-and-is-not-null",
+			filter: "select id1, val from t1 where val is null and id2 is not null",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'aaa')", noEvents},
+				{"insert into t1 values (2, 200, 'bbb')", noEvents},
+				{"insert into t1 values (3, 100, NULL)", nil},
+				{"insert into t1 values (4, NULL, NULL)", noEvents},
+				{"insert into t1 values (5, 200, NULL)", nil},
+				{"commit", nil},
+			},
+		},
+		{
+			name:   "is-null-and-other-op",
+			filter: "select id1, val from t1 where val is null and id1 != 4 and id2 not between 100 and 150",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'd')", noEvents},
+				{"insert into t1 values (2, 200, 'e')", noEvents},
+				{"insert into t1 values (3, 100, NULL)", noEvents},
+				{"insert into t1 values (4, 200, NULL)", noEvents},
+				{"insert into t1 values (5, 200, NULL)", nil},
+				{"commit", nil},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := &TestSpec{
+				t: t,
+				ddls: []string{
+					"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+				},
+				options: &TestSpecOptions{
+					filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{{
+							Match:  "t1",
+							Filter: tc.filter,
+						}},
+					},
+				},
+			}
+			defer ts.Close()
+			ts.Init()
+			ts.fieldEvents["t1"].cols[1].skip = true
+			ts.tests = [][]*TestQuery{tc.testQueries}
+			ts.Run()
+		})
+	}
 }

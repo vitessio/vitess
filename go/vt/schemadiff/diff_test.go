@@ -73,6 +73,13 @@ func TestDiffTables(t *testing.T) {
 			action:   "alter",
 			fromName: "t",
 			toName:   "t",
+			annotated: []string{
+				" CREATE TABLE `t` (",
+				" 	`id` int,",
+				"+	`i` int,",
+				"+	`b` tinyint(1),",
+				" 	PRIMARY KEY (`id`)",
+				" )"},
 		},
 		{
 			name: "alter columns from tinyint(1) to boolean",
@@ -93,6 +100,14 @@ func TestDiffTables(t *testing.T) {
 			action:   "alter",
 			fromName: "t",
 			toName:   "t",
+			annotated: []string{
+				" CREATE TABLE `t` (",
+				" 	`id` int,",
+				"+	`i` int,",
+				"+	`b` tinyint(1) DEFAULT '1',",
+				" 	PRIMARY KEY (`id`)",
+				" )",
+			},
 		},
 		{
 			name:     "change of columns, boolean type, invalid default",
@@ -103,6 +118,14 @@ func TestDiffTables(t *testing.T) {
 			action:   "alter",
 			fromName: "t",
 			toName:   "t",
+			annotated: []string{
+				" CREATE TABLE `t` (",
+				" 	`id` int,",
+				"+	`i` int,",
+				"+	`b` tinyint(1),",
+				" 	PRIMARY KEY (`id`)",
+				" )",
+			},
 		},
 		{
 			name:   "create",
@@ -139,6 +162,14 @@ func TestDiffTables(t *testing.T) {
 			hints: &DiffHints{
 				TableQualifierHint: TableQualifierDeclared,
 			},
+			annotated: []string{
+				" CREATE TABLE `t1` (",
+				" 	`id` int,",
+				"-	`name` int,",
+				"+	`name` bigint,",
+				" 	PRIMARY KEY (`id`)",
+				" )",
+			},
 		},
 		{
 			name:   "TableQualifierDeclared hint, from has qualifier",
@@ -150,6 +181,14 @@ func TestDiffTables(t *testing.T) {
 			hints: &DiffHints{
 				TableQualifierHint: TableQualifierDeclared,
 			},
+			annotated: []string{
+				" CREATE TABLE `_vt`.`t1` (",
+				" 	`id` int,",
+				"-	`name` int,",
+				"+	`name` bigint,",
+				" 	PRIMARY KEY (`id`)",
+				" )",
+			},
 		},
 		{
 			name:   "TableQualifierDefault, from has qualifier",
@@ -158,6 +197,14 @@ func TestDiffTables(t *testing.T) {
 			diff:   "alter table _vt.t1 modify column `name` bigint",
 			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
 			action: "alter",
+			annotated: []string{
+				" CREATE TABLE `_vt`.`t1` (",
+				" 	`id` int,",
+				"-	`name` int,",
+				"+	`name` bigint,",
+				" 	PRIMARY KEY (`id`)",
+				" )",
+			},
 		},
 		{
 			name:   "TableQualifierDefault, both have qualifiers",
@@ -166,6 +213,14 @@ func TestDiffTables(t *testing.T) {
 			diff:   "alter table _vt.t1 modify column `name` bigint",
 			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
 			action: "alter",
+			annotated: []string{
+				" CREATE TABLE `_vt`.`t1` (",
+				" 	`id` int,",
+				"-	`name` int,",
+				"+	`name` bigint,",
+				" 	PRIMARY KEY (`id`)",
+				" )",
+			},
 		},
 		{
 			name:   "TableQualifierDefault, create",
@@ -174,6 +229,12 @@ func TestDiffTables(t *testing.T) {
 			cdiff:  "CREATE TABLE `_vt`.`t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			action: "create",
 			toName: "t",
+			annotated: []string{
+				"+CREATE TABLE `_vt`.`t` (",
+				"+	`id` int,",
+				"+	PRIMARY KEY (`id`)",
+				"+)",
+			},
 		},
 		{
 			name:   "TableQualifierDeclared, create",
@@ -185,6 +246,12 @@ func TestDiffTables(t *testing.T) {
 			hints: &DiffHints{
 				TableQualifierHint: TableQualifierDeclared,
 			},
+			annotated: []string{
+				"+CREATE TABLE `_vt`.`t` (",
+				"+	`id` int,",
+				"+	PRIMARY KEY (`id`)",
+				"+)",
+			},
 		},
 		{
 			name:     "TableQualifierDefault, drop",
@@ -193,6 +260,12 @@ func TestDiffTables(t *testing.T) {
 			cdiff:    "DROP TABLE `_vt`.`t`",
 			action:   "drop",
 			fromName: "t",
+			annotated: []string{
+				"-CREATE TABLE `_vt`.`t` (",
+				"-	`id` int,",
+				"-	PRIMARY KEY (`id`)",
+				"-)",
+			},
 		},
 		{
 			name:     "TableQualifierDeclared, drop",
@@ -203,6 +276,12 @@ func TestDiffTables(t *testing.T) {
 			fromName: "t",
 			hints: &DiffHints{
 				TableQualifierHint: TableQualifierDeclared,
+			},
+			annotated: []string{
+				"-CREATE TABLE `_vt`.`t` (",
+				"-	`id` int,",
+				"-	PRIMARY KEY (`id`)",
+				"-)",
 			},
 		},
 		{
@@ -254,6 +333,12 @@ func TestDiffTables(t *testing.T) {
 				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
 				TableCharsetCollateStrategy: TableCharsetCollateStrict,
 			},
+			annotated: []string{
+				" CREATE TABLE `t` (",
+				" 	`a` varchar(64) COLLATE latin1_bin",
+				"-) CHARSET latin1",
+				" )",
+			},
 		},
 		{
 			name:     "changing table level defaults with column specific settings, table already normalized",
@@ -267,6 +352,13 @@ func TestDiffTables(t *testing.T) {
 				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,
 				TableCharsetCollateStrategy: TableCharsetCollateStrict,
 			},
+			annotated: []string{
+				" CREATE TABLE `t` (",
+				"-	`a` varchar(64)",
+				"-) CHARSET latin1",
+				"+	`a` varchar(64) CHARACTER SET latin1 COLLATE latin1_bin",
+				" )",
+			},
 		},
 		{
 			name:   "changing table level charset to default",
@@ -275,6 +367,12 @@ func TestDiffTables(t *testing.T) {
 			action: "alter",
 			diff:   "alter table t charset utf8mb4",
 			cdiff:  "ALTER TABLE `t` CHARSET utf8mb4",
+			annotated: []string{
+				" CREATE TABLE `t` (",
+				" 	`i` int",
+				"-) CHARSET latin1",
+				" )",
+			},
 		},
 		{
 			name: "no changes with normalization and utf8mb4",
@@ -406,11 +504,11 @@ func TestDiffTables(t *testing.T) {
 					require.NotNil(t, from)
 					require.NotNil(t, to)
 					require.NotNil(t, unified)
-					if ts.annotated != nil {
-						// Optional test for assorted scenarios.
-						unifiedExport := unified.Export()
-						assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
+					if ts.annotated == nil {
+						ts.annotated = []string{}
 					}
+					unifiedExport := unified.Export()
+					assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
 				})
 				// let's also check dq, and also validate that dq's statement is identical to d's
 				assert.NoError(t, dqerr)
@@ -556,12 +654,13 @@ func TestDiffViews(t *testing.T) {
 					_, err = env.Parser().ParseStrictDDL(canonicalDiff)
 					assert.NoError(t, err)
 				}
-				if ts.annotated != nil {
-					// Optional test for assorted scenarios.
-					_, _, unified := d.Annotated()
-					unifiedExport := unified.Export()
-					assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
+				if ts.annotated == nil {
+					ts.annotated = []string{}
 				}
+				_, _, unified := d.Annotated()
+				unifiedExport := unified.Export()
+				assert.Equal(t, ts.annotated, strings.Split(unifiedExport, "\n"))
+
 				// let's also check dq, and also validate that dq's statement is identical to d's
 				assert.NoError(t, dqerr)
 				require.NotNil(t, dq)
@@ -606,6 +705,9 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"ALTER TABLE `t` MODIFY COLUMN `v` varchar(20)",
 			},
+			annotated: []string{
+				" CREATE TABLE `t` (\n \t`id` int,\n-\t`v` varchar(10),\n+\t`v` varchar(20),\n \tPRIMARY KEY (`id`)\n )",
+			},
 		},
 		{
 			name: "change of table column tinyint 1 to longer",
@@ -616,6 +718,9 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"ALTER TABLE `t` MODIFY COLUMN `i` tinyint",
+			},
+			annotated: []string{
+				" CREATE TABLE `t` (\n \t`id` int,\n-\t`i` tinyint(1),\n+\t`i` tinyint,\n \tPRIMARY KEY (`id`)\n )",
 			},
 		},
 		{
@@ -628,6 +733,9 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"ALTER TABLE `t` MODIFY COLUMN `i` tinyint(1)",
 			},
+			annotated: []string{
+				" CREATE TABLE `t` (\n \t`id` int,\n-\t`i` tinyint,\n+\t`i` tinyint(1),\n \tPRIMARY KEY (`id`)\n )",
+			},
 		},
 		{
 			name: "change of table columns, added",
@@ -638,6 +746,9 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"ALTER TABLE `t` ADD COLUMN `i` int",
+			},
+			annotated: []string{
+				" CREATE TABLE `t` (\n \t`id` int,\n+\t`i` int,\n \tPRIMARY KEY (`id`)\n )",
 			},
 		},
 		{
@@ -650,6 +761,9 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"ALTER TABLE `identifiers` ADD COLUMN `company_id` mediumint unsigned NOT NULL FIRST",
 			},
+			annotated: []string{
+				" CREATE TABLE `identifiers` (\n+\t`company_id` mediumint unsigned NOT NULL,\n \t`id` binary(16) NOT NULL DEFAULT (uuid_to_bin(uuid(), true))\n )",
+			},
 		},
 		{
 			name: "change within functional index",
@@ -660,6 +774,9 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"ALTER TABLE `t1` DROP KEY `deleted_check`, ADD UNIQUE KEY `deleted_check` (`id`, (if(`deleted_at` IS NOT NULL, 0, NULL)))",
+			},
+			annotated: []string{
+				" CREATE TABLE `t1` (\n \t`id` mediumint unsigned NOT NULL,\n \t`deleted_at` timestamp NULL,\n \tPRIMARY KEY (`id`),\n-\tUNIQUE KEY `deleted_check` (`id`, (if(`deleted_at` IS NULL, 0, NULL)))\n+\tUNIQUE KEY `deleted_check` (`id`, (if(`deleted_at` IS NOT NULL, 0, NULL)))\n )",
 			},
 		},
 		{
@@ -672,6 +789,9 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"ALTER TABLE `t` DROP CHECK `Check1`, ADD CONSTRAINT `RenamedCheck1` CHECK (`test` >= 0)",
 			},
+			annotated: []string{
+				" CREATE TABLE `t` (\n \t`id` int NOT NULL,\n \t`test` int NOT NULL DEFAULT '0',\n \tPRIMARY KEY (`id`),\n-\tCONSTRAINT `Check1` CHECK (`test` >= 0)\n+\tCONSTRAINT `RenamedCheck1` CHECK (`test` >= 0)\n )",
+			},
 		},
 		{
 			name: "not enforce a check",
@@ -682,6 +802,9 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"ALTER TABLE `t` ALTER CHECK `Check1` NOT ENFORCED",
+			},
+			annotated: []string{
+				" CREATE TABLE `t` (\n \t`id` int NOT NULL,\n \t`test` int NOT NULL DEFAULT '0',\n \tPRIMARY KEY (`id`),\n-\tCONSTRAINT `Check1` CHECK (`test` >= 0)\n+\tCONSTRAINT `Check1` CHECK (`test` >= 0) NOT ENFORCED\n )",
 			},
 		},
 		{
@@ -694,6 +817,9 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"ALTER TABLE `t` ALTER CHECK `Check1` ENFORCED",
 			},
+			annotated: []string{
+				" CREATE TABLE `t` (\n \t`id` int NOT NULL,\n \t`test` int NOT NULL DEFAULT '0',\n \tPRIMARY KEY (`id`),\n-\tCONSTRAINT `Check1` CHECK (`test` >= 0) NOT ENFORCED\n+\tCONSTRAINT `Check1` CHECK (`test` >= 0)\n )",
+			},
 		},
 		{
 			name: "change of table columns, removed",
@@ -705,6 +831,9 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"ALTER TABLE `t` DROP COLUMN `i`",
 			},
+			annotated: []string{
+				" CREATE TABLE `t` (\n \t`id` int,\n-\t`i` int,\n \tPRIMARY KEY (`id`)\n )",
+			},
 		},
 		{
 			name: "create table",
@@ -714,6 +843,9 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"CREATE TABLE `t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
+			},
+			annotated: []string{
+				"+CREATE TABLE `t` (\n+\t`id` int,\n+\tPRIMARY KEY (`id`)\n+)",
 			},
 		},
 		{
@@ -775,6 +907,10 @@ func TestDiffSchemas(t *testing.T) {
 				"DROP TABLE `t2`",
 				"CREATE TABLE `t3` (\n\t`id` int unsigned,\n\tPRIMARY KEY (`id`)\n)",
 			},
+			annotated: []string{
+				"-CREATE TABLE `t2` (\n-\t`id` int unsigned,\n-\tPRIMARY KEY (`id`)\n-)",
+				"+CREATE TABLE `t3` (\n+\t`id` int unsigned,\n+\tPRIMARY KEY (`id`)\n+)",
+			},
 		},
 		{
 			name: "identical tables: heuristic rename",
@@ -811,6 +947,14 @@ func TestDiffSchemas(t *testing.T) {
 				"CREATE TABLE `t2b` (\n\t`id` int unsigned,\n\tPRIMARY KEY (`id`)\n)",
 				"CREATE TABLE `t3b` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			},
+			annotated: []string{
+				"-CREATE TABLE `t3a` (\n-\t`id` smallint,\n-\tPRIMARY KEY (`id`)\n-)",
+				"-CREATE TABLE `t2a` (\n-\t`id` int unsigned,\n-\tPRIMARY KEY (`id`)\n-)",
+				"-CREATE TABLE `t1a` (\n-\t`id` int,\n-\tPRIMARY KEY (`id`)\n-)",
+				"+CREATE TABLE `t1b` (\n+\t`id` bigint,\n+\tPRIMARY KEY (`id`)\n+)",
+				"+CREATE TABLE `t2b` (\n+\t`id` int unsigned,\n+\tPRIMARY KEY (`id`)\n+)",
+				"+CREATE TABLE `t3b` (\n+\t`id` int,\n+\tPRIMARY KEY (`id`)\n+)",
+			},
 		},
 		{
 			name: "identical tables: multiple heuristic rename",
@@ -829,6 +973,12 @@ func TestDiffSchemas(t *testing.T) {
 				"RENAME TABLE `t1a` TO `t3b`",
 			},
 			tableRename: TableRenameHeuristicStatement,
+			annotated: []string{
+				"-CREATE TABLE `t3a` (\n-\t`id` smallint,\n-\tPRIMARY KEY (`id`)\n-)",
+				"+CREATE TABLE `t1b` (\n+\t`id` bigint,\n+\tPRIMARY KEY (`id`)\n+)",
+				"-CREATE TABLE `t2a` (\n-\t`id` int unsigned,\n-\tPRIMARY KEY (`id`)\n-)\n+CREATE TABLE `t2b` (\n+\t`id` int unsigned,\n+\tPRIMARY KEY (`id`)\n+)",
+				"-CREATE TABLE `t1a` (\n-\t`id` int,\n-\tPRIMARY KEY (`id`)\n-)\n+CREATE TABLE `t3b` (\n+\t`id` int,\n+\tPRIMARY KEY (`id`)\n+)",
+			},
 		},
 		{
 			name: "tables with irregular names",
@@ -841,6 +991,10 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"ALTER TABLE `t.2` MODIFY COLUMN `id` bigint",
 				"ALTER TABLE `t3` MODIFY COLUMN `i.d` int unsigned",
+			},
+			annotated: []string{
+				" CREATE TABLE `t.2` (\n-\t`id` int,\n+\t`id` bigint,\n \tPRIMARY KEY (`id`)\n )",
+				" CREATE TABLE `t3` (\n-\t`i.d` int,\n+\t`i.d` int unsigned,\n \tPRIMARY KEY (`i.d`)\n )",
 			},
 		},
 		// Foreign keys
@@ -856,6 +1010,11 @@ func TestDiffSchemas(t *testing.T) {
 				"CREATE TABLE `t7` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 				"CREATE TABLE `t4` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f4` (`i`),\n\tCONSTRAINT `f4` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
 				"CREATE TABLE `t5` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f5` (`i`),\n\tCONSTRAINT `f5` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n)",
+			},
+			annotated: []string{
+				"+CREATE TABLE `t7` (\n+\t`id` int,\n+\tPRIMARY KEY (`id`)\n+)",
+				"+CREATE TABLE `t4` (\n+\t`id` int,\n+\t`i` int,\n+\tPRIMARY KEY (`id`),\n+\tKEY `f4` (`i`),\n+\tCONSTRAINT `f4` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n+)",
+				"+CREATE TABLE `t5` (\n+\t`id` int,\n+\t`i` int,\n+\tPRIMARY KEY (`id`),\n+\tKEY `f5` (`i`),\n+\tCONSTRAINT `f5` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n+)",
 			},
 		},
 		{
@@ -896,6 +1055,10 @@ func TestDiffSchemas(t *testing.T) {
 				"CREATE TABLE `t12` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `f1201c` (`i`),\n\tCONSTRAINT `f1201c` FOREIGN KEY (`i`) REFERENCES `t11` (`id`) ON DELETE SET NULL\n)",
 			},
 			fkStrategy: ForeignKeyCheckStrategyIgnore,
+			annotated: []string{
+				"+CREATE TABLE `t11` (\n+\t`id` int,\n+\t`i` int,\n+\tPRIMARY KEY (`id`),\n+\tKEY `f1101c` (`i`),\n+\tCONSTRAINT `f1101c` FOREIGN KEY (`i`) REFERENCES `t12` (`id`) ON DELETE RESTRICT\n+)",
+				"+CREATE TABLE `t12` (\n+\t`id` int,\n+\t`i` int,\n+\tPRIMARY KEY (`id`),\n+\tKEY `f1201c` (`i`),\n+\tCONSTRAINT `f1201c` FOREIGN KEY (`i`) REFERENCES `t11` (`id`) ON DELETE SET NULL\n+)",
+			},
 		},
 		{
 			name: "drop tables with foreign keys, expect specific order",
@@ -910,6 +1073,11 @@ func TestDiffSchemas(t *testing.T) {
 				"DROP TABLE `t4`",
 				"DROP TABLE `t7`",
 			},
+			annotated: []string{
+				"-CREATE TABLE `t5` (\n-\t`id` int,\n-\t`i` int,\n-\tPRIMARY KEY (`id`),\n-\tKEY `f5` (`i`),\n-\tCONSTRAINT `f5` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n-)",
+				"-CREATE TABLE `t4` (\n-\t`id` int,\n-\t`i` int,\n-\tPRIMARY KEY (`id`),\n-\tKEY `f4` (`i`),\n-\tCONSTRAINT `f4` FOREIGN KEY (`i`) REFERENCES `t7` (`id`)\n-)",
+				"-CREATE TABLE `t7` (\n-\t`id` int,\n-\tPRIMARY KEY (`id`)\n-)",
+			},
 		},
 		{
 			name: "rename index used by foreign keys",
@@ -920,6 +1088,9 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"ALTER TABLE `t` RENAME INDEX `i_idx` TO `i_alternative`",
+			},
+			annotated: []string{
+				" CREATE TABLE `t` (\n \t`id` int,\n \t`i` int,\n \tPRIMARY KEY (`id`),\n-\tKEY `i_idx` (`i`),\n+\tKEY `i_alternative` (`i`),\n \tCONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n )",
 			},
 		},
 		// Views
@@ -938,6 +1109,9 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"ALTER VIEW `v1` AS SELECT `id` FROM `t`",
 			},
+			annotated: []string{
+				"-CREATE VIEW `v1` AS SELECT * FROM `t`\n+CREATE VIEW `v1` AS SELECT `id` FROM `t`",
+			},
 		},
 		{
 			name: "drop view",
@@ -949,6 +1123,9 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"DROP VIEW `v1`",
 			},
+			annotated: []string{
+				"-CREATE VIEW `v1` AS SELECT * FROM `t`",
+			},
 		},
 		{
 			name: "create view",
@@ -959,6 +1136,9 @@ func TestDiffSchemas(t *testing.T) {
 			},
 			cdiffs: []string{
 				"CREATE VIEW `v1` AS SELECT `id` FROM `t`",
+			},
+			annotated: []string{
+				"+CREATE VIEW `v1` AS SELECT `id` FROM `t`",
 			},
 		},
 		{
@@ -979,6 +1159,10 @@ func TestDiffSchemas(t *testing.T) {
 				"DROP TABLE `v1`",
 				"CREATE VIEW `v1` AS SELECT * FROM `t`",
 			},
+			annotated: []string{
+				"-CREATE TABLE `v1` (\n-\t`id` int\n-)",
+				"+CREATE VIEW `v1` AS SELECT * FROM `t`",
+			},
 		},
 		{
 			name: "convert view to table",
@@ -991,6 +1175,10 @@ func TestDiffSchemas(t *testing.T) {
 			cdiffs: []string{
 				"DROP VIEW `v1`",
 				"CREATE TABLE `v1` (\n\t`id` int\n)",
+			},
+			annotated: []string{
+				"-CREATE VIEW `v1` AS SELECT * FROM `t`",
+				"+CREATE TABLE `v1` (\n+\t`id` int\n+)",
 			},
 		},
 		{
@@ -1019,6 +1207,14 @@ func TestDiffSchemas(t *testing.T) {
 				"CREATE VIEW `v0` AS SELECT * FROM `v2`, `t2`",
 				"CREATE TABLE `t4` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			},
+			annotated: []string{
+				"-CREATE VIEW `v1` AS SELECT * FROM `t1`",
+				"-CREATE TABLE `t1` (\n-\t`id` int,\n-\tPRIMARY KEY (`id`)\n-)",
+				" CREATE TABLE `t2` (\n-\t`id` int,\n+\t`id` bigint,\n \tPRIMARY KEY (`id`)\n )",
+				"-CREATE VIEW `v2` AS SELECT * FROM `t2`\n+CREATE VIEW `v2` AS SELECT `id` FROM `t2`",
+				"+CREATE VIEW `v0` AS SELECT * FROM `v2`, `t2`",
+				"+CREATE TABLE `t4` (\n+\t`id` int,\n+\tPRIMARY KEY (`id`)\n+)",
+			},
 		},
 		{
 			// Making sure schemadiff distinguishes between VIEWs with different casing
@@ -1034,6 +1230,11 @@ func TestDiffSchemas(t *testing.T) {
 				"DROP VIEW `v1`",
 				"DROP VIEW `V1`",
 				"DROP TABLE `t`",
+			},
+			annotated: []string{
+				"-CREATE VIEW `v1` AS SELECT * FROM `t`",
+				"-CREATE VIEW `V1` AS SELECT * FROM `t`",
+				"-CREATE TABLE `t` (\n-\t`id` int,\n-\tPRIMARY KEY (`id`)\n-)",
 			},
 		},
 	}
@@ -1093,14 +1294,13 @@ func TestDiffSchemas(t *testing.T) {
 						assert.Equal(t, dTo.Name(), clonedTo.Name())
 					}
 				}
-
-				if ts.annotated != nil {
-					// Optional test for assorted scenarios.
-					if assert.Equalf(t, len(diffs), len(ts.annotated), "%+v", cstatements) {
-						for i, d := range diffs {
-							_, _, unified := d.Annotated()
-							assert.Equal(t, ts.annotated[i], unified.Export())
-						}
+				if ts.annotated == nil {
+					ts.annotated = []string{}
+				}
+				if assert.Equalf(t, len(diffs), len(ts.annotated), "%+v", cstatements) {
+					for i, d := range diffs {
+						_, _, unified := d.Annotated()
+						assert.Equal(t, ts.annotated[i], unified.Export())
 					}
 				}
 

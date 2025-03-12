@@ -26,11 +26,13 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protowire"
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/format"
@@ -433,6 +435,72 @@ func (v Value) String() string {
 		return fmt.Sprintf("%v(%q)", Type(v.typ), v.val)
 	}
 	return fmt.Sprintf("%v(%s)", Type(v.typ), v.val)
+}
+
+// ToTime returns the value as a time.Time in the provided location.
+// NULL values are returned as zero time.
+func (v Value) ToTime(loc *time.Location) (time.Time, error) {
+	if v.Type() == Null {
+		return time.Time{}, nil
+	}
+	switch v.Type() {
+	case Datetime, Timestamp:
+		return datetimeToTime(v, loc)
+	case Date:
+		return dateToTime(v, loc)
+	default:
+		return time.Time{}, ErrIncompatibleTypeCast
+	}
+}
+
+// ErrInvalidTime is returned when we fail to parse a datetime
+// string from MySQL. This should never happen unless things are
+// seriously messed up.
+var ErrInvalidTime = errors.New("invalid MySQL time string")
+
+func datetimeToTime(v Value, loc *time.Location) (time.Time, error) {
+	if v.IsNull() {
+		return time.Time{}, nil
+	}
+	// Valid format string offsets for a DATETIME
+	//  |DATETIME          |19+
+	//  |------------------|------|
+	// "2006-01-02 15:04:05.999999"
+	dt, _, ok := datetime.ParseDateTime(v.ToString(), -1)
+	if !ok {
+		return time.Time{}, ErrInvalidTime
+	}
+	if dt.IsZero() {
+		return time.Time{}, nil
+	}
+
+	if loc == nil {
+		loc = time.UTC
+	}
+	return time.Date(dt.Date.Year(), time.Month(dt.Date.Month()), dt.Date.Day(),
+		dt.Time.Hour(), dt.Time.Minute(), dt.Time.Second(), dt.Time.Nanosecond(), loc), nil
+}
+
+func dateToTime(v Value, loc *time.Location) (time.Time, error) {
+	if v.IsNull() {
+		return time.Time{}, nil
+	}
+	// Valid format string offsets for a DATE
+	//  |DATE     |10
+	//  |---------|
+	// "2006-01-02 00:00:00.000000"
+	d, ok := datetime.ParseDate(v.ToString())
+	if !ok {
+		return time.Time{}, ErrInvalidTime
+	}
+	if d.IsZero() {
+		return time.Time{}, nil
+	}
+
+	if loc == nil {
+		loc = time.UTC
+	}
+	return time.Date(d.Year(), time.Month(d.Month()), d.Day(), 0, 0, 0, 0, loc), nil
 }
 
 // EncodeSQL encodes the value into an SQL statement. Can be binary.

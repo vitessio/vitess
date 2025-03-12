@@ -32,7 +32,7 @@ var _ SchemaInformation = (*FakeSI)(nil)
 
 // FakeSI is a fake SchemaInformation for testing
 type FakeSI struct {
-	Tables           map[string]*vindexes.Table
+	Tables           map[string]*vindexes.BaseTable
 	VindexTables     map[string]vindexes.Vindex
 	KsForeignKeyMode map[string]vschemapb.Keyspace_ForeignKeyMode
 	KsError          map[string]error
@@ -40,7 +40,7 @@ type FakeSI struct {
 }
 
 // FindTableOrVindex implements the SchemaInformation interface
-func (s *FakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+func (s *FakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
 	table, ok := s.Tables[sqlparser.String(tablename)]
 	if ok {
 		return table, nil, "", 0, nil, nil

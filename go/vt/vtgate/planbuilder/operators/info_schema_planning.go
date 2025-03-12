@@ -38,6 +38,8 @@ type InfoSchemaRouting struct {
 	SysTableTableSchema []sqlparser.Expr
 	SysTableTableName   map[string]sqlparser.Expr
 	Table               *QueryTable
+
+	seenPredicates []sqlparser.Expr
 }
 
 func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
@@ -78,6 +80,7 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 }
 
 func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
+	isr.seenPredicates = append(isr.seenPredicates, expr)
 	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(ctx, expr)
 	if out == nil {
 		return isr
@@ -100,6 +103,18 @@ func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContex
 		isr.SysTableTableName[bvName] = out
 	}
 	return isr
+}
+
+func (isr *InfoSchemaRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
+	isr.SysTableTableName = make(map[string]sqlparser.Expr)
+	isr.SysTableTableSchema = nil
+	seen := isr.seenPredicates
+	isr.seenPredicates = nil
+	var routing Routing = isr
+	for _, expr := range seen {
+		routing = UpdateRoutingLogic(ctx, expr, routing)
+	}
+	return routing
 }
 
 func (isr *InfoSchemaRouting) Cost() int {
@@ -196,7 +211,7 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
 
 	// if both sides have the same schema predicate, we can safely merge them
-	case sqlparser.Equals.Exprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
+	case equalExprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
 		for k, expr := range isrB.SysTableTableName {
 			isrA.SysTableTableName[k] = expr
 		}
@@ -206,6 +221,18 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 	default:
 		return nil
 	}
+}
+
+func equalExprs(a, b []sqlparser.Expr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !sqlparser.Equals.Expr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 var (

@@ -4,8 +4,12 @@
 
 - **[Major Changes](#major-changes)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated VTGate Metrics](#vtgate-metrics)
+    - [Deprecated VTGate Flags](#vtgate-flags)
     - [Deprecated VTTablet Flags](#vttablet-flags)
+    - [Removing gh-ost and pt-osc Online DDL strategies](#ghost-ptosc)
   - **[RPC Changes](#rpc-changes)**
+  - **[VTGate Metrics]**(#vtgate-metrics)
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
   - **[VTGate Config File Changes](#vtgate-config-file-changes)**
@@ -15,9 +19,12 @@
   - **[Stalled Disk Recovery in VTOrc](#stall-disk-recovery)**
   - **[Update default MySQL version to 8.0.40](#mysql-8-0-40)**
   - **[Update lite images to Debian Bookworm](#debian-bookworm)**
+  - **[KeyRanges in `--clusters_to_watch` in VTOrc](#key-range-vtorc)**
   - **[Support for Filtering Query logs on Error](#query-logs)**
+  - **[Semi-sync monitor in vttablet](#semi-sync-monitor)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
+  - **[VTTablet ACL enforcement and reloading](#reloading-vttablet-acl)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v22.13.1](#updated-node)
@@ -32,9 +39,56 @@ These are the RPC changes made in this release -
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions</a>
 
+#### <a id="vtgate-flags"/>Deprecated VTGate Flags</a>
+
+- `grpc-send-session-in-streaming` flag is deprecated. Session will be sent as part of response on StreamExecute API call.
+
 #### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
 
 - `twopc_enable` flag is deprecated. Usage of TwoPC commit will be determined by the `transaction_mode` set on VTGate via flag or session variable.
+- `--disable_active_reparents` flag that was previously deprecated, has now been removed.
+
+#### <a id="ghost-ptosc"/>Removing gh-ost and pt-osc Online DDL strategies</a>
+
+Vitess no longer recognizes the `gh-ost` and `pt-osc` (`pt-online-schema-change`) Online DDL strategies. The `vitess` strategy is the recommended way to make schema changes at scale. `mysql` and `direct` strategies continue to be supported.
+
+These `vttablet` flags have been removed:
+
+- `--gh-ost-path`
+- `--pt-osc-path`
+
+The use of `gh-ost` and `pt-osc` as strategies as follows, yields an error:
+```sh
+$ vtctldclient ApplySchema --ddl-strategy="gh-ost" ...
+$ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
+```
+
+### <a id="vtgate-metrics"/>VTGate Metrics
+
+#### New Metrics Added:
+Three new metrics have been introduced for queries:
+1.	`QueryExecutions` – Counts the number of queries executed. **Dimensions:** Query type, Plan type, Tablet type.
+2.	`QueryRoutes` – Counts the number of vttablets the query was executed on. **Dimensions:** Query type, Plan type, Tablet type.
+3.	`QueryExecutionsByTable` – Tracks queries executed at VTGate, with counts recorded per table. **Dimensions:** Query type, Table. 
+
+Example: 
+```
+Query: select t1.a, t2.b from t1 join t2 on t1.id = t2.id
+Shards: 2
+Sharding Key: id for both tables
+
+Metrics Published:
+1. QueryExecutions – {select, scatter, primary}, 1
+2. QueryRoutes – {select, scatter, primary}, 2
+3. QueryExecutionsByTable – {select, t1}, 1 and {select, t2}, 1
+```
+
+#### Deprecated Metrics:
+The following metrics have been deprecated:
+1.	`QueriesProcessed`
+2.	`QueriesRouted`
+3.	`QueriesProcessedByTable`
+4.	`QueriesRoutedByTable`
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 
@@ -135,9 +189,22 @@ This is the last time this will be needed in the `8.0.x` series, as starting wit
 
 The base system now uses Debian Bookworm instead of Debian Bullseye for the `vitess/lite` images. This change was brought by [Pull Request #17552].
 
+### <a id="key-range-vtorc"/>KeyRanges in `--clusters_to_watch` in VTOrc</a>
+VTOrc now supports specifying keyranges in the `--clusters_to_watch` flag. This means that there is no need to restart a VTOrc instance with a different flag value when you reshard a keyspace.
+For example, if a VTOrc is configured to watch `ks/-80`, then it would watch all the shards that fall under the keyrange `-80`. If a reshard is performed and `-80` is split into new shards `-40` and `40-80`, the VTOrc instance will automatically start watching the new shards without needing a restart. In the previous logic, specifying `ks/-80` for the flag would mean that VTOrc would watch only 1 (or no) shard. In the new system, since we interpret `-80` as a key range, it can watch multiple shards as described in the example.
+Users can continue to specify exact keyranges. The new feature is backward compatible.
+
 ### <a id="query-logs"/>Support for Filtering Query logs on Error</a>
 
 The `querylog-mode` setting can be configured to `error` to log only queries that result in errors. This option is supported in both VTGate and VTTablet.
+
+### <a id="semi-sync-monitor"/>Semi-sync monitor in vttablet</a>
+
+A new component has been added to the vttablet binary to monitor the semi-sync status of primary vttablets. We've observed cases where a brief network disruption can cause the primary to get stuck indefinitely waiting for semi-sync ACKs. In rare scenarios, this can block reparent operations and render the primary unresponsive. More information can be found in the issues https://github.com/vitessio/vitess/issues/17709 and https://github.com/vitessio/vitess/issues/17749.
+
+To address this, the new component continuously monitors the semi-sync status. If the primary becomes stuck on semi-sync ACKs, it generates writes to unblock it. If this fails, VTOrc is notified of the issue and initiates an emergency reparent operation.
+
+The monitoring interval can be adjusted using the `--semi-sync-monitor-interval` flag, which defaults to 10 seconds.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
@@ -146,6 +213,12 @@ The `querylog-mode` setting can be configured to `error` to log only queries tha
 - `twopc_abandon_age` flag now supports values in the time.Duration format (e.g., 1s, 2m, 1h). 
 While the flag will continue to accept float values (interpreted as seconds) for backward compatibility, 
 **float inputs are deprecated** and will be removed in a future release.
+
+- `--consolidator-query-waiter-cap` flag to set the maximum number of clients allowed to wait on the consolidator. The default value is set to 0 for unlimited wait. Users can adjust  this value based on the performance of VTTablet to avoid excessive memory usage and the risk of being OOMKilled, particularly in Kubernetes deployments.
+
+#### <a id="reloading-vttablet-acl"/>VTTablet ACL enforcement and reloading</a>
+
+When a tablet is started with `--enforce-tableacl-config` it will exit with an error if the contents of the file are not valid. After the changes made in https://github.com/vitessio/vitess/pull/17485 the tablet will no longer exit when reloading the contents of the file after receiving a SIGHUP. When the file contents are invalid on reload the tablet will now log an error and the active in-memory ACLs remain in effect.
 
 ### <a id="topo-read-concurrency-changes"/>`--topo_read_concurrency` behaviour changes
 

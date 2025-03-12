@@ -45,7 +45,7 @@ var (
 
 // VerifyQueriesUsingVtgate verifies queries using vtgate.
 func VerifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string, value string) {
-	qr, err := session.Execute(context.Background(), query, nil)
+	qr, err := session.Execute(context.Background(), query, nil, false)
 	require.Nil(t, err)
 	assert.Equal(t, value, fmt.Sprintf("%v", qr.Rows[0][0]))
 }
@@ -71,7 +71,7 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 	if UseXb {
 		replicaTabletArgs = append(replicaTabletArgs, XbArgs...)
 	}
-	replicaTabletArgs = append(replicaTabletArgs, "--disable_active_reparents",
+	replicaTabletArgs = append(replicaTabletArgs,
 		"--enable_replication_reporter=false",
 		"--init_tablet_type", "replica",
 		"--init_keyspace", restoreKSName,

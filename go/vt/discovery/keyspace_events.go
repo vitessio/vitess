@@ -42,6 +42,7 @@ import (
 var (
 	// waitConsistentKeyspacesCheck is the amount of time to wait for between checks to verify the keyspace is consistent.
 	waitConsistentKeyspacesCheck = 100 * time.Millisecond
+	kewHcSubscriberName          = "KeyspaceEventWatcher"
 )
 
 // KeyspaceEventWatcher is an auxiliary watcher that watches all availability incidents
@@ -221,7 +222,7 @@ func (kew *KeyspaceEventWatcher) broadcast(ev *KeyspaceEvent) {
 }
 
 func (kew *KeyspaceEventWatcher) run(ctx context.Context) {
-	hcChan := kew.hc.Subscribe()
+	hcChan := kew.hc.Subscribe(kewHcSubscriberName)
 	bufferCtx, bufferCancel := context.WithCancel(ctx)
 
 	go func() {
@@ -318,6 +319,7 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 	// watcher. this means the ongoing availability event has been resolved, so we can broadcast
 	// a resolution event to all listeners
 	kss.consistent = true
+	log.Infof("keyspace %s is now consistent", kss.keyspace)
 
 	kss.moveTablesState = nil
 
@@ -328,7 +330,7 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 			Serving: sstate.serving,
 		})
 
-		log.Infof("keyspace event resolved: %s is now consistent (serving: %t)",
+		log.V(2).Infof("keyspace event resolved: %s is now consistent (serving: %t)",
 			topoproto.KeyspaceShardString(sstate.target.Keyspace, sstate.target.Shard),
 			sstate.serving,
 		)

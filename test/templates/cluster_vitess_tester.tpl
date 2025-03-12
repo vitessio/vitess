@@ -14,7 +14,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: ubuntu-24.04
+    runs-on: {{.RunsOn}}
 
     steps:
     - name: Skip CI
@@ -103,10 +103,12 @@ jobs:
         # Install everything else we need, and configure
         sudo apt-get -qq install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
 
-        sudo service mysql stop
-        sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        # Running on CNCF ARC Runners no longer needs this
+        # Leaving this in as a tombstone for now
+        # sudo service mysql stop
+        # sudo service etcd stop
+        # sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        # sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
         # install JUnit report formatter

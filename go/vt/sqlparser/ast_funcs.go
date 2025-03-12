@@ -890,7 +890,7 @@ func NewLimitWithoutOffset(rowCount int) *Limit {
 // NewSelect is used to create a select statement
 func NewSelect(
 	comments Comments,
-	exprs SelectExprs,
+	exprs *SelectExprs,
 	selectOptions []string,
 	into *SelectInto,
 	from TableExprs,
@@ -1195,8 +1195,25 @@ func compliantName(in string) string {
 	return buf.String()
 }
 
-func (node *Select) AddSelectExprs(selectExprs SelectExprs) {
-	node.SelectExprs = append(node.SelectExprs, selectExprs...)
+func (node *Select) AddSelectExprs(selectExprs *SelectExprs) {
+	if node.SelectExprs == nil {
+		node.SelectExprs = &SelectExprs{}
+	}
+	node.SelectExprs.Exprs = append(node.SelectExprs.Exprs, selectExprs.Exprs...)
+}
+
+func (node *Select) AddSelectExpr(expr SelectExpr) {
+	if node.SelectExprs == nil {
+		node.SelectExprs = &SelectExprs{}
+	}
+	node.SelectExprs.Exprs = append(node.SelectExprs.Exprs, expr)
+}
+
+func (node *Select) SetSelectExprs(exprs ...SelectExpr) {
+	if node.SelectExprs == nil {
+		node.SelectExprs = &SelectExprs{}
+	}
+	node.SelectExprs.Exprs = exprs
 }
 
 // AddOrder adds an order by element
@@ -1256,12 +1273,18 @@ func (node *Select) IsDistinct() bool {
 
 // GetColumnCount return SelectExprs count.
 func (node *Select) GetColumnCount() int {
-	return len(node.SelectExprs)
+	if node.SelectExprs == nil {
+		return 0
+	}
+	return len(node.SelectExprs.Exprs)
 }
 
 // GetColumns gets the columns
-func (node *Select) GetColumns() SelectExprs {
-	return node.SelectExprs
+func (node *Select) GetColumns() []SelectExpr {
+	if node.SelectExprs == nil {
+		return nil
+	}
+	return node.SelectExprs.Exprs
 }
 
 // SetComments implements the Commented interface
@@ -1362,7 +1385,7 @@ func (node *Union) GetLimit() *Limit {
 }
 
 // GetColumns gets the columns
-func (node *Union) GetColumns() SelectExprs {
+func (node *Union) GetColumns() []SelectExpr {
 	return node.Left.GetColumns()
 }
 
@@ -2261,6 +2284,8 @@ func (columnFormat ColumnFormat) ToString() string {
 		return keywordStrings[DYNAMIC]
 	case DefaultFormat:
 		return keywordStrings[DEFAULT]
+	case CompressedFormat:
+		return keywordStrings[COMPRESSED]
 	default:
 		return "Unknown column format type"
 	}
@@ -2352,7 +2377,7 @@ func ContainsAggregation(e SQLNode) bool {
 }
 
 // setFuncArgs sets the arguments for the aggregation function, while checking that there is only one argument
-func setFuncArgs(aggr AggrFunc, exprs Exprs, name string) error {
+func setFuncArgs(aggr AggrFunc, exprs []Expr, name string) error {
 	if len(exprs) != 1 {
 		return vterrors.VT03001(name)
 	}
@@ -2408,8 +2433,8 @@ func (ae *AliasedExpr) ColumnName() string {
 }
 
 // AllAggregation returns true if all the expressions contain aggregation
-func (s SelectExprs) AllAggregation() bool {
-	for _, k := range s {
+func (s *SelectExprs) AllAggregation() bool {
+	for _, k := range s.Exprs {
 		if !ContainsAggregation(k) {
 			return false
 		}
@@ -2467,6 +2492,23 @@ func removeKeyspace(in SQLNode, shouldRemove func(qualifier string) bool) {
 		}
 		return true
 	})
+}
+
+// AddKeyspace adds the keyspace qualifier to TableName if it's not already present
+func AddKeyspace(in SQLNode, ks string) {
+	Rewrite(in, func(cursor *Cursor) bool {
+		switch expr := cursor.Node().(type) {
+		case *ColName:
+			// ignore it
+			return false
+		case TableName:
+			if expr.Qualifier.IsEmpty() {
+				expr.Qualifier = NewIdentifierCS(ks)
+				cursor.Replace(expr)
+			}
+		}
+		return true
+	}, nil)
 }
 
 func convertStringToInt(integer string) int {
@@ -3051,14 +3093,27 @@ func (node *ValuesStatement) GetColumnCount() int {
 	panic("no columns available") // TODO: we need a better solution than a panic
 }
 
-func (node *ValuesStatement) GetColumns() (result SelectExprs) {
+func (node *ValuesStatement) GetColumns() []SelectExpr {
+	var sel []SelectExpr
 	columnCount := node.GetColumnCount()
 	for i := range columnCount {
-		result = append(result, &AliasedExpr{Expr: NewColName(fmt.Sprintf("column_%d", i))})
+		sel = append(sel, &AliasedExpr{Expr: NewColName(fmt.Sprintf("column_%d", i))})
 	}
+	_ = sel
 	panic("no columns available") // TODO: we need a better solution than a panic
 }
 
 func (node *ValuesStatement) SetComments(comments Comments) {}
 
 func (node *ValuesStatement) GetParsedComments() *ParsedComments { return nil }
+
+func NewFuncExpr(name string, exprs ...Expr) *FuncExpr {
+	return &FuncExpr{
+		Name:  NewIdentifierCI(name),
+		Exprs: exprs,
+	}
+}
+
+func NewExprs(exprs ...Expr) *Exprs {
+	return &Exprs{Exprs: exprs}
+}

@@ -213,7 +213,7 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
 	execStatements(t, []string{
-		"create table src(idc varchar(20), val int, primary key(idc)) character set utf8mb3", // Use utf8mb3 to get a consistent default collation across MySQL versions
+		"create table src(idc varchar(20), val int, primary key(idc)) character set utf8mb4 collate utf8mb4_general_ci", // Use general_ci so that we have the same behavior across 5.7 and 8.0
 		"insert into src values('a', 1), ('c', 2)",
 		fmt.Sprintf("create table %s.dst(idc varchar(20), val int, primary key(idc))", vrepldb),
 	})
@@ -282,7 +282,7 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		"/update _vt.vreplication set state='Copying'",
 		// Copy mode.
 		"insert into dst(idc,val) values ('a',1)",
-		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(_binary'fields:{name:"idc" type:VARCHAR charset:33 flags:20483} rows:{lengths:1 values:"a"}'.*`,
+		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(_binary'fields:{name:"idc" type:VARCHAR charset:45 flags:20483} rows:{lengths:1 values:"a"}'.*`,
 		// Copy-catchup mode.
 		`/insert into dst\(idc,val\) select 'B', 3 from dual where \( .* 'B' COLLATE .* \) <= \( .* 'a' COLLATE .* \)`,
 	).Then(func(expect qh.ExpectationSequencer) qh.ExpectationSequencer {
@@ -292,11 +292,11 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		// upd1 := expect.
 		upd1 := expect.Then(qh.Eventually(
 			"insert into dst(idc,val) values ('B',3)",
-			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(_binary'fields:{name:"idc" type:VARCHAR charset:33 flags:20483} rows:{lengths:1 values:"B"}'.*`,
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(_binary'fields:{name:"idc" type:VARCHAR charset:45 flags:20483} rows:{lengths:1 values:"B"}'.*`,
 		))
 		upd2 := expect.Then(qh.Eventually(
 			"insert into dst(idc,val) values ('c',2)",
-			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(_binary'fields:{name:"idc" type:VARCHAR charset:33 flags:20483} rows:{lengths:1 values:"c"}'.*`,
+			`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(_binary'fields:{name:"idc" type:VARCHAR charset:45 flags:20483} rows:{lengths:1 values:"c"}'.*`,
 		))
 		upd1.Then(upd2.Eventually())
 		return upd2

@@ -79,11 +79,12 @@ If no replica-type tablet can be found, the backup can be taken on the primary i
 )
 
 var backupOptions = struct {
-	AllowPrimary       bool
-	BackupEngine       string
-	Concurrency        int32
-	IncrementalFromPos string
-	UpgradeSafe        bool
+	AllowPrimary         bool
+	BackupEngine         string
+	Concurrency          int32
+	IncrementalFromPos   string
+	UpgradeSafe          bool
+	MysqlShutdownTimeout time.Duration
 }{}
 
 func commandBackup(cmd *cobra.Command, args []string) error {
@@ -95,11 +96,12 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.BackupRequest{
-		TabletAlias:        tabletAlias,
-		AllowPrimary:       backupOptions.AllowPrimary,
-		Concurrency:        backupOptions.Concurrency,
-		IncrementalFromPos: backupOptions.IncrementalFromPos,
-		UpgradeSafe:        backupOptions.UpgradeSafe,
+		TabletAlias:          tabletAlias,
+		AllowPrimary:         backupOptions.AllowPrimary,
+		Concurrency:          backupOptions.Concurrency,
+		IncrementalFromPos:   backupOptions.IncrementalFromPos,
+		UpgradeSafe:          backupOptions.UpgradeSafe,
+		MysqlShutdownTimeout: protoutil.DurationToProto(backupOptions.MysqlShutdownTimeout),
 	}
 
 	if backupOptions.BackupEngine != "" {
@@ -125,10 +127,11 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 }
 
 var backupShardOptions = struct {
-	AllowPrimary       bool
-	Concurrency        int32
-	IncrementalFromPos string
-	UpgradeSafe        bool
+	AllowPrimary         bool
+	Concurrency          int32
+	IncrementalFromPos   string
+	UpgradeSafe          bool
+	MysqlShutdownTimeout time.Duration
 }{}
 
 func commandBackupShard(cmd *cobra.Command, args []string) error {
@@ -140,12 +143,13 @@ func commandBackupShard(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	stream, err := client.BackupShard(commandCtx, &vtctldatapb.BackupShardRequest{
-		Keyspace:           keyspace,
-		Shard:              shard,
-		AllowPrimary:       backupShardOptions.AllowPrimary,
-		Concurrency:        backupShardOptions.Concurrency,
-		IncrementalFromPos: backupShardOptions.IncrementalFromPos,
-		UpgradeSafe:        backupShardOptions.UpgradeSafe,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		AllowPrimary:         backupShardOptions.AllowPrimary,
+		Concurrency:          backupShardOptions.Concurrency,
+		IncrementalFromPos:   backupShardOptions.IncrementalFromPos,
+		UpgradeSafe:          backupShardOptions.UpgradeSafe,
+		MysqlShutdownTimeout: protoutil.DurationToProto(backupShardOptions.MysqlShutdownTimeout),
 	})
 	if err != nil {
 		return err
@@ -294,12 +298,14 @@ func init() {
 	Backup.Flags().StringVar(&backupOptions.BackupEngine, "backup-engine", "", "Request a specific backup engine for this backup request. Defaults to the preferred backup engine of the target vttablet")
 
 	Backup.Flags().BoolVar(&backupOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
+	Backup.Flags().DurationVar(&backupOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
 	Root.AddCommand(Backup)
 
 	BackupShard.Flags().BoolVar(&backupShardOptions.AllowPrimary, "allow-primary", false, "Allow the primary of a shard to be used for the backup. WARNING: If using the builtin backup engine, this will shutdown mysqld on the primary and stop writes for the duration of the backup.")
 	BackupShard.Flags().Int32Var(&backupShardOptions.Concurrency, "concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously.")
 	BackupShard.Flags().StringVar(&backupShardOptions.IncrementalFromPos, "incremental-from-pos", "", "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
-	BackupShard.Flags().BoolVar(&backupOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
+	BackupShard.Flags().BoolVar(&backupShardOptions.UpgradeSafe, "upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
+	BackupShard.Flags().DurationVar(&backupShardOptions.MysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
 	Root.AddCommand(BackupShard)
 
 	GetBackups.Flags().Uint32VarP(&getBackupsOptions.Limit, "limit", "l", 0, "Retrieve only the most recent N backups.")

@@ -1071,11 +1071,10 @@ func TestVDiffFindPKs(t *testing.T) {
 				Schema:            "create table t1(c1 bigint, c2 bigint, primary key(c1))",
 			},
 			targetSelect: &sqlparser.Select{
-				SelectExprs: sqlparser.SelectExprs{
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")}},
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")}},
-				},
-			},
+				SelectExprs: &sqlparser.SelectExprs{
+					Exprs: []sqlparser.SelectExpr{
+						&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")}},
+						&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")}}}}},
 			tdIn: &tableDiffer{
 				compareCols: []compareColInfo{{0, collations.Unknown, nil, false}, {1, collations.Unknown, nil, false}},
 				comparePKs:  []compareColInfo{},
@@ -1097,12 +1096,12 @@ func TestVDiffFindPKs(t *testing.T) {
 				Schema:            "create table t1(c1 bigint, c2 bigint, c3 varchar(50), c4 bigint, primary key(c1, c4))",
 			},
 			targetSelect: &sqlparser.Select{
-				SelectExprs: sqlparser.SelectExprs{
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c1")}},
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c2")}},
-					&sqlparser.AliasedExpr{Expr: &sqlparser.FuncExpr{Name: sqlparser.NewIdentifierCI("c3")}},
-					&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI("c4")}},
-				},
+				SelectExprs: &sqlparser.SelectExprs{
+					Exprs: []sqlparser.SelectExpr{
+						&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("c1")},
+						&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("c2")},
+						&sqlparser.AliasedExpr{Expr: sqlparser.NewFuncExpr("c3")},
+						&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("c4")}}},
 			},
 			tdIn: &tableDiffer{
 				compareCols: []compareColInfo{{0, collations.Unknown, nil, false}, {1, collations.Unknown, nil, false}, {2, collations.Unknown, nil, false}, {3, collations.Unknown, nil, false}},
@@ -1310,6 +1309,13 @@ func TestGetColumnCollations(t *testing.T) {
 			wantValues: map[string]*evalengine.EnumSetValues{
 				"size": {"'small'", "'medium'", "'large'"},
 			},
+		},
+		{
+			name: "invalid schema",
+			table: &tabletmanagerdatapb.TableDefinition{
+				Schema: "create table t1 (c1 varchar(10), size set('small', 'medium', 'large'), primary key(c1) with syntax error)",
+			},
+			wantErr: true,
 		},
 	}
 	env := vtenv.NewTestEnv()

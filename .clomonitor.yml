@@ -1,0 +1,8 @@
+# CLOMonitor metadata file
+# This file must be located at the root of the repository
+
+# Checks exemptions
+exemptions:
+  - check: slack_presence # Check identifier (see https://github.com/cncf/clomonitor/blob/main/docs/checks.md#exemptions)
+    reason: "This project has a separate Slack workspace that predates its donation to CNCF. A link to it is present in the README." # Justification of this exemption (mandatory, it will be displayed on the UI)
+

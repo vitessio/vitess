@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"slices"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -51,7 +53,7 @@ type ShardedRouting struct {
 
 var _ Routing = (*ShardedRouting)(nil)
 
-func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.Table, id semantics.TableSet) Routing {
+func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.BaseTable, id semantics.TableSet) Routing {
 	routing := &ShardedRouting{
 		RouteOpCode: engine.Scatter,
 		keyspace:    vtable.Keyspace,
@@ -221,6 +223,10 @@ func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Ro
 }
 
 func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool) {
+	jp, ok := predicate.(*predicates.JoinPredicate)
+	if ok {
+		predicate = jp.Current()
+	}
 	newVindexFound := false
 	switch node := predicate.(type) {
 	case *sqlparser.BetweenExpr:
@@ -613,7 +619,6 @@ func (tr *ShardedRouting) planCompositeInOpArg(
 			Index: idx,
 		}
 		if typ, found := ctx.TypeForExpr(col); found {
-			value.Type = typ.Type()
 			value.Collation = typ.Collation()
 		}
 
@@ -665,10 +670,11 @@ func (tr *ShardedRouting) extraInfo() string {
 		)
 	}
 
+	valueExprs := tr.Selected.ValueExprs
 	return fmt.Sprintf(
 		"Vindex[%s] Values[%s] Seen:[%s]",
 		tr.Selected.FoundVindex.String(),
-		sqlparser.String(sqlparser.Exprs(tr.Selected.ValueExprs)),
+		sqlparser.SliceString(valueExprs),
 		sqlparser.String(sqlparser.AndExpressions(tr.SeenPredicates...)),
 	)
 }

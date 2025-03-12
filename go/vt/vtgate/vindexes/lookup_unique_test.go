@@ -67,7 +67,7 @@ func TestLookupUniqueMap(t *testing.T) {
 
 	got, err := lookupUnique.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("1")),
 		key.DestinationNone{},
 	}
@@ -78,7 +78,7 @@ func TestLookupUniqueMap(t *testing.T) {
 	vc.numRows = 0
 	got, err = lookupUnique.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want = []key.Destination{
+	want = []key.ShardDestination{
 		key.DestinationNone{},
 		key.DestinationNone{},
 	}
@@ -109,7 +109,7 @@ func TestLookupUniqueMapWriteOnly(t *testing.T) {
 
 	got, err := lookupUnique.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
 		},

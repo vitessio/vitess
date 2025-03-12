@@ -53,6 +53,9 @@ func pushDerived(ctx *plancontext.PlanningContext, op *Horizon) (Operator, *Appl
 }
 
 func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, *ApplyResult) {
+	if newOp := op.tryCompact(ctx); newOp != nil {
+		return newOp, Rewrote("merged query graphs")
+	}
 	return mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), op.JoinType)
 }
 
@@ -82,7 +85,7 @@ func buildVindexTableForDML(
 	table *QueryTable,
 	ins *sqlparser.Insert,
 	dmlType string,
-) (*vindexes.Table, Routing) {
+) (*vindexes.BaseTable, Routing) {
 	vindexTable := tableInfo.GetVindexTable()
 	if tableInfo.GetVindexTable().Type == vindexes.TypeReference && vindexTable.Source != nil {
 		sourceTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vindexTable.Source.TableName)
@@ -179,7 +182,7 @@ func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) O
 	}
 	var src Operator = &Table{
 		QTable: table,
-		VTable: &vindexes.Table{
+		VTable: &vindexes.BaseTable{
 			Name:     table.Table.Name,
 			Keyspace: ks,
 		},
@@ -289,7 +292,7 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op Operator) (requ
 
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredicates []sqlparser.Expr, joinType sqlparser.JoinType) (Operator, *ApplyResult) {
 	jm := newJoinMerge(joinPredicates, joinType)
-	newPlan := jm.mergeJoinInputs(ctx, lhs, rhs, joinPredicates)
+	newPlan := jm.mergeJoinInputs(ctx, lhs, rhs)
 	if newPlan != nil {
 		return newPlan, Rewrote("merge routes into single operator")
 	}
@@ -299,22 +302,22 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 			// we can't switch sides, so let's see if we can use a HashJoin to solve it
 			join := NewHashJoin(lhs, rhs, !joinType.IsInner())
 			for _, pred := range joinPredicates {
-				join.AddJoinPredicate(ctx, pred)
+				join.AddJoinPredicate(ctx, pred, true)
 			}
 			ctx.SemTable.QuerySignature.HashJoin = true
 			return join, Rewrote("use a hash join because we have LIMIT on the LHS")
 		}
 
-		join := NewApplyJoin(ctx, Clone(rhs), Clone(lhs), nil, joinType)
+		join := NewApplyJoin(ctx, Clone(rhs), Clone(lhs), nil, joinType, false)
 		for _, pred := range joinPredicates {
-			join.AddJoinPredicate(ctx, pred)
+			join.AddJoinPredicate(ctx, pred, true)
 		}
 		return join, Rewrote("logical join to applyJoin, switching side because LIMIT")
 	}
 
-	join := NewApplyJoin(ctx, Clone(lhs), Clone(rhs), nil, joinType)
+	join := NewApplyJoin(ctx, Clone(lhs), Clone(rhs), nil, joinType, false)
 	for _, pred := range joinPredicates {
-		join.AddJoinPredicate(ctx, pred)
+		join.AddJoinPredicate(ctx, pred, true)
 	}
 
 	return join, Rewrote("logical join to applyJoin ")

@@ -105,4 +105,6 @@ message FullStatus {
   uint32 semi_sync_wait_for_replica_count = 20;
   bool super_read_only = 21;
   replicationdata.Configuration replication_configuration = 22;
+  bool disk_stalled = 23;
+  bool semi_sync_blocked = 24;
 }
