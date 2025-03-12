@@ -1163,6 +1163,25 @@ func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+func (cached *DeclareVar) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field VarNames []vitess.io/vitess/go/vt/sqlparser.IdentifierCI
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.VarNames)) * int64(32))
+		for _, elem := range cached.VarNames {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field Type *vitess.io/vitess/go/vt/sqlparser.ColumnType
+	size += cached.Type.CachedSize(true)
+	return size
+}
 func (cached *Default) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -580,6 +580,20 @@ func (eib *ElseIfBlock) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (dv *DeclareVar) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("declare")
+	prefix := " "
+	for _, varName := range dv.VarNames {
+		buf.WriteString(prefix)
+		varName.FormatFast(buf)
+		prefix = ", "
+	}
+	buf.WriteByte(' ')
+	dv.Type.FormatFast(buf)
+	buf.WriteByte(';')
+}
+
+// FormatFast formats the node.
 func (node *RevertMigration) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("revert ")
 	node.Comments.FormatFast(buf)

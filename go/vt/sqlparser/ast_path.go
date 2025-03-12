@@ -127,6 +127,8 @@ const (
 	RefOfCurTimeFuncExprName
 	RefOfDeallocateStmtComments
 	RefOfDeallocateStmtName
+	RefOfDeclareVarVarNamesOffset
+	RefOfDeclareVarType
 	RefOfDeleteWith
 	RefOfDeleteComments
 	RefOfDeleteTableExprsOffset
@@ -797,6 +799,10 @@ func (s ASTStep) DebugString() string {
 		return "(*DeallocateStmt).Comments"
 	case RefOfDeallocateStmtName:
 		return "(*DeallocateStmt).Name"
+	case RefOfDeclareVarVarNamesOffset:
+		return "(*DeclareVar).VarNamesOffset"
+	case RefOfDeclareVarType:
+		return "(*DeclareVar).Type"
 	case RefOfDeleteWith:
 		return "(*Delete).With"
 	case RefOfDeleteComments:
@@ -1943,6 +1949,12 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*DeallocateStmt).Comments
 		case RefOfDeallocateStmtName:
 			node = node.(*DeallocateStmt).Name
+		case RefOfDeclareVarVarNamesOffset:
+			idx, bytesRead := path.nextPathOffset()
+			path = path[bytesRead:]
+			node = node.(*DeclareVar).VarNames[idx]
+		case RefOfDeclareVarType:
+			node = node.(*DeclareVar).Type
 		case RefOfDeleteWith:
 			node = node.(*Delete).With
 		case RefOfDeleteComments:

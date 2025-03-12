@@ -141,6 +141,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
 	case *DeallocateStmt:
 		return a.rewriteRefOfDeallocateStmt(parent, node, replacer)
+	case *DeclareVar:
+		return a.rewriteRefOfDeclareVar(parent, node, replacer)
 	case *Default:
 		return a.rewriteRefOfDefault(parent, node, replacer)
 	case *Definer:
@@ -3390,6 +3392,63 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*DeallocateStmt).Name = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfDeclareVar(parent SQLNode, node *DeclareVar, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	for x, el := range node.VarNames {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfDeclareVarVarNamesOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
+		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*DeclareVar).VarNames[idx] = newNode.(IdentifierCI)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.collectPaths && len(node.VarNames) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeclareVarType))
+	}
+	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*DeclareVar).Type = newNode.(*ColumnType)
 	}) {
 		return false
 	}
@@ -14486,6 +14545,8 @@ func (a *application) rewriteCompoundStatement(parent SQLNode, node CompoundStat
 	switch node := node.(type) {
 	case *BeginEndStatement:
 		return a.rewriteRefOfBeginEndStatement(parent, node, replacer)
+	case *DeclareVar:
+		return a.rewriteRefOfDeclareVar(parent, node, replacer)
 	case *IfStatement:
 		return a.rewriteRefOfIfStatement(parent, node, replacer)
 	case *SingleStatement:

@@ -380,6 +380,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfDeallocateStmt(a, b)
+	case *DeclareVar:
+		b, ok := inB.(*DeclareVar)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDeclareVar(a, b)
 	case *Default:
 		b, ok := inB.(*Default)
 		if !ok {
@@ -2448,6 +2454,18 @@ func (cmp *Comparator) RefOfDeallocateStmt(a, b *DeallocateStmt) bool {
 	}
 	return cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCI(a.Name, b.Name)
+}
+
+// RefOfDeclareVar does deep equals between the two objects.
+func (cmp *Comparator) RefOfDeclareVar(a, b *DeclareVar) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.SliceOfIdentifierCI(a.VarNames, b.VarNames) &&
+		cmp.RefOfColumnType(a.Type, b.Type)
 }
 
 // RefOfDefault does deep equals between the two objects.
@@ -5976,6 +5994,12 @@ func (cmp *Comparator) CompoundStatement(inA, inB CompoundStatement) bool {
 			return false
 		}
 		return cmp.RefOfBeginEndStatement(a, b)
+	case *DeclareVar:
+		b, ok := inB.(*DeclareVar)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDeclareVar(a, b)
 	case *IfStatement:
 		b, ok := inB.(*IfStatement)
 		if !ok {

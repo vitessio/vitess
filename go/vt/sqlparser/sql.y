@@ -329,7 +329,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 // DDL Tokens
 %token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY DEALLOCATE
-%token <str> REVERT QUERIES
+%token <str> REVERT QUERIES DECLARE
 %token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE PREPARE EXECUTE
@@ -552,7 +552,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt limit_clause
 %type <selectInto> into_clause
-%type <columnTypeOptions> column_attribute_list_opt generated_column_attribute_list_opt
+%type <columnTypeOptions> column_attribute_list_opt generated_column_attribute_list_opt column_type_default_opt
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt regexp_symbol
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
@@ -620,7 +620,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <partSpec> partition_operation
 %type <procParam> proc_param
 %type <procParamMode> proc_param_mode
-%type <procParams> proc_params_list
+%type <procParams> proc_params_list proc_params_list_opt
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <jsonObjectParam> json_object_param
@@ -728,6 +728,24 @@ compound_statement_without_semicolon:
 | IF expression THEN compound_statement_list elseif_list_opt else_opt END IF
   {
     $$ = &IfStatement{SearchCondition: $2, ThenStatements: $4, ElseIfBlocks: $5, ElseStatements: $6}
+  }
+| DECLARE column_list column_type column_type_default_opt
+  {
+    $3.Options = $4
+    $$ = &DeclareVar{VarNames: $2, Type: $3}
+  }
+
+column_type_default_opt:
+  {
+    $$ = nil
+  }
+| DEFAULT openb expression closeb
+  {
+    $$ = &ColumnTypeOptions{Default: $3}
+  }
+| DEFAULT now_or_signed_literal
+  {
+    $$ = &ColumnTypeOptions{Default: $2, DefaultLiteral: true}
   }
 
 compound_statement_with_semicolon:
@@ -1377,7 +1395,7 @@ json_object_param:
   }
 
 create_procedure:
-  CREATE comment_opt definer_opt PROCEDURE not_exists_opt table_id openb proc_params_list closeb compound_statement
+  CREATE comment_opt definer_opt PROCEDURE not_exists_opt table_id openb proc_params_list_opt closeb compound_statement
   {
     $$ = &CreateProcedure{Comments: Comments($2).Parsed(), Name: $6, IfNotExists: $5, Definer: $3, Params: $8, Statement: $10}
     setDDL(yylex, $$)
@@ -7762,6 +7780,15 @@ cascade_or_local_opt:
     $$ = string($1)
   }
 
+proc_params_list_opt:
+  {
+    $$ = nil
+  }
+| proc_params_list
+  {
+    $$ = $1
+  }
+
 proc_params_list:
   proc_param
   {
@@ -8350,6 +8377,7 @@ reserved_keyword:
 | SUBSTRING
 | DATABASE
 | DATABASES
+| DECLARE
 | DEFAULT
 | DELETE
 | DENSE_RANK

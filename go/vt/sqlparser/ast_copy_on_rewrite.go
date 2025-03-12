@@ -140,6 +140,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfCurTimeFuncExpr(n, parent)
 	case *DeallocateStmt:
 		return c.copyOnRewriteRefOfDeallocateStmt(n, parent)
+	case *DeclareVar:
+		return c.copyOnRewriteRefOfDeclareVar(n, parent)
 	case *Default:
 		return c.copyOnRewriteRefOfDefault(n, parent)
 	case *Definer:
@@ -1937,6 +1939,38 @@ func (c *cow) copyOnRewriteRefOfDeallocateStmt(n *DeallocateStmt, parent SQLNode
 			res := *n
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.Name, _ = _Name.(IdentifierCI)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfDeclareVar(n *DeclareVar, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		var changedVarNames bool
+		_VarNames := make([]IdentifierCI, len(n.VarNames))
+		for x, el := range n.VarNames {
+			this, changed := c.copyOnRewriteIdentifierCI(el, n)
+			_VarNames[x] = this.(IdentifierCI)
+			if changed {
+				changedVarNames = true
+			}
+		}
+		_Type, changedType := c.copyOnRewriteRefOfColumnType(n.Type, n)
+		if changedVarNames || changedType {
+			res := *n
+			res.VarNames = _VarNames
+			res.Type, _ = _Type.(*ColumnType)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -7429,6 +7463,8 @@ func (c *cow) copyOnRewriteCompoundStatement(n CompoundStatement, parent SQLNode
 	switch n := n.(type) {
 	case *BeginEndStatement:
 		return c.copyOnRewriteRefOfBeginEndStatement(n, parent)
+	case *DeclareVar:
+		return c.copyOnRewriteRefOfDeclareVar(n, parent)
 	case *IfStatement:
 		return c.copyOnRewriteRefOfIfStatement(n, parent)
 	case *SingleStatement:

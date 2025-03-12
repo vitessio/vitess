@@ -791,11 +791,18 @@ type (
 		SearchCondition Expr
 		ThenStatements  CompoundStatements
 	}
+
+	// DeclareVar represents a Local Variable DECLARE Statement
+	DeclareVar struct {
+		VarNames []IdentifierCI
+		Type     *ColumnType
+	}
 )
 
 func (*SingleStatement) iCompoundStatement()   {}
 func (*BeginEndStatement) iCompoundStatement() {}
 func (*IfStatement) iCompoundStatement()       {}
+func (*DeclareVar) iCompoundStatement()        {}
 
 var _ OrderAndLimit = (*Select)(nil)
 var _ OrderAndLimit = (*Update)(nil)

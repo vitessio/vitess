@@ -221,7 +221,7 @@ var keywords = []keyword{
 	{"deallocate", DEALLOCATE},
 	{"dec", UNUSED},
 	{"decimal", DECIMAL_TYPE},
-	{"declare", UNUSED},
+	{"declare", DECLARE},
 	{"default", DEFAULT},
 	{"definer", DEFINER},
 	{"delay_key_write", DELAY_KEY_WRITE},

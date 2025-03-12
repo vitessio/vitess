@@ -421,6 +421,17 @@ func (eib *ElseIfBlock) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (dv *DeclareVar) Format(buf *TrackedBuffer) {
+	buf.literal("declare")
+	prefix := " "
+	for _, varName := range dv.VarNames {
+		buf.astPrintf(dv, "%s%v", prefix, varName)
+		prefix = ", "
+	}
+	buf.astPrintf(dv, " %v;", dv.Type)
+}
+
+// Format formats the node.
 func (node *RevertMigration) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "revert %vvitess_migration '%#s'", node.Comments, node.UUID)
 }

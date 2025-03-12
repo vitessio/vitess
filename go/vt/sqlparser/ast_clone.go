@@ -141,6 +141,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCurTimeFuncExpr(in)
 	case *DeallocateStmt:
 		return CloneRefOfDeallocateStmt(in)
+	case *DeclareVar:
+		return CloneRefOfDeclareVar(in)
 	case *Default:
 		return CloneRefOfDefault(in)
 	case *Definer:
@@ -1213,6 +1215,17 @@ func CloneRefOfDeallocateStmt(n *DeallocateStmt) *DeallocateStmt {
 	out := *n
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Name = CloneIdentifierCI(n.Name)
+	return &out
+}
+
+// CloneRefOfDeclareVar creates a deep clone of the input.
+func CloneRefOfDeclareVar(n *DeclareVar) *DeclareVar {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.VarNames = CloneSliceOfIdentifierCI(n.VarNames)
+	out.Type = CloneRefOfColumnType(n.Type)
 	return &out
 }
 
@@ -3886,6 +3899,8 @@ func CloneCompoundStatement(in CompoundStatement) CompoundStatement {
 	switch in := in.(type) {
 	case *BeginEndStatement:
 		return CloneRefOfBeginEndStatement(in)
+	case *DeclareVar:
+		return CloneRefOfDeclareVar(in)
 	case *IfStatement:
 		return CloneRefOfIfStatement(in)
 	case *SingleStatement:

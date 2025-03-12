@@ -140,6 +140,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCurTimeFuncExpr(in, f)
 	case *DeallocateStmt:
 		return VisitRefOfDeallocateStmt(in, f)
+	case *DeclareVar:
+		return VisitRefOfDeclareVar(in, f)
 	case *Default:
 		return VisitRefOfDefault(in, f)
 	case *Definer:
@@ -1435,6 +1437,23 @@ func VisitRefOfDeallocateStmt(in *DeallocateStmt, f Visit) error {
 		return err
 	}
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfDeclareVar(in *DeclareVar, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.VarNames {
+		if err := VisitIdentifierCI(el, f); err != nil {
+			return err
+		}
+	}
+	if err := VisitRefOfColumnType(in.Type, f); err != nil {
 		return err
 	}
 	return nil
@@ -4980,6 +4999,8 @@ func VisitCompoundStatement(in CompoundStatement, f Visit) error {
 	switch in := in.(type) {
 	case *BeginEndStatement:
 		return VisitRefOfBeginEndStatement(in, f)
+	case *DeclareVar:
+		return VisitRefOfDeclareVar(in, f)
 	case *IfStatement:
 		return VisitRefOfIfStatement(in, f)
 	case *SingleStatement:

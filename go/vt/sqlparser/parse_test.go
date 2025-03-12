@@ -1402,14 +1402,11 @@ var (
 		input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
 		output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
 	}, {
-		input:  "set /* simple */ a = 3",
-		output: "set /* simple */ @@a = 3",
+		input: "set /* simple */ a = 3",
 	}, {
-		input:  "set #simple\n b = 4",
-		output: "set #simple\n @@b = 4",
+		input: "set #simple\n b = 4",
 	}, {
-		input:  "set character_set_results = utf8",
-		output: "set @@character_set_results = utf8",
+		input: "set character_set_results = utf8",
 	}, {
 		input:  "set @@session.autocommit = true",
 		output: "set @@autocommit = true",
@@ -1424,10 +1421,10 @@ var (
 		output: "set @@autocommit = 'off'",
 	}, {
 		input:  "set autocommit = on",
-		output: "set @@autocommit = 'on'",
+		output: "set autocommit = 'on'",
 	}, {
 		input:  "set autocommit = off",
-		output: "set @@autocommit = 'off'",
+		output: "set autocommit = 'off'",
 	}, {
 		input:  "set names utf8 collate foo",
 		output: "set names 'utf8'",
@@ -1442,7 +1439,7 @@ var (
 		output: "set charset 'utf8'",
 	}, {
 		input:  "set s = 1--4",
-		output: "set @@s = 1 - -4",
+		output: "set s = 1 - -4",
 	}, {
 		input:  "set character set \"utf8\"",
 		output: "set charset 'utf8'",
@@ -1465,11 +1462,9 @@ var (
 		input:  "set @@local.wait_timeout = 3600",
 		output: "set @@wait_timeout = 3600",
 	}, {
-		input:  "set /* list */ a = 3, b = 4",
-		output: "set /* list */ @@a = 3, @@b = 4",
+		input: "set /* list */ a = 3, b = 4",
 	}, {
-		input:  "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
-		output: "set /* mixed list */ @@a = 3, names 'utf8', charset 'ascii', @@b = 4",
+		input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
 	}, {
 		input:  "set session transaction isolation level repeatable read",
 		output: "set @@session.transaction_isolation = 'repeatable-read'",
@@ -1501,39 +1496,29 @@ var (
 		input:  "set session transaction read only, isolation level serializable",
 		output: "set @@session.transaction_read_only = 'on', @@session.transaction_isolation = 'serializable'",
 	}, {
-		input:  "set tx_read_only = 1",
-		output: "set @@tx_read_only = 1",
+		input: "set tx_read_only = 1",
 	}, {
-		input:  "set tx_read_only = 0",
-		output: "set @@tx_read_only = 0",
+		input: "set tx_read_only = 0",
 	}, {
-		input:  "set transaction_read_only = 1",
-		output: "set @@session.transaction_read_only = 1",
+		input: "set transaction_read_only = 1",
 	}, {
-		input:  "set transaction_read_only = 0",
-		output: "set @@session.transaction_read_only = 0",
+		input: "set transaction_read_only = 0",
 	}, {
 		input: "set @@transaction_read_only = 1",
 	}, {
 		input: "set @@transaction_isolation = 'read-committed'",
 	}, {
-		input:  "set tx_isolation = 'repeatable read'",
-		output: "set @@tx_isolation = 'repeatable read'",
+		input: "set tx_isolation = 'repeatable read'",
 	}, {
-		input:  "set tx_isolation = 'read committed'",
-		output: "set @@tx_isolation = 'read committed'",
+		input: "set tx_isolation = 'read committed'",
 	}, {
-		input:  "set tx_isolation = 'read uncommitted'",
-		output: "set @@tx_isolation = 'read uncommitted'",
+		input: "set tx_isolation = 'read uncommitted'",
 	}, {
-		input:  "set tx_isolation = 'serializable'",
-		output: "set @@tx_isolation = 'serializable'",
+		input: "set tx_isolation = 'serializable'",
 	}, {
-		input:  "set sql_safe_updates = 0",
-		output: "set @@sql_safe_updates = 0",
+		input: "set sql_safe_updates = 0",
 	}, {
-		input:  "set sql_safe_updates = 1",
-		output: "set @@sql_safe_updates = 1",
+		input: "set sql_safe_updates = 1",
 	}, {
 		input: "set @variable = 42",
 	}, {
@@ -1541,10 +1526,10 @@ var (
 		output: "set @`period.variable` = 42",
 	}, {
 		input:  "set S= +++-++-+(4+1)",
-		output: "set @@S = - -(4 + 1)",
+		output: "set S = - -(4 + 1)",
 	}, {
 		input:  "set S= +- - - - -(4+1)",
-		output: "set @@S = - - - - -(4 + 1)",
+		output: "set S = - - - - -(4 + 1)",
 	}, {
 		input:  "alter table a add foo int references b (a) on delete restrict first",
 		output: "alter table a add column foo int references b (a) on delete restrict first",
@@ -2146,6 +2131,38 @@ var (
 	}, {
 		input:  `CREATE PROCEDURE compare (IN n INT, IN m INT, INOUT s VARCHAR(50)) BEGIN IF n = m THEN SET s = 'equals'; ELSE IF n > m THEN SET s = 'greater'; ELSE SET s = 'less'; END IF; SET s = CONCAT('is ', s, ' than'); END IF; SET s = CONCAT(n, ' ', s, ' ', m, '.'); END`,
 		output: `create procedure compare (in n INT, in m INT, inout s VARCHAR(50)) begin if n = m then set s = 'equals'; else if n > m then set s = 'greater'; else set s = 'less'; end if; set s = CONCAT('is ', s, ' than'); end if; set s = CONCAT(n, ' ', s, ' ', m, '.'); end;`,
+	}, {
+		input:  "create procedure SimpleProcedure() begin select 'Hello, World!'; end;",
+		output: "create procedure SimpleProcedure () begin select 'Hello, World!' from dual; end;",
+	}, {
+		input:  "create procedure DeclareVariableProcedure() begin declare message varchar(100); set message = 'Test Message'; select message; end;",
+		output: "create procedure DeclareVariableProcedure () begin declare message varchar(100); set message = 'Test Message'; select message from dual; end;",
+	}, {
+		input:  "create procedure IfBlockProcedure(in input_value int) begin if input_value > 0 then select 'Positive'; elseif input_value < 0 then select 'Negative'; else select 'Zero'; end if; end;",
+		output: "create procedure IfBlockProcedure (in input_value int) begin if input_value > 0 then select 'Positive' from dual; elseif input_value < 0 then select 'Negative' from dual; else select 'Zero' from dual; end if; end;",
+	}, {
+		input:  "create procedure DeclareAndIfProcedure(in input_value int) begin declare message varchar(50); if input_value > 100 then set message = 'High'; elseif input_value > 50 then set message = 'Medium'; else set message = 'Low'; end if; select message; end;",
+		output: "create procedure DeclareAndIfProcedure (in input_value int) begin declare message varchar(50); if input_value > 100 then set message = 'High'; elseif input_value > 50 then set message = 'Medium'; else set message = 'Low'; end if; select message from dual; end;",
+	}, {
+		input:  "create procedure NestedIfProcedure(in value int) begin if value > 0 then if value > 100 then select 'Very High'; else select 'High'; end if; else select 'Low or Negative'; end if; end;",
+		output: "create procedure NestedIfProcedure (in value int) begin if value > 0 then if value > 100 then select 'Very High' from dual; else select 'High' from dual; end if; else select 'Low or Negative' from dual; end if; end;",
+	}, {
+		input:  "create procedure MultipleDeclareProcedure(in val1 int, in val2 int) begin declare sum_result int; declare diff_result int; set sum_result = val1 + val2; set diff_result = val1 - val2; select sum_result as Sum, diff_result as Difference; end;",
+		output: "create procedure MultipleDeclareProcedure (in val1 int, in val2 int) begin declare sum_result int; declare diff_result int; set sum_result = val1 + val2; set diff_result = val1 - val2; select sum_result as `Sum`, diff_result as Difference from dual; end;",
+	}, {
+		input: "create procedure ErrorHandlingProcedure(in value int) begin declare exit handler for sqlexception begin select 'An error occurred'; end; if value < 0 then signal sqlstate '45000' set message_text = 'Negative values not allowed'; else select 'Valid value'; end if; end;",
+	}, {
+		input:  "create procedure ProcedureWithDefaultValue() begin declare myVar int; set myVar = 100; select myVar; end;",
+		output: "create procedure ProcedureWithDefaultValue () begin declare myVar int; set myVar = 100; select myVar from dual; end;",
+	}, {
+		input:  "create procedure ProcedureWithDefaultValueNewSyntax() begin declare myVar int default 200; select myVar; end;",
+		output: "create procedure ProcedureWithDefaultValueNewSyntax () begin declare myVar int default 200; select myVar from dual; end;",
+	}, {
+		input:  "create procedure MultipleDefaults() begin declare var1 int default 10; declare var2 varchar(50) default 'Hello World'; select var1, var2; end;",
+		output: "create procedure MultipleDefaults () begin declare var1 int default 10; declare var2 varchar(50) default 'Hello World'; select var1, var2 from dual; end;",
+	}, {
+		input:  "create procedure DefaultValueWithExpression() begin declare currentTime datetime default now(); select currentTime; end;",
+		output: "create procedure DefaultValueWithExpression () begin declare currentTime datetime default now(); select currentTime from dual; end;",
 	}, {
 		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {
