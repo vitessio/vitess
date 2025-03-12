@@ -23,34 +23,12 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
-
-var statsShardsWatched = stats.NewGaugesFuncWithMultiLabels("ShardsWatched",
-	"Keyspace/shards currently watched",
-	[]string{"Keyspace", "Shard"},
-	getShardsWatchedStats)
-
-// getShardsWatchedStats returns the keyspace/shards watched in a format for stats.
-func getShardsWatchedStats() map[string]int64 {
-	shardsWatched := make(map[string]int64)
-	allShardNames, err := inst.ReadAllShardNames()
-	if err != nil {
-		log.Errorf("Failed to read all shard names: %+v", err)
-		return shardsWatched
-	}
-	for ks, shards := range allShardNames {
-		for _, shard := range shards {
-			shardsWatched[ks+"."+shard] = 1
-		}
-	}
-	return shardsWatched
-}
 
 // refreshAllKeyspacesAndShardsMu ensures RefreshAllKeyspacesAndShards
 // is not executed concurrently.
