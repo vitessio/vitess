@@ -655,6 +655,14 @@ func (nz *normalizer) rewriteVariable(cursor *Cursor, node *Variable) {
 	switch node.Scope {
 	case VariableScope:
 		nz.udvRewrite(cursor, node)
+	case NoScope:
+		// We rewrite the NoScope to session scope for SET statements
+		// that we plan. Previously we used to do this during parsing itself,
+		// but we needed to change that to allow for set statements in a
+		// create procedure statement that sometimes set locally defined variables
+		// that aren't in the session scope.
+		node.Scope = SessionScope
+		fallthrough
 	case SessionScope, NextTxScope:
 		nz.sysVarRewrite(cursor, node)
 	}
