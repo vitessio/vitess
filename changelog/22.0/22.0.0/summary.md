@@ -9,6 +9,7 @@
     - [gh-ost and pt-osc Online DDL strategies](#deleted-ghost-ptosc)
   - **[Deprecations](#deprecations)**
     - [Deprecated VTGate Metrics](#vtgate-metrics)
+    - [Deprecated VTGate Flags](#vtgate-flags)
     - [Deprecated VTTablet Flags](#vttablet-flags)
   - **[RPC Changes](#rpc-changes)**
   - **[VTGate Metrics](#vtgate-metrics)**
@@ -72,6 +73,11 @@ $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
 #### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
 
 - `twopc_enable` flag is deprecated. Usage of TwoPC commit will be determined by the `transaction_mode` set on VTGate via flag or session variable.
+- `--disable_active_reparents` flag that was previously deprecated, has now been removed.
+
+#### <a id="vtgate-flags"/>Deprecated VTGate Flags</a>
+
+- `grpc-send-session-in-streaming` flag is deprecated. Session will be sent as part of response on StreamExecute API call.
 
 ### <a id="rpc-changes"/>RPC Changes</a>
 

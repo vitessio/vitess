@@ -144,19 +144,25 @@ var (
 		Long: `vtbackup is a batch command to perform a single pass of backup maintenance for a shard.
 
 When run periodically for each shard, vtbackup can ensure these configurable policies:
-	* There is always a recent backup for the shard.
-	* Old backups for the shard are removed.
+ * There is always a recent backup for the shard.
+
+ * Old backups for the shard are removed.
 
 Whatever system launches vtbackup is responsible for the following:
-	- Running vtbackup with similar flags that would be used for a vttablet and
-    mysqlctld in the target shard to be backed up.
-	- Provisioning as much disk space for vtbackup as would be given to vttablet.
-    The data directory MUST be empty at startup. Do NOT reuse a persistent disk.
-	- Running vtbackup periodically for each shard, for each backup storage location.
-	- Ensuring that at most one instance runs at a time for a given pair of shard
-    and backup storage location.
-	- Retrying vtbackup if it fails.
-	- Alerting human operators if the failure is persistent.
+ - Running vtbackup with similar flags that would be used for a vttablet and 
+   mysqlctld in the target shard to be backed up.
+
+ - Provisioning as much disk space for vtbackup as would be given to vttablet.
+   The data directory MUST be empty at startup. Do NOT reuse a persistent disk.
+
+ - Running vtbackup periodically for each shard, for each backup storage location.
+
+ - Ensuring that at most one instance runs at a time for a given pair of shard
+   and backup storage location.
+
+ - Retrying vtbackup if it fails.
+
+ - Alerting human operators if the failure is persistent.
 
 The process vtbackup follows to take a new backup has the following steps:
  1. Restore from the most recent backup.

@@ -74,6 +74,7 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	allowPrimary := subFlags.Bool("allow_primary", false, "Allows backups to be taken on primary. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
 	incrementalFromPos := subFlags.String("incremental_from_pos", "", "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
 	upgradeSafe := subFlags.Bool("upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
+	mysqlShutdownTimeout := subFlags.Duration("mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -88,11 +89,12 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	}
 
 	return wr.VtctldServer().Backup(&vtctldatapb.BackupRequest{
-		TabletAlias:        tabletAlias,
-		Concurrency:        *concurrency,
-		AllowPrimary:       *allowPrimary,
-		IncrementalFromPos: *incrementalFromPos,
-		UpgradeSafe:        *upgradeSafe,
+		TabletAlias:          tabletAlias,
+		Concurrency:          *concurrency,
+		AllowPrimary:         *allowPrimary,
+		IncrementalFromPos:   *incrementalFromPos,
+		UpgradeSafe:          *upgradeSafe,
+		MysqlShutdownTimeout: protoutil.DurationToProto(*mysqlShutdownTimeout),
 	}, &backupEventStreamLogger{logger: wr.Logger(), ctx: ctx})
 }
 
@@ -116,6 +118,7 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	allowPrimary := subFlags.Bool("allow_primary", false, "Whether to use primary tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
 	incrementalFromPos := subFlags.String("incremental_from_pos", "", "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
 	upgradeSafe := subFlags.Bool("upgrade-safe", false, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
+	mysqlShutdownTimeout := subFlags.Duration("mysql-shutdown-timeout", mysqlctl.DefaultShutdownTimeout, "Timeout to use when MySQL is being shut down.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -130,12 +133,13 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	}
 
 	return wr.VtctldServer().BackupShard(&vtctldatapb.BackupShardRequest{
-		Keyspace:           keyspace,
-		Shard:              shard,
-		Concurrency:        *concurrency,
-		AllowPrimary:       *allowPrimary,
-		IncrementalFromPos: *incrementalFromPos,
-		UpgradeSafe:        *upgradeSafe,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		Concurrency:          *concurrency,
+		AllowPrimary:         *allowPrimary,
+		IncrementalFromPos:   *incrementalFromPos,
+		UpgradeSafe:          *upgradeSafe,
+		MysqlShutdownTimeout: protoutil.DurationToProto(*mysqlShutdownTimeout),
 	}, &backupEventStreamLogger{logger: wr.Logger(), ctx: ctx})
 }
 

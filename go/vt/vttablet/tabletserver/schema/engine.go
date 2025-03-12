@@ -272,7 +272,7 @@ func (se *Engine) Open() error {
 
 	se.ticks.Start(func() {
 		// update stats on periodic reloads
-		if err := se.reload(ctx, true); err != nil {
+		if err := se.reloadAndIncludeStats(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
@@ -363,6 +363,11 @@ func (se *Engine) EnableHistorian(enabled bool) error {
 // emitted, as they can be expensive to calculate for a large number of tables
 func (se *Engine) Reload(ctx context.Context) error {
 	return se.ReloadAt(ctx, replication.Position{})
+}
+
+// reloadAndIncludeStats calls the ReloadAtEx function with includeStats set to true.
+func (se *Engine) reloadAndIncludeStats(ctx context.Context) error {
+	return se.ReloadAtEx(ctx, replication.Position{}, true)
 }
 
 // ReloadAt reloads the schema info from the db.

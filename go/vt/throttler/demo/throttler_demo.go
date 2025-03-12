@@ -68,6 +68,7 @@ var (
 	lagUpdateInterval        = 5 * time.Second
 	replicaDegrationDuration = 10 * time.Second
 	replicaDegrationInterval time.Duration
+	tdHcSubscriberName       = "ThrottlerDemo"
 )
 
 const flagSetName = "throttler_demo"
@@ -246,7 +247,7 @@ func newClient(ctx context.Context, primary *primary, replica *replica, ts *topo
 		throttler:   t,
 		stopChan:    make(chan struct{}),
 	}
-	healthcheckCh := c.healthCheck.Subscribe()
+	healthcheckCh := c.healthCheck.Subscribe(tdHcSubscriberName)
 	c.healthcheckCh = healthcheckCh
 	c.healthCheck.AddTablet(replica.fakeTablet.Tablet)
 	return c

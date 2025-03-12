@@ -1948,62 +1948,12 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			}
 		})
 	}
-	handle("/throttler/check", base.ShardScope)
 	handle("/throttler/check-self", base.SelfScope)
-}
-
-// registerThrottlerStatusHandler registers a throttler "status" request
-func (tsv *TabletServer) registerThrottlerStatusHandler() {
-	tsv.exporter.HandleFunc("/throttler/status", func(w http.ResponseWriter, r *http.Request) {
-		status := tsv.lagThrottler.Status()
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(status)
-	})
-}
-
-// registerThrottlerThrottleAppHandler registers a throttler "throttle-app" request
-func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
-	tsv.exporter.HandleFunc("/throttler/throttle-app", func(w http.ResponseWriter, r *http.Request) {
-		appName := r.URL.Query().Get("app")
-		d, err := time.ParseDuration(r.URL.Query().Get("duration"))
-		if err != nil {
-			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
-			return
-		}
-		var ratio = throttle.DefaultThrottleRatio
-		if ratioParam := r.URL.Query().Get("ratio"); ratioParam != "" {
-			ratio, err = strconv.ParseFloat(ratioParam, 64)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
-				return
-			}
-		}
-		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), ratio, false)
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(appThrottle)
-	})
-	tsv.exporter.HandleFunc("/throttler/unthrottle-app", func(w http.ResponseWriter, r *http.Request) {
-		appName := r.URL.Query().Get("app")
-		appThrottle := tsv.lagThrottler.UnthrottleApp(appName)
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(appThrottle)
-	})
-	tsv.exporter.HandleFunc("/throttler/throttled-apps", func(w http.ResponseWriter, r *http.Request) {
-		throttledApps := tsv.lagThrottler.ThrottledApps()
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(throttledApps)
-	})
 }
 
 // registerThrottlerHandlers registers all throttler handlers
 func (tsv *TabletServer) registerThrottlerHandlers() {
 	tsv.registerThrottlerCheckHandlers()
-	tsv.registerThrottlerStatusHandler()
-	tsv.registerThrottlerThrottleAppHandler()
 }
 
 func (tsv *TabletServer) registerDebugEnvHandler() {

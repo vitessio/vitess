@@ -246,7 +246,7 @@ Flags:
       --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
-      --mysql-shutdown-timeout duration                                  timeout to use when MySQL is being shut down. (default 5m0s)
+      --mysql-shutdown-timeout duration                                  Timeout to use when MySQL is being shut down. (default 5m0s)
       --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)

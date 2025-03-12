@@ -18,7 +18,7 @@ package semisyncmonitor
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -205,10 +205,10 @@ func (m *Monitor) isSemiSyncBlocked(ctx context.Context) (bool, error) {
 	}
 
 	// Read the status value and check if it is non-zero.
-	if len(res.Rows) != 1 || len(res.Rows[0]) != 2 {
-		return false, errors.New("unexpected number of rows received")
+	if len(res.Rows) != 1 || len(res.Rows[0]) != 1 {
+		return false, fmt.Errorf("unexpected number of rows received - %v", res.Rows)
 	}
-	value, err := res.Rows[0][1].ToCastInt64()
+	value, err := res.Rows[0][0].ToCastInt64()
 	return value != 0, err
 }
 
