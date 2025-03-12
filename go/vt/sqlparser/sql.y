@@ -1421,17 +1421,14 @@ create_view_prefix:
   CREATE comment_opt definer_opt security_view_opt VIEW table_name
   {
     $$ = &CreateView{ViewName: $6, Comments: Comments($2).Parsed(), Definer: $3 ,Security:$4}
-    setDDL(yylex, $$)
   }
 | CREATE comment_opt replace algorithm_view_opt definer_opt security_view_opt VIEW table_name
   {
     $$ = &CreateView{ViewName: $8, Comments: Comments($2).Parsed(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6}
-    setDDL(yylex, $$)
   }
 | CREATE comment_opt algorithm_view definer_opt security_view_opt VIEW table_name
   {
     $$ = &CreateView{ViewName: $7, Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5}
-    setDDL(yylex, $$)
   }
 
 
