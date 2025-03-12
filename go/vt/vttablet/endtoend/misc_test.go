@@ -1124,6 +1124,9 @@ func TestUpdateTableIndexMetrics(t *testing.T) {
 
 	assert.Equal(t, 2.0, framework.FetchVal(vars, "TableRows/vitess_a"))
 	assert.Equal(t, 3.0, framework.FetchVal(vars, "TableRows/vitess_part"))
+	partTableCountResult, _ := client.Execute("select count(1) from vitess_part", nil)
+	partTableRows, _ := partTableCountResult.Rows[0][0].ToInt()
+	assert.Equal(t, 3, partTableRows)
 
 	assert.Equal(t, pageSize, framework.FetchVal(vars, "TableClusteredIndexSize/vitess_a"))
 	assert.Equal(t, pageSize*2, framework.FetchVal(vars, "TableClusteredIndexSize/vitess_part"))
