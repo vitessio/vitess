@@ -1134,6 +1134,12 @@ func TestUpdateTableIndexMetrics(t *testing.T) {
 	partTableRows, _ := partTableCountResult.Rows[0][0].ToInt()
 	assert.Equal(t, 3, partTableRows)
 
+	tablesResult, err := conn.ExecuteFetch("select table_name, n_rows from mysql.innodb_table_stats where table_name like 'vitess_part%'", 1000, true)
+	require.NoError(t, err)
+	for _, row := range tablesResult.Rows {
+		fmt.Printf("table: %s n_rows: %v\n", row[0].ToString(), row[1].ToString())
+	}
+
 	assert.Equal(t, pageSize, framework.FetchVal(vars, "TableClusteredIndexSize/vitess_a"))
 	assert.Equal(t, pageSize*2, framework.FetchVal(vars, "TableClusteredIndexSize/vitess_part"))
 
