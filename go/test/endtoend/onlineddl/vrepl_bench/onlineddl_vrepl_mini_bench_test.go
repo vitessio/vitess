@@ -400,7 +400,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 				assert.NoError(t, err)
 
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.VPlayerName, true)
-				throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, throttlerapp.VPlayerName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, time.Minute)
+				throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.VPlayerName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, time.Minute)
 			})
 			readPos := func(t *testing.T) {
 				{
@@ -438,7 +438,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 					return
 				}
 				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.VPlayerName, true)
-				throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, throttlerapp.VPlayerName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, time.Second)
+				throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.VPlayerName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, time.Second)
 			})
 			var startTime = time.Now()
 			t.Run("unthrottle online-ddl", func(t *testing.T) {
@@ -490,7 +490,7 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 			results = append(results, endTime.Sub(startTime))
 			t.Logf(":::::::::::::::::::: Workload catchup took %v ::::::::::::::::::::", endTime.Sub(startTime))
 			t.Run("cleanup", func(t *testing.T) {
-				throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, throttlerapp.VPlayerName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, time.Minute)
+				throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.VPlayerName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, time.Minute)
 			})
 			t.Run("validate metrics", func(t *testing.T) {
 				testSelectTableMetrics(t)
