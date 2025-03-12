@@ -111,3 +111,19 @@ create table example (
     foo enum('a','b') not null,
     primary key (id)
 ) Engine = InnoDB;
+
+-- Table used to exercise unknown enum value fallback hashing. The vschema for this
+-- table deliberately omits the "c" value so we can insert known and unknown enums.
+create table example_enum_unknown (
+    id bigint unsigned not null,
+    foo enum('a','b','c') not null,
+    primary key (id)
+) Engine = InnoDB;
+
+-- Table used to exercise unknown set value fallback hashing. The vschema for this
+-- table deliberately omits the "c" value so we can insert known and unknown sets.
+create table example_set_unknown (
+    id bigint unsigned not null,
+    foo set('a','b','c') not null,
+    primary key (id)
+) Engine = InnoDB;
