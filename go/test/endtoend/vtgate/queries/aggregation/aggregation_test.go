@@ -54,6 +54,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 			"emp",
 			"dept",
 			"bet_logs",
+			"example",
 		}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
