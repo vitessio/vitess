@@ -69,11 +69,12 @@
 
 #### <a id="deleted-cli-flags"/>CLI Flags</a>
 
-| Component  |             Flag Name              | Was Deprecated In |                     Deprecation PR                      |
-|:----------:|:----------------------------------:|:-----------------:|:-------------------------------------------------------:|
-| `vttablet` | `queryserver-enable-settings-pool` |     `v21.0.0`     | [#16280](https://github.com/vitessio/vitess/pull/16280) |
-| `vttablet` |  `remove-sharded-auto-increment`   |     `v21.0.0`     | [#16860](https://github.com/vitessio/vitess/pull/16860) |
-| `vttablet` |     `disable_active_reparents`     |     `v20.0.0`     | [#14871](https://github.com/vitessio/vitess/pull/14871) |
+|           Component           |             Flag Name              | Was Deprecated In |                     Deprecation PR                      |
+|:-----------------------------:|:----------------------------------:|:-----------------:|:-------------------------------------------------------:|
+|          `vttablet`           | `queryserver-enable-settings-pool` |     `v21.0.0`     | [#16280](https://github.com/vitessio/vitess/pull/16280) |
+|          `vttablet`           |  `remove-sharded-auto-increment`   |     `v21.0.0`     | [#16860](https://github.com/vitessio/vitess/pull/16860) |
+|          `vttablet`           |     `disable_active_reparents`     |     `v20.0.0`     | [#14871](https://github.com/vitessio/vitess/pull/14871) |
+| `vtgate`, `vtcombo`, `vtctld` |   `healthcheck-dial-concurrency`   |     `v21.0.0`     | [#16378](https://github.com/vitessio/vitess/pull/16378) |
 
 #### <a id="deleted-ghost-ptosc"/>gh-ost and pt-osc Online DDL strategies</a>
 
