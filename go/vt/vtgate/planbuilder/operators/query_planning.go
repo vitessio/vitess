@@ -21,6 +21,7 @@ import (
 	"io"
 	"strconv"
 
+	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -123,7 +124,11 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 }
 
 func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Operator, res *ApplyResult) {
-	jm := newJoinMerge(nil, in.JoinType)
+	preds := slice.Map(in.JoinPredicates.columns, func(col applyJoinColumn) sqlparser.Expr {
+		return col.Original
+	})
+
+	jm := newJoinMerge(preds, in.JoinType)
 	r := jm.mergeJoinInputs(ctx, in.LHS, in.RHS)
 	if r == nil {
 		return in, NoRewrite
