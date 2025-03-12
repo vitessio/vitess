@@ -72,6 +72,7 @@
 | Component  |             Flag Name              | Was Deprecated In |                     Deprecation PR                      |
 |:----------:|:----------------------------------:|:-----------------:|:-------------------------------------------------------:|
 | `vttablet` | `queryserver-enable-settings-pool` |     `v21.0.0`     | [#16280](https://github.com/vitessio/vitess/pull/16280) |
+| `vttablet` |  `remove-sharded-auto-increment`   |     `v21.0.0`     | [#16860](https://github.com/vitessio/vitess/pull/16860) |
 | `vttablet` |     `disable_active_reparents`     |     `v20.0.0`     | [#14871](https://github.com/vitessio/vitess/pull/14871) |
 
 #### <a id="deleted-ghost-ptosc"/>gh-ost and pt-osc Online DDL strategies</a>
