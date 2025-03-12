@@ -742,10 +742,8 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 		rowCount, _ := row[1].ToInt64()
 		rowsBytes, _ := row[2].ToInt64()
 
-		if strings.Contains(tableName, "#p#") {
-			if partition, ok := partitions[tableName]; ok {
-				tableName = partition.table
-			}
+		if partition, ok := partitions[tableName]; ok {
+			tableName = partition.table
 		}
 
 		t, ok := tables[tableName]
@@ -775,10 +773,8 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 		indexName := row[1].ToString()
 		indexBytes, _ := row[2].ToInt64()
 
-		if strings.Contains(tableName, "#p#") {
-			if partition, ok := partitions[tableName]; ok {
-				tableName = partition.table
-			}
+		if partition, ok := partitions[tableName]; ok {
+			tableName = partition.table
 		}
 
 		key := [2]string{tableName, indexName}
