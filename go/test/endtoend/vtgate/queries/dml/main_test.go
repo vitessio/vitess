@@ -95,6 +95,9 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sSchemaSQL,
 			VSchema:   sVSchema,
 		}
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
+			"--queryserver-config-passthrough-dmls",
+			"--queryserver-config-max-result-size", "10")
 		err = clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
@@ -132,7 +135,8 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 
 		tables := []string{
 			"s_tbl", "num_vdx_tbl", "user_tbl", "order_tbl", "oevent_tbl", "oextra_tbl",
-			"auto_tbl", "oid_vdx_tbl", "unq_idx", "nonunq_idx", "u_tbl", "mixed_tbl", "lkp_map_idx", "j_tbl", "j_utbl",
+			"auto_tbl", "oid_vdx_tbl", "unq_idx", "nonunq_idx", "u_tbl", "mixed_tbl", "j_tbl", "j_utbl",
+			"t1", "t2",
 		}
 		for _, table := range tables {
 			// TODO (@frouioui): following assertions produce different results between MySQL and Vitess

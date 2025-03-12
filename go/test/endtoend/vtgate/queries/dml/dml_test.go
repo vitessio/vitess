@@ -17,6 +17,7 @@ limitations under the License.
 package dml
 
 import (
+	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
@@ -420,4 +421,62 @@ func TestDMLInUnique(t *testing.T) {
 		[VARCHAR("sks") VARCHAR("80-") VARCHAR("delete from user_tbl where region_id in (4, 6)")]
     ]`
 	assertVExplainEquals(t, mcmp.VtConn, "vexplain /*vt+ EXECUTE_DML_QUERIES */ queries delete from user_tbl where region_id in (1,2,3,4,5,6)", expected)
+}
+
+// TestUpdateWithLargeRowsAsInput tests that a query with large input rows should succeed with passthrough DML on.
+func TestUpdateWithLargeRowsAsInput(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert initial rows
+	for i := 0; i < 100; i++ {
+		mcmp.Exec(fmt.Sprintf("insert into t1(id, col) values (%d, %d)", i, i))
+		mcmp.Exec(fmt.Sprintf("insert into t2(id, col) values (%d, %d)", i, i))
+	}
+
+	queries := []string{
+		`update t1 join t2 on t1.col = t2.col set t1.col = 5`,
+		`update t1 join t2 on t1.col = t2.col set t1.col = t1.col + 1`,
+		`update t1 set col = col + 1`,
+	}
+
+	// Should succeed in OLTP mode.
+	for _, query := range queries {
+		t.Run("oltp-"+query, func(t *testing.T) {
+			mcmp.Exec(query)
+		})
+	}
+
+	// Switch workload to OLAP
+	utils.Exec(t, mcmp.VtConn, `set workload = olap`)
+
+	// Should also succeed in OLAP mode.
+	for _, query := range queries {
+		t.Run("olap-"+query, func(t *testing.T) {
+			mcmp.Exec(query)
+		})
+	}
+}
+
+// TestDeleteWithLargeRowsAsInput tests that a query with large input rows should succeed with passthrough DML on.
+func TestDeleteWithLargeRowsAsInput(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert initial rows
+	for i := 0; i < 100; i++ {
+		mcmp.Exec(fmt.Sprintf("insert into t1(id, col) values (%d, %d)", i, i))
+		mcmp.Exec(fmt.Sprintf("insert into t2(id, col) values (%d, %d)", i, i))
+	}
+
+	// Should succeed in OLTP mode
+	_ = mcmp.Exec(`delete t1 from t1 join t2 on t1.col = t2.col where t1.id > 40`)
+	// assert.EqualValues(t, 100, qr.RowsAffected)
+
+	// Switch workload to OLAP
+	utils.Exec(t, mcmp.VtConn, `set workload = olap`)
+
+	// Should also succeed in OLAP mode
+	_ = mcmp.Exec(`delete t1 from t1 join t2 on t1.col = t2.col`)
+	// assert.EqualValues(t, 0, qr.RowsAffected) // All rows should have been deleted in the first run
 }

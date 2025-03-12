@@ -58,6 +58,9 @@ func (dml *DMLWithInput) Inputs() ([]Primitive, []map[string]any) {
 
 // TryExecute performs a non-streaming exec.
 func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+	vcursor.Session().SetInDMLExecution(true)
+	defer vcursor.Session().SetInDMLExecution(false)
+
 	inputRes, err := vcursor.ExecutePrimitive(ctx, dml.Input, bindVars, false)
 	if err != nil {
 		return nil, err
