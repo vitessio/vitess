@@ -1106,9 +1106,15 @@ func TestUpdateTableIndexMetrics(t *testing.T) {
 	defer client.Execute("delete from vitess_part where id in (5,15,25)", nil)
 
 	// Analyze tables to make sure stats are updated prior to reload
-	tables := []string{"vitess_a", "vitess_part", "vitess_autoinc_seq"}
-	for _, table := range tables {
-		_, err = client.Execute(fmt.Sprintf("analyze table %s", table), nil)
+	analyzes := []string{
+		"analyze table vitess_a",
+		"analyze table vitess_autoinc_seq",
+		"alter table vitess_part analyze partition p0",
+		"alter table vitess_part analyze partition p1",
+		"analyze table vitess_part",
+	}
+	for _, sql := range analyzes {
+		_, err = client.Execute(sql, nil)
 		require.NoError(t, err)
 	}
 
