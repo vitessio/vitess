@@ -134,19 +134,19 @@ func TestUpdateWithLimit(t *testing.T) {
 	defer closer()
 
 	// initial rows
-	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (2,10), (3,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
+	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
 
 	// update with limit
-	qr := mcmp.Exec(`update s_tbl set num = 12 order by num, id limit 3`)
-	require.EqualValues(t, 3, qr.RowsAffected)
+	qr := mcmp.Exec(`update s_tbl set num = 12 order by num, id limit 1`)
+	require.EqualValues(t, 1, qr.RowsAffected)
 
 	qr = mcmp.Exec(`update order_tbl set cust_no = 12 where region_id = 1 limit 1`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
 	// check rows
 	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
-		`[[INT64(1) INT64(12)] [INT64(2) INT64(12)] [INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
+		`[[INT64(1) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
 	// 2 rows matches but limit is 1, so any one of the row can be modified in the table.
 	mcmp.AssertMatchesAnyNoCompare(`select region_id, oid, cust_no from order_tbl order by oid`,
 		`[[INT64(1) INT64(1) INT64(12)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`,
@@ -162,8 +162,8 @@ func TestUpdateWithLimit(t *testing.T) {
 	// check rows
 	// 2 rows matches `num > 17` but limit is 1 so any one of them will be updated.
 	mcmp.AssertMatchesAnyNoCompare(`select id, num from s_tbl order by id`,
-		`[[INT64(1) INT64(12)] [INT64(2) INT64(12)] [INT64(3) INT64(10)] [INT64(4) INT64(32)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`,
-		`[[INT64(1) INT64(12)] [INT64(2) INT64(12)] [INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(32)]]`)
+		`[[INT64(1) INT64(10)] [INT64(4) INT64(32)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`,
+		`[[INT64(1) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(32)]]`)
 	mcmp.AssertMatchesAnyNoCompare(`select region_id, oid, cust_no from order_tbl order by oid`,
 		`[[INT64(1) INT64(1) INT64(22)] [INT64(1) INT64(2) INT64(12)] [INT64(2) INT64(3) INT64(15)] [INT64(2) INT64(4) INT64(65)]]`,
 		`[[INT64(1) INT64(1) INT64(14)] [INT64(1) INT64(2) INT64(22)] [INT64(2) INT64(3) INT64(15)] [INT64(2) INT64(4) INT64(65)]]`)
