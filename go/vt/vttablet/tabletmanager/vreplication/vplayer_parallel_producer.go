@@ -273,7 +273,7 @@ func (p *parallelProducer) watchPos(ctx context.Context) error {
 				log.Errorf("========== QQQ watchPos aggregatedWorkersPos is IDLE: %v", p.lastAggregatedWorkersPosStr)
 				continue
 			}
-			log.Errorf("========== QQQ watchPos aggregatedWorkersPos: %v, combinedPos: %v, stop: %v", aggregatedWorkersPos, combinedPos, p.vp.stopPos)
+			// log.Errorf("========== QQQ watchPos aggregatedWorkersPos: %v, combinedPos: %v, stop: %v", aggregatedWorkersPos, combinedPos, p.vp.stopPos)
 
 			// Write back this combined pos to all workers, so that we condense their otherwise sparse GTID sets.
 			for _, w := range p.workers {
@@ -308,6 +308,7 @@ func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastC
 	p.sequenceToWorkersMapMu.RLock()
 	defer p.sequenceToWorkersMapMu.RUnlock()
 
+	p.assignSequence++
 	if workerIndex, ok := p.sequenceToWorkersMap[sequenceNumber]; ok {
 		// All events of same sequence should be executed by same worker
 		return workerIndex
@@ -318,7 +319,6 @@ func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastC
 		p.sequenceToWorkersMap[sequenceNumber] = workerIndex
 		return workerIndex
 	}
-	p.assignSequence++
 	// No specific transaction dependency constraints (any parent transactions were long since
 	// committed, and no worker longer indicates it owns any such transactions)
 	if preferCurrentWorker && p.countAssignedToCurrentWorker < maxWorkerEvents {
