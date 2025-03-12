@@ -34,13 +34,17 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/schema"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
@@ -95,6 +99,7 @@ var (
 
 	opOrder               int64
 	opOrderMutex          sync.Mutex
+	idSequence            atomic.Int32
 	hostname              = "localhost"
 	keyspaceName          = "ks"
 	cell                  = "zone1"
@@ -155,6 +160,17 @@ const (
 	maxTableRows         = 4096
 	workloadDuration     = 45 * time.Second
 	migrationWaitTimeout = 60 * time.Second
+	// wlType               = insertBatchWorkloadType
+	wlType           = mixedWorkloadType
+	throttleWorkload = true
+)
+
+type workloadType int
+
+const (
+	mixedWorkloadType workloadType = iota
+	insertWorkloadType
+	insertBatchWorkloadType
 )
 
 func resetOpOrder() {
@@ -190,6 +206,8 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
+			// "--relay_log_max_items", "10000000",
+			// "--relay_log_max_size", "1000000000",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", fmt.Sprintf("%v", migrationWaitTimeout*2),
 			"--migration_check_interval", "1.1s",
@@ -366,10 +384,23 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 				waitForReadyToComplete(t, uuid, true)
 			})
 			t.Run("throttle online-ddl", func(t *testing.T) {
-				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
-				onlineddl.ThrottleAllMigrations(t, &vtParams)
-				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
-				throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, throttlerapp.OnlineDDLName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, time.Minute)
+				if !throttleWorkload {
+					return
+				}
+				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.VPlayerName, false)
+				// onlineddl.ThrottleAllMigrations(t, &vtParams)
+
+				appRule := &topodatapb.ThrottledAppRule{
+					Name:      throttlerapp.VPlayerName.String(),
+					Ratio:     throttle.DefaultThrottleRatio,
+					ExpiresAt: protoutil.TimeToProto(time.Now().Add(time.Hour)),
+				}
+				req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
+				_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
+				assert.NoError(t, err)
+
+				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.VPlayerName, true)
+				throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, throttlerapp.VPlayerName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, time.Minute)
 			})
 			readPos := func(t *testing.T) {
 				{
@@ -389,9 +420,11 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 				readPos(t)
 			})
 			t.Run(fmt.Sprintf("start workload: %v", workloadDuration), func(t *testing.T) {
-				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
+				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.VPlayerName, throttleWorkload)
 				ctx, cancel := context.WithTimeout(ctx, workloadDuration)
 				defer cancel()
+				// runMultipleConnections(ctx, t, mixedWorkloadType)
+				// runMultipleConnections(ctx, t, insertWorkloadType)
 				runMultipleConnections(ctx, t)
 			})
 			t.Run("read pos", func(t *testing.T) {
@@ -401,13 +434,28 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 				onlineddl.CheckCompleteAllMigrations(t, &vtParams, 1)
 			})
 			t.Run("validate throttler at end of workload", func(t *testing.T) {
-				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
-				throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, throttlerapp.OnlineDDLName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, time.Second)
+				if !throttleWorkload {
+					return
+				}
+				onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.VPlayerName, true)
+				throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, throttlerapp.VPlayerName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED, time.Second)
 			})
 			var startTime = time.Now()
 			t.Run("unthrottle online-ddl", func(t *testing.T) {
-				onlineddl.UnthrottleAllMigrations(t, &vtParams)
-				if !onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false) {
+				if !throttleWorkload {
+					return
+				}
+				// onlineddl.UnthrottleAllMigrations(t, &vtParams)
+
+				appRule := &topodatapb.ThrottledAppRule{
+					Name:      throttlerapp.VPlayerName.String(),
+					ExpiresAt: protoutil.TimeToProto(time.Now()),
+				}
+				req := &vtctldatapb.UpdateThrottlerConfigRequest{Threshold: throttler.DefaultThreshold.Seconds()}
+				_, err := throttler.UpdateThrottlerTopoConfig(clusterInstance, req, appRule, nil)
+				assert.NoError(t, err)
+
+				if !onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.VPlayerName, false) {
 					status, err := throttler.GetThrottlerStatus(&clusterInstance.VtctldClientProcess, primaryTablet)
 					assert.NoError(t, err)
 
@@ -442,14 +490,14 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 			results = append(results, endTime.Sub(startTime))
 			t.Logf(":::::::::::::::::::: Workload catchup took %v ::::::::::::::::::::", endTime.Sub(startTime))
 			t.Run("cleanup", func(t *testing.T) {
-				throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, throttlerapp.OnlineDDLName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, time.Minute)
+				throttler.WaitForCheckThrottlerResult(t, clusterInstance, primaryTablet, throttlerapp.VPlayerName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, time.Minute)
 			})
 			t.Run("validate metrics", func(t *testing.T) {
 				testSelectTableMetrics(t)
 			})
-			// t.Run("sleep", func(t *testing.T) {
-			// 	time.Sleep(time.Minute * 3)
-			// })
+			t.Run("sleep", func(t *testing.T) {
+				time.Sleep(time.Minute * 3)
+			})
 		})
 	}
 
@@ -584,7 +632,10 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 }
 
 func generateInsert(t *testing.T, conn *mysql.Conn) error {
-	id := rand.Int32N(int32(maxTableRows))
+	id := idSequence.Add(1)
+	if wlType != insertBatchWorkloadType {
+		id = rand.Int32N(int32(maxTableRows))
+	}
 	query := fmt.Sprintf(insertRowStatement, id, nextOpOrder())
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
@@ -700,15 +751,30 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 		if !throttlerCheckOK.Load() {
 			continue
 		}
-		switch rand.Int32N(3) {
-		case 0:
+		switch wlType {
+		case mixedWorkloadType:
+			switch rand.Int32N(3) {
+			case 0:
+				err = generateInsert(t, conn)
+			case 1:
+				err = generateUpdate(t, conn)
+			case 2:
+				err = generateDelete(t, conn)
+			}
+			assert.Nil(t, err)
+		case insertWorkloadType:
 			err = generateInsert(t, conn)
-		case 1:
-			err = generateUpdate(t, conn)
-		case 2:
-			err = generateDelete(t, conn)
+			assert.Nil(t, err)
+		case insertBatchWorkloadType:
+			_, err := conn.ExecuteFetch("begin", 1, false)
+			assert.Nil(t, err)
+			for range 50 {
+				err = generateInsert(t, conn)
+				assert.Nil(t, err)
+			}
+			_, err = conn.ExecuteFetch("commit", 1, false)
+			assert.Nil(t, err)
 		}
-		assert.Nil(t, err)
 	}
 }
 
@@ -783,11 +849,13 @@ func initTable(t *testing.T) {
 	for i := 0; i < maxTableRows/2; i++ {
 		generateInsert(t, conn)
 	}
-	for i := 0; i < maxTableRows/4; i++ {
-		generateUpdate(t, conn)
-	}
-	for i := 0; i < maxTableRows/4; i++ {
-		generateDelete(t, conn)
+	if wlType != insertBatchWorkloadType {
+		for i := 0; i < maxTableRows/4; i++ {
+			generateUpdate(t, conn)
+		}
+		for i := 0; i < maxTableRows/4; i++ {
+			generateDelete(t, conn)
+		}
 	}
 }
 
