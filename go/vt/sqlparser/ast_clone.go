@@ -141,6 +141,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCurTimeFuncExpr(in)
 	case *DeallocateStmt:
 		return CloneRefOfDeallocateStmt(in)
+	case *DeclareCondition:
+		return CloneRefOfDeclareCondition(in)
 	case *DeclareHandler:
 		return CloneRefOfDeclareHandler(in)
 	case *DeclareVar:
@@ -491,6 +493,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowThrottlerStatus(in)
 	case *ShowTransactionStatus:
 		return CloneRefOfShowTransactionStatus(in)
+	case *Signal:
+		return CloneRefOfSignal(in)
+	case *SignalSet:
+		return CloneRefOfSignalSet(in)
 	case *SingleStatement:
 		return CloneRefOfSingleStatement(in)
 	case *StarExpr:
@@ -1229,6 +1235,17 @@ func CloneRefOfDeallocateStmt(n *DeallocateStmt) *DeallocateStmt {
 	out := *n
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Name = CloneIdentifierCI(n.Name)
+	return &out
+}
+
+// CloneRefOfDeclareCondition creates a deep clone of the input.
+func CloneRefOfDeclareCondition(n *DeclareCondition) *DeclareCondition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneIdentifierCI(n.Name)
+	out.Condition = CloneHandlerCondition(n.Condition)
 	return &out
 }
 
@@ -3099,6 +3116,27 @@ func CloneRefOfShowTransactionStatus(n *ShowTransactionStatus) *ShowTransactionS
 	return &out
 }
 
+// CloneRefOfSignal creates a deep clone of the input.
+func CloneRefOfSignal(n *Signal) *Signal {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Condition = CloneHandlerCondition(n.Condition)
+	out.SetValues = CloneSliceOfRefOfSignalSet(n.SetValues)
+	return &out
+}
+
+// CloneRefOfSignalSet creates a deep clone of the input.
+func CloneRefOfSignalSet(n *SignalSet) *SignalSet {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Value = CloneExpr(n.Value)
+	return &out
+}
+
 // CloneRefOfSingleStatement creates a deep clone of the input.
 func CloneRefOfSingleStatement(n *SingleStatement) *SingleStatement {
 	if n == nil {
@@ -3981,12 +4019,16 @@ func CloneCompoundStatement(in CompoundStatement) CompoundStatement {
 	switch in := in.(type) {
 	case *BeginEndStatement:
 		return CloneRefOfBeginEndStatement(in)
+	case *DeclareCondition:
+		return CloneRefOfDeclareCondition(in)
 	case *DeclareHandler:
 		return CloneRefOfDeclareHandler(in)
 	case *DeclareVar:
 		return CloneRefOfDeclareVar(in)
 	case *IfStatement:
 		return CloneRefOfIfStatement(in)
+	case *Signal:
+		return CloneRefOfSignal(in)
 	case *SingleStatement:
 		return CloneRefOfSingleStatement(in)
 	default:
@@ -4958,6 +5000,18 @@ func CloneSliceOfSelectExpr(n []SelectExpr) []SelectExpr {
 	res := make([]SelectExpr, len(n))
 	for i, x := range n {
 		res[i] = CloneSelectExpr(x)
+	}
+	return res
+}
+
+// CloneSliceOfRefOfSignalSet creates a deep clone of the input.
+func CloneSliceOfRefOfSignalSet(n []*SignalSet) []*SignalSet {
+	if n == nil {
+		return nil
+	}
+	res := make([]*SignalSet, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfSignalSet(x)
 	}
 	return res
 }

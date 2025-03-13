@@ -1163,6 +1163,22 @@ func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+func (cached *DeclareCondition) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
+	size += cached.Name.CachedSize(false)
+	// field Condition vitess.io/vitess/go/vt/sqlparser.HandlerCondition
+	if cc, ok := cached.Condition.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *DeclareHandler) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -4301,6 +4317,41 @@ func (cached *ShowTransactionStatus) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Keyspace)))
 	// field TransactionID string
 	size += hack.RuntimeAllocSize(int64(len(cached.TransactionID)))
+	return size
+}
+func (cached *Signal) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Condition vitess.io/vitess/go/vt/sqlparser.HandlerCondition
+	if cc, ok := cached.Condition.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field SetValues []*vitess.io/vitess/go/vt/sqlparser.SignalSet
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.SetValues)) * int64(8))
+		for _, elem := range cached.SetValues {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
+func (cached *SignalSet) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Value vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Value.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *SingleStatement) CachedSize(alloc bool) int64 {

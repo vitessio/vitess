@@ -164,6 +164,20 @@ const (
 	OutStr   = "out"
 	InoutStr = "inout"
 
+	// SignalConditionName
+	ClassOriginTypeStr       = "class_origin"
+	SubclassOriginTypeStr    = "subclass_origin"
+	MessageTextTypeStr       = "message_text"
+	MySQLErrNoTypeStr        = "mysql_errno"
+	ConstraintCatalogTypeStr = "constraint_catalog"
+	ConstraintSchemaTypeStr  = "constraint_schema"
+	ConstraintNameTypeStr    = "constraint_name"
+	CatalogNameTypeStr       = "catalog_name"
+	SchemaNameTypeStr        = "schema_name"
+	TableNameTypeStr         = "table_name"
+	ColumnNameTypeStr        = "column_name"
+	CursorNameTypeStr        = "cursor_name"
+
 	// HandlerAction
 	ContinueStr = "continue"
 	ExitStr     = "exit"
@@ -796,6 +810,22 @@ const (
 	InMode ProcParameterMode = iota
 	OutMode
 	InoutMode
+)
+
+// Constant for Enum Type - SignalConditionName
+const (
+	ClassOriginType SignalConditionName = iota
+	SubclassOriginType
+	MessageTextType
+	MySQLErrNoType
+	ConstraintCatalogType
+	ConstraintSchemaType
+	ConstraintNameType
+	CatalogNameType
+	SchemaNameType
+	TableNameType
+	ColumnNameType
+	CursorNameType
 )
 
 // Constant for Enum Type - PartitionByType

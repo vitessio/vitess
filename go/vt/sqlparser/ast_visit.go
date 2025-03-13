@@ -140,6 +140,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCurTimeFuncExpr(in, f)
 	case *DeallocateStmt:
 		return VisitRefOfDeallocateStmt(in, f)
+	case *DeclareCondition:
+		return VisitRefOfDeclareCondition(in, f)
 	case *DeclareHandler:
 		return VisitRefOfDeclareHandler(in, f)
 	case *DeclareVar:
@@ -490,6 +492,10 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowThrottlerStatus(in, f)
 	case *ShowTransactionStatus:
 		return VisitRefOfShowTransactionStatus(in, f)
+	case *Signal:
+		return VisitRefOfSignal(in, f)
+	case *SignalSet:
+		return VisitRefOfSignalSet(in, f)
 	case *SingleStatement:
 		return VisitRefOfSingleStatement(in, f)
 	case *StarExpr:
@@ -1451,6 +1457,21 @@ func VisitRefOfDeallocateStmt(in *DeallocateStmt, f Visit) error {
 		return err
 	}
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfDeclareCondition(in *DeclareCondition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitHandlerCondition(in.Condition, f); err != nil {
 		return err
 	}
 	return nil
@@ -3994,6 +4015,35 @@ func VisitRefOfShowTransactionStatus(in *ShowTransactionStatus, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfSignal(in *Signal, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitHandlerCondition(in.Condition, f); err != nil {
+		return err
+	}
+	for _, el := range in.SetValues {
+		if err := VisitRefOfSignalSet(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func VisitRefOfSignalSet(in *SignalSet, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Value, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfSingleStatement(in *SingleStatement, f Visit) error {
 	if in == nil {
 		return nil
@@ -5095,12 +5145,16 @@ func VisitCompoundStatement(in CompoundStatement, f Visit) error {
 	switch in := in.(type) {
 	case *BeginEndStatement:
 		return VisitRefOfBeginEndStatement(in, f)
+	case *DeclareCondition:
+		return VisitRefOfDeclareCondition(in, f)
 	case *DeclareHandler:
 		return VisitRefOfDeclareHandler(in, f)
 	case *DeclareVar:
 		return VisitRefOfDeclareVar(in, f)
 	case *IfStatement:
 		return VisitRefOfIfStatement(in, f)
+	case *Signal:
+		return VisitRefOfSignal(in, f)
 	case *SingleStatement:
 		return VisitRefOfSingleStatement(in, f)
 	case Visitable:

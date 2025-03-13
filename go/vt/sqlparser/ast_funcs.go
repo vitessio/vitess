@@ -1497,6 +1497,38 @@ func (action ProcParameterMode) ToString() string {
 	}
 }
 
+// ToString returns the type as a string
+func (scn SignalConditionName) ToString() string {
+	switch scn {
+	case ClassOriginType:
+		return ClassOriginTypeStr
+	case SubclassOriginType:
+		return SubclassOriginTypeStr
+	case MessageTextType:
+		return MessageTextTypeStr
+	case MySQLErrNoType:
+		return MySQLErrNoTypeStr
+	case ConstraintCatalogType:
+		return ConstraintCatalogTypeStr
+	case ConstraintSchemaType:
+		return ConstraintSchemaTypeStr
+	case ConstraintNameType:
+		return ConstraintNameTypeStr
+	case CatalogNameType:
+		return CatalogNameTypeStr
+	case SchemaNameType:
+		return SchemaNameTypeStr
+	case TableNameType:
+		return TableNameTypeStr
+	case ColumnNameType:
+		return ColumnNameTypeStr
+	case CursorNameType:
+		return CursorNameTypeStr
+	default:
+		return "Unknown SignalConditionName"
+	}
+}
+
 // ToString returns the string associated with the HandlerAction Enum
 func (ha HandlerAction) ToString() string {
 	switch ha {

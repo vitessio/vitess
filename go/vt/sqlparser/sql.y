@@ -156,6 +156,9 @@ func markBindVariable(yylex yyLexer, bvar string) {
   handlerAction HandlerAction
   handlerCondition HandlerCondition
   handlerConditions []HandlerCondition
+  signalSet *SignalSet
+  signalSets []*SignalSet
+  signalConditionName SignalConditionName
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partitionEngine *PartitionEngine
@@ -333,9 +336,9 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // DDL Tokens
 %token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY DEALLOCATE
 %token <str> REVERT QUERIES DECLARE FOUND HANDLER CONTINUE EXIT UNDO
-%token <str> SQLEXCEPTION SQLSTATE SQLWARNING
+%token <str> SQLEXCEPTION SQLSTATE SQLWARNING CONDITION
 %token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
-%token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
+%token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT SIGNAL
 %token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE PREPARE EXECUTE
 %token <str> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <str> VINDEX VINDEXES DIRECTORY NAME UPGRADE
@@ -377,6 +380,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 // SET tokens
 %token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
+%token <str> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA CONSTRAINT_NAME CATALOG_NAME SCHEMA_NAME TABLE_NAME COLUMN_NAME CURSOR_NAME
 
 // Functions
 %token <str> ADDDATE CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE DATE_ADD DATE_SUB NOW SUBDATE
@@ -466,7 +470,10 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <alterDatabase> alter_database_prefix
 %type <handlerAction> handler_action
 %type <handlerConditions> condition_value_list
-%type <handlerCondition> condition_value
+%type <handlerCondition> condition_value error_condition_value sqlstate_condition_value condition_name signal_condition_value
+%type <signalSets> signal_set_list_opt signal_set_list
+%type <signalSet> signal_set
+%type <signalConditionName> condition_information_item_name
 %type <databaseOption> collate character_set encryption
 %type <databaseOptions> create_options create_options_opt
 %type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt partition_storage_opt
@@ -745,6 +752,86 @@ compound_statement_without_semicolon:
   {
     $$ = &DeclareHandler{Action: $2, Conditions: $5, Statement: $6}
   }
+| DECLARE sql_id CONDITION FOR error_condition_value
+  {
+    $$ = &DeclareCondition{Name: $2, Condition: $5}
+  }
+| SIGNAL signal_condition_value signal_set_list_opt
+  {
+    $$ = &Signal{Condition: $2, SetValues: $3}
+  }
+
+signal_set_list_opt:
+  {
+    $$ = nil
+  }
+| signal_set_list
+
+signal_set_list:
+  signal_set_list signal_set
+  {
+    $$ = append($1, $2)
+  }
+| SET signal_set
+  {
+    $$ = []*SignalSet{ $2 }
+  }
+
+signal_set:
+  condition_information_item_name '=' literal
+  {
+    $$ = &SignalSet{ConditionName: $1, Value: $3}
+  }
+
+condition_information_item_name:
+  CLASS_ORIGIN
+  {
+    $$ = ClassOriginType
+  }
+| SUBCLASS_ORIGIN
+  {
+    $$ = SubclassOriginType
+  }
+| MESSAGE_TEXT
+  {
+    $$ = MessageTextType
+  }
+| MYSQL_ERRNO
+  {
+    $$ = MySQLErrNoType
+  }
+| CONSTRAINT_CATALOG
+  {
+    $$ = ConstraintCatalogType
+  }
+| CONSTRAINT_SCHEMA
+  {
+    $$ = ConstraintSchemaType
+  }
+| CONSTRAINT_NAME
+  {
+    $$ = ConstraintNameType
+  }
+| CATALOG_NAME
+  {
+    $$ = CatalogNameType
+  }
+| SCHEMA_NAME
+  {
+    $$ = SchemaNameType
+  }
+| TABLE_NAME
+  {
+    $$ = TableNameType
+  }
+| COLUMN_NAME
+  {
+    $$ = ColumnNameType
+  }
+| CURSOR_NAME
+  {
+    $$ = CursorNameType
+  }
 
 handler_action:
   CONTINUE
@@ -770,18 +857,40 @@ condition_value_list:
     $$ = []HandlerCondition{ $1 }
   }
 
-condition_value:
+error_condition_value:
   INTEGRAL
   {
      $$ = &HandlerConditionErrorCode{ErrorCode: convertStringToInt($1)}
   }
-| SQLSTATE value_opt STRING
+| sqlstate_condition_value
+  {
+    $$ = $1
+  }
+
+signal_condition_value:
+  sqlstate_condition_value
+| condition_name
+
+sqlstate_condition_value:
+  SQLSTATE value_opt STRING
   {
     $$ = &HandlerConditionSQLState{SQLStateValue: NewStrLiteral($3)}
   }
-| sql_id
+
+condition_name:
+  sql_id
   {
     $$ = &HandlerConditionNamed{Name: $1}
+  }
+
+condition_value:
+  error_condition_value
+  {
+    $$ = $1
+  }
+| condition_name
+  {
+    $$ = $1
   }
 | SQLWARNING
   {
@@ -8452,6 +8561,7 @@ reserved_keyword:
 | CHECK
 | COLLATE
 | COLUMN
+| CONDITION
 | CONTINUE
 | CONVERT
 | CREATE
@@ -8566,6 +8676,7 @@ reserved_keyword:
 | SEPARATOR
 | SET
 | SHOW
+| SIGNAL
 | SPATIAL
 | SQL_BIG_RESULT
 | SQL_SMALL_RESULT
@@ -8639,15 +8750,18 @@ non_reserved_keyword:
 | CANCEL
 | CASCADE
 | CASCADED
+| CATALOG_NAME
 | CHANNEL
 | CHAR %prec FUNCTION_CALL_NON_KEYWORD
 | CHARSET
 | CHECKSUM
+| CLASS_ORIGIN
 | CLEANUP
 | CLONE
 | COALESCE
 | CODE
 | COLLATION
+| COLUMN_NAME
 | COLUMN_FORMAT
 | COLUMNS
 | COMMENT_KEYWORD
@@ -8660,10 +8774,14 @@ non_reserved_keyword:
 | COMPRESSION
 | CONNECTION
 | CONSISTENT
+| CONSTRAINT_CATALOG
+| CONSTRAINT_NAME
+| CONSTRAINT_SCHEMA
 | COPY
 | COUNT %prec FUNCTION_CALL_NON_KEYWORD
 | CSV
 | CURRENT
+| CURSOR_NAME
 | CUTOVER_THRESHOLD
 | DATA
 | DATE %prec STRING_TYPE_PREFIX_NON_KEYWORD
@@ -8814,6 +8932,7 @@ non_reserved_keyword:
 | MEMORY
 | MEMBER
 | MERGE
+| MESSAGE_TEXT
 | MID %prec FUNCTION_CALL_NON_KEYWORD
 | MIN %prec FUNCTION_CALL_NON_KEYWORD
 | MIN_ROWS
@@ -8822,6 +8941,7 @@ non_reserved_keyword:
 | MULTILINESTRING %prec FUNCTION_CALL_NON_KEYWORD
 | MULTIPOINT %prec FUNCTION_CALL_NON_KEYWORD
 | MULTIPOLYGON %prec FUNCTION_CALL_NON_KEYWORD
+| MYSQL_ERRNO
 | NAME
 | NAMES
 | NCHAR
@@ -8906,6 +9026,7 @@ non_reserved_keyword:
 | ROW_FORMAT
 | RTRIM %prec FUNCTION_CALL_NON_KEYWORD
 | S3
+| SCHEMA_NAME
 | SECONDARY
 | SECONDARY_ENGINE
 | SECONDARY_ENGINE_ATTRIBUTE
@@ -8993,10 +9114,12 @@ non_reserved_keyword:
 | ST_StartPoint %prec FUNCTION_CALL_NON_KEYWORD
 | ST_X %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Y %prec FUNCTION_CALL_NON_KEYWORD
+| SUBCLASS_ORIGIN
 | SUBDATE %prec FUNCTION_CALL_NON_KEYWORD
 | SUBPARTITION
 | SUBPARTITIONS
 | SUM %prec FUNCTION_CALL_NON_KEYWORD
+| TABLE_NAME
 | TABLES
 | TABLESAMPLE
 | TABLESPACE

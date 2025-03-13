@@ -127,6 +127,8 @@ const (
 	RefOfCurTimeFuncExprName
 	RefOfDeallocateStmtComments
 	RefOfDeallocateStmtName
+	RefOfDeclareConditionName
+	RefOfDeclareConditionCondition
 	RefOfDeclareHandlerConditionsOffset
 	RefOfDeclareHandlerStatement
 	RefOfDeclareVarVarNamesOffset
@@ -435,6 +437,9 @@ const (
 	RefOfShowCreateOp
 	RefOfShowFilterFilter
 	RefOfShowMigrationLogsComments
+	RefOfSignalCondition
+	RefOfSignalSetValuesOffset
+	RefOfSignalSetValue
 	RefOfSingleStatementStatement
 	RefOfStarExprTableName
 	RefOfStdArg
@@ -572,6 +577,7 @@ const (
 	SliceOfRefOfPartitionDefinitionOffset
 	RefOfRootNodeSQLNode
 	SliceOfSelectExprOffset
+	SliceOfRefOfSignalSetOffset
 	RefOfTableNameName
 	RefOfTableNameQualifier
 	RefOfTableOptionValue
@@ -805,6 +811,10 @@ func (s ASTStep) DebugString() string {
 		return "(*DeallocateStmt).Comments"
 	case RefOfDeallocateStmtName:
 		return "(*DeallocateStmt).Name"
+	case RefOfDeclareConditionName:
+		return "(*DeclareCondition).Name"
+	case RefOfDeclareConditionCondition:
+		return "(*DeclareCondition).Condition"
 	case RefOfDeclareHandlerConditionsOffset:
 		return "(*DeclareHandler).ConditionsOffset"
 	case RefOfDeclareHandlerStatement:
@@ -1421,6 +1431,12 @@ func (s ASTStep) DebugString() string {
 		return "(*ShowFilter).Filter"
 	case RefOfShowMigrationLogsComments:
 		return "(*ShowMigrationLogs).Comments"
+	case RefOfSignalCondition:
+		return "(*Signal).Condition"
+	case RefOfSignalSetValuesOffset:
+		return "(*Signal).SetValuesOffset"
+	case RefOfSignalSetValue:
+		return "(*SignalSet).Value"
 	case RefOfSingleStatementStatement:
 		return "(*SingleStatement).Statement"
 	case RefOfStarExprTableName:
@@ -1695,6 +1711,8 @@ func (s ASTStep) DebugString() string {
 		return "(*RootNode).SQLNode"
 	case SliceOfSelectExprOffset:
 		return "([]SelectExpr)[]Offset"
+	case SliceOfRefOfSignalSetOffset:
+		return "([]*SignalSet)[]Offset"
 	case RefOfTableNameName:
 		return "(*TableName).Name"
 	case RefOfTableNameQualifier:
@@ -1967,6 +1985,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*DeallocateStmt).Comments
 		case RefOfDeallocateStmtName:
 			node = node.(*DeallocateStmt).Name
+		case RefOfDeclareConditionName:
+			node = node.(*DeclareCondition).Name
+		case RefOfDeclareConditionCondition:
+			node = node.(*DeclareCondition).Condition
 		case RefOfDeclareHandlerConditionsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
@@ -2659,6 +2681,14 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*ShowFilter).Filter
 		case RefOfShowMigrationLogsComments:
 			node = node.(*ShowMigrationLogs).Comments
+		case RefOfSignalCondition:
+			node = node.(*Signal).Condition
+		case RefOfSignalSetValuesOffset:
+			idx, bytesRead := path.nextPathOffset()
+			path = path[bytesRead:]
+			node = node.(*Signal).SetValues[idx]
+		case RefOfSignalSetValue:
+			node = node.(*SignalSet).Value
 		case RefOfSingleStatementStatement:
 			node = node.(*SingleStatement).Statement
 		case RefOfStarExprTableName:

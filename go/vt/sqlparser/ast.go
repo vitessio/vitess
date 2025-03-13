@@ -808,6 +808,18 @@ type (
 		Conditions []HandlerCondition
 		Statement  CompoundStatement
 	}
+
+	// DeclareCondition represents a DECLARE...CONDITION statement
+	DeclareCondition struct {
+		Name      IdentifierCI
+		Condition HandlerCondition
+	}
+
+	// Signal represents a SIGNAL statement
+	Signal struct {
+		Condition HandlerCondition
+		SetValues []*SignalSet
+	}
 )
 
 func (*SingleStatement) iCompoundStatement()   {}
@@ -815,6 +827,17 @@ func (*BeginEndStatement) iCompoundStatement() {}
 func (*IfStatement) iCompoundStatement()       {}
 func (*DeclareVar) iCompoundStatement()        {}
 func (*DeclareHandler) iCompoundStatement()    {}
+func (*DeclareCondition) iCompoundStatement()  {}
+func (*Signal) iCompoundStatement()            {}
+
+// SignalConditionName is an enum for the name of the condition variable being set in SIGNAL statement
+type SignalConditionName int8
+
+// SignalSet represents a set condition in a SIGNAL statement
+type SignalSet struct {
+	ConditionName SignalConditionName
+	Value         Expr
+}
 
 // HandlerCondition represents a condition in a DECLARE HANDLER statement
 type (

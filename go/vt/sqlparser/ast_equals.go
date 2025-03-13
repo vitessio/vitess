@@ -380,6 +380,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfDeallocateStmt(a, b)
+	case *DeclareCondition:
+		b, ok := inB.(*DeclareCondition)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDeclareCondition(a, b)
 	case *DeclareHandler:
 		b, ok := inB.(*DeclareHandler)
 		if !ok {
@@ -1430,6 +1436,18 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfShowTransactionStatus(a, b)
+	case *Signal:
+		b, ok := inB.(*Signal)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSignal(a, b)
+	case *SignalSet:
+		b, ok := inB.(*SignalSet)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSignalSet(a, b)
 	case *SingleStatement:
 		b, ok := inB.(*SingleStatement)
 		if !ok {
@@ -2496,6 +2514,18 @@ func (cmp *Comparator) RefOfDeallocateStmt(a, b *DeallocateStmt) bool {
 	}
 	return cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCI(a.Name, b.Name)
+}
+
+// RefOfDeclareCondition does deep equals between the two objects.
+func (cmp *Comparator) RefOfDeclareCondition(a, b *DeclareCondition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.IdentifierCI(a.Name, b.Name) &&
+		cmp.HandlerCondition(a.Condition, b.Condition)
 }
 
 // RefOfDeclareHandler does deep equals between the two objects.
@@ -4650,6 +4680,30 @@ func (cmp *Comparator) RefOfShowTransactionStatus(a, b *ShowTransactionStatus) b
 		a.TransactionID == b.TransactionID
 }
 
+// RefOfSignal does deep equals between the two objects.
+func (cmp *Comparator) RefOfSignal(a, b *Signal) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.HandlerCondition(a.Condition, b.Condition) &&
+		cmp.SliceOfRefOfSignalSet(a.SetValues, b.SetValues)
+}
+
+// RefOfSignalSet does deep equals between the two objects.
+func (cmp *Comparator) RefOfSignalSet(a, b *SignalSet) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.ConditionName == b.ConditionName &&
+		cmp.Expr(a.Value, b.Value)
+}
+
 // RefOfSingleStatement does deep equals between the two objects.
 func (cmp *Comparator) RefOfSingleStatement(a, b *SingleStatement) bool {
 	if a == b {
@@ -6116,6 +6170,12 @@ func (cmp *Comparator) CompoundStatement(inA, inB CompoundStatement) bool {
 			return false
 		}
 		return cmp.RefOfBeginEndStatement(a, b)
+	case *DeclareCondition:
+		b, ok := inB.(*DeclareCondition)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDeclareCondition(a, b)
 	case *DeclareHandler:
 		b, ok := inB.(*DeclareHandler)
 		if !ok {
@@ -6134,6 +6194,12 @@ func (cmp *Comparator) CompoundStatement(inA, inB CompoundStatement) bool {
 			return false
 		}
 		return cmp.RefOfIfStatement(a, b)
+	case *Signal:
+		b, ok := inB.(*Signal)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSignal(a, b)
 	case *SingleStatement:
 		b, ok := inB.(*SingleStatement)
 		if !ok {
@@ -8042,6 +8108,19 @@ func (cmp *Comparator) SliceOfSelectExpr(a, b []SelectExpr) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !cmp.SelectExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// SliceOfRefOfSignalSet does deep equals between the two objects.
+func (cmp *Comparator) SliceOfRefOfSignalSet(a, b []*SignalSet) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.RefOfSignalSet(a[i], b[i]) {
 			return false
 		}
 	}

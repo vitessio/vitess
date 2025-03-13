@@ -140,6 +140,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfCurTimeFuncExpr(n, parent)
 	case *DeallocateStmt:
 		return c.copyOnRewriteRefOfDeallocateStmt(n, parent)
+	case *DeclareCondition:
+		return c.copyOnRewriteRefOfDeclareCondition(n, parent)
 	case *DeclareHandler:
 		return c.copyOnRewriteRefOfDeclareHandler(n, parent)
 	case *DeclareVar:
@@ -490,6 +492,10 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfShowThrottlerStatus(n, parent)
 	case *ShowTransactionStatus:
 		return c.copyOnRewriteRefOfShowTransactionStatus(n, parent)
+	case *Signal:
+		return c.copyOnRewriteRefOfSignal(n, parent)
+	case *SignalSet:
+		return c.copyOnRewriteRefOfSignalSet(n, parent)
 	case *SingleStatement:
 		return c.copyOnRewriteRefOfSingleStatement(n, parent)
 	case *StarExpr:
@@ -1953,6 +1959,30 @@ func (c *cow) copyOnRewriteRefOfDeallocateStmt(n *DeallocateStmt, parent SQLNode
 			res := *n
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.Name, _ = _Name.(IdentifierCI)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfDeclareCondition(n *DeclareCondition, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
+		_Condition, changedCondition := c.copyOnRewriteHandlerCondition(n.Condition, n)
+		if changedName || changedCondition {
+			res := *n
+			res.Name, _ = _Name.(IdentifierCI)
+			res.Condition, _ = _Condition.(HandlerCondition)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6042,6 +6072,60 @@ func (c *cow) copyOnRewriteRefOfShowTransactionStatus(n *ShowTransactionStatus, 
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfSignal(n *Signal, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Condition, changedCondition := c.copyOnRewriteHandlerCondition(n.Condition, n)
+		var changedSetValues bool
+		_SetValues := make([]*SignalSet, len(n.SetValues))
+		for x, el := range n.SetValues {
+			this, changed := c.copyOnRewriteRefOfSignalSet(el, n)
+			_SetValues[x] = this.(*SignalSet)
+			if changed {
+				changedSetValues = true
+			}
+		}
+		if changedCondition || changedSetValues {
+			res := *n
+			res.Condition, _ = _Condition.(HandlerCondition)
+			res.SetValues = _SetValues
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfSignalSet(n *SignalSet, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Value, changedValue := c.copyOnRewriteExpr(n.Value, n)
+		if changedValue {
+			res := *n
+			res.Value, _ = _Value.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfSingleStatement(n *SingleStatement, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -7619,12 +7703,16 @@ func (c *cow) copyOnRewriteCompoundStatement(n CompoundStatement, parent SQLNode
 	switch n := n.(type) {
 	case *BeginEndStatement:
 		return c.copyOnRewriteRefOfBeginEndStatement(n, parent)
+	case *DeclareCondition:
+		return c.copyOnRewriteRefOfDeclareCondition(n, parent)
 	case *DeclareHandler:
 		return c.copyOnRewriteRefOfDeclareHandler(n, parent)
 	case *DeclareVar:
 		return c.copyOnRewriteRefOfDeclareVar(n, parent)
 	case *IfStatement:
 		return c.copyOnRewriteRefOfIfStatement(n, parent)
+	case *Signal:
+		return c.copyOnRewriteRefOfSignal(n, parent)
 	case *SingleStatement:
 		return c.copyOnRewriteRefOfSingleStatement(n, parent)
 	case Visitable:

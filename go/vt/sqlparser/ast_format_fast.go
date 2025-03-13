@@ -609,6 +609,35 @@ func (dh *DeclareHandler) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (dc *DeclareCondition) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("declare ")
+	dc.Name.FormatFast(buf)
+	buf.WriteString(" condition for ")
+	dc.Condition.FormatFast(buf)
+	buf.WriteByte(';')
+}
+
+// FormatFast formats the node.
+func (s *Signal) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("signal ")
+	s.Condition.FormatFast(buf)
+	prefix := " set "
+	for _, sv := range s.SetValues {
+		buf.WriteString(prefix)
+		sv.FormatFast(buf)
+		prefix = ", "
+	}
+	buf.WriteString(";")
+}
+
+// FormatFast formats the node.
+func (s *SignalSet) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString(s.ConditionName.ToString())
+	buf.WriteString(" = ")
+	s.Value.FormatFast(buf)
+}
+
+// FormatFast formats the node.
 func (hcss *HandlerConditionSQLState) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("sqlstate ")
 	hcss.SQLStateValue.FormatFast(buf)

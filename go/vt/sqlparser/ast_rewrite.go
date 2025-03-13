@@ -141,6 +141,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
 	case *DeallocateStmt:
 		return a.rewriteRefOfDeallocateStmt(parent, node, replacer)
+	case *DeclareCondition:
+		return a.rewriteRefOfDeclareCondition(parent, node, replacer)
 	case *DeclareHandler:
 		return a.rewriteRefOfDeclareHandler(parent, node, replacer)
 	case *DeclareVar:
@@ -491,6 +493,10 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowThrottlerStatus(parent, node, replacer)
 	case *ShowTransactionStatus:
 		return a.rewriteRefOfShowTransactionStatus(parent, node, replacer)
+	case *Signal:
+		return a.rewriteRefOfSignal(parent, node, replacer)
+	case *SignalSet:
+		return a.rewriteRefOfSignalSet(parent, node, replacer)
 	case *SingleStatement:
 		return a.rewriteRefOfSingleStatement(parent, node, replacer)
 	case *StarExpr:
@@ -3406,6 +3412,55 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*DeallocateStmt).Name = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfDeclareCondition(parent SQLNode, node *DeclareCondition, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfDeclareConditionName))
+	}
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*DeclareCondition).Name = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeclareConditionCondition))
+	}
+	if !a.rewriteHandlerCondition(node, node.Condition, func(newNode, parent SQLNode) {
+		parent.(*DeclareCondition).Condition = newNode.(HandlerCondition)
 	}) {
 		return false
 	}
@@ -11855,6 +11910,105 @@ func (a *application) rewriteRefOfShowTransactionStatus(parent SQLNode, node *Sh
 }
 
 // Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfSignal(parent SQLNode, node *Signal, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSignalCondition))
+	}
+	if !a.rewriteHandlerCondition(node, node.Condition, func(newNode, parent SQLNode) {
+		parent.(*Signal).Condition = newNode.(HandlerCondition)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	for x, el := range node.SetValues {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfSignalSetValuesOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
+		if !a.rewriteRefOfSignalSet(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*Signal).SetValues[idx] = newNode.(*SignalSet)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfSignalSet(parent SQLNode, node *SignalSet, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSignalSetValue))
+	}
+	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
+		parent.(*SignalSet).Value = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSingleStatement(parent SQLNode, node *SingleStatement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -14837,12 +14991,16 @@ func (a *application) rewriteCompoundStatement(parent SQLNode, node CompoundStat
 	switch node := node.(type) {
 	case *BeginEndStatement:
 		return a.rewriteRefOfBeginEndStatement(parent, node, replacer)
+	case *DeclareCondition:
+		return a.rewriteRefOfDeclareCondition(parent, node, replacer)
 	case *DeclareHandler:
 		return a.rewriteRefOfDeclareHandler(parent, node, replacer)
 	case *DeclareVar:
 		return a.rewriteRefOfDeclareVar(parent, node, replacer)
 	case *IfStatement:
 		return a.rewriteRefOfIfStatement(parent, node, replacer)
+	case *Signal:
+		return a.rewriteRefOfSignal(parent, node, replacer)
 	case *SingleStatement:
 		return a.rewriteRefOfSingleStatement(parent, node, replacer)
 	case Visitable:

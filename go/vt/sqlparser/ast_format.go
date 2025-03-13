@@ -443,6 +443,27 @@ func (dh *DeclareHandler) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (dc *DeclareCondition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(dc, "declare %v condition for %v;", dc.Name, dc.Condition)
+}
+
+// Format formats the node.
+func (s *Signal) Format(buf *TrackedBuffer) {
+	buf.astPrintf(s, "signal %v", s.Condition)
+	prefix := " set "
+	for _, sv := range s.SetValues {
+		buf.astPrintf(s, "%s%v", prefix, sv)
+		prefix = ", "
+	}
+	buf.literal(";")
+}
+
+// Format formats the node.
+func (s *SignalSet) Format(buf *TrackedBuffer) {
+	buf.astPrintf(s, "%s = %v", s.ConditionName.ToString(), s.Value)
+}
+
+// Format formats the node.
 func (hcss *HandlerConditionSQLState) Format(buf *TrackedBuffer) {
 	buf.astPrintf(hcss, "sqlstate %v", hcss.SQLStateValue)
 }
