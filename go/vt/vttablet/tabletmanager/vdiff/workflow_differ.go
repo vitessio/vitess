@@ -70,6 +70,51 @@ func newWorkflowDiffer(ct *controller, opts *tabletmanagerdatapb.VDiffOptions, c
 	return wd, nil
 }
 
+// reconcileExtraRows compares the extra rows in the source and target tables. If there are any matching rows, they are
+// removed from the extra rows. The number of extra rows to compare is limited by vdiff option maxExtraRowsToCompare.
+func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64, maxReportSampleRows int64) error {
+	err := wd.reconcileReferenceTables(dr)
+	if err != nil {
+		return err
+	}
+
+	return wd.doReconcileExtraRows(dr, maxExtraRowsToCompare, maxReportSampleRows)
+}
+
+func (wd *workflowDiffer) reconcileReferenceTables(dr *DiffReport) error {
+	if dr.MismatchedRows == 0 {
+		// Get the VSchema on the target and source keyspaces. We can then use this
+		// for handling additional edge cases, such as adjusting results for reference
+		// tables when the shard count is different between the source and target as
+		// then there will be a extra rows reported on the side with more shards.
+		srcvschema, err := wd.ct.ts.GetVSchema(wd.ct.vde.ctx, wd.ct.sourceKeyspace)
+		if err != nil {
+			return err
+		}
+		tgtvschema, err := wd.ct.ts.GetVSchema(wd.ct.vde.ctx, wd.ct.vde.thisTablet.Keyspace)
+		if err != nil {
+			return err
+		}
+		svt, sok := srcvschema.Tables[dr.TableName]
+		tvt, tok := tgtvschema.Tables[dr.TableName]
+		if dr.ExtraRowsSource > 0 && sok && svt.Type == vindexes.TypeReference && dr.ExtraRowsSource%dr.MatchingRows == 0 {
+			// We have a reference table with no mismatched rows and the number of
+			// extra rows on the source is a multiple of the matching rows. This
+			// means that there's no actual diff.
+			dr.ExtraRowsSource = 0
+			dr.ExtraRowsSourceDiffs = nil
+		}
+		if dr.ExtraRowsTarget > 0 && tok && tvt.Type == vindexes.TypeReference && dr.ExtraRowsTarget%dr.MatchingRows == 0 {
+			// We have a reference table with no mismatched rows and the number of
+			// extra rows on the target is a multiple of the matching rows. This
+			// means that there's no actual diff.
+			dr.ExtraRowsTarget = 0
+			dr.ExtraRowsTargetDiffs = nil
+		}
+	}
+	return nil
+}
+
 func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64, maxReportSampleRows int64) error {
 	if dr.ExtraRowsSource == 0 || dr.ExtraRowsTarget == 0 {
 		return nil
@@ -144,51 +189,6 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	}
 	if int64(len(dr.ExtraRowsTargetDiffs)) > maxReportSampleRows && maxReportSampleRows > 0 {
 		dr.ExtraRowsTargetDiffs = dr.ExtraRowsTargetDiffs[:maxReportSampleRows-1]
-	}
-	return nil
-}
-
-// reconcileExtraRows compares the extra rows in the source and target tables. If there are any matching rows, they are
-// removed from the extra rows. The number of extra rows to compare is limited by vdiff option maxExtraRowsToCompare.
-func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompare int64, maxReportSampleRows int64) error {
-	err := wd.reconcileReferenceTables(dr)
-	if err != nil {
-		return err
-	}
-
-	return wd.doReconcileExtraRows(dr, maxExtraRowsToCompare, maxReportSampleRows)
-}
-
-func (wd *workflowDiffer) reconcileReferenceTables(dr *DiffReport) error {
-	if dr.MismatchedRows == 0 {
-		// Get the VSchema on the target and source keyspaces. We can then use this
-		// for handling additional edge cases, such as adjusting results for reference
-		// tables when the shard count is different between the source and target as
-		// then there will be a extra rows reported on the side with more shards.
-		srcvschema, err := wd.ct.ts.GetVSchema(wd.ct.vde.ctx, wd.ct.sourceKeyspace)
-		if err != nil {
-			return err
-		}
-		tgtvschema, err := wd.ct.ts.GetVSchema(wd.ct.vde.ctx, wd.ct.vde.thisTablet.Keyspace)
-		if err != nil {
-			return err
-		}
-		svt, sok := srcvschema.Tables[dr.TableName]
-		tvt, tok := tgtvschema.Tables[dr.TableName]
-		if dr.ExtraRowsSource > 0 && sok && svt.Type == vindexes.TypeReference && dr.ExtraRowsSource%dr.MatchingRows == 0 {
-			// We have a reference table with no mismatched rows and the number of
-			// extra rows on the source is a multiple of the matching rows. This
-			// means that there's no actual diff.
-			dr.ExtraRowsSource = 0
-			dr.ExtraRowsSourceDiffs = nil
-		}
-		if dr.ExtraRowsTarget > 0 && tok && tvt.Type == vindexes.TypeReference && dr.ExtraRowsTarget%dr.MatchingRows == 0 {
-			// We have a reference table with no mismatched rows and the number of
-			// extra rows on the target is a multiple of the matching rows. This
-			// means that there's no actual diff.
-			dr.ExtraRowsTarget = 0
-			dr.ExtraRowsTargetDiffs = nil
-		}
 	}
 	return nil
 }
