@@ -2970,6 +2970,7 @@ func CloneRefOfSelectInto(n *SelectInto) *SelectInto {
 		return nil
 	}
 	out := *n
+	out.VarList = CloneSliceOfRefOfVariable(n.VarList)
 	out.Charset = CloneColumnCharset(n.Charset)
 	return &out
 }

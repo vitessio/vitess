@@ -3841,6 +3841,11 @@ func VisitRefOfSelectInto(in *SelectInto, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	for _, el := range in.VarList {
+		if err := VisitRefOfVariable(el, f); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 func VisitRefOfSet(in *Set, f Visit) error {

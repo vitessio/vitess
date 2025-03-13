@@ -2120,7 +2120,7 @@ var (
 	}, {
 		input: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
 	}, {
-		input:  "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end",
+		input:  "create procedure p1 (country CHAR(3), out cities INT) begin select count(*) from x where d = e; end",
 		output: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
 	}, {
 		input:  `CREATE PROCEDURE p1 (IN a CHAR(3), OUT b INT) SELECT COUNT(*) FROM x WHERE d = e`,
@@ -2185,6 +2185,9 @@ var (
 	}, {
 		input:  "create procedure DefaultValueWithExpression() begin declare currentTime datetime default now(); select currentTime; end;",
 		output: "create procedure DefaultValueWithExpression () begin declare currentTime datetime default now(); select currentTime from dual; end;",
+	}, {
+		input:  "create procedure UpdateSalaryProcedure(in emp_id int, in bonus decimal(10,2)) begin declare current_salary decimal(10,2); select salary into current_salary from employees where id = emp_id; if current_salary is not null then update employees set salary = current_salary + bonus where id = emp_id; else select 'Employee Not Found'; end if; end;",
+		output: "create procedure UpdateSalaryProcedure (in emp_id int, in bonus decimal(10,2)) begin declare current_salary decimal(10,2); select salary from employees where id = emp_id into current_salary; if current_salary is not null then update employees set salary = current_salary + bonus where id = emp_id; else select 'Employee Not Found' from dual; end if; end;",
 	}, {
 		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {
@@ -4689,6 +4692,9 @@ func TestSelectInto(t *testing.T) {
 		output: `select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' fields terminated by ',' enclosed by '"' escaped by '\\' overwrite on`,
 	}, {
 		input: "select * from t into dumpfile 'out_file_name'",
+	}, {
+		input:  "SELECT id, data INTO @x, @y FROM test.t1 LIMIT 1;",
+		output: "select id, `data` from test.t1 limit 1 into @x, @y",
 	}, {
 		input: "select * from t into outfile 'out_file_name' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n'",
 	}, {

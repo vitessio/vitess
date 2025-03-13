@@ -4502,6 +4502,7 @@ func (cmp *Comparator) RefOfSelectInto(a, b *SelectInto) bool {
 		a.Manifest == b.Manifest &&
 		a.Overwrite == b.Overwrite &&
 		a.Type == b.Type &&
+		cmp.SliceOfRefOfVariable(a.VarList, b.VarList) &&
 		cmp.ColumnCharset(a.Charset, b.Charset)
 }
 

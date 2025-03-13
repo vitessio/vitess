@@ -337,8 +337,8 @@ END
 INPUT
 select 3 into @v1;
 END
-ERROR
-syntax error at position 18 near 'v1'
+OUTPUT
+select 3 from dual into @v1
 END
 INPUT
 select /lib64/ user, host, db, info from information_schema.processlist where state = 'User lock' and info = 'select get_lock('ee_16407_5', 60)';
@@ -613,8 +613,8 @@ END
 INPUT
 select col1 from test limit 1 into tmp;
 END
-ERROR
-syntax error at position 39 near 'tmp'
+OUTPUT
+select col1 from test limit 1 into tmp
 END
 INPUT
 select substring_index(null,null,null);
@@ -685,8 +685,8 @@ END
 INPUT
 select j from v2 where j = 1 into k;
 END
-ERROR
-syntax error at position 36 near 'k'
+OUTPUT
+select j from v2 where j = 1 into k
 END
 INPUT
 select substring('hello', -18446744073709551615, -18446744073709551615);
@@ -1117,8 +1117,8 @@ END
 INPUT
 select 141427 + datediff(curdate(),'1970-01-01') into @my_uuid_synthetic;
 END
-ERROR
-syntax error at position 73 near 'my_uuid_synthetic'
+OUTPUT
+select 141427 + datediff(curdate(), '1970-01-01') from dual into @my_uuid_synthetic
 END
 INPUT
 select makedate(1997,0);
@@ -2557,8 +2557,8 @@ END
 INPUT
 select max_data_length into @changed_max_data_length from information_schema.tables where table_name='t1';
 END
-ERROR
-syntax error at position 53 near 'changed_max_data_length'
+OUTPUT
+select max_data_length from information_schema.`tables` where table_name = 't1' into @changed_max_data_length
 END
 INPUT
 select 1 and min(a) is null from t1;
@@ -4189,8 +4189,8 @@ END
 INPUT
 select @@session.time_zone into @save_tz;
 END
-ERROR
-syntax error at position 41 near 'save_tz'
+OUTPUT
+select @@time_zone from dual into @save_tz
 END
 INPUT
 select count(*), min(7), max(7) from t1m, t1i;
@@ -4837,8 +4837,8 @@ END
 INPUT
 select count(distinct x.id_aams) into not_installed from (select * from (select t1.id_aams, t2.* from t1 left join t2 on t2.code_id = vlt_code_id and t1.id_aams = t2.id_game where t1.id_aams = 1715000360 order by t2.id desc ) as g group by g.id_aams having g.id is null ) as x;
 END
-ERROR
-syntax error at position 52 near 'not_installed'
+OUTPUT
+select count(distinct x.id_aams) from (select * from (select t1.id_aams, t2.* from t1 left join t2 on t2.code_id = vlt_code_id and t1.id_aams = t2.id_game where t1.id_aams = 1715000360 order by t2.id desc) as g group by g.id_aams having g.id is null) as x into not_installed
 END
 INPUT
 select "... and something more ...";
@@ -5017,8 +5017,8 @@ END
 INPUT
 select concat('0',mid(@my_uuid,16,3),mid(@my_uuid,10,4),left(@my_uuid,8)) into @my_uuidate;
 END
-ERROR
-syntax error at position 91 near 'my_uuidate'
+OUTPUT
+select concat('0', substr(@my_uuid, 16, 3), substr(@my_uuid, 10, 4), left(@my_uuid, 8)) from dual into @my_uuidate
 END
 INPUT
 select locate('he','hello',null),locate('he',null,2),locate(null,'hello',2);
@@ -5155,8 +5155,8 @@ END
 INPUT
 select max_data_length into @orig_max_data_length from information_schema.tables where table_name='t1';
 END
-ERROR
-syntax error at position 50 near 'orig_max_data_length'
+OUTPUT
+select max_data_length from information_schema.`tables` where table_name = 't1' into @orig_max_data_length
 END
 INPUT
 select hex(substr(_utf16 0x00e400e50068,-3));
@@ -5803,8 +5803,8 @@ END
 INPUT
 select ST_GeomFromText("POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))") into @a;
 END
-ERROR
-syntax error at position 73 near 'a'
+OUTPUT
+select st_geometryfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))') from dual into @a
 END
 INPUT
 select 'a' union select concat('a', -concat('3',4));
@@ -7501,8 +7501,8 @@ END
 INPUT
 select ST_GeomFromText('linestring(7 6, 15 4)') into @l;
 END
-ERROR
-syntax error at position 56 near 'l'
+OUTPUT
+select st_geometryfromtext('linestring(7 6, 15 4)') from dual into @l
 END
 INPUT
 select concat("max=",connection) 'p1';
@@ -9289,8 +9289,8 @@ END
 INPUT
 select sysdate() into @b;
 END
-ERROR
-syntax error at position 25 near 'b'
+OUTPUT
+select sysdate() from dual into @b
 END
 INPUT
 select inet_ntoa(null),inet_aton(null);
@@ -10657,8 +10657,8 @@ END
 INPUT
 select uuid() into @my_uuid;
 END
-ERROR
-syntax error at position 28 near 'my_uuid'
+OUTPUT
+select uuid() from dual into @my_uuid
 END
 INPUT
 select NULLIF(NULL,NULL), NULLIF(NULL,1), NULLIF(NULL,1.0), NULLIF(NULL,"test");
@@ -10963,8 +10963,8 @@ END
 INPUT
 select i from v1 where i = 1 into k;
 END
-ERROR
-syntax error at position 36 near 'k'
+OUTPUT
+select i from v1 where i = 1 into k
 END
 INPUT
 select a, t1.*, b from t1;
@@ -12769,8 +12769,8 @@ END
 INPUT
 select @@sql_mode into @full_mode;
 END
-ERROR
-syntax error at position 34 near 'full_mode'
+OUTPUT
+select @@sql_mode from dual into @full_mode
 END
 INPUT
 select @a, @b;
@@ -14971,8 +14971,8 @@ END
 INPUT
 select ST_GeomFromText('linestring(5 5, 15 4)') into @l;
 END
-ERROR
-syntax error at position 56 near 'l'
+OUTPUT
+select st_geometryfromtext('linestring(5 5, 15 4)') from dual into @l
 END
 INPUT
 select a1,a2,b,min(c),max(c) from t1 where a1 >= 'c' or a2 < 'b' group by a1,a2,b;
@@ -15625,8 +15625,8 @@ END
 INPUT
 select @@GLOBAL.relay_log_info_repository into @save_relay_log_info_repository;
 END
-ERROR
-syntax error at position 79 near 'save_relay_log_info_repository'
+OUTPUT
+select @@global.relay_log_info_repository from dual into @save_relay_log_info_repository
 END
 INPUT
 select SUBSTR('abcdefg',-1,-1) FROM DUAL;
@@ -15649,8 +15649,8 @@ END
 INPUT
 select floor(conv(@my_uuidate,16,10)/@my_uuid_one_day) into @my_uuid_date;
 END
-ERROR
-syntax error at position 74 near 'my_uuid_date'
+OUTPUT
+select floor(conv(@my_uuidate, 16, 10) / @my_uuid_one_day) from dual into @my_uuid_date
 END
 INPUT
 select a1,max(c),min(c) from t3 where (a2 = 'a') and (b = 'b') group by a1;
@@ -15961,8 +15961,8 @@ END
 INPUT
 select index_length into @paked_keys_size from information_schema.tables where table_name='t1';
 END
-ERROR
-syntax error at position 42 near 'paked_keys_size'
+OUTPUT
+select index_length from information_schema.`tables` where table_name = 't1' into @paked_keys_size
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_croatian_ci;
@@ -16033,8 +16033,8 @@ END
 INPUT
 select CONNECTION_ID() into @thread_id;
 END
-ERROR
-syntax error at position 39 near 'thread_id'
+OUTPUT
+select CONNECTION_ID() from dual into @thread_id
 END
 INPUT
 select * from information_schema.CHARACTER_SETS where CHARACTER_SET_NAME like 'latin1%' order by character_set_name;
@@ -16471,8 +16471,8 @@ END
 INPUT
 select i from t1 where i = 1 into k;
 END
-ERROR
-syntax error at position 36 near 'k'
+OUTPUT
+select i from t1 where i = 1 into k
 END
 INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'p' order by table_name;
@@ -17863,8 +17863,8 @@ END
 INPUT
 select i from t1 where i = 1 into j;
 END
-ERROR
-syntax error at position 36 near 'j'
+OUTPUT
+select i from t1 where i = 1 into j
 END
 INPUT
 select c from t2;
@@ -18019,8 +18019,8 @@ END
 INPUT
 select count(*) into n from t1;
 END
-ERROR
-syntax error at position 23 near 'n'
+OUTPUT
+select count(*) from t1 into n
 END
 INPUT
 select time("1997-12-31 25:59:59.000001");
@@ -20731,8 +20731,8 @@ END
 INPUT
 select ST_GeomFromText('linestring(-2 -2, 12 7)') into @l;
 END
-ERROR
-syntax error at position 58 near 'l'
+OUTPUT
+select st_geometryfromtext('linestring(-2 -2, 12 7)') from dual into @l
 END
 INPUT
 select RANDOM_BYTES(1025);
@@ -20821,8 +20821,8 @@ END
 INPUT
 select ST_GeomFromText('linestring(6 2, 12 1)') into @l;
 END
-ERROR
-syntax error at position 56 near 'l'
+OUTPUT
+select st_geometryfromtext('linestring(6 2, 12 1)') from dual into @l
 END
 INPUT
 select hex(substr(_utf16 0x00e400e5D800DC00,-2));
@@ -21157,8 +21157,8 @@ END
 INPUT
 select i from t1 where i=1 into k;
 END
-ERROR
-syntax error at position 34 near 'k'
+OUTPUT
+select i from t1 where i = 1 into k
 END
 INPUT
 select s.*, '*', m.*, (s.match_1_h - m.home) UUX from t2 s straight_join t1 m where m.match_id = 1 order by UUX desc;
@@ -22603,8 +22603,8 @@ END
 INPUT
 select @@GLOBAL.expire_logs_days into @save_expire_logs_days;
 END
-ERROR
-syntax error at position 61 near 'save_expire_logs_days'
+OUTPUT
+select @@global.expire_logs_days from dual into @save_expire_logs_days
 END
 INPUT
 select * from t1 where a=if(b<10,_ucs2 0x0062,_ucs2 0x00C0);

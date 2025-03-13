@@ -422,6 +422,7 @@ const (
 	RefOfSelectLimit
 	RefOfSelectInto
 	RefOfSelectExprsExprsOffset
+	RefOfSelectIntoVarListOffset
 	RefOfSetComments
 	RefOfSetExprs
 	RefOfSetExprVar
@@ -1394,6 +1395,8 @@ func (s ASTStep) DebugString() string {
 		return "(*Select).Into"
 	case RefOfSelectExprsExprsOffset:
 		return "(*SelectExprs).ExprsOffset"
+	case RefOfSelectIntoVarListOffset:
+		return "(*SelectInto).VarListOffset"
 	case RefOfSetComments:
 		return "(*Set).Comments"
 	case RefOfSetExprs:
@@ -2626,6 +2629,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*SelectExprs).Exprs[idx]
+		case RefOfSelectIntoVarListOffset:
+			idx, bytesRead := path.nextPathOffset()
+			path = path[bytesRead:]
+			node = node.(*SelectInto).VarList[idx]
 		case RefOfSetComments:
 			node = node.(*Set).Comments
 		case RefOfSetExprs:

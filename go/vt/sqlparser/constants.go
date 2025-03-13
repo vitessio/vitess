@@ -835,6 +835,7 @@ const (
 	IntoOutfile SelectIntoType = iota
 	IntoOutfileS3
 	IntoDumpfile
+	IntoVariables
 )
 
 // Constant for Enum Type - JtOnResponseType

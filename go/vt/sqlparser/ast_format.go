@@ -2320,6 +2320,15 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
+	if node.Type == IntoVariables {
+		buf.literal(" into")
+		prefix := " "
+		for _, intoVar := range node.VarList {
+			buf.astPrintf(node, "%s%v", prefix, intoVar)
+			prefix = ", "
+		}
+		return
+	}
 	buf.astPrintf(node, "%s%#s", node.Type.ToString(), node.FileName)
 	if node.Charset.Name != "" {
 		buf.astPrintf(node, " character set %#s", node.Charset.Name)

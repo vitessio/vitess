@@ -5785,6 +5785,24 @@ func (c *cow) copyOnRewriteRefOfSelectInto(n *SelectInto, parent SQLNode) (out S
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
+		var changedVarList bool
+		_VarList := make([]*Variable, len(n.VarList))
+		for x, el := range n.VarList {
+			this, changed := c.copyOnRewriteRefOfVariable(el, n)
+			_VarList[x] = this.(*Variable)
+			if changed {
+				changedVarList = true
+			}
+		}
+		if changedVarList {
+			res := *n
+			res.VarList = _VarList
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)

@@ -564,8 +564,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
 %type <columns> ins_column_list column_list column_list_opt column_list_empty index_list
-%type <variable> variable_expr set_variable user_defined_variable
-%type <variables> at_id_list execute_statement_list_opt
+%type <variable> variable_expr set_variable user_defined_variable into_var
+%type <variables> at_id_list execute_statement_list_opt into_var_list
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -7867,7 +7867,10 @@ proc_param:
   }
 
 proc_param_mode:
-  IN
+  {
+    $$ = InMode
+  }
+| IN
   {
     $$ = InMode
   }
@@ -7975,6 +7978,30 @@ INTO OUTFILE S3 STRING charset_opt format_opt export_options manifest_opt overwr
 {
     $$ = &SelectInto{Type:IntoOutfile, FileName:encodeSQLString($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
 }
+| INTO into_var_list
+{
+    $$ = &SelectInto{Type:IntoVariables, VarList:$2}
+}
+
+into_var_list:
+  into_var_list ',' into_var
+  {
+    $$ = append($1, $3)
+  }
+| into_var
+  {
+    $$ = []*Variable{$1}
+  }
+
+into_var:
+  user_defined_variable
+  {
+    $$ = $1
+  }
+| ID
+  {
+    $$ = &Variable{Name: createIdentifierCI($1), Scope: NoScope}
+  }
 
 format_opt:
   {

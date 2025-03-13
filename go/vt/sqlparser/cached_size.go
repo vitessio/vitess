@@ -4099,7 +4099,14 @@ func (cached *SelectInto) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(144)
+	}
+	// field VarList []*vitess.io/vitess/go/vt/sqlparser.Variable
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.VarList)) * int64(8))
+		for _, elem := range cached.VarList {
+			size += elem.CachedSize(true)
+		}
 	}
 	// field FileName string
 	size += hack.RuntimeAllocSize(int64(len(cached.FileName)))

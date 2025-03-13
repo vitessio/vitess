@@ -11336,12 +11336,29 @@ func (a *application) rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, r
 			return true
 		}
 	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
+	for x, el := range node.VarList {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfSelectIntoVarListOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
 		}
+		if !a.rewriteRefOfVariable(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*SelectInto).VarList[idx] = newNode.(*Variable)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}

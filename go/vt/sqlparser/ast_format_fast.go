@@ -3041,6 +3041,16 @@ func (node *SelectInto) FormatFast(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
+	if node.Type == IntoVariables {
+		buf.WriteString(" into")
+		prefix := " "
+		for _, intoVar := range node.VarList {
+			buf.WriteString(prefix)
+			intoVar.FormatFast(buf)
+			prefix = ", "
+		}
+		return
+	}
 	buf.WriteString(node.Type.ToString())
 	buf.WriteString(node.FileName)
 	if node.Charset.Name != "" {

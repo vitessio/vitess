@@ -315,6 +315,7 @@ type (
 	// SelectInto is a struct that represent the INTO part of a select query
 	SelectInto struct {
 		Type         SelectIntoType
+		VarList      []*Variable
 		FileName     string
 		Charset      ColumnCharset
 		FormatOption string
