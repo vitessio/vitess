@@ -315,7 +315,7 @@ func getLockAction(analysedInstance string, code inst.AnalysisCode) string {
 }
 
 // LockShard locks the keyspace-shard preventing others from performing conflicting actions.
-func LockShard(ctx context.Context, keyspace, shard string, lockAction string) (context.Context, func(*error), error) {
+func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context.Context, func(*error), error) {
 	if keyspace == "" {
 		return nil, nil, errors.New("can't lock shard: keyspace is unspecified")
 	}
