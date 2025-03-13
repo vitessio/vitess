@@ -1091,6 +1091,8 @@ func TestEngineReload(t *testing.T) {
 }
 
 func TestUpdateTableIndexMetrics(t *testing.T) {
+	time.Sleep(6 * time.Second)
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
@@ -1105,6 +1107,8 @@ func TestUpdateTableIndexMetrics(t *testing.T) {
 	require.NoError(t, err)
 	defer client.Execute("delete from vitess_part where id in (5,15,25)", nil)
 
+	time.Sleep(6 * time.Second)
+
 	// Analyze tables to make sure stats are updated prior to reload
 	analyzes := []string{
 		"analyze table vitess_a",
@@ -1116,10 +1120,14 @@ func TestUpdateTableIndexMetrics(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	time.Sleep(6 * time.Second)
+
 	fmt.Println("requested schema reload")
 	err = framework.Server.ReloadSchema(ctx)
 	fmt.Println("schema reload completed")
 	require.NoError(t, err)
+
+	time.Sleep(6 * time.Second)
 
 	results, err := client.Execute("select @@innodb_page_size", nil)
 	require.NoError(t, err)
