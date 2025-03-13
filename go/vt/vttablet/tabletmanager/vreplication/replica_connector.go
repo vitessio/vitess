@@ -58,7 +58,7 @@ func NewReplicaConnector(venv *vtenv.Environment, connParams *mysql.ConnParams) 
 	return c
 }
 
-//-----------------------------------------------------------
+// -----------------------------------------------------------
 
 type ReplicaConnector struct {
 	conn      *mysql.ConnParams
@@ -73,5 +73,5 @@ func (c *ReplicaConnector) Close() error {
 }
 
 func (c *ReplicaConnector) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return c.vstreamer.Stream(ctx, startPos, nil, filter, throttlerapp.ReplicaConnectorName, send)
+	return c.vstreamer.Stream(ctx, startPos, nil, filter, throttlerapp.ReplicaConnectorName, send, nil)
 }

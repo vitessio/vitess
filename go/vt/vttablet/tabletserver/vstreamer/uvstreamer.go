@@ -88,7 +88,8 @@ type uvstreamer struct {
 
 	config *uvstreamerConfig
 
-	vs *vstreamer // last vstreamer created in uvstreamer
+	vs      *vstreamer // last vstreamer created in uvstreamer
+	options *binlogdatapb.VStreamOptions
 }
 
 type uvstreamerConfig struct {
@@ -96,7 +97,10 @@ type uvstreamerConfig struct {
 	CatchupRetryTime  time.Duration
 }
 
-func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) *uvstreamer {
+func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se *schema.Engine, startPos string,
+	tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, vschema *localVSchema,
+	throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions) *uvstreamer {
+
 	ctx, cancel := context.WithCancel(ctx)
 	config := &uvstreamerConfig{
 		MaxReplicationLag: 1 * time.Nanosecond,
@@ -123,6 +127,7 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		config:       config,
 		inTablePKs:   tablePKs,
 		throttlerApp: throttlerApp,
+		options:      options,
 	}
 
 	return uvs
@@ -427,7 +432,7 @@ func (uvs *uvstreamer) Stream() error {
 		}
 	}
 	vs := newVStreamer(uvs.ctx, uvs.cp, uvs.se, replication.EncodePosition(uvs.pos), replication.EncodePosition(uvs.stopPos),
-		uvs.filter, uvs.getVSchema(), uvs.throttlerApp, uvs.send, "replicate", uvs.vse)
+		uvs.filter, uvs.getVSchema(), uvs.throttlerApp, uvs.send, "replicate", uvs.vse, uvs.options)
 
 	uvs.setVs(vs)
 	return vs.Stream()

@@ -739,7 +739,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 				return io.EOF
 			}
 			return nil
-		})
+		}, nil)
 	}()
 	wg.Wait()
 	if errGoroutine != nil {
@@ -2030,7 +2030,7 @@ func TestMinimalMode(t *testing.T) {
 		engine = oldEngine
 		env = oldEnv
 	}()
-	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil })
+	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil }, nil)
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
 
@@ -2431,7 +2431,7 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 			return io.EOF
 		}
 		return nil
-	})
+	}, nil)
 }
 
 func execStatement(t *testing.T, query string) {

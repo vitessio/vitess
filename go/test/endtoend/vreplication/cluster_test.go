@@ -87,6 +87,9 @@ type ClusterConfig struct {
 	vtorcPort            int
 
 	vreplicationCompressGTID bool
+	// Set overrideHeartbeatOptions to true to override the default heartbeat options:
+	// which are set to only on demand (5s) and 250ms interval.
+	overrideHeartbeatOptions bool
 }
 
 // enableGTIDCompression enables GTID compression for the cluster and returns a function
@@ -522,9 +525,16 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 
 	options := []string{
 		"--queryserver-config-schema-reload-time", "5s",
+	} // FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
+
+	defaultHeartbeatOptions := []string{
 		"--heartbeat_on_demand_duration", "5s",
 		"--heartbeat_interval", "250ms",
-	} // FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
+	}
+	if !mainClusterConfig.overrideHeartbeatOptions {
+		options = append(options, defaultHeartbeatOptions...)
+	}
+
 	options = append(options, extraVTTabletArgs...)
 
 	if mainClusterConfig.vreplicationCompressGTID {

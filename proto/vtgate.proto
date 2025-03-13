@@ -302,6 +302,8 @@ message VStreamFlags {
   string cells = 4;
   string cell_preference = 5;
   string tablet_order = 6;
+  // When set, all new row events from the `heartbeat` table, for all shards, in the sidecardb will be streamed.
+  bool stream_keyspace_heartbeats = 7;
 }
 
 // VStreamRequest is the payload for VStream.

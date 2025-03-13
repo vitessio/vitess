@@ -443,7 +443,7 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 	pos := ""
 	go func() {
 		err := engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
-			//t.Logf("Received events: %v", evs)
+			// t.Logf("Received events: %v", evs)
 			muAllEvents.Lock()
 			defer muAllEvents.Unlock()
 			for _, ev := range evs {
@@ -463,7 +463,7 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 				allEvents = append(allEvents, ev)
 			}
 			return nil
-		})
+		}, nil)
 		require.Nil(t, err)
 	}()
 }

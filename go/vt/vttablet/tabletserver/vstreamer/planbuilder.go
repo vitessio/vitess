@@ -59,6 +59,9 @@ type Plan struct {
 	Filters []Filter
 
 	env *vtenv.Environment
+
+	// IsInternal is set to true if the plan is for a sidecar table.
+	IsInternal bool
 }
 
 // Opcode enumerates the operators supported in a where clause

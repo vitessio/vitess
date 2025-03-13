@@ -31,7 +31,9 @@ import (
 // VStreamer defines  the functions of VStreamer
 // that the BinlogWatcher needs.
 type VStreamer interface {
-	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) error
+	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
+		filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error,
+		options *binlogdatapb.VStreamOptions) error
 }
 
 // BinlogWatcher is a tabletserver service that watches the
@@ -93,7 +95,7 @@ func (blw *BinlogWatcher) process(ctx context.Context) {
 		// VStreamer will reload the schema when it encounters a DDL.
 		err := blw.vs.Stream(ctx, "current", nil, filter, throttlerapp.BinlogWatcherName, func(events []*binlogdatapb.VEvent) error {
 			return nil
-		})
+		}, nil)
 		log.Infof("ReplicationWatcher VStream ended: %v, retrying in 5 seconds", err)
 		select {
 		case <-ctx.Done():

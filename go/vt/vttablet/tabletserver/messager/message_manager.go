@@ -742,7 +742,7 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 			}
 		}
 		return nil
-	})
+	}, nil)
 	return err
 }
 

@@ -671,6 +671,7 @@ func (conn *gRPCQueryClient) VStream(ctx context.Context, request *binlogdatapb.
 			Position:          request.Position,
 			Filter:            request.Filter,
 			TableLastPKs:      request.TableLastPKs,
+			Options:           request.Options,
 		}
 		stream, err := conn.c.VStream(ctx, req)
 		if err != nil {

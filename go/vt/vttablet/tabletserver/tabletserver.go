@@ -1189,7 +1189,7 @@ func (tsv *TabletServer) VStream(ctx context.Context, request *binlogdatapb.VStr
 	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
 		return err
 	}
-	return tsv.vstreamer.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send)
+	return tsv.vstreamer.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send, request.Options)
 }
 
 // VStreamRows streams rows from the specified starting point.
