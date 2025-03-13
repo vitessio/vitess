@@ -750,6 +750,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 		if !ok {
 			t = table{table: tableName}
 		}
+		fmt.Printf("adding %v rows for table %v\n", rowCount, tableName)
 		t.rows += rowCount
 		t.rowBytes += rowsBytes
 		tables[tableName] = t
@@ -822,6 +823,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 	se.tableRowsGauge.ResetAll()
 	se.tableClusteredIndexSizeGauge.ResetAll()
 	for _, tbl := range tables {
+		fmt.Printf("Setting rowsGuage for table: %s to %v rows\n", tbl.table, tbl.rows)
 		se.tableRowsGauge.Set(tbl.table, tbl.rows)
 		se.tableClusteredIndexSizeGauge.Set(tbl.table, tbl.rowBytes)
 	}
