@@ -36,8 +36,9 @@
       "Original": "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -57,8 +58,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select user_extra.col1, `values`.user_col1 as col1 from (values ::values) as `values`(user_col1), user_extra where 1 != 1",
-            "Query": "select user_extra.col1, `values`.user_col1 as col1 from (values ::values) as `values`(user_col1), user_extra where user_extra.col1 = 2",
+            "FieldQuery": "select user_extra.col1 from user_extra where 1 != 1",
+            "Query": "select user_extra.col1 from user_extra where user_extra.col1 = 2",
             "Table": "user_extra"
           }
         ]
@@ -73,46 +74,36 @@
     "comment": "HAVING multi-route",
     "query": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:a",
-          "1:col2",
-          "2:col3"
-        ],
-        "Columns": "1,2,0",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1,R:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Block",
-            "BindVarName": "values",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.col1 as a, `user`.col2 from `user` where 1 != 1",
-                "Query": "select `user`.col1 as a, `user`.col2 from `user` where `user`.col1 = 1 and `user`.col1 = `user`.col2",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select user_extra.col3, `values`.user_col1 as col1, `values`.user_col2 as col2 from (values ::values) as `values`(user_col1, user_col2), user_extra where 1 != 1",
-                "Query": "select user_extra.col3, `values`.user_col1 as col1, `values`.user_col2 as col2 from (values ::values) as `values`(user_col1, user_col2), user_extra where user_extra.col3 = 1",
-                "Table": "user_extra"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col1 as a, `user`.col2 from `user` where 1 != 1",
+            "Query": "select `user`.col1 as a, `user`.col2 from `user` where `user`.col1 = 1 and `user`.col1 = `user`.col2",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.col3 from user_extra where 1 != 1",
+            "Query": "select user_extra.col3 from user_extra where user_extra.col3 = 1",
+            "Table": "user_extra"
           }
         ]
       },
@@ -542,77 +533,70 @@
     "comment": "ORDER BY NULL for join",
     "query": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:a",
-          "1:col2",
-          "2:col3"
-        ],
-        "Columns": "1,2,0",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1,R:0",
+        "JoinVars": {
+          "user_id": 2
+        },
+        "TableName": "`user`_music",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Block",
-            "BindVarName": "values",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1",
+            "Table": "`user`",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "VindexLookup",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Values": [
+              ":user_id"
+            ],
+            "Vindex": "music_user_map",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "EqualUnique",
+                "Variant": "IN",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1",
-                "Table": "`user`",
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
                 "Values": [
-                  "1"
+                  "::name"
                 ],
                 "Vindex": "user_index"
               },
               {
-                "OperatorType": "VindexLookup",
-                "Variant": "MultiEqual",
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "Values": [
-                  "values:2"
-                ],
-                "Vindex": "music_user_map",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "IN",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
-                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-                    "Table": "name_user_vdx",
-                    "Values": [
-                      "::name"
-                    ],
-                    "Vindex": "user_index"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "ByDestination",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select music.col3, `values`.user_col1 as col1, `values`.user_col2 as col2 from (values ::values) as `values`(user_col1, user_col2, user_id), music where 1 != 1",
-                    "Query": "select music.col3, `values`.user_col1 as col1, `values`.user_col2 as col2 from (values ::values) as `values`(user_col1, user_col2, user_id), music where `values`.user_id = music.id",
-                    "Table": "music"
-                  }
-                ]
+                "FieldQuery": "select music.col3 from music where 1 != 1",
+                "Query": "select music.col3 from music where music.id = :user_id",
+                "Table": "music"
               }
             ]
           }
@@ -628,77 +612,70 @@
     "comment": "ORDER BY non-key column for join",
     "query": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:a",
-          "1:col2",
-          "2:col3"
-        ],
-        "Columns": "1,2,0",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1,R:0",
+        "JoinVars": {
+          "user_id": 2
+        },
+        "TableName": "`user`_music",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Block",
-            "BindVarName": "values",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by `user`.col1 asc",
+            "Table": "`user`",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "VindexLookup",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Values": [
+              ":user_id"
+            ],
+            "Vindex": "music_user_map",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "EqualUnique",
+                "Variant": "IN",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by `user`.col1 asc",
-                "Table": "`user`",
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
                 "Values": [
-                  "1"
+                  "::name"
                 ],
                 "Vindex": "user_index"
               },
               {
-                "OperatorType": "VindexLookup",
-                "Variant": "MultiEqual",
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "Values": [
-                  "values:2"
-                ],
-                "Vindex": "music_user_map",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "IN",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
-                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-                    "Table": "name_user_vdx",
-                    "Values": [
-                      "::name"
-                    ],
-                    "Vindex": "user_index"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "ByDestination",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select music.col3, `values`.user_col1 as col1, `values`.user_col2 as col2 from (values ::values) as `values`(user_col1, user_col2, user_id), music where 1 != 1",
-                    "Query": "select music.col3, `values`.user_col1 as col1, `values`.user_col2 as col2 from (values ::values) as `values`(user_col1, user_col2, user_id), music where `values`.user_id = music.id",
-                    "Table": "music"
-                  }
-                ]
+                "FieldQuery": "select music.col3 from music where 1 != 1",
+                "Query": "select music.col3 from music where music.id = :user_id",
+                "Table": "music"
               }
             ]
           }
@@ -714,77 +691,70 @@
     "comment": "ORDER BY non-key column for implicit join",
     "query": "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:a",
-          "1:col2",
-          "2:col3"
-        ],
-        "Columns": "1,2,0",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1,R:0",
+        "JoinVars": {
+          "user_id": 2
+        },
+        "TableName": "`user`_music",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Block",
-            "BindVarName": "values",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by `user`.col1 asc",
+            "Table": "`user`",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "VindexLookup",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Values": [
+              ":user_id"
+            ],
+            "Vindex": "music_user_map",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "EqualUnique",
+                "Variant": "IN",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by `user`.col1 asc",
-                "Table": "`user`",
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
                 "Values": [
-                  "1"
+                  "::name"
                 ],
                 "Vindex": "user_index"
               },
               {
-                "OperatorType": "VindexLookup",
-                "Variant": "MultiEqual",
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "Values": [
-                  "values:2"
-                ],
-                "Vindex": "music_user_map",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "IN",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
-                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-                    "Table": "name_user_vdx",
-                    "Values": [
-                      "::name"
-                    ],
-                    "Vindex": "user_index"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "ByDestination",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select music.col3, `values`.user_col1 as col1, `values`.user_col2 as col2 from (values ::values) as `values`(user_col1, user_col2, user_id), music where 1 != 1",
-                    "Query": "select music.col3, `values`.user_col1 as col1, `values`.user_col2 as col2 from (values ::values) as `values`(user_col1, user_col2, user_id), music where `values`.user_id = music.id",
-                    "Table": "music"
-                  }
-                ]
+                "FieldQuery": "select music.col3 from music where 1 != 1",
+                "Query": "select music.col3 from music where music.id = :user_id",
+                "Table": "music"
               }
             ]
           }
@@ -869,77 +839,70 @@
     "comment": "ORDER BY RAND() for join",
     "query": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:a",
-          "1:col2",
-          "2:col3"
-        ],
-        "Columns": "1,2,0",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1,R:0",
+        "JoinVars": {
+          "user_id": 2
+        },
+        "TableName": "`user`_music",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Block",
-            "BindVarName": "values",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by RAND()",
+            "Table": "`user`",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "VindexLookup",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Values": [
+              ":user_id"
+            ],
+            "Vindex": "music_user_map",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "EqualUnique",
+                "Variant": "IN",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by RAND()",
-                "Table": "`user`",
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Table": "name_user_vdx",
                 "Values": [
-                  "1"
+                  "::name"
                 ],
                 "Vindex": "user_index"
               },
               {
-                "OperatorType": "VindexLookup",
-                "Variant": "MultiEqual",
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "Values": [
-                  "values:2"
-                ],
-                "Vindex": "music_user_map",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "IN",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
-                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-                    "Table": "name_user_vdx",
-                    "Values": [
-                      "::name"
-                    ],
-                    "Vindex": "user_index"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "ByDestination",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select music.col3, `values`.user_col1 as col1, `values`.user_col2 as col2 from (values ::values) as `values`(user_col1, user_col2, user_id), music where 1 != 1",
-                    "Query": "select music.col3, `values`.user_col1 as col1, `values`.user_col2 as col2 from (values ::values) as `values`(user_col1, user_col2, user_id), music where `values`.user_id = music.id",
-                    "Table": "music"
-                  }
-                ]
+                "FieldQuery": "select music.col3 from music where 1 != 1",
+                "Query": "select music.col3 from music where music.id = :user_id",
+                "Table": "music"
               }
             ]
           }
@@ -1365,8 +1328,9 @@
         "Inputs": [
           {
             "OperatorType": "Join",
-            "Variant": "Block",
-            "BindVarName": "values",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1390,8 +1354,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `values`.user_col as col from (values ::values) as `values`(user_col), user_extra where 1 != 1",
-                    "Query": "select `values`.user_col as col from (values ::values) as `values`(user_col), user_extra limit 1",
+                    "FieldQuery": "select 1 from user_extra where 1 != 1",
+                    "Query": "select 1 from user_extra limit 1",
                     "Table": "user_extra"
                   }
                 ]
@@ -1656,8 +1620,9 @@
       "Original": "select name from user, music order by name",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_music",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1678,8 +1643,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `values`.user_name as `name` from (values ::values) as `values`(user_name), music where 1 != 1",
-            "Query": "select `values`.user_name as `name` from (values ::values) as `values`(user_name), music",
+            "FieldQuery": "select 1 from music where 1 != 1",
+            "Query": "select 1 from music",
             "Table": "music"
           }
         ]
@@ -1835,46 +1800,37 @@
     "comment": "join order by with ambiguous column reference ; valid in MySQL",
     "query": "select name, name from user, music order by name",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select name, name from user, music order by name",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:name",
-          "1:name"
-        ],
-        "Columns": "0,0",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:0",
+        "TableName": "`user`_music",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Block",
-            "BindVarName": "values",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `name`, `name`, weight_string(`name`) from `user` where 1 != 1",
-                "OrderBy": "(0|2) ASC",
-                "Query": "select `name`, `name`, weight_string(`name`) from `user` order by `user`.`name` asc",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `values`.user_name as `name` from (values ::values) as `values`(user_name), music where 1 != 1",
-                "Query": "select `values`.user_name as `name` from (values ::values) as `values`(user_name), music",
-                "Table": "music"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `name`, `name`, weight_string(`name`) from `user` where 1 != 1",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select `name`, `name`, weight_string(`name`) from `user` order by `user`.`name` asc",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music where 1 != 1",
+            "Query": "select 1 from music",
+            "Table": "music"
           }
         ]
       },
@@ -1965,8 +1921,9 @@
         "Inputs": [
           {
             "OperatorType": "Join",
-            "Variant": "Block",
-            "BindVarName": "values",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,L:1",
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -1975,8 +1932,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.a from `user` where 1 != 1",
-                "Query": "select distinct `user`.a from `user`",
+                "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1",
+                "Query": "select distinct `user`.a, weight_string(`user`.a) from `user`",
                 "Table": "`user`"
               },
               {
@@ -1986,8 +1943,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `values`.user_a as a, weight_string(`values`.user_a) from (values ::values) as `values`(user_a), user_extra where 1 != 1",
-                "Query": "select distinct `values`.user_a as a, weight_string(`values`.user_a) from (values ::values) as `values`(user_a), user_extra",
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select distinct 1 from user_extra",
                 "Table": "user_extra"
               }
             ]
@@ -2240,8 +2197,12 @@
         "Inputs": [
           {
             "OperatorType": "Join",
-            "Variant": "Block",
-            "BindVarName": "values",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,R:0",
+            "JoinVars": {
+              "user_col": 1
+            },
+            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2261,8 +2222,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `values`.user_id as id, coalesce(`values`.user_col, user_extra.col) as `coalesce(``values``.user_col, user_extra.col)` from (values ::values) as `values`(user_id, user_col), user_extra where 1 != 1",
-                "Query": "select `values`.user_id as id, coalesce(`values`.user_col, user_extra.col) as `coalesce(``values``.user_col, user_extra.col)` from (values ::values) as `values`(user_id, user_col), user_extra",
+                "FieldQuery": "select coalesce(:user_col /* INT16 */, user_extra.col) from user_extra where 1 != 1",
+                "Query": "select coalesce(:user_col /* INT16 */, user_extra.col) from user_extra",
                 "Table": "user_extra"
               }
             ]

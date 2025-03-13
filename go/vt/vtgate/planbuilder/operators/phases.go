@@ -127,7 +127,7 @@ func (p Phase) shouldUseBlockJoins(ctx *plancontext.PlanningContext) bool {
 		}
 	}
 
-	return true
+	return ctx.VSchema.AreBlockJoinsEnabled() || ctx.IsCommentDirectiveSet(sqlparser.DirectiveAllowBlockJoin)
 }
 
 func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {

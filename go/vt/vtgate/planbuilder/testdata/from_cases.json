@@ -148,8 +148,9 @@
       "Original": "select music.col from user join music",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "TableName": "`user`_music",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -169,8 +170,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.col from (values ::values) as `values`, music where 1 != 1",
-            "Query": "select music.col from (values ::values) as `values`, music",
+            "FieldQuery": "select music.col from music where 1 != 1",
+            "Query": "select music.col from music",
             "Table": "music"
           }
         ]
@@ -338,8 +339,12 @@
       "Original": "select user.music.foo from user.music join user on user.music.id = user.id where user.music.col = 42",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "music_id": 1
+        },
+        "TableName": "music_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -354,16 +359,16 @@
           },
           {
             "OperatorType": "Route",
-            "Variant": "MultiEqual",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `values`.music_foo as foo from (values ::values) as `values`(music_foo, music_id), `user` where 1 != 1",
-            "Query": "select `values`.music_foo as foo from (values ::values) as `values`(music_foo, music_id), `user` where `values`.music_id = `user`.id",
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where `user`.id = :music_id",
             "Table": "`user`",
             "Values": [
-              "values:1"
+              ":music_id"
             ],
             "Vindex": "user_index"
           }
@@ -384,8 +389,9 @@
       "Original": "select music.col from user, music",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "TableName": "`user`_music",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -405,8 +411,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.col from (values ::values) as `values`, music where 1 != 1",
-            "Query": "select music.col from (values ::values) as `values`, music",
+            "FieldQuery": "select music.col from music where 1 != 1",
+            "Query": "select music.col from music",
             "Table": "music"
           }
         ]
@@ -1356,8 +1362,12 @@
       "Original": "select user.col from user join user_extra on user.id < user_extra.user_id",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "user_id": 1
+        },
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1377,8 +1387,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `values`.user_col as col from (values ::values) as `values`(user_col, user_id), user_extra where 1 != 1",
-            "Query": "select `values`.user_col as col from (values ::values) as `values`(user_col, user_id), user_extra where `values`.user_id < user_extra.user_id",
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra where :user_id < user_extra.user_id",
             "Table": "user_extra"
           }
         ]
@@ -1398,8 +1408,9 @@
       "Original": "select user.col from user join user_extra on user.id = 5",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1423,8 +1434,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `values`.user_col as col from (values ::values) as `values`(user_col), user_extra where 1 != 1",
-            "Query": "select `values`.user_col as col from (values ::values) as `values`(user_col), user_extra",
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
             "Table": "user_extra"
           }
         ]
@@ -1444,8 +1455,9 @@
       "Original": "select user.col from user join user_extra on 5 = user.id",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1469,8 +1481,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `values`.user_col as col from (values ::values) as `values`(user_col), user_extra where 1 != 1",
-            "Query": "select `values`.user_col as col from (values ::values) as `values`(user_col), user_extra",
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
             "Table": "user_extra"
           }
         ]
@@ -1490,8 +1502,12 @@
       "Original": "select user.col from user join user_extra on user.id = user_extra.col",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "user_extra_col": 0
+        },
+        "TableName": "user_extra_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1506,16 +1522,16 @@
           },
           {
             "OperatorType": "Route",
-            "Variant": "MultiEqual",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.col from (values ::values) as `values`(user_extra_col), `user` where 1 != 1",
-            "Query": "select `user`.col from (values ::values) as `values`(user_extra_col), `user` where `user`.id = `values`.user_extra_col",
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user` where `user`.id = :user_extra_col /* INT16 */",
             "Table": "`user`",
             "Values": [
-              "values:0"
+              ":user_extra_col"
             ],
             "Vindex": "user_index"
           }
@@ -1536,8 +1552,12 @@
       "Original": "select user.col from user_extra join user on user_extra.user_id = user.name",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "user_name": 1
+        },
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1552,16 +1572,16 @@
           },
           {
             "OperatorType": "Route",
-            "Variant": "MultiEqual",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `values`.user_col as col from (values ::values) as `values`(user_col, user_name), user_extra where 1 != 1",
-            "Query": "select `values`.user_col as col from (values ::values) as `values`(user_col, user_name), user_extra where user_extra.user_id = `values`.user_name",
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra where user_extra.user_id = :user_name",
             "Table": "user_extra",
             "Values": [
-              "values:1"
+              ":user_name"
             ],
             "Vindex": "user_index"
           }
@@ -1681,8 +1701,9 @@
       "Original": "select route2.col from route2 join user_extra",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "unsharded_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1702,8 +1723,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `values`.route2_col as col from (values ::values) as `values`(route2_col), user_extra where 1 != 1",
-            "Query": "select `values`.route2_col as col from (values ::values) as `values`(route2_col), user_extra",
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
             "Table": "user_extra"
           }
         ]
@@ -2758,8 +2779,12 @@
       "Original": "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "JoinVars": {
+          "user_col2": 1
+        },
+        "TableName": "`user`_unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2779,8 +2804,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select main.unsharded.col1, `values`.user_col1 as col1 from (values ::values) as `values`(user_col1, user_col2), unsharded where 1 != 1",
-            "Query": "select main.unsharded.col1, `values`.user_col1 as col1 from (values ::values) as `values`(user_col1, user_col2), unsharded where unsharded.col2 = `values`.user_col2",
+            "FieldQuery": "select unsharded.col1 from unsharded where 1 != 1",
+            "Query": "select unsharded.col1 from unsharded where unsharded.col2 = :user_col2",
             "Table": "unsharded"
           }
         ]
@@ -2982,8 +3007,12 @@
       "Original": "SELECT `user`.`id` FROM `user` INNER JOIN `user_extra` ON `user`.`id` = `user_extra`.`assembly_id` WHERE `user_extra`.`user_id` = 2",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0",
+        "JoinVars": {
+          "user_extra_assembly_id": 0
+        },
+        "TableName": "user_extra_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3002,16 +3031,16 @@
           },
           {
             "OperatorType": "Route",
-            "Variant": "MultiEqual",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.id from (values ::values) as `values`(user_extra_assembly_id), `user` where 1 != 1",
-            "Query": "select `user`.id from (values ::values) as `values`(user_extra_assembly_id), `user` where `user`.id = `values`.user_extra_assembly_id",
+            "FieldQuery": "select `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.id from `user` where `user`.id = :user_extra_assembly_id",
             "Table": "`user`",
             "Values": [
-              "values:0"
+              ":user_extra_assembly_id"
             ],
             "Vindex": "user_index"
           }
@@ -3182,48 +3211,43 @@
     "comment": "join column selected as alias",
     "query": "SELECT u.id as uid, ue.id as ueid FROM user u join user_extra ue where u.id = ue.id",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT u.id as uid, ue.id as ueid FROM user u join user_extra ue where u.id = ue.id",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:uid",
-          "1:ueid"
-        ],
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "R:0,L:0",
+        "JoinVars": {
+          "ue_id": 0
+        },
+        "TableName": "user_extra_`user`",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Block",
-            "BindVarName": "values",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select ue.id as ueid from user_extra as ue where 1 != 1",
-                "Query": "select ue.id as ueid from user_extra as ue",
-                "Table": "user_extra"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "MultiEqual",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select u.id as uid, `values`.ue_id as id from (values ::values) as `values`(ue_id), `user` as u where 1 != 1",
-                "Query": "select u.id as uid, `values`.ue_id as id from (values ::values) as `values`(ue_id), `user` as u where u.id = `values`.ue_id",
-                "Table": "`user`",
-                "Values": [
-                  "values:0"
-                ],
-                "Vindex": "user_index"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.id as ueid from user_extra as ue where 1 != 1",
+            "Query": "select ue.id as ueid from user_extra as ue",
+            "Table": "user_extra"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
+            "Query": "select u.id as uid from `user` as u where u.id = :ue_id",
+            "Table": "`user`",
+            "Values": [
+              ":ue_id"
+            ],
+            "Vindex": "user_index"
           }
         ]
       },
@@ -3676,8 +3700,12 @@
       "Original": "select u.id from user as u join user as uu on u.intcol = uu.intcol",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_intcol": 1
+        },
+        "TableName": "`user`_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3697,8 +3725,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `values`.u_id as id from (values ::values) as `values`(u_id, u_intcol), `user` as uu where 1 != 1",
-            "Query": "select `values`.u_id as id from (values ::values) as `values`(u_id, u_intcol), `user` as uu where `values`.u_intcol = uu.intcol",
+            "FieldQuery": "select 1 from `user` as uu where 1 != 1",
+            "Query": "select 1 from `user` as uu where uu.intcol = :u_intcol /* INT16 */",
             "Table": "`user`"
           }
         ]
@@ -3835,8 +3863,9 @@
       "Original": "select 1 from main.unsharded join main_2.unsharded_tab",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "unsharded_unsharded_tab",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3856,8 +3885,8 @@
               "Name": "main_2",
               "Sharded": false
             },
-            "FieldQuery": "select 1 as `1` from (values ::values) as `values`, unsharded_tab where 1 != 1",
-            "Query": "select 1 as `1` from (values ::values) as `values`, unsharded_tab",
+            "FieldQuery": "select 1 from unsharded_tab where 1 != 1",
+            "Query": "select 1 from unsharded_tab",
             "Table": "unsharded_tab"
           }
         ]
@@ -4233,47 +4262,39 @@
     "comment": "join with USING construct",
     "query": "select * from authoritative join unsharded_authoritative using(col1)",
     "plan": {
-      "Type": "Complex",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select * from authoritative join unsharded_authoritative using(col1)",
       "Instructions": {
-        "OperatorType": "SimpleProjection",
-        "ColumnNames": [
-          "0:col1",
-          "1:user_id",
-          "2:col2",
-          "3:col2"
-        ],
-        "Columns": "1,2,3,0",
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1,L:2,R:0",
+        "JoinVars": {
+          "authoritative_col1": 0
+        },
+        "TableName": "authoritative_unsharded_authoritative",
         "Inputs": [
           {
-            "OperatorType": "Join",
-            "Variant": "Block",
-            "BindVarName": "values",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select authoritative.col1, authoritative.user_id, authoritative.col2 from authoritative where 1 != 1",
-                "Query": "select authoritative.col1, authoritative.user_id, authoritative.col2 from authoritative",
-                "Table": "authoritative"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Unsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select unsharded_authoritative.col2, `values`.authoritative_col1 as col1, `values`.authoritative_user_id as user_id, `values`.authoritative_col2 as col2 from (values ::values) as `values`(authoritative_col1, authoritative_user_id, authoritative_col2), unsharded_authoritative where 1 != 1",
-                "Query": "select unsharded_authoritative.col2, `values`.authoritative_col1 as col1, `values`.authoritative_user_id as user_id, `values`.authoritative_col2 as col2 from (values ::values) as `values`(authoritative_col1, authoritative_user_id, authoritative_col2), unsharded_authoritative where `values`.authoritative_col1 = unsharded_authoritative.col1",
-                "Table": "unsharded_authoritative"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select authoritative.col1, authoritative.user_id, authoritative.col2 from authoritative where 1 != 1",
+            "Query": "select authoritative.col1, authoritative.user_id, authoritative.col2 from authoritative",
+            "Table": "authoritative"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded_authoritative.col2 from unsharded_authoritative where 1 != 1",
+            "Query": "select unsharded_authoritative.col2 from unsharded_authoritative where unsharded_authoritative.col1 = :authoritative_col1 /* VARCHAR */",
+            "Table": "unsharded_authoritative"
           }
         ]
       },
@@ -4514,8 +4535,12 @@
       "Original": "select 1 from multicol_tbl m1 join multicol_tbl m2 on m1.cola = m2.cola",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "m1_cola": 1
+        },
+        "TableName": "multicol_tbl_multicol_tbl",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -4530,16 +4555,16 @@
           },
           {
             "OperatorType": "Route",
-            "Variant": "MultiEqual",
+            "Variant": "SubShard",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 as `1` from (values ::values) as `values`(m1_cola), multicol_tbl as m2 where 1 != 1",
-            "Query": "select 1 as `1` from (values ::values) as `values`(m1_cola), multicol_tbl as m2 where `values`.m1_cola = m2.cola",
+            "FieldQuery": "select 1 from multicol_tbl as m2 where 1 != 1",
+            "Query": "select 1 from multicol_tbl as m2 where m2.cola = :m1_cola",
             "Table": "multicol_tbl",
             "Values": [
-              "values:0"
+              ":m1_cola"
             ],
             "Vindex": "multicolIdx"
           }
@@ -4860,8 +4885,12 @@
       "Original": "select u.intcol, u.id from user u use vindex (name_user_map) join music m ignore vindex(user_index) on u.col = m.col where u.name = 'bb' and u.id = 3 and m.user_id = 5 and m.id = 20",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1",
+        "JoinVars": {
+          "u_col": 2
+        },
+        "TableName": "`user`_music",
         "Inputs": [
           {
             "OperatorType": "VindexLookup",
@@ -4937,8 +4966,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `values`.u_intcol as intcol, `values`.u_id as id from (values ::values) as `values`(u_intcol, u_id, u_col), music as m where 1 != 1",
-                "Query": "select `values`.u_intcol as intcol, `values`.u_id as id from (values ::values) as `values`(u_intcol, u_id, u_col), music as m where m.user_id = 5 and m.id = 20 and `values`.u_col = m.col",
+                "FieldQuery": "select 1 from music as m where 1 != 1",
+                "Query": "select 1 from music as m where m.user_id = 5 and m.id = 20 and m.col = :u_col /* INT16 */",
                 "Table": "music"
               }
             ]
@@ -4960,8 +4989,12 @@
       "Original": "select 1 from user join t1 on user.id = t1.id",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "t1_id": 1
+        },
+        "TableName": "t1_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -4976,16 +5009,16 @@
           },
           {
             "OperatorType": "Route",
-            "Variant": "MultiEqual",
+            "Variant": "EqualUnique",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 as `1` from (values ::values) as `values`(t1_id), `user` where 1 != 1",
-            "Query": "select 1 as `1` from (values ::values) as `values`(t1_id), `user` where `user`.id = `values`.t1_id",
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where `user`.id = :t1_id",
             "Table": "`user`",
             "Values": [
-              "values:0"
+              ":t1_id"
             ],
             "Vindex": "user_index"
           }

@@ -130,13 +130,17 @@
               "Sharded": false
             },
             "FieldQuery": "select t1.id, t2.id from t1, t2 where 1 != 1",
-            "Query": "select t1.id, t2.id from t1, t2 where `values`.t1_id = t2.id",
+            "Query": "select t1.id, t2.id from t1, t2 where t1.id = t2.id",
             "Table": "t1, t2"
           },
           {
             "OperatorType": "Join",
-            "Variant": "Block",
-            "BindVarName": "values",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,R:0",
+            "JoinVars": {
+              "t1_id1": 0
+            },
+            "TableName": "t1_t1",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -151,14 +155,18 @@
               },
               {
                 "OperatorType": "Route",
-                "Variant": "Scatter",
+                "Variant": "EqualUnique",
                 "Keyspace": {
                   "Name": "sharded_dst1",
                   "Sharded": true
                 },
-                "FieldQuery": "select t2.id, `values`.t1_id as id from (values ::values) as `values`(t1_id), t1 as t2 where 1 != 1",
-                "Query": "select t2.id, `values`.t1_id as id from (values ::values) as `values`(t1_id), t1 as t2 where `values`.t1_id = t2.id",
-                "Table": "t1"
+                "FieldQuery": "select t2.id from t1 as t2 where 1 != 1",
+                "Query": "select t2.id from t1 as t2 where t2.id = :t1_id1",
+                "Table": "t1",
+                "Values": [
+                  ":t1_id1"
+                ],
+                "Vindex": "xxhash"
               }
             ]
           }

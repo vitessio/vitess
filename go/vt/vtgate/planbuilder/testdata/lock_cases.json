@@ -141,8 +141,12 @@
       "Original": "select u.col, u.bar from user u join music m on u.foo = m.foo for update nowait",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1",
+        "JoinVars": {
+          "u_foo": 2
+        },
+        "TableName": "`user`_music",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -162,8 +166,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `values`.u_col as col, `values`.u_bar as bar from (values ::values) as `values`(u_col, u_bar, u_foo), music as m where 1 != 1",
-            "Query": "select `values`.u_col as col, `values`.u_bar as bar from (values ::values) as `values`(u_col, u_bar, u_foo), music as m where `values`.u_foo = m.foo for update nowait",
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.foo = :u_foo for update nowait",
             "Table": "music"
           }
         ]
@@ -183,8 +187,12 @@
       "Original": "select u.col, u.bar from user u join music m on u.foo = m.foo for share skip locked",
       "Instructions": {
         "OperatorType": "Join",
-        "Variant": "Block",
-        "BindVarName": "values",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1",
+        "JoinVars": {
+          "u_foo": 2
+        },
+        "TableName": "`user`_music",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -204,8 +212,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `values`.u_col as col, `values`.u_bar as bar from (values ::values) as `values`(u_col, u_bar, u_foo), music as m where 1 != 1",
-            "Query": "select `values`.u_col as col, `values`.u_bar as bar from (values ::values) as `values`(u_col, u_bar, u_foo), music as m where `values`.u_foo = m.foo for share skip locked",
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.foo = :u_foo for share skip locked",
             "Table": "music"
           }
         ]
