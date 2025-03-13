@@ -679,6 +679,8 @@ func addWSColumnToInput(ctx *plancontext.PlanningContext, source Operator, offse
 		return addWSColumnToInput(ctx, op.Source, offset)
 	case *Filter:
 		return addWSColumnToInput(ctx, op.Source, offset)
+	case *BlockBuild:
+		return addWSColumnToInput(ctx, op.Source, offset)
 	case *Projection:
 		return true, op.AddWSColumn(ctx, offset, true)
 	case *Aggregator:

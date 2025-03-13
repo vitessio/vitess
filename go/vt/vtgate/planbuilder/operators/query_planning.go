@@ -194,14 +194,17 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 func tryPushBlockBuild(ctx *plancontext.PlanningContext, in *BlockBuild) (Operator, *ApplyResult) {
 	switch src := in.Source.(type) {
 	case *Filter:
-		return Swap(in, src, "pushed values under filter")
+		return Swap(in, src, "pushed BlockBuild under filter")
 	case *Route:
 		src.Routing.AddValuesTableID(in.TableID)
 		src.Routing.resetRoutingLogic(ctx)
-		return Swap(in, src, "pushed values under route")
+		return Swap(in, src, "pushed BlockBuild under route")
 	case *SubQueryContainer:
 		src.Outer, in.Source = in, src.Outer
-		return src, Rewrote("pushed values under subquery container")
+		return src, Rewrote("pushed BlockBuild under subquery container")
+	case *Limit:
+		return Swap(in, src, "pushed BlockBuild under limit")
+
 	}
 	return in, NoRewrite
 }
@@ -325,10 +328,23 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 
 		if in.Top {
 			in.Pushed = true
-			return in, Rewrote(fmt.Sprintf("add limit to %s of apply join", side))
+			return in, Rewrotef("add limit to %s of apply join", side)
 		}
 
-		return src, Rewrote(fmt.Sprintf("push limit to %s of apply join", side))
+		return src, Rewrotef("pushed limit to %s of apply join", side)
+	case *BlockJoin:
+		if in.Pushed {
+			// This is the Top limit, and it's already pushed down
+			return in, NoRewrite
+		}
+		src.RHS = createPushedLimit(ctx, src.RHS, in)
+
+		if in.Top {
+			in.Pushed = true
+			return in, Rewrote("add limit to RHS of block join")
+		}
+
+		return src, Rewrote("pushed limit to RHS of block join")
 	case *Limit:
 		combinedLimit := mergeLimits(in.AST, src.AST)
 		if combinedLimit == nil {

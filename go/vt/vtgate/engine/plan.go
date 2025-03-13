@@ -136,7 +136,7 @@ func getPlanType(p Primitive) PlanType {
 		return getPlanType(prim.Input)
 	case *VindexLookup:
 		return PlanLookup
-	case *Join:
+	case *Join, *BlockJoin:
 		return PlanJoinOp
 	case *FkCascade, *FkVerify:
 		return PlanForeignKey

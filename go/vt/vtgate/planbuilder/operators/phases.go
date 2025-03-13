@@ -76,9 +76,7 @@ func (p Phase) shouldRun(ctx *plancontext.PlanningContext) bool {
 	s := ctx.SemTable.QuerySignature
 	switch p {
 	case rewriteApplyJoin:
-		return !ctx.SemTable.QuerySignature.Aggregation &&
-			(ctx.VSchema.AreBlockJoinsEnabled() ||
-				ctx.IsCommentDirectiveSet(sqlparser.DirectiveAllowBlockJoin))
+		return p.shouldUseBlockJoins(ctx)
 	case pullDistinctFromUnion:
 		return s.Union
 	case delegateAggregation:
@@ -97,6 +95,35 @@ func (p Phase) shouldRun(ctx *plancontext.PlanningContext) bool {
 	default:
 		return true
 	}
+}
+
+// shouldUseBlockJoins returns true if the query should be rewritten to use BlockJoin.
+// This is only done for two table queries with no aggregation,
+// and the tables are not info_schema tables or derived tables
+func (p Phase) shouldUseBlockJoins(ctx *plancontext.PlanningContext) bool {
+	if ctx.Statement == nil {
+		return false
+	}
+
+	_, isSel := ctx.Statement.(sqlparser.SelectStatement)
+	if !isSel {
+		return false
+	}
+
+	// we only use block-joins for two normal table queries with no aggregation
+	stepOne := !ctx.SemTable.QuerySignature.Aggregation && len(ctx.SemTable.Tables) == 2
+	if !stepOne {
+		return false
+	}
+
+	for _, tableInfo := range ctx.SemTable.Tables {
+		rt, isNormalTable := tableInfo.(*semantics.RealTable)
+		if !isNormalTable || rt.IsInfSchema() {
+			return false
+		}
+
+	}
+	return true
 }
 
 func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {

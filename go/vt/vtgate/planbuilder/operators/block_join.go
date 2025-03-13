@@ -79,7 +79,7 @@ func (vj *BlockJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting b
 
 // AddWSColumn is used to add a weight_string column to the operator
 func (vj *BlockJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
-	panic("oh no")
+	return vj.RHS.AddWSColumn(ctx, offset, underRoute)
 }
 
 func (vj *BlockJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {

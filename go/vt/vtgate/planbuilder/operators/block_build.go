@@ -87,3 +87,6 @@ func (v *BlockBuild) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 func (v *BlockBuild) introducesTableID() semantics.TableSet {
 	return v.TableID
 }
+func (v *BlockBuild) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	panic("BUG: BlockBuild should have been pushed under a route")
+}
