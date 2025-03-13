@@ -394,10 +394,12 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, incl
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
+		fmt.Printf("Engine not open (include stats: %v)\n", includeStats)
 		log.Warning("Schema reload called for an engine that is not yet open")
 		return nil
 	}
 	if !pos.IsZero() && se.reloadAtPos.AtLeast(pos) {
+		fmt.Printf("Schema cached (include stats: %v)\n", includeStats)
 		log.V(2).Infof("ReloadAtEx: found cached schema at %s", replication.EncodePosition(pos))
 		return nil
 	}
@@ -417,6 +419,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		se.SchemaReloadTimings.Record("SchemaReload", start)
 	}()
 
+	fmt.Printf("in relaod (include stats: %v, SkipMetaCheck: %v)\n", includeStats, se.SkipMetaCheck)
 	// if this flag is set, then we don't need table meta information
 	if se.SkipMetaCheck {
 		return nil
