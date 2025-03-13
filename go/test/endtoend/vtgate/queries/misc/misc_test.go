@@ -132,7 +132,8 @@ func BenchmarkBlockJoin(b *testing.B) {
 
 		b.Run(fmt.Sprintf("LHS(%d) RHS(%d)", testCase.lhsRowCount, testCase.rhsRowCount), func(b *testing.B) {
 			for range b.N {
-				mcmp.Exec("select t1.id1, tbl.id from t1, tbl where t1.id2 = tbl.nonunq_col")
+				_, err := mcmp.VtConn.ExecuteFetch("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1, tbl.id from t1, tbl where t1.id2 = tbl.nonunq_col", 10001, true)
+				require.NoError(b, err)
 			}
 			b.StopTimer()
 

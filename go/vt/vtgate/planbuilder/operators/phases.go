@@ -105,6 +105,9 @@ func (p Phase) shouldUseBlockJoins(ctx *plancontext.PlanningContext) bool {
 		return false
 	}
 
+	// Below are cases unsupported by block join:
+
+	// No DMLs
 	_, isSel := ctx.Statement.(sqlparser.SelectStatement)
 	if !isSel {
 		return false
@@ -116,13 +119,14 @@ func (p Phase) shouldUseBlockJoins(ctx *plancontext.PlanningContext) bool {
 		return false
 	}
 
+	// no information schema and non-normal tables
 	for _, tableInfo := range ctx.SemTable.Tables {
 		rt, isNormalTable := tableInfo.(*semantics.RealTable)
 		if !isNormalTable || rt.IsInfSchema() {
 			return false
 		}
-
 	}
+
 	return true
 }
 
