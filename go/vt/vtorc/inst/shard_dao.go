@@ -41,18 +41,6 @@ func ReadShardNames(keyspaceName string) (shardNames []string, err error) {
 	return shardNames, err
 }
 
-// ReadAllShardNames reads the names of all vitess shards by keyspace.
-func ReadAllShardNames() (shardNames map[string][]string, err error) {
-	shardNames = make(map[string][]string)
-	query := `select keyspace, shard from vitess_shard`
-	err = db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
-		ks := row.GetString("keyspace")
-		shardNames[ks] = append(shardNames[ks], row.GetString("shard"))
-		return nil
-	})
-	return shardNames, err
-}
-
 // ReadShardPrimaryInformation reads the vitess shard record and gets the shard primary alias and timestamp.
 func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias string, primaryTimestamp string, err error) {
 	if err = topo.ValidateKeyspaceName(keyspaceName); err != nil {

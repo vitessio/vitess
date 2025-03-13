@@ -31,6 +31,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -54,9 +55,47 @@ var (
 	// This is populated by parsing `--clusters_to_watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
 
+	// tablet stats
+	statsTabletsWatchedByCell = stats.NewGaugesFuncWithMultiLabels(
+		"TabletsWatchedByCell",
+		"Number of tablets watched by cell",
+		[]string{"Cell"},
+		getTabletsWatchedByCellStats,
+	)
+	statsTabletsWatchedByShard = stats.NewGaugesFuncWithMultiLabels(
+		"TabletsWatchedByShard",
+		"Number of tablets watched by keyspace/shard",
+		[]string{"Keyspace", "Shard"},
+		getTabletsWatchedByShardStats,
+	)
+
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
 )
+
+// getTabletsWatchedByCellStats returns the number of tablets watched by cell in stats format.
+func getTabletsWatchedByCellStats() map[string]int64 {
+	tabletCountsByCell, err := inst.ReadTabletCountsByCell()
+	if err != nil {
+		log.Errorf("Failed to read tablet counts by cell: %+v", err)
+	}
+	return tabletCountsByCell
+}
+
+// getTabletsWatchedByShardStats returns the number of tablets watched by keyspace/shard in stats format.
+func getTabletsWatchedByShardStats() map[string]int64 {
+	tabletsWatchedByShard := make(map[string]int64)
+	tabletCountsByKS, err := inst.ReadTabletCountsByKeyspaceShard()
+	if err != nil {
+		log.Errorf("Failed to read tablet counts by shard: %+v", err)
+	}
+	for keyspace, countsByShard := range tabletCountsByKS {
+		for shard, tabletCount := range countsByShard {
+			tabletsWatchedByShard[keyspace+"."+shard] = tabletCount
+		}
+	}
+	return tabletsWatchedByShard
+}
 
 // RegisterFlags registers the flags required by VTOrc
 func RegisterFlags(fs *pflag.FlagSet) {
