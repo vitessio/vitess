@@ -247,12 +247,8 @@ func TestNoQueryPlanCache(t *testing.T) {
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if firstPlan == nil {
-		t.Fatalf("plan should not be nil")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, firstPlan, "plan should not be nil")
 	assertPlanCacheSize(t, qe, 0)
 	qe.ClearQueryPlanCache()
 }
@@ -276,12 +272,8 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if firstPlan == nil {
-		t.Fatalf("plan should not be nil")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, firstPlan, "plan should not be nil")
 	assertPlanCacheSize(t, qe, 0)
 	qe.ClearQueryPlanCache()
 }
