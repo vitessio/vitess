@@ -134,8 +134,6 @@ const (
 	ShardReplicationPositionResource Resource = "ShardReplicationPosition"
 	WorkflowResource                 Resource = "Workflow"
 
-	VTExplainResource Resource = "VTExplain"
-
 	VExplainResource Resource = "VExplain"
 
 	TabletFullStatusResource Resource = "TabletFullStatus"

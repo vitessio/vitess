@@ -39,7 +39,6 @@ import {
     fetchVSchema,
     FetchVSchemaParams,
     fetchVtctlds,
-    fetchVTExplain,
     fetchVExplain,
     fetchWorkflow,
     fetchWorkflowStatus,
@@ -452,13 +451,6 @@ export const useConcludeTransaction = (
     return useMutation<Awaited<ReturnType<typeof concludeTransaction>>, Error>(() => {
         return concludeTransaction(params);
     }, options);
-};
-
-export const useVTExplain = (
-    params: Parameters<typeof fetchVTExplain>[0],
-    options?: UseQueryOptions<pb.VTExplainResponse, Error> | undefined
-) => {
-    return useQuery(['vtexplain', params], () => fetchVTExplain(params), { ...options });
 };
 
 export const useVExplain = (
