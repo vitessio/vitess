@@ -56,6 +56,8 @@ var (
 	// disable redo logging and double write buffer
 	mysqlShellSpeedUpRestore = false
 
+	mysqlShellBackupBinaryName = "mysqlsh"
+
 	// use when checking if we need to create the directory on the local filesystem or not.
 	knownObjectStoreParams = []string{"s3BucketName", "osBucketName", "azureContainerName"}
 
@@ -107,8 +109,8 @@ type MySQLShellBackupEngine struct {
 }
 
 const (
-	mysqlShellBackupBinaryName = "mysqlsh"
 	mysqlShellBackupEngineName = "mysqlshell"
+	mysqlShellLockMessage      = "Global read lock has been released"
 )
 
 func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (result BackupResult, finalErr error) {
@@ -152,6 +154,11 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	}
 	lockAcquired := time.Now() // we will report how long we hold the lock for
 
+	// we need to release the global read lock in case the backup fails to start and
+	// the lock wasn't released by releaseReadLock() yet. context might be expired,
+	// so we pass a new one.
+	defer func() { _ = params.Mysqld.ReleaseGlobalReadLock(context.Background()) }()
+
 	posBeforeBackup, err := params.Mysqld.PrimaryPosition()
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "failed to fetch position")
@@ -184,6 +191,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 
 	// Get exit status.
 	if err := cmd.Wait(); err != nil {
+		pipeWriter.Close() // make sure we close the writer so the goroutines above will complete.
 		return BackupUnusable, vterrors.Wrap(err, mysqlShellBackupEngineName+" failed")
 	}
 
@@ -503,7 +511,7 @@ func releaseReadLock(ctx context.Context, reader io.Reader, params BackupParams,
 
 		if !released {
 
-			if !strings.Contains(line, "Global read lock has been released") {
+			if !strings.Contains(line, mysqlShellLockMessage) {
 				continue
 			}
 			released = true
@@ -520,6 +528,10 @@ func releaseReadLock(ctx context.Context, reader io.Reader, params BackupParams,
 	}
 	if err := scanner.Err(); err != nil {
 		params.Logger.Errorf("error reading from reader: %v", err)
+	}
+
+	if !released {
+		params.Logger.Errorf("could not release global lock earlier")
 	}
 }
 

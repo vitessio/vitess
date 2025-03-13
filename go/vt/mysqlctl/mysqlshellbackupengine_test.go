@@ -18,13 +18,16 @@ package mysqlctl
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
@@ -305,5 +308,122 @@ func TestCleanupMySQL(t *testing.T) {
 				"unexpected number of queries executed")
 		})
 	}
+
+}
+
+// this is a helper to write files in a temporary directory
+func generateTestFile(t *testing.T, name, contents string) {
+	f, err := os.OpenFile(name, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0700)
+	require.NoError(t, err)
+	defer f.Close()
+	_, err = f.WriteString(contents)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+}
+
+// This tests if we are properly releasing the global read lock we acquire
+// during ExecuteBackup(), even if the backup didn't succeed.
+func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
+	originalLocation := mysqlShellBackupLocation
+	originalBinary := mysqlShellBackupBinaryName
+	mysqlShellBackupLocation = "logical"
+	mysqlShellBackupBinaryName = path.Join(t.TempDir(), "test.sh")
+
+	defer func() { // restore the original values.
+		mysqlShellBackupLocation = originalLocation
+		mysqlShellBackupBinaryName = originalBinary
+	}()
+
+	logger := logutil.NewMemoryLogger()
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysql := NewFakeMysqlDaemon(fakedb)
+	defer mysql.Close()
+
+	be := &MySQLShellBackupEngine{}
+	params := BackupParams{
+		TabletAlias: "test",
+		Logger:      logger,
+		Mysqld:      mysql,
+	}
+	bs := FakeBackupStorage{
+		StartBackupReturn: FakeBackupStorageStartBackupReturn{},
+	}
+
+	t.Run("lock released if we see the mysqlsh lock being acquired", func(t *testing.T) {
+		logger.Clear()
+		manifestBuffer := ioutil.NewBytesBufferWriter()
+		bs.StartBackupReturn.BackupHandle = &FakeBackupHandle{
+			Dir:           t.TempDir(),
+			AddFileReturn: FakeBackupHandleAddFileReturn{WriteCloser: manifestBuffer},
+		}
+
+		// this simulates mysql shell completing without any issues.
+		generateTestFile(t, mysqlShellBackupBinaryName, fmt.Sprintf("#!/bin/bash\n>&2 echo %s", mysqlShellLockMessage))
+
+		bh, err := bs.StartBackup(context.Background(), t.TempDir(), t.Name())
+		require.NoError(t, err)
+
+		_, err = be.ExecuteBackup(context.Background(), params, bh)
+		require.NoError(t, err)
+		require.False(t, mysql.GlobalReadLock) // lock must be released.
+
+		// check the manifest is valid.
+		var manifest MySQLShellBackupManifest
+		err = json.Unmarshal(manifestBuffer.Bytes(), &manifest)
+		require.NoError(t, err)
+
+		require.Equal(t, mysqlShellBackupEngineName, manifest.BackupMethod)
+
+		// did we notice the lock was release and did we release it ours as well?
+		require.Contains(t, logger.String(), "global read lock released after",
+			"failed to release the global lock after mysqlsh")
+	})
+
+	t.Run("lock released if when we don't see mysqlsh released it", func(t *testing.T) {
+		mysql.GlobalReadLock = false // clear lock status.
+		logger.Clear()
+		manifestBuffer := ioutil.NewBytesBufferWriter()
+		bs.StartBackupReturn.BackupHandle = &FakeBackupHandle{
+			Dir:           t.TempDir(),
+			AddFileReturn: FakeBackupHandleAddFileReturn{WriteCloser: manifestBuffer},
+		}
+
+		// this simulates mysqlshell completing, but we don't see the message that is released its lock.
+		generateTestFile(t, mysqlShellBackupBinaryName, "#!/bin/bash\nexit 0")
+
+		bh, err := bs.StartBackup(context.Background(), t.TempDir(), t.Name())
+		require.NoError(t, err)
+
+		// in this case the backup was successful, but even if we didn't see mysqlsh release its lock
+		// we make sure it is released at the end.
+		_, err = be.ExecuteBackup(context.Background(), params, bh)
+		require.NoError(t, err)
+		require.False(t, mysql.GlobalReadLock) // lock must be released.
+
+		// make sure we are at least logging the lock wasn't able to be released earlier.
+		require.Contains(t, logger.String(), "could not release global lock earlier",
+			"failed to log error message when unable to release lock during backup")
+	})
+
+	t.Run("lock released when backup fails", func(t *testing.T) {
+		mysql.GlobalReadLock = false // clear lock status.
+		logger.Clear()
+		manifestBuffer := ioutil.NewBytesBufferWriter()
+		bs.StartBackupReturn.BackupHandle = &FakeBackupHandle{
+			Dir:           t.TempDir(),
+			AddFileReturn: FakeBackupHandleAddFileReturn{WriteCloser: manifestBuffer},
+		}
+
+		// this simulates the backup process failing.
+		generateTestFile(t, mysqlShellBackupBinaryName, "#!/bin/bash\nexit 1")
+
+		bh, err := bs.StartBackup(context.Background(), t.TempDir(), t.Name())
+		require.NoError(t, err)
+
+		_, err = be.ExecuteBackup(context.Background(), params, bh)
+		require.ErrorContains(t, err, "mysqlshell failed")
+		require.False(t, mysql.GlobalReadLock) // lock must be released.
+	})
 
 }

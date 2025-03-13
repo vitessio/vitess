@@ -177,6 +177,9 @@ type FakeMysqlDaemon struct {
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_slave_enabled.
 	SemiSyncReplicaEnabled bool
 
+	// GlobalReadLock is used to test if a lock has been acquired already or not
+	GlobalReadLock bool
+
 	// TimeoutHook is a func that can be called at the beginning of
 	// any method to fake a timeout.
 	// All a test needs to do is make it { return context.DeadlineExceeded }.
@@ -738,10 +741,20 @@ func (fmd *FakeMysqlDaemon) GetVersionComment(ctx context.Context) (string, erro
 
 // AcquireGlobalReadLock is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) AcquireGlobalReadLock(ctx context.Context) error {
-	return errors.New("not implemented")
+	if fmd.GlobalReadLock {
+		return errors.New("lock already acquired")
+	}
+
+	fmd.GlobalReadLock = true
+	return nil
 }
 
 // ReleaseGlobalReadLock is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) error {
-	return errors.New("not implemented")
+	if fmd.GlobalReadLock {
+		fmd.GlobalReadLock = false
+		return nil
+	}
+
+	return errors.New("no read locks acquired yet")
 }
