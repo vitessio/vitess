@@ -64,6 +64,7 @@ require (
 	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
 	github.com/yudai/golcs v0.0.0-20170316035057-ecda9a501e82
 	github.com/z-division/go-zookeeper v1.0.0
+<<<<<<< HEAD
 	go.etcd.io/etcd/api/v3 v3.5.14
 	go.etcd.io/etcd/client/pkg/v3 v3.5.14
 	go.etcd.io/etcd/client/v3 v3.5.14
@@ -84,6 +85,28 @@ require (
 	google.golang.org/grpc/examples v0.0.0-20210430044426-28078834f35b
 	google.golang.org/protobuf v1.34.1
 	gopkg.in/DataDog/dd-trace-go.v1 v1.64.0
+=======
+	go.etcd.io/etcd/api/v3 v3.5.18
+	go.etcd.io/etcd/client/pkg/v3 v3.5.18
+	go.etcd.io/etcd/client/v3 v3.5.18
+	go.uber.org/mock v0.5.0
+	golang.org/x/crypto v0.35.0 // indirect
+	golang.org/x/mod v0.23.0 // indirect
+	golang.org/x/net v0.36.0
+	golang.org/x/oauth2 v0.26.0
+	golang.org/x/sys v0.30.0
+	golang.org/x/term v0.29.0
+	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/time v0.10.0
+	golang.org/x/tools v0.29.0
+	google.golang.org/api v0.219.0
+	google.golang.org/genproto v0.0.0-20250204164813-702378808489 // indirect
+	google.golang.org/grpc v1.70.0
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1
+	google.golang.org/grpc/examples v0.0.0-20250204041003-947e2a4be2ba
+	google.golang.org/protobuf v1.36.4
+	gopkg.in/DataDog/dd-trace-go.v1 v1.69.1
+>>>>>>> bbba2127ce (Bump golang.org/x/net from 0.34.0 to 0.36.0 (#17958))
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/ldap.v2 v2.5.1
 	sigs.k8s.io/yaml v1.4.0
