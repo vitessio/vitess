@@ -4637,7 +4637,7 @@
     }
   },
   {
-    "comment": "Values-Join and subquery",
+    "comment": "Three tables join and subquery cannot be a block join",
     "query": "select /*vt+ ALLOW_BLOCK_JOIN */ unsharded.x, u1.x from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
     "plan": {
       "Type": "Join",
