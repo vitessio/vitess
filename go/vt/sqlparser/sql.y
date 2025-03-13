@@ -153,6 +153,9 @@ func markBindVariable(yylex yyLexer, bvar string) {
   jsonObjectParams []*JSONObjectParam
   procParam  *ProcParameter
   procParams []*ProcParameter
+  handlerAction HandlerAction
+  handlerCondition HandlerCondition
+  handlerConditions []HandlerCondition
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partitionEngine *PartitionEngine
@@ -329,7 +332,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 // DDL Tokens
 %token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY DEALLOCATE
-%token <str> REVERT QUERIES DECLARE
+%token <str> REVERT QUERIES DECLARE FOUND HANDLER CONTINUE EXIT UNDO
+%token <str> SQLEXCEPTION SQLSTATE SQLWARNING
 %token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE PREPARE EXECUTE
@@ -460,6 +464,9 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <alterTable> create_index_prefix
 %type <createDatabase> create_database_prefix
 %type <alterDatabase> alter_database_prefix
+%type <handlerAction> handler_action
+%type <handlerConditions> condition_value_list
+%type <handlerCondition> condition_value
 %type <databaseOption> collate character_set encryption
 %type <databaseOptions> create_options create_options_opt
 %type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt partition_storage_opt
@@ -509,7 +516,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <selectExpr> select_expression
 %type <strs> select_options select_options_opt flush_option_list
 %type <str> select_option algorithm_view_opt algorithm_view security_view security_view_opt
-%type <str> generated_always_opt user_username address_opt
+%type <str> generated_always_opt user_username address_opt value_opt
 %type <definer> definer_opt definer user
 %type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr regular_expressions xml_expressions
 %type <expr> simple_expr literal NUM_literal text_start text_literal text_literal_or_arg bool_pri literal_or_null now predicate tuple_expression null_int_variable_arg performance_schema_function_expressions gtid_function_expressions
@@ -734,6 +741,64 @@ compound_statement_without_semicolon:
     $3.Options = $4
     $$ = &DeclareVar{VarNames: $2, Type: $3}
   }
+| DECLARE handler_action HANDLER FOR condition_value_list compound_statement_without_semicolon
+  {
+    $$ = &DeclareHandler{Action: $2, Conditions: $5, Statement: $6}
+  }
+
+handler_action:
+  CONTINUE
+  {
+    $$ = ContinueAction
+  }
+| EXIT
+  {
+    $$ = ExitAction
+  }
+| UNDO
+  {
+    $$ = UndoAction
+  }
+
+condition_value_list:
+  condition_value_list ',' condition_value
+  {
+    $$ = append($1, $3)
+  }
+| condition_value
+  {
+    $$ = []HandlerCondition{ $1 }
+  }
+
+condition_value:
+  INTEGRAL
+  {
+     $$ = &HandlerConditionErrorCode{ErrorCode: convertStringToInt($1)}
+  }
+| SQLSTATE value_opt STRING
+  {
+    $$ = &HandlerConditionSQLState{SQLStateValue: NewStrLiteral($3)}
+  }
+| sql_id
+  {
+    $$ = &HandlerConditionNamed{Name: $1}
+  }
+| SQLWARNING
+  {
+    $$ = &HandlerConditionSQLWarning{}
+  }
+| NOT FOUND
+  {
+    $$ = &HandlerConditionNotFound{}
+  }
+| SQLEXCEPTION
+  {
+    $$ = &HandlerConditionSQLException{}
+  }
+
+value_opt:
+  {}
+| VALUE
 
 column_type_default_opt:
   {
@@ -1398,7 +1463,6 @@ create_procedure:
   CREATE comment_opt definer_opt PROCEDURE not_exists_opt table_id openb proc_params_list_opt closeb compound_statement
   {
     $$ = &CreateProcedure{Comments: Comments($2).Parsed(), Name: $6, IfNotExists: $5, Definer: $3, Params: $8, Statement: $10}
-    setDDL(yylex, $$)
   }
 
 create_table_prefix:
@@ -8361,6 +8425,7 @@ reserved_keyword:
 | CHECK
 | COLLATE
 | COLUMN
+| CONTINUE
 | CONVERT
 | CREATE
 | CROSS
@@ -8389,6 +8454,7 @@ reserved_keyword:
 | EMPTY
 | ESCAPE
 | EXISTS
+| EXIT
 | EXPLAIN
 | EXTRACT
 | FALSE
@@ -8476,6 +8542,9 @@ reserved_keyword:
 | SPATIAL
 | SQL_BIG_RESULT
 | SQL_SMALL_RESULT
+| SQLEXCEPTION
+| SQLSTATE
+| SQLWARNING
 | STORED
 | STRAIGHT_JOIN
 | SYSDATE
@@ -8485,6 +8554,7 @@ reserved_keyword:
 | TO
 | TRAILING
 | TRUE
+| UNDO
 | UNION
 | UNIQUE
 | UNLOCK
@@ -8619,6 +8689,7 @@ non_reserved_keyword:
 | FORMAT
 | FORMAT_BYTES %prec FUNCTION_CALL_NON_KEYWORD
 | FORMAT_PICO_TIME %prec FUNCTION_CALL_NON_KEYWORD
+| FOUND
 | FULL
 | FUNCTION
 | GENERAL
@@ -8632,6 +8703,7 @@ non_reserved_keyword:
 | GTID_EXECUTED
 | GTID_SUBSET %prec FUNCTION_CALL_NON_KEYWORD
 | GTID_SUBTRACT %prec FUNCTION_CALL_NON_KEYWORD
+| HANDLER
 | HASH
 | HEADER
 | HISTOGRAM

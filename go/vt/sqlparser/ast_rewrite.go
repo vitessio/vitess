@@ -141,6 +141,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
 	case *DeallocateStmt:
 		return a.rewriteRefOfDeallocateStmt(parent, node, replacer)
+	case *DeclareHandler:
+		return a.rewriteRefOfDeclareHandler(parent, node, replacer)
 	case *DeclareVar:
 		return a.rewriteRefOfDeclareVar(parent, node, replacer)
 	case *Default:
@@ -219,6 +221,18 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfGroupBy(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
+	case *HandlerConditionErrorCode:
+		return a.rewriteRefOfHandlerConditionErrorCode(parent, node, replacer)
+	case *HandlerConditionNamed:
+		return a.rewriteRefOfHandlerConditionNamed(parent, node, replacer)
+	case *HandlerConditionNotFound:
+		return a.rewriteRefOfHandlerConditionNotFound(parent, node, replacer)
+	case *HandlerConditionSQLException:
+		return a.rewriteRefOfHandlerConditionSQLException(parent, node, replacer)
+	case *HandlerConditionSQLState:
+		return a.rewriteRefOfHandlerConditionSQLState(parent, node, replacer)
+	case *HandlerConditionSQLWarning:
+		return a.rewriteRefOfHandlerConditionSQLWarning(parent, node, replacer)
 	case IdentifierCI:
 		return a.rewriteIdentifierCI(parent, node, replacer)
 	case IdentifierCS:
@@ -3410,6 +3424,63 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 }
 
 // Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfDeclareHandler(parent SQLNode, node *DeclareHandler, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	for x, el := range node.Conditions {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfDeclareHandlerConditionsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
+		if !a.rewriteHandlerCondition(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*DeclareHandler).Conditions[idx] = newNode.(HandlerCondition)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.collectPaths && len(node.Conditions) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeclareHandlerStatement))
+	}
+	if !a.rewriteCompoundStatement(node, node.Statement, func(newNode, parent SQLNode) {
+		parent.(*DeclareHandler).Statement = newNode.(CompoundStatement)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDeclareVar(parent SQLNode, node *DeclareVar, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5366,6 +5437,210 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfHandlerConditionErrorCode(parent SQLNode, node *HandlerConditionErrorCode, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfHandlerConditionNamed(parent SQLNode, node *HandlerConditionNamed, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfHandlerConditionNamedName))
+	}
+	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*HandlerConditionNamed).Name = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfHandlerConditionNotFound(parent SQLNode, node *HandlerConditionNotFound, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfHandlerConditionSQLException(parent SQLNode, node *HandlerConditionSQLException, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfHandlerConditionSQLState(parent SQLNode, node *HandlerConditionSQLState, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfHandlerConditionSQLStateSQLStateValue))
+	}
+	if !a.rewriteRefOfLiteral(node, node.SQLStateValue, func(newNode, parent SQLNode) {
+		parent.(*HandlerConditionSQLState).SQLStateValue = newNode.(*Literal)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfHandlerConditionSQLWarning(parent SQLNode, node *HandlerConditionSQLWarning, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -14545,6 +14820,8 @@ func (a *application) rewriteCompoundStatement(parent SQLNode, node CompoundStat
 	switch node := node.(type) {
 	case *BeginEndStatement:
 		return a.rewriteRefOfBeginEndStatement(parent, node, replacer)
+	case *DeclareHandler:
+		return a.rewriteRefOfDeclareHandler(parent, node, replacer)
 	case *DeclareVar:
 		return a.rewriteRefOfDeclareVar(parent, node, replacer)
 	case *IfStatement:
@@ -14885,6 +15162,32 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
 	case *XorExpr:
 		return a.rewriteRefOfXorExpr(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
+	default:
+		// this should never happen
+		return true
+	}
+}
+
+// Function Generation Source: InterfaceMethod
+func (a *application) rewriteHandlerCondition(parent SQLNode, node HandlerCondition, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	switch node := node.(type) {
+	case *HandlerConditionErrorCode:
+		return a.rewriteRefOfHandlerConditionErrorCode(parent, node, replacer)
+	case *HandlerConditionNamed:
+		return a.rewriteRefOfHandlerConditionNamed(parent, node, replacer)
+	case *HandlerConditionNotFound:
+		return a.rewriteRefOfHandlerConditionNotFound(parent, node, replacer)
+	case *HandlerConditionSQLException:
+		return a.rewriteRefOfHandlerConditionSQLException(parent, node, replacer)
+	case *HandlerConditionSQLState:
+		return a.rewriteRefOfHandlerConditionSQLState(parent, node, replacer)
+	case *HandlerConditionSQLWarning:
+		return a.rewriteRefOfHandlerConditionSQLWarning(parent, node, replacer)
 	case Visitable:
 		return a.rewriteVisitable(parent, node, replacer)
 	default:

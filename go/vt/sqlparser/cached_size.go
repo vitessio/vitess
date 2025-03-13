@@ -1163,6 +1163,29 @@ func (cached *DeallocateStmt) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+func (cached *DeclareHandler) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Conditions []vitess.io/vitess/go/vt/sqlparser.HandlerCondition
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Conditions)) * int64(16))
+		for _, elem := range cached.Conditions {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	// field Statement vitess.io/vitess/go/vt/sqlparser.CompoundStatement
+	if cc, ok := cached.Statement.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *DeclareVar) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1849,6 +1872,40 @@ func (cached *GroupConcatExpr) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Separator)))
 	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
 	size += cached.Limit.CachedSize(true)
+	return size
+}
+func (cached *HandlerConditionErrorCode) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
+func (cached *HandlerConditionNamed) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
+	size += cached.Name.CachedSize(false)
+	return size
+}
+func (cached *HandlerConditionSQLState) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	// field SQLStateValue *vitess.io/vitess/go/vt/sqlparser.Literal
+	size += cached.SQLStateValue.CachedSize(true)
 	return size
 }
 func (cached *IdentifierCI) CachedSize(alloc bool) int64 {

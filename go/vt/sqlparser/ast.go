@@ -761,6 +761,9 @@ type (
 
 	// IndexType is the type of index in a DDL statement
 	IndexType int8
+
+	// HandlerAction is the type of action for the DeclareHandler statement
+	HandlerAction int8
 )
 
 // Compound Statements
@@ -797,12 +800,59 @@ type (
 		VarNames []IdentifierCI
 		Type     *ColumnType
 	}
+
+	// DeclareHandler represents a DECLARE...HANDLER statement
+	DeclareHandler struct {
+		Action     HandlerAction
+		Conditions []HandlerCondition
+		Statement  CompoundStatement
+	}
 )
 
 func (*SingleStatement) iCompoundStatement()   {}
 func (*BeginEndStatement) iCompoundStatement() {}
 func (*IfStatement) iCompoundStatement()       {}
 func (*DeclareVar) iCompoundStatement()        {}
+func (*DeclareHandler) iCompoundStatement()    {}
+
+// HandlerCondition represents a condition in a DECLARE HANDLER statement
+type (
+	HandlerCondition interface {
+		iHandlerCondition()
+		SQLNode
+	}
+
+	// HandlerConditionSQLState represents a SQLSTATE condition in a DECLARE HANDLER statement
+	HandlerConditionSQLState struct {
+		SQLStateValue *Literal
+	}
+
+	// HandlerConditionNamed represents a named condition in a DECLARE HANDLER statement
+	HandlerConditionNamed struct {
+		Name IdentifierCI
+	}
+
+	// HandlerConditionErrorCode represents an error code condition in a DECLARE HANDLER statement
+	HandlerConditionErrorCode struct {
+		ErrorCode int
+	}
+
+	// HandlerConditionSQLException represents a SQLEXCEPTION condition in a DECLARE HANDLER statement
+	HandlerConditionSQLException struct{}
+
+	// HandlerConditionSQLWarning represents a SQLWARNING condition in a DECLARE HANDLER statement
+	HandlerConditionSQLWarning struct{}
+
+	// HandlerConditionNotFound represents a NOT FOUND condition in a DECLARE HANDLER statement
+	HandlerConditionNotFound struct{}
+)
+
+func (*HandlerConditionSQLState) iHandlerCondition()     {}
+func (*HandlerConditionNamed) iHandlerCondition()        {}
+func (*HandlerConditionErrorCode) iHandlerCondition()    {}
+func (*HandlerConditionSQLException) iHandlerCondition() {}
+func (*HandlerConditionSQLWarning) iHandlerCondition()   {}
+func (*HandlerConditionNotFound) iHandlerCondition()     {}
 
 var _ OrderAndLimit = (*Select)(nil)
 var _ OrderAndLimit = (*Update)(nil)

@@ -2150,7 +2150,29 @@ var (
 		input:  "create procedure MultipleDeclareProcedure(in val1 int, in val2 int) begin declare sum_result int; declare diff_result int; set sum_result = val1 + val2; set diff_result = val1 - val2; select sum_result as Sum, diff_result as Difference; end;",
 		output: "create procedure MultipleDeclareProcedure (in val1 int, in val2 int) begin declare sum_result int; declare diff_result int; set sum_result = val1 + val2; set diff_result = val1 - val2; select sum_result as `Sum`, diff_result as Difference from dual; end;",
 	}, {
-		input: "create procedure ErrorHandlingProcedure(in value int) begin declare exit handler for sqlexception begin select 'An error occurred'; end; if value < 0 then signal sqlstate '45000' set message_text = 'Negative values not allowed'; else select 'Valid value'; end if; end;",
+		input:  "create procedure ErrorHandlingProcedure(in value int) begin declare exit handler for sqlexception begin select 'An error occurred'; end; if value < 0 then set message_text = 'Negative values not allowed'; else select 'Valid value'; end if; end;",
+		output: "create procedure ErrorHandlingProcedure (in value int) begin declare exit handler for sqlexception begin select 'An error occurred' from dual; end; if value < 0 then set message_text = 'Negative values not allowed'; else select 'Valid value' from dual; end if; end;",
+	}, {
+		input:  "create procedure HandlerWithSQLEXCEPTION() begin declare undo handler for sqlexception begin select 'SQL Exception occurred'; end; insert into non_existing_table values (1); end;",
+		output: "create procedure HandlerWithSQLEXCEPTION () begin declare undo handler for sqlexception begin select 'SQL Exception occurred' from dual; end; insert into non_existing_table values (1); end;",
+	}, {
+		input:  "create procedure HandlerWithNOTFOUND() begin declare exit handler for not found begin select 'No data found'; end; select * from employees where id = -1; end;",
+		output: "create procedure HandlerWithNOTFOUND () begin declare exit handler for not found begin select 'No data found' from dual; end; select * from employees where id = -1; end;",
+	}, {
+		input:  "create procedure HandlerWithSQLWARNING() begin declare continue handler for sqlwarning begin select 'A warning occurred'; end; insert into employees (id, name) values (null, 'John'); end;",
+		output: "create procedure HandlerWithSQLWARNING () begin declare continue handler for sqlwarning begin select 'A warning occurred' from dual; end; insert into employees(id, `name`) values (null, 'John'); end;",
+	}, {
+		input:  "create procedure HandlerWithMySQLErrorCode() begin declare exit handler for 1062 begin select 'Duplicate entry error'; end; insert into employees (id, name) values (1, 'John'); end;",
+		output: "create procedure HandlerWithMySQLErrorCode () begin declare exit handler for 1062 begin select 'Duplicate entry error' from dual; end; insert into employees(id, `name`) values (1, 'John'); end;",
+	}, {
+		input:  "create procedure HandlerWithSQLSTATEValue() begin declare exit handler for sqlstate '23000' begin select 'Integrity constraint violation'; end; insert into employees (id, name) values (1, 'John'); end;",
+		output: "create procedure HandlerWithSQLSTATEValue () begin declare exit handler for sqlstate '23000' begin select 'Integrity constraint violation' from dual; end; insert into employees(id, `name`) values (1, 'John'); end;",
+	}, {
+		input:  "create procedure HandlerWithMultipleConditions() begin declare exit handler for not found, 1062, sqlwarning begin select 'Error or warning occurred'; end; insert into employees (id, name) values (1, 'John'); end;",
+		output: "create procedure HandlerWithMultipleConditions () begin declare exit handler for not found, 1062, sqlwarning begin select 'Error or warning occurred' from dual; end; insert into employees(id, `name`) values (1, 'John'); end;",
+	}, {
+		input:  "create procedure HandlerWithContinueAndExit() begin declare continue handler for sqlwarning begin select 'Warning handled, continuing execution'; end; declare exit handler for sqlexception begin select 'Exception handled, exiting'; end; insert into non_existing_table values (1); end;",
+		output: "create procedure HandlerWithContinueAndExit () begin declare continue handler for sqlwarning begin select 'Warning handled, continuing execution' from dual; end; declare exit handler for sqlexception begin select 'Exception handled, exiting' from dual; end; insert into non_existing_table values (1); end;",
 	}, {
 		input:  "create procedure ProcedureWithDefaultValue() begin declare myVar int; set myVar = 100; select myVar; end;",
 		output: "create procedure ProcedureWithDefaultValue () begin declare myVar int; set myVar = 100; select myVar from dual; end;",

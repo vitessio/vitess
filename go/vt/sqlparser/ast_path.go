@@ -127,6 +127,8 @@ const (
 	RefOfCurTimeFuncExprName
 	RefOfDeallocateStmtComments
 	RefOfDeallocateStmtName
+	RefOfDeclareHandlerConditionsOffset
+	RefOfDeclareHandlerStatement
 	RefOfDeclareVarVarNamesOffset
 	RefOfDeclareVarType
 	RefOfDeleteWith
@@ -204,6 +206,8 @@ const (
 	RefOfGroupConcatExprExprsOffset
 	RefOfGroupConcatExprOrderBy
 	RefOfGroupConcatExprLimit
+	RefOfHandlerConditionNamedName
+	RefOfHandlerConditionSQLStateSQLStateValue
 	RefOfIfStatementSearchCondition
 	RefOfIfStatementThenStatements
 	RefOfIfStatementElseIfBlocksOffset
@@ -549,6 +553,7 @@ const (
 	RefOfColumnTypeOptionsSecondaryEngineAttribute
 	RefOfColumnTypeOptionsSRID
 	SliceOfRefOfProcParameterOffset
+	SliceOfHandlerConditionOffset
 	SliceOfTableExprOffset
 	SliceOfRefOfVariableOffset
 	SliceOfRefOfElseIfBlockOffset
@@ -799,6 +804,10 @@ func (s ASTStep) DebugString() string {
 		return "(*DeallocateStmt).Comments"
 	case RefOfDeallocateStmtName:
 		return "(*DeallocateStmt).Name"
+	case RefOfDeclareHandlerConditionsOffset:
+		return "(*DeclareHandler).ConditionsOffset"
+	case RefOfDeclareHandlerStatement:
+		return "(*DeclareHandler).Statement"
 	case RefOfDeclareVarVarNamesOffset:
 		return "(*DeclareVar).VarNamesOffset"
 	case RefOfDeclareVarType:
@@ -953,6 +962,10 @@ func (s ASTStep) DebugString() string {
 		return "(*GroupConcatExpr).OrderBy"
 	case RefOfGroupConcatExprLimit:
 		return "(*GroupConcatExpr).Limit"
+	case RefOfHandlerConditionNamedName:
+		return "(*HandlerConditionNamed).Name"
+	case RefOfHandlerConditionSQLStateSQLStateValue:
+		return "(*HandlerConditionSQLState).SQLStateValue"
 	case RefOfIfStatementSearchCondition:
 		return "(*IfStatement).SearchCondition"
 	case RefOfIfStatementThenStatements:
@@ -1643,6 +1656,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ColumnTypeOptions).SRID"
 	case SliceOfRefOfProcParameterOffset:
 		return "([]*ProcParameter)[]Offset"
+	case SliceOfHandlerConditionOffset:
+		return "([]HandlerCondition)[]Offset"
 	case SliceOfTableExprOffset:
 		return "([]TableExpr)[]Offset"
 	case SliceOfRefOfVariableOffset:
@@ -1949,6 +1964,12 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*DeallocateStmt).Comments
 		case RefOfDeallocateStmtName:
 			node = node.(*DeallocateStmt).Name
+		case RefOfDeclareHandlerConditionsOffset:
+			idx, bytesRead := path.nextPathOffset()
+			path = path[bytesRead:]
+			node = node.(*DeclareHandler).Conditions[idx]
+		case RefOfDeclareHandlerStatement:
+			node = node.(*DeclareHandler).Statement
 		case RefOfDeclareVarVarNamesOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
@@ -2117,6 +2138,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*GroupConcatExpr).OrderBy
 		case RefOfGroupConcatExprLimit:
 			node = node.(*GroupConcatExpr).Limit
+		case RefOfHandlerConditionNamedName:
+			node = node.(*HandlerConditionNamed).Name
+		case RefOfHandlerConditionSQLStateSQLStateValue:
+			node = node.(*HandlerConditionSQLState).SQLStateValue
 		case RefOfIfStatementSearchCondition:
 			node = node.(*IfStatement).SearchCondition
 		case RefOfIfStatementThenStatements:

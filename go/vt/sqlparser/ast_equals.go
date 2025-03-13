@@ -380,6 +380,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfDeallocateStmt(a, b)
+	case *DeclareHandler:
+		b, ok := inB.(*DeclareHandler)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDeclareHandler(a, b)
 	case *DeclareVar:
 		b, ok := inB.(*DeclareVar)
 		if !ok {
@@ -614,6 +620,42 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfGroupConcatExpr(a, b)
+	case *HandlerConditionErrorCode:
+		b, ok := inB.(*HandlerConditionErrorCode)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionErrorCode(a, b)
+	case *HandlerConditionNamed:
+		b, ok := inB.(*HandlerConditionNamed)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionNamed(a, b)
+	case *HandlerConditionNotFound:
+		b, ok := inB.(*HandlerConditionNotFound)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionNotFound(a, b)
+	case *HandlerConditionSQLException:
+		b, ok := inB.(*HandlerConditionSQLException)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionSQLException(a, b)
+	case *HandlerConditionSQLState:
+		b, ok := inB.(*HandlerConditionSQLState)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionSQLState(a, b)
+	case *HandlerConditionSQLWarning:
+		b, ok := inB.(*HandlerConditionSQLWarning)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionSQLWarning(a, b)
 	case IdentifierCI:
 		b, ok := inB.(IdentifierCI)
 		if !ok {
@@ -2456,6 +2498,19 @@ func (cmp *Comparator) RefOfDeallocateStmt(a, b *DeallocateStmt) bool {
 		cmp.IdentifierCI(a.Name, b.Name)
 }
 
+// RefOfDeclareHandler does deep equals between the two objects.
+func (cmp *Comparator) RefOfDeclareHandler(a, b *DeclareHandler) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Action == b.Action &&
+		cmp.SliceOfHandlerCondition(a.Conditions, b.Conditions) &&
+		cmp.CompoundStatement(a.Statement, b.Statement)
+}
+
 // RefOfDeclareVar does deep equals between the two objects.
 func (cmp *Comparator) RefOfDeclareVar(a, b *DeclareVar) bool {
 	if a == b {
@@ -2954,6 +3009,72 @@ func (cmp *Comparator) RefOfGroupConcatExpr(a, b *GroupConcatExpr) bool {
 		cmp.SliceOfExpr(a.Exprs, b.Exprs) &&
 		cmp.OrderBy(a.OrderBy, b.OrderBy) &&
 		cmp.RefOfLimit(a.Limit, b.Limit)
+}
+
+// RefOfHandlerConditionErrorCode does deep equals between the two objects.
+func (cmp *Comparator) RefOfHandlerConditionErrorCode(a, b *HandlerConditionErrorCode) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.ErrorCode == b.ErrorCode
+}
+
+// RefOfHandlerConditionNamed does deep equals between the two objects.
+func (cmp *Comparator) RefOfHandlerConditionNamed(a, b *HandlerConditionNamed) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.IdentifierCI(a.Name, b.Name)
+}
+
+// RefOfHandlerConditionNotFound does deep equals between the two objects.
+func (cmp *Comparator) RefOfHandlerConditionNotFound(a, b *HandlerConditionNotFound) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
+}
+
+// RefOfHandlerConditionSQLException does deep equals between the two objects.
+func (cmp *Comparator) RefOfHandlerConditionSQLException(a, b *HandlerConditionSQLException) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
+}
+
+// RefOfHandlerConditionSQLState does deep equals between the two objects.
+func (cmp *Comparator) RefOfHandlerConditionSQLState(a, b *HandlerConditionSQLState) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.RefOfLiteral(a.SQLStateValue, b.SQLStateValue)
+}
+
+// RefOfHandlerConditionSQLWarning does deep equals between the two objects.
+func (cmp *Comparator) RefOfHandlerConditionSQLWarning(a, b *HandlerConditionSQLWarning) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
 }
 
 // IdentifierCI does deep equals between the two objects.
@@ -5994,6 +6115,12 @@ func (cmp *Comparator) CompoundStatement(inA, inB CompoundStatement) bool {
 			return false
 		}
 		return cmp.RefOfBeginEndStatement(a, b)
+	case *DeclareHandler:
+		b, ok := inB.(*DeclareHandler)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDeclareHandler(a, b)
 	case *DeclareVar:
 		b, ok := inB.(*DeclareVar)
 		if !ok {
@@ -6885,6 +7012,57 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 	}
 }
 
+// HandlerCondition does deep equals between the two objects.
+func (cmp *Comparator) HandlerCondition(inA, inB HandlerCondition) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *HandlerConditionErrorCode:
+		b, ok := inB.(*HandlerConditionErrorCode)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionErrorCode(a, b)
+	case *HandlerConditionNamed:
+		b, ok := inB.(*HandlerConditionNamed)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionNamed(a, b)
+	case *HandlerConditionNotFound:
+		b, ok := inB.(*HandlerConditionNotFound)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionNotFound(a, b)
+	case *HandlerConditionSQLException:
+		b, ok := inB.(*HandlerConditionSQLException)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionSQLException(a, b)
+	case *HandlerConditionSQLState:
+		b, ok := inB.(*HandlerConditionSQLState)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionSQLState(a, b)
+	case *HandlerConditionSQLWarning:
+		b, ok := inB.(*HandlerConditionSQLWarning)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionSQLWarning(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // InsertRows does deep equals between the two objects.
 func (cmp *Comparator) InsertRows(inA, inB InsertRows) bool {
 	if inA == nil && inB == nil {
@@ -7608,6 +7786,19 @@ func (cmp *Comparator) SliceOfRefOfProcParameter(a, b []*ProcParameter) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !cmp.RefOfProcParameter(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// SliceOfHandlerCondition does deep equals between the two objects.
+func (cmp *Comparator) SliceOfHandlerCondition(a, b []HandlerCondition) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.HandlerCondition(a[i], b[i]) {
 			return false
 		}
 	}

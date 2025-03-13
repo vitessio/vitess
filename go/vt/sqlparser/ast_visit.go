@@ -140,6 +140,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCurTimeFuncExpr(in, f)
 	case *DeallocateStmt:
 		return VisitRefOfDeallocateStmt(in, f)
+	case *DeclareHandler:
+		return VisitRefOfDeclareHandler(in, f)
 	case *DeclareVar:
 		return VisitRefOfDeclareVar(in, f)
 	case *Default:
@@ -218,6 +220,18 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfGroupBy(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *HandlerConditionErrorCode:
+		return VisitRefOfHandlerConditionErrorCode(in, f)
+	case *HandlerConditionNamed:
+		return VisitRefOfHandlerConditionNamed(in, f)
+	case *HandlerConditionNotFound:
+		return VisitRefOfHandlerConditionNotFound(in, f)
+	case *HandlerConditionSQLException:
+		return VisitRefOfHandlerConditionSQLException(in, f)
+	case *HandlerConditionSQLState:
+		return VisitRefOfHandlerConditionSQLState(in, f)
+	case *HandlerConditionSQLWarning:
+		return VisitRefOfHandlerConditionSQLWarning(in, f)
 	case IdentifierCI:
 		return VisitIdentifierCI(in, f)
 	case IdentifierCS:
@@ -1441,6 +1455,23 @@ func VisitRefOfDeallocateStmt(in *DeallocateStmt, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfDeclareHandler(in *DeclareHandler, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.Conditions {
+		if err := VisitHandlerCondition(el, f); err != nil {
+			return err
+		}
+	}
+	if err := VisitCompoundStatement(in.Statement, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfDeclareVar(in *DeclareVar, f Visit) error {
 	if in == nil {
 		return nil
@@ -2033,6 +2064,66 @@ func VisitRefOfGroupConcatExpr(in *GroupConcatExpr, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfHandlerConditionErrorCode(in *HandlerConditionErrorCode, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfHandlerConditionNamed(in *HandlerConditionNamed, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfHandlerConditionNotFound(in *HandlerConditionNotFound, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfHandlerConditionSQLException(in *HandlerConditionSQLException, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfHandlerConditionSQLState(in *HandlerConditionSQLState, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.SQLStateValue, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfHandlerConditionSQLWarning(in *HandlerConditionSQLWarning, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
@@ -4999,6 +5090,8 @@ func VisitCompoundStatement(in CompoundStatement, f Visit) error {
 	switch in := in.(type) {
 	case *BeginEndStatement:
 		return VisitRefOfBeginEndStatement(in, f)
+	case *DeclareHandler:
+		return VisitRefOfDeclareHandler(in, f)
 	case *DeclareVar:
 		return VisitRefOfDeclareVar(in, f)
 	case *IfStatement:
@@ -5329,6 +5422,30 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfWeightStringFuncExpr(in, f)
 	case *XorExpr:
 		return VisitRefOfXorExpr(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+func VisitHandlerCondition(in HandlerCondition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *HandlerConditionErrorCode:
+		return VisitRefOfHandlerConditionErrorCode(in, f)
+	case *HandlerConditionNamed:
+		return VisitRefOfHandlerConditionNamed(in, f)
+	case *HandlerConditionNotFound:
+		return VisitRefOfHandlerConditionNotFound(in, f)
+	case *HandlerConditionSQLException:
+		return VisitRefOfHandlerConditionSQLException(in, f)
+	case *HandlerConditionSQLState:
+		return VisitRefOfHandlerConditionSQLState(in, f)
+	case *HandlerConditionSQLWarning:
+		return VisitRefOfHandlerConditionSQLWarning(in, f)
 	case Visitable:
 		return VisitVisitable(in, f)
 	default:

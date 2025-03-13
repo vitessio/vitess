@@ -1497,6 +1497,20 @@ func (action ProcParameterMode) ToString() string {
 	}
 }
 
+// ToString returns the string associated with the HandlerAction Enum
+func (ha HandlerAction) ToString() string {
+	switch ha {
+	case ContinueAction:
+		return ContinueStr
+	case ExitAction:
+		return ExitStr
+	case UndoAction:
+		return UndoStr
+	default:
+		return "Unknown Handler Action"
+	}
+}
+
 // ToString returns the string associated with the Scope enum
 func (scope Scope) ToString() string {
 	switch scope {

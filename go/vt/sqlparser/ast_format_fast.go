@@ -594,6 +594,52 @@ func (dv *DeclareVar) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (dh *DeclareHandler) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("declare ")
+	buf.WriteString(dh.Action.ToString())
+	buf.WriteString(" handler for")
+	prefix := " "
+	for _, condition := range dh.Conditions {
+		buf.WriteString(prefix)
+		condition.FormatFast(buf)
+		prefix = ", "
+	}
+	buf.WriteByte(' ')
+	dh.Statement.FormatFast(buf)
+}
+
+// FormatFast formats the node.
+func (hcss *HandlerConditionSQLState) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("sqlstate ")
+	hcss.SQLStateValue.FormatFast(buf)
+}
+
+// FormatFast formats the node.
+func (hcn *HandlerConditionNamed) FormatFast(buf *TrackedBuffer) {
+	hcn.Name.FormatFast(buf)
+}
+
+// FormatFast formats the node.
+func (hcec *HandlerConditionErrorCode) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString(fmt.Sprintf("%d", hcec.ErrorCode))
+}
+
+// FormatFast formats the node.
+func (hcse *HandlerConditionSQLException) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("sqlexception")
+}
+
+// FormatFast formats the node.
+func (hcsw *HandlerConditionSQLWarning) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("sqlwarning")
+}
+
+// FormatFast formats the node.
+func (hcnf *HandlerConditionNotFound) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("not found")
+}
+
+// FormatFast formats the node.
 func (node *RevertMigration) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("revert ")
 	node.Comments.FormatFast(buf)

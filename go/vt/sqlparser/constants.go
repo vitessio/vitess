@@ -164,6 +164,11 @@ const (
 	OutStr   = "out"
 	InoutStr = "inout"
 
+	// HandlerAction
+	ContinueStr = "continue"
+	ExitStr     = "exit"
+	UndoStr     = "undo"
+
 	// IsExpr.Operator
 	IsNullStr     = "is null"
 	IsNotNullStr  = "is not null"
@@ -540,6 +545,13 @@ const (
 	ForUpdateLock
 	ForUpdateLockNoWait
 	ForUpdateLockSkipLocked
+)
+
+// Constants for Enum Type - HandlerAction
+const (
+	ContinueAction HandlerAction = iota
+	ExitAction
+	UndoAction
 )
 
 // Constants for Enum Type - TrimType

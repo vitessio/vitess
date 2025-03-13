@@ -140,6 +140,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfCurTimeFuncExpr(n, parent)
 	case *DeallocateStmt:
 		return c.copyOnRewriteRefOfDeallocateStmt(n, parent)
+	case *DeclareHandler:
+		return c.copyOnRewriteRefOfDeclareHandler(n, parent)
 	case *DeclareVar:
 		return c.copyOnRewriteRefOfDeclareVar(n, parent)
 	case *Default:
@@ -218,6 +220,18 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfGroupBy(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
+	case *HandlerConditionErrorCode:
+		return c.copyOnRewriteRefOfHandlerConditionErrorCode(n, parent)
+	case *HandlerConditionNamed:
+		return c.copyOnRewriteRefOfHandlerConditionNamed(n, parent)
+	case *HandlerConditionNotFound:
+		return c.copyOnRewriteRefOfHandlerConditionNotFound(n, parent)
+	case *HandlerConditionSQLException:
+		return c.copyOnRewriteRefOfHandlerConditionSQLException(n, parent)
+	case *HandlerConditionSQLState:
+		return c.copyOnRewriteRefOfHandlerConditionSQLState(n, parent)
+	case *HandlerConditionSQLWarning:
+		return c.copyOnRewriteRefOfHandlerConditionSQLWarning(n, parent)
 	case IdentifierCI:
 		return c.copyOnRewriteIdentifierCI(n, parent)
 	case IdentifierCS:
@@ -1951,6 +1965,38 @@ func (c *cow) copyOnRewriteRefOfDeallocateStmt(n *DeallocateStmt, parent SQLNode
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfDeclareHandler(n *DeclareHandler, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		var changedConditions bool
+		_Conditions := make([]HandlerCondition, len(n.Conditions))
+		for x, el := range n.Conditions {
+			this, changed := c.copyOnRewriteHandlerCondition(el, n)
+			_Conditions[x] = this.(HandlerCondition)
+			if changed {
+				changedConditions = true
+			}
+		}
+		_Statement, changedStatement := c.copyOnRewriteCompoundStatement(n.Statement, n)
+		if changedConditions || changedStatement {
+			res := *n
+			res.Conditions = _Conditions
+			res.Statement, _ = _Statement.(CompoundStatement)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfDeclareVar(n *DeclareVar, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -2903,6 +2949,98 @@ func (c *cow) copyOnRewriteRefOfGroupConcatExpr(n *GroupConcatExpr, parent SQLNo
 			}
 			changed = true
 		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfHandlerConditionErrorCode(n *HandlerConditionErrorCode, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfHandlerConditionNamed(n *HandlerConditionNamed, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
+		if changedName {
+			res := *n
+			res.Name, _ = _Name.(IdentifierCI)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfHandlerConditionNotFound(n *HandlerConditionNotFound, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfHandlerConditionSQLException(n *HandlerConditionSQLException, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfHandlerConditionSQLState(n *HandlerConditionSQLState, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_SQLStateValue, changedSQLStateValue := c.copyOnRewriteRefOfLiteral(n.SQLStateValue, n)
+		if changedSQLStateValue {
+			res := *n
+			res.SQLStateValue, _ = _SQLStateValue.(*Literal)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfHandlerConditionSQLWarning(n *HandlerConditionSQLWarning, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -7463,6 +7601,8 @@ func (c *cow) copyOnRewriteCompoundStatement(n CompoundStatement, parent SQLNode
 	switch n := n.(type) {
 	case *BeginEndStatement:
 		return c.copyOnRewriteRefOfBeginEndStatement(n, parent)
+	case *DeclareHandler:
+		return c.copyOnRewriteRefOfDeclareHandler(n, parent)
 	case *DeclareVar:
 		return c.copyOnRewriteRefOfDeclareVar(n, parent)
 	case *IfStatement:
@@ -7793,6 +7933,30 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfWeightStringFuncExpr(n, parent)
 	case *XorExpr:
 		return c.copyOnRewriteRefOfXorExpr(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
+	default:
+		// this should never happen
+		return nil, false
+	}
+}
+func (c *cow) copyOnRewriteHandlerCondition(n HandlerCondition, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	switch n := n.(type) {
+	case *HandlerConditionErrorCode:
+		return c.copyOnRewriteRefOfHandlerConditionErrorCode(n, parent)
+	case *HandlerConditionNamed:
+		return c.copyOnRewriteRefOfHandlerConditionNamed(n, parent)
+	case *HandlerConditionNotFound:
+		return c.copyOnRewriteRefOfHandlerConditionNotFound(n, parent)
+	case *HandlerConditionSQLException:
+		return c.copyOnRewriteRefOfHandlerConditionSQLException(n, parent)
+	case *HandlerConditionSQLState:
+		return c.copyOnRewriteRefOfHandlerConditionSQLState(n, parent)
+	case *HandlerConditionSQLWarning:
+		return c.copyOnRewriteRefOfHandlerConditionSQLWarning(n, parent)
 	case Visitable:
 		return c.copyOnRewriteVisitable(n, parent)
 	default:

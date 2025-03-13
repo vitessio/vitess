@@ -141,6 +141,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCurTimeFuncExpr(in)
 	case *DeallocateStmt:
 		return CloneRefOfDeallocateStmt(in)
+	case *DeclareHandler:
+		return CloneRefOfDeclareHandler(in)
 	case *DeclareVar:
 		return CloneRefOfDeclareVar(in)
 	case *Default:
@@ -219,6 +221,18 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfGroupBy(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *HandlerConditionErrorCode:
+		return CloneRefOfHandlerConditionErrorCode(in)
+	case *HandlerConditionNamed:
+		return CloneRefOfHandlerConditionNamed(in)
+	case *HandlerConditionNotFound:
+		return CloneRefOfHandlerConditionNotFound(in)
+	case *HandlerConditionSQLException:
+		return CloneRefOfHandlerConditionSQLException(in)
+	case *HandlerConditionSQLState:
+		return CloneRefOfHandlerConditionSQLState(in)
+	case *HandlerConditionSQLWarning:
+		return CloneRefOfHandlerConditionSQLWarning(in)
 	case IdentifierCI:
 		return CloneIdentifierCI(in)
 	case IdentifierCS:
@@ -1218,6 +1232,17 @@ func CloneRefOfDeallocateStmt(n *DeallocateStmt) *DeallocateStmt {
 	return &out
 }
 
+// CloneRefOfDeclareHandler creates a deep clone of the input.
+func CloneRefOfDeclareHandler(n *DeclareHandler) *DeclareHandler {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Conditions = CloneSliceOfHandlerCondition(n.Conditions)
+	out.Statement = CloneCompoundStatement(n.Statement)
+	return &out
+}
+
 // CloneRefOfDeclareVar creates a deep clone of the input.
 func CloneRefOfDeclareVar(n *DeclareVar) *DeclareVar {
 	if n == nil {
@@ -1644,6 +1669,62 @@ func CloneRefOfGroupConcatExpr(n *GroupConcatExpr) *GroupConcatExpr {
 	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
+	return &out
+}
+
+// CloneRefOfHandlerConditionErrorCode creates a deep clone of the input.
+func CloneRefOfHandlerConditionErrorCode(n *HandlerConditionErrorCode) *HandlerConditionErrorCode {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfHandlerConditionNamed creates a deep clone of the input.
+func CloneRefOfHandlerConditionNamed(n *HandlerConditionNamed) *HandlerConditionNamed {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneIdentifierCI(n.Name)
+	return &out
+}
+
+// CloneRefOfHandlerConditionNotFound creates a deep clone of the input.
+func CloneRefOfHandlerConditionNotFound(n *HandlerConditionNotFound) *HandlerConditionNotFound {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfHandlerConditionSQLException creates a deep clone of the input.
+func CloneRefOfHandlerConditionSQLException(n *HandlerConditionSQLException) *HandlerConditionSQLException {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfHandlerConditionSQLState creates a deep clone of the input.
+func CloneRefOfHandlerConditionSQLState(n *HandlerConditionSQLState) *HandlerConditionSQLState {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.SQLStateValue = CloneRefOfLiteral(n.SQLStateValue)
+	return &out
+}
+
+// CloneRefOfHandlerConditionSQLWarning creates a deep clone of the input.
+func CloneRefOfHandlerConditionSQLWarning(n *HandlerConditionSQLWarning) *HandlerConditionSQLWarning {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	return &out
 }
 
@@ -3899,6 +3980,8 @@ func CloneCompoundStatement(in CompoundStatement) CompoundStatement {
 	switch in := in.(type) {
 	case *BeginEndStatement:
 		return CloneRefOfBeginEndStatement(in)
+	case *DeclareHandler:
+		return CloneRefOfDeclareHandler(in)
 	case *DeclareVar:
 		return CloneRefOfDeclareVar(in)
 	case *IfStatement:
@@ -4229,6 +4312,30 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfWeightStringFuncExpr(in)
 	case *XorExpr:
 		return CloneRefOfXorExpr(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// CloneHandlerCondition creates a deep clone of the input.
+func CloneHandlerCondition(in HandlerCondition) HandlerCondition {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *HandlerConditionErrorCode:
+		return CloneRefOfHandlerConditionErrorCode(in)
+	case *HandlerConditionNamed:
+		return CloneRefOfHandlerConditionNamed(in)
+	case *HandlerConditionNotFound:
+		return CloneRefOfHandlerConditionNotFound(in)
+	case *HandlerConditionSQLException:
+		return CloneRefOfHandlerConditionSQLException(in)
+	case *HandlerConditionSQLState:
+		return CloneRefOfHandlerConditionSQLState(in)
+	case *HandlerConditionSQLWarning:
+		return CloneRefOfHandlerConditionSQLWarning(in)
 	default:
 		// this should never happen
 		return nil
@@ -4619,6 +4726,18 @@ func CloneSliceOfRefOfProcParameter(n []*ProcParameter) []*ProcParameter {
 	res := make([]*ProcParameter, len(n))
 	for i, x := range n {
 		res[i] = CloneRefOfProcParameter(x)
+	}
+	return res
+}
+
+// CloneSliceOfHandlerCondition creates a deep clone of the input.
+func CloneSliceOfHandlerCondition(n []HandlerCondition) []HandlerCondition {
+	if n == nil {
+		return nil
+	}
+	res := make([]HandlerCondition, len(n))
+	for i, x := range n {
+		res[i] = CloneHandlerCondition(x)
 	}
 	return res
 }

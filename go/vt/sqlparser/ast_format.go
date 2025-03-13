@@ -432,6 +432,47 @@ func (dv *DeclareVar) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (dh *DeclareHandler) Format(buf *TrackedBuffer) {
+	buf.astPrintf(dh, "declare %s handler for", dh.Action.ToString())
+	prefix := " "
+	for _, condition := range dh.Conditions {
+		buf.astPrintf(dh, "%s%v", prefix, condition)
+		prefix = ", "
+	}
+	buf.astPrintf(dh, " %v", dh.Statement)
+}
+
+// Format formats the node.
+func (hcss *HandlerConditionSQLState) Format(buf *TrackedBuffer) {
+	buf.astPrintf(hcss, "sqlstate %v", hcss.SQLStateValue)
+}
+
+// Format formats the node.
+func (hcn *HandlerConditionNamed) Format(buf *TrackedBuffer) {
+	buf.astPrintf(hcn, "%v", hcn.Name)
+}
+
+// Format formats the node.
+func (hcec *HandlerConditionErrorCode) Format(buf *TrackedBuffer) {
+	buf.astPrintf(hcec, "%d", hcec.ErrorCode)
+}
+
+// Format formats the node.
+func (hcse *HandlerConditionSQLException) Format(buf *TrackedBuffer) {
+	buf.literal("sqlexception")
+}
+
+// Format formats the node.
+func (hcsw *HandlerConditionSQLWarning) Format(buf *TrackedBuffer) {
+	buf.literal("sqlwarning")
+}
+
+// Format formats the node.
+func (hcnf *HandlerConditionNotFound) Format(buf *TrackedBuffer) {
+	buf.literal("not found")
+}
+
+// Format formats the node.
 func (node *RevertMigration) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "revert %vvitess_migration '%#s'", node.Comments, node.UUID)
 }
