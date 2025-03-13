@@ -483,6 +483,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 				}
 			}
 			if err := se.updateTableIndexMetrics(ctx, conn.Conn); err != nil {
+				fmt.Printf("Updating index/table statistics failed, error: %v\n", err)
 				log.Errorf("Updating index/table statistics failed, error: %v", err)
 			}
 			// See testing in TestEngineReload
