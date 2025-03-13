@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -172,6 +173,7 @@ func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
 type CompareOptions struct {
 	CompareColumnNames bool
 	IgnoreRowsAffected bool
+	AllowAnyFieldSize  bool
 }
 
 func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, opts CompareOptions) error {
@@ -201,7 +203,7 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 		var myCols []string
 		for i, vtField := range vtQr.Fields {
 			myField := mysqlQr.Fields[i]
-			checkFields(t, myField.Name, vtField, myField)
+			checkFields(t, myField.Name, vtField, myField, opts.AllowAnyFieldSize)
 
 			vtCols = append(vtCols, vtField.Name)
 			myCols = append(myCols, myField.Name)
@@ -257,45 +259,44 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 // "TIMESTAMP" for instance.
 var checkFieldsRegExpr = regexp.MustCompile(`([a-zA-Z]*)(\d*)`)
 
-func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field) {
-	// TODO: make this accept block join results
-	// t.Helper()
-	//
-	// fail := func() {
-	// 	t.Errorf("for column %s field types do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Type.String(), vtField.Type.String())
-	// }
-	//
-	// if vtField.Type != myField.Type {
-	// 	vtMatches := checkFieldsRegExpr.FindStringSubmatch(vtField.Type.String())
-	// 	myMatches := checkFieldsRegExpr.FindStringSubmatch(myField.Type.String())
-	//
-	// 	// Here we want to fail if we have totally different types for instance: "INT64" vs "TIMESTAMP"
-	// 	// We do this by checking the length of the regexp slices and checking the second item of the slices (the real type i.e. "INT")
-	// 	if len(vtMatches) != 3 || len(vtMatches) != len(myMatches) || vtMatches[1] != myMatches[1] {
-	// 		fail()
-	// 		return
-	// 	}
-	// 	vtVal, vtErr := strconv.Atoi(vtMatches[2])
-	// 	myVal, myErr := strconv.Atoi(myMatches[2])
-	// 	if vtErr != nil || myErr != nil {
-	// 		fail()
-	// 		return
-	// 	}
-	//
-	// 	// Types the same now, however, if the size of the type is smaller on Vitess compared to MySQL
-	// 	// we need to fail. We can allow superset but not the opposite.
-	// 	if vtVal < myVal {
-	// 		fail()
-	// 		return
-	// 	}
-	// }
-	//
-	// // starting in Vitess 20, decimal types are properly sized in their field information
-	// if BinaryIsAtLeastAtVersion(20, "vtgate") && vtField.Type == sqltypes.Decimal {
-	// 	if vtField.Decimals != myField.Decimals {
-	// 		t.Errorf("for column %s field decimals count do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Decimals, vtField.Decimals)
-	// 	}
-	// }
+func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field, allowAnyFieldSize bool) {
+	t.Helper()
+
+	fail := func() {
+		t.Errorf("for column %s field types do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Type.String(), vtField.Type.String())
+	}
+
+	if vtField.Type != myField.Type {
+		vtMatches := checkFieldsRegExpr.FindStringSubmatch(vtField.Type.String())
+		myMatches := checkFieldsRegExpr.FindStringSubmatch(myField.Type.String())
+
+		// Here we want to fail if we have totally different types for instance: "INT64" vs "TIMESTAMP"
+		// We do this by checking the length of the regexp slices and checking the second item of the slices (the real type i.e. "INT")
+		if len(vtMatches) != 3 || len(vtMatches) != len(myMatches) || vtMatches[1] != myMatches[1] {
+			fail()
+			return
+		}
+		vtVal, vtErr := strconv.Atoi(vtMatches[2])
+		myVal, myErr := strconv.Atoi(myMatches[2])
+		if vtErr != nil || myErr != nil {
+			fail()
+			return
+		}
+
+		// Types the same now, however, if the size of the type is smaller on Vitess compared to MySQL
+		// we need to fail. We can allow superset but not the opposite.
+		if !allowAnyFieldSize && vtVal < myVal {
+			fail()
+			return
+		}
+	}
+
+	// starting in Vitess 20, decimal types are properly sized in their field information
+	if BinaryIsAtLeastAtVersion(20, "vtgate") && vtField.Type == sqltypes.Decimal {
+		if vtField.Decimals != myField.Decimals {
+			t.Errorf("for column %s field decimals count do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Decimals, vtField.Decimals)
+		}
+	}
 }
 
 func compareVitessAndMySQLErrors(t TestingT, vtErr, mysqlErr error) {

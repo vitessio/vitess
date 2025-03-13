@@ -103,7 +103,7 @@ func TestCheckFields(t *testing.T) {
 	for _, c := range cases {
 		t.Run(fmt.Sprintf("%s_%s", c.vtField.String(), c.myField.String()), func(t *testing.T) {
 			tt := &testing.T{}
-			checkFields(tt, "col", createField(c.vtField), createField(c.myField))
+			checkFields(tt, "col", createField(c.vtField), createField(c.myField), false)
 			require.Equal(t, c.fail, tt.Failed())
 		})
 	}

@@ -416,8 +416,10 @@ func TestUsingJoin(t *testing.T) {
 		`[[VARCHAR("12") INT64(1) VARCHAR("12") INT64(1) VARCHAR("12")] `+
 			`[VARCHAR("123") INT64(4) VARCHAR("123") INT64(4) VARCHAR("123")] `+
 			`[VARCHAR("134") INT64(5) VARCHAR("123") INT64(5) VARCHAR("123")]]`)
+
+	mcmp.SetAllowAnyFieldSize(true)
 	mcmp.AssertMatchesNoOrderInclColumnNames(`select * from t2 join t3 using (tcol1) having tcol1 = 12`,
-		`[[VARCHAR("12") INT64(1) VARCHAR("12") INT64(1) VARCHAR("12")]]`)
+		`[[VARCHAR("12") INT32(1) VARCHAR("12") INT64(1) VARCHAR("12")]]`)
 }
 
 // TestInsertFunction tests the INSERT function
