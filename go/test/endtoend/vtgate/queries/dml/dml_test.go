@@ -27,6 +27,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestUniqueLookupDuplicateEntries should fail if the is duplicate in unique lookup column.
+func TestUniqueLookupDuplicateEntries(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// initial row
+	utils.Exec(t, mcmp.VtConn, "insert into s_tbl(id, num) values (1,10)")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+
+	// insert duplicate row
+	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (2,10)", "Duplicate entry '10' for key 'num_vdx_tbl.PRIMARY'")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+
+	// insert duplicate row in multi-row insert
+	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (3,20), (4,20)", "Duplicate entry '20' for key 'num_vdx_tbl.PRIMARY'")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+
+	// update with limit 1 succeed.
+	utils.Exec(t, mcmp.VtConn, "update s_tbl set num = 30 limit 1")
+
+	// update to same value on multiple row should fail.
+	utils.AssertContainsError(t, mcmp.VtConn, "update s_tbl set num = 40 limit 2", "Duplicate entry '40' for key 'num_vdx_tbl.PRIMARY'")
+}
+
 func TestMultiEqual(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
 		t.Skip("test uses multiple keyspaces, test framework only supports partial keyspace testing for a single keyspace")
