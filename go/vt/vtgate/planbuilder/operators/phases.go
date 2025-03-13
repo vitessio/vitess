@@ -76,7 +76,9 @@ func (p Phase) shouldRun(ctx *plancontext.PlanningContext) bool {
 	s := ctx.SemTable.QuerySignature
 	switch p {
 	case rewriteApplyJoin:
-		return ctx.VSchema.AreBlockJoinsEnabled() || ctx.IsCommentDirectiveSet(sqlparser.DirectiveAllowBlockJoin)
+		return !ctx.SemTable.QuerySignature.Aggregation &&
+			(ctx.VSchema.AreBlockJoinsEnabled() ||
+				ctx.IsCommentDirectiveSet(sqlparser.DirectiveAllowBlockJoin))
 	case pullDistinctFromUnion:
 		return s.Union
 	case delegateAggregation:
