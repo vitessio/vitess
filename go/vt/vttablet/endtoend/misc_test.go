@@ -1118,7 +1118,9 @@ func TestUpdateTableIndexMetrics(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	fmt.Println("requested schema reload")
 	err = framework.Server.ReloadSchema(ctx)
+	fmt.Println("schema reload completed")
 	require.NoError(t, err)
 
 	results, err := client.Execute("select @@innodb_page_size", nil)

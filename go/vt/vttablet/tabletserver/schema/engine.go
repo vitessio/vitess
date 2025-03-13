@@ -404,6 +404,7 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, incl
 	if err := se.reload(ctx, includeStats); err != nil {
 		return err
 	}
+	fmt.Printf("schema reloded (include stats: %v)\n", includeStats)
 	se.reloadAtPos = pos
 	return nil
 }
