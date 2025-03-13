@@ -1109,8 +1109,6 @@ func TestUpdateTableIndexMetrics(t *testing.T) {
 	analyzes := []string{
 		"analyze table vitess_a",
 		"analyze table vitess_autoinc_seq",
-		"alter table vitess_part analyze partition p0",
-		"alter table vitess_part analyze partition p1",
 		"analyze table vitess_part",
 	}
 	for _, sql := range analyzes {
