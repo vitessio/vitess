@@ -391,6 +391,7 @@ func (se *Engine) ReloadAt(ctx context.Context, pos replication.Position) error 
 // The includeStats argument controls whether table size statistics should be
 // emitted, as they can be expensive to calculate for a large number of tables
 func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, includeStats bool) error {
+	fmt.Printf("start of ReloadAtEx (include stats: %v)\n", includeStats)
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
@@ -406,8 +407,8 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, incl
 	if err := se.reload(ctx, includeStats); err != nil {
 		return err
 	}
-	fmt.Printf("schema reloded (include stats: %v)\n", includeStats)
 	se.reloadAtPos = pos
+	fmt.Printf("end of ReloadAtEx (include stats: %v)\n", includeStats)
 	return nil
 }
 
