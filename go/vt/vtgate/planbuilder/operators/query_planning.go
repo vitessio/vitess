@@ -123,7 +123,15 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 }
 
 func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Operator, res *ApplyResult) {
-	jm := newJoinMerge(nil, in.JoinType)
+	// when we initially created the ApplyJoin, we tried to merge the two sides of the join,
+	// but at that point we might not have been able to push down derived tables or subqueries
+	// enough for the merge to be possible. Now that more rewriting has happened, let's try
+	// merging again, using the original join predicates to drive the merge.
+	preds := make([]sqlparser.Expr, 0, len(in.JoinPredicates.columns))
+	for _, col := range in.JoinPredicates.columns {
+		preds = append(preds, col.Original)
+	}
+	jm := newJoinMerge(preds, in.JoinType)
 	r := jm.mergeJoinInputs(ctx, in.LHS, in.RHS)
 	if r == nil {
 		return in, NoRewrite
