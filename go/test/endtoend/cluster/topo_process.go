@@ -134,7 +134,7 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 				DialTimeout: 5 * time.Second,
 			})
 			if cerr != nil {
-				return err
+				return cerr
 			}
 			topo.Client = cli
 			return
