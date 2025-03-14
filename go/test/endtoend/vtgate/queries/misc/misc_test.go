@@ -779,3 +779,29 @@ func TestSemiJoin(t *testing.T) {
 		})
 	}
 }
+
+func TestBlockJoin(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	for i := 1; i <= 1000; i++ {
+		mcmp.Exec(fmt.Sprintf("insert into t1(id1, id2) values (%d, %d)", i, 2*i))
+		mcmp.Exec(fmt.Sprintf("insert into tbl(id, unq_col, nonunq_col) values (%d, %d, %d)", i, 2*i, 3*i))
+	}
+
+	for _, mode := range []string{"oltp"} {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1, t1.id2 from t1 join tbl where t1.id1 = tbl.id")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1 from t1 join tbl where t1.id2 = tbl.id")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1 from t1 join tbl where t1.id2 = tbl.id order by t1.id1")
+
+			// WIP - Failing query, see onecase.json
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1+t1.id2 as mas from t1 join tbl where t1.id2 = tbl.id order by mas")
+
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1, tbl.nonunq_col from t1 join tbl where t1.id2 = tbl.id")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1+t1.id2 as mas, tbl.unq_col, t1.id2 from t1 join tbl where t1.id2 = tbl.id and tbl.id > 50 order by mas")
+		})
+	}
+}
