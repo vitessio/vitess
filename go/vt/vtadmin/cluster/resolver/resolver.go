@@ -32,6 +32,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/spf13/pflag"
 	grpcbackoff "google.golang.org/grpc/backoff"
@@ -177,23 +178,16 @@ func sanitizeScheme(id string) string {
 	if id == "" {
 		return "vtadmin"
 	}
-	out := strings.Builder{}
-	for _, r := range id {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '+', r == '-', r == '.':
-			out.WriteRune(r)
-		default:
-			// replace anything else (e.g. '_') with '-'
-			out.WriteRune('-')
+	// Map runes: letters, digits, '+', '-', '.' are kept; others become '-'
+	s := strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '+' || r == '-' || r == '.' {
+			return r
 		}
-	}
-	s := out.String()
-	// A URL scheme must start with a letter.
-	if s != "" {
-		first := s[0]
-		if !(first >= 'a' && first <= 'z') && !(first >= 'A' && first <= 'Z') {
-			s = "x" + s
-		}
+		return '-'
+	}, id)
+	// Ensure the scheme starts with a letter.
+	if s == "" || !unicode.IsLetter(rune(s[0])) {
+		s = "x" + s
 	}
 	return s
 }
