@@ -322,8 +322,8 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 
 	// Support both formats for backwards compatibility
 	// TODO(v25): Remove underscore versions
-	utils.SetFlagVariants(options.ConfigOverrides, "vstream-dynamic-packet-size", dynamicPacketSize)
-	utils.SetFlagVariants(options.ConfigOverrides, "vstream-packet-size", packetSize)
+	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", dynamicPacketSize)
+	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", packetSize)
 
 	return engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
 		timer := time.NewTimer(2 * time.Second)

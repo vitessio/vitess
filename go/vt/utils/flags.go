@@ -18,6 +18,7 @@ package utils
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -64,4 +65,13 @@ func SetFlagVariants(m map[string]string, key, value string) {
 	underscored, dashed := flagVariants(key)
 	m[underscored] = value
 	m[dashed] = value
+}
+
+func SetFlagVariantsForTests(m map[string]string, key, value string) {
+	underscored, dashed := flagVariants(key)
+	if rand.Int()%2 == 0 {
+		m[underscored] = value
+	} else {
+		m[dashed] = value
+	}
 }

@@ -536,8 +536,8 @@ func TestStreamRowsCancel(t *testing.T) {
 
 	// Support both formats for backwards compatibility
 	// TODO(v25): Remove underscore versions
-	utils.SetFlagVariants(options.ConfigOverrides, "vstream-dynamic-packet-size", "false")
-	utils.SetFlagVariants(options.ConfigOverrides, "vstream-packet-size", "10")
+	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", "false")
+	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", "10")
 
 	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		cancel()
