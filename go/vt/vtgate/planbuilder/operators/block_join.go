@@ -59,108 +59,108 @@ func (c blockJoinColumn) PureLHS() bool {
 var _ Operator = (*BlockJoin)(nil)
 var _ JoinOp = (*BlockJoin)(nil)
 
-func (vj *BlockJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) int {
+func (bj *BlockJoin) AddColumn(ctx *plancontext.PlanningContext, reuseExisting bool, addToGroupBy bool, ae *sqlparser.AliasedExpr) int {
 	if reuseExisting {
-		if offset := vj.FindCol(ctx, ae.Expr, false); offset >= 0 {
+		if offset := bj.FindCol(ctx, ae.Expr, false); offset >= 0 {
 			return offset
 		}
 	}
 
-	jc, _ := breakBlockJoinExpressionInLHS(ctx, ae.Expr, TableID(vj.LHS), vj.Destination)
+	jc, _ := breakBlockJoinExpressionInLHS(ctx, ae.Expr, TableID(bj.LHS), bj.Destination)
 	for _, lhsExpr := range jc.LHS {
-		_ = vj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr.Original))
-		ctx.AddBlockJoinColumn(vj.Destination, lhsExpr.RightHandVersion)
+		_ = bj.LHS.AddColumn(ctx, true, false, aeWrap(lhsExpr.Original))
+		ctx.AddBlockJoinColumn(bj.Destination, lhsExpr.RightHandVersion)
 	}
 
 	rhsCol := sqlparser.NewAliasedExpr(jc.RHS, ae.ColumnName())
 
-	return vj.RHS.AddColumn(ctx, reuseExisting, addToGroupBy, rhsCol)
+	return bj.RHS.AddColumn(ctx, reuseExisting, addToGroupBy, rhsCol)
 }
 
 // AddWSColumn is used to add a weight_string column to the operator
-func (vj *BlockJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
-	return vj.RHS.AddWSColumn(ctx, offset, underRoute)
+func (bj *BlockJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	return bj.RHS.AddWSColumn(ctx, offset, underRoute)
 }
 
-func (vj *BlockJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
-	return vj.RHS.FindCol(ctx, expr, underRoute)
+func (bj *BlockJoin) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, underRoute bool) int {
+	return bj.RHS.FindCol(ctx, expr, underRoute)
 }
 
-func (vj *BlockJoin) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return vj.RHS.GetColumns(ctx)
+func (bj *BlockJoin) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return bj.RHS.GetColumns(ctx)
 }
 
-func (vj *BlockJoin) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
-	return vj.RHS.GetSelectExprs(ctx)
+func (bj *BlockJoin) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
+	return bj.RHS.GetSelectExprs(ctx)
 }
 
-func (vj *BlockJoin) GetLHS() Operator {
-	return vj.LHS
+func (bj *BlockJoin) GetLHS() Operator {
+	return bj.LHS
 }
 
-func (vj *BlockJoin) GetRHS() Operator {
-	return vj.RHS
+func (bj *BlockJoin) GetRHS() Operator {
+	return bj.RHS
 }
 
-func (vj *BlockJoin) SetLHS(operator Operator) {
-	vj.LHS = operator
+func (bj *BlockJoin) SetLHS(operator Operator) {
+	bj.LHS = operator
 }
 
-func (vj *BlockJoin) SetRHS(operator Operator) {
-	vj.RHS = operator
+func (bj *BlockJoin) SetRHS(operator Operator) {
+	bj.RHS = operator
 }
 
-func (vj *BlockJoin) MakeInner() {
+func (bj *BlockJoin) MakeInner() {
 	// no-op for block-join
 }
 
-func (vj *BlockJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
-	return AddPredicate(ctx, vj, expr, false, newFilterSinglePredicate)
+func (bj *BlockJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
+	return AddPredicate(ctx, bj, expr, false, newFilterSinglePredicate)
 }
 
-func (vj *BlockJoin) IsInner() bool {
+func (bj *BlockJoin) IsInner() bool {
 	return true
 }
 
-func (vj *BlockJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, pushDown bool) blockJoinColumn {
+func (bj *BlockJoin) addJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, pushDown bool) blockJoinColumn {
 	if expr == nil {
 		return blockJoinColumn{}
 	}
-	lID := TableID(vj.LHS)
+	lID := TableID(bj.LHS)
 
-	jc, pureLHS := breakBlockJoinExpressionInLHS(ctx, expr, lID, vj.Destination)
+	jc, pureLHS := breakBlockJoinExpressionInLHS(ctx, expr, lID, bj.Destination)
 	if !pushDown {
-		vj.JoinPredicates = append(vj.JoinPredicates, jc)
+		bj.JoinPredicates = append(bj.JoinPredicates, jc)
 		return jc
 	}
 
 	if pureLHS {
-		vj.LHS = vj.LHS.AddPredicate(ctx, expr)
+		bj.LHS = bj.LHS.AddPredicate(ctx, expr)
 		return jc
 	}
 
-	vj.RHS = vj.RHS.AddPredicate(ctx, jc.RHS)
+	bj.RHS = bj.RHS.AddPredicate(ctx, jc.RHS)
 	if len(jc.LHS) == 0 {
 		// this is a pure RHS predicate, let's push it there and forget about it
 		return jc
 	}
 
-	vj.JoinPredicates = append(vj.JoinPredicates, jc)
+	bj.JoinPredicates = append(bj.JoinPredicates, jc)
 	return jc
 }
 
-func (vj *BlockJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, pushDown bool) {
-	vj.addJoinPredicate(ctx, expr, pushDown)
+func (bj *BlockJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, pushDown bool) {
+	bj.addJoinPredicate(ctx, expr, pushDown)
 }
 
-func (vj *BlockJoin) Clone(inputs []Operator) Operator {
-	clone := *vj
+func (bj *BlockJoin) Clone(inputs []Operator) Operator {
+	clone := *bj
 	clone.LHS = inputs[0]
 	clone.RHS = inputs[1]
 	return &clone
 }
 
-func (vj *BlockJoin) ShortDescription() string {
+func (bj *BlockJoin) ShortDescription() string {
 	fn := func(cols []blockJoinColumn) string {
 		out := slice.Map(cols, func(jc blockJoinColumn) string {
 			return jc.String()
@@ -168,24 +168,24 @@ func (vj *BlockJoin) ShortDescription() string {
 		return strings.Join(out, ", ")
 	}
 
-	firstPart := fmt.Sprintf("%s on %s", vj.Destination, fn(vj.JoinPredicates))
+	firstPart := fmt.Sprintf("%s on %s", bj.Destination, fn(bj.JoinPredicates))
 
 	return firstPart
 }
 
-func (vj *BlockJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
-	return vj.RHS.GetOrdering(ctx)
+func (bj *BlockJoin) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
+	return bj.RHS.GetOrdering(ctx)
 }
 
-func (vj *BlockJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
-	for _, jc := range vj.JoinPredicates {
+func (bj *BlockJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	for _, jc := range bj.JoinPredicates {
 		// for join predicates, we only need to push the LHS dependencies. The RHS expressions are already pushed
 		for _, lh := range jc.LHS {
-			vj.LHS.AddColumn(ctx, true, false, aeWrap(lh.Original))
-			ctx.AddBlockJoinColumn(vj.Destination, lh.RightHandVersion)
+			bj.LHS.AddColumn(ctx, true, false, aeWrap(lh.Original))
+			ctx.AddBlockJoinColumn(bj.Destination, lh.RightHandVersion)
 		}
 	}
-	return vj
+	return bj
 }
 
 func getBlockJoinColName(ctx *plancontext.PlanningContext, destination string, tableID semantics.TableSet, expr sqlparser.Expr) string {

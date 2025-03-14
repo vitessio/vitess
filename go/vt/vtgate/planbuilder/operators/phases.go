@@ -169,24 +169,24 @@ func rewriteApplyToBlock(ctx *plancontext.PlanningContext, op Operator) Operator
 			return op, NoRewrite
 		}
 
-		vj := newBlockJoin(ctx, aj.LHS, aj.RHS, aj.JoinType)
-		if vj == nil {
+		bj := newBlockJoin(ctx, aj.LHS, aj.RHS, aj.JoinType)
+		if bj == nil {
 			return op, NoRewrite
 		}
 
 		for _, column := range aj.JoinColumns.columns {
-			vj.AddColumn(ctx, true, false, aeWrap(column.Original))
+			bj.AddColumn(ctx, true, false, aeWrap(column.Original))
 		}
 
 		for _, pred := range aj.JoinPredicates.columns {
 			if pred.JoinPredicateID == nil {
 				panic(vterrors.VT13001("missing join predicate ID"))
 			}
-			jc := vj.addJoinPredicate(ctx, pred.Original, false)
+			jc := bj.addJoinPredicate(ctx, pred.Original, false)
 			ctx.PredTracker.Set(*pred.JoinPredicateID, jc.RHS)
 		}
 		done = true
-		return vj, Rewrote("rewrote ApplyJoin to BlockJoin")
+		return bj, Rewrote("rewrote ApplyJoin to BlockJoin")
 	}
 
 	return TopDown(op, TableID, visit, stopAtRoute)
