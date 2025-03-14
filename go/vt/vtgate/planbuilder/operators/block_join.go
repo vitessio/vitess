@@ -43,7 +43,7 @@ type (
 	}
 
 	leftHandSideExpression struct {
-		Original         *sqlparser.ColName
+		Original,
 		RightHandVersion sqlparser.Expr
 	}
 )
@@ -188,11 +188,18 @@ func (bj *BlockJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	return bj
 }
 
+const blockJoinCol = "x_x"
+
 func getBlockJoinColName(ctx *plancontext.PlanningContext, destination string, tableID semantics.TableSet, expr sqlparser.Expr) string {
 	col, isCol := expr.(*sqlparser.ColName)
-	if !isCol {
-		panic(fmt.Sprintf("expected a col named '%v'", expr))
+	if isCol {
+		return getBlockJoinColNameForColName(ctx, destination, tableID, col)
 	}
+
+	return ctx.ReservedVars.ReserveVariable(blockJoinCol)
+}
+
+func getBlockJoinColNameForColName(ctx *plancontext.PlanningContext, destination string, tableID semantics.TableSet, col *sqlparser.ColName) string {
 	tableName := col.Qualifier.Name.String()
 	if tableName == "" {
 		ti, err := ctx.SemTable.TableInfoFor(tableID)

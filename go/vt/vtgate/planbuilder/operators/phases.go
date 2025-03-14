@@ -101,6 +101,7 @@ func (p Phase) shouldRun(ctx *plancontext.PlanningContext) bool {
 // This is only done for two table queries with no aggregation,
 // and the tables are not info_schema tables or derived tables
 func (p Phase) shouldUseBlockJoins(ctx *plancontext.PlanningContext) bool {
+	return true
 	if ctx.Statement == nil {
 		return false
 	}
