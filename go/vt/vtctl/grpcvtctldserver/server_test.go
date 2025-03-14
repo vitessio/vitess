@@ -42,8 +42,10 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/callerid"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -52,10 +54,8 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
-	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -1268,6 +1268,7 @@ func TestBackupShard(t *testing.T) {
 type requireCallerIDTMClient struct {
 	*testutil.TabletManagerClient
 }
+
 // ExecuteQuery implements the tmclient.TabletManagerClient interface for requireCallerIDTMClient.
 func (tc *requireCallerIDTMClient) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
 	if callerid.EffectiveCallerIDFromContext(ctx) == nil {
@@ -1338,31 +1339,37 @@ func TestCancelSchemaMigration(t *testing.T) {
 				Keyspace: "ks",
 				Uuid:     "abc",
 			},
-		expected: &vtctldatapb.CancelSchemaMigrationResponse{
-			RowsAffectedByShard: map[string]uint64{
-				"-80": 1,
-				"80-": 0,
+			expected: &vtctldatapb.CancelSchemaMigrationResponse{
+				RowsAffectedByShard: map[string]uint64{
+					"-80": 1,
+					"80-": 0,
+				},
 			},
 		},
-	},
-	{
-		name: "strict ACL requires caller id",
-		tablets: []*topodatapb.Tablet{
-			{Keyspace: "ks", Shard: "0", Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Type: topodatapb.TabletType_PRIMARY},
+		{
+			name: "strict ACL requires caller id",
+			tablets: []*topodatapb.Tablet{
+				{Keyspace: "ks", Shard: "0", Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Type: topodatapb.TabletType_PRIMARY},
+			},
+			tmc: &requireCallerIDTMClient{TabletManagerClient: &testutil.TabletManagerClient{
+				ExecuteQueryResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {Response: &querypb.QueryResult{RowsAffected: 1}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {},
+				},
+				ReloadSchemaResults: map[string]error{"zone1-0000000100": nil},
+			}},
+			req:       &vtctldatapb.CancelSchemaMigrationRequest{Keyspace: "ks", Uuid: "abc", CallerId: &vtrpc.CallerID{Principal: "strict"}},
+			expected:  &vtctldatapb.CancelSchemaMigrationResponse{RowsAffectedByShard: map[string]uint64{"0": 1}},
+			shouldErr: false,
 		},
-		tmc: &requireCallerIDTMClient{TabletManagerClient: &testutil.TabletManagerClient{
-			ExecuteQueryResults: map[string]struct{Response *querypb.QueryResult; Error error}{
-				"zone1-0000000100": {Response: &querypb.QueryResult{RowsAffected: 1}},
-			},
-			PrimaryPositionResults: map[string]struct{Position string; Error error}{
-				"zone1-0000000100": {},
-			},
-			ReloadSchemaResults: map[string]error{"zone1-0000000100": nil},
-		}},
-		req: &vtctldatapb.CancelSchemaMigrationRequest{Keyspace: "ks", Uuid: "abc", CallerId: &vtrpc.CallerID{Principal: "strict"}},
-		expected: &vtctldatapb.CancelSchemaMigrationResponse{RowsAffectedByShard: map[string]uint64{"0": 1}},
-		shouldErr: false,
-	},
 		{
 			name: "no shard primary",
 			tablets: []*topodatapb.Tablet{
