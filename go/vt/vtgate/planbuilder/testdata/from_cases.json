@@ -5078,11 +5078,11 @@
   },
   {
     "comment": "Block Join with using",
-    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ t2.tcol1, t2.id, t2.tcol2, t3.id, t3.tcol2 from t2 join t3 using (tcol1)",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ u.tcol1, u.id, u.tcol2, ue.id, ue.tcol2 from user u join user_extra ue using (col)",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ t2.tcol1, t2.id, t2.tcol2, t3.id, t3.tcol2 from t2 join t3 using (tcol1)",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ u.tcol1, u.id, u.tcol2, ue.id, ue.tcol2 from user u join user_extra ue using (col)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
@@ -5106,9 +5106,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select t2.tcol1, t2.id, t2.tcol2 from t2 where 1 != 1",
-                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ t2.tcol1, t2.id, t2.tcol2 from t2",
-                "Table": "t2"
+                "FieldQuery": "select u.tcol1, u.id, u.tcol2, u.col from `user` as u where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ u.tcol1, u.id, u.tcol2, u.col from `user` as u",
+                "Table": "`user`"
               },
               {
                 "OperatorType": "Route",
@@ -5117,17 +5117,17 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select t3.id, t3.tcol2, `values`.t2_tcol1 as tcol1, `values`.t2_id as id, `values`.t2_tcol2 as tcol2 from (values ::values) as `values`(t2_tcol1, t2_id, t2_tcol2), t3 where 1 != 1",
-                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ t3.id, t3.tcol2, `values`.t2_tcol1 as tcol1, `values`.t2_id as id, `values`.t2_tcol2 as tcol2 from (values ::values) as `values`(t2_tcol1, t2_id, t2_tcol2), t3 where `values`.t2_tcol1 = t3.tcol1",
-                "Table": "t3"
+                "FieldQuery": "select ue.id, ue.tcol2, `values`.u_tcol1 as tcol1, `values`.u_id as id, `values`.u_tcol2 as tcol2 from (values ::values) as `values`(u_tcol1, u_id, u_tcol2, u_col), user_extra as ue where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ ue.id, ue.tcol2, `values`.u_tcol1 as tcol1, `values`.u_id as id, `values`.u_tcol2 as tcol2 from (values ::values) as `values`(u_tcol1, u_id, u_tcol2, u_col), user_extra as ue where `values`.u_col = ue.col",
+                "Table": "user_extra"
               }
             ]
           }
         ]
       },
       "TablesUsed": [
-        "user.t2",
-        "user.t3"
+        "user.user",
+        "user.user_extra"
       ]
     }
   }

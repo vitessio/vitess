@@ -220,52 +220,6 @@
         }
       },
       "tables": {
-        "t2": {
-          "column_vindexes": [
-            {
-              "column": "id",
-              "name": "hash"
-            }
-          ],
-          "columns": [
-            {
-              "name": "tcol1",
-              "type": "VARCHAR"
-            },
-            {
-              "name": "id",
-              "type": "BIGINT"
-            },
-            {
-              "name": "tcol2",
-              "type": "VARCHAR"
-            }
-          ],
-          "column_list_authoritative": true
-        },
-        "t3": {
-          "column_vindexes": [
-            {
-              "column": "id",
-              "name": "hash"
-            }
-          ],
-          "columns": [
-            {
-              "name": "tcol1",
-              "type": "VARCHAR"
-            },
-            {
-              "name": "id",
-              "type": "BIGINT"
-            },
-            {
-              "name": "tcol2",
-              "type": "VARCHAR"
-            }
-          ],
-          "column_list_authoritative": true
-        },
         "user": {
           "column_vindexes": [
             {
