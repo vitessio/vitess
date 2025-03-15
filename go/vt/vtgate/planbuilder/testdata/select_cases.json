@@ -23,6 +23,34 @@
     }
   },
   {
+    "comment": "derived table join with NOT IN subquery can be merged after applying join merging with predicates",
+    "query": "SELECT m1.id FROM music as m1 JOIN (SELECT max(id) as id FROM music WHERE music.user_id = 1234 AND music.foobar NOT IN (SELECT foobar FROM user_extra WHERE user_extra.user_id = 1234)) as m2 ON m1.id = m2.id",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT m1.id FROM music as m1 JOIN (SELECT max(id) as id FROM music WHERE music.user_id = 1234 AND music.foobar NOT IN (SELECT foobar FROM user_extra WHERE user_extra.user_id = 1234)) as m2 ON m1.id = m2.id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select m1.id from (select max(id) as id from music where 1 != 1) as m2, music as m1 where 1 != 1",
+        "Query": "select m1.id from (select max(id) as id from music where music.user_id = 1234 and music.foobar not in (select foobar from user_extra where user_extra.user_id = 1234)) as m2, music as m1 where m1.id = m2.id",
+        "Table": "music",
+        "Values": [
+          "1234"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "'*' expression for simple route",
     "query": "select user.* from user",
     "plan": {
