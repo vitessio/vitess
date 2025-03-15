@@ -1324,6 +1324,7 @@ func (cluster *LocalProcessCluster) NewVTAdminProcess() {
 		Binary:         "vtadmin",
 		Port:           cluster.GetAndReservePort(),
 		LogDir:         cluster.TmpDirectory,
+		ClusterID:      "local",
 		VtGateGrpcPort: cluster.VtgateProcess.GrpcPort,
 		VtGateWebPort:  cluster.VtgateProcess.Port,
 		VtctldWebPort:  cluster.VtctldProcess.Port,
