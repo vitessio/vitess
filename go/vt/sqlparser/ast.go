@@ -43,6 +43,12 @@ type (
 		SQLNode
 	}
 
+	// CompoundStatement represents a compound statement that can be part of a create procedure call.
+	CompoundStatement interface {
+		iCompoundStatement()
+		SQLNode
+	}
+
 	Commented interface {
 		SetComments(comments Comments)
 		GetParsedComments() *ParsedComments
@@ -309,6 +315,7 @@ type (
 	// SelectInto is a struct that represent the INTO part of a select query
 	SelectInto struct {
 		Type         SelectIntoType
+		VarList      []*Variable
 		FileName     string
 		Charset      ColumnCharset
 		FormatOption string
@@ -520,6 +527,16 @@ type (
 		Ratio     *Literal
 		Threshold string
 		Shards    string
+	}
+
+	// CreateProcedure represents a CREATE PROCEDURE statement.
+	CreateProcedure struct {
+		Name        IdentifierCS
+		Comments    *ParsedComments
+		IfNotExists bool
+		Definer     *Definer
+		Params      []*ProcParameter
+		Statement   CompoundStatement
 	}
 
 	// AlterTable represents a ALTER TABLE statement.
@@ -745,7 +762,121 @@ type (
 
 	// IndexType is the type of index in a DDL statement
 	IndexType int8
+
+	// HandlerAction is the type of action for the DeclareHandler statement
+	HandlerAction int8
 )
+
+// Compound Statements
+type (
+	// CompoundStatements represents a list of compound statements.
+	CompoundStatements []CompoundStatement
+
+	// SingleStatement represents a single statement.
+	SingleStatement struct {
+		Statement Statement
+	}
+
+	// BeginEndStatement represents a BEGIN ... END block.
+	BeginEndStatement struct {
+		Statements CompoundStatements
+	}
+
+	// IfStatement represents a IF ... ELSEIF ... ELSE ... END IF block.
+	IfStatement struct {
+		SearchCondition Expr
+		ThenStatements  CompoundStatements
+		ElseIfBlocks    []*ElseIfBlock
+		ElseStatements  CompoundStatements
+	}
+
+	// ElseIfBlock represents a ELSEIF block in an IF statement.
+	ElseIfBlock struct {
+		SearchCondition Expr
+		ThenStatements  CompoundStatements
+	}
+
+	// DeclareVar represents a Local Variable DECLARE Statement
+	DeclareVar struct {
+		VarNames []IdentifierCI
+		Type     *ColumnType
+	}
+
+	// DeclareHandler represents a DECLARE...HANDLER statement
+	DeclareHandler struct {
+		Action     HandlerAction
+		Conditions []HandlerCondition
+		Statement  CompoundStatement
+	}
+
+	// DeclareCondition represents a DECLARE...CONDITION statement
+	DeclareCondition struct {
+		Name      IdentifierCI
+		Condition HandlerCondition
+	}
+
+	// Signal represents a SIGNAL statement
+	Signal struct {
+		Condition HandlerCondition
+		SetValues []*SignalSet
+	}
+)
+
+func (*SingleStatement) iCompoundStatement()   {}
+func (*BeginEndStatement) iCompoundStatement() {}
+func (*IfStatement) iCompoundStatement()       {}
+func (*DeclareVar) iCompoundStatement()        {}
+func (*DeclareHandler) iCompoundStatement()    {}
+func (*DeclareCondition) iCompoundStatement()  {}
+func (*Signal) iCompoundStatement()            {}
+
+// SignalConditionName is an enum for the name of the condition variable being set in SIGNAL statement
+type SignalConditionName int8
+
+// SignalSet represents a set condition in a SIGNAL statement
+type SignalSet struct {
+	ConditionName SignalConditionName
+	Value         Expr
+}
+
+// HandlerCondition represents a condition in a DECLARE HANDLER statement
+type (
+	HandlerCondition interface {
+		iHandlerCondition()
+		SQLNode
+	}
+
+	// HandlerConditionSQLState represents a SQLSTATE condition in a DECLARE HANDLER statement
+	HandlerConditionSQLState struct {
+		SQLStateValue *Literal
+	}
+
+	// HandlerConditionNamed represents a named condition in a DECLARE HANDLER statement
+	HandlerConditionNamed struct {
+		Name IdentifierCI
+	}
+
+	// HandlerConditionErrorCode represents an error code condition in a DECLARE HANDLER statement
+	HandlerConditionErrorCode struct {
+		ErrorCode int
+	}
+
+	// HandlerConditionSQLException represents a SQLEXCEPTION condition in a DECLARE HANDLER statement
+	HandlerConditionSQLException struct{}
+
+	// HandlerConditionSQLWarning represents a SQLWARNING condition in a DECLARE HANDLER statement
+	HandlerConditionSQLWarning struct{}
+
+	// HandlerConditionNotFound represents a NOT FOUND condition in a DECLARE HANDLER statement
+	HandlerConditionNotFound struct{}
+)
+
+func (*HandlerConditionSQLState) iHandlerCondition()     {}
+func (*HandlerConditionNamed) iHandlerCondition()        {}
+func (*HandlerConditionErrorCode) iHandlerCondition()    {}
+func (*HandlerConditionSQLException) iHandlerCondition() {}
+func (*HandlerConditionSQLWarning) iHandlerCondition()   {}
+func (*HandlerConditionNotFound) iHandlerCondition()     {}
 
 var _ OrderAndLimit = (*Select)(nil)
 var _ OrderAndLimit = (*Update)(nil)
@@ -790,6 +921,7 @@ func (*UnlockTables) iStatement()          {}
 func (*AlterTable) iStatement()            {}
 func (*AlterVschema) iStatement()          {}
 func (*AlterMigration) iStatement()        {}
+func (*CreateProcedure) iStatement()       {}
 func (*RevertMigration) iStatement()       {}
 func (*ShowMigrationLogs) iStatement()     {}
 func (*ShowThrottledApps) iStatement()     {}
@@ -1739,6 +1871,16 @@ func (*ValuesStatement) iInsertRows() {}
 type OptLike struct {
 	LikeTable TableName
 }
+
+// ProcParameter represents a procedure parameter
+type ProcParameter struct {
+	Mode ProcParameterMode
+	Name IdentifierCI
+	Type *ColumnType
+}
+
+// ProcParameterMode is an enum for ProcParameter.Mode
+type ProcParameterMode int8
 
 // PartitionSpec describe partition actions (for alter statements)
 type PartitionSpec struct {

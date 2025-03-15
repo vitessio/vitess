@@ -886,7 +886,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(found)",
+        "Aggregates": "sum(0) AS sum(`found`)",
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -898,8 +898,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-                "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+                "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
+                "Query": "select 1 as `found` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
                 "SysTableTableSchema": "['music']",
                 "Table": "information_schema.`tables`"
               },
@@ -910,8 +910,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-                "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1",
+                "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
+                "Query": "select 1 as `found` from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1",
                 "SysTableTableSchema": "['music']",
                 "Table": "information_schema.views"
               }
@@ -938,8 +938,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
+            "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
+            "Query": "select 1 as `found` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */",
             "SysTableTableSchema": "['music']",
             "Table": "information_schema.`tables`"
           },
@@ -950,8 +950,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-            "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1",
+            "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
+            "Query": "select 1 as `found` from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ limit 1",
             "SysTableTableSchema": "['music']",
             "Table": "information_schema.views"
           }
@@ -976,8 +976,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */",
+            "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
+            "Query": "select 1 as `found` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */",
             "SysTableTableSchema": "['music', 'Music']",
             "Table": "information_schema.`tables`"
           },
@@ -988,8 +988,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-            "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1",
+            "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
+            "Query": "select 1 as `found` from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1",
             "SysTableTableSchema": "['music', 'user']",
             "Table": "information_schema.views"
           }
@@ -1014,8 +1014,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */",
+            "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
+            "Query": "select 1 as `found` from information_schema.`tables` where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */",
             "SysTableTableSchema": "['music', 'Music']",
             "Table": "information_schema.`tables`"
           },
@@ -1026,8 +1026,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-            "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1",
+            "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
+            "Query": "select 1 as `found` from information_schema.views where table_schema = :__vtschemaname /* VARCHAR */ and table_schema = :__vtschemaname /* VARCHAR */ limit 1",
             "SysTableTableSchema": "['music', 'user']",
             "Table": "information_schema.views"
           }
@@ -1064,8 +1064,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-                    "Query": "select 1 as found from information_schema.`tables` where table_name = :table_name1 /* VARCHAR */ and table_name = :table_name1 /* VARCHAR */ limit :__upper_limit",
+                    "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
+                    "Query": "select 1 as `found` from information_schema.`tables` where table_name = :table_name1 /* VARCHAR */ and table_name = :table_name1 /* VARCHAR */ limit :__upper_limit",
                     "SysTableTableName": "[table_name1:'Music']",
                     "Table": "information_schema.`tables`"
                   },
@@ -1076,8 +1076,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
-                    "Query": "select 1 as found from information_schema.views where table_name = :table_name2 /* VARCHAR */ and table_name = :table_name2 /* VARCHAR */ limit :__upper_limit",
+                    "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
+                    "Query": "select 1 as `found` from information_schema.views where table_name = :table_name2 /* VARCHAR */ and table_name = :table_name2 /* VARCHAR */ limit :__upper_limit",
                     "SysTableTableName": "[table_name2:'user']",
                     "Table": "information_schema.views"
                   }
@@ -1093,8 +1093,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
-            "Query": "select 1 as found from information_schema.`tables` where table_name = :table_name /* VARCHAR */ and table_name = :table_name /* VARCHAR */ and :__sq_has_values",
+            "FieldQuery": "select 1 as `found` from information_schema.`tables` where 1 != 1",
+            "Query": "select 1 as `found` from information_schema.`tables` where table_name = :table_name /* VARCHAR */ and table_name = :table_name /* VARCHAR */ and :__sq_has_values",
             "SysTableTableName": "[table_name:'Music']",
             "Table": "information_schema.`tables`"
           }
