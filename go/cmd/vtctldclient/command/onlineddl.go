@@ -33,6 +33,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
@@ -153,6 +154,7 @@ func commandOnlineDDLCancel(cmd *cobra.Command, args []string) error {
 	resp, err := client.CancelSchemaMigration(commandCtx, &vtctldatapb.CancelSchemaMigrationRequest{
 		Keyspace: keyspace,
 		Uuid:     uuid,
+		CallerId: applySchemaOptions.CallerIDProto(),
 	})
 	if err != nil {
 		return err
@@ -177,6 +179,7 @@ func commandOnlineDDLCleanup(cmd *cobra.Command, args []string) error {
 	resp, err := client.CleanupSchemaMigration(commandCtx, &vtctldatapb.CleanupSchemaMigrationRequest{
 		Keyspace: keyspace,
 		Uuid:     uuid,
+		CallerId: applySchemaOptions.CallerIDProto(),
 	})
 	if err != nil {
 		return err
@@ -197,10 +200,10 @@ func commandOnlineDDLForceCutOver(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	cli.FinishedParsing(cmd)
-
 	resp, err := client.ForceCutOverSchemaMigration(commandCtx, &vtctldatapb.ForceCutOverSchemaMigrationRequest{
 		Keyspace: keyspace,
 		Uuid:     uuid,
+		CallerId: applySchemaOptions.CallerIDProto(),
 	})
 	if err != nil {
 		return err
@@ -221,10 +224,10 @@ func commandOnlineDDLComplete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	cli.FinishedParsing(cmd)
-
 	resp, err := client.CompleteSchemaMigration(commandCtx, &vtctldatapb.CompleteSchemaMigrationRequest{
 		Keyspace: keyspace,
 		Uuid:     uuid,
+		CallerId: applySchemaOptions.CallerIDProto(),
 	})
 	if err != nil {
 		return err
@@ -245,10 +248,10 @@ func commandOnlineDDLLaunch(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	cli.FinishedParsing(cmd)
-
 	resp, err := client.LaunchSchemaMigration(commandCtx, &vtctldatapb.LaunchSchemaMigrationRequest{
 		Keyspace: keyspace,
 		Uuid:     uuid,
+		CallerId: applySchemaOptions.CallerIDProto(),
 	})
 	if err != nil {
 		return err
@@ -271,10 +274,10 @@ func commandOnlineDDLRetry(cmd *cobra.Command, args []string) error {
 	}
 
 	cli.FinishedParsing(cmd)
-
 	resp, err := client.RetrySchemaMigration(commandCtx, &vtctldatapb.RetrySchemaMigrationRequest{
 		Keyspace: keyspace,
 		Uuid:     uuid,
+		CallerId: applySchemaOptions.CallerIDProto(),
 	})
 	if err != nil {
 		return err
@@ -417,6 +420,8 @@ func commandOnlineDDLShow(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	OnlineDDL.Flags().StringVar(&applySchemaOptions.CallerID, "caller-id", "", "Effective caller ID used for the operation and should map to an ACL name which grants this identity the necessary permissions to perform the operation (this is only necessary when strict table ACLs are used).")
+
 	OnlineDDL.AddCommand(OnlineDDLCancel)
 	OnlineDDL.AddCommand(OnlineDDLCleanup)
 	OnlineDDL.AddCommand(OnlineDDLComplete)
