@@ -1,9 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (vreplication_migrate_vdiff2_convert_tz)
+name: Cluster (vreplication_vtctldclient_vdiff2_movetables_tz)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_migrate_vdiff2_convert_tz)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_vtctldclient_vdiff2_movetables_tz)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -16,11 +16,7 @@ env:
 jobs:
   build:
     timeout-minutes: 60
-<<<<<<< HEAD:.github/workflows/cluster_endtoend_vreplication_migrate_vdiff2_convert_tz.yml
-    name: Run endtoend tests on Cluster (vreplication_migrate_vdiff2_convert_tz)
-=======
-    name: Run endtoend tests on Cluster (vreplication_migrate)
->>>>>>> 3f638eb55e (VDiff: Fix bug with handling tables with no pks but only a unique key. (#17968)):.github/workflows/cluster_endtoend_vreplication_migrate.yml
+    name: Run endtoend tests on Cluster (vreplication_vtctldclient_vdiff2_movetables_tz)
     runs-on: gh-hosted-runners-16cores-1-24.04
 
     steps:
@@ -62,6 +58,7 @@ jobs:
         token: ''
         filters: |
           end_to_end:
+            - 'test/config.json'
             - 'go/**/*.go'
             - 'go/vt/sidecardb/**/*.sql'
             - 'go/test/endtoend/onlineddl/vrepl_suite/**'
@@ -74,13 +71,13 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/cluster_endtoend_vreplication_migrate_vdiff2_convert_tz.yml'
+            - '.github/workflows/cluster_endtoend_vreplication_vtctldclient_vdiff2_movetables_tz.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       with:
-        go-version: 1.22.12
+        go-version-file: go.mod
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -118,12 +115,14 @@ jobs:
         sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
 
         # Install everything else we need, and configure
-        sudo apt-get -qq install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
+        sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
 
-        sudo service mysql stop
-        sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        # Running on CNCF ARC Runners no longer needs this
+        # Leaving this in as a tombstone for now
+        # sudo service mysql stop
+        # sudo service etcd stop
+        # sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        # sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
         # install JUnit report formatter
@@ -174,8 +173,14 @@ jobs:
         binlog-transaction-compression=ON
         EOF
         
+        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        binlog-row-value-options=PARTIAL_JSON
+        EOF
+        
+        # Some of these tests require specific locales to be installed.
+        # See https://github.com/cncf/automation/commit/49f2ad7a791a62ff7d038002bbb2b1f074eed5d5
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard vreplication_migrate_vdiff2_convert_tz | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard vreplication_vtctldclient_vdiff2_movetables_tz | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()
@@ -193,4 +198,4 @@ jobs:
       uses: test-summary/action@31493c76ec9e7aa675f1585d3ed6f1da69269a86 # v2.4
       with:
         paths: "report.xml"
-        show: "fail, skip"
+        show: "fail"

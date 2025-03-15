@@ -42,7 +42,18 @@ var (
 )
 
 var (
+<<<<<<< HEAD
 	unitTestDatabases = []mysqlVersion{mysql57, mysql80}
+=======
+	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mysql84}
+)
+
+const (
+	oracleCloudRunner = "oracle-16cpu-64gb-x86-64"
+	githubRunner      = "gh-hosted-runners-16cores-1-24.04"
+	cores16RunnerName = githubRunner
+	defaultRunnerName = "ubuntu-24.04"
+>>>>>>> 3f638eb55e (VDiff: Fix bug with handling tables with no pks but only a unique key. (#17968))
 )
 
 const (
