@@ -315,22 +315,20 @@ func getLockAction(analysedInstance string, code inst.AnalysisCode) string {
 }
 
 // LockShard locks the keyspace-shard preventing others from performing conflicting actions.
-func LockShard(ctx context.Context, tabletAlias string, lockAction string) (context.Context, func(*error), error) {
-	if tabletAlias == "" {
-		return nil, nil, errors.New("can't lock shard: instance is unspecified")
+func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context.Context, func(*error), error) {
+	if keyspace == "" {
+		return nil, nil, errors.New("can't lock shard: keyspace is unspecified")
+	}
+	if shard == "" {
+		return nil, nil, errors.New("can't lock shard: shard name is unspecified")
 	}
 	val := atomic.LoadInt32(&hasReceivedSIGTERM)
 	if val > 0 {
 		return nil, nil, errors.New("can't lock shard: SIGTERM received")
 	}
 
-	tablet, err := inst.ReadTablet(tabletAlias)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	atomic.AddInt32(&shardsLockCounter, 1)
-	ctx, unlock, err := ts.TryLockShard(ctx, tablet.Keyspace, tablet.Shard, lockAction)
+	ctx, unlock, err := ts.TryLockShard(ctx, keyspace, shard, lockAction)
 	if err != nil {
 		atomic.AddInt32(&shardsLockCounter, -1)
 		return nil, nil, err
