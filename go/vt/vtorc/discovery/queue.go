@@ -35,8 +35,8 @@ import (
 
 // queueItem represents an item in the discovery.Queue.
 type queueItem struct {
-	PushedAt time.Time
 	Key      string
+	PushedAt time.Time
 }
 
 // Queue is an ordered queue with deduplication.
@@ -82,8 +82,8 @@ func (q *Queue) Push(key string) {
 		return
 	}
 	q.queue <- queueItem{
-		PushedAt: time.Now(),
 		Key:      key,
+		PushedAt: time.Now(),
 	}
 }
 
