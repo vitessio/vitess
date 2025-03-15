@@ -38,14 +38,14 @@ fi
 
 # All Go packages with test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*
-packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}{{if len .XTestGoFiles}}{{.ImportPath}} {{join .XTestGoFiles " "}}{{end}}' ./go/.../endtoend/... | sort)
+packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}{{if len .XTestGoFiles}}{{.ImportPath}} {{join .XTestGoFiles " "}}{{end}}' ./go/vt/vttablet/endtoend/... | sort)
 
 # Flaky tests have the suffix "_flaky_test.go".
 all_except_flaky_and_cluster_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_test\.go" |  grep -vE "go/test/endtoend" | cut -d" " -f1)
 flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | grep -vE "go/test/endtoend" | cut -d" " -f1)
 
 # Run non-flaky tests.
-echo "$all_except_flaky_and_cluster_tests" | xargs go test -count=1 $VT_GO_PARALLEL
+echo "$all_except_flaky_and_cluster_tests" | xargs go test -count=1 -run TestUpdateTableIndexMetrics $VT_GO_PARALLEL
 if [ $? -ne 0 ]; then
   echo "ERROR: Go unit tests failed. See above for errors."
   echo

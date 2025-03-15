@@ -1090,6 +1090,76 @@ func TestEngineReload(t *testing.T) {
 	})
 }
 
+func TestUpdateTableIndexMetrics(t *testing.T) {
+	time.Sleep(6 * time.Second)
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	if query := conn.BaseShowInnodbTableSizes(); query == "" {
+		t.Skip("additional table/index metrics not updated in this version of MySQL")
+	}
+	client := framework.NewClient()
+
+	_, err = client.Execute("insert into vitess_part (id) values (5),(15),(25)", nil)
+	require.NoError(t, err)
+	defer client.Execute("delete from vitess_part where id in (5,15,25)", nil)
+
+	time.Sleep(6 * time.Second)
+
+	// Analyze tables to make sure stats are updated prior to reload
+	analyzes := []string{
+		"analyze table vitess_a",
+		"analyze table vitess_autoinc_seq",
+		"analyze table vitess_part",
+	}
+	for _, sql := range analyzes {
+		_, err = client.Execute(sql, nil)
+		require.NoError(t, err)
+	}
+
+	time.Sleep(6 * time.Second)
+
+	fmt.Println("requested schema reload")
+	err = framework.Server.ReloadSchema(ctx)
+	fmt.Println("schema reload completed")
+	require.NoError(t, err)
+
+	time.Sleep(6 * time.Second)
+
+	results, err := client.Execute("select @@innodb_page_size", nil)
+	require.NoError(t, err)
+	pageSize, err := results.Rows[0][0].ToFloat64()
+	require.NoError(t, err)
+
+	vars := framework.DebugVars()
+
+	assert.Equal(t, 2.0, framework.FetchVal(vars, "TableRows/vitess_a"))
+	assert.Equal(t, 3.0, framework.FetchVal(vars, "TableRows/vitess_part"))
+	partTableCountResult, _ := client.Execute("select count(1) from vitess_part", nil)
+	partTableRows, _ := partTableCountResult.Rows[0][0].ToInt()
+	assert.Equal(t, 3, partTableRows)
+
+	tablesResult, err := conn.ExecuteFetch("select table_name, n_rows from mysql.innodb_table_stats where table_name like 'vitess_part%'", 1000, true)
+	require.NoError(t, err)
+	for _, row := range tablesResult.Rows {
+		fmt.Printf("table: %s n_rows: %v\n", row[0].ToString(), row[1].ToString())
+	}
+
+	assert.Equal(t, pageSize, framework.FetchVal(vars, "TableClusteredIndexSize/vitess_a"))
+	assert.Equal(t, pageSize*2, framework.FetchVal(vars, "TableClusteredIndexSize/vitess_part"))
+
+	assert.Equal(t, 2.0, framework.FetchVal(vars, "IndexCardinality/vitess_a.PRIMARY"))
+	assert.Equal(t, 3.0, framework.FetchVal(vars, "IndexCardinality/vitess_part.PRIMARY"))
+	assert.Equal(t, 0.0, framework.FetchVal(vars, "IndexCardinality/vitess_autoinc_seq.name"))
+
+	assert.Equal(t, pageSize, framework.FetchVal(vars, "IndexBytes/vitess_a.PRIMARY"))
+	assert.Equal(t, pageSize*2, framework.FetchVal(vars, "IndexBytes/vitess_part.PRIMARY"))
+	assert.Equal(t, pageSize, framework.FetchVal(vars, "IndexBytes/vitess_autoinc_seq.name"))
+}
+
 // TestTuple tests that bind variables having tuple values work with vttablet.
 func TestTuple(t *testing.T) {
 	client := framework.NewClient()
