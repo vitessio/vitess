@@ -173,6 +173,7 @@ func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
 type CompareOptions struct {
 	CompareColumnNames bool
 	IgnoreRowsAffected bool
+	AllowAnyFieldSize  bool
 }
 
 func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, opts CompareOptions) error {
@@ -202,7 +203,7 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 		var myCols []string
 		for i, vtField := range vtQr.Fields {
 			myField := mysqlQr.Fields[i]
-			checkFields(t, myField.Name, vtField, myField)
+			checkFields(t, myField.Name, vtField, myField, opts.AllowAnyFieldSize)
 
 			vtCols = append(vtCols, vtField.Name)
 			myCols = append(myCols, myField.Name)
@@ -258,7 +259,7 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 // "TIMESTAMP" for instance.
 var checkFieldsRegExpr = regexp.MustCompile(`([a-zA-Z]*)(\d*)`)
 
-func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field) {
+func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field, allowAnyFieldSize bool) {
 	t.Helper()
 
 	fail := func() {
@@ -284,7 +285,7 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field)
 
 		// Types the same now, however, if the size of the type is smaller on Vitess compared to MySQL
 		// we need to fail. We can allow superset but not the opposite.
-		if vtVal < myVal {
+		if !allowAnyFieldSize && vtVal < myVal {
 			fail()
 			return
 		}

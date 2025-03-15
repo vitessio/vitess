@@ -66,6 +66,10 @@ func Rewrote(message string) *ApplyResult {
 	return &ApplyResult{Transformations: []Rewrite{{Message: message}}}
 }
 
+func Rewrotef(format string, a ...any) *ApplyResult {
+	return Rewrote(fmt.Sprintf(format, a...))
+}
+
 func (ar *ApplyResult) Merge(other *ApplyResult) *ApplyResult {
 	if ar == nil {
 		return other

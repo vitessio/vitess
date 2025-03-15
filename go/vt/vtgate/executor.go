@@ -1482,6 +1482,8 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 
 		DBDDLPlugin: dbDDLPlugin,
 
+		AllowBlockJoins: allowBlockJoins,
+
 		WarmingReadsPercent: e.config.WarmingReadsPercent,
 		WarmingReadsTimeout: warmingReadsQueryTimeout,
 		WarmingReadsChannel: e.warmingReadsChannel,

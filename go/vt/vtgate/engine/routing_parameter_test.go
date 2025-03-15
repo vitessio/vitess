@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func TestFindRouteValuesJoin(t *testing.T) {
+func TestFindRouteBlockJoin(t *testing.T) {
 	vindex, err := vindexes.CreateVindex("hash", "", nil)
 	require.NoError(t, err)
 
