@@ -177,6 +177,7 @@ func (m *ExecuteOptions) CloneVT() *ExecuteOptions {
 	r.WorkloadName = m.WorkloadName
 	r.Priority = m.Priority
 	r.FetchLastInsertId = m.FetchLastInsertId
+	r.InDmlExecution = m.InDmlExecution
 	if rhs := m.TransactionAccessMode; rhs != nil {
 		tmpContainer := make([]ExecuteOptions_TransactionAccessMode, len(rhs))
 		copy(tmpContainer, rhs)
@@ -1894,6 +1895,18 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			return 0, err
 		}
 		i -= size
+	}
+	if m.InDmlExecution {
+		i--
+		if m.InDmlExecution {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0x98
 	}
 	if m.FetchLastInsertId {
 		i--
@@ -6196,6 +6209,9 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if m.FetchLastInsertId {
 		n += 3
 	}
+	if m.InDmlExecution {
+		n += 3
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -8964,6 +8980,26 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.FetchLastInsertId = bool(v != 0)
+		case 19:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InDmlExecution", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.InDmlExecution = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

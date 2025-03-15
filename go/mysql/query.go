@@ -44,6 +44,9 @@ const (
 	// This is different than specifying `0`, because `0` means "expect zero results", while this means
 	// "do not attempt to read any results into memory".
 	FETCH_NO_ROWS = math.MinInt
+
+	// FETCH_ALL_ROWS used as `maxrows` in `ExecuteFetch` and related functions, to indicate all rows should be fetched.
+	FETCH_ALL_ROWS = -1
 )
 
 //
@@ -506,7 +509,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		}
 
 		// Check we're not over the limit before we add more.
-		if len(result.Rows) == maxrows {
+		if maxrows != FETCH_ALL_ROWS && len(result.Rows) == maxrows {
 			c.recycleReadPacket()
 			if err := c.drainResults(); err != nil {
 				return nil, false, 0, err

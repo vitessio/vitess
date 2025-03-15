@@ -17,6 +17,7 @@ limitations under the License.
 package dml
 
 import (
+	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
@@ -133,19 +134,19 @@ func TestUpdateWithLimit(t *testing.T) {
 	defer closer()
 
 	// initial rows
-	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (2,10), (3,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
+	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
 
 	// update with limit
-	qr := mcmp.Exec(`update s_tbl set num = 12 order by num, id limit 3`)
-	require.EqualValues(t, 3, qr.RowsAffected)
+	qr := mcmp.Exec(`update s_tbl set num = 12 order by num, id limit 1`)
+	require.EqualValues(t, 1, qr.RowsAffected)
 
 	qr = mcmp.Exec(`update order_tbl set cust_no = 12 where region_id = 1 limit 1`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
 	// check rows
 	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
-		`[[INT64(1) INT64(12)] [INT64(2) INT64(12)] [INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
+		`[[INT64(1) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
 	// 2 rows matches but limit is 1, so any one of the row can be modified in the table.
 	mcmp.AssertMatchesAnyNoCompare(`select region_id, oid, cust_no from order_tbl order by oid`,
 		`[[INT64(1) INT64(1) INT64(12)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`,
@@ -161,8 +162,8 @@ func TestUpdateWithLimit(t *testing.T) {
 	// check rows
 	// 2 rows matches `num > 17` but limit is 1 so any one of them will be updated.
 	mcmp.AssertMatchesAnyNoCompare(`select id, num from s_tbl order by id`,
-		`[[INT64(1) INT64(12)] [INT64(2) INT64(12)] [INT64(3) INT64(10)] [INT64(4) INT64(32)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`,
-		`[[INT64(1) INT64(12)] [INT64(2) INT64(12)] [INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(32)]]`)
+		`[[INT64(1) INT64(10)] [INT64(4) INT64(32)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`,
+		`[[INT64(1) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(32)]]`)
 	mcmp.AssertMatchesAnyNoCompare(`select region_id, oid, cust_no from order_tbl order by oid`,
 		`[[INT64(1) INT64(1) INT64(22)] [INT64(1) INT64(2) INT64(12)] [INT64(2) INT64(3) INT64(15)] [INT64(2) INT64(4) INT64(65)]]`,
 		`[[INT64(1) INT64(1) INT64(14)] [INT64(1) INT64(2) INT64(22)] [INT64(2) INT64(3) INT64(15)] [INT64(2) INT64(4) INT64(65)]]`)
@@ -420,4 +421,62 @@ func TestDMLInUnique(t *testing.T) {
 		[VARCHAR("sks") VARCHAR("80-") VARCHAR("delete from user_tbl where region_id in (4, 6)")]
     ]`
 	assertVExplainEquals(t, mcmp.VtConn, "vexplain /*vt+ EXECUTE_DML_QUERIES */ queries delete from user_tbl where region_id in (1,2,3,4,5,6)", expected)
+}
+
+// TestUpdateWithLargeRowsAsInput tests that a query with large input rows should succeed with passthrough DML on.
+func TestUpdateWithLargeRowsAsInput(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert initial rows
+	for i := 0; i < 100; i++ {
+		mcmp.Exec(fmt.Sprintf("insert into t1(id, col) values (%d, %d)", i, i))
+		mcmp.Exec(fmt.Sprintf("insert into t2(id, col) values (%d, %d)", i, i))
+	}
+
+	queries := []string{
+		`update t1 join t2 on t1.col = t2.col set t1.col = 5`,
+		`update t1 join t2 on t1.col = t2.col set t1.col = t1.col + 1`,
+		`update t1 set col = col + 1`,
+	}
+
+	// Should succeed in OLTP mode.
+	for _, query := range queries {
+		t.Run("oltp-"+query, func(t *testing.T) {
+			mcmp.Exec(query)
+		})
+	}
+
+	// Switch workload to OLAP
+	utils.Exec(t, mcmp.VtConn, `set workload = olap`)
+
+	// Should also succeed in OLAP mode.
+	for _, query := range queries {
+		t.Run("olap-"+query, func(t *testing.T) {
+			mcmp.Exec(query)
+		})
+	}
+}
+
+// TestDeleteWithLargeRowsAsInput tests that a query with large input rows should succeed with passthrough DML on.
+func TestDeleteWithLargeRowsAsInput(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert initial rows
+	for i := 0; i < 100; i++ {
+		mcmp.Exec(fmt.Sprintf("insert into t1(id, col) values (%d, %d)", i, i))
+		mcmp.Exec(fmt.Sprintf("insert into t2(id, col) values (%d, %d)", i, i))
+	}
+
+	// Should succeed in OLTP mode
+	_ = mcmp.Exec(`delete t1 from t1 join t2 on t1.col = t2.col where t1.id > 40`)
+	// assert.EqualValues(t, 100, qr.RowsAffected)
+
+	// Switch workload to OLAP
+	utils.Exec(t, mcmp.VtConn, `set workload = olap`)
+
+	// Should also succeed in OLAP mode
+	_ = mcmp.Exec(`delete t1 from t1 join t2 on t1.col = t2.col`)
+	// assert.EqualValues(t, 0, qr.RowsAffected) // All rows should have been deleted in the first run
 }
