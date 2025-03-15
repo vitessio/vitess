@@ -166,7 +166,11 @@ func (txc *TxConn) queryService(ctx context.Context, alias *topodatapb.TabletAli
 	if alias == nil {
 		return txc.tabletGateway, nil
 	}
-	return txc.tabletGateway.QueryServiceByAlias(ctx, alias, nil)
+	qs, err := txc.tabletGateway.QueryServiceByAlias(ctx, alias, nil)
+	if err != nil {
+		return nil, vterrors.VT15001(vterrors.Code(err), err.Error())
+	}
+	return qs, nil
 }
 
 func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSession, logging *econtext.ExecuteLogger) error {
