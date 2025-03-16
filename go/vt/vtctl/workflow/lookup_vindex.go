@@ -18,9 +18,11 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
 	"google.golang.org/protobuf/proto"
 
@@ -629,12 +631,14 @@ func (lv *lookupVindex) validateExternalizedVindex(vindex *vschemapb.Vindex) err
 	return nil
 }
 
-// validateExternalized checks if the vindex has been externalized
+// validateExternalized checks if the vindexes have been externalized
 // and verifies the state of the VReplication workflow on the target shards.
 // It ensures that all streams in the workflow are frozen.
-func (lv *lookupVindex) validateExternalized(ctx context.Context, vindex *vschemapb.Vindex, name string, targetShards []*topo.ShardInfo) error {
-	if err := lv.validateExternalizedVindex(vindex); err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s has not been externalized yet: %v", name, err)
+func (lv *lookupVindex) validateExternalized(ctx context.Context, vindexByName map[string]*vschemapb.Vindex, workflowName string, targetShards []*topo.ShardInfo) error {
+	for vindexName, vindex := range vindexByName {
+		if err := lv.validateExternalizedVindex(vindex); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s has not been externalized yet: %v", vindexName, err)
+		}
 	}
 
 	err := forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
@@ -643,13 +647,13 @@ func (lv *lookupVindex) validateExternalized(ctx context.Context, vindex *vschem
 			return err
 		}
 		res, err := lv.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
-			Workflow: name,
+			Workflow: workflowName,
 		})
 		if err != nil {
 			return err
 		}
 		if res == nil || res.Workflow == "" {
-			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", name, topoproto.TabletAliasString(targetPrimary.Alias))
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", workflowName, topoproto.TabletAliasString(targetPrimary.Alias))
 		}
 		for _, stream := range res.Streams {
 			// All streams need to be frozen.
@@ -663,4 +667,124 @@ func (lv *lookupVindex) validateExternalized(ctx context.Context, vindex *vschem
 		return err
 	}
 	return nil
+}
+
+// validateInternalizedState ensures that the workflow is running if it
+// backfills unowned vindex or we've requested that it shouldn't be stopped
+// after copy phase completes, else it ensures that the workflow is stopped.
+func (lv *lookupVindex) validateInternalizedState(ctx context.Context, workflowName string, isBackfillingOwned bool, targetShards []*topo.ShardInfo) error {
+	return forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
+		targetPrimary, err := lv.ts.GetTablet(ctx, targetShard.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		res, err := lv.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: workflowName,
+		})
+		if err != nil {
+			return err
+		}
+		if res == nil || res.Workflow == "" {
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", workflowName, topoproto.TabletAliasString(targetPrimary.Alias))
+		}
+		for _, stream := range res.Streams {
+			if stream.Bls.Filter == nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid binlog source")
+			}
+			if !isBackfillingOwned || !stream.Bls.StopAfterCopy {
+				// If there's no owner or we've requested that the workflow NOT be stopped
+				// after the copy phase completes, then all streams need to be running.
+				if stream.State != binlogdatapb.VReplicationWorkflowState_Running {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Running state: %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State)
+				}
+			} else {
+				// If there is an owner, all streams need to be stopped after copy.
+				if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || !strings.Contains(stream.Message, "Stopped after copy") {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Stopped after copy state: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
+				}
+			}
+		}
+		return nil
+	})
+}
+
+// getVindexesFromWorkflowOptions reads workflow options from each target
+// shard, and returns lookup vindex names found in workflow options.
+func (lv *lookupVindex) getVindexesFromWorkflowOptions(ctx context.Context, workflowName string, targetShards []*topo.ShardInfo) ([]string, error) {
+	var (
+		options string
+		mu      sync.Mutex
+	)
+	err := forAllShards(targetShards, func(si *topo.ShardInfo) error {
+		targetPrimary, err := lv.ts.GetTablet(ctx, si.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		res, err := lv.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: workflowName,
+		})
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if options != "" && options != res.Options {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "inconsistent workflow options on target shard %s/%s",
+				targetPrimary.Keyspace, targetPrimary.GetShard())
+		}
+		options = res.GetOptions()
+		return nil
+	})
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read workflow options")
+	}
+	workflowOptions := &vtctldatapb.WorkflowOptions{}
+	if err := json.Unmarshal([]byte(options), workflowOptions); err != nil {
+		return nil, vterrors.Wrapf(err, "failed to parse workflow options")
+	}
+	return workflowOptions.GetLookupVindexes(), nil
+}
+
+// getVindexAndVSchema gets the vindexes (from VSchema) and VSchema with the
+// provided keyspace and workflow. Uses workflow options to retrieve lookup
+// vindex names.
+func (lv *lookupVindex) getVindexesAndVSchema(ctx context.Context, keyspace string, workflowName string, targetShards []*topo.ShardInfo) (map[string]*vschemapb.Vindex, *topo.KeyspaceVSchemaInfo, error) {
+	lookupVindexes, err := lv.getVindexesFromWorkflowOptions(ctx, workflowName, targetShards)
+	if err != nil {
+		return nil, nil, vterrors.Wrapf(err, "failed to retrieve lookup vindex names from workflow")
+	}
+	if len(lookupVindexes) == 0 {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "lookup vindexes not found in the workflow options")
+	}
+
+	vschema, err := lv.ts.GetVSchema(ctx, keyspace)
+	if err != nil {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", keyspace)
+	}
+	vindexByName := make(map[string]*vschemapb.Vindex, len(lookupVindexes))
+	for _, vindexName := range lookupVindexes {
+		vindex := vschema.Vindexes[vindexName]
+		if vindex == nil {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "vindex %s not found in the %s keyspace", vindexName, keyspace)
+		}
+		vindexByName[vindexName] = vindex
+	}
+	return vindexByName, vschema, nil
+}
+
+// isBackfillingOwnedVindexes returns if the VReplication workflow is
+// backfilling owned lookup vindexes. Also, returns error in case the
+// workflow backfills a mix of owned and unowned vindexes.
+func isBackfillingOwnedVindexes(vindexByName map[string]*vschemapb.Vindex) (bool, error) {
+	isBackfillingOwned := false
+	for vindexName, vindex := range vindexByName {
+		if vindex.Owner != "" {
+			isBackfillingOwned = true
+		} else if isBackfillingOwned {
+			// We don't allow a workflow to backfill a mix of unowned
+			// and owned vindexes.
+			return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "workflow can't backfill mix of unowned and owned vindexes, vindex %s is unowned", vindexName)
+		}
+	}
+	return isBackfillingOwned, nil
 }

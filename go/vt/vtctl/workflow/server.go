@@ -27,6 +27,7 @@ import (
 	"text/template"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
@@ -562,18 +563,18 @@ func (s *Server) LookupVindexComplete(ctx context.Context, req *vtctldatapb.Look
 	span.Annotate("name", req.Name)
 	span.Annotate("table_keyspace", req.TableKeyspace)
 
-	vindex, _, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
-	if err != nil {
-		return nil, err
-	}
-
 	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
 	if err != nil {
 		return nil, err
 	}
 
 	lv := newLookupVindex(s)
-	if err = lv.validateExternalized(ctx, vindex, req.Name, targetShards); err != nil {
+	vindexByName, _, err := lv.getVindexesAndVSchema(ctx, req.Keyspace, req.Name, targetShards)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = lv.validateExternalized(ctx, vindexByName, req.Name, targetShards); err != nil {
 		return nil, err
 	}
 
@@ -607,6 +608,17 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 	ms, sourceVSchema, targetVSchema, cancelFunc, err := lv.prepareCreate(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
 	if err != nil {
 		return nil, err
+	}
+
+	// We are including lookup vindexes names in the workflow options so that
+	// this can be used later in externalize, internalize or complete to fetch
+	// lookup vindexes names that the workflow is backfilling.
+	if ms.WorkflowOptions == nil {
+		ms.WorkflowOptions = &vtctldatapb.WorkflowOptions{
+			LookupVindexes: maps.Keys(req.Vindex.Vindexes),
+		}
+	} else {
+		ms.WorkflowOptions.LookupVindexes = maps.Keys(req.Vindex.Vindexes)
 	}
 
 	if err := s.ts.SaveVSchema(ctx, targetVSchema); err != nil {
@@ -650,56 +662,28 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("table_keyspace", req.TableKeyspace)
 	span.Annotate("delete_workflow", req.DeleteWorkflow)
 
-	vindex, sourceKsVS, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
-	if err != nil {
-		return nil, err
-	}
-
 	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
 	if err != nil {
 		return nil, err
 	}
 
-	err = forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
-		targetPrimary, err := s.ts.GetTablet(ctx, targetShard.PrimaryAlias)
-		if err != nil {
-			return err
-		}
-		res, err := s.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
-			Workflow: req.Name,
-		})
-		if err != nil {
-			return err
-		}
-		if res == nil || res.Workflow == "" {
-			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, topoproto.TabletAliasString(targetPrimary.Alias))
-		}
-		for _, stream := range res.Streams {
-			if stream.Bls.Filter == nil || len(stream.Bls.Filter.Rules) != 1 {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid binlog source")
-			}
-			if vindex.Owner == "" || !stream.Bls.StopAfterCopy {
-				// If there's no owner or we've requested that the workflow NOT be stopped
-				// after the copy phase completes, then all streams need to be running.
-				if stream.State != binlogdatapb.VReplicationWorkflowState_Running {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Running state: %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State)
-				}
-			} else {
-				// If there is an owner, all streams need to be stopped after copy.
-				if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || !strings.Contains(stream.Message, "Stopped after copy") {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Stopped after copy state: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
-				}
-			}
-		}
-		return nil
-	})
+	lv := newLookupVindex(s)
+	vindexByName, sourceKsVS, err := lv.getVindexesAndVSchema(ctx, req.Keyspace, req.Name, targetShards)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &vtctldatapb.LookupVindexExternalizeResponse{}
+	isBackfillingOwned, err := isBackfillingOwnedVindexes(vindexByName)
+	if err != nil {
+		return nil, err
+	}
 
-	if vindex.Owner != "" {
+	if err := lv.validateInternalizedState(ctx, req.Name, isBackfillingOwned, targetShards); err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.LookupVindexExternalizeResponse{}
+	if isBackfillingOwned {
 		// If there is an owner, we have to stop/delete the streams. Once we
 		// externalize it the VTGate will now be responsible for keeping the
 		// lookup table up to date with the owner table.
@@ -738,8 +722,12 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 		}
 	}
 
-	// Remove the write_only param and save the source vschema.
-	delete(vindex.Params, "write_only")
+	for _, vindex := range vindexByName {
+		// Remove the write_only param from each vindex.
+		delete(vindex.Params, "write_only")
+	}
+
+	// Save the source vschema.
 	if err := s.ts.SaveVSchema(ctx, sourceKsVS); err != nil {
 		return nil, err
 	}
@@ -755,23 +743,25 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("name", req.Name)
 	span.Annotate("table_keyspace", req.TableKeyspace)
 
-	vindex, sourceKsVS, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
-	if err != nil {
-		return nil, err
-	}
-
 	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
 	if err != nil {
 		return nil, err
 	}
 
 	lv := newLookupVindex(s)
-	if err = lv.validateExternalized(ctx, vindex, req.Name, targetShards); err != nil {
+	vindexByName, sourceKsVS, err := lv.getVindexesAndVSchema(ctx, req.Keyspace, req.Name, targetShards)
+	if err != nil {
 		return nil, err
 	}
 
-	// Make the vindex back to write_only and save the source vschema.
-	vindex.Params["write_only"] = "true"
+	if err = lv.validateExternalized(ctx, vindexByName, req.Name, targetShards); err != nil {
+		return nil, err
+	}
+
+	// Make the vindexes back to write_only and save the source vschema.
+	for _, vindex := range vindexByName {
+		vindex.Params["write_only"] = "true"
+	}
 	if err := s.ts.SaveVSchema(ctx, sourceKsVS); err != nil {
 		return nil, err
 	}
