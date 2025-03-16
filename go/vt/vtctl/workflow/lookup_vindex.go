@@ -754,7 +754,11 @@ func (lv *lookupVindex) getVindexesAndVSchema(ctx context.Context, keyspace stri
 		return nil, nil, vterrors.Wrapf(err, "failed to retrieve lookup vindex names from workflow")
 	}
 	if len(lookupVindexes) == 0 {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "lookup vindexes not found in the workflow options")
+		// If lookup vindexes from workflow options were absent, we should
+		// assume the vindex name to be same as workflow name. This will allow
+		// us to support old behaviour. Even if this was not the case, we will
+		// still error out while retrieving vindex from vschema.
+		lookupVindexes = []string{workflowName}
 	}
 
 	vschema, err := lv.ts.GetVSchema(ctx, keyspace)
