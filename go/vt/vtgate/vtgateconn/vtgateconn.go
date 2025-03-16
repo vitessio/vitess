@@ -118,8 +118,8 @@ type VTGateSession struct {
 }
 
 // Execute performs a VTGate Execute.
-func (sn *VTGateSession) Execute(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	session, res, err := sn.impl.Execute(ctx, sn.session, query, bindVars)
+func (sn *VTGateSession) Execute(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable, prepared bool) (*sqltypes.Result, error) {
+	session, res, err := sn.impl.Execute(ctx, sn.session, query, bindVars, prepared)
 	sn.session = session
 	return res, err
 }
@@ -145,10 +145,10 @@ func (sn *VTGateSession) StreamExecute(ctx context.Context, query string, bindVa
 }
 
 // Prepare performs a VTGate Prepare.
-func (sn *VTGateSession) Prepare(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
-	session, fields, err := sn.impl.Prepare(ctx, sn.session, query, bindVars)
+func (sn *VTGateSession) Prepare(ctx context.Context, query string) ([]*querypb.Field, uint16, error) {
+	session, fields, paramsCount, err := sn.impl.Prepare(ctx, sn.session, query)
 	sn.session = session
-	return fields, err
+	return fields, paramsCount, err
 }
 
 //
@@ -159,7 +159,7 @@ func (sn *VTGateSession) Prepare(ctx context.Context, query string, bindVars map
 // implementation. It can be used concurrently across goroutines.
 type Impl interface {
 	// Execute executes a non-streaming query on vtgate.
-	Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error)
+	Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, prepared bool) (*vtgatepb.Session, *sqltypes.Result, error)
 
 	// ExecuteBatch executes a non-streaming queries on vtgate.
 	ExecuteBatch(ctx context.Context, session *vtgatepb.Session, queryList []string, bindVarsList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error)
@@ -168,7 +168,7 @@ type Impl interface {
 	StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, processResponse func(*vtgatepb.StreamExecuteResponse)) (sqltypes.ResultStream, error)
 
 	// Prepare returns the fields information for the query as part of supporting prepare statements.
-	Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error)
+	Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error)
 
 	// CloseSession closes the session provided by rolling back any active transaction.
 	CloseSession(ctx context.Context, session *vtgatepb.Session) error

@@ -35,7 +35,7 @@ func TestSendTable(t *testing.T) {
 		testName             string
 		sharded              bool
 		shards               []string
-		destination          key.Destination
+		destination          key.ShardDestination
 		expectedQueryLog     []string
 		expectedError        string
 		isDML                bool
@@ -174,7 +174,7 @@ func TestSendTable_StreamExecute(t *testing.T) {
 		testName         string
 		sharded          bool
 		shards           []string
-		destination      key.Destination
+		destination      key.ShardDestination
 		expectedQueryLog []string
 		expectedError    string
 		isDML            bool
@@ -305,16 +305,27 @@ func TestSendGetFields(t *testing.T) {
 		},
 		Query:             "dummy_query",
 		TargetDestination: key.DestinationAllShards{},
-		IsDML:             true,
 		SingleShardOnly:   false,
 	}
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}, results: results}
-	qr, err := send.GetFields(context.Background(), vc, map[string]*querypb.BindVariable{})
-	require.NoError(t, err)
-	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.-20: dummy_query {} ks.20-: dummy_query {} true false`,
+
+	t.Run("GetFields - not a dml query", func(t *testing.T) {
+		qr, err := send.GetFields(context.Background(), vc, map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		vc.ExpectLog(t, []string{
+			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+			`ExecuteMultiShard ks.-20: dummy_query {} ks.20-: dummy_query {} false false`,
+		})
+		require.Nil(t, qr.Rows)
+		require.Equal(t, 4, len(qr.Fields))
 	})
-	require.Nil(t, qr.Rows)
-	require.Equal(t, 4, len(qr.Fields))
+
+	vc.Rewind()
+	t.Run("GetFields - a dml query", func(t *testing.T) {
+		send.IsDML = true
+		qr, err := send.GetFields(context.Background(), vc, map[string]*querypb.BindVariable{})
+		require.NoError(t, err)
+		require.Empty(t, qr.Fields)
+		vc.ExpectLog(t, nil)
+	})
 }

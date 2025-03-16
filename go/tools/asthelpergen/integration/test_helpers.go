@@ -124,11 +124,19 @@ type (
 		cursor cursor
 	}
 	cursor struct {
-		stop bool
+		stop           bool
+		node, replaced AST
 	}
 )
 
 func (c *cow) postVisit(a, b AST, d bool) (AST, bool) {
+	c.cursor.node = a
+	c.cursor.replaced = nil
+	c.post(&c.cursor)
+	if c.cursor.replaced != nil {
+		return c.cursor.replaced, true
+	}
+
 	return a, d
 }
 
@@ -174,4 +182,15 @@ func (path ASTPath) DebugString() string {
 	}
 
 	return sb.String()
+}
+
+func CopyOnRewrite(
+	node AST,
+	pre func(node, parent AST) bool,
+	post func(cursor *cursor),
+	cloned func(before, after AST),
+) AST {
+	cow := cow{pre: pre, post: post, cursor: cursor{}, cloned: cloned}
+	out, _ := cow.copyOnRewriteAST(node, nil)
+	return out
 }

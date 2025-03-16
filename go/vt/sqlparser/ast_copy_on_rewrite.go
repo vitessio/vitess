@@ -564,6 +564,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfWith(n, parent)
 	case *XorExpr:
 		return c.copyOnRewriteRefOfXorExpr(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -6968,6 +6970,8 @@ func (c *cow) copyOnRewriteAggrFunc(n AggrFunc, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfVarSamp(n, parent)
 	case *Variance:
 		return c.copyOnRewriteRefOfVariance(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7022,6 +7026,8 @@ func (c *cow) copyOnRewriteAlterOption(n AlterOption, parent SQLNode) (out SQLNo
 		return c.copyOnRewriteRefOfTablespaceOperation(n, parent)
 	case *Validation:
 		return c.copyOnRewriteRefOfValidation(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7188,6 +7194,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfValuesFuncExpr(n, parent)
 	case *WeightStringFuncExpr:
 		return c.copyOnRewriteRefOfWeightStringFuncExpr(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7204,6 +7212,8 @@ func (c *cow) copyOnRewriteColTuple(n ColTuple, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfSubquery(n, parent)
 	case ValTuple:
 		return c.copyOnRewriteValTuple(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7218,6 +7228,8 @@ func (c *cow) copyOnRewriteConstraintInfo(n ConstraintInfo, parent SQLNode) (out
 		return c.copyOnRewriteRefOfCheckConstraintDefinition(n, parent)
 	case *ForeignKeyDefinition:
 		return c.copyOnRewriteRefOfForeignKeyDefinition(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7234,6 +7246,8 @@ func (c *cow) copyOnRewriteDBDDLStatement(n DBDDLStatement, parent SQLNode) (out
 		return c.copyOnRewriteRefOfCreateDatabase(n, parent)
 	case *DropDatabase:
 		return c.copyOnRewriteRefOfDropDatabase(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7260,6 +7274,8 @@ func (c *cow) copyOnRewriteDDLStatement(n DDLStatement, parent SQLNode) (out SQL
 		return c.copyOnRewriteRefOfRenameTable(n, parent)
 	case *TruncateTable:
 		return c.copyOnRewriteRefOfTruncateTable(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7274,6 +7290,8 @@ func (c *cow) copyOnRewriteExplain(n Explain, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfExplainStmt(n, parent)
 	case *ExplainTab:
 		return c.copyOnRewriteRefOfExplainTab(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7518,6 +7536,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfWeightStringFuncExpr(n, parent)
 	case *XorExpr:
 		return c.copyOnRewriteRefOfXorExpr(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7536,6 +7556,8 @@ func (c *cow) copyOnRewriteInsertRows(n InsertRows, parent SQLNode) (out SQLNode
 		return c.copyOnRewriteValues(n, parent)
 	case *ValuesStatement:
 		return c.copyOnRewriteRefOfValuesStatement(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7552,6 +7574,8 @@ func (c *cow) copyOnRewriteSelectExpr(n SelectExpr, parent SQLNode) (out SQLNode
 		return c.copyOnRewriteRefOfNextval(n, parent)
 	case *StarExpr:
 		return c.copyOnRewriteRefOfStarExpr(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7566,6 +7590,8 @@ func (c *cow) copyOnRewriteSelectStatement(n SelectStatement, parent SQLNode) (o
 		return c.copyOnRewriteRefOfSelect(n, parent)
 	case *Union:
 		return c.copyOnRewriteRefOfUnion(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7584,6 +7610,8 @@ func (c *cow) copyOnRewriteShowInternal(n ShowInternal, parent SQLNode) (out SQL
 		return c.copyOnRewriteRefOfShowOther(n, parent)
 	case *ShowTransactionStatus:
 		return c.copyOnRewriteRefOfShowTransactionStatus(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7598,6 +7626,8 @@ func (c *cow) copyOnRewriteSimpleTableExpr(n SimpleTableExpr, parent SQLNode) (o
 		return c.copyOnRewriteRefOfDerivedTable(n, parent)
 	case TableName:
 		return c.copyOnRewriteTableName(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7708,6 +7738,8 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfVStream(n, parent)
 	case *ValuesStatement:
 		return c.copyOnRewriteRefOfValuesStatement(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7726,6 +7758,8 @@ func (c *cow) copyOnRewriteTableExpr(n TableExpr, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfJoinTableExpr(n, parent)
 	case *ParenTableExpr:
 		return c.copyOnRewriteRefOfParenTableExpr(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7742,6 +7776,8 @@ func (c *cow) copyOnRewriteTableStatement(n TableStatement, parent SQLNode) (out
 		return c.copyOnRewriteRefOfUnion(n, parent)
 	case *ValuesStatement:
 		return c.copyOnRewriteRefOfValuesStatement(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -7901,6 +7937,24 @@ func (c *cow) copyOnRewriteRefOfVindexParam(n *VindexParam, parent SQLNode) (out
 			if c.cloned != nil {
 				c.cloned(n, out)
 			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteVisitable(n Visitable, parent SQLNode) (out SQLNode, changed bool) {
+	if c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_inner, changedInner := c.copyOnRewriteSQLNode(n.VisitThis(), n)
+		if changedInner {
+			res := n.Clone(_inner)
+			out = res
 			changed = true
 		}
 	}

@@ -113,6 +113,14 @@ type Cursor struct {
 	current *pathbuilder.ASTPathBuilder
 }
 
+// Visitable is the interface that needs to be implemented by all nodes that live outside the `sqlparser` package,
+// in order to visit/rewrite/copy_on_rewrite these nodes.
+type Visitable interface {
+	SQLNode
+	VisitThis() SQLNode
+	Clone(inner SQLNode) SQLNode
+}
+
 // Node returns the current Node.
 func (c *Cursor) Node() SQLNode { return c.node }
 

@@ -18,11 +18,9 @@ package vitessdriver
 
 import (
 	"database/sql/driver"
-	"errors"
 	"fmt"
 	"time"
 
-	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -45,66 +43,14 @@ func (cv *converter) ToNative(v sqltypes.Value) (any, error) {
 		return v.ToUint64()
 	case v.IsFloat():
 		return v.ToFloat64()
-	case v.Type() == sqltypes.Datetime, v.Type() == sqltypes.Timestamp:
-		return cv.datetimeToTime(v)
-	case v.Type() == sqltypes.Date:
-		return cv.dateToTime(v)
+	case v.Type() == sqltypes.Datetime, v.Type() == sqltypes.Timestamp, v.Type() == sqltypes.Date:
+		return v.ToTime(cv.location)
 	case v.IsQuoted() || v.Type() == sqltypes.Bit || v.Type() == sqltypes.Decimal:
 		out, err = v.ToBytes()
 	case v.Type() == sqltypes.Expression:
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v cannot be converted to a go type", v)
 	}
 	return out, err
-}
-
-// ErrInvalidTime is returned when we fail to parse a datetime
-// string from MySQL. This should never happen unless things are
-// seriously messed up.
-var ErrInvalidTime = errors.New("invalid MySQL time string")
-
-func (cv *converter) datetimeToTime(v sqltypes.Value) (time.Time, error) {
-	if v.IsNull() {
-		return time.Time{}, nil
-	}
-	// Valid format string offsets for a DATETIME
-	//  |DATETIME          |19+
-	//  |------------------|------|
-	// "2006-01-02 15:04:05.999999"
-	dt, _, ok := datetime.ParseDateTime(v.ToString(), -1)
-	if !ok {
-		return time.Time{}, ErrInvalidTime
-	}
-	if dt.IsZero() {
-		return time.Time{}, nil
-	}
-	loc := cv.location
-	if loc == nil {
-		loc = time.UTC
-	}
-	return time.Date(dt.Date.Year(), time.Month(dt.Date.Month()), dt.Date.Day(),
-		dt.Time.Hour(), dt.Time.Minute(), dt.Time.Second(), dt.Time.Nanosecond(), loc), nil
-}
-
-func (cv *converter) dateToTime(v sqltypes.Value) (time.Time, error) {
-	if v.IsNull() {
-		return time.Time{}, nil
-	}
-	// Valid format string offsets for a DATE
-	//  |DATE     |10
-	//  |---------|
-	// "2006-01-02 00:00:00.000000"
-	d, ok := datetime.ParseDate(v.ToString())
-	if !ok {
-		return time.Time{}, ErrInvalidTime
-	}
-	if d.IsZero() {
-		return time.Time{}, nil
-	}
-	loc := cv.location
-	if loc == nil {
-		loc = time.UTC
-	}
-	return time.Date(d.Year(), time.Month(d.Month()), d.Day(), 0, 0, 0, 0, loc), nil
 }
 
 func (cv *converter) BuildBindVariable(v any) (*querypb.BindVariable, error) {

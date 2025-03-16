@@ -944,7 +944,7 @@ func (td *tableDiffer) getSourcePKCols() error {
 		executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 			res, err := td.wd.ct.tmc.ExecuteFetchAsApp(ctx, sourceTablet.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 				Query:   []byte(query),
-				MaxRows: 1,
+				MaxRows: uint64(maxrows),
 			})
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
@@ -958,9 +958,11 @@ func (td *tableDiffer) getSourcePKCols() error {
 				td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
 		}
 		if len(pkeCols) > 0 {
+			log.Infof("Using primary key equivalent columns %+v for table %s", pkeCols, td.table.Name)
 			sourceTable.PrimaryKeyColumns = pkeCols
 		} else {
 			// We use every column together as a substitute PK.
+			log.Infof("Using all columns as a substitute primary key for table %s", td.table.Name)
 			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, td.table.Columns...)
 		}
 	}

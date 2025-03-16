@@ -147,10 +147,12 @@ jobs:
 
         {{end}}
 
-        sudo service mysql stop
-        sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        # Running on CNCF ARC Runners no longer needs this
+        # Leaving this in as a tombstone for now
+        # sudo service mysql stop
+        # sudo service etcd stop
+        # sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        # sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
         # install JUnit report formatter
@@ -235,6 +237,8 @@ jobs:
         EOF
         {{end}}
 
+        # Some of these tests require specific locales to be installed.
+        # See https://github.com/cncf/automation/commit/49f2ad7a791a62ff7d038002bbb2b1f074eed5d5
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}}{{if .BuildTag}} -build-tag={{.BuildTag}} {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 

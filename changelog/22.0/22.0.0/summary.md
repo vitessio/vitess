@@ -4,9 +4,12 @@
 
 - **[Major Changes](#major-changes)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated VTGate Metrics](#vtgate-metrics)
+    - [Deprecated VTGate Flags](#vtgate-flags)
     - [Deprecated VTTablet Flags](#vttablet-flags)
     - [Removing gh-ost and pt-osc Online DDL strategies](#ghost-ptosc)
   - **[RPC Changes](#rpc-changes)**
+  - **[VTGate Metrics]**(#vtgate-metrics)
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
   - **[VTGate Config File Changes](#vtgate-config-file-changes)**
@@ -36,9 +39,14 @@ These are the RPC changes made in this release -
 
 ### <a id="deprecations-and-deletions"/>Deprecations and Deletions</a>
 
+#### <a id="vtgate-flags"/>Deprecated VTGate Flags</a>
+
+- `grpc-send-session-in-streaming` flag is deprecated. Session will be sent as part of response on StreamExecute API call.
+
 #### <a id="vttablet-flags"/>Deprecated VTTablet Flags</a>
 
 - `twopc_enable` flag is deprecated. Usage of TwoPC commit will be determined by the `transaction_mode` set on VTGate via flag or session variable.
+- `--disable_active_reparents` flag that was previously deprecated, has now been removed.
 
 #### <a id="ghost-ptosc"/>Removing gh-ost and pt-osc Online DDL strategies</a>
 
@@ -54,6 +62,33 @@ The use of `gh-ost` and `pt-osc` as strategies as follows, yields an error:
 $ vtctldclient ApplySchema --ddl-strategy="gh-ost" ...
 $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
 ```
+
+### <a id="vtgate-metrics"/>VTGate Metrics
+
+#### New Metrics Added:
+Three new metrics have been introduced for queries:
+1.	`QueryExecutions` – Counts the number of queries executed. **Dimensions:** Query type, Plan type, Tablet type.
+2.	`QueryRoutes` – Counts the number of vttablets the query was executed on. **Dimensions:** Query type, Plan type, Tablet type.
+3.	`QueryExecutionsByTable` – Tracks queries executed at VTGate, with counts recorded per table. **Dimensions:** Query type, Table. 
+
+Example: 
+```
+Query: select t1.a, t2.b from t1 join t2 on t1.id = t2.id
+Shards: 2
+Sharding Key: id for both tables
+
+Metrics Published:
+1. QueryExecutions – {select, scatter, primary}, 1
+2. QueryRoutes – {select, scatter, primary}, 2
+3. QueryExecutionsByTable – {select, t1}, 1 and {select, t2}, 1
+```
+
+#### Deprecated Metrics:
+The following metrics have been deprecated:
+1.	`QueriesProcessed`
+2.	`QueriesRouted`
+3.	`QueriesProcessedByTable`
+4.	`QueriesRoutedByTable`
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 

@@ -89,23 +89,6 @@ type tableCopyProgress struct {
 // copyProgress stores the tableCopyProgress for all tables still being copied
 type copyProgress map[string]*tableCopyProgress
 
-// sequenceMetadata contains all of the relevant metadata for a sequence that
-// is being used by a table involved in a vreplication workflow.
-type sequenceMetadata struct {
-	// The name of the sequence table.
-	backingTableName string
-	// The keyspace where the backing table lives.
-	backingTableKeyspace string
-	// The dbName in use by the keyspace where the backing table lives.
-	backingTableDBName string
-	// The name of the table using the sequence.
-	usingTableName string
-	// The dbName in use by the keyspace where the using table lives.
-	usingTableDBName string
-	// The using table definition.
-	usingTableDefinition *vschemapb.Table
-}
-
 // vdiffOutput holds the data from all shards that is needed to generate
 // the full summary results of the vdiff in the vdiff show command output.
 type vdiffOutput struct {

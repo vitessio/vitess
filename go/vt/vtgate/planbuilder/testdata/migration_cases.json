@@ -3,7 +3,8 @@
     "comment": "revert migration",
     "query": "revert vitess_migration 'abc'",
     "plan": {
-      "QueryType": "REVERT",
+      "Type": "Passthrough",
+      "QueryType": "MIGRATION",
       "Original": "revert vitess_migration 'abc'",
       "Instructions": {
         "OperatorType": "RevertMigration",
@@ -19,7 +20,8 @@
     "comment": "retry migration",
     "query": "alter vitess_migration 'abc' retry",
     "plan": {
-      "QueryType": "UNKNOWN",
+      "Type": "Scatter",
+      "QueryType": "MIGRATION",
       "Original": "alter vitess_migration 'abc' retry",
       "Instructions": {
         "OperatorType": "Send",
@@ -36,7 +38,8 @@
     "comment": "complete migration",
     "query": "alter vitess_migration 'abc' complete",
     "plan": {
-      "QueryType": "UNKNOWN",
+      "Type": "Scatter",
+      "QueryType": "MIGRATION",
       "Original": "alter vitess_migration 'abc' complete",
       "Instructions": {
         "OperatorType": "Send",
@@ -53,7 +56,8 @@
     "comment": "complete migration",
     "query": "alter vitess_migration 'abc' cleanup",
     "plan": {
-      "QueryType": "UNKNOWN",
+      "Type": "Scatter",
+      "QueryType": "MIGRATION",
       "Original": "alter vitess_migration 'abc' cleanup",
       "Instructions": {
         "OperatorType": "Send",
@@ -70,7 +74,8 @@
     "comment": "cancel migration",
     "query": "alter vitess_migration 'abc' cancel",
     "plan": {
-      "QueryType": "UNKNOWN",
+      "Type": "Scatter",
+      "QueryType": "MIGRATION",
       "Original": "alter vitess_migration 'abc' cancel",
       "Instructions": {
         "OperatorType": "Send",
@@ -87,7 +92,8 @@
     "comment": "cancel all migrations",
     "query": "alter vitess_migration cancel all",
     "plan": {
-      "QueryType": "UNKNOWN",
+      "Type": "Scatter",
+      "QueryType": "MIGRATION",
       "Original": "alter vitess_migration cancel all",
       "Instructions": {
         "OperatorType": "Send",

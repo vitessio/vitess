@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	rewriteName = "rewrite"
+	rewriteName   = "rewrite"
+	visitableName = "Visitable"
 )
 
 type rewriteGen struct {
@@ -45,39 +46,96 @@ func newRewriterGen(pkgname string, ifaceName string) *rewriteGen {
 	}
 }
 
-func (r *rewriteGen) genFile(generatorSPI) (string, *jen.File) {
+// genFile sets up the rewrite code for the Visitable interface and returns the file.
+func (r *rewriteGen) genFile(spi generatorSPI) (string, *jen.File) {
+	r.generateVisitableRewrite()
 	return "ast_rewrite.go", r.file
 }
 
+// generateVisitableRewrite produces the rewrite function for the Visitable interface.
+func (r *rewriteGen) generateVisitableRewrite() {
+	callName := rewriteName + visitableName
+	args := fmt.Sprintf("parent %s, node Visitable, replacer replacerFunc", r.ifaceName)
+
+	r.file.Add(
+		jen.Func().Params(jen.Id("a *application")).
+			Id(callName).
+			Call(jen.Id(args)).
+			Bool().
+			Block(
+				// PRE
+				jen.If(jen.Id("a").Dot("pre").Op("!=").Nil()).Block(
+					jen.Id("a").Dot("cur").Dot("replacer").Op("=").Id("replacer"),
+					jen.Id("a").Dot("cur").Dot("parent").Op("=").Id("parent"),
+					jen.Id("a").Dot("cur").Dot("node").Op("=").Id("node"),
+					jen.Id("kontinue").Op(":=").Op("!").Id("a").Dot("pre").Call(jen.Op("&").Id("a").Dot("cur")),
+
+					jen.If(jen.Id("a").Dot("cur").Dot("revisit")).Block(
+						jen.Id("a").Dot("cur").Dot("revisit").Op("=").False(),
+						jen.Return(jen.Id("a").Dot(rewriteName+r.ifaceName).Call(jen.Id("parent"), jen.Id("a").Dot("cur").Dot("node"), jen.Id("replacer"))),
+					),
+					jen.If(jen.Id("kontinue")).Block(
+						jen.Return(jen.True()),
+					),
+				),
+
+				// no path collection for Visitable
+				jen.If(jen.Id("a").Dot("collectPaths")).Block(
+					jen.Panic(jen.Lit("[BUG] paths are not supported on 'Visitable'")),
+				),
+
+				// rewrite internal fields
+				jen.If(
+					jen.Op("!").Id("a").Dot(rewriteName+r.ifaceName).Call(
+						jen.Id("node"),
+						jen.Id("node").Dot("VisitThis").Call(),
+						jen.Func().Params(
+							jen.Id("newNode"), jen.Id("parent").Id(r.ifaceName),
+						).Block(
+							jen.Panic(jen.Lit("[BUG] tried to replace 'VisitThis' on 'Visitable'")),
+						),
+					),
+				).Block(
+					jen.Return(jen.False()),
+				),
+
+				// POST
+				jen.If(jen.Id("a").Dot("post").Op("!=").Nil()).Block(
+					jen.Id("a").Dot("cur").Dot("replacer").Op("=").Id("replacer"),
+					jen.Id("a").Dot("cur").Dot("parent").Op("=").Id("parent"),
+					jen.Id("a").Dot("cur").Dot("node").Op("=").Id("node"),
+					jen.If(jen.Op("!").Id("a").Dot("post").Call(jen.Op("&").Id("a").Dot("cur"))).Block(
+						jen.Return(jen.False()),
+					),
+				),
+
+				jen.Return(jen.True()),
+			),
+	)
+}
+
+// interfaceMethod handles rewriting for interface types.
 func (r *rewriteGen) interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error {
 	if !shouldAdd(t, spi.iface()) {
 		return nil
 	}
-	/*
-		func VisitAST(in AST) (bool, error) {
-			if in == nil {
-				return false, nil
-			}
-			switch a := inA.(type) {
-			case *SubImpl:
-				return VisitSubImpl(a, b)
-			default:
-				return false, nil
-			}
-		}
-	*/
+
+	// nil check
 	stmts := []jen.Code{
 		jen.If(jen.Id("node == nil").Block(returnTrue())),
 	}
 
+	// switch on actual type
 	var cases []jen.Code
-	_ = spi.findImplementations(iface, func(t types.Type) error {
-		if _, ok := t.Underlying().(*types.Interface); ok {
+	_ = spi.findImplementations(iface, func(tt types.Type) error {
+		// skip if it's itself an interface
+		if _, ok := tt.Underlying().(*types.Interface); ok {
 			return nil
 		}
-		typeString := types.TypeString(t, noQualifier)
-		funcName := rewriteName + printableTypeName(t)
-		spi.addType(t)
+		typeString := types.TypeString(tt, noQualifier)
+		funcName := rewriteName + printableTypeName(tt)
+		spi.addType(tt)
+
 		caseBlock := jen.Case(jen.Id(typeString)).Block(
 			jen.Return(jen.Id("a").Dot(funcName).Call(jen.Id("parent, node, replacer"))),
 		)
@@ -85,176 +143,61 @@ func (r *rewriteGen) interfaceMethod(t types.Type, iface *types.Interface, spi g
 		return nil
 	})
 
-	cases = append(cases,
+	// special case for Visitable
+	cases = append(
+		cases,
+		jen.Case(jen.Id(visitableName)).Block(
+			jen.Return(jen.Id("a."+rewriteName+visitableName).Call(jen.Id("parent, node, replacer"))),
+		),
 		jen.Default().Block(
 			jen.Comment("this should never happen"),
 			returnTrue(),
-		))
+		),
+	)
 
-	stmts = append(stmts, jen.Switch(jen.Id("node := node.(type)").Block(
-		cases...,
-	)))
+	stmts = append(stmts,
+		jen.Switch(jen.Id("node := node.(type)").Block(cases...)),
+	)
 
 	r.rewriteFunc(t, stmts, "InterfaceMethod")
 	return nil
 }
 
-func (r *rewriteGen) visitStructFields(t types.Type, strct *types.Struct, spi generatorSPI, fail bool) (stmts []jen.Code) {
-	fields := r.rewriteAllStructFields(t, strct, spi, fail)
-	stmts = append(stmts, r.executePre())
-	stmts = append(stmts, fields...)
-
-	if len(fields) > 0 {
-		stmts = append(stmts, jen.If(jen.Id("a.collectPaths")).Block(jen.Id("a.cur.current.Pop").Params()))
-	}
-	stmts = append(stmts, executePost(len(fields) > 0))
-	stmts = append(stmts, returnTrue())
-	return
-}
-
+// structMethod handles rewriting for struct types.
 func (r *rewriteGen) structMethod(t types.Type, strct *types.Struct, spi generatorSPI) error {
 	if !shouldAdd(t, spi.iface()) {
 		return nil
 	}
-
-	r.rewriteFunc(t, r.visitStructFields(t, strct, spi, true), "StructMethod")
-
+	stmts := r.rewriteStructFields(t, strct, spi, true)
+	r.rewriteFunc(t, stmts, "StructMethod")
 	return nil
 }
 
+// ptrToStructMethod handles rewriting for pointer-to-struct types.
 func (r *rewriteGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi generatorSPI) error {
 	if !shouldAdd(t, spi.iface()) {
 		return nil
 	}
 
-	/*
-		if node == nil { return nil }
-	*/
-	stmts := []jen.Code{jen.If(jen.Id("node == nil").Block(returnTrue()))}
-	stmts = append(stmts, r.visitStructFields(t, strct, spi, false)...)
+	stmts := []jen.Code{
+		jen.If(jen.Id("node == nil").Block(returnTrue())),
+	}
+	stmts = append(stmts, r.rewriteStructFields(t, strct, spi, false)...)
 
 	r.rewriteFunc(t, stmts, "PtrToStructMethod")
-
 	return nil
 }
 
+// ptrToBasicMethod handles rewriting for pointer-to-basic types.
 func (r *rewriteGen) ptrToBasicMethod(t types.Type, _ *types.Basic, spi generatorSPI) error {
 	if !shouldAdd(t, spi.iface()) {
 		return nil
 	}
 
-	stmts := []jen.Code{
-		jen.Comment("ptrToBasicMethod"),
-	}
-	r.rewriteFunc(t, stmts, "PtrToBasicMethod")
-
+	r.rewriteFunc(t, []jen.Code{
+		jen.Comment("No rewrite needed for pointer to basic type"),
+	}, "PtrToBasicMethod")
 	return nil
-}
-
-func (r *rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error {
-	if !shouldAdd(t, spi.iface()) {
-		return nil
-	}
-
-	/*
-		if node == nil {
-				return nil
-			}
-			cur := Cursor{
-				node:     node,
-				parent:   parent,
-				replacer: replacer,
-			}
-			if !pre(&cur) {
-				return nil
-			}
-	*/
-	stmts := []jen.Code{
-		jen.If(jen.Id("node == nil").Block(returnTrue())),
-	}
-
-	preStmts := setupCursor()
-	preStmts = append(preStmts,
-		jen.Id("kontinue").Op(":=").Id("!a.pre(&a.cur)"),
-		jen.If(jen.Id("a.cur.revisit").Block(
-			jen.Id("a.cur.revisit").Op("=").False(),
-			jen.Return(jen.Id("a.rewrite"+r.ifaceName+"(parent, a.cur.node, replacer)")),
-		)),
-		jen.If(jen.Id("kontinue").Block(jen.Return(jen.True()))),
-	)
-
-	stmts = append(stmts,
-		jen.If(jen.Id("a.pre != nil").Block(preStmts...)),
-	)
-
-	haveChildren := false
-	if shouldAdd(slice.Elem(), spi.iface()) {
-		/*
-			var path ASTPath
-			if a.collectPaths {
-			  path = a.cur.current
-			}
-			for i, el := range node {
-				if err := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
-					parent.(LeafSlice)[i] = newNode.(*Leaf)
-				}, pre, post); err != nil {
-					return err
-				}
-			}
-		*/
-		haveChildren = true
-		rewriteChild := r.rewriteChildSlice(t, slice.Elem(), "", jen.Id("el"), jen.Index(jen.Id("idx")), false)
-
-		stmts = append(stmts,
-			jen.For(jen.Id("x, el").Op(":=").Id("range node")).
-				Block(rewriteChild...))
-	}
-
-	if haveChildren {
-		stmts = append(stmts, jen.If(jen.Id("a.collectPaths").Op("&&").Len(jen.Id("node")).Op(">").Lit(0)).Block(jen.Id("a.cur.current.Pop").Params()))
-	}
-
-	stmts = append(stmts, executePost(haveChildren))
-	stmts = append(stmts, returnTrue())
-
-	r.rewriteFunc(t, stmts, "SliceMethod")
-	return nil
-}
-
-func setupCursor() []jen.Code {
-	return []jen.Code{
-		jen.Id("a.cur.replacer = replacer"),
-		jen.Id("a.cur.parent = parent"),
-		jen.Id("a.cur.node = node"),
-	}
-}
-
-func (r *rewriteGen) executePre() jen.Code {
-	curStmts := setupCursor()
-	name := fmt.Sprintf("a.rewrite%s(parent, a.cur.node, replacer)", r.ifaceName)
-	curStmts = append(curStmts, jen.Id("kontinue").Op(":=").Id("!a.pre(&a.cur)"),
-		jen.If(jen.Id("a.cur.revisit").Block(
-			jen.Id("a.cur.revisit").Op("=").False(),
-			jen.Return(jen.Id(name)),
-		)),
-		jen.If(jen.Id("kontinue").Block(jen.Return(jen.True()))),
-	)
-	return jen.If(jen.Id("a.pre != nil").Block(curStmts...))
-}
-
-func executePost(seenChildren bool) jen.Code {
-	var curStmts []jen.Code
-	if seenChildren {
-		// if we have visited children, we have to write to the cursor fields
-		curStmts = setupCursor()
-	} else {
-		curStmts = append(curStmts,
-			jen.If(jen.Id("a.pre == nil")).Block(setupCursor()...))
-	}
-
-	curStmts = append(curStmts, jen.If(jen.Id("!a.post(&a.cur)")).Block(returnFalse()))
-
-	return jen.If(jen.Id("a.post != nil")).Block(curStmts...)
 }
 
 func (r *rewriteGen) basicMethod(t types.Type, _ *types.Basic, spi generatorSPI) error {
@@ -262,180 +205,257 @@ func (r *rewriteGen) basicMethod(t types.Type, _ *types.Basic, spi generatorSPI)
 		return nil
 	}
 
-	stmts := []jen.Code{r.executePre(), executePost(false), returnTrue()}
+	stmts := []jen.Code{r.executePreRewrite(), executePostRewrite(false), returnTrue()}
 	r.rewriteFunc(t, stmts, "BasicMethod")
 	return nil
 }
 
-func (r *rewriteGen) rewriteFunc(t types.Type, stmts []jen.Code, source string) {
+// sliceMethod handles rewriting for slice types.
+func (r *rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error {
+	if !shouldAdd(t, spi.iface()) {
+		return nil
+	}
 
-	/*
-		func (a *application) rewriteNodeType(parent AST, node NodeType, replacer replacerFunc) {
-	*/
+	stmts := []jen.Code{
+		jen.If(jen.Id("node == nil").Block(returnTrue())),
+	}
 
-	typeString := types.TypeString(t, noQualifier)
-	funcName := fmt.Sprintf("%s%s", rewriteName, printableTypeName(t))
-	code := jen.Commentf("Function Generation Source: %s", source).Line().Func().Params(
-		jen.Id("a").Op("*").Id("application"),
-	).Id(funcName).Params(
-		jen.Id(fmt.Sprintf("parent %s, node %s, replacer replacerFunc", r.ifaceName, typeString)),
-	).Bool().Block(stmts...)
+	// run pre if available
+	preStmts := setupCursor()
+	preStmts = append(preStmts,
+		jen.Id("kontinue").Op(":=").Op("!").Id("a.pre(&a.cur)"),
+		jen.If(jen.Id("a").Dot("cur").Dot("revisit")).Block(
+			jen.Id("a").Dot("cur").Dot("revisit").Op("=").False(),
+			jen.Return(jen.Id("a").Dot(rewriteName+r.ifaceName).Call(
+				jen.Id("parent"), jen.Id("a").Dot("cur").Dot("node"), jen.Id("replacer")),
+			),
+		),
+		jen.If(jen.Id("kontinue")).Block(jen.Return(jen.True())),
+	)
 
-	r.file.Add(code)
+	stmts = append(stmts, jen.If(jen.Id("a.pre != nil").Block(preStmts...)))
+
+	// rewrite slice elements if needed
+	haveChildren := false
+	if shouldAdd(slice.Elem(), spi.iface()) {
+		haveChildren = true
+		stmts = append(stmts,
+			jen.For(jen.List(jen.Id("x"), jen.Id("el")).Op(":=").Id("range node")).Block(
+				r.rewriteChildSlice(t, slice.Elem(), "", jen.Id("el"), jen.Index(jen.Id("idx")), false)...,
+			),
+		)
+	}
+
+	if haveChildren {
+		stmts = append(stmts,
+			jen.If(jen.Id("a.collectPaths").Op("&&").Len(jen.Id("node")).Op(">").Lit(0)).
+				Block(jen.Id("a.cur.current.Pop").Params()),
+		)
+	}
+
+	// run post if available
+	stmts = append(stmts, executePostRewrite(haveChildren))
+	stmts = append(stmts, returnTrue())
+
+	r.rewriteFunc(t, stmts, "SliceMethod")
+	return nil
 }
 
-func (r *rewriteGen) rewriteAllStructFields(t types.Type, strct *types.Struct, spi generatorSPI, fail bool) []jen.Code {
-	/*
-		if errF := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
-			err = vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] tried to replace '%s' on '%s'")
-		}, pre, post); errF != nil {
-			return errF
-		}
+// rewriteStructFields processes a struct's fields, running pre/post if applicable.
+func (r *rewriteGen) rewriteStructFields(t types.Type, strct *types.Struct, spi generatorSPI, fail bool) []jen.Code {
+	fields := r.rewriteAllFields(t, strct, spi, fail)
 
-	*/
+	stmts := []jen.Code{
+		r.executePreRewrite(),
+	}
+	stmts = append(stmts, fields...)
+
+	if len(fields) > 0 {
+		stmts = append(stmts,
+			jen.If(jen.Id("a.collectPaths")).Block(
+				jen.Id("a.cur.current.Pop").Params(),
+			),
+		)
+	}
+
+	stmts = append(stmts,
+		executePostRewrite(len(fields) > 0),
+		returnTrue(),
+	)
+
+	return stmts
+}
+
+// rewriteAllFields checks struct fields and rewrites relevant ones.
+func (r *rewriteGen) rewriteAllFields(t types.Type, strct *types.Struct, spi generatorSPI, fail bool) []jen.Code {
 	var output []jen.Code
 	fieldNumber := 0
 	prevSliceField := ""
+
 	for i := 0; i < strct.NumFields(); i++ {
 		field := strct.Field(i)
+
+		// single field that implements the interface
 		if types.Implements(field.Type(), spi.iface()) {
 			spi.addType(field.Type())
-			rewriteLines := r.rewriteChild(t, field.Type(), field.Name(), jen.Id("node").Dot(field.Name()), jen.Dot(field.Name()), fail, fieldNumber == 0, prevSliceField)
+			lines := r.rewriteChild(
+				t, field.Type(), field.Name(),
+				jen.Id("node").Dot(field.Name()),
+				jen.Dot(field.Name()),
+				fail, fieldNumber == 0, prevSliceField,
+			)
 			prevSliceField = ""
-			output = append(output, rewriteLines...)
+			output = append(output, lines...)
 			fieldNumber++
 			continue
 		}
+
+		// slice of fields that implement the interface
 		slice, isSlice := field.Type().(*types.Slice)
 		if isSlice && types.Implements(slice.Elem(), spi.iface()) {
 			ifCondition := jen.Id("a.collectPaths")
 			if prevSliceField != "" {
 				ifCondition = ifCondition.Op("&&").Len(jen.Id("node." + prevSliceField)).Op(">").Lit(0)
 			}
-			ifCollectPath := jen.If(ifCondition).Block(
-				jen.Id("a.cur.current.Pop").Params(),
-			)
 			if fieldNumber != 0 {
-				output = append(output, ifCollectPath)
+				output = append(output,
+					jen.If(ifCondition).Block(
+						jen.Id("a.cur.current.Pop").Params(),
+					),
+				)
 			}
 			prevSliceField = field.Name()
 			spi.addType(slice.Elem())
+
 			output = append(output,
 				jen.For(jen.List(jen.Id("x"), jen.Id("el")).Op(":=").Id("range node."+field.Name())).
-					Block(r.rewriteChildSlice(t, slice.Elem(), field.Name(), jen.Id("el"), jen.Dot(field.Name()).Index(jen.Id("idx")), fail)...))
+					Block(
+						r.rewriteChildSlice(
+							t, slice.Elem(), field.Name(),
+							jen.Id("el"),
+							jen.Dot(field.Name()).Index(jen.Id("idx")),
+							fail,
+						)...,
+					),
+			)
 			fieldNumber++
 		}
 	}
 	return output
 }
 
-func failReplacer(t types.Type, f string) *jen.Statement {
-	typeString := types.TypeString(t, noQualifier)
-	return jen.Panic(jen.Lit(fmt.Sprintf("[BUG] tried to replace '%s' on '%s'", f, typeString)))
-}
-
-func (r *rewriteGen) rewriteChild(t, field types.Type, fieldName string, param jen.Code, replace jen.Code, fail, firstChild bool, prevSliceField string) []jen.Code {
-	/*
-		if errF := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
-			parent.(*RefContainer).ASTType = newNode.(AST)
-		}, pre, post); errF != nil {
-			return errF
-		}
-
-		if errF := rewriteAST(node, el, func(newNode, parent AST) {
-			parent.(*RefSliceContainer).ASTElements[i] = newNode.(AST)
-		}, pre, post); errF != nil {
-			return errF
-		}
-
-	*/
+// rewriteChild handles rewriting a single struct field that implements iface.
+func (r *rewriteGen) rewriteChild(
+	t, field types.Type,
+	fieldName string,
+	param jen.Code,
+	replace jen.Code,
+	fail, firstChild bool,
+	prevSliceField string,
+) []jen.Code {
 	funcName := rewriteName + printableTypeName(field)
+
+	// replacerFunc block
 	var replaceOrFail *jen.Statement
 	if fail {
-		replaceOrFail = failReplacer(t, fieldName)
+		replaceOrFail = jen.Panic(
+			jen.Lit(fmt.Sprintf("[BUG] tried to replace '%s' on '%s'",
+				fieldName, types.TypeString(t, noQualifier))),
+		)
 	} else {
 		replaceOrFail = jen.Id("parent").
 			Assert(jen.Id(types.TypeString(t, noQualifier))).
 			Add(replace).
 			Op("=").
-			Id("newNode").Assert(jen.Id(types.TypeString(field, noQualifier)))
-
+			Id("newNode").
+			Assert(jen.Id(types.TypeString(field, noQualifier)))
 	}
-	funcBlock := jen.Func().Call(jen.Id("newNode, parent").Id(r.ifaceName)).
-		Block(replaceOrFail)
 
+	funcBlock := jen.Func().Call(jen.Id("newNode, parent").Id(r.ifaceName)).Block(replaceOrFail)
+
+	// rewriting call
 	rewriteField := jen.If(
 		jen.Op("!").Id("a").Dot(funcName).Call(
 			jen.Id("node"),
 			param,
-			funcBlock).Block(returnFalse()))
+			funcBlock,
+		),
+	).Block(returnFalse())
 
+	// path collection
 	collectPathBlock := []jen.Code{
-		jen.Id("a.cur.current.AddStep").Params(jen.Id("uint16").Params(jen.Id(printableTypeName(t) + fieldName))),
+		jen.Id("a.cur.current.AddStep").Params(
+			jen.Id("uint16").Call(
+				jen.Id(printableTypeName(t) + fieldName),
+			),
+		),
 	}
 	if !firstChild {
 		collectPathBlock = append([]jen.Code{jen.Id("a.cur.current.Pop").Params()}, collectPathBlock...)
 	}
+
 	ifCondition := jen.Id("a.collectPaths")
 	if prevSliceField != "" {
 		ifCondition = ifCondition.Op("&&").Len(jen.Id("node." + prevSliceField)).Op(">").Lit(0)
 	}
-	ifCollectPath := jen.If(ifCondition).Block(
-		collectPathBlock...,
-	)
 
 	return []jen.Code{
-		ifCollectPath,
+		jen.If(ifCondition).Block(collectPathBlock...),
 		rewriteField,
 	}
 }
 
-func (r *rewriteGen) rewriteChildSlice(t, field types.Type, fieldName string, param jen.Code, replace jen.Code, fail bool) []jen.Code {
-	/*
-				if errF := a.rewriteAST(node, el, func(idx int) replacerFunc {
-				return func(newNode, parent AST) {
-					parent.(InterfaceSlice)[idx] = newNode.(AST)
-				}
-			}(i)); errF != nil {
-				return errF
-			}
-
-			if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
-		return errr...
-		}); errF != nil {
-				return errF
-			}
-
-	*/
-
+// rewriteChildSlice handles rewriting an element in a slice field.
+func (r *rewriteGen) rewriteChildSlice(
+	t, field types.Type,
+	fieldName string,
+	param jen.Code,
+	replace jen.Code,
+	fail bool,
+) []jen.Code {
 	funcName := rewriteName + printableTypeName(field)
+
+	// define a replacer function
 	var funcBlock jen.Code
-	replacerFuncDef := jen.Func().Call(jen.Id("newNode, parent").Id(r.ifaceName))
 	if fail {
-		funcBlock = replacerFuncDef.Block(failReplacer(t, fieldName))
+		funcBlock = jen.Func().Call(jen.Id("newNode, parent").Id(r.ifaceName)).Block(
+			jen.Panic(
+				jen.Lit(fmt.Sprintf("[BUG] tried to replace '%s' on '%s'",
+					fieldName, types.TypeString(t, noQualifier))),
+			),
+		)
 	} else {
-		funcBlock = jen.Func().Call(jen.Id("idx int")).Id("replacerFunc").
-			Block(jen.Return(replacerFuncDef.Block(
-				jen.Id("parent").Assert(jen.Id(types.TypeString(t, noQualifier))).Add(replace).Op("=").Id("newNode").Assert(jen.Id(types.TypeString(field, noQualifier)))),
-			)).Call(jen.Id("x"))
+		funcBlock = jen.Func().Call(jen.Id("idx int")).Id("replacerFunc").Block(
+			jen.Return(
+				jen.Func().Call(jen.Id("newNode, parent").Id(r.ifaceName)).Block(
+					jen.Id("parent").
+						Assert(jen.Id(types.TypeString(t, noQualifier))).
+						Add(replace).
+						Op("=").
+						Id("newNode").
+						Assert(jen.Id(types.TypeString(field, noQualifier))),
+				),
+			),
+		).Call(jen.Id("x"))
 	}
 
+	// rewriting call
 	rewriteField := jen.If(
 		jen.Op("!").Id("a").Dot(funcName).Call(
 			jen.Id("node"),
 			param,
-			funcBlock).Block(returnFalse()))
+			funcBlock,
+		),
+	).Block(returnFalse())
 
-	// if a.collectPaths {
-	//   if x == 0 {
-	//        a.cur.current.AddStepWithOffset(LeafSliceOffset)
-	//   } else {
-	//        a.cur.current.ChangeOffset(x)
-	//   }
-	// }
+	// path collection
 	savePath := jen.If(jen.Id("a.collectPaths")).Block(
 		jen.If(jen.Id("x").Op("==").Lit(0)).Block(
-			jen.Id("a.cur.current.AddStepWithOffset").Params(jen.Id("uint16").Params(jen.Id(printableTypeName(t) + fieldName + "Offset"))),
+			jen.Id("a.cur.current.AddStepWithOffset").Params(
+				jen.Id("uint16").Call(
+					jen.Id(printableTypeName(t) + fieldName + "Offset"),
+				),
+			),
 		).Else().Block(
 			jen.Id("a.cur.current.ChangeOffset").Params(jen.Id("x")),
 		),
@@ -447,8 +467,73 @@ func (r *rewriteGen) rewriteChildSlice(t, field types.Type, fieldName string, pa
 	}
 }
 
-var noQualifier = func(p *types.Package) string {
-	return ""
+// rewriteFunc is the top-level generator of the rewrite methods.
+func (r *rewriteGen) rewriteFunc(t types.Type, stmts []jen.Code, source string) {
+	typeString := types.TypeString(t, noQualifier)
+	funcName := fmt.Sprintf("%s%s", rewriteName, printableTypeName(t))
+
+	code := jen.Commentf("Function Generation Source: %s", source).
+		Line().
+		Func().Params(jen.Id("a").Op("*").Id("application")).
+		Id(funcName).
+		Params(
+			jen.Id(fmt.Sprintf("parent %s, node %s, replacer replacerFunc", r.ifaceName, typeString)),
+		).
+		Bool().
+		Block(stmts...)
+
+	r.file.Add(code)
+}
+
+// setupCursor initializes a.cur with replacer, parent, and node.
+func setupCursor() []jen.Code {
+	return []jen.Code{
+		jen.Id("a.cur.replacer = replacer"),
+		jen.Id("a.cur.parent = parent"),
+		jen.Id("a.cur.node = node"),
+	}
+}
+
+// executePreRewrite runs the pre step if a.pre is not nil.
+func (r *rewriteGen) executePreRewrite() jen.Code {
+	curStmts := setupCursor()
+	curStmts = append(
+		curStmts,
+		jen.Id("kontinue").Op(":=").Op("!").Id("a.pre(&a.cur)"),
+		jen.If(jen.Id("a.cur.revisit")).Block(
+			jen.Id("a.cur.revisit").Op("=").False(),
+			jen.Return(
+				jen.Id("a."+rewriteName+r.ifaceName).
+					Call(jen.Id("parent"), jen.Id("a.cur.node"), jen.Id("replacer")),
+			),
+		),
+		jen.If(jen.Id("kontinue")).Block(
+			jen.Return(jen.True()),
+		),
+	)
+
+	return jen.If(jen.Id("a.pre != nil")).Block(curStmts...)
+}
+
+// executePostRewrite runs the post step if a.post is not nil.
+func executePostRewrite(seenChildren bool) jen.Code {
+	var curStmts []jen.Code
+	if seenChildren {
+		// re-init cursor fields if children were visited
+		curStmts = setupCursor()
+	} else {
+		curStmts = append(
+			curStmts,
+			jen.If(jen.Id("a.pre == nil")).Block(setupCursor()...),
+		)
+	}
+
+	curStmts = append(
+		curStmts,
+		jen.If(jen.Op("!").Id("a.post(&a.cur)")).Block(returnFalse()),
+	)
+
+	return jen.If(jen.Id("a.post != nil")).Block(curStmts...)
 }
 
 func returnTrue() jen.Code {
@@ -457,4 +542,8 @@ func returnTrue() jen.Code {
 
 func returnFalse() jen.Code {
 	return jen.Return(jen.False())
+}
+
+var noQualifier = func(p *types.Package) string {
+	return ""
 }

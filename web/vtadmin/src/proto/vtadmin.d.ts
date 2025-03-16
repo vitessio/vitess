@@ -31528,6 +31528,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest backup_engine */
         backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a BackupRequest. */
@@ -31553,6 +31556,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -54575,6 +54581,9 @@ export namespace vtctldata {
 
         /** BackupRequest backup_engine */
         backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a BackupRequest. */
@@ -54603,6 +54612,9 @@ export namespace vtctldata {
 
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -54817,6 +54829,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest incremental_from_pos */
         incremental_from_pos?: (string|null);
+
+        /** BackupShardRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -54845,6 +54860,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest incremental_from_pos. */
         public incremental_from_pos: string;
+
+        /** BackupShardRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.

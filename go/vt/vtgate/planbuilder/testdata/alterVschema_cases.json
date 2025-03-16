@@ -3,6 +3,7 @@
     "comment": "Create vindex",
     "query": "alter vschema create vindex hash_vdx using hash",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DDL",
       "Original": "alter vschema create vindex hash_vdx using hash",
       "Instructions": {
@@ -22,6 +23,7 @@
     "comment": "Create vindex with qualifier",
     "query": "alter vschema create vindex user.hash_vdx using hash",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DDL",
       "Original": "alter vschema create vindex user.hash_vdx using hash",
       "Instructions": {
@@ -41,6 +43,7 @@
     "comment": "Drop vindex",
     "query": "alter vschema drop vindex hash_vdx",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DDL",
       "Original": "alter vschema drop vindex hash_vdx",
       "Instructions": {
@@ -60,6 +63,7 @@
     "comment": "Add table",
     "query": "alter vschema add table a",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DDL",
       "Original": "alter vschema add table a",
       "Instructions": {
@@ -79,6 +83,7 @@
     "comment": "Add sequence",
     "query": "alter vschema add sequence a_seq",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DDL",
       "Original": "alter vschema add sequence a_seq",
       "Instructions": {
@@ -98,6 +103,7 @@
     "comment": "Add auto_increment with qualifier",
     "query": "alter vschema on user.a add auto_increment id using a_seq",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DDL",
       "Original": "alter vschema on user.a add auto_increment id using a_seq",
       "Instructions": {
@@ -117,6 +123,7 @@
     "comment": "Drop table",
     "query": "alter vschema drop table a",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DDL",
       "Original": "alter vschema drop table a",
       "Instructions": {
@@ -136,6 +143,7 @@
     "comment": "Add Vindex",
     "query": "alter vschema on a add vindex hash (id)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DDL",
       "Original": "alter vschema on a add vindex hash (id)",
       "Instructions": {
@@ -155,6 +163,7 @@
     "comment": "Drop Vindex",
     "query": "alter vschema on a drop vindex hash",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DDL",
       "Original": "alter vschema on a drop vindex hash",
       "Instructions": {

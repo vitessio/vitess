@@ -116,6 +116,9 @@ CREATE INDEX last_checked_idx_database_instance ON database_instance(last_checke
 CREATE INDEX last_seen_idx_database_instance ON database_instance(last_seen)
 	`,
 	`
+CREATE INDEX hostname_port_database_instance ON database_instance(hostname, port)
+	`,
+	`
 DROP TABLE IF EXISTS audit
 `,
 	`
