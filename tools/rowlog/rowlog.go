@@ -63,8 +63,8 @@ func usage() {
 	pflag.Usage = func() {
 		logger.Printf("Rowlog Usage:\n")
 		s := "rowlog --ids <id list csv> --table <table_name> --pk <primary_key_only_ints> --source <source_keyspace> --target <target_keyspace> "
-		s += "--vtctld <vtctl url> --vtgate <vtgate url> --cells <cell names csv> --topo_implementation <topo type, eg: etcd2> "
-		s += "--topo_global_server_address <top url> --topo_global_root <topo root dir>\n"
+		s += "--vtctld <vtctl url> --vtgate <vtgate url> --cells <cell names csv> --topo-implementation <topo type, eg: etcd2> "
+		s += "--topo-global-server-address <top url> --topo-global-root <topo root dir>\n"
 		logger.Printf(s)
 	}
 }

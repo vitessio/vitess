@@ -30,7 +30,7 @@ Flags:
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling   Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
       --config-name string                                          Name of the config file (without extension) to search for. (default "vtconfig")
-      --config-path strings                                         Paths to search for config files in. (default [{{ .Workdir }}])
+      --config-path strings                                         Paths to search for config files in. (default [/home/mounica/Desktop/vitess/go/flags/endtoend])
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul_auth_static_file string                              JSON File to read the topos/tokens from.
@@ -90,24 +90,24 @@ Flags:
       --tablet_manager_grpc_server_name string                      the server name to use to validate server certificate
       --tablet_manager_protocol string                              Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
       --tolerable-replication-lag duration                          Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS
-      --topo-information-refresh-duration duration                  Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server (default 15s)
       --topo-consul-lock-delay duration                             LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                      List of checks for consul session. (default "serfHealth")
       --topo-consul-lock-session-ttl string                         TTL for consul session.
       --topo-consul-watch-poll-duration duration                    time of the long poll for watch queries. (default 30s)
       --topo-etcd-lease-ttl int                                     Lease TTL for locks and leader election. The client will use KeepAlive to keep the lease going. (default 30)
       --topo-etcd-tls-ca string                                     path to the ca to use to validate the server cert when connecting to the etcd topo server
-      --topo-etcd-tls-cert string                                   path to the client cert to use to connect to the etcd topo server, requires topo_etcd_tls_key, enables TLS
+      --topo-etcd-tls-cert string                                   path to the client cert to use to connect to the etcd topo server, requires topo-etcd-tls-key, enables TLS
       --topo-etcd-tls-key string                                    path to the client key to use to connect to the etcd topo server, enables TLS
       --topo-global-root string                                     the path of the global topology data in the global topology server
       --topo-global-server-address string                           the address of the global topology server
       --topo-implementation string                                  the topology implementation to use
+      --topo-information-refresh-duration duration                  Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server (default 15s)
       --topo-read-concurrency int                                   Maximum concurrency of topo reads per global or local cell. (default 32)
       --topo-zk-auth-file string                                    auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
       --topo-zk-base-timeout duration                               zk base timeout (see zk.Connect) (default 30s)
       --topo-zk-max-concurrency int                                 maximum number of pending requests to send to a Zookeeper server. (default 64)
       --topo-zk-tls-ca string                                       the server ca to use to validate servers when connecting to the zk topo server
-      --topo-zk-tls-cert string                                     the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS
+      --topo-zk-tls-cert string                                     the cert to use to connect to the zk topo server, requires topo-zk-tls-key, enables TLS
       --topo-zk-tls-key string                                      the key to use to connect to the zk topo server, enables TLS
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 // VtctldProcess is a generic handle for a running vtctld .
@@ -51,11 +52,18 @@ type VtctldProcess struct {
 func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
 	_ = createDirectory(vtctld.LogDir, 0700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
+
+	flags := make(map[string]string)
+
+	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtctld.TopoImplementation)
+	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtctld.TopoGlobalAddress)
+	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtctld.TopoGlobalRoot)
+
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
-		"--topo_implementation", vtctld.TopoImplementation,
-		"--topo_global_server_address", vtctld.TopoGlobalAddress,
-		"--topo_global_root", vtctld.TopoGlobalRoot,
+		flags["--topo-implementation"],
+		flags["--topo-global-server-address"],
+		flags["--topo-global-root"],
 		"--cell", cell,
 		"--service_map", vtctld.ServiceMap,
 		"--backup_storage_implementation", vtctld.BackupStorageImplementation,

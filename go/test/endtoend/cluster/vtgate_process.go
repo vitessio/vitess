@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -146,10 +147,16 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4
 
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
+	flags := make(map[string]string)
+
+	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtgate.TopoImplementation)
+	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtgate.TopoGlobalAddress)
+	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtgate.TopoGlobalRoot)
+
 	args := []string{
-		"--topo_implementation", vtgate.TopoImplementation,
-		"--topo_global_server_address", vtgate.TopoGlobalAddress,
-		"--topo_global_root", vtgate.TopoGlobalRoot,
+		flags["--topo-implementation"],
+		flags["--topo-global-server-address"],
+		flags["--topo-global-root"],
 		"--config-file", vtgate.ConfigFile,
 		"--log_dir", vtgate.LogDir,
 		"--log_queries_to_file", vtgate.FileToLogQueries,

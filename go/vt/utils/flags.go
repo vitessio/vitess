@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -33,8 +34,15 @@ Contains utility functions for working with flags during the flags refactor proj
 // flagVariants returns two variants of the flag name:
 // one with dashes replaced by underscores and one with underscores replaced by dashes.
 func flagVariants(name string) (underscored, dashed string) {
-	underscored = strings.ReplaceAll(name, "-", "_")
-	dashed = strings.ReplaceAll(name, "_", "-")
+	prefix := "--"
+	if strings.HasPrefix(name, prefix) {
+		nameWithoutPrefix := strings.TrimPrefix(name, prefix)
+		underscored = prefix + strings.ReplaceAll(nameWithoutPrefix, "-", "_")
+		dashed = prefix + strings.ReplaceAll(nameWithoutPrefix, "_", "-")
+	} else {
+		underscored = strings.ReplaceAll(name, "-", "_")
+		dashed = strings.ReplaceAll(name, "_", "-")
+	}
 	return
 }
 
@@ -57,8 +65,20 @@ func SetFlagIntVar(fs *pflag.FlagSet, p *int, name string, def int, usage string
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).IntVar)
 }
 
+func SetFlagInt64Var(fs *pflag.FlagSet, p *int64, name string, def int64, usage string) {
+	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).Int64Var)
+}
+
 func SetFlagBoolVar(fs *pflag.FlagSet, p *bool, name string, def bool, usage string) {
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).BoolVar)
+}
+
+func SetFlagStringVar(fs *pflag.FlagSet, p *string, name string, def string, usage string) {
+	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).StringVar)
+}
+
+func SetFlagDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def time.Duration, usage string) {
+	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).DurationVar)
 }
 
 func SetFlagVariants(m map[string]string, key, value string) {

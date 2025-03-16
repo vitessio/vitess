@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 // VtbackupProcess is a generic handle for a running Vtbackup.
@@ -55,11 +56,17 @@ type VtbackupProcess struct {
 
 // Setup starts vtbackup process with required arguements
 func (vtbackup *VtbackupProcess) Setup() (err error) {
+	flags := make(map[string]string)
+
+	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtbackup.TopoImplementation)
+	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtbackup.TopoGlobalAddress)
+	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtbackup.TopoGlobalRoot)
+
 	vtbackup.proc = exec.Command(
 		vtbackup.Binary,
-		"--topo_implementation", vtbackup.TopoImplementation,
-		"--topo_global_server_address", vtbackup.TopoGlobalAddress,
-		"--topo_global_root", vtbackup.TopoGlobalRoot,
+		flags["--topo-implementation"],
+		flags["--topo-global-server-address"],
+		flags["--topo-global-root"],
 		"--log_dir", vtbackup.LogDir,
 
 		//initDBfile is required to run vtbackup

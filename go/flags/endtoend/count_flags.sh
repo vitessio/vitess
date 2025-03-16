@@ -29,3 +29,4 @@ echo "-------------------------------------"
 echo "Total Flags with underscores (_): $underscore_count"
 echo "Total Flags with dashes (-): $dash_count"
 
+

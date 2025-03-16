@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 const vttabletStateTimeout = 60 * time.Second
@@ -92,11 +93,17 @@ type VttabletProcess struct {
 
 // Setup starts vttablet process with required arguements
 func (vttablet *VttabletProcess) Setup() (err error) {
+	flags := make(map[string]string)
+
+	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vttablet.TopoImplementation)
+	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vttablet.TopoGlobalAddress)
+	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vttablet.TopoGlobalRoot)
+
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
-		"--topo_implementation", vttablet.TopoImplementation,
-		"--topo_global_server_address", vttablet.TopoGlobalAddress,
-		"--topo_global_root", vttablet.TopoGlobalRoot,
+		flags["--topo-implementation"],
+		flags["--topo-global-server-address"],
+		flags["--topo-global-root"],
 		"--log_queries_to_file", vttablet.FileToLogQueries,
 		"--tablet-path", vttablet.TabletPath,
 		"--port", fmt.Sprintf("%d", vttablet.Port),

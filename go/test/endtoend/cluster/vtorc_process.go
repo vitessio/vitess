@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 // VTOrcProcess is a test struct for running
@@ -112,14 +113,20 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	}
 
 	/* minimal command line arguments:
-	$ vtorc --topo_implementation etcd2 --topo_global_server_address localhost:2379 --topo_global_root /vitess/global
+	$ vtorc --topo-implementation etcd2 --topo-global-server-address localhost:2379 --topo-global-root /vitess/global
 	--config config/vtorc/default.json --alsologtostderr
 	*/
+	flags := make(map[string]string)
+
+	utils.SetFlagVariantsForTests(flags, "--topo-implementation", orc.TopoImplementation)
+	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", orc.TopoGlobalAddress)
+	utils.SetFlagVariantsForTests(flags, "--topo-global-root", orc.TopoGlobalRoot)
+
 	orc.proc = exec.Command(
 		orc.Binary,
-		"--topo_implementation", orc.TopoImplementation,
-		"--topo_global_server_address", orc.TopoGlobalAddress,
-		"--topo_global_root", orc.TopoGlobalRoot,
+		flags["--topo-implementation"],
+		flags["--topo-global-server-address"],
+		flags["--topo-global-root"],
 		"--config-file", orc.ConfigPath,
 		"--port", fmt.Sprintf("%d", orc.Port),
 		"--bind-address", "127.0.0.1",
