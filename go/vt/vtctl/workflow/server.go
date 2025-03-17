@@ -656,7 +656,7 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 		return nil, err
 	}
 
-	isBackfillingOwned, err := isBackfillingOwnedVindexes(vindexByName)
+	isBackfillingOwned, err := IsBackfillingOwnedVindexes(vindexByName)
 	if err != nil {
 		return nil, err
 	}

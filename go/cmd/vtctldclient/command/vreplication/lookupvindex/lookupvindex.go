@@ -98,6 +98,15 @@ var (
 
 	parseAndValidateCreate = func(cmd *cobra.Command, args []string) error {
 		if createOptions.ParamsFile != "" {
+			if createOptions.TableOwner != "" {
+				return fmt.Errorf("cannot specify both table-owner and params-file")
+			}
+			if createOptions.Type != "" {
+				return fmt.Errorf("cannot specify both type and params-file")
+			}
+			if len(createOptions.TableOwnerColumns) != 0 {
+				return fmt.Errorf("cannot specify both table-owner-columns and params-file")
+			}
 			paramsFile, err := os.ReadFile(createOptions.ParamsFile)
 			if err != nil {
 				return err
@@ -110,13 +119,13 @@ var (
 			return parseVindexParams(createVindexParams, cmd)
 		}
 		if createOptions.TableOwner == "" {
-			return fmt.Errorf("table-owner is a required flag.")
+			return fmt.Errorf("table-owner is a required flag")
 		}
 		if createOptions.Type == "" {
-			return fmt.Errorf("type is a required flag.")
+			return fmt.Errorf("type is a required flag")
 		}
 		if len(createOptions.TableOwnerColumns) == 0 {
-			return fmt.Errorf("table-owner-columns is a required flag.")
+			return fmt.Errorf("table-owner-columns is a required flag")
 		}
 		if createOptions.TableName == "" { // Use vindex name
 			createOptions.TableName = baseOptions.Name

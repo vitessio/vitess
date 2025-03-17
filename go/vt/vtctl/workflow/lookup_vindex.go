@@ -756,8 +756,8 @@ func (lv *lookupVindex) getVindexesAndVSchema(ctx context.Context, keyspace stri
 	if len(lookupVindexes) == 0 {
 		// If lookup vindexes from workflow options were absent, we should
 		// assume the vindex name to be same as workflow name. This will allow
-		// us to support old behaviour. Even if this was not the case, we will
-		// still error out while retrieving vindex from vschema.
+		// us to support old behaviour. Even if this was a wrong assumption,
+		// we will still error out while retrieving vindex from vschema.
 		lookupVindexes = []string{workflowName}
 	}
 
@@ -776,10 +776,10 @@ func (lv *lookupVindex) getVindexesAndVSchema(ctx context.Context, keyspace stri
 	return vindexByName, vschema, nil
 }
 
-// isBackfillingOwnedVindexes returns if the VReplication workflow is
+// IsBackfillingOwnedVindexes returns if the VReplication workflow is
 // backfilling owned lookup vindexes. Also, returns error in case the
 // workflow backfills a mix of owned and unowned vindexes.
-func isBackfillingOwnedVindexes(vindexByName map[string]*vschemapb.Vindex) (bool, error) {
+func IsBackfillingOwnedVindexes(vindexByName map[string]*vschemapb.Vindex) (bool, error) {
 	isBackfillingOwned := false
 	for vindexName, vindex := range vindexByName {
 		if vindex.Owner != "" {
