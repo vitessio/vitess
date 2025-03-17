@@ -2120,16 +2120,16 @@ var (
 	}, {
 		input: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
 	}, {
-		input:  "create procedure p1 (country CHAR(3), out cities INT) begin select count(*) from x where d = e; end",
+		input:  "create procedure p1 (country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
 		output: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
 	}, {
-		input:  `CREATE PROCEDURE p1 (IN a CHAR(3), OUT b INT) SELECT COUNT(*) FROM x WHERE d = e`,
+		input:  `CREATE PROCEDURE p1 (IN a CHAR(3), OUT b INT) SELECT COUNT(*) FROM x WHERE d = e;`,
 		output: "create procedure p1 (in a CHAR(3), out b INT) select count(*) from x where d = e;",
 	}, {
 		input:  `CREATE PROCEDURE p1 (IN country CHAR(3), OUT cities INT) begin create table t1(a int); begin end; end;`,
 		output: "create procedure p1 (in country CHAR(3), out cities INT) begin create table t1 (\n\ta int\n); begin end; end;",
 	}, {
-		input:  `CREATE PROCEDURE compare (IN n INT, IN m INT, INOUT s VARCHAR(50)) BEGIN IF n = m THEN SET s = 'equals'; ELSE IF n > m THEN SET s = 'greater'; ELSE SET s = 'less'; END IF; SET s = CONCAT('is ', s, ' than'); END IF; SET s = CONCAT(n, ' ', s, ' ', m, '.'); END`,
+		input:  `CREATE PROCEDURE compare (IN n INT, IN m INT, INOUT s VARCHAR(50)) BEGIN IF n = m THEN SET s = 'equals'; ELSE IF n > m THEN SET s = 'greater'; ELSE SET s = 'less'; END IF; SET s = CONCAT('is ', s, ' than'); END IF; SET s = CONCAT(n, ' ', s, ' ', m, '.'); END;`,
 		output: `create procedure compare (in n INT, in m INT, inout s VARCHAR(50)) begin if n = m then set s = 'equals'; else if n > m then set s = 'greater'; else set s = 'less'; end if; set s = CONCAT('is ', s, ' than'); end if; set s = CONCAT(n, ' ', s, ' ', m, '.'); end;`,
 	}, {
 		input:  "create procedure SimpleProcedure() begin select 'Hello, World!'; end;",
@@ -4798,7 +4798,7 @@ func TestPositionedErr(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range invalidSQL {
 		tkn := parser.NewStringTokenizer(tcase.input)
-		_, err := ParseNext(tkn)
+		_, err := parse(tkn)
 
 		if posErr, ok := err.(PositionedErr); !ok {
 			t.Errorf("%s: %v expected PositionedErr, got (%T) %v", tcase.input, err, err, tcase.output)
@@ -6169,9 +6169,8 @@ func TestCreateTableEscaped(t *testing.T) {
 
 var (
 	invalidSQL = []struct {
-		input        string
-		output       string
-		excludeMulti bool // Don't use in the ParseNext multi-statement parsing tests.
+		input  string
+		output string
 	}{{
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
@@ -6268,26 +6267,22 @@ var (
 		input:  "select /* straight_join using */ 1 from t1 straight_join t2 using (a)",
 		output: "syntax error at position 66 near 'using'",
 	}, {
-		input:        "select 'aa",
-		output:       "syntax error at position 11 near 'aa'",
-		excludeMulti: true,
+		input:  "select 'aa",
+		output: "syntax error at position 11 near 'aa'",
 	}, {
-		input:        "select 'aa\\",
-		output:       "syntax error at position 12 near 'aa'",
-		excludeMulti: true,
+		input:  "select 'aa\\",
+		output: "syntax error at position 12 near 'aa'",
 	}, {
-		input:        "select /* aa",
-		output:       "syntax error at position 13 near '/* aa'",
-		excludeMulti: true,
+		input:  "select /* aa",
+		output: "syntax error at position 13 near '/* aa'",
 	}, {
 		// This is a valid MySQL query but does not yet work with Vitess.
 		// The problem is that the tokenizer takes .3 as a single token which causes parsing error
 		// We should instead be using . as a separate token and then 3t2 as an identifier.
 		// This highlights another problem, the tokenization has to be aware of the context of parsing!
 		// Since in an alternate query like `select .3e3t`, we should use .3e3 as a single token FLOAT and then t as ID.
-		input:        "create table 2t.3t2 (c1 bigint not null, c2 text, primary key(c1))",
-		output:       "syntax error at position 18 near '.3'",
-		excludeMulti: true,
+		input:  "create table 2t.3t2 (c1 bigint not null, c2 text, primary key(c1))",
+		output: "syntax error at position 18 near '.3'",
 	}, {
 		input:  "ALTER TABLE t ADD PARTITION (PARTITION p10 VALUES LESS THAN (10)), ADD PARTITION (PARTITION p20 VALUES LESS THAN (20))",
 		output: "syntax error at position 67",
@@ -6350,7 +6345,7 @@ func TestSkipToEnd(t *testing.T) {
 	}, {
 		// Partial DDL should get reset for valid DDLs also.
 		input:  "create table a(id int); select * from t",
-		output: "syntax error at position 31 near 'select'",
+		output: ErrMultipleStatements.Error(),
 	}, {
 		// Partial DDL does not get reset here. But we allow the
 		// DDL only if there are no new tokens after skipping to end.
@@ -6558,6 +6553,112 @@ func TestValidUnionCases(t *testing.T) {
 
 func TestValidSelectCases(t *testing.T) {
 	testFile(t, "select_cases.txt", makeTestOutput(t))
+}
+
+// TestParseMultiple concatenates all the valid SQL test cases and check it can read
+// them as one long string.
+func TestParseMultiple(t *testing.T) {
+	var sql strings.Builder
+	totalCases := len(validSQL)
+	for _, tcase := range validSQL {
+		if tcase.partialDDL {
+			totalCases--
+			continue
+		}
+		sql.WriteString(tcase.input)
+		sql.WriteRune(';')
+	}
+
+	parser := NewTestParser()
+	sqlString := sql.String()
+	stmts, err := parser.ParseMultiple(sqlString)
+	require.NoError(t, err)
+	var finalStmts []Statement
+	for _, stmt := range stmts {
+		if stmt != nil {
+			finalStmts = append(finalStmts, stmt)
+		}
+	}
+	require.EqualValues(t, totalCases, len(finalStmts))
+	idx := 0
+	for _, tcase := range validSQL {
+		if tcase.partialDDL {
+			continue
+		}
+		want := tcase.output
+		if want == "" {
+			want = tcase.input
+		}
+		require.Equal(t, want, String(finalStmts[idx]))
+		idx++
+	}
+}
+
+func TestIgnoreSpecialComments(t *testing.T) {
+	input := `SELECT 1;/*! ALTER TABLE foo DISABLE KEYS; */ SELECT 2;`
+
+	parser := NewTestParser()
+	tokenizer := parser.NewStringTokenizer(input)
+	tokenizer.SkipSpecialComments = true
+	stmts, err := parse(tokenizer)
+	require.NoError(t, err)
+	require.Len(t, stmts, 2)
+	require.Equal(t, "select 1 from dual", String(stmts[0]))
+	require.Equal(t, "select 2 from dual", String(stmts[1]))
+}
+
+// TestParseMultipleEdgeCases tests various ParseMultiple edge cases.
+func TestParseMultipleEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+		want    []string
+	}{{
+		name:  "Trailing ;",
+		input: "select 1 from a; update a set b = 2;",
+		want:  []string{"select 1 from a", "update a set b = 2"},
+	}, {
+		name:  "No trailing ;",
+		input: "select 1 from a; update a set b = 2",
+		want:  []string{"select 1 from a", "update a set b = 2"},
+	}, {
+		name:  "Trailing whitespace",
+		input: "select 1 from a; update a set b = 2    ",
+		want:  []string{"select 1 from a", "update a set b = 2"},
+	}, {
+		name:  "Trailing whitespace and ;",
+		input: "select 1 from a; update a set b = 2   ;   ",
+		want:  []string{"select 1 from a", "update a set b = 2"},
+	}, {
+		name:  "Handle SkipToEnd statements",
+		input: "set character set utf8; select 1 from a",
+		want:  []string{"set charset 'utf8'", "select 1 from a"},
+	}, {
+		name:  "Semicolin inside a string",
+		input: "set character set ';'; select 1 from a",
+		want:  []string{"set charset ';'", "select 1 from a"},
+	}, {
+		name:    "Partial DDL",
+		input:   "create table a ignore me this is garbage; select 1 from a",
+		wantErr: "syntax error at position 22 near 'ignore'",
+	}}
+	parser := NewTestParser()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stmts, err := parser.ParseMultiple(test.input)
+			if test.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), test.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.EqualValues(t, len(test.want), len(stmts))
+			for i, stmt := range stmts {
+				require.Equal(t, test.want[i], String(stmt))
+			}
+		})
+	}
 }
 
 func makeTestOutput(t *testing.T) string {

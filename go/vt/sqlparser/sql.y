@@ -18,8 +18,15 @@ package sqlparser
 
 import "vitess.io/vitess/go/ptr"
 
-func setParseTree(yylex yyLexer, stmt Statement) {
-  yylex.(*Tokenizer).ParseTree = stmt
+func setParseTrees(yylex yyLexer, stmts []Statement) {
+  if len(stmts) > 1 && stmts[len(stmts)-1] == nil {
+    stmts = stmts[:len(stmts)-1]
+  }
+  yylex.(*Tokenizer).ParseTrees = stmts
+}
+
+func resetTokenizer(yylex yyLexer) {
+  yylex.(*Tokenizer).reset()
 }
 
 func setAllowComments(yylex yyLexer, allow bool) {
@@ -61,6 +68,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 %union {
   statement       Statement
+  statements      []Statement
   selStmt         SelectStatement
   compoundStatement CompoundStatement
   compoundStatements CompoundStatements
@@ -449,7 +457,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 
 %type <partitionByType> range_or_list
 %type <integer> partitions_opt algorithm_opt subpartitions_opt partition_max_rows partition_min_rows
-%type <statement> command command_opt kill_statement
+%type <statements> multiple_commands
+%type <statement> command command_opt kill_statement comment_command_opt
 %type <statement> explain_statement explainable_statement vexplain_statement
 %type <statement> prepare_statement execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
@@ -657,27 +666,40 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <txAccessModes> tx_chacteristics_opt tx_chars
 %type <txAccessMode> tx_char
 %type <killType> kill_type_opt
-%start any_command
+%start parse
 
 %%
 
-any_command:
-  comment_opt command_opt semicolon_opt
+parse:
+  multiple_commands
   {
-    stmt := $2
+    setParseTrees(yylex, $1)
+  }
+
+multiple_commands:
+  comment_command_opt
+  {
+    $$ = []Statement{$1}
+    resetTokenizer(yylex)
+  }
+|  multiple_commands ';' comment_command_opt
+  {
+    $$ = append($1, $3)
+    resetTokenizer(yylex)
+  }
+
+comment_command_opt:
+  comment_opt command_opt
+  {
+    $$ = $2
     // If the statement is empty and we have comments
     // then we create a special struct which stores them.
     // This is required because we need to update the rows_returned
     // and other query stats and not return a `query was empty` error
-    if stmt == nil && $1 != nil {
-       stmt = &CommentOnly{Comments: $1}
+    if $$ == nil && $1 != nil {
+       $$ = &CommentOnly{Comments: $1}
     }
-    setParseTree(yylex, stmt)
   }
-
-semicolon_opt:
-/*empty*/ {}
-| ';' {}
 
 command_opt:
   command
@@ -686,7 +708,7 @@ command_opt:
   }
 | /*empty*/
   {
-    setParseTree(yylex, nil)
+    $$ = nil
   }
 
 command:

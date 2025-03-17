@@ -757,7 +757,7 @@ func TestSplitStatements(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
-			statements, err := parser.SplitStatements(tcase.input)
+			statements, err := parser.ParseMultiple(tcase.input)
 			if tcase.wantErr {
 				assert.Error(t, err)
 			} else {
