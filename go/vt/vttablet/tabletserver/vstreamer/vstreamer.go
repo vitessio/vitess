@@ -465,6 +465,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		return nil, fmt.Errorf("can't strip checksum from binlog event: %v, event data: %#v", err, ev)
 	}
 
+	timeNowUnixNano := time.Now().UnixNano()
 	var vevents []*binlogdatapb.VEvent
 	switch {
 	case ev.IsRotate(), ev.IsStop():
@@ -711,7 +712,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				}
 				for _, tpvevent := range tpvevents {
 					tpvevent.Timestamp = int64(ev.Timestamp())
-					tpvevent.CurrentTime = time.Now().UnixNano()
+					tpvevent.CurrentTime = timeNowUnixNano
 					if err := bufferAndTransmit(tpvevent); err != nil {
 						if err == io.EOF {
 							return nil, nil
@@ -726,13 +727,17 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		}
 		vs.vse.vstreamerCompressedTransactionsDecoded.Add(1)
 	}
+	vsEventGTIDString := ""
+	if vs.eventGTID != nil {
+		vsEventGTIDString = vs.eventGTID.String()
+	}
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())
-		vevent.CurrentTime = time.Now().UnixNano()
+		vevent.CurrentTime = timeNowUnixNano
 		vevent.SequenceNumber = vs.sequenceNumber
 		vevent.CommitParent = vs.commitParent
 		if vs.eventGTID != nil {
-			vevent.EventGtid = vs.eventGTID.String()
+			vevent.EventGtid = vsEventGTIDString
 		}
 	}
 	return vevents, nil
