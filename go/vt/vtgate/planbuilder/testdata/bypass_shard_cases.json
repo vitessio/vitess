@@ -280,7 +280,7 @@
           "Sharded": false
         },
         "TargetDestination": "Shard(-80)",
-        "Query": "select count(*), col from unsharded join vt_main.t1 where exists (select 1 from t2 join information_schema.`tables` where table_name = 't3')"
+        "Query": "select count(*), col from unsharded join vt_main.t1 where exists (select 1 from t2 join information_schema.`tables` where `table_name` = 't3')"
       }
     }
   }
