@@ -297,11 +297,19 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	if vp.parallelMode {
 		defer log.Errorf("========== QQQ DONE fetchAndApply")
+		log.Errorf("========== QQQ fetchAndApply startPos: %v", vp.startPos)
 
 		producer, err := newParallelProducer(ctx, vp.vr.dbClientGen, vp)
 		if err != nil {
 			return err
 		}
+		_, combinedPos, err := producer.aggregateWorkersPos(ctx, vp.vr.dbClient, false)
+		if err != nil {
+			return err
+		}
+		producer.startPos = combinedPos
+		log.Errorf("========== QQQ fetchAndApply producer.startPos = %v", producer.startPos)
+
 		go func() {
 			defer log.Errorf("========== QQQ DONE fetchAndApply/parallel goroutine")
 			// ctx, cancel := context.WithCancel(ctx)

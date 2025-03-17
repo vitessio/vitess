@@ -46,7 +46,8 @@ const (
 type parallelProducer struct {
 	vp *vplayer
 
-	workers []*parallelWorker
+	workers  []*parallelWorker
+	startPos replication.Position
 
 	posReached                atomic.Bool
 	workerErrors              chan error
@@ -71,7 +72,7 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 	p := &parallelProducer{
 		vp:                       vp,
 		workers:                  make([]*parallelWorker, countWorkers),
-		workerErrors:             make(chan error, countWorkers),
+		workerErrors:             make(chan error, countWorkers+1),
 		sequenceToWorkersMap:     make(map[int64]int),
 		completedSequenceNumbers: make(chan int64, countWorkers),
 		aggregateWorkersPosQuery: binlogplayer.ReadVReplicationCombinedWorkersGTIDs(vp.vr.id),
@@ -107,10 +108,11 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 			return w.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
 		}
 		// INSERT a row into _vt.vreplication_worker_pos with an empty position
-		if _, err := w.dbClient.ExecuteFetch(binlogplayer.GenerateInitWorkerPos(vp.vr.id, w.index), -1); err != nil {
+		query := binlogplayer.GenerateInitWorkerPos(vp.vr.id, w.index)
+		log.Errorf("========== QQQ initWorkersPos query: %v", query)
+		if _, err := w.dbClient.ExecuteFetch(query, -1); err != nil {
 			return nil, err
 		}
-
 		p.workers[i] = w
 	}
 
@@ -121,7 +123,6 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 func (p *parallelProducer) commitAll(ctx context.Context, except *parallelWorker) error {
 	var eg errgroup.Group
 	for _, w := range p.workers {
-		w := w
 		if except != nil && w.index == except.index {
 			continue
 		}
@@ -193,7 +194,6 @@ func (p *parallelProducer) aggregateWorkersPos(ctx context.Context, dbClient *vd
 		// Nothing changed since last visit. Skip all the parsing and updates.
 		return aggregatedWorkersPos, combinedPos, nil
 	}
-	p.lastAggregatedWorkersPosStr = aggregatedWorkersPosStr
 	aggregatedWorkersPos, err = binlogplayer.DecodeMySQL56Position(aggregatedWorkersPosStr)
 	if err != nil {
 		return aggregatedWorkersPos, combinedPos, err
@@ -233,12 +233,19 @@ func (p *parallelProducer) aggregateWorkersPos(ctx context.Context, dbClient *vd
 	combinedPos = replication.AppendGTIDSet(aggregatedWorkersPos, p.vp.startPos.GTIDSet)
 	p.vp.pos = combinedPos // TODO(shlomi) potential for race condition
 
+	if !onlyFirstContiguous {
+		log.Errorf("========== QQQ aggregateWorkersPos aggregatedWorkersPos: %v", aggregatedWorkersPos)
+		log.Errorf("========== QQQ aggregateWorkersPos combinedPos: %v", combinedPos)
+
+	}
 	// Update _vt.vreplication. This write reflects everything we could read from the workers table,
 	// which means that data was committed by the workers, which means this is a de-factor "what's been
 	// actually applied"."
 	if _, err := p.updatePos(ctx, combinedPos, lastEventTimestamp, dbClient); err != nil {
+		log.Errorf("========== QQQ aggregateWorkersPos error: %v", err)
 		return aggregatedWorkersPos, combinedPos, err
 	}
+	p.lastAggregatedWorkersPosStr = aggregatedWorkersPosStr
 	return aggregatedWorkersPos, combinedPos, nil
 }
 
@@ -350,6 +357,8 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 		}
 	}()
 	currentWorker := p.workers[0]
+	hasFieldEvent := false
+	workerWithFieldEvent := -1
 	for {
 		if p.posReached.Load() {
 			return io.EOF
@@ -361,12 +370,15 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 			canApplyInParallel := false
 			switch event.Type {
 			case binlogdatapb.VEventType_BEGIN,
-				// binlogdatapb.VEventType_FIELD,
 				binlogdatapb.VEventType_ROW,
 				binlogdatapb.VEventType_COMMIT,
 				binlogdatapb.VEventType_GTID:
 				// We can parallelize these events.
 				canApplyInParallel = true
+			case binlogdatapb.VEventType_FIELD:
+				canApplyInParallel = true
+				hasFieldEvent = true
+				workerWithFieldEvent = currentWorker.index
 			case binlogdatapb.VEventType_PREVIOUS_GTIDS:
 				// This `case` is not required, but let's make this very explicit:
 				// The transaction dependency graph is scoped to per-binary log.
@@ -391,13 +403,27 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 				p.countAssignedToCurrentWorker++
 			} else {
 				p.countAssignedToCurrentWorker = 1
+				if hasFieldEvent {
+					log.Errorf("========== QQQ process FIELD issue: %v event seq=%v assigned to worker %v even though there was field event in worker %v",
+						event.Type, event.SequenceNumber, workerIndex, workerWithFieldEvent)
+				}
 			}
 
+			if hasFieldEvent && event.Type == binlogdatapb.VEventType_COMMIT {
+				event.Skippable = false
+			}
 			currentWorker = p.workers[workerIndex]
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case currentWorker.events <- event:
+			}
+			if hasFieldEvent && event.Type == binlogdatapb.VEventType_COMMIT {
+				// We wait until the field event is applied.
+				if err := <-currentWorker.commitEvents(); err != nil {
+					return err
+				}
+				hasFieldEvent = false
 			}
 			if !canApplyInParallel {
 				// Say this was a DDL. Then we need to wait until it is absolutely complete, before we allow the next event to be processed.
@@ -425,10 +451,18 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 			p.workerErrors <- err
 		}
 	}()
+
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	workersCtx, workersCancel := context.WithCancel(ctx)
+	defer workersCancel()
+
 	for _, w := range p.workers {
+		wg.Add(1)
 		w := w
 		go func() {
-			p.workerErrors <- w.applyQueuedEvents(ctx)
+			defer wg.Done()
+			p.workerErrors <- w.applyQueuedEvents(workersCtx)
 		}()
 	}
 
@@ -472,17 +506,30 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 		lagSecs = -1
 		for i, events := range items {
 			for j, event := range events {
-				// event's GTID is singular, but we parse it as a GTIDSet
 				if !p.vp.stopPos.IsZero() {
-					_, eventGTID, err := replication.DecodePositionMySQL56(event.Gtid)
+					// event.GTID is a GTIDSet of combined parsed events
+					_, streamedGTID, err := replication.DecodePositionMySQL56(event.Gtid)
 					if err != nil {
 						return err
 					}
-					if !p.vp.stopPos.GTIDSet.Contains(eventGTID) {
+					if !p.vp.stopPos.GTIDSet.Contains(streamedGTID) {
 						// This event goes beyond the stop position. We skip it.
 						continue
 					}
 				}
+				if event.EventGtid != "" && !p.startPos.IsZero() {
+					// eventGTID is a singular GTID entry
+					eventGTID, err := replication.ParseMysql56GTID(event.EventGtid)
+					if err != nil {
+						return err
+					}
+					if p.startPos.GTIDSet.ContainsGTID(eventGTID) {
+						// This event was already processed.
+						log.Errorf("========== QQQ applyEvents skipping GTID entry %v", eventGTID)
+						continue
+					}
+				}
+
 				if event.Timestamp != 0 {
 					// If the event is a heartbeat sent while throttled then do not update
 					// the lag based on it.
