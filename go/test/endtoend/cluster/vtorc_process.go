@@ -116,21 +116,24 @@ func (orc *VTOrcProcess) Setup() (err error) {
 	$ vtorc --topo-implementation etcd2 --topo-global-server-address localhost:2379 --topo-global-root /vitess/global
 	--config config/vtorc/default.json --alsologtostderr
 	*/
-	flags := make(map[string]string)
+	flags := map[string]string{
+		"--topo-implementation":        orc.TopoImplementation,
+		"--topo-global-server-address": orc.TopoGlobalAddress,
+		"--topo-global-root":           orc.TopoGlobalRoot,
+		"--config-file":                orc.ConfigPath,
+		"--port":                       fmt.Sprintf("%d", orc.Port),
+		"--bind-address":               "127.0.0.1",
+	}
 
 	utils.SetFlagVariantsForTests(flags, "--topo-implementation", orc.TopoImplementation)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", orc.TopoGlobalAddress)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-root", orc.TopoGlobalRoot)
 
-	orc.proc = exec.Command(
-		orc.Binary,
-		flags["--topo-implementation"],
-		flags["--topo-global-server-address"],
-		flags["--topo-global-root"],
-		"--config-file", orc.ConfigPath,
-		"--port", fmt.Sprintf("%d", orc.Port),
-		"--bind-address", "127.0.0.1",
-	)
+	orc.proc = exec.Command(orc.Binary)
+	for flag, value := range flags {
+		orc.proc.Args = append(orc.proc.Args, flag, value)
+	}
+
 	if !orc.NoOverride {
 		orc.proc.Args = append(orc.proc.Args,
 			// This parameter is overriden from the config file. This verifies that we indeed use the flag value over the config file.

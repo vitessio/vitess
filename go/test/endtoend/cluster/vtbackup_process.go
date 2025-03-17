@@ -56,29 +56,50 @@ type VtbackupProcess struct {
 
 // Setup starts vtbackup process with required arguements
 func (vtbackup *VtbackupProcess) Setup() (err error) {
-	flags := make(map[string]string)
+
+	flags := map[string]string{
+		"--topo-implementation":        vtbackup.TopoImplementation,
+		"--topo-global-server-address": vtbackup.TopoGlobalAddress,
+		"--topo-global-root":           vtbackup.TopoGlobalRoot,
+		"--log_dir":                    vtbackup.LogDir,
+
+		//initDBfile is required to run vtbackup
+		"--mysql_port":       fmt.Sprintf("%d", vtbackup.MysqlPort),
+		"--init_db_sql_file": vtbackup.initDBfile,
+		"--init_keyspace":    vtbackup.Keyspace,
+		"--init_shard":       vtbackup.Shard,
+
+		//Backup Arguments are not optional
+		"--backup_storage_implementation": vtbackup.BackupStorageImplementation,
+		"--file_backup_storage_root":      vtbackup.FileBackupStorageRoot,
+	}
 
 	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtbackup.TopoImplementation)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtbackup.TopoGlobalAddress)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtbackup.TopoGlobalRoot)
 
-	vtbackup.proc = exec.Command(
-		vtbackup.Binary,
-		flags["--topo-implementation"],
-		flags["--topo-global-server-address"],
-		flags["--topo-global-root"],
-		"--log_dir", vtbackup.LogDir,
+	vtbackup.proc = exec.Command(vtbackup.Binary)
+	for k, v := range flags {
+		vtbackup.proc.Args = append(vtbackup.proc.Args, k, v)
+	}
 
-		//initDBfile is required to run vtbackup
-		"--mysql_port", fmt.Sprintf("%d", vtbackup.MysqlPort),
-		"--init_db_sql_file", vtbackup.initDBfile,
-		"--init_keyspace", vtbackup.Keyspace,
-		"--init_shard", vtbackup.Shard,
+	// vtbackup.proc = exec.Command(
+	// 	vtbackup.Binary,
+	// 	"--topo-implementation", vtbackup.TopoImplementation,
+	// 	"--topo-global-server-address", vtbackup.TopoGlobalAddress,
+	// 	"--topo-global-root", vtbackup.TopoGlobalRoot,
+	// 	"--log_dir", vtbackup.LogDir,
 
-		//Backup Arguments are not optional
-		"--backup_storage_implementation", vtbackup.BackupStorageImplementation,
-		"--file_backup_storage_root", vtbackup.FileBackupStorageRoot,
-	)
+	// 	//initDBfile is required to run vtbackup
+	// 	"--mysql_port", fmt.Sprintf("%d", vtbackup.MysqlPort),
+	// 	"--init_db_sql_file", vtbackup.initDBfile,
+	// 	"--init_keyspace", vtbackup.Keyspace,
+	// 	"--init_shard", vtbackup.Shard,
+
+	// 	//Backup Arguments are not optional
+	// 	"--backup_storage_implementation", vtbackup.BackupStorageImplementation,
+	// 	"--file_backup_storage_root", vtbackup.FileBackupStorageRoot,
+	// )
 
 	if vtbackup.initialBackup {
 		vtbackup.proc.Args = append(vtbackup.proc.Args, "--initial_backup")

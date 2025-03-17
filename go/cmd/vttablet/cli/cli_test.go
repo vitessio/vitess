@@ -18,7 +18,7 @@ package cli
 
 import (
 	"context"
-	"fmt"
+	// "fmt"
 	"os"
 	"testing"
 
@@ -45,13 +45,13 @@ func TestRunFailsToStartTabletManager(t *testing.T) {
 	})
 
 	flags := make(map[string]string)
-	utils.SetFlagVariantsForTests(flags, "topo-implementation", "test")
-	utils.SetFlagVariantsForTests(flags, "topo-global-server-address", "localhost")
-	utils.SetFlagVariantsForTests(flags, "topo-global-root", "cell")
+	utils.SetFlagVariantsForTests(flags, "--topo-implementation", "test")
+	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", "localhost")
+	utils.SetFlagVariantsForTests(flags, "--topo-global-root", "cell")
 
 	var flagArgs []string
-	for k, v := range flags {
-		flagArgs = append(flagArgs, fmt.Sprintf("--%s=%s", k, v))
+	for flag, value := range flags {
+		flagArgs = append(flagArgs, flag, value)
 	}
 
 	flagArgs = append(flagArgs,

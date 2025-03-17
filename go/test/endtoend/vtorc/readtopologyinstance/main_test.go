@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 	"vitess.io/vitess/go/vt/servenv"
+
 	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -50,16 +51,18 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	}()
 
 	// Change the args such that they match how we would invoke VTOrc
+	args := map[string]string{
+		"--topo-global-server-address": clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalAddress,
+		"--topo-implementation":        clusterInfo.ClusterInstance.VtctldClientProcess.TopoImplementation,
+		"--topo-global-root":           clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalRoot,
+	}
+
+	vtutils.SetFlagVariantsForTests(args, "--topo-global-server-address", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalAddress)
+	vtutils.SetFlagVariantsForTests(args, "--topo-implementation", clusterInfo.ClusterInstance.VtctldClientProcess.TopoImplementation)
+	vtutils.SetFlagVariantsForTests(args, "--topo-global-root", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalRoot)
+
 	os.Args = []string{"vtorc"}
-
-	flags := make(map[string]string)
-
-	vtutils.SetFlagVariantsForTests(flags, "topo-global-server-address", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalAddress)
-	vtutils.SetFlagVariantsForTests(flags, "topo-implementation", clusterInfo.ClusterInstance.VtctldClientProcess.TopoImplementation)
-	vtutils.SetFlagVariantsForTests(flags, "topo-global-root", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalRoot)
-
-	for k, v := range flags {
-		fmt.Printf("Flag: %s, Value: %s\n", k, v)
+	for k, v := range args {
 		os.Args = append(os.Args, k, v)
 	}
 

@@ -53,27 +53,31 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	_ = createDirectory(vtctld.LogDir, 0700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
 
-	flags := make(map[string]string)
+	flags := map[string]string{
+		"--topo-implementation":           vtctld.TopoImplementation,
+		"--topo-global-server-address":    vtctld.TopoGlobalAddress,
+		"--topo-global-root":              vtctld.TopoGlobalRoot,
+		"--cell":                          cell,
+		"--service_map":                   vtctld.ServiceMap,
+		"--backup_storage_implementation": vtctld.BackupStorageImplementation,
+		"--file_backup_storage_root":      vtctld.FileBackupStorageRoot,
+		"--log_dir":                       vtctld.LogDir,
+		"--port":                          fmt.Sprintf("%d", vtctld.Port),
+		"--grpc_port":                     fmt.Sprintf("%d", vtctld.GrpcPort),
+		"--bind-address":                  "127.0.0.1",
+		"--grpc_bind_address":             "127.0.0.1",
+	}
 
 	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtctld.TopoImplementation)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtctld.TopoGlobalAddress)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtctld.TopoGlobalRoot)
 
-	vtctld.proc = exec.Command(
-		vtctld.Binary,
-		flags["--topo-implementation"],
-		flags["--topo-global-server-address"],
-		flags["--topo-global-root"],
-		"--cell", cell,
-		"--service_map", vtctld.ServiceMap,
-		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
-		"--file_backup_storage_root", vtctld.FileBackupStorageRoot,
-		"--log_dir", vtctld.LogDir,
-		"--port", fmt.Sprintf("%d", vtctld.Port),
-		"--grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
-		"--bind-address", "127.0.0.1",
-		"--grpc_bind_address", "127.0.0.1",
-	)
+	args := []string{vtctld.Binary}
+	for flag, value := range flags {
+		args = append(args, flag, value)
+	}
+
+	vtctld.proc = exec.Command(args[0], args[1:]...)
 
 	if *isCoverage {
 		vtctld.proc.Args = append(vtctld.proc.Args, "--test.coverprofile="+getCoveragePath("vtctld.out"))
