@@ -19,8 +19,11 @@ package logic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
+	"sync/atomic"
+	"time"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -69,6 +72,9 @@ var (
 		"Shard",
 	})
 
+	// shardsLockCounter is a count of in-flight shard locks. Use atomics to read/update.
+	shardsLockCounter int64
+
 	// recoveriesCounter counts the number of recoveries that VTOrc has performed
 	recoveriesCounter = stats.NewCountersWithSingleLabel("RecoveriesCount", "Count of the different recoveries performed", "RecoveryType", actionableRecoveriesNames...)
 
@@ -77,6 +83,10 @@ var (
 
 	// recoveriesFailureCounter counts the number of failed recoveries that VTOrc has performed
 	recoveriesFailureCounter = stats.NewCountersWithSingleLabel("FailedRecoveries", "Count of the different failed recoveries performed", "RecoveryType", actionableRecoveriesNames...)
+
+	// shardLockTimings measures the timing of LockShard operations.
+	shardLockTimingsActions = []string{"Lock", "Unlock"}
+	shardLockTimings        = stats.NewTimings("ShardLockTimings", "Timings of global shard locks", "Action", shardLockTimingsActions...)
 )
 
 // recoveryFunction is the code of the recovery function to be used
@@ -144,11 +154,54 @@ func NewTopologyRecoveryStep(id int64, message string) *TopologyRecoveryStep {
 }
 
 func init() {
+	// ShardLocksActive is a stats representation of shardsLockCounter.
+	stats.NewGaugeFunc("ShardLocksActive", "Number of actively-held shard locks", func() int64 {
+		return atomic.LoadInt64(&shardsLockCounter)
+	})
 	go initializeTopologyRecoveryPostConfiguration()
 }
 
 func initializeTopologyRecoveryPostConfiguration() {
 	config.WaitForConfigurationToBeLoaded()
+}
+
+func getLockAction(analysedInstance string, code inst.AnalysisCode) string {
+	return fmt.Sprintf("VTOrc Recovery for %v on %v", code, analysedInstance)
+}
+
+// LockShard locks the keyspace-shard preventing others from performing conflicting actions.
+func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context.Context, func(*error), error) {
+	if keyspace == "" {
+		return nil, nil, errors.New("can't lock shard: keyspace is unspecified")
+	}
+	if shard == "" {
+		return nil, nil, errors.New("can't lock shard: shard name is unspecified")
+	}
+	val := atomic.LoadInt32(&hasReceivedSIGTERM)
+	if val > 0 {
+		return nil, nil, errors.New("can't lock shard: SIGTERM received")
+	}
+
+	startTime := time.Now()
+	defer func() {
+		lockTime := time.Since(startTime)
+		shardLockTimings.Add("Lock", lockTime)
+	}()
+
+	atomic.AddInt64(&shardsLockCounter, 1)
+	ctx, unlock, err := ts.TryLockShard(ctx, keyspace, shard, lockAction)
+	if err != nil {
+		atomic.AddInt64(&shardsLockCounter, -1)
+		return nil, nil, err
+	}
+	return ctx, func(e *error) {
+		startTime := time.Now()
+		defer func() {
+			atomic.AddInt64(&shardsLockCounter, -1)
+			shardLockTimings.Add("Unlock", time.Since(startTime))
+		}()
+		unlock(e)
+	}, nil
 }
 
 // AuditTopologyRecovery audits a single step in a topology recovery process.
