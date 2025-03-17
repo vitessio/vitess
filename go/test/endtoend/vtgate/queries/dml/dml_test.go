@@ -38,20 +38,41 @@ func TestUniqueLookupDuplicateEntries(t *testing.T) {
 	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
 
 	// insert duplicate row
-	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (2,10)", "Duplicate entry '10' for key 'num_vdx_tbl.PRIMARY'")
+	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (2,10)", "lookup.Create: target: sks.-80.primary: vttablet: "+
+		"Duplicate entry '10' for key 'num_vdx_tbl.PRIMARY'")
 	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
 	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
 
-	// insert duplicate row in multi-row insert
-	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (3,20), (4,20)", "Duplicate entry '20' for key 'num_vdx_tbl.PRIMARY'")
+	// insert duplicate row in multi-row insert multi shard
+	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (3,20), (4,20),(5,30)",
+		"transaction rolled back to reverse changes of partial DML execution: target: sks.80-.primary: vttablet: "+
+			"Duplicate entry '20' for key 'num_vdx_tbl.PRIMARY'")
 	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
 	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+
+	// insert duplicate row in multi-row insert - lookup single shard
+	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (3,20), (4,20)",
+		"transaction rolled back to reverse changes of partial DML execution: lookup.Create: target: sks.80-.primary: vttablet: "+
+			"Duplicate entry '20' for key 'num_vdx_tbl.PRIMARY'")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+
+	// insert second row to test with limit update.
+	utils.Exec(t, mcmp.VtConn, "insert into s_tbl(id, num) values (10,100)")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)] [INT64(10) INT64(100)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(100) VARCHAR("594764E1A2B2D98E")]]`)
 
 	// update with limit 1 succeed.
-	utils.Exec(t, mcmp.VtConn, "update s_tbl set num = 30 limit 1")
+	utils.Exec(t, mcmp.VtConn, "update s_tbl set num = 30 order by id limit 1")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(30)] [INT64(10) INT64(100)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(30) VARCHAR("166B40B44ABA4BD6")] [INT64(100) VARCHAR("594764E1A2B2D98E")]]`)
 
 	// update to same value on multiple row should fail.
-	utils.AssertContainsError(t, mcmp.VtConn, "update s_tbl set num = 40 limit 2", "Duplicate entry '40' for key 'num_vdx_tbl.PRIMARY'")
+	utils.AssertContainsError(t, mcmp.VtConn, "update s_tbl set num = 40 limit 2",
+		"lookup.Create: transaction rolled back to reverse changes of partial DML execution: target: sks.80-.primary: vttablet: "+
+			"rpc error: code = AlreadyExists desc = Duplicate entry '40' for key 'num_vdx_tbl.PRIMARY'")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(30)] [INT64(10) INT64(100)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(30) VARCHAR("166B40B44ABA4BD6")] [INT64(100) VARCHAR("594764E1A2B2D98E")]]`)
 }
 
 func TestMultiEqual(t *testing.T) {
