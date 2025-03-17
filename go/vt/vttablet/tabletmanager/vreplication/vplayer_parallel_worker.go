@@ -141,16 +141,10 @@ func (w *parallelWorker) commitEvents() chan error {
 
 func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 	log.Errorf("========== QQQ applyQueuedEvents")
-	defer func() {
-		log.Errorf("========== QQQ applyQueuedEvents *********** DONE %v *********** err=%v", w.index, err)
-	}()
 
 	defer func() {
 		// Anything that's not committed should be rolled back
 		w.dbClient.Rollback()
-	}()
-
-	defer func() {
 		log.Errorf("========== QQQ applyQueuedEvents worker %v num commits=%v, num events=%v, numSubscribes=%v", w.index, w.numCommits, w.numEvents, w.numSubscribes)
 	}()
 
@@ -180,7 +174,7 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 				// So we're just sitting idly with a bunch of uncommitted statements. Better to commit now.
 				log.Errorf("========== QQQ applyQueuedEvents worker %v idle with skipped commit and %v events. COMMITTING", w.index, len(w.sequenceNumbers))
 				if err := applyEvent(w.producer.generateCommitWorkerEvent()); err != nil {
-					return err
+					return vterrors.Wrapf(err, "failed to commit idle worker %v", w.index)
 				}
 			}
 		case pos := <-w.aggregatedPosChan:
@@ -197,7 +191,6 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 				if !lastEventWasSkippedCommit {
 					continue
 				}
-				// log.Errorf("========== QQQ applyQueuedEvents worker %v idle with isConsiderCommitWorkerEvent commit and %v events. COMMITTING", w.index, len(w.sequenceNumbers))
 			}
 
 			skippable := func() bool {
@@ -207,10 +200,10 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 				if event.Skippable {
 					return true
 				}
-				if len(w.sequenceNumbers) < maxWorkerEvents {
-					// We don't want to commit yet. We're waiting for more events.
-					return true
-				}
+				// if len(w.sequenceNumbers) < maxWorkerEvents {
+				// 	// We don't want to commit yet. We're waiting for more events.
+				// 	return true
+				// }
 				return false
 			}
 
@@ -220,8 +213,12 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 				lastEventWasSkippedCommit = true
 				continue
 			}
+			// log.Errorf("========== QQQ applyQueuedEvents worker %v applying %v event at %v. in transaction=%v", w.index, event.Type, event.EventGtid, w.dbClient.InTransaction)
+			// if event.EventGtid == "" {
+			// 	log.Errorf("========== QQQ applyQueuedEvents worker %v event.EventGtid is empty. worker position=%v", w.index, w.updatedPos)
+			// }
 			if err := applyEvent(event); err != nil {
-				return err
+				return vterrors.Wrapf(err, "worker %v failed to apply %v event at position %v", w.index, event.Type, event.EventGtid)
 			}
 		}
 	}
@@ -574,9 +571,12 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, event *binlogdat
 	if shouldActuallyCommit {
 		if !w.updatedPos.IsZero() {
 			update := binlogplayer.GenerateUpdateWorkerPos(w.vp.vr.id, w.index, w.updatedPos.String(), w.updatedPosTimestamp)
+			// log.Errorf("========== QQQ applyQueuedCommit worker %v actual commit with updatedPos=%v", w.index, w.updatedPos)
 			if _, err := w.queryFunc(ctx, update); err != nil {
+				// log.Errorf("========== QQQ applyQueuedCommit worker %v actual commit FAILED", w.index)
 				return err
 			}
+			// log.Errorf("========== QQQ applyQueuedCommit worker %v actual commit SUCCESS", w.index)
 			w.updatedPos = replication.Position{}
 		}
 		err = w.commitFunc()
