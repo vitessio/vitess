@@ -156,6 +156,7 @@ func AssertSingleRowIsReturned(t *testing.T, conn *mysql.Conn, predicate string,
 }
 
 func AssertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
+	t.Helper()
 	t.Run(pre, func(t *testing.T) {
 		qr, err := conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE "+pre, 1000, true)
 		require.NoError(t, err)

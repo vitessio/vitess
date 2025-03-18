@@ -464,6 +464,8 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("allow_primary", req.AllowPrimary)
 	span.Annotate("concurrency", req.Concurrency)
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
+	span.Annotate("upgrade_safe", req.UpgradeSafe)
+	span.Annotate("mysql_shutdown_timeout", req.MysqlShutdownTimeout)
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
 	// Instead of return on err directly, only return err when no tablets for backup at all
@@ -511,7 +513,13 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(backupTablet.Alias))
 
-	r := &vtctldatapb.BackupRequest{Concurrency: req.Concurrency, AllowPrimary: req.AllowPrimary, UpgradeSafe: req.UpgradeSafe, IncrementalFromPos: req.IncrementalFromPos}
+	r := &vtctldatapb.BackupRequest{
+		Concurrency:          req.Concurrency,
+		AllowPrimary:         req.AllowPrimary,
+		IncrementalFromPos:   req.IncrementalFromPos,
+		UpgradeSafe:          req.UpgradeSafe,
+		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
+	}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
 }
@@ -521,11 +529,12 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 },
 ) error {
 	r := &tabletmanagerdatapb.BackupRequest{
-		Concurrency:        req.Concurrency,
-		AllowPrimary:       req.AllowPrimary,
-		IncrementalFromPos: req.IncrementalFromPos,
-		UpgradeSafe:        req.UpgradeSafe,
-		BackupEngine:       req.BackupEngine,
+		Concurrency:          req.Concurrency,
+		AllowPrimary:         req.AllowPrimary,
+		IncrementalFromPos:   req.IncrementalFromPos,
+		BackupEngine:         req.BackupEngine,
+		UpgradeSafe:          req.UpgradeSafe,
+		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {

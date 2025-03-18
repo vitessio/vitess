@@ -12,7 +12,7 @@ source build.env
 mkdir -p "$VTROOT/bin"
 cd "$VTROOT/bin"
 
-KUBE_VERSION="${KUBE_VERSION:-v1.31.0}"
+KUBE_VERSION="${KUBE_VERSION:-v1.32.2}"
 KUBERNETES_RELEASE_URL="${KUBERNETES_RELEASE_URL:-https://dl.k8s.io}"
 
 # Download kubectl if needed.

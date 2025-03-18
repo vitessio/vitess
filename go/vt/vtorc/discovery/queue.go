@@ -33,85 +33,78 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
-// Queue contains information for managing discovery requests
-type Queue struct {
-	sync.Mutex
-
-	name         string
-	done         chan struct{}
-	queue        chan string
-	queuedKeys   map[string]time.Time
-	consumedKeys map[string]time.Time
+// queueItem represents an item in the discovery.Queue.
+type queueItem struct {
+	Key      string
+	PushedAt time.Time
 }
 
-// CreateQueue allows for creation of a new discovery queue
-func CreateQueue(name string) *Queue {
+// Queue is an ordered queue with deduplication.
+type Queue struct {
+	mu       sync.Mutex
+	enqueued map[string]struct{}
+	queue    chan queueItem
+}
+
+// NewQueue creates a new queue.
+func NewQueue() *Queue {
 	return &Queue{
-		name:         name,
-		queuedKeys:   make(map[string]time.Time),
-		consumedKeys: make(map[string]time.Time),
-		queue:        make(chan string, config.DiscoveryQueueCapacity),
+		enqueued: make(map[string]struct{}),
+		queue:    make(chan queueItem, config.DiscoveryQueueCapacity),
 	}
 }
 
-// QueueLen returns the length of the queue (channel size + queued size)
-func (q *Queue) QueueLen() int {
-	q.Lock()
-	defer q.Unlock()
+// setKeyCheckEnqueued returns true if a key is already enqueued, if
+// not the key will be marked as enqueued and false is returned.
+func (q *Queue) setKeyCheckEnqueued(key string) (alreadyEnqueued bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
-	return len(q.queue) + len(q.queuedKeys)
+	_, alreadyEnqueued = q.enqueued[key]
+	if !alreadyEnqueued {
+		q.enqueued[key] = struct{}{}
+	}
+	return alreadyEnqueued
+}
+
+// QueueLen returns the length of the queue.
+func (q *Queue) QueueLen() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	return len(q.enqueued)
 }
 
 // Push enqueues a key if it is not on a queue and is not being
 // processed; silently returns otherwise.
 func (q *Queue) Push(key string) {
-	q.Lock()
-	defer q.Unlock()
-
-	// is it enqueued already?
-	if _, found := q.queuedKeys[key]; found {
+	if q.setKeyCheckEnqueued(key) {
 		return
 	}
-
-	// is it being processed now?
-	if _, found := q.consumedKeys[key]; found {
-		return
+	q.queue <- queueItem{
+		Key:      key,
+		PushedAt: time.Now(),
 	}
-
-	q.queuedKeys[key] = time.Now()
-	q.queue <- key
 }
 
 // Consume fetches a key to process; blocks if queue is empty.
 // Release must be called once after Consume.
 func (q *Queue) Consume() string {
-	q.Lock()
-	queue := q.queue
-	q.Unlock()
+	item := <-q.queue
 
-	key := <-queue
-
-	q.Lock()
-	defer q.Unlock()
-
-	// alarm if have been waiting for too long
-	timeOnQueue := time.Since(q.queuedKeys[key])
+	timeOnQueue := time.Since(item.PushedAt)
 	if timeOnQueue > config.GetInstancePollTime() {
-		log.Warningf("key %v spent %.4fs waiting on a discoveryQueue", key, timeOnQueue.Seconds())
+		log.Warningf("key %v spent %.4fs waiting on a discovery queue", item.Key, timeOnQueue.Seconds())
 	}
 
-	q.consumedKeys[key] = q.queuedKeys[key]
-
-	delete(q.queuedKeys, key)
-
-	return key
+	return item.Key
 }
 
 // Release removes a key from a list of being processed keys
 // which allows that key to be pushed into the queue again.
 func (q *Queue) Release(key string) {
-	q.Lock()
-	defer q.Unlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 
-	delete(q.consumedKeys, key)
+	delete(q.enqueued, key)
 }

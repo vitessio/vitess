@@ -48,6 +48,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -179,46 +180,9 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 
 // waitForTabletThrottlingStatus waits for the tablet to return the provided HTTP code for
 // the provided app name in its self check.
-func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name, wantCode int) {
-	timer := time.NewTimer(defaultTimeout)
-	defer timer.Stop()
-	for {
-		output, err := throttlerCheckSelf(tablet, throttlerApp)
-		require.NoError(t, err)
-
-		responseCode, err := jsonparser.GetInt([]byte(output), "ResponseCode")
-		require.NoError(t, err, "waitForTabletThrottlingStatus output: %v", output)
-
-		var gotCode int
-		switch tabletmanagerdatapb.CheckThrottlerResponseCode(responseCode) {
-		case tabletmanagerdatapb.CheckThrottlerResponseCode_OK:
-			gotCode = http.StatusOK
-		case tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED:
-			gotCode = http.StatusExpectationFailed
-		case tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED:
-			gotCode = http.StatusTooManyRequests
-		case tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC:
-			gotCode = http.StatusNotFound
-		case tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR:
-			gotCode = http.StatusInternalServerError
-		default:
-			gotCode = http.StatusInternalServerError
-		}
-
-		if wantCode == gotCode {
-			// Wait for any cached check values to be cleared and the new
-			// status value to be in effect everywhere before returning.
-			time.Sleep(500 * time.Millisecond)
-			return
-		}
-		select {
-		case <-timer.C:
-			require.FailNow(t, fmt.Sprintf("tablet %q did not return expected status of %d for application %q before the timeout of %s; last seen status: %d",
-				tablet.Name, wantCode, throttlerApp, defaultTimeout, gotCode))
-		default:
-			time.Sleep(defaultTick)
-		}
-	}
+func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode) bool {
+	_, ok := throttler.WaitForCheckThrottlerResult(t, vc.VtctldClient, &cluster.Vttablet{Alias: tablet.Name}, throttlerApp, nil, wantCode, defaultTimeout)
+	return ok
 }
 
 // waitForNoWorkflowLag waits for the VReplication workflow's MaxVReplicationTransactionLag
@@ -282,25 +246,35 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 	}
 }
 
-func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) {
-	query := fmt.Sprintf("select count(*) from %s", table)
-	wantRes := fmt.Sprintf("[[INT64(%d)]]", want)
+func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int64) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+
+	query := fmt.Sprintf("select count(*) as c from %s", table)
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
 		qr, err := vttablet.QueryTablet(query, database, true)
 		require.NoError(t, err)
 		require.NotNil(t, qr)
-		if wantRes == fmt.Sprintf("%v", qr.Rows) {
+		row := qr.Named().Row()
+		require.NotNil(t, row)
+		got := row.AsInt64("c", 0)
+		require.LessOrEqual(t, got, want)
+		if got == want {
 			log.Infof("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name)
 			return
 		}
 		select {
-		case <-timer.C:
-			require.FailNow(t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) on tablet %q before the timeout of %s; last seen result: %v",
-				table, want, vttablet.Name, defaultTimeout, qr.Rows))
-		default:
-			time.Sleep(defaultTick)
+		case <-ctx.Done():
+			require.FailNow(
+				t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) on tablet %q before the timeout of %s; last seen result: %v",
+					table, want, vttablet.Name, defaultTimeout, qr.Rows),
+			)
+			return
+		case <-ticker.C:
 		}
 	}
 }

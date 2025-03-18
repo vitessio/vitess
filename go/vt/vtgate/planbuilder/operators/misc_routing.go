@@ -78,6 +78,10 @@ func (tr *TargetedRouting) updateRoutingLogic(_ *plancontext.PlanningContext, _ 
 	return tr
 }
 
+func (tr *TargetedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
+	return tr
+}
+
 func (tr *TargetedRouting) Cost() int {
 	return 1
 }
@@ -99,6 +103,10 @@ func (n *NoneRouting) Clone() Routing {
 }
 
 func (n *NoneRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) Routing {
+	return n
+}
+
+func (n *NoneRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
 	return n
 }
 
@@ -126,6 +134,10 @@ func (rr *AnyShardRouting) Clone() Routing {
 }
 
 func (rr *AnyShardRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) Routing {
+	return rr
+}
+
+func (rr *AnyShardRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
 	return rr
 }
 
@@ -166,6 +178,10 @@ func (dr *DualRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparse
 	return dr
 }
 
+func (dr *DualRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
+	return dr
+}
+
 func (dr *DualRouting) Cost() int {
 	return 0
 }
@@ -188,6 +204,10 @@ func (sr *SequenceRouting) Clone() Routing {
 }
 
 func (sr *SequenceRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) Routing {
+	return sr
+}
+
+func (sr *SequenceRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
 	return sr
 }
 

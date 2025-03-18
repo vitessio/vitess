@@ -227,6 +227,13 @@ func (session *SafeSession) SetFoundRows(value uint64) {
 	session.foundRowsHandled = true
 }
 
+// SetInDMLExecution set the `inDMLExecution` value.
+func (session *SafeSession) SetInDMLExecution(inDMLExec bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.GetOrCreateOptions().InDmlExecution = inDMLExec
+}
+
 // GetRollbackOnPartialExec returns the rollbackOnPartialExec value.
 func (session *SafeSession) GetRollbackOnPartialExec() string {
 	session.mu.Lock()

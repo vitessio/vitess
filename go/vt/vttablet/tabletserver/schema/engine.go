@@ -272,7 +272,7 @@ func (se *Engine) Open() error {
 
 	se.ticks.Start(func() {
 		// update stats on periodic reloads
-		if err := se.reload(ctx, true); err != nil {
+		if err := se.reloadAndIncludeStats(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
@@ -363,6 +363,11 @@ func (se *Engine) EnableHistorian(enabled bool) error {
 // emitted, as they can be expensive to calculate for a large number of tables
 func (se *Engine) Reload(ctx context.Context) error {
 	return se.ReloadAt(ctx, replication.Position{})
+}
+
+// reloadAndIncludeStats calls the ReloadAtEx function with includeStats set to true.
+func (se *Engine) reloadAndIncludeStats(ctx context.Context) error {
+	return se.ReloadAtEx(ctx, replication.Position{}, true)
 }
 
 // ReloadAt reloads the schema info from the db.
@@ -521,7 +526,8 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		createTime, _ := row[2].ToCastInt64()
 		var fileSize, allocatedSize uint64
 
-		if includeStats {
+		// For 5.7 flavor, includeStats is ignored, so we don't get the additional columns
+		if includeStats && len(row) >= 6 {
 			fileSize, _ = row[4].ToCastUint64()
 			allocatedSize, _ = row[5].ToCastUint64()
 			// publish the size metrics

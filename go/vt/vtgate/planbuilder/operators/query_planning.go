@@ -21,6 +21,8 @@ import (
 	"io"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -75,6 +77,8 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		switch in := in.(type) {
 		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
+		case *ApplyJoin:
+			return tryMergeApplyJoin(in, ctx)
 		case *Join:
 			return optimizeJoin(ctx, in)
 		case *Projection:
@@ -103,7 +107,6 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 			return tryPushUpdate(in)
 		case *RecurseCTE:
 			return tryMergeRecurse(ctx, in)
-
 		default:
 			return in, NoRewrite
 		}
@@ -117,6 +120,71 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	}
 
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Operator, res *ApplyResult) {
+	jm := newJoinMerge(nil, in.JoinType)
+	r := jm.mergeJoinInputs(ctx, in.LHS, in.RHS)
+	if r == nil {
+		return in, NoRewrite
+	}
+	aj, ok := r.Source.(*ApplyJoin)
+	if !ok {
+		panic(vterrors.VT13001("expected apply join"))
+	}
+
+	// Copy the join predicates from the original ApplyJoin to the new one.
+	aj.JoinPredicates = in.JoinPredicates
+
+	//  - Rewrite join predicates already pushed down &&
+	//  - Save original join predicates if we have to bail out of the rewrite
+	original := map[predicates.ID]sqlparser.Expr{}
+	for _, col := range aj.JoinPredicates.columns {
+		if col.JoinPredicateID != nil {
+			// if we have pushed down a join predicate, we need to restore it to its original shape, without the argument from the LHS
+			id := *col.JoinPredicateID
+			oldExpr, err := ctx.PredTracker.Get(id)
+			if err != nil {
+				panic(err)
+			}
+			original[id] = oldExpr
+			ctx.PredTracker.Set(id, col.Original)
+		}
+	}
+
+	// Defer restoration of original predicates if no successful rewrite happens.
+	defer func() {
+		if res == NoRewrite {
+			for id, expr := range original {
+				ctx.PredTracker.Set(id, expr)
+			}
+		}
+	}()
+
+	// After merging joins, routing logic may have changed. Re-evaluate routing decisions.
+	// Example scenario:
+	// Before merge: routing based on predicates like ':lhs_col = rhs.col'.
+	// After merge: predicate rewritten to 'lhs.col = rhs.col', making this predicate invalid for routing.
+	r.Routing = r.Routing.resetRoutingLogic(ctx)
+
+	// Verify if the LHS is a Route operator, which is required for this rewrite.
+	rb, ok := in.LHS.(*Route)
+	success := "pushed ApplyJoin under Route"
+	if !ok {
+		// Unexpected scenario: LHS is not a Route; abort rewrite.
+		return in, NoRewrite
+	}
+
+	// Special case: If LHS is a DualRouting AND the join isn't INNER or targeting a single shard,
+	// we cannot safely perform this rewrite.
+	if _, isDual := rb.Routing.(*DualRouting); isDual &&
+		!(jm.joinType.IsInner() || r.Routing.OpCode().IsSingleShard()) {
+		// to check the resulting opcode, we've used the original predicates.
+		// Since we are not using them, we need to restore the argument versions of the predicates
+		return in, NoRewrite
+	}
+
+	return r, Rewrote(success)
 }
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {

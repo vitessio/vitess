@@ -2,7 +2,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.1
+    controller-gen.kubebuilder.io/version: v0.17.2
   name: etcdlockservers.planetscale.com
 spec:
   group: planetscale.com
@@ -329,7 +329,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.1
+    controller-gen.kubebuilder.io/version: v0.17.2
   name: vitessbackups.planetscale.com
 spec:
   group: planetscale.com
@@ -381,7 +381,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.1
+    controller-gen.kubebuilder.io/version: v0.17.2
   name: vitessbackupschedules.planetscale.com
 spec:
   group: planetscale.com
@@ -416,6 +416,7 @@ spec:
                 cluster:
                   type: string
                 concurrencyPolicy:
+                  default: Forbid
                   enum:
                     - Allow
                     - Forbid
@@ -491,8 +492,6 @@ spec:
                         example: commerce
                         type: string
                       name:
-                        enum:
-                          - BackupShard
                         type: string
                       shard:
                         example: '-'
@@ -542,6 +541,11 @@ spec:
                 lastScheduledTime:
                   format: date-time
                   type: string
+                lastScheduledTimes:
+                  additionalProperties:
+                    format: date-time
+                    type: string
+                  type: object
               type: object
           type: object
       served: true
@@ -553,7 +557,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.1
+    controller-gen.kubebuilder.io/version: v0.17.2
   name: vitessbackupstorages.planetscale.com
 spec:
   group: planetscale.com
@@ -721,7 +725,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.1
+    controller-gen.kubebuilder.io/version: v0.17.2
   name: vitesscells.planetscale.com
 spec:
   group: planetscale.com
@@ -1863,7 +1867,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.1
+    controller-gen.kubebuilder.io/version: v0.17.2
   name: vitessclusters.planetscale.com
 spec:
   group: planetscale.com
@@ -2028,6 +2032,7 @@ spec:
                               type: string
                             type: object
                           concurrencyPolicy:
+                            default: Forbid
                             enum:
                               - Allow
                               - Forbid
@@ -2099,8 +2104,6 @@ spec:
                                   example: commerce
                                   type: string
                                 name:
-                                  enum:
-                                    - BackupShard
                                   type: string
                                 shard:
                                   example: '-'
@@ -5124,7 +5127,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.1
+    controller-gen.kubebuilder.io/version: v0.17.2
   name: vitesskeyspaces.planetscale.com
 spec:
   group: planetscale.com
@@ -6576,7 +6579,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.1
+    controller-gen.kubebuilder.io/version: v0.17.2
   name: vitessshards.planetscale.com
 spec:
   group: planetscale.com
@@ -7539,9 +7542,36 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: vitess-operator
+  namespace: example
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vitess-operator
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
+metadata:
+  name: vitess-operator-backup-storage
+  namespace: example
+rules:
+  - apiGroups:
+      - planetscale.com
+    resources:
+      - vitessshards
+      - vitessshards/status
+      - vitessshards/finalizers
+      - vitessbackups
+      - vitessbackups/status
+      - vitessbackups/finalizers
+      - vitessbackupstorages
+      - vitessbackupstorages/status
+      - vitessbackupstorages/finalizers
+    verbs:
+      - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
 metadata:
   name: vitess-operator
 rules:
@@ -7631,14 +7661,29 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: vitess-operator
+  name: vitess-operator-backup-storage
+  namespace: example
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
+  name: vitess-operator-backup-storage
+subjects:
+  - kind: ServiceAccount
+    name: vitess-operator
+    namespace: example
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vitess-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
   name: vitess-operator
 subjects:
   - kind: ServiceAccount
     name: vitess-operator
+    namespace: default
 ---
 apiVersion: scheduling.k8s.io/v1
 description: Vitess components (vttablet, vtgate, vtctld, etcd)
@@ -7678,9 +7723,7 @@ spec:
             - vitess-operator
           env:
             - name: WATCH_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
+              value: "default,example"
             - name: POD_NAME
               valueFrom:
                 fieldRef:

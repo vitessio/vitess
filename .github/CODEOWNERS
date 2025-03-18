@@ -20,6 +20,8 @@ go.sum @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 /go/cmd/vtctldclient @mattlord @notfelineit
 /go/cmd/vtctldclient/command/throttler.go @shlomi-noach @mattlord
 /go/cmd/vtctldclient/command/vreplication @mattlord @rohit-nayak-ps @shlomi-noach @notfelineit
+/go/cmd/vtctldclient/command/backups.go @frouioui @mattlord
+/go/cmd/vtbackup @frouioui @deepthi
 /go/internal/flag @rohit-nayak-ps
 /go/mysql @harshit-gangal @systay @mattlord
 /go/pools @deepthi @harshit-gangal
@@ -36,7 +38,7 @@ go.sum @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 /go/vt/dbconnpool @harshit-gangal @mattlord
 /go/vt/discovery @deepthi @frouioui
 /go/vt/discovery/*tablet_picker* @rohit-nayak-ps @mattlord
-/go/vt/mysqlctl @deepthi @mattlord
+/go/vt/mysqlctl @deepthi @mattlord @frouioui
 /go/vt/proto @deepthi @harshit-gangal @mattlord
 /go/vt/proto/vtadmin @notfelineit
 /go/vt/schema @mattlord @shlomi-noach
@@ -56,7 +58,7 @@ go.sum @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 /go/vt/vtctl/reparentutil @GuptaManan100 @deepthi
 /go/vt/vtctl/vtctldclient @notfelineit @mattlord
 /go/vt/vtctld @deepthi @notfelineit @rohit-nayak-ps @mattlord
-/go/vt/vterrors @harshit-gangal @systay
+/go/vt/vterrors @harshit-gangal @systay @frouioui
 /go/vt/vtexplain @systay @harshit-gangal
 /go/vt/vtgate @harshit-gangal @systay @frouioui @GuptaManan100
 /go/vt/vtgate/endtoend/*vstream* @rohit-nayak-ps @mattlord @shlomi-noach @notfelineit
@@ -70,6 +72,7 @@ go.sum @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 /go/vt/vttablet/onlineddl @mattlord @rohit-nayak-ps @shlomi-noach @notfelineit
 /go/vt/vttablet/queryservice @harshit-gangal @systay
 /go/vt/vttablet/tabletmanager @deepthi @GuptaManan100 @rohit-nayak-ps @shlomi-noach
+/go/vt/vttablet/tabletmanager/rpc_backup.go @deepthi @GuptaManan100 @rohit-nayak-ps @shlomi-noach @frouioui
 /go/vt/vttablet/tabletmanager/rpc_throttler.go @shlomi-noach @mattlord @timvaillancourt
 /go/vt/vttablet/tabletserver/throttle @shlomi-noach @mattlord @timvaillancourt
 /go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps @mattlord @shlomi-noach @notfelineit

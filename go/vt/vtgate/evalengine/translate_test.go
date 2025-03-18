@@ -452,3 +452,19 @@ func TestCardinalityWithBindVariables(t *testing.T) {
 		})
 	}
 }
+
+func TestBindVarType(t *testing.T) {
+	lhs := sqlparser.NewTypedArgument("lhs", sqltypes.Int32)
+	rhs := sqlparser.NewTypedArgument("rhs", sqltypes.Int64)
+	venv := vtenv.NewTestEnv()
+	cmp := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     lhs,
+		Right:    rhs,
+	}
+	_, err := Translate(cmp, &Config{
+		Collation:   venv.CollationEnv().DefaultConnectionCharset(),
+		Environment: venv,
+	})
+	require.NoError(t, err)
+}

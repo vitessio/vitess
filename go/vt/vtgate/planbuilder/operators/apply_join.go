@@ -22,6 +22,8 @@ import (
 	"slices"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
+
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -69,10 +71,11 @@ type (
 	//     so they can be used for the result of this expression that is using data from both sides.
 	//     All fields will be used for these
 	applyJoinColumn struct {
-		Original sqlparser.Expr // this is the original expression being passed through
-		LHSExprs []BindVarExpr  // These are the expressions we are pushing to the left hand side which we'll receive as bind variables
-		RHSExpr  sqlparser.Expr // This the expression that we'll evaluate on the right hand side. This is nil, if the right hand side has nothing.
-		GroupBy  bool           // if this is true, we need to push this down to our inputs with addToGroupBy set to true
+		JoinPredicateID *predicates.ID
+		Original        sqlparser.Expr // this is the original expression being passed through
+		LHSExprs        []BindVarExpr  // These are the expressions we are pushing to the left hand side which we'll receive as bind variables
+		RHSExpr         sqlparser.Expr // This the expression that we'll evaluate on the right hand side. This is nil, if the right hand side has nothing.
+		GroupBy         bool           // if this is true, we need to push this down to our inputs with addToGroupBy set to true
 	}
 
 	// BindVarExpr is an expression needed from one side of a join/subquery, and the argument name for it.
@@ -83,7 +86,13 @@ type (
 	}
 )
 
-func NewApplyJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, predicate sqlparser.Expr, joinType sqlparser.JoinType) *ApplyJoin {
+func NewApplyJoin(
+	ctx *plancontext.PlanningContext,
+	lhs, rhs Operator,
+	predicate sqlparser.Expr,
+	joinType sqlparser.JoinType,
+	pushDownPredicate bool,
+) *ApplyJoin {
 	aj := &ApplyJoin{
 		binaryOperator: newBinaryOp(lhs, rhs),
 		Vars:           map[string]int{},
@@ -91,7 +100,7 @@ func NewApplyJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, predicate
 		JoinColumns:    &applyJoinColumns{},
 		JoinPredicates: &applyJoinColumns{},
 	}
-	aj.AddJoinPredicate(ctx, predicate)
+	aj.AddJoinPredicate(ctx, predicate, pushDownPredicate)
 	return aj
 }
 
@@ -139,17 +148,21 @@ func (aj *ApplyJoin) IsInner() bool {
 	return aj.JoinType.IsInner()
 }
 
-func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
+func (aj *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, pushDown bool) {
 	if expr == nil {
 		return
 	}
 	rhs := aj.RHS
-	predicates := sqlparser.SplitAndExpression(nil, expr)
-	for _, pred := range predicates {
-		col := breakExpressionInLHSandRHS(ctx, pred, TableID(aj.LHS))
+	preds := sqlparser.SplitAndExpression(nil, expr)
+	for _, pred := range preds {
+		lhsID := TableID(aj.LHS)
+		col := breakExpressionInLHSandRHS(ctx, pred, lhsID)
+		if pushDown {
+			newPred := ctx.PredTracker.NewJoinPredicate(col.RHSExpr)
+			col.JoinPredicateID = &newPred.ID
+			rhs = rhs.AddPredicate(ctx, newPred)
+		}
 		aj.JoinPredicates.add(col)
-		ctx.AddJoinPredicates(pred, col.RHSExpr)
-		rhs = rhs.AddPredicate(ctx, col.RHSExpr)
 	}
 	aj.RHS = rhs
 }
