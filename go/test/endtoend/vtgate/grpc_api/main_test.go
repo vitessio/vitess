@@ -106,9 +106,9 @@ func TestMain(m *testing.M) {
 
 		// Configure vtgate to use static auth
 		clusterInstance.VtGateExtraArgs = []string{
-			"--grpc_auth_mode", "static",
-			"--grpc_auth_static_password_file", grpcServerAuthStaticPath,
-			"--grpc_use_effective_callerid",
+			"--grpc-auth-mode", "static",
+			"--grpc-auth-static-password-file", grpcServerAuthStaticPath,
+			"--grpc-use-effective-callerid",
 			"--grpc-use-static-authentication-callerid",
 		}
 

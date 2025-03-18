@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 
 	// setting grpc max size
 	if os.Getenv("grpc_max_massage_size") == "" {
-		os.Setenv("grpc_max_message_size", strconv.FormatInt(16*1024*1024, 10))
+		os.Setenv("grpc-max-message-size", strconv.FormatInt(16*1024*1024, 10))
 	}
 
 	exitcode, err := func() (int, error) {

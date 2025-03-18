@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/grpcoptionaltls"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttls"
 )
 
@@ -129,47 +130,48 @@ var (
 // ParseFlags(WithArgs)? if they wish to run a gRPC server.
 func RegisterGRPCServerFlags() {
 	OnParse(func(fs *pflag.FlagSet) {
-		fs.IntVar(&gRPCPort, "grpc_port", gRPCPort, "Port to listen on for gRPC calls. If zero, do not listen.")
-		fs.StringVar(&gRPCBindAddress, "grpc_bind_address", gRPCBindAddress, "Bind address for gRPC calls. If empty, listen on all addresses.")
-		fs.DurationVar(&gRPCMaxConnectionAge, "grpc_max_connection_age", gRPCMaxConnectionAge, "Maximum age of a client connection before GoAway is sent.")
-		fs.DurationVar(&gRPCMaxConnectionAgeGrace, "grpc_max_connection_age_grace", gRPCMaxConnectionAgeGrace, "Additional grace period after grpc_max_connection_age, after which connections are forcibly closed.")
-		fs.IntVar(&gRPCInitialConnWindowSize, "grpc_server_initial_conn_window_size", gRPCInitialConnWindowSize, "gRPC server initial connection window size")
-		fs.IntVar(&gRPCInitialWindowSize, "grpc_server_initial_window_size", gRPCInitialWindowSize, "gRPC server initial window size")
-		fs.DurationVar(&gRPCKeepAliveEnforcementPolicyMinTime, "grpc_server_keepalive_enforcement_policy_min_time", gRPCKeepAliveEnforcementPolicyMinTime, "gRPC server minimum keepalive time")
-		fs.BoolVar(&gRPCKeepAliveEnforcementPolicyPermitWithoutStream, "grpc_server_keepalive_enforcement_policy_permit_without_stream", gRPCKeepAliveEnforcementPolicyPermitWithoutStream, "gRPC server permit client keepalive pings even when there are no active streams (RPCs)")
 
-		fs.StringVar(&gRPCCert, "grpc_cert", gRPCCert, "server certificate to use for gRPC connections, requires grpc_key, enables TLS")
-		fs.StringVar(&gRPCKey, "grpc_key", gRPCKey, "server private key to use for gRPC connections, requires grpc_cert, enables TLS")
-		fs.StringVar(&gRPCCA, "grpc_ca", gRPCCA, "server CA to use for gRPC connections, requires TLS, and enforces client certificate check")
-		fs.StringVar(&gRPCCRL, "grpc_crl", gRPCCRL, "path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake")
-		fs.BoolVar(&gRPCEnableOptionalTLS, "grpc_enable_optional_tls", gRPCEnableOptionalTLS, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port")
-		fs.StringVar(&gRPCServerCA, "grpc_server_ca", gRPCServerCA, "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
-		fs.DurationVar(&gRPCKeepaliveTime, "grpc_server_keepalive_time", gRPCKeepaliveTime, "After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive.")
-		fs.DurationVar(&gRPCKeepaliveTimeout, "grpc_server_keepalive_timeout", gRPCKeepaliveTimeout, "After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
+		utils.SetFlagIntVar(fs, &gRPCPort, "grpc-port", gRPCPort, "Port to listen on for gRPC calls. If zero, do not listen.")
+		utils.SetFlagStringVar(fs, &gRPCBindAddress, "grpc-bind-address", gRPCBindAddress, "Bind address for gRPC calls. If empty, listen on all addresses.")
+		utils.SetFlagDurationVar(fs, &gRPCMaxConnectionAge, "grpc-max-connection-age", gRPCMaxConnectionAge, "Maximum age of a client connection before GoAway is sent.")
+		utils.SetFlagDurationVar(fs, &gRPCMaxConnectionAgeGrace, "grpc-max-connection-age-grace", gRPCMaxConnectionAgeGrace, "Additional grace period after grpc-max-connection-age, after which connections are forcibly closed.")
+		utils.SetFlagIntVar(fs, &gRPCInitialConnWindowSize, "grpc-server-initial-conn-window-size", gRPCInitialConnWindowSize, "gRPC server initial connection window size")
+		utils.SetFlagIntVar(fs, &gRPCInitialWindowSize, "grpc-server-initial-window-size", gRPCInitialWindowSize, "gRPC server initial window size")
+		utils.SetFlagDurationVar(fs, &gRPCKeepAliveEnforcementPolicyMinTime, "grpc-server-keepalive-enforcement-policy-min-time", gRPCKeepAliveEnforcementPolicyMinTime, "gRPC server minimum keepalive time")
+		utils.SetFlagBoolVar(fs, &gRPCKeepAliveEnforcementPolicyPermitWithoutStream, "grpc-server-keepalive-enforcement-policy-permit-without-stream", gRPCKeepAliveEnforcementPolicyPermitWithoutStream, "gRPC server permit client keepalive pings even when there are no active streams (RPCs)")
+
+		utils.SetFlagStringVar(fs, &gRPCCert, "grpc-cert", gRPCCert, "server certificate to use for gRPC connections, requires grpc-key, enables TLS")
+		utils.SetFlagStringVar(fs, &gRPCKey, "grpc-key", gRPCKey, "server private key to use for gRPC connections, requires grpc-cert, enables TLS")
+		utils.SetFlagStringVar(fs, &gRPCCA, "grpc-ca", gRPCCA, "server CA to use for gRPC connections, requires TLS, and enforces client certificate check")
+		utils.SetFlagStringVar(fs, &gRPCCRL, "grpc-crl", gRPCCRL, "path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake")
+		utils.SetFlagBoolVar(fs, &gRPCEnableOptionalTLS, "grpc-enable-optional-tls", gRPCEnableOptionalTLS, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port")
+		utils.SetFlagStringVar(fs, &gRPCServerCA, "grpc-server-ca", gRPCServerCA, "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
+		utils.SetFlagDurationVar(fs, &gRPCKeepaliveTime, "grpc-server-keepalive-time", gRPCKeepaliveTime, "After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive.")
+		utils.SetFlagDurationVar(fs, &gRPCKeepaliveTimeout, "grpc-server-keepalive-timeout", gRPCKeepaliveTimeout, "After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
 	})
 }
 
-// GRPCCert returns the value of the `--grpc_cert` flag.
+// GRPCCert returns the value of the `--grpc-cert` flag.
 func GRPCCert() string {
 	return gRPCCert
 }
 
-// GRPCCertificateAuthority returns the value of the `--grpc_ca` flag.
+// GRPCCertificateAuthority returns the value of the `--grpc-ca` flag.
 func GRPCCertificateAuthority() string {
 	return gRPCCA
 }
 
-// GRPCKey returns the value of the `--grpc_key` flag.
+// GRPCKey returns the value of the `--grpc-key` flag.
 func GRPCKey() string {
 	return gRPCKey
 }
 
-// GRPCPort returns the value of the `--grpc_port` flag.
+// GRPCPort returns the value of the `--grpc-port` flag.
 func GRPCPort() int {
 	return gRPCPort
 }
 
-// GRPCPort returns the value of the `--grpc_bind_address` flag.
+// GRPCPort returns the value of the `--grpc-bind-address` flag.
 func GRPCBindAddress() string {
 	return gRPCBindAddress
 }

@@ -302,14 +302,14 @@ func TestMtlsAuth(t *testing.T) {
 	// When cluster starts it will apply SQL and VSchema migrations in the configured schema_dir folder
 	// With mtls authorization enabled, the authorized CN must match the certificate's CN
 	cluster, err := startCluster(
-		"--grpc_auth_mode=mtls",
-		fmt.Sprintf("--grpc_key=%s", key),
-		fmt.Sprintf("--grpc_cert=%s", cert),
-		fmt.Sprintf("--grpc_ca=%s", caCert),
+		"--grpc-auth-mode=mtls",
+		fmt.Sprintf("--grpc-key=%s", key),
+		fmt.Sprintf("--grpc-cert=%s", cert),
+		fmt.Sprintf("--grpc-ca=%s", caCert),
 		fmt.Sprintf("--vtctld_grpc_key=%s", clientKey),
 		fmt.Sprintf("--vtctld_grpc_cert=%s", clientCert),
 		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
-		fmt.Sprintf("--grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
+		fmt.Sprintf("--grpc-auth-mtls-allowed-substrings=%s", "CN=ClientApp"))
 	require.NoError(t, err)
 	defer func() {
 		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
@@ -344,14 +344,14 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	// For mtls authorization failure by providing a client certificate with different CN thant the
 	// authorized in the configuration
 	cluster, err := startCluster(
-		"--grpc_auth_mode=mtls",
-		fmt.Sprintf("--grpc_key=%s", key),
-		fmt.Sprintf("--grpc_cert=%s", cert),
-		fmt.Sprintf("--grpc_ca=%s", caCert),
+		"--grpc-auth-mode=mtls",
+		fmt.Sprintf("--grpc-key=%s", key),
+		fmt.Sprintf("--grpc-cert=%s", cert),
+		fmt.Sprintf("--grpc-ca=%s", caCert),
 		fmt.Sprintf("--vtctld_grpc_key=%s", clientKey),
 		fmt.Sprintf("--vtctld_grpc_cert=%s", clientCert),
 		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
-		fmt.Sprintf("--grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
+		fmt.Sprintf("--grpc-auth-mtls-allowed-substrings=%s", "CN=ClientApp"))
 	defer cluster.TearDown()
 
 	require.Error(t, err)

@@ -66,7 +66,7 @@ func TestMain(m *testing.M) {
 		// Set extra args for twopc
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			"--transaction_mode", "TWOPC",
-			"--grpc_use_effective_callerid",
+			"--grpc-use-effective-callerid",
 			"--tablet_refresh_interval", "2s",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
