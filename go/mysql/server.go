@@ -324,7 +324,13 @@ func (l *Listener) Accept() {
 		connectionID := l.connectionID
 		l.connectionID++
 
+		maxConWarn := false
 		for l.maxConns > 0 && uint64(connCount.Get()) >= l.maxConns {
+			if !maxConWarn {
+				log.Warning("max connections reached. Clients waiting. Increase server max connections")
+				maxConWarn = true // Logging once for each connection seems adequate.
+			}
+
 			// TODO: make this behavior configurable (wait v. reject)
 			time.Sleep(500 * time.Millisecond)
 		}
