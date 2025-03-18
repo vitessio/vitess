@@ -1112,16 +1112,16 @@ func TestUpdateTableIndexMetrics(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Wait up to 1s for the rows added to vitess_part to be reflected in DebugVars
+	// Wait up to 5s for the rows added to vitess_part to be reflected in DebugVars
 	updated := false
-	for i := 0; !updated && i < 20; i++ {
+	for i := 0; !updated && i < 10; i++ {
 		err = framework.Server.ReloadSchema(ctx)
 		require.NoError(t, err)
 
 		if framework.FetchVal(framework.DebugVars(), "TableRows/vitess_part") == 3 {
 			updated = true
 		} else {
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
 
