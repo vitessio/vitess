@@ -24,12 +24,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 )
 
 // TestKill opens a connection, issues a command that
@@ -440,7 +438,7 @@ func TestMaxRows(t *testing.T) {
 		},
 	}
 
-	sql := "select table_schema, count(*) as table_count from information_schema.tables group by table_schema"
+	sql := "select table_schema, count(*) as table_count from information_schema.tables where table_schema != '_vt' group by table_schema"
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			qr, err := conn.ExecuteFetch(sql, tcase.maxRows, true)
