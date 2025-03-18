@@ -436,7 +436,7 @@ func createQueryTableForDML(
 func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	switch expr := expr.(type) {
 	case *sqlparser.ComparisonExpr:
-		if expr.Operator == sqlparser.EqualOp || expr.Operator == sqlparser.NullSafeEqualOp {
+		if expr.Operator == sqlparser.EqualOp {
 			ctx.SemTable.AddExprEquality(expr.Left, expr.Right)
 		}
 	}
