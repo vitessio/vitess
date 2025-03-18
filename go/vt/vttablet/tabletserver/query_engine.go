@@ -399,12 +399,12 @@ func (qe *QueryEngine) Close() {
 
 var errNoCache = errors.New("plan should not be cached")
 
-func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPlan, error) {
+func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string, noRowsLimit bool) (*TabletPlan, error) {
 	statement, err := qe.env.Environment().Parser().Parse(sql)
 	if err != nil {
 		return nil, err
 	}
-	splan, err := planbuilder.Build(qe.env.Environment(), statement, curSchema.tables, qe.env.Config().DB.DBName, qe.env.Config().EnableViews)
+	splan, err := planbuilder.Build(qe.env.Environment(), statement, curSchema.tables, qe.env.Config().DB.DBName, noRowsLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +419,7 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPla
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in an LRU cache.
-func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
+func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, noRowsLimit bool) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
 
@@ -429,10 +429,10 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	curSchema := qe.schema.Load()
 
 	if skipQueryPlanCache {
-		plan, err = qe.getPlan(curSchema, sql)
+		plan, err = qe.getPlan(curSchema, sql, noRowsLimit)
 	} else {
-		plan, logStats.CachedPlan, err = qe.plans.GetOrLoad(PlanCacheKey(sql), curSchema.epoch, func() (*TabletPlan, error) {
-			return qe.getPlan(curSchema, sql)
+		plan, logStats.CachedPlan, err = qe.plans.GetOrLoad(PlanCacheKey(qe.getPlanCacheKey(sql, noRowsLimit)), curSchema.epoch, func() (*TabletPlan, error) {
+			return qe.getPlan(curSchema, sql, noRowsLimit)
 		})
 	}
 
@@ -492,6 +492,14 @@ func (qe *QueryEngine) GetStreamPlan(ctx context.Context, logStats *tabletenv.Lo
 // gets key used to cache stream query plan
 func (qe *QueryEngine) getStreamPlanCacheKey(sql string) string {
 	return "__STREAM__" + sql
+}
+
+// gets key used to cache stream query plan
+func (qe *QueryEngine) getPlanCacheKey(sql string, noRowsLimit bool) string {
+	if noRowsLimit {
+		return "__UNLIMITED__" + sql
+	}
+	return sql
 }
 
 // GetMessageStreamPlan builds a plan for Message streaming.
