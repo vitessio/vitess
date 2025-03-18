@@ -24,6 +24,7 @@
   - **[KeyRanges in `--clusters_to_watch` in VTOrc](#key-range-vtorc)**
   - **[Support for Filtering Query logs on Error](#query-logs)**
   - **[Semi-sync monitor in vttablet](#semi-sync-monitor)**
+  - **[Wrapped fatal transaction errors](#new-errors-fatal-tx)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[VTTablet ACL enforcement and reloading](#reloading-vttablet-acl)**
@@ -261,6 +262,22 @@ A new component has been added to the vttablet binary to monitor the semi-sync s
 To address this, the new component continuously monitors the semi-sync status. If the primary becomes stuck on semi-sync ACKs, it generates writes to unblock it. If this fails, VTOrc is notified of the issue and initiates an emergency reparent operation.
 
 The monitoring interval can be adjusted using the `--semi-sync-monitor-interval` flag, which defaults to 10 seconds.
+
+---
+
+### <a id="new-errors-fatal-tx"/>Wrapped fatal transaction errors</a>
+
+
+When a query fails while being in a transaction, due to the transaction no longer being valid (e.g. PRS, rollout, primary down, etc), the original error is now wrapped around a `VT15001` error.
+
+For non-transactional queries that produce a `VT15001`, VTGate will try to rollback and clear the transaction.
+Any new queries on the same connection will fail with a `VT09032` error, until a `ROLLBACK` is received
+to acknowledge that the transaction was automatically rolled back and cleared by VTGate.
+
+`VT09032` is returned to clients to avoid applications blindly sending queries to VTGate thinking they are still in a transaction.
+
+This change was introduced by [#17669](https://github.com/vitessio/vitess/pull/17669).
+
 
 ---
 

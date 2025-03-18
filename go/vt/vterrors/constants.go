@@ -33,6 +33,9 @@ const TxEngineClosed = "tx engine can't accept new connections in state %v"
 // WrongTablet for invalid tablet type error
 const WrongTablet = "wrong tablet type"
 
+// ConnectionRefused is for gRPC client not being able to connect to a server
+const ConnectionRefused = "connection refused"
+
 // RxWrongTablet regex for invalid tablet type error
 var RxWrongTablet = regexp.MustCompile("(wrong|invalid) tablet type")
 

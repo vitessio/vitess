@@ -261,7 +261,7 @@ func TestReplicaTransactions(t *testing.T) {
 	_ = replicaTablet.VttabletProcess.TearDown()
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
-	utils.AssertContainsError(t, readConn, fetchAllCustomers, "is either down or nonexistent")
+	utils.AssertContainsMultipleErrors(t, readConn, fetchAllCustomers, "VT15001", "is either down or nonexistent")
 
 	// bring up the tablet again
 	// trying to use the same session/transaction should fail as the vtgate has
@@ -271,7 +271,8 @@ func TestReplicaTransactions(t *testing.T) {
 	require.NoError(t, err)
 	serving := replicaTablet.VttabletProcess.WaitForStatus("SERVING", 60*time.Second)
 	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
-	utils.AssertContainsError(t, readConn, fetchAllCustomers, "not found")
+	utils.AssertContainsError(t, readConn, fetchAllCustomers, "VT09032")
+	utils.Exec(t, readConn, "rollback")
 
 	// create a new connection, should be able to query again
 	readConn, err = mysql.Connect(ctx, &vtParams)
