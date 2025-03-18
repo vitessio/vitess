@@ -1000,10 +1000,6 @@ func (st *SemTable) AddExprEquality(a, b sqlparser.Expr) {
 	st.ExprEqualities.Add(a, b, st.EqualsExprWithDeps)
 }
 
-func (st *SemTable) GetExprEquality(e sqlparser.Expr) []sqlparser.Expr {
-	return st.ExprEqualities.Get(e, st.EqualsExprWithDeps)
-}
-
 func (st *SemTable) ForeachExprEquality(e sqlparser.Expr, f func(expr sqlparser.Expr) error) error {
 	return st.ExprEqualities.Foreach(e, st.EqualsExprWithDeps, f)
 }

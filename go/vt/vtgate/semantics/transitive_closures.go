@@ -33,8 +33,6 @@ type (
 
 		// Both the above fields are used to find the offset into this slice
 		equalities [][]sqlparser.Expr
-
-		comparer func(a, b sqlparser.Expr) bool
 	}
 
 	// ExprWithID is used to keep track of expressions that are not valid as map keys
@@ -56,9 +54,9 @@ func NewTransitiveClosures() *TransitiveClosures {
 	}
 }
 
-func (ce *TransitiveClosures) getID(e sqlparser.Expr, comparer func(a, b sqlparser.Expr) bool) (int, bool) {
+func (tc *TransitiveClosures) getID(e sqlparser.Expr, comparer func(a, b sqlparser.Expr) bool) (int, bool) {
 	if !ValidAsMapKey(e) {
-		for _, id := range ce.notMapKeys {
+		for _, id := range tc.notMapKeys {
 			if comparer(id.Expr, e) {
 				return id.ID, true
 			}
@@ -68,17 +66,17 @@ func (ce *TransitiveClosures) getID(e sqlparser.Expr, comparer func(a, b sqlpars
 	}
 
 	// first let's try to find the expression in the map
-	id, found := ce.exprIDs[e]
+	id, found := tc.exprIDs[e]
 	if found {
 		return id, found
 	}
 
 	// we might still have a match in the map, just not by reference
-	for expr, id := range ce.exprIDs {
+	for expr, id := range tc.exprIDs {
 		if comparer(expr, e) {
 			defer func() {
 				// we do this in the defer so we don't mutate the map while iterating over it
-				ce.exprIDs[e] = id
+				tc.exprIDs[e] = id
 			}()
 			return id, true
 		}
@@ -87,55 +85,61 @@ func (ce *TransitiveClosures) getID(e sqlparser.Expr, comparer func(a, b sqlpars
 	return 0, false
 }
 
-func (ce *TransitiveClosures) setID(in sqlparser.Expr, id int, comparer func(a, b sqlparser.Expr) bool) {
+// setID should be called after updating the equalities slice, so that the ID we are setting actually exists.
+// e.g. call Add adds to the slice and then calls setID.
+func (tc *TransitiveClosures) setID(in sqlparser.Expr, id int, comparer func(a, b sqlparser.Expr) bool) {
 	if ValidAsMapKey(in) {
 		// we need to use the comparer to find the expression in the map
-		for expr := range ce.exprIDs {
+		for expr := range tc.exprIDs {
 			if comparer(expr, in) {
 				defer func() {
 					// we do this in the defer so we don't mutate the map while iterating over it
-					ce.exprIDs[expr] = id
+					tc.exprIDs[expr] = id
 				}()
 			}
 		}
 
-		ce.exprIDs[in] = id
+		tc.exprIDs[in] = id
 		return
 	}
 
-	for idx, notMap := range ce.notMapKeys {
+	var foundMatch bool
+	for idx, notMap := range tc.notMapKeys {
 		if comparer(notMap.Expr, in) {
-			ce.notMapKeys[idx].ID = id
-			return
+			foundMatch = true
+			tc.notMapKeys[idx].ID = id
 		}
 	}
-	ce.notMapKeys = append(ce.notMapKeys, ExprWithID{Expr: in, ID: id})
+	if !foundMatch {
+		tc.notMapKeys = append(tc.notMapKeys, ExprWithID{Expr: in, ID: id})
+	}
 }
 
 // Add adds a new equality to the TransitiveClosures
-func (ce *TransitiveClosures) Add(lhs, rhs sqlparser.Expr, comparer func(a, b sqlparser.Expr) bool) {
-	lhsID, lok := ce.getID(lhs, comparer)
-	rhsID, rok := ce.getID(rhs, comparer)
-	if !lok && !rok {
+func (tc *TransitiveClosures) Add(lhs, rhs sqlparser.Expr, comparer func(a, b sqlparser.Expr) bool) {
+	lhsID, leftKnown := tc.getID(lhs, comparer)
+	rhsID, rightKnown := tc.getID(rhs, comparer)
+	if !leftKnown && !rightKnown {
 		// neither expression is known
-		id := len(ce.equalities)
-		ce.equalities = append(ce.equalities, []sqlparser.Expr{lhs, rhs})
-		ce.setID(lhs, id, comparer)
-		ce.setID(rhs, id, comparer)
+		id := len(tc.equalities)
+		tc.equalities = append(tc.equalities, []sqlparser.Expr{lhs, rhs})
+		tc.setID(lhs, id, comparer)
+		tc.setID(rhs, id, comparer)
 		return
 	}
 
-	if !lok {
+	if !leftKnown {
 		// lhs is not known
-		ce.equalities[rhsID] = append(ce.equalities[rhsID], lhs)
-		ce.setID(lhs, rhsID, comparer)
+		tc.equalities[rhsID] = append(tc.equalities[rhsID], lhs)
+		tc.setID(lhs, rhsID, comparer)
 		return
 	}
 
-	if !rok {
+	if !rightKnown {
 		// rhs is not known
-		ce.equalities[lhsID] = append(ce.equalities[lhsID], rhs)
-		ce.setID(rhs, lhsID, comparer)
+		tc.equalities[lhsID] = append(tc.equalities[lhsID], rhs)
+		tc.setID(rhs, lhsID, comparer)
+		return
 	}
 
 	// merge the two sets
@@ -143,51 +147,37 @@ func (ce *TransitiveClosures) Add(lhs, rhs sqlparser.Expr, comparer func(a, b sq
 		var smallerID, largerID int
 		var smaller, larger []sqlparser.Expr
 
-		if len(ce.equalities[lhsID]) < len(ce.equalities[rhsID]) {
-			smallerID = lhsID
-			largerID = rhsID
-			smaller = ce.equalities[lhsID]
-			larger = ce.equalities[rhsID]
+		if len(tc.equalities[lhsID]) < len(tc.equalities[rhsID]) {
+			smallerID, largerID = lhsID, rhsID
 		} else {
-			smallerID = rhsID
-			largerID = lhsID
-			smaller = ce.equalities[rhsID]
-			larger = ce.equalities[lhsID]
+			smallerID, largerID = rhsID, lhsID
 		}
+		smaller = tc.equalities[smallerID]
+		larger = tc.equalities[largerID]
 
-		ce.equalities[largerID] = append(larger, smaller...)
+		tc.equalities[largerID] = append(larger, smaller...)
 		// we don't want to shuffle any elements around, so we just set the smaller set to nil
-		ce.equalities[smallerID] = nil
+		tc.equalities[smallerID] = nil
 
 		for _, expr := range smaller {
-			ce.setID(expr, largerID, comparer)
+			tc.setID(expr, largerID, comparer)
 		}
 	}
-}
-
-// Get returns all expressions that are equal to the given expression
-func (ce *TransitiveClosures) Get(expr sqlparser.Expr, comparer func(a, b sqlparser.Expr) bool) []sqlparser.Expr {
-	id, found := ce.getID(expr, comparer)
-	if !found {
-		return []sqlparser.Expr{expr}
-	}
-
-	return ce.equalities[id]
 }
 
 // Foreach calls the given function for all expressions that are equal to the given expression
-func (ce *TransitiveClosures) Foreach(expr sqlparser.Expr, comparer func(a, b sqlparser.Expr) bool, f func(expr sqlparser.Expr) error) error {
+func (tc *TransitiveClosures) Foreach(expr sqlparser.Expr, comparer func(a, b sqlparser.Expr) bool, f func(expr sqlparser.Expr) error) error {
 	// always start with the given expression
 	if err := f(expr); err != nil {
 		return err
 	}
 
-	id, found := ce.getID(expr, comparer)
+	id, found := tc.getID(expr, comparer)
 	if !found {
-		return f(expr)
+		return nil
 	}
 
-	for _, e := range ce.equalities[id] {
+	for _, e := range tc.equalities[id] {
 		err := f(e)
 		if err != nil {
 			return err

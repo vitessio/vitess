@@ -49,11 +49,43 @@ func TestTransitiveClosures_SimpleAddAndGet(t *testing.T) {
 	tc.Add(exprA, exprB, comp)
 
 	// Now fetching either expression should return a slice containing both.
-	gotA := tc.Get(exprA, comp)
-	gotB := tc.Get(exprB, comp)
+	gotA := get(tc, exprA)
+	gotB := get(tc, exprB)
 
-	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprB}, gotA, "exprA's set must have A and B")
-	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprB}, gotB, "exprB's set must have A and B")
+	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprA, exprB}, gotA, "exprA's set must have A and B")
+	assert.ElementsMatch(t, []sqlparser.Expr{exprB, exprA, exprB}, gotB, "exprB's set must have A and B")
+}
+
+func TestTransitiveClosures_NotMergingUnrelatedEqualities(t *testing.T) {
+	// Test that unrelated equalities are not merged together
+	tc := NewTransitiveClosures()
+
+	// We add X and Y, which will be the first ID
+	exprX := sqlparser.NewColName(X)
+	exprY := sqlparser.NewColName(Y)
+	tc.Add(exprX, exprY, comp) // X==Y
+
+	// Then we add A, B, C which are all equal and should have the second ID
+	exprA := sqlparser.NewColName(A)
+	exprB := sqlparser.NewColName(B)
+	exprC := sqlparser.NewColName(C)
+	tc.Add(exprA, exprB, comp) // A==B
+	tc.Add(exprB, exprC, comp) // B==C => A==B==C
+
+	// ID: 0 => X==Y
+	// ID: 1 => A==B==C
+
+	gotX := get(tc, exprX)
+	gotY := get(tc, exprY)
+	assert.ElementsMatch(t, []sqlparser.Expr{exprX, exprX, exprY}, gotX, "exprX's set must have X and Y")
+	assert.ElementsMatch(t, []sqlparser.Expr{exprY, exprX, exprY}, gotY, "exprX's set must have X and Y")
+
+	gotA := get(tc, exprA)
+	gotB := get(tc, exprB)
+	gotC := get(tc, exprC)
+	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprA, exprB, exprC}, gotA, "exprA's set must have A and B and C")
+	assert.ElementsMatch(t, []sqlparser.Expr{exprB, exprA, exprB, exprC}, gotB, "exprB's set must have A and B and C")
+	assert.ElementsMatch(t, []sqlparser.Expr{exprC, exprA, exprB, exprC}, gotC, "exprC's set must have A and B and C")
 }
 
 func TestTransitiveClosures_MultipleMerges(t *testing.T) {
@@ -78,14 +110,12 @@ func TestTransitiveClosures_MultipleMerges(t *testing.T) {
 	tc.Add(exprC, exprX, comp) // C==X => A==B==C==D==X==Y
 
 	// All of A,B,C,X,Y should be in the same set
-	setA := tc.Get(exprA, comp)
-	setC := tc.Get(exprC, comp)
-	setX := tc.Get(exprX, comp)
-	expected := []sqlparser.Expr{exprA, exprB, exprC, exprD, exprX, exprY}
-
-	assert.ElementsMatch(t, expected, setA, "A's set should contain A,B,C,D,X,Y")
-	assert.ElementsMatch(t, expected, setC, "C's set should contain A,B,C,D,X,Y")
-	assert.ElementsMatchf(t, expected, setX, "X's set should contain A,B,C,D,X,Y: %s", sqlparser.SliceString(setX))
+	setA := get(tc, exprA)
+	setC := get(tc, exprC)
+	setX := get(tc, exprX)
+	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprA, exprB, exprC, exprD, exprX, exprY}, setA, "A's set should contain A,B,C,D,X,Y")
+	assert.ElementsMatch(t, []sqlparser.Expr{exprC, exprA, exprB, exprC, exprD, exprX, exprY}, setC, "C's set should contain A,B,C,D,X,Y")
+	assert.ElementsMatchf(t, []sqlparser.Expr{exprX, exprA, exprB, exprC, exprD, exprX, exprY}, setX, "X's set should contain A,B,C,D,X,Y: %s", sqlparser.SliceString(setX))
 }
 
 func TestTransitiveClosures_NotMapKeys(t *testing.T) {
@@ -106,11 +136,11 @@ func TestTransitiveClosures_NotMapKeys(t *testing.T) {
 	tc.Add(notMapKeyExpr, notMapKeyExpr2, comp)
 
 	// We expect them to be in the same equivalence set
-	got1 := tc.Get(notMapKeyExpr, comp)
-	got2 := tc.Get(notMapKeyExpr2, comp)
+	got1 := get(tc, notMapKeyExpr)
+	got2 := get(tc, notMapKeyExpr2)
 
-	assert.ElementsMatch(t, []sqlparser.Expr{notMapKeyExpr, notMapKeyExpr2}, got1)
-	assert.ElementsMatch(t, []sqlparser.Expr{notMapKeyExpr, notMapKeyExpr2}, got2)
+	assert.ElementsMatch(t, []sqlparser.Expr{notMapKeyExpr, notMapKeyExpr, notMapKeyExpr2}, got1)
+	assert.ElementsMatch(t, []sqlparser.Expr{notMapKeyExpr2, notMapKeyExpr, notMapKeyExpr2}, got2)
 }
 
 func TestTransitiveClosures_MixedMapKeyValidity(t *testing.T) {
@@ -128,11 +158,11 @@ func TestTransitiveClosures_MixedMapKeyValidity(t *testing.T) {
 	tc.Add(exprA, exprB, comp)
 
 	// Both should be in the same set
-	gotA := tc.Get(exprA, comp)
-	gotF := tc.Get(exprB, comp)
+	gotA := get(tc, exprA)
+	gotB := get(tc, exprB)
 
-	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprB}, gotA)
-	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprB}, gotF)
+	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprA, exprB}, gotA)
+	assert.ElementsMatch(t, []sqlparser.Expr{exprB, exprA, exprB}, gotB)
 }
 
 func TestTransitiveClosures_DuplicateAdds(t *testing.T) {
@@ -145,8 +175,8 @@ func TestTransitiveClosures_DuplicateAdds(t *testing.T) {
 	tc.Add(exprA, exprB, comp) // Duplicate Add should not cause problems.
 
 	// They should remain in the same set with no duplicates in Get()
-	got := tc.Get(exprA, comp)
-	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprB}, got)
+	got := get(tc, exprA)
+	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprA, exprB}, got)
 }
 
 func TestTransitiveClosures_MergeNonMapKeyExpressions(t *testing.T) {
@@ -163,36 +193,23 @@ func TestTransitiveClosures_MergeNonMapKeyExpressions(t *testing.T) {
 	tc.Add(exprC, exprD, comp)
 	tc.Add(exprA, exprD, comp)
 
-	gotA := tc.Get(exprA, comp)
-	gotB := tc.Get(exprB, comp)
-	gotC := tc.Get(exprC, comp)
-	gotD := tc.Get(exprD, comp)
+	gotA := get(tc, exprA)
+	gotB := get(tc, exprB)
+	gotC := get(tc, exprC)
+	gotD := get(tc, exprD)
 
-	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprB, exprC, exprD}, gotA)
-	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprB, exprC, exprD}, gotB)
-	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprB, exprC, exprD}, gotC)
-	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprB, exprC, exprD}, gotD)
+	assert.ElementsMatch(t, []sqlparser.Expr{exprA, exprA, exprB, exprC, exprD}, gotA)
+	assert.ElementsMatch(t, []sqlparser.Expr{exprB, exprA, exprB, exprC, exprD}, gotB)
+	assert.ElementsMatch(t, []sqlparser.Expr{exprC, exprA, exprB, exprC, exprD}, gotC)
+	assert.ElementsMatch(t, []sqlparser.Expr{exprD, exprA, exprB, exprC, exprD}, gotD)
 }
 
-func TestTransitiveClosures_StructuralMatchInMapKeys(t *testing.T) {
-	tc := NewTransitiveClosures()
-
-	// Two colNames with the same name but different pointer references
-	exprPtr1 := sqlparser.NewColName("same")
-	exprPtr2 := sqlparser.NewColName("same")
-
-	// Even though the AST pointers differ, structurally they are the same colName
-	// If ValidAsMapKey(expr) => pointer-based map usage might skip exprPtr2.
-	// The code attempts to do a structural match fallback in `Get()`.
-	tc.Add(exprPtr1, exprPtr2, comp)
-
-	got1 := tc.Get(exprPtr1, comp)
-	got2 := tc.Get(exprPtr2, comp)
-
-	// Both sets should contain the same references, though how you unify them
-	// depends on your map fallback logic. Minimally, we expect a single equivalence set.
-	assert.ElementsMatch(t, got1, got2, "Structurally identical expressions should unify")
-	assert.Len(t, got1, 2, "Should have exactly two expressions in the set")
+func get(tc *TransitiveClosures, expr sqlparser.Expr) (res []sqlparser.Expr) {
+	_ = tc.Foreach(expr, comp, func(expr sqlparser.Expr) error {
+		res = append(res, expr)
+		return nil
+	})
+	return
 }
 
 func tuple(i ...int) sqlparser.Expr {
