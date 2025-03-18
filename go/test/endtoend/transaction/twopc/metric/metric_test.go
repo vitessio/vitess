@@ -120,14 +120,14 @@ func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, err = conn.Execute(ctx, "begin", nil)
+	_, err = conn.Execute(ctx, "begin", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(ctx, "insert into twopc_user(id, name) values(7,'foo'), (8,'bar')", nil)
+	_, err = conn.Execute(ctx, "insert into twopc_user(id, name) values(7,'foo'), (8,'bar')", nil, false)
 	require.NoError(t, err)
 
 	// fail after mm commit.
 	newCtx := callerid.NewContext(ctx, callerid.NewEffectiveCallerID("MMCommitted_FailNow", "", ""), nil)
-	_, err = conn.Execute(newCtx, "commit", nil)
+	_, err = conn.Execute(newCtx, "commit", nil, false)
 	require.ErrorContains(t, err, "Fail After MM commit")
 
 	updatedCount := getVarValue[float64](t, "CommitUnresolved", clusterInstance.VtgateProcess.GetVars)
@@ -135,16 +135,16 @@ func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
 
 	waitForResolve(ctx, t, conn, 5*time.Second)
 
-	_, err = conn.Execute(ctx, "begin", nil)
+	_, err = conn.Execute(ctx, "begin", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(ctx, "insert into twopc_user(id, name) values(9,'foo')", nil)
+	_, err = conn.Execute(ctx, "insert into twopc_user(id, name) values(9,'foo')", nil, false)
 	require.NoError(t, err)
-	_, err = conn.Execute(ctx, "insert into twopc_user(id, name) values(10,'apa')", nil)
+	_, err = conn.Execute(ctx, "insert into twopc_user(id, name) values(10,'apa')", nil, false)
 	require.NoError(t, err)
 
 	// fail during rm commit.
 	newCtx = callerid.NewContext(ctx, callerid.NewEffectiveCallerID("RMCommit_-40_FailNow", "", ""), nil)
-	_, err = conn.Execute(newCtx, "commit", nil)
+	_, err = conn.Execute(newCtx, "commit", nil, false)
 	require.ErrorContains(t, err, "Fail During RM commit")
 
 	updatedCount = getVarValue[float64](t, "CommitUnresolved", clusterInstance.VtgateProcess.GetVars)
@@ -167,16 +167,16 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 	defer cancel()
 
 	for i := 1; i <= 20; i++ {
-		_, err = conn.Execute(ctx, "begin", nil)
+		_, err = conn.Execute(ctx, "begin", nil, false)
 		require.NoError(t, err)
 		query := fmt.Sprintf("insert into twopc_user(id, name) values(%d,'foo'), (%d,'bar'), (%d,'baz')", i, i*101, i+53)
-		_, err = conn.Execute(ctx, query, nil)
+		_, err = conn.Execute(ctx, query, nil, false)
 		require.NoError(t, err)
 
 		multi := len(conn.SessionPb().ShardSessions) > 1
 
 		// fail after mm commit.
-		_, err = conn.Execute(ctx, "commit", nil)
+		_, err = conn.Execute(ctx, "commit", nil, false)
 		if multi {
 			assert.ErrorContains(t, err, "Fail After MM commit")
 		} else {
@@ -224,7 +224,7 @@ func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
 	execute(t, newCtx, conn, "insert into twopc_t1(id, col) values (4, 1)")
 	execute(t, newCtx, conn, "insert into twopc_t1(id, col) values (6, 2)")
 	execute(t, newCtx, conn, "insert into twopc_t1(id, col) values (9, 3)")
-	_, err = conn.Execute(newCtx, "commit", nil)
+	_, err = conn.Execute(newCtx, "commit", nil, false)
 	require.ErrorContains(t, err, "commit prepared: retryable error")
 	dtidRetryable := getDTIDFromWarnings(ctx, t, conn)
 	require.NotEmpty(t, dtidRetryable)
@@ -238,7 +238,7 @@ func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
 	execute(t, newCtx, conn, "insert into twopc_t1(id, col) values (20, 11)")
 	execute(t, newCtx, conn, "insert into twopc_t1(id, col) values (22, 21)")
 	execute(t, newCtx, conn, "insert into twopc_t1(id, col) values (25, 31)")
-	_, err = conn.Execute(newCtx, "commit", nil)
+	_, err = conn.Execute(newCtx, "commit", nil, false)
 	require.ErrorContains(t, err, "commit prepared: non retryable error")
 	dtidNonRetryable := getDTIDFromWarnings(ctx, t, conn)
 	require.NotEmpty(t, dtidNonRetryable)
@@ -255,7 +255,7 @@ func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
 	waitForDTIDResolve(ctx, t, conn, dtidRetryable, 5*time.Second)
 
 	// dtid with non retryable error should remain unresolved.
-	qr, err := conn.Execute(ctx, fmt.Sprintf(`show transaction status for '%s'`, dtidNonRetryable), nil)
+	qr, err := conn.Execute(ctx, fmt.Sprintf(`show transaction status for '%s'`, dtidNonRetryable), nil, false)
 	require.NoError(t, err)
 	require.NotZero(t, qr.Rows, "should remain unresolved")
 
@@ -265,7 +265,7 @@ func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, out, "Successfully concluded the distributed transaction")
 	// now verifying
-	qr, err = conn.Execute(ctx, fmt.Sprintf(`show transaction status for '%s'`, dtidNonRetryable), nil)
+	qr, err = conn.Execute(ctx, fmt.Sprintf(`show transaction status for '%s'`, dtidNonRetryable), nil, false)
 	require.NoError(t, err)
 	require.Empty(t, qr.Rows)
 }
@@ -273,7 +273,7 @@ func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
 func execute(t *testing.T, ctx context.Context, conn *vtgateconn.VTGateSession, query string) {
 	t.Helper()
 
-	_, err := conn.Execute(ctx, query, nil)
+	_, err := conn.Execute(ctx, query, nil, false)
 	require.NoError(t, err)
 }
 
@@ -364,7 +364,7 @@ func waitForResolve(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateSe
 }
 
 func getDTIDFromWarnings(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateSession) string {
-	qr, err := conn.Execute(ctx, "show warnings", nil)
+	qr, err := conn.Execute(ctx, "show warnings", nil, false)
 	require.NoError(t, err)
 	require.Len(t, qr.Rows, 1)
 
@@ -388,7 +388,7 @@ func waitForDTIDResolve(ctx context.Context, t *testing.T, conn *vtgateconn.VTGa
 			t.Errorf("transaction resolution exceeded wait time of %v", waitTime)
 			unresolved = false // break the loop.
 		case <-time.After(100 * time.Millisecond):
-			qr, err := conn.Execute(ctx, fmt.Sprintf(`show transaction status for '%s'`, dtid), nil)
+			qr, err := conn.Execute(ctx, fmt.Sprintf(`show transaction status for '%s'`, dtid), nil, false)
 			require.NoError(t, err)
 			unresolved = len(qr.Rows) != 0
 		}

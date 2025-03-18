@@ -218,8 +218,18 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilenam
 	}
 
 	// Build the command.
-	sidBlock := gtidSet.SIDBlock()
-	return c.WriteComBinlogDumpGTID(serverID, binlogFilename, 4, 0, sidBlock)
+	var sidBlock []byte
+	if gtidSet != nil {
+		sidBlock = gtidSet.SIDBlock()
+	}
+	var flags2 uint16
+	if binlogFilename != "" {
+		flags2 |= BinlogThroughPosition
+	}
+	if len(sidBlock) > 0 {
+		flags2 |= BinlogThroughGTID
+	}
+	return c.WriteComBinlogDumpGTID(serverID, binlogFilename, 4, flags2, sidBlock)
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.
@@ -477,7 +487,12 @@ const InnoDBTableSizes = `
 
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor57) baseShowTablesWithSizes() string {
-	return TablesWithSize57
+	// For 5.7, we use the base query instead of the query with sizes. Flavor57 should only be used
+	// for unmanaged tables during import. We don't need to know the size of the tables in that case since
+	// the size information is mainly used by Online DDL.
+	// The TablesWithSize57 query can be very non-performant on some external databases, for example on Aurora with
+	// a large number of tables, it can time out often.
+	return BaseShowTables
 }
 
 // baseShowInnodbTableSizes is part of the Flavor interface.

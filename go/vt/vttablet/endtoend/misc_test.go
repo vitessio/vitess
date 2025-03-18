@@ -1042,8 +1042,8 @@ func TestEngineReload(t *testing.T) {
 					assert.Zero(t, tbl.FileSize)
 					assert.Zero(t, tbl.AllocatedSize)
 				default:
-					assert.NotZero(t, tbl.FileSize)
-					assert.NotZero(t, tbl.AllocatedSize)
+					assert.Zero(t, tbl.FileSize)
+					assert.Zero(t, tbl.AllocatedSize)
 				}
 			})
 		}
@@ -1082,8 +1082,8 @@ func TestEngineReload(t *testing.T) {
 					assert.Zero(t, tbl.FileSize)
 					assert.Zero(t, tbl.AllocatedSize)
 				default:
-					assert.NotZero(t, tbl.FileSize)
-					assert.NotZero(t, tbl.AllocatedSize)
+					assert.Zero(t, tbl.FileSize)
+					assert.Zero(t, tbl.AllocatedSize)
 				}
 			})
 		}
@@ -1193,4 +1193,45 @@ func TestTuple(t *testing.T) {
 	res, err = client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
 	require.NoError(t, err)
 	require.Zero(t, len(res.Rows))
+}
+
+// TestMaxRows tests different scenarios with max rows.
+func TestMaxRows(t *testing.T) {
+	oldPT := framework.Server.Config().PassthroughDML
+	oldMR := framework.Server.MaxResultSize()
+	defer func() {
+		framework.Server.SetPassthroughDMLs(oldPT)
+		framework.Server.SetMaxResultSize(oldMR)
+	}()
+
+	client := framework.NewClient()
+
+	_, err := client.Execute(`insert into maxrows_tbl (id, col) values (100, 200), (300, 400)`, nil)
+	require.NoError(t, err)
+
+	framework.Server.SetMaxResultSize(1)
+	_, err = client.Execute(`select * from maxrows_tbl`, nil)
+	require.ErrorContains(t, err, "Row count exceeded 1")
+
+	// setting passthrough dml to true
+	framework.Server.Config().PassthroughDML = true
+
+	// this should still fail as InDMLExecution should be true as well.
+	_, err = client.Execute(`select * from maxrows_tbl`, nil)
+	require.ErrorContains(t, err, "Row count exceeded 1")
+
+	// setting InDMLExecution to true
+	inDMLExecOption := &querypb.ExecuteOptions{InDmlExecution: true}
+
+	// this should still fail as it only works inside a transaction
+	_, err = client.ExecuteWithOptions(`select * from maxrows_tbl`, nil, inDMLExecOption)
+	require.ErrorContains(t, err, "[BUG] SelectNoLimit unexpected plan type", "this is expected only inside a transaction")
+
+	// this should work as it is inside a transaction.
+	require.NoError(t,
+		client.Begin(false))
+	_, err = client.ExecuteWithOptions(`select * from maxrows_tbl`, nil, inDMLExecOption)
+	require.NoError(t, err, "Passthrough DML with In DML Execution should not be affected by max rows")
+	require.NoError(t,
+		client.Commit())
 }

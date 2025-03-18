@@ -275,7 +275,7 @@ func positionAtLeast(t *testing.T, tablet *Vttablet, a string, b string) bool {
 
 // ExecuteQueriesUsingVtgate sends query to vtgate using vtgate session.
 func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
-	_, err := session.Execute(context.Background(), query, nil)
+	_, err := session.Execute(context.Background(), query, nil, false)
 	require.Nil(t, err)
 }
 
@@ -297,22 +297,6 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 
 	return cp
 
-}
-
-func filterDoubleDashArgs(args []string, version int) (filtered []string) {
-	if version > 13 {
-		return args
-	}
-
-	for _, arg := range args {
-		if arg == "--" {
-			continue
-		}
-
-		filtered = append(filtered, arg)
-	}
-
-	return filtered
 }
 
 // WriteDbCredentialToTmp writes JSON formatted db credentials to the

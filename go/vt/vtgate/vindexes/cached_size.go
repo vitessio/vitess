@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,13 +17,7 @@ limitations under the License.
 
 package vindexes
 
-import (
-	"math"
-	"reflect"
-	"unsafe"
-
-	hack "vitess.io/vitess/go/hack"
-)
+import hack "vitess.io/vitess/go/hack"
 
 type cachedObject interface {
 	CachedSize(alloc bool) int64
@@ -327,14 +321,7 @@ func (cached *MultiCol) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field columnVdx map[int]vitess.io/vitess/go/vt/vtgate/vindexes.Hashing
 	if cached.columnVdx != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.columnVdx)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
-		if len(cached.columnVdx) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
-		}
+		size += hack.RuntimeMapSize(cached.columnVdx)
 		for _, v := range cached.columnVdx {
 			if cc, ok := v.(cachedObject); ok {
 				size += cc.CachedSize(true)
@@ -343,14 +330,7 @@ func (cached *MultiCol) CachedSize(alloc bool) int64 {
 	}
 	// field columnBytes map[int]int
 	if cached.columnBytes != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.columnBytes)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 144))
-		if len(cached.columnBytes) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 144))
-		}
+		size += hack.RuntimeMapSize(cached.columnBytes)
 	}
 	return size
 }
@@ -392,6 +372,17 @@ func (cached *Numeric) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *NumericLookupTable) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	size += hack.RuntimeMapSize(*cached)
+	return size
+}
 
 //go:nocheckptr
 func (cached *NumericStaticMap) CachedSize(alloc bool) int64 {
@@ -410,14 +401,7 @@ func (cached *NumericStaticMap) CachedSize(alloc bool) int64 {
 	}
 	// field lookup vitess.io/vitess/go/vt/vtgate/vindexes.NumericLookupTable
 	if cached.lookup != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.lookup)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 144))
-		if len(cached.lookup) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 144))
-		}
+		size += hack.RuntimeMapSize(cached.lookup)
 	}
 	// field unknownParams []string
 	{
@@ -461,14 +445,7 @@ func (cached *RegionJSON) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field regionMap vitess.io/vitess/go/vt/vtgate/vindexes.RegionMap
 	if cached.regionMap != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.regionMap)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
-		if len(cached.regionMap) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
-		}
+		size += hack.RuntimeMapSize(cached.regionMap)
 		for k := range cached.regionMap {
 			size += hack.RuntimeAllocSize(int64(len(k)))
 		}
@@ -480,6 +457,17 @@ func (cached *RegionJSON) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
+	return size
+}
+func (cached *RegionMap) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	size += hack.RuntimeMapSize(*cached)
 	return size
 }
 func (cached *ReverseBits) CachedSize(alloc bool) int64 {

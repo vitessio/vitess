@@ -2,6 +2,7 @@ apiVersion: planetscale.com/v2
 kind: VitessCluster
 metadata:
   name: example
+  namespace: example
 spec:
   backup:
     engine: xtrabackup
@@ -11,8 +12,8 @@ spec:
             path: /tmp
             type: Directory
     schedules:
-      - name: "every-minute-customer"
-        schedule: "* * * * *"
+      - name: "commerce"
+        schedule: "*/2 * * * *"
         resources:
           requests:
             cpu: 100m
@@ -23,27 +24,27 @@ spec:
         failedJobsHistoryLimit: 3
         jobTimeoutMinute: 5
         strategies:
-          - name: BackupShard
-            keyspace: "customer"
-            shard: "-80"
-          - name: BackupShard
-            keyspace: "customer"
-            shard: "80-"
-      - name: "every-minute-commerce"
-        schedule: "* * * * *"
-        resources:
-          requests:
-            cpu: 100m
-            memory: 1024Mi
-          limits:
-            memory: 1024Mi
-        successfulJobsHistoryLimit: 2
-        failedJobsHistoryLimit: 3
-        jobTimeoutMinute: 5
-        strategies:
-          - name: BackupShard
+          - name: commerce_x
             keyspace: "commerce"
             shard: "-"
+      - name: "customer"
+        schedule: "*/2 * * * *"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 1024Mi
+          limits:
+            memory: 1024Mi
+        successfulJobsHistoryLimit: 2
+        failedJobsHistoryLimit: 3
+        jobTimeoutMinute: 5
+        strategies:
+          - name: customer_80-x
+            keyspace: "customer"
+            shard: "80-"
+          - name: customer_x-80
+            keyspace: "customer"
+            shard: "-80"
   images:
     vtctld: vitess/lite:latest
     vtadmin: vitess/vtadmin:latest
@@ -53,7 +54,7 @@ spec:
     vtorc: vitess/lite:latest
     mysqld:
       mysql80Compatible: vitess/lite:latest
-    mysqldExporter: prom/mysqld-exporter:v0.11.0
+    mysqldExporter: prom/mysqld-exporter:v0.14.0
   cells:
   - name: zone1
     gateway:

@@ -26,16 +26,7 @@ func TestReadOnlyPolicy(t *testing.T) {
 	testReadOnlyPolicy := readOnlyPolicy{}
 
 	want := errReadOnly
-	err := testReadOnlyPolicy.CheckAccessActor("", ADMIN)
-	assert.Equalf(t, err, want, "got %v; want %v", err, want)
-
-	err = testReadOnlyPolicy.CheckAccessActor("", DEBUGGING)
-	assert.Equalf(t, err, nil, "got %v; want no error", err)
-
-	err = testReadOnlyPolicy.CheckAccessActor("", MONITORING)
-	assert.Equalf(t, err, nil, "got %v; want no error", err)
-
-	err = testReadOnlyPolicy.CheckAccessHTTP(nil, ADMIN)
+	err := testReadOnlyPolicy.CheckAccessHTTP(nil, ADMIN)
 	assert.Equalf(t, err, want, "got %v; want %v", err, want)
 
 	err = testReadOnlyPolicy.CheckAccessHTTP(nil, DEBUGGING)

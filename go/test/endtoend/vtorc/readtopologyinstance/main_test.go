@@ -50,9 +50,9 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 
 	// Change the args such that they match how we would invoke VTOrc
 	os.Args = []string{"vtorc",
-		"--topo_global_server_address", clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalAddress,
-		"--topo_implementation", clusterInfo.ClusterInstance.VtctlProcess.TopoImplementation,
-		"--topo_global_root", clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalRoot,
+		"--topo_global_server_address", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalAddress,
+		"--topo_implementation", clusterInfo.ClusterInstance.VtctldClientProcess.TopoImplementation,
+		"--topo_global_root", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalRoot,
 	}
 	servenv.ParseFlags("vtorc")
 	config.SetInstancePollTime(1 * time.Second)
@@ -91,6 +91,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.True(t, primaryInstance.SemiSyncReplicaEnabled)
 	assert.True(t, primaryInstance.SemiSyncPrimaryStatus)
 	assert.False(t, primaryInstance.SemiSyncReplicaStatus)
+	assert.False(t, primaryInstance.SemiSyncBlocked)
 	assert.EqualValues(t, 2, primaryInstance.SemiSyncPrimaryClients)
 	assert.EqualValues(t, 1, primaryInstance.SemiSyncPrimaryWaitForReplicaCount)
 	assert.EqualValues(t, 1000000000000000000, primaryInstance.SemiSyncPrimaryTimeout)
@@ -142,6 +143,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.False(t, replicaInstance.SemiSyncPrimaryEnabled)
 	assert.True(t, replicaInstance.SemiSyncReplicaEnabled)
 	assert.False(t, replicaInstance.SemiSyncPrimaryStatus)
+	assert.False(t, replicaInstance.SemiSyncBlocked)
 	assert.True(t, replicaInstance.SemiSyncReplicaStatus)
 	assert.EqualValues(t, 0, replicaInstance.SemiSyncPrimaryClients)
 	assert.EqualValues(t, 1, replicaInstance.SemiSyncPrimaryWaitForReplicaCount)

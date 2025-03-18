@@ -24,28 +24,86 @@ import (
 
 //go:generate go run ../main --in . --iface vitess.io/vitess/go/tools/asthelpergen/integration.AST --clone_exclude "*NoCloneType"
 
-// AST is the interface all interface types implement
-type AST interface {
-	String() string
-}
+type (
+	// AST is the interface all interface types implement
+	AST interface {
+		String() string
+	}
+	// Empty struct impl of the iface
+	Leaf struct {
+		v int
+	}
 
-// Empty struct impl of the iface
-type Leaf struct {
-	v int
-}
+	// Options have been added to test the behaviour
+	// of a struct that doesn't implement the AST interface
+	// but includes a field that does.
+	Options struct {
+		a int
+		b string
+		l *Leaf
+	}
+
+	// Container implements the interface ByRef
+	RefContainer struct {
+		ASTType               AST
+		NotASTType            int
+		Opts                  []*Options
+		ASTImplementationType *Leaf
+	}
+	// Container implements the interface ByRef
+	RefSliceContainer struct {
+		something                 int // want a non-AST field first
+		ASTElements               []AST
+		NotASTElements            []int
+		ASTImplementationElements []*Leaf
+	}
+	// Container implements the interface ByValue
+	ValueContainer struct {
+		ASTType               AST
+		NotASTType            int
+		ASTImplementationType *Leaf
+	}
+	// Container implements the interface ByValue
+	ValueSliceContainer struct {
+		ASTElements               []AST
+		NotASTElements            []int
+		ASTImplementationElements LeafSlice
+	}
+	// We need to support these types - a slice of AST elements can implement the interface
+	InterfaceSlice []AST
+	// We need to support these types - a slice of AST elements can implement the interface
+	Bytes       []byte
+	LeafSlice   []*Leaf
+	BasicType   int
+	NoCloneType struct {
+		v int
+	}
+	// We want to support all types that are used as field types, which can include interfaces.
+	// Example would be sqlparser.Expr that implements sqlparser.SQLNode
+	SubIface interface {
+		AST
+		iface()
+	}
+	SubImpl struct {
+		inner SubIface
+		field *bool
+	}
+	InterfaceContainer struct {
+		v any
+	}
+
+	Visitable interface {
+		AST
+		VisitThis() AST
+		Clone(inner AST) AST
+	}
+)
 
 func (l *Leaf) String() string {
 	if l == nil {
 		return "nil"
 	}
 	return fmt.Sprintf("Leaf(%d)", l.v)
-}
-
-// Container implements the interface ByRef
-type RefContainer struct {
-	ASTType               AST
-	NotASTType            int
-	ASTImplementationType *Leaf
 }
 
 func (r *RefContainer) String() string {
@@ -61,41 +119,17 @@ func (r *RefContainer) String() string {
 	return fmt.Sprintf("RefContainer{%s, %d, %s}", astType, r.NotASTType, r.ASTImplementationType.String())
 }
 
-// Container implements the interface ByRef
-type RefSliceContainer struct {
-	ASTElements               []AST
-	NotASTElements            []int
-	ASTImplementationElements []*Leaf
-}
-
 func (r *RefSliceContainer) String() string {
 	return fmt.Sprintf("RefSliceContainer{%s, %s, %s}", sliceStringAST(r.ASTElements...), "r.NotASTType", sliceStringLeaf(r.ASTImplementationElements...))
-}
-
-// Container implements the interface ByValue
-type ValueContainer struct {
-	ASTType               AST
-	NotASTType            int
-	ASTImplementationType *Leaf
 }
 
 func (r ValueContainer) String() string {
 	return fmt.Sprintf("ValueContainer{%s, %d, %s}", r.ASTType.String(), r.NotASTType, r.ASTImplementationType.String())
 }
 
-// Container implements the interface ByValue
-type ValueSliceContainer struct {
-	ASTElements               []AST
-	NotASTElements            []int
-	ASTImplementationElements []*Leaf
-}
-
 func (r ValueSliceContainer) String() string {
 	return fmt.Sprintf("ValueSliceContainer{%s, %s, %s}", sliceStringAST(r.ASTElements...), "r.NotASTType", sliceStringLeaf(r.ASTImplementationElements...))
 }
-
-// We need to support these types - a slice of AST elements can implement the interface
-type InterfaceSlice []AST
 
 func (r InterfaceSlice) String() string {
 	var elements []string
@@ -106,14 +140,9 @@ func (r InterfaceSlice) String() string {
 	return "[" + strings.Join(elements, ", ") + "]"
 }
 
-// We need to support these types - a slice of AST elements can implement the interface
-type Bytes []byte
-
 func (r Bytes) String() string {
 	return string(r)
 }
-
-type LeafSlice []*Leaf
 
 func (r LeafSlice) String() string {
 	var elements []string
@@ -122,8 +151,6 @@ func (r LeafSlice) String() string {
 	}
 	return strings.Join(elements, ", ")
 }
-
-type BasicType int
 
 func (r BasicType) String() string {
 	return fmt.Sprintf("int(%d)", r)
@@ -135,33 +162,13 @@ const (
 	thisIsNotAType2 BasicType = 2
 )
 
-// We want to support all types that are used as field types, which can include interfaces.
-// Example would be sqlparser.Expr that implements sqlparser.SQLNode
-type SubIface interface {
-	AST
-	iface()
-}
-
-type SubImpl struct {
-	inner SubIface
-	field *bool
-}
-
 func (r *SubImpl) String() string {
 	return "SubImpl"
 }
 func (r *SubImpl) iface() {}
 
-type InterfaceContainer struct {
-	v any
-}
-
 func (r InterfaceContainer) String() string {
 	return fmt.Sprintf("%v", r.v)
-}
-
-type NoCloneType struct {
-	v int
 }
 
 func (r *NoCloneType) String() string {
@@ -171,8 +178,9 @@ func (r *NoCloneType) String() string {
 type Visit func(node AST) (bool, error)
 
 type application struct {
-	pre, post ApplyFunc
-	cur       Cursor
+	pre, post    ApplyFunc
+	cur          Cursor
+	collectPaths bool
 }
 
 var Equals = &Comparator{}

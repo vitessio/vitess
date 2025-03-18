@@ -38,7 +38,7 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	switch node := stmt.(type) {
 	case *sqlparser.Select:
 		role := tableacl.READER
-		if _, ok := node.SelectExprs[0].(*sqlparser.Nextval); ok {
+		if _, ok := node.GetColumns()[0].(*sqlparser.Nextval); ok {
 			role = tableacl.WRITER
 		}
 		permissions = buildSubqueryPermissions(node, role, permissions)

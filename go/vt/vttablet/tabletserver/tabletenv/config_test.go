@@ -97,6 +97,7 @@ rowStreamer:
   maxMySQLReplLagSecs: 400
 schemaChangeReloadTimeout: 30s
 schemaReloadIntervalSeconds: 30m0s
+semiSyncMonitor: {}
 txPool: {}
 `
 	assert.Equal(t, wantBytes, string(gotBytes))
@@ -164,6 +165,8 @@ rowStreamer:
   maxMySQLReplLagSecs: 43200
 schemaChangeReloadTimeout: 30s
 schemaReloadIntervalSeconds: 30m0s
+semiSyncMonitor:
+  intervalSeconds: 10s
 signalWhenSchemaChange: true
 streamBufferSize: 32768
 txPool:
@@ -298,6 +301,12 @@ func TestFlags(t *testing.T) {
 	currentConfig.Healthcheck.Interval = 0
 	Init()
 	want.Healthcheck.Interval = time.Second
+	assert.Equal(t, want, currentConfig)
+
+	semiSyncMonitorInterval = time.Second
+	currentConfig.SemiSyncMonitor.Interval = 0
+	Init()
+	want.SemiSyncMonitor.Interval = time.Second
 	assert.Equal(t, want, currentConfig)
 
 	degradedThreshold = 2 * time.Second

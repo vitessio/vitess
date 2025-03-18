@@ -303,6 +303,11 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execRollbackToSavepoint(conn, qre.query, qre.plan.FullStmt)
 	case p.PlanRelease:
 		return qre.execTxQuery(conn, qre.query, false)
+	case p.PlanSelectNoLimit:
+		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
+			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
+		}
+		return qre.txFetch(conn, false)
 	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
@@ -718,10 +723,14 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 				q.SetErr(err)
 			}
 		} else {
-			qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
-			startTime := time.Now()
-			q.Wait()
-			qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
+			waiterCap := qre.tsv.config.ConsolidatorQueryWaiterCap
+			if waiterCap == 0 || *q.AddWaiterCounter(0) <= waiterCap {
+				qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
+				startTime := time.Now()
+				q.Wait()
+				qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
+			}
+			q.AddWaiterCounter(-1)
 		}
 		if q.Err() != nil {
 			return nil, q.Err()
@@ -1154,7 +1163,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 		return nil, err
 	}
 
-	exec, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	exec, err := conn.Exec(ctx, sql, qre.getMaxResultSize(), wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -1164,6 +1173,13 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	}
 
 	return exec, nil
+}
+
+func (qre *QueryExecutor) getMaxResultSize() int {
+	if qre.plan.PlanID == p.PlanSelectNoLimit {
+		return mysql.FETCH_ALL_ROWS
+	}
+	return int(qre.tsv.qe.maxResultSize.Load())
 }
 
 func (qre *QueryExecutor) resetLastInsertIDIfNeeded(ctx context.Context, conn *connpool.Conn) error {

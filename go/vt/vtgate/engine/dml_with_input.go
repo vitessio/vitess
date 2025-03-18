@@ -20,9 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -34,6 +31,7 @@ const DmlVals = "dml_vals"
 // DMLWithInput represents the instructions to perform a DML operation based on the input result.
 type DMLWithInput struct {
 	txNeeded
+	noFields
 
 	Input Primitive
 
@@ -60,6 +58,9 @@ func (dml *DMLWithInput) Inputs() ([]Primitive, []map[string]any) {
 
 // TryExecute performs a non-streaming exec.
 func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+	vcursor.Session().SetInDMLExecution(true)
+	defer vcursor.Session().SetInDMLExecution(false)
+
 	inputRes, err := vcursor.ExecutePrimitive(ctx, dml.Input, bindVars, false)
 	if err != nil {
 		return nil, err
@@ -161,11 +162,6 @@ func (dml *DMLWithInput) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 	return callback(res)
 }
 
-// GetFields fetches the field info.
-func (dml *DMLWithInput) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.VT13001("unreachable code for DMLs")
-}
-
 func (dml *DMLWithInput) description() PrimitiveDescription {
 	var offsets []string
 	for idx, offset := range dml.OutputCols {
@@ -185,8 +181,7 @@ func (dml *DMLWithInput) description() PrimitiveDescription {
 		other["BindVars"] = bvList
 	}
 	return PrimitiveDescription{
-		OperatorType:     "DMLWithInput",
-		TargetTabletType: topodatapb.TabletType_PRIMARY,
-		Other:            other,
+		OperatorType: "DMLWithInput",
+		Other:        other,
 	}
 }

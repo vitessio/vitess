@@ -201,6 +201,11 @@ func (client *localVtctldClient) ConcludeTransaction(ctx context.Context, in *vt
 	return client.s.ConcludeTransaction(ctx, in)
 }
 
+// CopySchemaShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) CopySchemaShard(ctx context.Context, in *vtctldatapb.CopySchemaShardRequest, opts ...grpc.CallOption) (*vtctldatapb.CopySchemaShardResponse, error) {
+	return client.s.CopySchemaShard(ctx, in)
+}
+
 // CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) CreateKeyspace(ctx context.Context, in *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
 	return client.s.CreateKeyspace(ctx, in)
@@ -431,6 +436,11 @@ func (client *localVtctldClient) LaunchSchemaMigration(ctx context.Context, in *
 	return client.s.LaunchSchemaMigration(ctx, in)
 }
 
+// LookupVindexComplete is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) LookupVindexComplete(ctx context.Context, in *vtctldatapb.LookupVindexCompleteRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexCompleteResponse, error) {
+	return client.s.LookupVindexComplete(ctx, in)
+}
+
 // LookupVindexCreate is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) LookupVindexCreate(ctx context.Context, in *vtctldatapb.LookupVindexCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexCreateResponse, error) {
 	return client.s.LookupVindexCreate(ctx, in)
@@ -439,6 +449,11 @@ func (client *localVtctldClient) LookupVindexCreate(ctx context.Context, in *vtc
 // LookupVindexExternalize is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) LookupVindexExternalize(ctx context.Context, in *vtctldatapb.LookupVindexExternalizeRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexExternalizeResponse, error) {
 	return client.s.LookupVindexExternalize(ctx, in)
+}
+
+// LookupVindexInternalize is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) LookupVindexInternalize(ctx context.Context, in *vtctldatapb.LookupVindexInternalizeRequest, opts ...grpc.CallOption) (*vtctldatapb.LookupVindexInternalizeResponse, error) {
+	return client.s.LookupVindexInternalize(ctx, in)
 }
 
 // MaterializeCreate is part of the vtctlservicepb.VtctldClient interface.
@@ -730,6 +745,11 @@ func (client *localVtctldClient) Validate(ctx context.Context, in *vtctldatapb.V
 // ValidateKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ValidateKeyspace(ctx context.Context, in *vtctldatapb.ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateKeyspaceResponse, error) {
 	return client.s.ValidateKeyspace(ctx, in)
+}
+
+// ValidatePermissionsKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ValidatePermissionsKeyspace(ctx context.Context, in *vtctldatapb.ValidatePermissionsKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidatePermissionsKeyspaceResponse, error) {
+	return client.s.ValidatePermissionsKeyspace(ctx, in)
 }
 
 // ValidateSchemaKeyspace is part of the vtctlservicepb.VtctldClient interface.

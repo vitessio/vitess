@@ -84,7 +84,7 @@ func TestMessage(t *testing.T) {
 
 	utils.Exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
 	utils.Exec(t, conn, createMessage)
-	clusterInstance.VtctlProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
+	clusterInstance.VtctldClientProcess.ExecuteCommand(fmt.Sprintf("ReloadSchemaKeyspace %s", lookupKeyspace))
 
 	defer utils.Exec(t, conn, "drop table vitess_message")
 
@@ -428,7 +428,7 @@ func TestReparenting(t *testing.T) {
 	assertClientCount(t, 0, shard0Replica)
 	assertClientCount(t, 1, shard1Primary)
 
-	_, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (3) and time_acked is null", nil)
+	_, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (3) and time_acked is null", nil, false)
 	require.Nil(t, err)
 }
 
@@ -480,7 +480,7 @@ func TestConnection(t *testing.T) {
 	_, err = stream.Next()
 	require.Nil(t, err)
 
-	_, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (2, 5) and time_acked is null", nil)
+	_, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (2, 5) and time_acked is null", nil, false)
 	require.Nil(t, err)
 	// After closing one stream, ensure vttablets have dropped it.
 	stream.Close()
@@ -533,7 +533,7 @@ func testMessaging(t *testing.T, name, ks string) {
 	resMap = make(map[string]string)
 	stream.ClearMem()
 	// validate message ack with id 4
-	qr, err := session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (4) and time_acked is null", nil)
+	qr, err := session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (4) and time_acked is null", nil, false)
 	require.Nil(t, err)
 	assert.Equal(t, uint64(1), qr.RowsAffected)
 
@@ -546,7 +546,7 @@ func testMessaging(t *testing.T, name, ks string) {
 	assert.Equal(t, "1", resMap["1"])
 
 	// validate message ack with 1 and 4, only 1 should be ack
-	qr, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (1, 4) and time_acked is null", nil)
+	qr, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (1, 4) and time_acked is null", nil, false)
 	require.Nil(t, err)
 	assert.Equal(t, uint64(1), qr.RowsAffected)
 }

@@ -118,7 +118,7 @@ func (expr *CollateExpr) compile(c *compiler) (ctype, error) {
 		}
 		fallthrough
 	case sqltypes.VarBinary:
-		c.asm.Collate(expr.TypedCollation.Collation)
+		c.asm.Collate(expr.TypedCollation)
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, expr.TypedCollation.Collation, nil)
 	}

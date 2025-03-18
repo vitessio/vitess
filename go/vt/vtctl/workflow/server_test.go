@@ -29,15 +29,19 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -355,6 +359,41 @@ func TestMoveTablesComplete(t *testing.T) {
 						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 					result: &querypb.QueryResult{},
 				},
+			},
+			expectedTargetQueries: []*queryResult{
+				{
+					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
+						targetKeyspaceName, workflowName),
+					result: &querypb.QueryResult{},
+				},
+			},
+			want: &vtctldatapb.MoveTablesCompleteResponse{
+				Summary: fmt.Sprintf("Successfully completed the %s workflow in the %s keyspace",
+					workflowName, targetKeyspaceName),
+			},
+		},
+		{
+			name: "ignore source keyspace",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.MoveTablesCompleteRequest{
+				TargetKeyspace:       targetKeyspaceName,
+				Workflow:             workflowName,
+				IgnoreSourceKeyspace: true,
+			},
+			preFunc: func(t *testing.T, env *testEnv) {
+				err := env.ts.DeleteKeyspace(ctx, sourceKeyspaceName)
+				require.NoError(t, err)
+			},
+			postFunc: func(t *testing.T, env *testEnv) {
+				err := env.ts.CreateKeyspace(ctx, sourceKeyspaceName, &topodatapb.Keyspace{})
+				require.NoError(t, err)
 			},
 			expectedTargetQueries: []*queryResult{
 				{
@@ -741,11 +780,14 @@ func TestWorkflowDelete(t *testing.T) {
 				},
 			},
 			preFunc: func(t *testing.T, env *testEnv) {
-				err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschemapb.Keyspace{
-					Sharded: true,
-					MultiTenantSpec: &vschemapb.MultiTenantSpec{
-						TenantIdColumnName: "tenant_id",
-						TenantIdColumnType: sqltypes.Int64,
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: targetKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{
+						Sharded: true,
+						MultiTenantSpec: &vschemapb.MultiTenantSpec{
+							TenantIdColumnName: "tenant_id",
+							TenantIdColumnType: sqltypes.Int64,
+						},
 					},
 				})
 				require.NoError(t, err)
@@ -851,11 +893,14 @@ func TestWorkflowDelete(t *testing.T) {
 				},
 			},
 			preFunc: func(t *testing.T, env *testEnv) {
-				err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschemapb.Keyspace{
-					Sharded: true,
-					MultiTenantSpec: &vschemapb.MultiTenantSpec{
-						TenantIdColumnName: "tenant_id",
-						TenantIdColumnType: sqltypes.Int64,
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: targetKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{
+						Sharded: true,
+						MultiTenantSpec: &vschemapb.MultiTenantSpec{
+							TenantIdColumnName: "tenant_id",
+							TenantIdColumnType: sqltypes.Int64,
+						},
 					},
 				})
 				require.NoError(t, err)
@@ -911,11 +956,14 @@ func TestWorkflowDelete(t *testing.T) {
 				},
 			},
 			preFunc: func(t *testing.T, env *testEnv) {
-				err := env.ts.SaveVSchema(ctx, targetKeyspaceName, &vschemapb.Keyspace{
-					Sharded: true,
-					MultiTenantSpec: &vschemapb.MultiTenantSpec{
-						TenantIdColumnName: "tenant_id",
-						TenantIdColumnType: sqltypes.Int64,
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: targetKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{
+						Sharded: true,
+						MultiTenantSpec: &vschemapb.MultiTenantSpec{
+							TenantIdColumnName: "tenant_id",
+							TenantIdColumnType: sqltypes.Int64,
+						},
 					},
 				})
 				require.NoError(t, err)
@@ -2305,4 +2353,354 @@ func TestWorkflowStatus(t *testing.T) {
 	assert.Equal(t, int64(100), stateTable2.RowsCopied)
 	assert.Equal(t, float32(50), stateTable1.RowsPercentage)
 	assert.Equal(t, float32(50), stateTable2.RowsPercentage)
+}
+
+func TestDeleteShard(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	// Verify that shard exists.
+	si, err := te.ts.GetShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0])
+	require.NoError(t, err)
+	require.NotNil(t, si)
+
+	// Expect to fail if recursive is false.
+	err = te.ws.DeleteShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0], false, true)
+	assert.ErrorContains(t, err, "shard target_keyspace/- still has 1 tablets in cell")
+
+	// Should not throw error if given keyspace or shard is invalid.
+	err = te.ws.DeleteShard(ctx, "invalid_keyspace", "-", false, true)
+	assert.NoError(t, err)
+
+	// Successful shard delete.
+	err = te.ws.DeleteShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0], true, true)
+	assert.NoError(t, err)
+
+	// Check if the shard was deleted.
+	_, err = te.ts.GetShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0])
+	assert.ErrorContains(t, err, "node doesn't exist")
+}
+
+func TestCopySchemaShard(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	sqlSchema := `create table t1(id bigint(20) unsigned auto_increment, msg varchar(64), primary key (id)) Engine=InnoDB;`
+	te.tmc.schema[fmt.Sprintf("%s.t1", sourceKeyspace.KeyspaceName)] = &tabletmanagerdatapb.SchemaDefinition{
+		DatabaseSchema: "CREATE DATABASE {{.DatabaseName}}",
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+			{
+				Name:   "t1",
+				Schema: sqlSchema,
+				Columns: []string{
+					"id",
+					"msg",
+				},
+				Type: tmutils.TableBaseTable,
+			},
+		},
+	}
+
+	// Expect queries on target shards
+	te.tmc.expectApplySchemaRequest(200, &applySchemaRequestResponse{
+		change: &tmutils.SchemaChange{
+			SQL:              "CREATE DATABASE `vt_target_keyspace`",
+			Force:            false,
+			AllowReplication: true,
+			SQLMode:          vreplication.SQLMode,
+		},
+	})
+	te.tmc.expectApplySchemaRequest(200, &applySchemaRequestResponse{
+		change: &tmutils.SchemaChange{
+			SQL:              sqlSchema,
+			Force:            false,
+			AllowReplication: true,
+			SQLMode:          vreplication.SQLMode,
+		},
+	})
+
+	sourceTablet := te.tablets[sourceKeyspace.KeyspaceName][100]
+	err := te.ws.CopySchemaShard(ctx, sourceTablet.Alias, []string{"/.*/"}, nil, false, targetKeyspace.KeyspaceName, "-", 1*time.Second, true)
+	assert.NoError(t, err)
+	assert.Empty(t, te.tmc.applySchemaRequests[200])
+}
+
+func TestValidateShardsHaveVReplicationPermissions(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	si1, err := te.ts.GetShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0])
+	require.NoError(t, err)
+	si2, err := te.ts.GetShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[1])
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name                string
+		response            *validateVReplicationPermissionsResponse
+		expectedErrContains string
+	}{
+		{
+			// Expect no error in this case.
+			name: "unimplemented error",
+			response: &validateVReplicationPermissionsResponse{
+				err: status.Error(codes.Unimplemented, "unimplemented test"),
+			},
+		},
+		{
+			name: "tmc error",
+			response: &validateVReplicationPermissionsResponse{
+				err: fmt.Errorf("tmc throws error"),
+			},
+			expectedErrContains: "tmc throws error",
+		},
+		{
+			name: "no permissions",
+			response: &validateVReplicationPermissionsResponse{
+				res: &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
+					User: "vt_test_user",
+					Ok:   false,
+				},
+			},
+			expectedErrContains: "vt_test_user does not have the required set of permissions",
+		},
+		{
+			name: "success",
+			response: &validateVReplicationPermissionsResponse{
+				res: &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
+					User: "vt_filtered",
+					Ok:   true,
+				},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			te.tmc.expectValidateVReplicationPermissionsResponse(200, tc.response)
+			te.tmc.expectValidateVReplicationPermissionsResponse(210, tc.response)
+			err = te.ws.validateShardsHaveVReplicationPermissions(ctx, targetKeyspace.KeyspaceName, []*topo.ShardInfo{si1, si2})
+			if tc.expectedErrContains == "" {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorContains(t, err, tc.expectedErrContains)
+		})
+	}
+}
+
+func TestWorkflowUpdate(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	req := &vtctldatapb.WorkflowUpdateRequest{
+		Keyspace: targetKeyspace.KeyspaceName,
+		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow: "wf1",
+			State:    binlogdatapb.VReplicationWorkflowState_Running.Enum(),
+		},
+	}
+
+	testcases := []struct {
+		name     string
+		response map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse
+		err      map[uint32]error
+
+		// Match the tablet `changed` field from response.
+		expectedResponse    map[uint32]bool
+		expectedErrContains string
+	}{
+		{
+			name: "one tablet stream changed",
+			response: map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{
+				200: {
+					Result: &querypb.QueryResult{
+						RowsAffected: 1,
+					},
+				},
+				210: {
+					Result: &querypb.QueryResult{
+						RowsAffected: 0,
+					},
+				},
+			},
+			expectedResponse: map[uint32]bool{
+				200: true,
+				210: false,
+			},
+		},
+		{
+			name: "two tablet stream changed",
+			response: map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{
+				200: {
+					Result: &querypb.QueryResult{
+						RowsAffected: 1,
+					},
+				},
+				210: {
+					Result: &querypb.QueryResult{
+						RowsAffected: 2,
+					},
+				},
+			},
+			expectedResponse: map[uint32]bool{
+				200: true,
+				210: true,
+			},
+		},
+		{
+			name: "tablet throws error",
+			err: map[uint32]error{
+				200: fmt.Errorf("test error from 200"),
+			},
+			expectedErrContains: "test error from 200",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Add responses
+			for tabletID, resp := range tc.response {
+				te.tmc.AddUpdateVReplicationWorkflowRequestResponse(tabletID, &updateVReplicationWorkflowRequestResponse{
+					req: req.TabletRequest,
+					res: resp,
+				})
+			}
+			// Add errors
+			for tabletID, err := range tc.err {
+				te.tmc.AddUpdateVReplicationWorkflowRequestResponse(tabletID, &updateVReplicationWorkflowRequestResponse{
+					req: req.TabletRequest,
+					err: err,
+				})
+			}
+
+			res, err := te.ws.WorkflowUpdate(ctx, req)
+			if tc.expectedErrContains != "" {
+				assert.ErrorContains(t, err, tc.expectedErrContains)
+				return
+			}
+
+			assert.NoError(t, err)
+			for tabletID, changed := range tc.expectedResponse {
+				i := slices.IndexFunc(res.Details, func(det *vtctldatapb.WorkflowUpdateResponse_TabletInfo) bool {
+					return det.Tablet.Uid == tabletID
+				})
+				assert.NotEqual(t, -1, i)
+				assert.Equal(t, changed, res.Details[i].Changed)
+			}
+		})
+	}
+}
+
+func TestFinalizeMigrateWorkflow(t *testing.T) {
+	ctx := context.Background()
+
+	workflowName := "wf1"
+	tableName1 := "t1"
+	tableName2 := "t2"
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName1: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName1,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName1),
+				},
+			},
+		},
+		tableName2: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName2,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName2),
+				},
+			},
+		},
+	}
+
+	testcases := []struct {
+		name          string
+		expectQueries []string
+		cancel        bool
+		keepData      bool
+	}{
+		{
+			name: "cancel false, keepData true",
+			expectQueries: []string{
+				"delete from _vt.vreplication where db_name = 'vt_target_keyspace' and workflow = 'wf1'",
+			},
+			cancel:   false,
+			keepData: true,
+		},
+		{
+			name: "cancel true, keepData false",
+			expectQueries: []string{
+				"delete from _vt.vreplication where db_name = 'vt_target_keyspace' and workflow = 'wf1'",
+				"drop table `vt_target_keyspace`.`t1`",
+				"drop table `vt_target_keyspace`.`t2`",
+			},
+			cancel:   true,
+			keepData: false,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+			defer te.close()
+			te.tmc.schema = schema
+
+			ts, _, err := te.ws.getWorkflowState(ctx, targetKeyspace.KeyspaceName, workflowName)
+			require.NoError(t, err)
+
+			for _, q := range tc.expectQueries {
+				te.tmc.expectVRQuery(200, q, nil)
+				te.tmc.expectVRQuery(210, q, nil)
+			}
+
+			_, err = te.ws.finalizeMigrateWorkflow(ctx, ts, "", tc.cancel, tc.keepData, false, false)
+			assert.NoError(t, err)
+
+			ks, err := te.ts.GetSrvVSchema(ctx, "cell")
+			require.NoError(t, err)
+			assert.NotNil(t, ks.Keyspaces[targetKeyspace.KeyspaceName])
+
+			// Expect tables to be present in the VSchema if cancel was false.
+			if !tc.cancel {
+				assert.Len(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables, 2)
+				assert.NotNil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName1])
+				assert.NotNil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName2])
+			} else {
+				assert.Len(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables, 0)
+				assert.Nil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName1])
+				assert.Nil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName2])
+			}
+
+			// Expect queries to be used.
+			assert.Empty(t, te.tmc.applySchemaRequests[200])
+			assert.Empty(t, te.tmc.applySchemaRequests[210])
+		})
+	}
 }

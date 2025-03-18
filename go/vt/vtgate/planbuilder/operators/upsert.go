@@ -74,7 +74,7 @@ func (u *Upsert) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
 	return nil
 }
 
-func createUpsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, insOp Operator, rows sqlparser.Values, vTbl *vindexes.Table) Operator {
+func createUpsertOperator(ctx *plancontext.PlanningContext, ins *sqlparser.Insert, insOp Operator, rows sqlparser.Values, vTbl *vindexes.BaseTable) Operator {
 	if len(vTbl.UniqueKeys) != 0 {
 		panic(vterrors.VT12001("ON DUPLICATE KEY UPDATE with foreign keys with unique keys"))
 	}

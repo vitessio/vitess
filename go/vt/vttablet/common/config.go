@@ -50,6 +50,7 @@ type VReplicationConfig struct {
 	StoreCompressedGTID     bool
 	ParallelInsertWorkers   int
 	TabletTypesStr          string
+	EnableHttpLog           bool // Enable the /debug/vrlog endpoint
 
 	// Config parameters applicable to the source side (vstreamer)
 	// The coresponding Override fields are used to determine if the user has provided a value for the parameter so
@@ -94,6 +95,7 @@ func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 		StoreCompressedGTID:     vreplicationStoreCompressedGTID,
 		ParallelInsertWorkers:   vreplicationParallelInsertWorkers,
 		TabletTypesStr:          vreplicationTabletTypesStr,
+		EnableHttpLog:           vreplicationEnableHttpLog,
 
 		VStreamPacketSizeOverride:              false,
 		VStreamPacketSize:                      VStreamerDefaultPacketSize,
@@ -142,18 +144,18 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				c.ExperimentalFlags = value
 			}
 		case "vreplication_net_read_timeout":
-			value, err := strconv.ParseInt(v, 10, 64)
+			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
-				c.NetReadTimeout = int(value)
+				c.NetReadTimeout = value
 			}
 		case "vreplication_net_write_timeout":
-			value, err := strconv.ParseInt(v, 10, 64)
+			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
-				c.NetWriteTimeout = int(value)
+				c.NetWriteTimeout = value
 			}
 		case "vreplication_copy_phase_duration":
 			value, err := time.ParseDuration(v)
@@ -177,18 +179,18 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				c.MaxTimeToRetryError = value
 			}
 		case "relay_log_max_size":
-			value, err := strconv.ParseInt(v, 10, 64)
+			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
-				c.RelayLogMaxSize = int(value)
+				c.RelayLogMaxSize = value
 			}
 		case "relay_log_max_items":
-			value, err := strconv.ParseInt(v, 10, 64)
+			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
-				c.RelayLogMaxItems = int(value)
+				c.RelayLogMaxItems = value
 			}
 		case "vreplication_replica_lag_tolerance":
 			value, err := time.ParseDuration(v)
@@ -198,11 +200,11 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				c.ReplicaLagTolerance = value
 			}
 		case "vreplication_heartbeat_update_interval":
-			value, err := strconv.ParseInt(v, 10, 64)
+			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
-				c.HeartbeatUpdateInterval = int(value)
+				c.HeartbeatUpdateInterval = value
 			}
 		case "vreplication_store_compressed_gtid":
 			value, err := strconv.ParseBool(v)
@@ -212,19 +214,19 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				c.StoreCompressedGTID = value
 			}
 		case "vreplication-parallel-insert-workers":
-			value, err := strconv.ParseInt(v, 10, 64)
+			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
-				c.ParallelInsertWorkers = int(value)
+				c.ParallelInsertWorkers = value
 			}
 		case "vstream_packet_size":
-			value, err := strconv.ParseInt(v, 10, 64)
+			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
 				c.VStreamPacketSizeOverride = true
-				c.VStreamPacketSize = int(value)
+				c.VStreamPacketSize = value
 			}
 		case "vstream_dynamic_packet_size":
 			value, err := strconv.ParseBool(v)

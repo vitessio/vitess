@@ -1127,7 +1127,7 @@ func (node *DeallocateStmt) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CallProc) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "call %v(%v)", node.Name, node.Params)
+	buf.astPrintf(node, "call %v(%n)", node.Name, node.Params)
 }
 
 // Format formats the node.
@@ -1155,9 +1155,9 @@ func (node *ParsedComments) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node SelectExprs) Format(buf *TrackedBuffer) {
+func (node *SelectExprs) Format(buf *TrackedBuffer) {
 	var prefix string
-	for _, n := range node {
+	for _, n := range node.Exprs {
 		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
@@ -1312,9 +1312,9 @@ func (node *Where) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node Exprs) Format(buf *TrackedBuffer) {
+func (node *Exprs) Format(buf *TrackedBuffer) {
 	var prefix string
-	for _, n := range node {
+	for _, n := range node.Exprs {
 		buf.astPrintf(node, "%s%v", prefix, n)
 		prefix = ", "
 	}
@@ -1499,7 +1499,13 @@ func (node *ColName) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node ValTuple) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "(%v)", Exprs(node))
+	var prefix string
+	buf.WriteString("(")
+	for _, n := range node {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+	buf.WriteString(")")
 }
 
 // Format formats the node.
@@ -1688,15 +1694,15 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	} else {
 		buf.WriteString(funcName)
 	}
-	buf.astPrintf(node, "(%v)", node.Exprs)
+	buf.astPrintf(node, "(%n)", node.Exprs)
 }
 
 // Format formats the node
 func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
 	if node.Distinct {
-		buf.astPrintf(node, "group_concat(%s%v%v", DistinctStr, node.Exprs, node.OrderBy)
+		buf.astPrintf(node, "group_concat(%s%n%v", DistinctStr, node.Exprs, node.OrderBy)
 	} else {
-		buf.astPrintf(node, "group_concat(%v%v", node.Exprs, node.OrderBy)
+		buf.astPrintf(node, "group_concat(%n%v", node.Exprs, node.OrderBy)
 	}
 	if node.Separator != "" {
 		buf.astPrintf(node, " %s %#s", keywordStrings[SEPARATOR], node.Separator)
@@ -1744,7 +1750,7 @@ func (node *WindowSpecification) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " %v", node.Name)
 	}
 	if node.PartitionClause != nil {
-		buf.astPrintf(node, " partition by %v", node.PartitionClause)
+		buf.astPrintf(node, " partition by %n", node.PartitionClause)
 	}
 	if node.OrderClause != nil {
 		buf.astPrintf(node, "%v", node.OrderClause)
@@ -1898,7 +1904,7 @@ func (node *InsertExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *IntervalFuncExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "interval(%v, %v)", node.Expr, node.Exprs)
+	buf.astPrintf(node, "interval(%v, %n)", node.Expr, node.Exprs)
 }
 
 // Format formats the node.
@@ -1912,7 +1918,7 @@ func (node *LocateExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CharExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "char(%v", node.Exprs)
+	buf.astPrintf(node, "char(%n", node.Exprs)
 	if node.Charset != "" {
 		buf.astPrintf(node, " using %#s", node.Charset)
 	}
@@ -2861,7 +2867,7 @@ func (node *Count) Format(buf *TrackedBuffer) {
 	if node.Distinct {
 		buf.literal(DistinctStr)
 	}
-	buf.astPrintf(node, "%v)", node.Args)
+	buf.astPrintf(node, "%n)", node.Args)
 	if node.OverClause != nil {
 		buf.astPrintf(node, " %v", node.OverClause)
 	}
@@ -3032,12 +3038,12 @@ func (node *PointExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *LineStringExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "linestring(%v)", node.PointParams)
+	buf.astPrintf(node, "linestring(%n)", node.PointParams)
 }
 
 // Format formats the node.
 func (node *PolygonExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "polygon(%v)", node.LinestringParams)
+	buf.astPrintf(node, "polygon(%n)", node.LinestringParams)
 }
 
 // Format formats the node.
@@ -3051,17 +3057,17 @@ func (node *PurgeBinaryLogs) Format(buf *TrackedBuffer) {
 }
 
 func (node *MultiPolygonExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "multipolygon(%v)", node.PolygonParams)
+	buf.astPrintf(node, "multipolygon(%n)", node.PolygonParams)
 }
 
 // Format formats the node.
 func (node *MultiPointExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "multipoint(%v)", node.PointParams)
+	buf.astPrintf(node, "multipoint(%n)", node.PointParams)
 }
 
 // Format formats the node.
 func (node *MultiLinestringExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "multilinestring(%v)", node.LinestringParams)
+	buf.astPrintf(node, "multilinestring(%n)", node.LinestringParams)
 }
 
 // Format formats the node

@@ -19,6 +19,7 @@ package cli
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -65,6 +66,8 @@ const (
 	phaseNameTakeNewBackup               = "TakeNewBackup"
 	phaseStatusCatchupReplicationStalled = "Stalled"
 	phaseStatusCatchupReplicationStopped = "Stopped"
+
+	timeoutWaitingForReplicationStatus = 60 * time.Second
 )
 
 var (
@@ -141,19 +144,25 @@ var (
 		Long: `vtbackup is a batch command to perform a single pass of backup maintenance for a shard.
 
 When run periodically for each shard, vtbackup can ensure these configurable policies:
-	* There is always a recent backup for the shard.
-	* Old backups for the shard are removed.
+ * There is always a recent backup for the shard.
+
+ * Old backups for the shard are removed.
 
 Whatever system launches vtbackup is responsible for the following:
-	- Running vtbackup with similar flags that would be used for a vttablet and
-    mysqlctld in the target shard to be backed up.
-	- Provisioning as much disk space for vtbackup as would be given to vttablet.
-    The data directory MUST be empty at startup. Do NOT reuse a persistent disk.
-	- Running vtbackup periodically for each shard, for each backup storage location.
-	- Ensuring that at most one instance runs at a time for a given pair of shard
-    and backup storage location.
-	- Retrying vtbackup if it fails.
-	- Alerting human operators if the failure is persistent.
+ - Running vtbackup with similar flags that would be used for a vttablet and 
+   mysqlctld in the target shard to be backed up.
+
+ - Provisioning as much disk space for vtbackup as would be given to vttablet.
+   The data directory MUST be empty at startup. Do NOT reuse a persistent disk.
+
+ - Running vtbackup periodically for each shard, for each backup storage location.
+
+ - Ensuring that at most one instance runs at a time for a given pair of shard
+   and backup storage location.
+
+ - Retrying vtbackup if it fails.
+
+ - Alerting human operators if the failure is persistent.
 
 The process vtbackup follows to take a new backup has the following steps:
  1. Restore from the most recent backup.
@@ -335,6 +344,18 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}
+	ctx, cancelCtx := context.WithCancel(ctx)
+	backgroundCtx, cancelBackgroundCtx := context.WithCancel(backgroundCtx)
+	defer func() {
+		cancelCtx()
+		cancelBackgroundCtx()
+	}()
+	mysqld.OnTerm(func() {
+		log.Warning("Cancelling vtbackup as MySQL has terminated")
+		cancelCtx()
+		cancelBackgroundCtx()
+	})
+
 	initCtx, initCancel := context.WithTimeout(ctx, mysqlTimeout)
 	defer initCancel()
 	initMysqldAt := time.Now()
@@ -520,7 +541,13 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 
 		waitStartTime = time.Now()
 	)
+
+	lastErr := vterrors.NewLastError("replication catch up", timeoutWaitingForReplicationStatus)
 	for {
+		if !lastErr.ShouldRetry() {
+			return fmt.Errorf("timeout waiting for replication status after %.0f seconds", timeoutWaitingForReplicationStatus.Seconds())
+		}
+
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("error in replication catch up: %v", ctx.Err())
@@ -530,6 +557,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		lastStatus = status
 		status, statusErr = mysqld.ReplicationStatus(ctx)
 		if statusErr != nil {
+			lastErr.Record(statusErr)
 			log.Warningf("Error getting replication status: %v", statusErr)
 			continue
 		}
@@ -548,7 +576,10 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 			}
 		}
 		if !status.Healthy() {
-			log.Warning("Replication has stopped before backup could be taken. Trying to restart replication.")
+			errStr := "Replication has stopped before backup could be taken. Trying to restart replication."
+			log.Warning(errStr)
+			lastErr.Record(errors.New(strings.ToLower(errStr)))
+
 			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 1)
 			if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warningf("Failed to restart replication: %v", err)

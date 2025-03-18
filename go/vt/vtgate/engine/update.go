@@ -23,8 +23,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -42,8 +40,8 @@ type VindexValues struct {
 
 // Update represents the instructions to perform an update.
 type Update struct {
-	// Update does not take inputs
 	noInputs
+	noFields
 
 	*DML
 
@@ -83,11 +81,6 @@ func (upd *Update) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 
 }
 
-// GetFields fetches the field info.
-func (upd *Update) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, fmt.Errorf("BUG: unreachable code for %q", upd.Query)
-}
-
 // updateVindexEntries performs an update when a vindex is being modified
 // by the statement.
 // Note: the commit order may be different from the DML order because it's possible
@@ -95,7 +88,7 @@ func (upd *Update) GetFields(ctx context.Context, vcursor VCursor, bindVars map[
 // Note 2: While changes are being committed, the changing row could be
 // unreachable by either the new or old column values.
 func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
-	if len(upd.ChangedVindexValues) == 0 {
+	if !upd.isVindexModified() {
 		return nil
 	}
 	queries := make([]*querypb.BoundQuery, len(rss))
@@ -194,6 +187,10 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 	return nil
 }
 
+func (upd *Update) isVindexModified() bool {
+	return len(upd.ChangedVindexValues) != 0
+}
+
 func (upd *Update) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query":                upd.Query,
@@ -219,10 +216,9 @@ func (upd *Update) description() PrimitiveDescription {
 	}
 
 	return PrimitiveDescription{
-		OperatorType:     "Update",
-		Keyspace:         upd.Keyspace,
-		Variant:          upd.Opcode.String(),
-		TargetTabletType: topodatapb.TabletType_PRIMARY,
-		Other:            other,
+		OperatorType: "Update",
+		Keyspace:     upd.Keyspace,
+		Variant:      upd.Opcode.String(),
+		Other:        other,
 	}
 }

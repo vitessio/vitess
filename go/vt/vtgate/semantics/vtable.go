@@ -100,7 +100,7 @@ func (v *vTableInfo) canShortCut() shortCut {
 }
 
 // GetVindexTable implements the TableInfo interface
-func (v *vTableInfo) GetVindexTable() *vindexes.Table {
+func (v *vTableInfo) GetVindexTable() *vindexes.BaseTable {
 	return nil
 }
 
@@ -133,7 +133,7 @@ func (v *vTableInfo) getExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.VT03022(s, "field list")
 }
 
-func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *vTableInfo {
+func createVTableInfoForExpressions(expressions []sqlparser.SelectExpr, tables []TableInfo, org originable) *vTableInfo {
 	cols, colNames, ts, isAuthoritative := selectExprsToInfos(expressions, tables, org)
 	return &vTableInfo{
 		columnNames:     colNames,
@@ -144,7 +144,7 @@ func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []
 }
 
 func selectExprsToInfos(
-	expressions sqlparser.SelectExprs,
+	expressions []sqlparser.SelectExpr,
 	tables []TableInfo,
 	org originable,
 ) (cols []sqlparser.Expr, colNames []string, ts TableSet, isAuthoritative bool) {

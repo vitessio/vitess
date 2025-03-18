@@ -181,8 +181,8 @@ message SchemaMigration {
     // SchemaMigration_VITESS was also formerly called "ONLINE".
     VITESS = 0;
     ONLINE = 0;
-    GHOST = 1;
-    PTOSC = 2;
+    reserved 1; // Was GHOST
+    reserved 2; // Was PTOSC
     // SchemaMigration_DIRECT runs the migration directly against MySQL (e.g. `ALTER TABLE ...`),
     // meaning it is not actually an "online" DDL migration.
     DIRECT = 3;
@@ -461,6 +461,11 @@ message BackupRequest {
   bool upgrade_safe = 5;
   // BackupEngine specifies if we want to use a particular backup engine for this backup request
   optional string backup_engine = 6;
+
+  // MysqlShutdownTimeout is the duration to wait for mysqld to shutdown before
+  // starting the backup. This is available so we can override this for upgrade safe
+  // backups which might take longer to shut down.
+  vttime.Duration mysql_shutdown_timeout = 7;
 }
 
 message BackupResponse {
@@ -486,6 +491,10 @@ message BackupShardRequest {
   // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
   // then the backup becomes incremental and applies as of given position.
   string incremental_from_pos = 6;
+  // MysqlShutdownTimeout is the duration to wait for mysqld to shutdown before
+  // starting the backup. This is available so we can override this for upgrade safe
+  // backups which might take longer to shut down.
+  vttime.Duration mysql_shutdown_timeout = 7;
 }
 
 message CancelSchemaMigrationRequest {
@@ -554,6 +563,20 @@ message CompleteSchemaMigrationRequest {
 
 message CompleteSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
+}
+
+message CopySchemaShardRequest {
+  topodata.TabletAlias source_tablet_alias = 1;
+  repeated string tables = 2;
+  repeated string exclude_tables = 3;
+  bool include_views = 4;
+  bool skip_verify = 5;
+  vttime.Duration wait_replicas_timeout = 6;
+  string destination_keyspace = 7;
+  string destination_shard = 8;
+}
+
+message CopySchemaShardResponse {
 }
 
 message CreateKeyspaceRequest {
@@ -1217,6 +1240,18 @@ message LaunchSchemaMigrationResponse {
   map<string, uint64> rows_affected_by_shard = 1;
 }
 
+message LookupVindexCompleteRequest {
+  // Where the lookup vindex lives.
+  string keyspace = 1;
+  // This is the name of the lookup vindex and the vreplication workflow.
+  string name = 2;
+  // Where the vreplication workflow lives.
+  string table_keyspace = 3;
+}
+
+message LookupVindexCompleteResponse {
+}
+
 message LookupVindexCreateRequest {
   string keyspace = 1;
   string workflow = 2;
@@ -1237,11 +1272,28 @@ message LookupVindexExternalizeRequest {
   string name = 2;
   // Where the vreplication workflow lives.
   string table_keyspace = 3;
+  // If this is set true, we directly delete the workflow instead of stopping.
+  // Also, complete command is not required to delete workflow in that case.
+  bool delete_workflow = 4;
 }
 
 message LookupVindexExternalizeResponse {
-  // Was the workflow also deleted.
-  bool workflow_deleted = 1;
+  // Was the workflow stopped.
+  bool workflow_stopped = 1;
+  // Was the workflow deleted.
+  bool workflow_deleted = 2;
+}
+
+message LookupVindexInternalizeRequest {
+  // Where the lookup vindex lives.
+  string keyspace = 1;
+  // This is the name of the lookup vindex and the vreplication workflow.
+  string name = 2;
+  // Where the vreplication workflow lives.
+  string table_keyspace = 3;
+}
+
+message LookupVindexInternalizeResponse {
 }
 
 message MaterializeCreateRequest {
@@ -1381,6 +1433,9 @@ message MoveTablesCompleteRequest {
   bool rename_tables = 6;
   bool dry_run = 7;
   repeated string shards = 8;
+  // Set to true if the you know that the source keyspace is no
+  // longer available but still want to complete the workflow.
+  bool ignore_source_keyspace = 9;
 }
 
 message MoveTablesCompleteResponse {
@@ -1860,12 +1915,25 @@ message ValidateKeyspaceResponse {
   map<string, ValidateShardResponse> results_by_shard = 2;
 }
 
+message ValidatePermissionsKeyspaceRequest {
+  string keyspace = 1;
+  // If you only want to validate a subset of the shards in the
+  // keyspace, then specify a list of shard names.
+  repeated string shards = 2;
+}
+
+message ValidatePermissionsKeyspaceResponse {
+}
+
 message ValidateSchemaKeyspaceRequest {
   string keyspace = 1;
   repeated string exclude_tables = 2;
   bool include_views = 3;
   bool skip_no_primary = 4;
   bool include_vschema = 5;
+  // If you only want to validate a subset of the shards in the
+  // keyspace, then specify a list of shard names.
+  repeated string shards = 6;
 }
 
 message ValidateSchemaKeyspaceResponse {
@@ -2054,6 +2122,10 @@ message WorkflowDeleteRequest {
   // up the migrated data. This is only used with multi-tenant
   // MoveTables migrations.
   int64 delete_batch_size = 6;
+  // Set to true if the you know that the source keyspace is no
+  // longer available but still want to clean everything up on the
+  // target keyspace.
+  bool ignore_source_keyspace = 7;
 }
 
 message WorkflowDeleteResponse {

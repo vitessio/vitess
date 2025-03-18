@@ -38,7 +38,7 @@ var ddls1, ddls2 []string
 
 func init() {
 	sidecarDBTables = []string{"copy_state", "dt_participant", "dt_state", "heartbeat", "post_copy_action",
-		"redo_state", "redo_statement", "reparent_journal", "resharding_journal", "schema_migrations", "schema_version",
+		"redo_state", "redo_statement", "reparent_journal", "resharding_journal", "schema_migrations", "schema_version", "semisync_heartbeat",
 		"tables", "udfs", "vdiff", "vdiff_log", "vdiff_table", "views", "vreplication", "vreplication_log"}
 	numSidecarDBTables = len(sidecarDBTables)
 	ddls1 = []string{
@@ -51,7 +51,7 @@ func init() {
 }
 
 func prs(t *testing.T, keyspace, shard string) {
-	_, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "--", fmt.Sprintf("%s/%s", keyspace, shard))
+	_, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", fmt.Sprintf("%s/%s", keyspace, shard))
 	require.NoError(t, err)
 }
 

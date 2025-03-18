@@ -205,7 +205,11 @@ func (te *Env) SetVSchema(vs string) error {
 	if err := json2.UnmarshalPB([]byte(vs), &kspb); err != nil {
 		return err
 	}
-	if err := te.TopoServ.SaveVSchema(ctx, te.KeyspaceName, &kspb); err != nil {
+	ksvs := &topo.KeyspaceVSchemaInfo{
+		Name:     te.KeyspaceName,
+		Keyspace: &kspb,
+	}
+	if err := te.TopoServ.SaveVSchema(ctx, ksvs); err != nil {
 		return err
 	}
 	te.SchemaEngine.Reload(ctx)

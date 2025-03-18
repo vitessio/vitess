@@ -569,7 +569,7 @@ func (tpc *TwoPC) UnresolvedTransactions(ctx context.Context, abandonTime time.T
 			appendCurrentTx()
 
 			// Extract the transaction state and initialize a new TransactionMetadata
-			stateID, _ := row[1].ToInt()
+			stateID, _ := row[1].ToInt32()
 			timeCreated, _ := row[2].ToCastInt64()
 			currentTx = &querypb.TransactionMetadata{
 				Dtid:         dtid,

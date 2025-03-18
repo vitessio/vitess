@@ -221,8 +221,12 @@ type sandboxTopo struct {
 //
 // when this version is used, WatchSrvVSchema can properly simulate watches
 func newSandboxForCells(ctx context.Context, cells []string) *sandboxTopo {
+	ts := memorytopo.NewServer(ctx, cells...)
+	for ks := range ksToSandbox {
+		ts.EnsureVSchema(ctx, ks)
+	}
 	return &sandboxTopo{
-		topoServer: memorytopo.NewServer(ctx, cells...),
+		ts,
 	}
 }
 
@@ -293,6 +297,16 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 		return
 	}
 
+	// Update the backing topo server with the current sandbox vschemas.
+	for ks := range ksToSandbox {
+		ksvs := &topo.KeyspaceVSchemaInfo{
+			Name:     ks,
+			Keyspace: srvVSchema.Keyspaces[ks],
+		}
+		if err := sct.topoServer.SaveVSchema(ctx, ksvs); err != nil {
+			panic(fmt.Sprintf("sandboxTopo SaveVSchema returned an error: %v", err))
+		}
+	}
 	sct.topoServer.UpdateSrvVSchema(ctx, cell, srvVSchema)
 	current, updateChan, err := sct.topoServer.WatchSrvVSchema(ctx, cell)
 	if err != nil {

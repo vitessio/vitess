@@ -1099,16 +1099,6 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	return parentAlterTableEntityDiff, nil
 }
 
-func (c *CreateTableEntity) diffTableCharset(
-	t1cc *charsetCollate,
-	t2cc *charsetCollate,
-) string {
-	if t1cc.charset != t2cc.charset {
-		return t2cc.charset
-	}
-	return ""
-}
-
 // isDefaultTableOptionValue sees if the value for a TableOption is also its default value
 func isDefaultTableOptionValue(option *sqlparser.TableOption) bool {
 	var value string
@@ -1689,6 +1679,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 						NewName: t2Key.Info.Name,
 					}
 					alterTable.AlterOptions = append(alterTable.AlterOptions, renameIndex)
+					annotations.MarkAdded(sqlparser.CanonicalString(t2Key))
 					convertedToRename = true
 				}
 			}

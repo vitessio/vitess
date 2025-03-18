@@ -118,8 +118,8 @@ func (rv *RegionJSON) NeedsVCursor() bool {
 }
 
 // Map satisfies MultiColumn.
-func (rv *RegionJSON) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
-	destinations := make([]key.Destination, 0, len(rowsColValues))
+func (rv *RegionJSON) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.ShardDestination, error) {
+	destinations := make([]key.ShardDestination, 0, len(rowsColValues))
 	for _, row := range rowsColValues {
 		if len(row) != 2 {
 			destinations = append(destinations, key.DestinationNone{})

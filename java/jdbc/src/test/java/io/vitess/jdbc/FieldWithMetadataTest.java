@@ -28,15 +28,7 @@ import java.sql.Types;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
-import org.mockito.internal.verification.VerificationModeFactory;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
-@PrepareForTest(FieldWithMetadata.class)
-@RunWith(PowerMockRunner.class)
 public class FieldWithMetadataTest extends BaseTest {
 
   @Test
@@ -490,92 +482,6 @@ public class FieldWithMetadataTest extends BaseTest {
             + "(1)," + "flags=AUTO_INCREMENT PRIMARY_KEY UNIQUE_KEY BINARY "
             + "BLOB MULTI_KEY UNSIGNED ZEROFILL, charsetIndex=0, charsetName=null]";
     Assert.assertEquals(result, field.toString());
-  }
-
-  public void testCollations() throws Exception {
-    VitessConnection conn = getVitessConnection();
-
-    Query.Field raw = Query.Field.newBuilder().setTable("foo").setType(Query.Type.CHAR)
-        .setName("foo").setOrgName("foo").setCharset(33).build();
-
-    FieldWithMetadata fieldWithMetadata = PowerMockito.spy(new FieldWithMetadata(conn, raw));
-    String first = fieldWithMetadata.getCollation();
-    String second = fieldWithMetadata.getCollation();
-
-    Assert.assertEquals("utf8_general_ci", first);
-    Assert.assertEquals("cached response is same as first", first, second);
-
-    PowerMockito.verifyPrivate(fieldWithMetadata, VerificationModeFactory.times(1))
-        .invoke("getCollationIndex");
-
-    try {
-      raw = raw.toBuilder()
-          // value chosen because it's obviously out of bounds for the underlying array
-          .setCharset(Integer.MAX_VALUE).build();
-
-      fieldWithMetadata = PowerMockito.spy(new FieldWithMetadata(conn, raw));
-      fieldWithMetadata.getCollation();
-      Assert.fail("Should have received an array index out of bounds because "
-          + "charset/collationIndex of Int.MAX is well above size of charset array");
-    } catch (SQLException e) {
-      if (e.getCause() instanceof ArrayIndexOutOfBoundsException) {
-        Assert.assertEquals("CollationIndex '" + Integer.MAX_VALUE + "' out of bounds for "
-            + "collationName lookup, should be within 0 and "
-            + CharsetMapping.COLLATION_INDEX_TO_COLLATION_NAME.length, e.getMessage());
-      } else {
-        // just rethrow so we fail that way
-        throw e;
-      }
-    }
-
-    PowerMockito.verifyPrivate(fieldWithMetadata, VerificationModeFactory.times(1))
-        .invoke("getCollationIndex");
-    //Mockito.verify(fieldWithMetadata, Mockito.times(1)).getCollationIndex();
-
-    conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
-    fieldWithMetadata = PowerMockito.spy(new FieldWithMetadata(conn, raw));
-    Assert.assertEquals("null response when not including all fields", null,
-        fieldWithMetadata.getCollation());
-
-    // We should not call this at all, because we're short circuiting due to included fields
-    //Mockito.verify(fieldWithMetadata, Mockito.never()).getCollationIndex();
-    PowerMockito.verifyPrivate(fieldWithMetadata, VerificationModeFactory.times(0))
-        .invoke("getCollationIndex");
-  }
-
-  @Test
-  public void testMaxBytesPerChar() throws Exception {
-    VitessConnection conn = PowerMockito.spy(getVitessConnection());
-
-    Query.Field raw = Query.Field.newBuilder().setTable("foo").setType(Query.Type.CHAR)
-        .setName("foo").setOrgName("foo").setCharset(33).build();
-
-    FieldWithMetadata fieldWithMetadata = PowerMockito.spy(new FieldWithMetadata(conn, raw));
-
-    int first = fieldWithMetadata.getMaxBytesPerCharacter();
-    int second = fieldWithMetadata.getMaxBytesPerCharacter();
-
-    Assert.assertEquals("cached response is same as first", first, second);
-    // We called getMaxBytesPerCharacter 2 times above, but should only have made 1 call to
-    // fieldWithMetadata.getMaxBytesPerChar:
-    // first - call conn
-    // second - return cached
-    Mockito.verify(fieldWithMetadata, VerificationModeFactory.times(1))
-        .getMaxBytesPerChar(33, "UTF-8");
-    PowerMockito.verifyPrivate(fieldWithMetadata, VerificationModeFactory.times(1))
-        .invoke("getCollationIndex");
-
-    conn.setIncludedFields(Query.ExecuteOptions.IncludedFields.TYPE_AND_NAME);
-    fieldWithMetadata = PowerMockito.spy(new FieldWithMetadata(conn, raw));
-    Assert.assertEquals("0 return value when not including all fields", 0,
-        fieldWithMetadata.getMaxBytesPerCharacter());
-
-    // We should not call this function because we short circuited due to not including all fields.
-    Mockito.verify(fieldWithMetadata, VerificationModeFactory.times(0))
-        .getMaxBytesPerChar(33, "UTF-8");
-    // Should not be called at all, because it's new for just this test
-    PowerMockito.verifyPrivate(fieldWithMetadata, VerificationModeFactory.times(0))
-        .invoke("getCollationIndex");
   }
 
   @Test

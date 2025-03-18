@@ -21,15 +21,17 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/streamlog"
+
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -56,7 +58,7 @@ func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 	panic("implement me")
 }
 
-func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error {
+func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksvs *topo.KeyspaceVSchemaInfo, srvvs *vschema.SrvVSchema) error {
 	panic("implement me")
 }
 
@@ -99,7 +101,7 @@ func TestDestinationKeyspace(t *testing.T) {
 		targetString, qualifier string
 		expectedError           string
 		expectedKeyspace        string
-		expectedDest            key.Destination
+		expectedDest            key.ShardDestination
 		expectedTabletType      topodatapb.TabletType
 	}
 
@@ -189,15 +191,10 @@ func TestDestinationKeyspace(t *testing.T) {
 }
 
 var (
-	ks1            = &vindexes.Keyspace{Name: "ks1"}
-	ks1Schema      = &vindexes.KeyspaceSchema{Keyspace: ks1}
-	ks2            = &vindexes.Keyspace{Name: "ks2"}
-	ks2Schema      = &vindexes.KeyspaceSchema{Keyspace: ks2}
-	vschemaWith1KS = &vindexes.VSchema{
-		Keyspaces: map[string]*vindexes.KeyspaceSchema{
-			ks1.Name: ks1Schema,
-		},
-	}
+	ks1       = &vindexes.Keyspace{Name: "ks1"}
+	ks1Schema = &vindexes.KeyspaceSchema{Keyspace: ks1}
+	ks2       = &vindexes.Keyspace{Name: "ks2"}
+	ks2Schema = &vindexes.KeyspaceSchema{Keyspace: ks2}
 )
 
 var vschemaWith2KS = &vindexes.VSchema{
@@ -245,58 +242,6 @@ func TestSetTarget(t *testing.T) {
 			} else {
 				require.EqualError(t, err, tc.expectedError)
 			}
-		})
-	}
-}
-
-func TestKeyForPlan(t *testing.T) {
-	type testCase struct {
-		vschema               *vindexes.VSchema
-		targetString          string
-		expectedPlanPrefixKey string
-	}
-
-	tests := []testCase{{
-		vschema:               vschemaWith1KS,
-		targetString:          "",
-		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
-	}, {
-		vschema:               vschemaWith1KS,
-		targetString:          "ks1@replica",
-		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
-	}, {
-		vschema:               vschemaWith1KS,
-		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+DestinationShard(-80)+Query:SELECT 1",
-	}, {
-		vschema:               vschemaWith1KS,
-		targetString:          "ks1[deadbeef]",
-		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+KsIDsResolved:80-+Query:SELECT 1",
-	}, {
-		vschema:               vschemaWith1KS,
-		targetString:          "",
-		expectedPlanPrefixKey: "ks1@primary+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
-	}, {
-		vschema:               vschemaWith1KS,
-		targetString:          "ks1@replica",
-		expectedPlanPrefixKey: "ks1@replica+Collate:utf8mb4_0900_ai_ci+Query:SELECT 1",
-	}}
-
-	for i, tc := range tests {
-		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
-			ss := NewSafeSession(&vtgatepb.Session{InTransaction: false})
-			ss.SetTargetString(tc.targetString)
-			cfg := VCursorConfig{
-				Collation:         collations.CollationUtf8mb4ID,
-				DefaultTabletType: topodatapb.TabletType_PRIMARY,
-			}
-			vc, err := NewVCursorImpl(ss, sqlparser.MarginComments{}, &fakeExecutor{}, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, srvtopo.NewResolver(&FakeTopoServer{}, nil, ""), nil, fakeObserver{}, cfg)
-			require.NoError(t, err)
-			vc.vschema = tc.vschema
-
-			var buf strings.Builder
-			vc.KeyForPlan(context.Background(), "SELECT 1", &buf)
-			require.Equal(t, tc.expectedPlanPrefixKey, buf.String())
 		})
 	}
 }
@@ -367,7 +312,7 @@ func TestSetExecQueryTimeout(t *testing.T) {
 
 func TestRecordMirrorStats(t *testing.T) {
 	safeSession := NewSafeSession(nil)
-	logStats := logstats.NewLogStats(context.Background(), t.Name(), "select 1", "", nil)
+	logStats := logstats.NewLogStats(context.Background(), t.Name(), "select 1", "", nil, streamlog.NewQueryLogConfigForTest())
 	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, logStats, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{})
 	require.NoError(t, err)
 
@@ -384,7 +329,7 @@ func TestRecordMirrorStats(t *testing.T) {
 
 type fakeExecutor struct{}
 
-func (f fakeExecutor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (f fakeExecutor) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable, prepared bool) (*sqltypes.Result, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -449,7 +394,7 @@ func (f fakeExecutor) SetVitessMetadata(ctx context.Context, name, value string)
 	panic("implement me")
 }
 
-func (f fakeExecutor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
+func (f fakeExecutor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -459,7 +404,7 @@ func (f fakeExecutor) VSchema() *vindexes.VSchema {
 	panic("implement me")
 }
 
-func (f fakeExecutor) PlanPrepareStmt(ctx context.Context, vcursor *VCursorImpl, query string) (*engine.Plan, sqlparser.Statement, error) {
+func (f fakeExecutor) PlanPrepareStmt(context.Context, *SafeSession, string) (*engine.Plan, error) {
 	// TODO implement me
 	panic("implement me")
 }

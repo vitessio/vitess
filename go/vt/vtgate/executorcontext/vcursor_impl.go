@@ -19,7 +19,6 @@ package executorcontext
 import (
 	"context"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 	"sync"
@@ -28,6 +27,8 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
+
+	"vitess.io/vitess/go/vt/sysvars"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
@@ -95,7 +96,7 @@ type (
 
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
 	iExecute interface {
-		Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+		Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable, prepared bool) (*sqltypes.Result, error)
 		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, errs []error)
 		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver, fetchLastInsertID bool) []error
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
@@ -112,7 +113,7 @@ type (
 
 		// TODO: remove when resolver is gone
 		VSchema() *vindexes.VSchema
-		PlanPrepareStmt(ctx context.Context, vcursor *VCursorImpl, query string) (*engine.Plan, sqlparser.Statement, error)
+		PlanPrepareStmt(ctx context.Context, safeSession *SafeSession, query string) (*engine.Plan, error)
 
 		Environment() *vtenv.Environment
 		ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error)
@@ -123,7 +124,25 @@ type (
 	// VSchemaOperator is an interface to Vschema Operations
 	VSchemaOperator interface {
 		GetCurrentSrvVschema() *vschemapb.SrvVSchema
-		UpdateVSchema(ctx context.Context, ksName string, vschema *vschemapb.SrvVSchema) error
+		UpdateVSchema(ctx context.Context, ks *topo.KeyspaceVSchemaInfo, vschema *vschemapb.SrvVSchema) error
+	}
+
+	Resolver interface {
+		GetGateway() srvtopo.Gateway
+		ResolveDestinations(
+			ctx context.Context,
+			keyspace string,
+			tabletType topodatapb.TabletType,
+			ids []*querypb.Value,
+			destinations []key.ShardDestination,
+		) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
+		ResolveDestinationsMultiCol(
+			ctx context.Context,
+			keyspace string,
+			tabletType topodatapb.TabletType,
+			ids [][]sqltypes.Value,
+			destinations []key.ShardDestination,
+		) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error)
 	}
 
 	// VCursorImpl implements the VCursor functionality used by dependent
@@ -133,10 +152,10 @@ type (
 		SafeSession    *SafeSession
 		keyspace       string
 		tabletType     topodatapb.TabletType
-		destination    key.Destination
+		destination    key.ShardDestination
 		marginComments sqlparser.MarginComments
 		executor       iExecute
-		resolver       *srvtopo.Resolver
+		resolver       Resolver
 		topoServer     *topo.Server
 		logStats       *logstats.LogStats
 
@@ -175,7 +194,7 @@ func NewVCursorImpl(
 	logStats *logstats.LogStats,
 	vm VSchemaOperator,
 	vschema *vindexes.VSchema,
-	resolver *srvtopo.Resolver,
+	resolver Resolver,
 	serv srvtopo.Server,
 	observer ResultsObserver,
 	cfg VCursorConfig,
@@ -211,6 +230,26 @@ func NewVCursorImpl(
 
 		observer: observer,
 	}, nil
+}
+
+func (vc *VCursorImpl) GetSafeSession() *SafeSession {
+	return vc.SafeSession
+}
+
+func (vc *VCursorImpl) PrepareSetVarComment() string {
+	var res []string
+	vc.Session().GetSystemVariables(func(k, v string) {
+		if sysvars.SupportsSetVar(k) {
+			if k == "sql_mode" && v == "''" {
+				// SET_VAR(sql_mode, '') is not accepted by MySQL, giving a warning:
+				// | Warning | 1064 | Optimizer hint syntax error near ''') */
+				v = "' '"
+			}
+			res = append(res, fmt.Sprintf("SET_VAR(%s = %s)", k, v))
+		}
+	})
+
+	return strings.Join(res, " ")
 }
 
 func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
@@ -367,7 +406,7 @@ func (vc *VCursorImpl) UnresolvedTransactions(ctx context.Context, keyspace stri
 	if keyspace == "" {
 		keyspace = vc.GetKeyspace()
 	}
-	rss, _, err := vc.ResolveDestinations(ctx, keyspace, nil, []key.Destination{key.DestinationAllShards{}})
+	rss, _, err := vc.ResolveDestinations(ctx, keyspace, nil, []key.ShardDestination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, err
 	}
@@ -391,8 +430,8 @@ func (vc *VCursorImpl) StartPrimitiveTrace() func() engine.Stats {
 
 // FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
-func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := vc.ParseDestinationTarget(name.Qualifier.String())
+func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.BaseTable, string, topodatapb.TabletType, key.ShardDestination, error) {
+	destKeyspace, destTabletType, dest, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, "", destTabletType, nil, err
 	}
@@ -407,7 +446,7 @@ func (vc *VCursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, str
 }
 
 func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.TableStatement {
-	ks, _, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
+	ks, _, _, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil
 	}
@@ -417,8 +456,8 @@ func (vc *VCursorImpl) FindView(name sqlparser.TableName) sqlparser.TableStateme
 	return vc.vschema.FindView(ks, name.Name.String())
 }
 
-func (vc *VCursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Table, error) {
-	destKeyspace, destTabletType, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
+func (vc *VCursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.BaseTable, error) {
+	destKeyspace, destTabletType, _, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
@@ -435,14 +474,14 @@ func (vc *VCursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Tabl
 }
 
 // FindTableOrVindex finds the specified table or vindex.
-func (vc *VCursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+func (vc *VCursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
 	if name.Qualifier.IsEmpty() && name.Name.String() == "dual" {
 		// The magical MySQL dual table should only be resolved
 		// when it is not qualified by a database name.
 		return vc.getDualTable()
 	}
 
-	destKeyspace, destTabletType, dest, err := ParseDestinationTarget(name.Qualifier.String(), vc.tabletType, vc.vschema)
+	destKeyspace, destTabletType, dest, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}
@@ -456,12 +495,29 @@ func (vc *VCursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 	return table, vindex, destKeyspace, destTabletType, dest, nil
 }
 
-func (vc *VCursorImpl) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error) {
+// FindViewTarget finds the specified view's target keyspace.
+func (vc *VCursorImpl) FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error) {
+	destKeyspace, _, _, err := vc.parseDestinationTarget(name.Qualifier.String())
+	if err != nil {
+		return nil, err
+	}
+	if destKeyspace != "" {
+		return vc.FindKeyspace(destKeyspace)
+	}
+
+	tbl, err := vc.vschema.FindRoutedTable("", name.Name.String(), vc.tabletType)
+	if err != nil || tbl == nil {
+		return nil, err
+	}
+	return tbl.Keyspace, nil
+}
+
+func (vc *VCursorImpl) parseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
 	return ParseDestinationTarget(targetString, vc.tabletType, vc.vschema)
 }
 
 // ParseDestinationTarget parses destination target string and provides a keyspace if possible.
-func ParseDestinationTarget(targetString string, tablet topodatapb.TabletType, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
+func ParseDestinationTarget(targetString string, tablet topodatapb.TabletType, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.ShardDestination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, tablet)
 	// If the keyspace is not specified, and there is only one keyspace in the VSchema, use that.
 	if destKeyspace == "" && len(vschema.Keyspaces) == 1 {
@@ -472,7 +528,7 @@ func ParseDestinationTarget(targetString string, tablet topodatapb.TabletType, v
 	return destKeyspace, destTabletType, dest, err
 }
 
-func (vc *VCursorImpl) getDualTable() (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+func (vc *VCursorImpl) getDualTable() (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
 	ksName := vc.getActualKeyspace()
 	var ks *vindexes.Keyspace
 	if ksName == "" {
@@ -481,7 +537,7 @@ func (vc *VCursorImpl) getDualTable() (*vindexes.Table, vindexes.Vindex, string,
 	} else {
 		ks = vc.vschema.Keyspaces[ksName].Keyspace
 	}
-	tbl := &vindexes.Table{
+	tbl := &vindexes.BaseTable{
 		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ks,
 		Type:     vindexes.TypeReference,
@@ -748,7 +804,7 @@ func (vc *VCursorImpl) Execute(ctx context.Context, method string, query string,
 		return nil, err
 	}
 
-	qr, err := vc.executor.Execute(ctx, nil, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
+	qr, err := vc.executor.Execute(ctx, nil, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars, false)
 	vc.setRollbackOnPartialExecIfRequired(err != nil, rollbackOnError)
 
 	return qr, err
@@ -763,7 +819,7 @@ func (vc *VCursorImpl) markSavepoint(ctx context.Context, needsRollbackOnParialE
 	}
 	uID := fmt.Sprintf("_vt%s", strings.ReplaceAll(uuid.NewString(), "-", "_"))
 	spQuery := fmt.Sprintf("%ssavepoint %s%s", vc.marginComments.Leading, uID, vc.marginComments.Trailing)
-	_, err := vc.executor.Execute(ctx, nil, "MarkSavepoint", vc.SafeSession, spQuery, bindVars)
+	_, err := vc.executor.Execute(ctx, nil, "MarkSavepoint", vc.SafeSession, spQuery, bindVars, false)
 	if err != nil {
 		return err
 	}
@@ -834,7 +890,7 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
 func (vc *VCursorImpl) ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
 	atomic.AddUint64(&vc.logStats.ShardQueries, 1)
-	rss, _, err := vc.ResolveDestinations(ctx, keyspace, nil, []key.Destination{key.DestinationKeyspaceID(ksid)})
+	rss, _, err := vc.ResolveDestinations(ctx, keyspace, nil, []key.ShardDestination{key.DestinationKeyspaceID(ksid)})
 	if err != nil {
 		return nil, err
 	}
@@ -911,7 +967,7 @@ func (vc *VCursorImpl) fixupPartiallyMovedShards(rss []*srvtopo.ResolvedShard) (
 	return rss, nil
 }
 
-func (vc *VCursorImpl) ResolveDestinations(ctx context.Context, keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func (vc *VCursorImpl) ResolveDestinations(ctx context.Context, keyspace string, ids []*querypb.Value, destinations []key.ShardDestination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	rss, values, err := vc.resolver.ResolveDestinations(ctx, keyspace, vc.tabletType, ids, destinations)
 	if err != nil {
 		return nil, nil, err
@@ -925,7 +981,7 @@ func (vc *VCursorImpl) ResolveDestinations(ctx context.Context, keyspace string,
 	return rss, values, err
 }
 
-func (vc *VCursorImpl) ResolveDestinationsMultiCol(ctx context.Context, keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {
+func (vc *VCursorImpl) ResolveDestinationsMultiCol(ctx context.Context, keyspace string, ids [][]sqltypes.Value, destinations []key.ShardDestination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error) {
 	rss, values, err := vc.resolver.ResolveDestinationsMultiCol(ctx, keyspace, vc.tabletType, ids, destinations)
 	if err != nil {
 		return nil, nil, err
@@ -978,6 +1034,21 @@ func (vc *VCursorImpl) SetSysVar(name string, expr string) {
 	vc.SafeSession.SetSystemVariable(name, expr)
 }
 
+func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sqlparser.Statement) {
+	if setVarComment == "" {
+		return
+	}
+	switch stmt.(type) {
+	// If the statement supports optimizer hints or a transaction statement or a SET statement
+	// no reserved connection is needed
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
+		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show,
+		sqlparser.SupportOptimizerHint:
+	default:
+		vc.NeedsReservedConn()
+	}
+}
+
 // NeedsReservedConn implements the SessionActions interface
 func (vc *VCursorImpl) NeedsReservedConn() {
 	vc.SafeSession.SetReservedConn(true)
@@ -1003,7 +1074,7 @@ func (vc *VCursorImpl) ShardSession() []*srvtopo.ResolvedShard {
 }
 
 // Destination implements the ContextVSchema interface
-func (vc *VCursorImpl) Destination() key.Destination {
+func (vc *VCursorImpl) ShardDestination() key.ShardDestination {
 	return vc.destination
 }
 
@@ -1027,7 +1098,7 @@ func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sq
 }
 
 // TargetDestination implements the ContextVSchema interface
-func (vc *VCursorImpl) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
+func (vc *VCursorImpl) TargetDestination(qualifier string) (key.ShardDestination, *vindexes.Keyspace, topodatapb.TabletType, error) {
 	keyspaceName := vc.getActualKeyspace()
 	if vc.destination == nil && qualifier != "" {
 		keyspaceName = qualifier
@@ -1153,6 +1224,11 @@ func (vc *VCursorImpl) SetWorkloadName(workloadName string) {
 // SetFoundRows implements the SessionActions interface
 func (vc *VCursorImpl) SetFoundRows(foundRows uint64) {
 	vc.SafeSession.SetFoundRows(foundRows)
+}
+
+// SetInDMLExecution implements the SessionActions interface
+func (vc *VCursorImpl) SetInDMLExecution(inDMLExec bool) {
+	vc.SafeSession.SetInDMLExecution(inDMLExec)
 }
 
 // SetDDLStrategy implements the SessionActions interface
@@ -1319,7 +1395,7 @@ func (vc *VCursorImpl) GetAggregateUDFs() []string {
 // FindMirrorRule finds the mirror rule for the requested table name and
 // VSchema tablet type.
 func (vc *VCursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.MirrorRule, error) {
-	destKeyspace, destTabletType, _, err := vc.ParseDestinationTarget(name.Qualifier.String())
+	destKeyspace, destTabletType, _, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, err
 	}
@@ -1331,40 +1407,6 @@ func (vc *VCursorImpl) FindMirrorRule(name sqlparser.TableName) (*vindexes.Mirro
 		return nil, err
 	}
 	return mirrorRule, err
-}
-
-func (vc *VCursorImpl) KeyForPlan(ctx context.Context, query string, buf io.StringWriter) {
-	_, _ = buf.WriteString(vc.keyspace)
-	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
-	_, _ = buf.WriteString("+Collate:")
-	_, _ = buf.WriteString(vc.Environment().CollationEnv().LookupName(vc.config.Collation))
-
-	if vc.destination != nil {
-		switch vc.destination.(type) {
-		case key.DestinationKeyspaceID, key.DestinationKeyspaceIDs:
-			resolved, _, err := vc.ResolveDestinations(ctx, vc.keyspace, nil, []key.Destination{vc.destination})
-			if err == nil && len(resolved) > 0 {
-				shards := make([]string, len(resolved))
-				for i := 0; i < len(shards); i++ {
-					shards[i] = resolved[i].Target.GetShard()
-				}
-				sort.Strings(shards)
-
-				_, _ = buf.WriteString("+KsIDsResolved:")
-				for i, s := range shards {
-					if i > 0 {
-						_, _ = buf.WriteString(",")
-					}
-					_, _ = buf.WriteString(s)
-				}
-			}
-		default:
-			_, _ = buf.WriteString("+")
-			_, _ = buf.WriteString(vc.destination.String())
-		}
-	}
-	_, _ = buf.WriteString("+Query:")
-	_, _ = buf.WriteString(query)
 }
 
 func (vc *VCursorImpl) GetKeyspace() string {
@@ -1384,7 +1426,10 @@ func (vc *VCursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	}
 
 	// Resolve the keyspace either from the table qualifier or the target keyspace
-	var ksName string
+	var (
+		ksName string
+		err    error
+	)
 	if !vschemaDDL.Table.IsEmpty() {
 		ksName = vschemaDDL.Table.Qualifier.String()
 	}
@@ -1395,15 +1440,14 @@ func (vc *VCursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 		return ErrNoKeyspace
 	}
 
-	ks := srvVschema.Keyspaces[ksName]
-	ks, err := topotools.ApplyVSchemaDDL(ksName, ks, vschemaDDL)
+	ksvs, err := topotools.ApplyVSchemaDDL(ctx, ksName, vc.topoServer, vschemaDDL)
 	if err != nil {
 		return err
 	}
 
-	srvVschema.Keyspaces[ksName] = ks
+	srvVschema.Keyspaces[ksName] = ksvs.Keyspace
 
-	return vc.vm.UpdateVSchema(ctx, ksName, srvVschema)
+	return vc.vm.UpdateVSchema(ctx, ksvs, srvVschema)
 }
 
 func (vc *VCursorImpl) MessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error {
@@ -1526,8 +1570,8 @@ func (vc *VCursorImpl) GetUDV(name string) *querypb.BindVariable {
 	return vc.SafeSession.GetUDV(name)
 }
 
-func (vc *VCursorImpl) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, sqlparser.Statement, error) {
-	return vc.executor.PlanPrepareStmt(ctx, vc, query)
+func (vc *VCursorImpl) PlanPrepareStatement(ctx context.Context, query string) (*engine.Plan, error) {
+	return vc.executor.PlanPrepareStmt(ctx, vc.SafeSession, query)
 }
 
 func (vc *VCursorImpl) ClearPrepareData(name string) {
@@ -1550,18 +1594,9 @@ func (vc *VCursorImpl) GetWarmingReadsChannel() chan bool {
 	return vc.config.WarmingReadsChannel
 }
 
-// UpdateForeignKeyChecksState updates the foreign key checks state of the vcursor.
-func (vc *VCursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
-	// Initialize the state to unspecified.
-	vc.fkChecksState = nil
-	// If the query has a SET_VAR optimizer hint that explicitly sets the foreign key checks state,
-	// we should use that.
-	if fkStateFromQuery != nil {
-		vc.fkChecksState = fkStateFromQuery
-		return
-	}
-	// If the query doesn't have anything, then we consult the session state.
-	vc.fkChecksState = vc.SafeSession.ForeignKeyChecks()
+// SetForeignKeyCheckState updates the foreign key checks state of the vcursor.
+func (vc *VCursorImpl) SetForeignKeyCheckState(fkChecksState *bool) {
+	vc.fkChecksState = fkChecksState
 }
 
 // GetForeignKeyChecksState gets the stored foreign key checks state in the vcursor.

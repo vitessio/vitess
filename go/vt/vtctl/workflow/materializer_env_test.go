@@ -86,10 +86,10 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 	}
 
 	require.NoError(t, topoServ.CreateKeyspace(ctx, ms.SourceKeyspace, &topodatapb.Keyspace{}))
-	require.NoError(t, topoServ.SaveVSchema(ctx, ms.SourceKeyspace, &vschemapb.Keyspace{}))
+	require.NoError(t, topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: ms.SourceKeyspace, Keyspace: &vschemapb.Keyspace{}}))
 	if ms.SourceKeyspace != ms.TargetKeyspace {
 		require.NoError(t, topoServ.CreateKeyspace(ctx, ms.TargetKeyspace, &topodatapb.Keyspace{}))
-		require.NoError(t, topoServ.SaveVSchema(ctx, ms.TargetKeyspace, &vschemapb.Keyspace{}))
+		require.NoError(t, topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: ms.TargetKeyspace, Keyspace: &vschemapb.Keyspace{}}))
 	}
 	logger := logutil.NewConsoleLogger()
 	require.NoError(t, topoServ.RebuildSrvVSchema(ctx, []string{"cell"}))

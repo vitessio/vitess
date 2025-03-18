@@ -399,6 +399,8 @@ type fakeTMClient struct {
 	getSchemaCounts map[string]int
 	// Used to confirm the number of times WorkflowDelete was called.
 	workflowDeleteCalls int
+	// Used to confirm the number of times UpdateVReplicationWorkflow with state as Stopped was called.
+	workflowStopCalls int
 }
 
 func newFakeTMClient() *fakeTMClient {
@@ -580,5 +582,8 @@ func (tmc *fakeTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *
 func (tmc *fakeTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
+	if *req.State == binlogdatapb.VReplicationWorkflowState_Stopped {
+		tmc.workflowStopCalls++
+	}
 	return tmc.tablets[int(tablet.Alias.Uid)].tm.UpdateVReplicationWorkflow(ctx, req)
 }

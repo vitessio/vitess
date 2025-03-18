@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -1659,7 +1660,7 @@ func TestPurgeMessages(t *testing.T) {
 func TestHandleExecUnknownError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	logStats := tabletenv.NewLogStats(ctx, "TestHandleExecError")
+	logStats := tabletenv.NewLogStats(ctx, "TestHandleExecError", streamlog.NewQueryLogConfigForTest())
 	cfg := tabletenv.NewDefaultConfig()
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
@@ -1676,7 +1677,7 @@ func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 	defer cancel()
 	tl := newTestLogger()
 	defer tl.Close()
-	logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation")
+	logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation", streamlog.NewQueryLogConfigForTest())
 	env, err := vtenv.New(vtenv.Options{
 		MySQLServerVersion: config.DefaultMySQLVersion,
 		TruncateErrLen:     32,
@@ -2154,6 +2155,16 @@ var aclJSON2 = `{
     }
   ]
 }`
+var aclJSONOverlapError = `{
+	"table_groups": [
+	  {
+		"name": "group02",
+		"table_names_or_prefixes": ["test_table2", "test_table2"],
+		"readers": ["vt2"],
+		"admins": ["vt2"]
+	  }
+	]
+  }`
 
 func TestACLHUP(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2167,12 +2178,23 @@ func TestACLHUP(t *testing.T) {
 	require.NoError(t, err)
 	defer os.Remove(f.Name())
 
+	// We need to confirm this ACL JSON is broken first, for later use.
+	_, err = io.WriteString(f, aclJSONOverlapError)
+	require.NoError(t, err)
+	err = f.Close()
+	require.NoError(t, err)
+	err = tsv.InitACL(f.Name(), 0)
+	require.Error(t, err)
+
+	f, err = os.Create(f.Name())
+	require.NoError(t, err)
 	_, err = io.WriteString(f, aclJSON1)
 	require.NoError(t, err)
 	err = f.Close()
 	require.NoError(t, err)
 
-	tsv.InitACL(f.Name(), true, 0)
+	err = tsv.InitACL(f.Name(), 0)
+	require.NoError(t, err)
 
 	groups1 := tableacl.GetCurrentConfig().TableGroups
 	if name1 := groups1[0].GetName(); name1 != "group01" {
@@ -2187,20 +2209,37 @@ func TestACLHUP(t *testing.T) {
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 	time.Sleep(100 * time.Millisecond) // wait for signal handler
 
-	groups2 := tableacl.GetCurrentConfig().TableGroups
-	if len(groups2) != 1 {
-		t.Fatalf("Expected only one table group")
+	test_loaded_acl := func() {
+		groups2 := tableacl.GetCurrentConfig().TableGroups
+		if len(groups2) != 1 {
+			t.Fatalf("Expected only one table group")
+		}
+		group2 := groups2[0]
+		if name2 := group2.GetName(); name2 != "group02" {
+			t.Fatalf("Expected name 'group02', got '%s'", name2)
+		}
+		if group2.GetAdmins() == nil {
+			t.Fatalf("Expected 'admins' to exist, but it didn't")
+		}
+		if group2.GetWriters() != nil {
+			t.Fatalf("Expected 'writers' to not exist, got '%s'", group2.GetWriters())
+		}
 	}
-	group2 := groups2[0]
-	if name2 := group2.GetName(); name2 != "group02" {
-		t.Fatalf("Expected name 'group02', got '%s'", name2)
-	}
-	if group2.GetAdmins() == nil {
-		t.Fatalf("Expected 'admins' to exist, but it didn't")
-	}
-	if group2.GetWriters() != nil {
-		t.Fatalf("Expected 'writers' to not exist, got '%s'", group2.GetWriters())
-	}
+
+	test_loaded_acl()
+
+	// Now try to reload an invalid ACL and see if we are still operating with the same ACL config as before.
+
+	f, err = os.Create(f.Name())
+	require.NoError(t, err)
+	_, err = io.WriteString(f, aclJSONOverlapError)
+	require.NoError(t, err)
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+	time.Sleep(100 * time.Millisecond) // wait for signal handler
+
+	test_loaded_acl()
+
 }
 
 func TestConfigChanges(t *testing.T) {

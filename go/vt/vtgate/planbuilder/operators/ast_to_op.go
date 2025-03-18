@@ -137,8 +137,8 @@ func findTablesContained(ctx *plancontext.PlanningContext, node sqlparser.SQLNod
 // comparisons between the inner and the outer side.
 // They can be used for merging the two parts of the query together
 type joinPredicateCollector struct {
-	predicates          sqlparser.Exprs
-	remainingPredicates sqlparser.Exprs
+	predicates          []sqlparser.Expr
+	remainingPredicates []sqlparser.Expr
 	joinColumns         []applyJoinColumn
 
 	totalID,
@@ -174,7 +174,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 	rexprs := ctx.SemTable.SelectExprs(node.Right)
 
 	unionCols := ctx.SemTable.SelectExprs(node)
-	union := newUnion([]Operator{opLHS, opRHS}, []sqlparser.SelectExprs{lexprs, rexprs}, unionCols, node.Distinct)
+	union := newUnion([]Operator{opLHS, opRHS}, [][]sqlparser.SelectExpr{lexprs, rexprs}, unionCols, node.Distinct)
 	return newHorizon(union, node)
 }
 
@@ -195,6 +195,7 @@ func createOpFromStmt(inCtx *plancontext.PlanningContext, stmt sqlparser.Stateme
 	if err != nil {
 		panic(err)
 	}
+	ctx.PredTracker = inCtx.PredTracker // we share this so that joinPredicates still get unique IDs
 
 	// TODO (@GuptaManan100, @harshit-gangal): When we add cross-shard foreign keys support,
 	// we should augment the semantic analysis to also tell us whether the given query has any cross shard parent foreign keys to validate.
@@ -229,9 +230,6 @@ func createOpFromStmt(inCtx *plancontext.PlanningContext, stmt sqlparser.Stateme
 	if err != nil {
 		panic(err)
 	}
-
-	// need to remember which predicates have been broken up during join planning
-	inCtx.KeepPredicateInfo(ctx)
 
 	return op
 }
@@ -371,7 +369,7 @@ func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTE, ou
 		panic(err)
 	}
 
-	return newRecurse(ctx, def, seed, term, activeCTE.Predicates, horizon, idForRecursiveTable(ctx, def), outerID, union.Distinct)
+	return newRecurse(def, seed, term, activeCTE.Predicates, horizon, idForRecursiveTable(ctx, def), outerID, union.Distinct)
 }
 
 func idForRecursiveTable(ctx *plancontext.PlanningContext, def *semantics.CTE) semantics.TableSet {
@@ -438,15 +436,8 @@ func createQueryTableForDML(
 func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	switch expr := expr.(type) {
 	case *sqlparser.ComparisonExpr:
-		if expr.Operator != sqlparser.EqualOp {
-			return
-		}
-
-		if left, isCol := expr.Left.(*sqlparser.ColName); isCol {
-			ctx.SemTable.AddColumnEquality(left, expr.Right)
-		}
-		if right, isCol := expr.Right.(*sqlparser.ColName); isCol {
-			ctx.SemTable.AddColumnEquality(right, expr.Left)
+		if expr.Operator == sqlparser.EqualOp {
+			ctx.SemTable.AddExprEquality(expr.Left, expr.Right)
 		}
 	}
 }
@@ -464,7 +455,7 @@ func createSelectionOp(
 	lock sqlparser.Lock,
 ) Operator {
 	selectionStmt := &sqlparser.Select{
-		SelectExprs: selectExprs,
+		SelectExprs: &sqlparser.SelectExprs{Exprs: selectExprs},
 		From:        tableExprs,
 		Where:       where,
 		OrderBy:     orderBy,

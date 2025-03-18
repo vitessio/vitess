@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -108,6 +108,7 @@ func (cached *bvcre) CachedSize(alloc bool) int64 {
 	}
 	// field re *regexp.Regexp
 	if cached.re != nil {
+		// WARNING: size of external type regexp.Regexp cannot be fully calculated
 		size += hack.RuntimeAllocSize(int64(160))
 	}
 	return size
@@ -124,6 +125,7 @@ func (cached *namedRegexp) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	// field Regexp *regexp.Regexp
 	if cached.Regexp != nil {
+		// WARNING: size of external type regexp.Regexp cannot be fully calculated
 		size += hack.RuntimeAllocSize(int64(160))
 	}
 	return size

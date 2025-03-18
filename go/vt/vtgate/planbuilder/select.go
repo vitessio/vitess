@@ -139,19 +139,20 @@ func buildSQLCalcFoundRowsPlan(
 	sel2.OrderBy = nil
 	sel2.Limit = nil
 
-	countStartExpr := []sqlparser.SelectExpr{&sqlparser.AliasedExpr{
-		Expr: &sqlparser.CountStar{},
-	}}
+	countStar := &sqlparser.AliasedExpr{Expr: &sqlparser.CountStar{}}
+	selectExprs := &sqlparser.SelectExprs{
+		Exprs: []sqlparser.SelectExpr{countStar},
+	}
 	if sel2.GroupBy == nil && sel2.Having == nil {
 		// if there is no grouping, we can use the same query and
 		// just replace the SELECT sub-clause to have a single count(*)
-		sel2.SelectExprs = countStartExpr
+		sel2.SetSelectExprs(countStar)
 	} else {
 		// when there is grouping, we have to move the original query into a derived table.
 		//                       select id, sum(12) from user group by id =>
 		// select count(*) from (select id, sum(12) from user group by id) t
 		sel3 := &sqlparser.Select{
-			SelectExprs: countStartExpr,
+			SelectExprs: selectExprs,
 			From: []sqlparser.TableExpr{
 				&sqlparser.AliasedTableExpr{
 					Expr: &sqlparser.DerivedTable{Select: sel2},
@@ -292,10 +293,12 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 		return nil, nil
 	}
 
-	exprs := make([]evalengine.Expr, len(sel.SelectExprs))
-	cols := make([]string, len(sel.SelectExprs))
+	columns := sel.GetColumns()
+	size := len(columns)
+	exprs := make([]evalengine.Expr, size)
+	cols := make([]string, size)
 	var lockFunctions []*engine.LockFunc
-	for i, e := range sel.SelectExprs {
+	for i, e := range columns {
 		expr, ok := e.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, nil

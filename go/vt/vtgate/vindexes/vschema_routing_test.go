@@ -307,7 +307,7 @@ func TestAutoGlobalRoutingBasic(t *testing.T) {
 
 	// Verify the global tables
 	ks := vschema.Keyspaces["sharded1"]
-	require.EqualValues(t, vschema.globalTables, map[string]*Table{
+	require.EqualValues(t, vschema.globalTables, map[string]Table{
 		"table5":   ks.Tables["table5"],
 		"scommon1": ks.Tables["scommon1"],
 		"scommon2": ks.Tables["scommon2"],
@@ -419,7 +419,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 	vindex1 := &stFU{
 		name: "stfu1",
 	}
-	t1 := &Table{
+	t1 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks1,
 		ColumnVindexes: []*ColumnVindex{{
@@ -434,7 +434,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 	t1.Ordered = []*ColumnVindex{
 		t1.ColumnVindexes[0],
 	}
-	t2 := &Table{
+	t2 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t2"),
 		Keyspace: ks2,
 	}
@@ -445,10 +445,10 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("table rt1 has more than one target: [ks1.t1 ks2.t2]"),
 			},
 			"rt2": {
-				Tables: []*Table{t2},
+				Tables: []*BaseTable{t2},
 			},
 			"escaped": {
-				Tables: []*Table{t2},
+				Tables: []*BaseTable{t2},
 			},
 			"dup": {
 				Error: errors.New("duplicate rule for entry dup"),
@@ -466,7 +466,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("table t2 not found"),
 			},
 		},
-		globalTables: map[string]*Table{
+		globalTables: map[string]Table{
 			"t1": t1,
 			"t2": t2,
 		},
@@ -477,7 +477,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			"ks1": {
 				Keyspace:       ks1,
 				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"t1": t1,
 				},
 				Vindexes: map[string]Vindex{
@@ -487,7 +487,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			"ks2": {
 				ForeignKeyMode: vschemapb.Keyspace_managed,
 				Keyspace:       ks2,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"t2": t2,
 				},
 				Vindexes: map[string]Vindex{},

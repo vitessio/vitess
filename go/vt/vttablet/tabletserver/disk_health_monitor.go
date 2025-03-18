@@ -1,4 +1,20 @@
-package tabletmanager
+/*
+Copyright 2024 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package tabletserver
 
 import (
 	"context"
@@ -7,7 +23,28 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 )
+
+var (
+	stalledDiskWriteDir      = ""
+	stalledDiskWriteTimeout  = 30 * time.Second
+	stalledDiskWriteInterval = 5 * time.Second
+)
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerInitFlags)
+	servenv.OnParseFor("vttablet", registerInitFlags)
+}
+
+func registerInitFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&stalledDiskWriteDir, "disk-write-dir", stalledDiskWriteDir, "if provided, tablet will attempt to write a file to this directory to check if the disk is stalled")
+	fs.DurationVar(&stalledDiskWriteTimeout, "disk-write-timeout", stalledDiskWriteTimeout, "if writes exceed this duration, the disk is considered stalled")
+	fs.DurationVar(&stalledDiskWriteInterval, "disk-write-interval", stalledDiskWriteInterval, "how often to write to the disk to check whether it is stalled")
+}
 
 type DiskHealthMonitor interface {
 	// IsDiskStalled returns true if the disk is stalled or rejecting writes.

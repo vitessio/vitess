@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -329,10 +330,16 @@ func TestCreateLookupVindexFull(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(context.Background(), ms.TargetKeyspace, &vschemapb.Keyspace{}); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     ms.TargetKeyspace,
+		Keyspace: &vschemapb.Keyspace{},
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, sourceVSchema); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     ms.SourceKeyspace,
+		Keyspace: sourceVSchema,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -376,7 +383,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	}
 	vschema, err := env.topoServ.GetVSchema(ctx, ms.SourceKeyspace)
 	require.NoError(t, err)
-	utils.MustMatch(t, wantvschema, vschema)
+	utils.MustMatch(t, wantvschema, vschema.Keyspace)
 
 	wantvschema = &vschemapb.Keyspace{
 		Tables: map[string]*vschemapb.Table{
@@ -385,7 +392,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 	}
 	vschema, err = env.topoServ.GetVSchema(ctx, ms.TargetKeyspace)
 	require.NoError(t, err)
-	utils.MustMatch(t, wantvschema, vschema)
+	utils.MustMatch(t, wantvschema, vschema.Keyspace)
 }
 
 func TestCreateLookupVindexCreateDDL(t *testing.T) {
@@ -412,7 +419,10 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 			},
 		},
 	}
-	if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, vs); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     ms.SourceKeyspace,
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -827,10 +837,16 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 				Schema: sourceSchema,
 			}},
 		}
-		if err := env.topoServ.SaveVSchema(context.Background(), ms.TargetKeyspace, &vschemapb.Keyspace{}); err != nil {
+		if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+			Name:     ms.TargetKeyspace,
+			Keyspace: &vschemapb.Keyspace{},
+		}); err != nil {
 			t.Fatal(err)
 		}
-		if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, tcase.sourceVSchema); err != nil {
+		if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+			Name:     ms.SourceKeyspace,
+			Keyspace: tcase.sourceVSchema,
+		}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -866,7 +882,10 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			},
 		},
 	}
-	if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, sourcevs); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     ms.SourceKeyspace,
+		Keyspace: sourcevs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1063,7 +1082,10 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			}},
 		}
 		specs.Vindexes["v"].Params["table"] = fmt.Sprintf("%s.%s", ms.TargetKeyspace, tcase.targetTable)
-		if err := env.topoServ.SaveVSchema(context.Background(), ms.TargetKeyspace, tcase.targetVSchema); err != nil {
+		if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+			Name:     ms.TargetKeyspace,
+			Keyspace: tcase.targetVSchema,
+		}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -1075,7 +1097,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			continue
 		}
 		require.NoError(t, err)
-		utils.MustMatch(t, tcase.out, got, tcase.description)
+		utils.MustMatch(t, tcase.out, got.Keyspace, tcase.description)
 	}
 }
 
@@ -1178,7 +1200,10 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, vschema); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     ms.SourceKeyspace,
+		Keyspace: vschema,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1287,7 +1312,10 @@ func TestCreateCustomizedVindex(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, vschema); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     ms.SourceKeyspace,
+		Keyspace: vschema,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1402,7 +1430,10 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, vschema); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     ms.SourceKeyspace,
+		Keyspace: vschema,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1480,7 +1511,10 @@ func TestStopAfterCopyFlag(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, vschema); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     ms.SourceKeyspace,
+		Keyspace: vschema,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1536,10 +1570,16 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			},
 		},
 	}
-	if err := topoServ.SaveVSchema(context.Background(), "sourceks", vs); err != nil {
+	if err := topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     "sourceks",
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := topoServ.SaveVSchema(context.Background(), "targetks", &vschemapb.Keyspace{}); err != nil {
+	if err := topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     "targetks",
+		Keyspace: &vschemapb.Keyspace{},
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1861,7 +1901,10 @@ func TestExternalizeVindex(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		// Resave the source schema for every iteration.
-		if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, sourceVSchema); err != nil {
+		if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+			Name:     ms.SourceKeyspace,
+			Keyspace: sourceVSchema,
+		}); err != nil {
 			t.Fatal(err)
 		}
 		if tcase.vrResponse != nil {
@@ -2012,7 +2055,10 @@ func TestMaterializerOneToMany(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     "targetks",
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2069,7 +2115,10 @@ func TestMaterializerManyToMany(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     "targetks",
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2130,7 +2179,10 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     "targetks",
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2267,7 +2319,10 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     "targetks",
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2327,7 +2382,10 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     "targetks",
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2399,7 +2457,10 @@ func TestMaterializerNoTargetVSchema(t *testing.T) {
 		Sharded: true,
 	}
 
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     "targetks",
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -2619,7 +2680,10 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     "targetks",
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2660,7 +2724,10 @@ func TestMaterializerComplexVindexExpression(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     "targetks",
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2701,7 +2768,10 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
+	if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+		Name:     "targetks",
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -3138,11 +3208,17 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			env, ctx := newTestMaterializerEnv(t, ms, tcase.sourceShards, tcase.targetShards)
-			if err := env.topoServ.SaveVSchema(ctx, "targetks", tcase.targetVSchema); err != nil {
+			if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+				Name:     "targetks",
+				Keyspace: tcase.targetVSchema,
+			}); err != nil {
 				t.Fatal(err)
 			}
 			if tcase.sourceVSchema != nil {
-				if err := env.topoServ.SaveVSchema(context.Background(), "sourceks", tcase.sourceVSchema); err != nil {
+				if err := env.topoServ.SaveVSchema(context.Background(), &topo.KeyspaceVSchemaInfo{
+					Name:     "sourceks",
+					Keyspace: tcase.sourceVSchema,
+				}); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -3395,7 +3471,10 @@ func TestAddTablesToVSchema(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ts.SaveVSchema(ctx, srcks, tt.sourceVSchema)
+			ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+				Name:     srcks,
+				Keyspace: tt.sourceVSchema,
+			})
 			err := wr.addTablesToVSchema(ctx, srcks, tt.inTargetVSchema, tt.tables, tt.copyVSchema)
 			require.NoError(t, err)
 			require.Equal(t, tt.wantTargetVSchema, tt.inTargetVSchema)
@@ -3587,7 +3666,10 @@ func TestKeyRangesEqualOptimization(t *testing.T) {
 			ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
 			// Target is always sharded.
-			err := env.wr.ts.SaveVSchema(ctx, targetKs, targetVSchema)
+			err := env.wr.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+				Name:     targetKs,
+				Keyspace: targetVSchema,
+			})
 			require.NoError(t, err, "SaveVSchema failed: %v", err)
 
 			for _, tablet := range env.tablets {

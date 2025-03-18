@@ -17,7 +17,6 @@ limitations under the License.
 package workflow
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -51,6 +50,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -293,7 +293,7 @@ func forAllShards(shards []*topo.ShardInfo, f func(*topo.ShardInfo) error) error
 }
 
 func matchColInSelect(col sqlparser.IdentifierCI, sel *sqlparser.Select) (*sqlparser.ColName, error) {
-	for _, selExpr := range sel.SelectExprs {
+	for _, selExpr := range sel.GetColumns() {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
 			return &sqlparser.ColName{Name: col}, nil
@@ -460,11 +460,11 @@ func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodata
 	sort.Strings(targetShards)
 	getFullKeyRange := func(shards []string) (*topodatapb.KeyRange, error) {
 		// Expect sorted shards.
-		kr1, err := getKeyRange(sourceShards[0])
+		kr1, err := getKeyRange(shards[0])
 		if err != nil {
 			return nil, err
 		}
-		kr2, err := getKeyRange(sourceShards[len(sourceShards)-1])
+		kr2, err := getKeyRange(shards[len(shards)-1])
 		if err != nil {
 			return nil, err
 		}
@@ -626,9 +626,7 @@ func ReverseWorkflowName(workflow string) string {
 // this public, but it doesn't belong in package workflow. Maybe package sqltypes,
 // or maybe package sqlescape?
 func encodeString(in string) string {
-	buf := bytes.NewBuffer(nil)
-	sqltypes.NewVarChar(in).EncodeSQL(buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }
 
 func getRenameFileName(tableName string) string {
@@ -1028,7 +1026,7 @@ func applyTargetShards(ts *trafficSwitcher, targetShards []string) error {
 
 // validateSourceTablesExist validates that tables provided are present
 // in the source keyspace.
-func validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTables, tables []string) error {
+func validateSourceTablesExist(sourceKeyspace string, ksTables, tables []string) error {
 	var missingTables []string
 	for _, table := range tables {
 		if schema.IsInternalOperationTableName(table) {
@@ -1050,4 +1048,26 @@ func validateSourceTablesExist(ctx context.Context, sourceKeyspace string, ksTab
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table(s) not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
 	}
 	return nil
+}
+
+// getVindexAndVSchema gets the vindex (from VSchema) and VSchema with the
+// provided vindex name and keyspace.
+func getVindexAndVSchema(ctx context.Context, ts *topo.Server, keyspace string, vindexName string) (*vschemapb.Vindex, *topo.KeyspaceVSchemaInfo, error) {
+	vschema, err := ts.GetVSchema(ctx, keyspace)
+	if err != nil {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", keyspace)
+	}
+	vindex := vschema.Vindexes[vindexName]
+	if vindex == nil {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in the %s keyspace", vindexName, keyspace)
+	}
+	return vindex, vschema, nil
+}
+
+func processWorkflowActionOptions(opts []WorkflowActionOption) workflowActionOptions {
+	var options workflowActionOptions
+	for _, o := range opts {
+		o.apply(&options)
+	}
+	return options
 }

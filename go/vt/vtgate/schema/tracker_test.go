@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -170,6 +169,38 @@ func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 	assert.Nil(t, ks3.reloadKeyspace, "ks3 already initialized")
 }
 
+// TestTrackerNoLock tests that processing of health check is not blocked while tracking is making GetSchema rpc calls.
+func TestTrackerNoLock(t *testing.T) {
+	ch := make(chan *discovery.TabletHealth)
+	tracker := NewTracker(ch, true, false, sqlparser.NewTestParser())
+	tracker.consumeDelay = 1 * time.Millisecond
+	tracker.Start()
+	defer tracker.Stop()
+
+	target := &querypb.Target{Cell: cell, Keyspace: keyspace, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}
+
+	sbc := sandboxconn.NewSandboxConn(tablet)
+	sbc.GetSchemaDelayResponse = 100 * time.Millisecond
+
+	th := &discovery.TabletHealth{
+		Conn:    sbc,
+		Tablet:  tablet,
+		Target:  target,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{TableSchemaChanged: []string{"t1"}},
+	}
+
+	for i := 0; i < 500000; i++ {
+		select {
+		case ch <- th:
+		case <-time.After(10 * time.Millisecond):
+			t.Fatalf("failed to send health check to tracker")
+		}
+	}
+	require.GreaterOrEqual(t, sbc.GetSchemaCount.Load(), int64(1), "GetSchema rpc should be called")
+}
+
 type myTable struct {
 	name, create string
 }
@@ -201,6 +232,9 @@ func TestTableTracking(t *testing.T) {
 		),
 		tables(
 			tbl("t4", "create table t4(name varchar(50) primary key)"),
+		),
+		tables(
+			tbl("t5", "create table t5(name varchar(50) primary key with broken syntax)"),
 		),
 	}
 
@@ -234,6 +268,15 @@ func TestTableTracking(t *testing.T) {
 			"t3": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME, CollationName: "binary", Size: 0, Nullable: true}},
 			"t4": {{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
 		},
+	}, {
+		testName: "new broken table",
+		updTbl:   []string{"t5"},
+		expTbl: map[string][]vindexes.Column{
+			"t1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64, CollationName: "binary", Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("email"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: false, Default: &sqlparser.Literal{Val: "a@b.com"}}},
+			"T1": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}, {Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
+			"t3": {{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_DATETIME, CollationName: "binary", Size: 0, Nullable: true}},
+			"t4": {{Name: sqlparser.NewIdentifierCI("name"), Type: querypb.Type_VARCHAR, Size: 50, Nullable: true}},
+		},
 	}}
 
 	testTracker(t, false, schemaResponse, testcases)
@@ -253,34 +296,43 @@ func TestViewsTracking(t *testing.T) {
 			tbl("t3", "create view t3 as select 1 from tbl3"),
 		),
 		tables(tbl("t4", "create view t4 as select 1 from tbl4")),
+		tables(tbl("t4", "create view t5 as select 1 from tbl4 with broken syntax")),
 	}
 
 	testcases := []testCases{{
 		testName: "initial view load",
 		expView: map[string]string{
-			"prior": "select 1 from tbl"},
+			"prior": "select 1 from ks.tbl"},
 	}, {
 		testName: "new view t1, V1",
 		updView:  []string{"t1", "V1"},
 		expView: map[string]string{
-			"t1":    "select 1 from tbl1",
-			"V1":    "select 1 from tbl2",
-			"prior": "select 1 from tbl"},
+			"t1":    "select 1 from ks.tbl1",
+			"V1":    "select 1 from ks.tbl2",
+			"prior": "select 1 from ks.tbl"},
 	}, {
 		testName: "delete prior, updated V1 and new t3",
 		updView:  []string{"prior", "V1", "t3"},
 		expView: map[string]string{
-			"t1": "select 1 from tbl1",
-			"V1": "select 1, 2 from tbl2",
-			"t3": "select 1 from tbl3"},
+			"t1": "select 1 from ks.tbl1",
+			"V1": "select 1, 2 from ks.tbl2",
+			"t3": "select 1 from ks.tbl3"},
 	}, {
 		testName: "new t4",
 		updView:  []string{"t4"},
 		expView: map[string]string{
-			"t1": "select 1 from tbl1",
-			"V1": "select 1, 2 from tbl2",
-			"t3": "select 1 from tbl3",
-			"t4": "select 1 from tbl4"},
+			"t1": "select 1 from ks.tbl1",
+			"V1": "select 1, 2 from ks.tbl2",
+			"t3": "select 1 from ks.tbl3",
+			"t4": "select 1 from ks.tbl4"},
+	}, {
+		testName: "new broken t5",
+		updView:  []string{"t5"},
+		expView: map[string]string{
+			"t1": "select 1 from ks.tbl1",
+			"V1": "select 1, 2 from ks.tbl2",
+			"t3": "select 1 from ks.tbl3",
+			"t4": "select 1 from ks.tbl4"},
 	}}
 
 	testTracker(t, false, schemaDefResult, testcases)

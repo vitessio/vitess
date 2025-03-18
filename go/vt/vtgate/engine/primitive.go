@@ -77,11 +77,11 @@ type (
 		// Keyspace ID level functions.
 		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
 
-		// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
+		// Resolver methods, from key.ShardDestination to srvtopo.ResolvedShard.
 		// Will replace all of the Topo functions.
-		ResolveDestinations(ctx context.Context, keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
+		ResolveDestinations(ctx context.Context, keyspace string, ids []*querypb.Value, destinations []key.ShardDestination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
 
-		ResolveDestinationsMultiCol(ctx context.Context, keyspace string, ids [][]sqltypes.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error)
+		ResolveDestinationsMultiCol(ctx context.Context, keyspace string, ids [][]sqltypes.Value, destinations []key.ShardDestination) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error)
 
 		ExecuteVSchema(ctx context.Context, keyspace string, vschemaDDL *sqlparser.AlterVschema) error
 
@@ -98,7 +98,7 @@ type (
 
 		LookupRowLockShardSession() vtgatepb.CommitOrder
 
-		FindRoutedTable(tablename sqlparser.TableName) (*vindexes.Table, error)
+		FindRoutedTable(tablename sqlparser.TableName) (*vindexes.BaseTable, error)
 
 		// GetDBDDLPlugin gets the configured plugin for DROP/CREATE DATABASE
 		GetDBDDLPluginName() string
@@ -184,6 +184,7 @@ type (
 		SetPriority(string)
 		SetExecQueryTimeout(timeout *int)
 		SetFoundRows(uint64)
+		SetInDMLExecution(inDMLExec bool)
 
 		SetDDLStrategy(string)
 		GetDDLStrategy() string
@@ -269,6 +270,9 @@ type (
 
 	// txNeeded is a default implementation for Primitives that need transaction handling
 	txNeeded struct{}
+
+	// noFields is a default implementation for Primitives that do not return fields
+	noFields struct{}
 )
 
 // Find will return the first Primitive that matches the evaluate function. If no match is found, nil will be returned
@@ -302,4 +306,8 @@ func (noTxNeeded) NeedsTransaction() bool {
 
 func (txNeeded) NeedsTransaction() bool {
 	return true
+}
+
+func (noFields) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return &sqltypes.Result{}, nil
 }

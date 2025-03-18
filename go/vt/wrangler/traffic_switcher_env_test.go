@@ -206,12 +206,18 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	}
 	tme.setPrimarySchemas(schema)
 	if len(sourceShards) != 1 {
-		if err := tme.ts.SaveVSchema(ctx, "ks1", vs); err != nil {
+		if err := tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+			Name:     "ks1",
+			Keyspace: vs,
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if len(targetShards) != 1 {
-		if err := tme.ts.SaveVSchema(ctx, "ks2", vs); err != nil {
+		if err := tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+			Name:     "ks2",
+			Keyspace: vs,
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -232,7 +238,10 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		tabletID += 10
 		gfdb := fakesqldb.New(t)
 		tme.additionalPrimaries = append(tme.additionalPrimaries, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_PRIMARY, gfdb, TabletKeyspaceShard(t, "global", "0")))
-		if err := tme.ts.SaveVSchema(ctx, "global", uvs); err != nil {
+		if err := tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+			Name:     "global",
+			Keyspace: uvs,
+		}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -246,7 +255,10 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			Column:   "id",
 			Sequence: "t2_seq",
 		}
-		if err := tme.ts.SaveVSchema(ctx, "ks2", tks); err != nil {
+		if err := tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+			Name:     "ks2",
+			Keyspace: tks,
+		}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -459,9 +471,15 @@ func newTestTablePartialMigrater(ctx context.Context, t *testing.T, shards, shar
 			},
 		},
 	}
-	err := tme.ts.SaveVSchema(ctx, "ks1", vs)
+	err := tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     "ks1",
+		Keyspace: vs,
+	})
 	require.NoError(t, err)
-	err = tme.ts.SaveVSchema(ctx, "ks2", vs)
+	err = tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     "ks2",
+		Keyspace: vs,
+	})
 	require.NoError(t, err)
 	err = tme.ts.RebuildSrvVSchema(ctx, nil)
 	require.NoError(t, err)
@@ -630,7 +648,10 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 			},
 		},
 	}
-	if err := tme.ts.SaveVSchema(ctx, "ks", vs); err != nil {
+	if err := tme.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     "ks",
+		Keyspace: vs,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := tme.ts.RebuildSrvVSchema(ctx, nil); err != nil {

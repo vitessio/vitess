@@ -16,20 +16,13 @@
 
 package io.vitess.jdbc;
 
+import org.junit.Assert;
+import org.junit.Test;
+
 import java.sql.ParameterMetaData;
 import java.sql.SQLException;
 import java.sql.Types;
 
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.internal.verification.VerificationModeFactory;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
-
-@RunWith(PowerMockRunner.class)
-@PrepareForTest(VitessParameterMetaData.class)
 public class VitessParameterMetaDataTest {
 
   @Test
@@ -68,22 +61,6 @@ public class VitessParameterMetaDataTest {
               + "' is greater than number of parameters, which is '" + parameterCount + "'.",
           e.getMessage());
     }
-  }
-
-  @Test
-  public void testOutOfBoundCoverage() throws Exception {
-    int param = 2;
-    VitessParameterMetaData metaData = PowerMockito.spy(new VitessParameterMetaData(5));
-
-    metaData.getParameterType(param);
-    metaData.getPrecision(param);
-    metaData.getScale(param);
-    metaData.getParameterClassName(param);
-    metaData.getParameterTypeName(param);
-    metaData.isSigned(param);
-
-    PowerMockito.verifyPrivate(metaData, VerificationModeFactory.times(6))
-        .invoke("checkBounds", param);
   }
 
   @Test(expected = SQLException.class)

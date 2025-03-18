@@ -19,15 +19,20 @@ package newfeaturetest
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
@@ -177,7 +182,7 @@ func TestERSWithWriteInPromoteReplica(t *testing.T) {
 }
 
 func TestBufferingWithMultipleDisruptions(t *testing.T) {
-	clusterInstance := utils.SetupShardedReparentCluster(t, policy.DurabilitySemiSync)
+	clusterInstance := utils.SetupShardedReparentCluster(t, policy.DurabilitySemiSync, nil)
 	defer utils.TeardownCluster(clusterInstance)
 
 	// Stop all VTOrc instances, so that they don't interfere with the test.
@@ -233,4 +238,100 @@ func TestBufferingWithMultipleDisruptions(t *testing.T) {
 	require.NoError(t, err)
 	// Wait for all the writes to have succeeded.
 	wg.Wait()
+}
+
+// TestSemiSyncBlockDueToDisruption tests that Vitess can recover from a situation
+// where a primary is stuck waiting for semi-sync ACKs due to a network issue,
+// even if no new writes from the user arrives.
+func TestSemiSyncBlockDueToDisruption(t *testing.T) {
+	// This is always set to "true" on GitHub Actions runners:
+	// https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
+	ci, ok := os.LookupEnv("CI")
+	if ok && strings.ToLower(ci) == "true" {
+		t.Skip("Test not meant to be run on CI")
+	}
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	// stop heartbeats on all the replicas
+	for idx, tablet := range tablets {
+		if idx == 0 {
+			continue
+		}
+		utils.RunSQLs(context.Background(), t, []string{
+			"stop slave;",
+			"change master to MASTER_HEARTBEAT_PERIOD = 0;",
+			"start slave;",
+		}, tablet)
+	}
+
+	// Take a backup of the pf.conf file
+	runCommandWithSudo(t, "cp", "/etc/pf.conf", "/etc/pf.conf.backup")
+	defer func() {
+		// Restore the file from backup
+		runCommandWithSudo(t, "mv", "/etc/pf.conf.backup", "/etc/pf.conf")
+		runCommandWithSudo(t, "pfctl", "-f", "/etc/pf.conf")
+	}()
+	// Disrupt the network between the primary and the replicas
+	runCommandWithSudo(t, "sh", "-c", fmt.Sprintf("echo 'block in proto tcp from any to any port %d' | sudo tee -a /etc/pf.conf > /dev/null", tablets[0].MySQLPort))
+
+	// This following command is only required if pfctl is not already enabled
+	//runCommandWithSudo(t, "pfctl", "-e")
+	runCommandWithSudo(t, "pfctl", "-f", "/etc/pf.conf")
+	rules := runCommandWithSudo(t, "pfctl", "-s", "rules")
+	log.Errorf("Rules enforced - %v", rules)
+
+	// Start a write that will be blocked by the primary waiting for semi-sync ACKs
+	ch := make(chan any)
+	go func() {
+		defer func() {
+			close(ch)
+		}()
+		utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+	}()
+
+	// Starting VTOrc later now, because we don't want it to fix the heartbeat interval
+	// on the replica's before the disruption has been introduced.
+	err := clusterInstance.StartVTOrc(clusterInstance.Keyspaces[0].Name)
+	require.NoError(t, err)
+	go func() {
+		for {
+			select {
+			case <-ch:
+				return
+			case <-time.After(1 * time.Second):
+				str, isPresent := tablets[0].VttabletProcess.GetVars()["SemiSyncMonitorWritesBlocked"]
+				if isPresent {
+					log.Errorf("SemiSyncMonitorWritesBlocked - %v", str)
+				}
+			}
+		}
+	}()
+	// If the network disruption is too long lived, then we will end up running ERS from VTOrc.
+	networkDisruptionDuration := 43 * time.Second
+	time.Sleep(networkDisruptionDuration)
+
+	// Restore the network
+	runCommandWithSudo(t, "cp", "/etc/pf.conf.backup", "/etc/pf.conf")
+	runCommandWithSudo(t, "pfctl", "-f", "/etc/pf.conf")
+
+	// We expect the problem to be resolved in less than 30 seconds.
+	select {
+	case <-time.After(30 * time.Second):
+		t.Errorf("Timed out waiting for semi-sync to be unblocked")
+	case <-ch:
+		log.Errorf("Woohoo, write finished!")
+	}
+}
+
+// runCommandWithSudo runs the provided command with sudo privileges
+// when the command is run, it prompts the user for the password, and it must be
+// entered for the program to resume.
+func runCommandWithSudo(t *testing.T, args ...string) string {
+	cmd := exec.Command("sudo", args...)
+	out, err := cmd.CombinedOutput()
+	assert.NoError(t, err, string(out))
+	return string(out)
 }

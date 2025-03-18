@@ -41,15 +41,17 @@ func TestNormalizerAndSemanticAnalysisIntegration(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			parse, err := sqlparser.NewTestParser().Parse(test.query)
+			parse, known, err := sqlparser.NewTestParser().Parse2(test.query)
 			require.NoError(t, err)
 
-			err = sqlparser.Normalize(parse, sqlparser.NewReservedVars("bv", sqlparser.BindVars{}), map[string]*querypb.BindVariable{})
+			rv := sqlparser.NewReservedVars("", known)
+			out, err := sqlparser.Normalize(parse, rv, map[string]*querypb.BindVariable{}, true, "d", 0, "", map[string]string{}, nil, nil)
 			require.NoError(t, err)
 
-			st, err := Analyze(parse, "d", fakeSchemaInfo())
+			st, err := Analyze(out.AST, "d", fakeSchemaInfo())
 			require.NoError(t, err)
-			bv := parse.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Argument)
+
+			bv := extract(out.AST.(*sqlparser.Select), 0).(*sqlparser.Argument)
 			typ, found := st.ExprTypes[bv]
 			require.True(t, found, "bindvar was not typed")
 			require.Equal(t, test.typ, typ.Type().String())
@@ -68,15 +70,15 @@ func TestColumnCollations(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			parse, err := sqlparser.NewTestParser().Parse(test.query)
+			ast, err := sqlparser.NewTestParser().Parse(test.query)
 			require.NoError(t, err)
 
-			err = sqlparser.Normalize(parse, sqlparser.NewReservedVars("bv", sqlparser.BindVars{}), map[string]*querypb.BindVariable{})
+			out, err := sqlparser.Normalize(ast, sqlparser.NewReservedVars("bv", sqlparser.BindVars{}), map[string]*querypb.BindVariable{}, true, "d", 0, "", map[string]string{}, nil, nil)
 			require.NoError(t, err)
 
-			st, err := Analyze(parse, "d", fakeSchemaInfo())
+			st, err := Analyze(out.AST, "d", fakeSchemaInfo())
 			require.NoError(t, err)
-			col := extract(parse.(*sqlparser.Select), 0)
+			col := extract(out.AST.(*sqlparser.Select), 0)
 			typ, found := st.TypeForExpr(col)
 			require.True(t, found, "column was not typed")
 

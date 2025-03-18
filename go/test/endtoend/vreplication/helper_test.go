@@ -48,6 +48,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -55,6 +56,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -178,30 +180,9 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 
 // waitForTabletThrottlingStatus waits for the tablet to return the provided HTTP code for
 // the provided app name in its self check.
-func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name, wantCode int64) {
-	var gotCode int64
-	timer := time.NewTimer(defaultTimeout)
-	defer timer.Stop()
-	for {
-		output, err := throttlerCheckSelf(tablet, throttlerApp)
-		require.NoError(t, err)
-
-		gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
-		require.NoError(t, err)
-		if wantCode == gotCode {
-			// Wait for any cached check values to be cleared and the new
-			// status value to be in effect everywhere before returning.
-			time.Sleep(500 * time.Millisecond)
-			return
-		}
-		select {
-		case <-timer.C:
-			require.FailNow(t, fmt.Sprintf("tablet %q did not return expected status of %d for application %q before the timeout of %s; last seen status: %d",
-				tablet.Name, wantCode, throttlerApp, defaultTimeout, gotCode))
-		default:
-			time.Sleep(defaultTick)
-		}
-	}
+func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name, wantCode tabletmanagerdatapb.CheckThrottlerResponseCode) bool {
+	_, ok := throttler.WaitForCheckThrottlerResult(t, vc.VtctldClient, &cluster.Vttablet{Alias: tablet.Name}, throttlerApp, nil, wantCode, defaultTimeout)
+	return ok
 }
 
 // waitForNoWorkflowLag waits for the VReplication workflow's MaxVReplicationTransactionLag
@@ -265,25 +246,35 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 	}
 }
 
-func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) {
-	query := fmt.Sprintf("select count(*) from %s", table)
-	wantRes := fmt.Sprintf("[[INT64(%d)]]", want)
+func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int64) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+
+	query := fmt.Sprintf("select count(*) as c from %s", table)
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
 		qr, err := vttablet.QueryTablet(query, database, true)
 		require.NoError(t, err)
 		require.NotNil(t, qr)
-		if wantRes == fmt.Sprintf("%v", qr.Rows) {
+		row := qr.Named().Row()
+		require.NotNil(t, row)
+		got := row.AsInt64("c", 0)
+		require.LessOrEqual(t, got, want)
+		if got == want {
 			log.Infof("waitForRowCountInTablet: found %d rows in table %s on tablet %s", want, table, vttablet.Name)
 			return
 		}
 		select {
-		case <-timer.C:
-			require.FailNow(t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) on tablet %q before the timeout of %s; last seen result: %v",
-				table, want, vttablet.Name, defaultTimeout, qr.Rows))
-		default:
-			time.Sleep(defaultTick)
+		case <-ctx.Done():
+			require.FailNow(
+				t, fmt.Sprintf("table %q did not reach the expected number of rows (%d) on tablet %q before the timeout of %s; last seen result: %v",
+					table, want, vttablet.Name, defaultTimeout, qr.Rows),
+			)
+			return
+		case <-ticker.C:
 		}
 	}
 }
@@ -1028,6 +1019,13 @@ func confirmKeyspacesRoutedTo(t *testing.T, keyspace string, routedKeyspace, tab
 		plan := vexplain(t, database, fmt.Sprintf("select * from %s.%s", keyspace, table))
 		require.Equalf(t, routedKeyspace, plan.Keyspace.Name, "for database %s, keyspace %v, tabletType %s", database, keyspace, tt)
 	}
+}
+
+// confirmNoWorkflows confirms that there are no active workflows in the given keyspace.
+func confirmNoWorkflows(t *testing.T, keyspace string) {
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("GetWorkflows", keyspace, "--compact", "--include-logs=false")
+	require.NoError(t, err)
+	require.True(t, isEmptyWorkflowShowOutput(output))
 }
 
 // getVReplicationConfig returns the vreplication config for one random workflow for a given tablet. Currently, this is

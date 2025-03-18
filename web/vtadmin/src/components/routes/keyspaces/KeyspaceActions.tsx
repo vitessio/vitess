@@ -79,8 +79,8 @@ const KeyspaceActions: React.FC<KeyspaceActionsProps> = ({ keyspace, clusterID }
                 isOpen={currentDialog === 'Validate Schema'}
                 body={
                     <div className="text-sm mt-3">
-                        Validates that the schema on the primary tablet for shard 0 matches the schema on all of the
-                        other tablets in the keyspace <span className="font-mono bg-gray-300">{keyspace}</span>.
+                        Validates that the schema on the primary tablet for the first shard matches the schema on all of
+                        the other tablets in the keyspace <span className="font-mono bg-gray-300">{keyspace}</span>.
                     </div>
                 }
                 successBody={

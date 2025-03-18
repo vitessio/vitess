@@ -25,7 +25,6 @@ import (
 	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
@@ -76,13 +75,13 @@ var (
 // Endpoint: /txlogz?timeout=%d&limit=%d
 // timeout: the txlogz will keep dumping transactions until timeout
 // limit: txlogz will keep dumping transactions until it hits the limit
-func txlogzHandler(w http.ResponseWriter, req *http.Request) {
+func txlogzHandler(w http.ResponseWriter, req *http.Request, redactUIQuery bool) {
 	if err := acl.CheckAccessHTTP(req, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
 	}
 
-	if streamlog.GetRedactDebugUIQueries() {
+	if redactUIQuery {
 		io.WriteString(w, `
 <!DOCTYPE html>
 <html>

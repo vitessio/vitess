@@ -81,7 +81,8 @@ func (c *Conn) AnalyzeSemiSyncAckRequest(buf []byte) (strippedBuf []byte, ackReq
 // WriteComBinlogDumpGTID writes a ComBinlogDumpGTID command.
 // Only works with MySQL 5.6+ (and not MariaDB).
 // See http://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html for syntax.
-func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, binlogPos uint64, flags uint16, gtidSet []byte) error {
+// sidBlock must be the result of a gtidSet.SIDBlock() function.
+func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, binlogPos uint64, flags uint16, sidBlock []byte) error {
 	c.sequence = 0
 	length := 1 + // ComBinlogDumpGTID
 		2 + // flags
@@ -90,7 +91,7 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 		len(binlogFilename) + // binlog-filename
 		8 + // binlog-pos
 		4 + // data-size
-		len(gtidSet) // data
+		len(sidBlock) // data
 	data, pos := c.startEphemeralPacketWithHeader(length)
 	pos = writeByte(data, pos, ComBinlogDumpGTID)             // nolint
 	pos = writeUint16(data, pos, flags)                       // nolint
@@ -98,8 +99,8 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 	pos = writeUint32(data, pos, uint32(len(binlogFilename))) // nolint
 	pos = writeEOFString(data, pos, binlogFilename)           // nolint
 	pos = writeUint64(data, pos, binlogPos)                   // nolint
-	pos = writeUint32(data, pos, uint32(len(gtidSet)))        // nolint
-	pos += copy(data[pos:], gtidSet)                          // nolint
+	pos = writeUint32(data, pos, uint32(len(sidBlock)))       // nolint
+	pos += copy(data[pos:], sidBlock)                         // nolint
 	if err := c.writeEphemeralPacket(); err != nil {
 		return sqlerror.NewSQLErrorf(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "%v", err)
 	}

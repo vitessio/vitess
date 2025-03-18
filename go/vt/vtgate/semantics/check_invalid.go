@@ -163,8 +163,8 @@ func (a *analyzer) checkSelect(cursor *sqlparser.Cursor, node *sqlparser.Select)
 	}
 	errMsg := "INTO"
 	nextVal := false
-	if len(node.SelectExprs) == 1 {
-		if _, isNextVal := node.SelectExprs[0].(*sqlparser.Nextval); isNextVal {
+	if node.GetColumnCount() == 1 {
+		if _, isNextVal := node.GetColumns()[0].(*sqlparser.Nextval); isNextVal {
 			nextVal = true
 			errMsg = "NEXT"
 		}

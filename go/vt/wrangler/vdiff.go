@@ -503,7 +503,7 @@ func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition,
 	var orderby sqlparser.OrderBy
 	for _, pk := range table.PrimaryKeyColumns {
 		found := false
-		for i, selExpr := range targetSelect.SelectExprs {
+		for i, selExpr := range targetSelect.GetColumns() {
 			expr := selExpr.(*sqlparser.AliasedExpr).Expr
 			colname := ""
 			switch ct := expr.(type) {
@@ -542,7 +542,7 @@ func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition,
 // column in the table definition leveraging MySQL's collation inheritance
 // rules.
 func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition) (map[string]collations.ID, map[string]*evalengine.EnumSetValues, error) {
-	createstmt, err := venv.Parser().Parse(table.Schema)
+	createstmt, err := venv.Parser().ParseStrictDDL(table.Schema)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -603,12 +603,12 @@ func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.Tab
 // If SourceTimeZone is defined in the BinlogSource, the VReplication workflow would have converted the datetime
 // columns expecting the source to have been in the SourceTimeZone and target in TargetTimeZone. We need to do the reverse
 // conversion in VDiff before comparing to the source
-func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs, fields map[string]querypb.Type) sqlparser.SelectExprs {
+func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs []sqlparser.SelectExpr, fields map[string]querypb.Type) []sqlparser.SelectExpr {
 	if df.sourceTimeZone == "" {
 		return targetSelectExprs
 	}
 	log.Infof("source time zone specified: %s", df.sourceTimeZone)
-	var newSelectExprs sqlparser.SelectExprs
+	var newSelectExprs []sqlparser.SelectExpr
 	var modified bool
 	for _, expr := range targetSelectExprs {
 		converted := false
@@ -619,14 +619,10 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs
 				colName := colAs.Name.Lowered()
 				fieldType := fields[colName]
 				if fieldType == querypb.Type_DATETIME {
-					convertTZFuncExpr = &sqlparser.FuncExpr{
-						Name: sqlparser.NewIdentifierCI("convert_tz"),
-						Exprs: sqlparser.Exprs{
-							colAs,
-							sqlparser.NewStrLiteral(df.targetTimeZone),
-							sqlparser.NewStrLiteral(df.sourceTimeZone),
-						},
-					}
+					convertTZFuncExpr = sqlparser.NewFuncExpr("convert_tz",
+						colAs,
+						sqlparser.NewStrLiteral(df.targetTimeZone),
+						sqlparser.NewStrLiteral(df.sourceTimeZone))
 					log.Infof("converting datetime column %s using convert_tz()", colName)
 					newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
 					converted = true
@@ -679,14 +675,14 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	targetSelect := &sqlparser.Select{}
 	// aggregates contains the list if Aggregate functions, if any.
 	var aggregates []*engine.AggregateParams
-	for _, selExpr := range sel.SelectExprs {
+	for _, selExpr := range sel.GetColumns() {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
 			// If it's a '*' expression, expand column list from the schema.
 			for _, fld := range table.Fields {
 				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(fld.Name)}}
-				sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, aliased)
-				targetSelect.SelectExprs = append(targetSelect.SelectExprs, aliased)
+				sourceSelect.AddSelectExpr(aliased)
+				targetSelect.AddSelectExpr(aliased)
 			}
 		case *sqlparser.AliasedExpr:
 			var targetCol *sqlparser.ColName
@@ -700,8 +696,8 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 				targetCol = &sqlparser.ColName{Name: selExpr.As}
 			}
 			// If the input was "select a as b", then source will use "a" and target will use "b".
-			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, selExpr)
-			targetSelect.SelectExprs = append(targetSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: targetCol})
+			sourceSelect.AddSelectExpr(selExpr)
+			targetSelect.AddSelectExpr(&sqlparser.AliasedExpr{Expr: targetCol})
 
 			// Check if it's an aggregate expression
 			if expr, ok := selExpr.Expr.(sqlparser.AggrFunc); ok {
@@ -713,7 +709,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 					// but will need to be revisited when we add such support to vreplication
 					aggregates = append(aggregates, engine.NewAggregateParam(
 						/*opcode*/ opcode.AggregateSum,
-						/*offset*/ len(sourceSelect.SelectExprs)-1,
+						/*offset*/ sourceSelect.GetColumnCount()-1,
 						/*alias*/ "", df.env.CollationEnv()))
 				}
 			}
@@ -727,12 +723,12 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		fields[strings.ToLower(field.Name)] = field.Type
 	}
 
-	targetSelect.SelectExprs = df.adjustForSourceTimeZone(targetSelect.SelectExprs, fields)
+	targetSelect.SelectExprs.Exprs = df.adjustForSourceTimeZone(targetSelect.SelectExprs.Exprs, fields)
 	// Start with adding all columns for comparison.
-	td.compareCols = make([]compareColInfo, len(sourceSelect.SelectExprs))
+	td.compareCols = make([]compareColInfo, sourceSelect.GetColumnCount())
 	for i := range td.compareCols {
 		td.compareCols[i].colIndex = i
-		colname, err := getColumnNameForSelectExpr(targetSelect.SelectExprs[i])
+		colname, err := getColumnNameForSelectExpr(targetSelect.GetColumns()[i])
 		if err != nil {
 			return nil, err
 		}
@@ -1357,16 +1353,16 @@ func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug,
 	if onlyPks {
 		for _, pkI := range td.selectPks {
 			buf := sqlparser.NewTrackedBuffer(nil)
-			sel.SelectExprs[pkI].Format(buf)
+			sel.SelectExprs.Exprs[pkI].Format(buf)
 			col := buf.String()
 			drp.Row[col] = row[pkI]
 		}
 		return drp, nil
 	}
 
-	for i := range sel.SelectExprs {
+	for i := range sel.SelectExprs.Exprs {
 		buf := sqlparser.NewTrackedBuffer(nil)
-		sel.SelectExprs[i].Format(buf)
+		sel.SelectExprs.Exprs[i].Format(buf)
 		col := buf.String()
 		drp.Row[col] = row[i]
 	}
@@ -1380,7 +1376,7 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 
 	if onlyPks {
 		for i, pkI := range td.selectPks {
-			pk := sel.SelectExprs[pkI]
+			pk := sel.GetColumns()[pkI]
 			pk.Format(buf)
 			if i != len(td.selectPks)-1 {
 				buf.Myprintf(", ")
@@ -1393,7 +1389,7 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 	buf.Myprintf(sqlparser.ToString(sel.From))
 	buf.Myprintf(" where ")
 	for i, pkI := range td.selectPks {
-		sel.SelectExprs[pkI].Format(buf)
+		sel.SelectExprs.Exprs[pkI].Format(buf)
 		buf.Myprintf("=")
 		row[pkI].EncodeSQL(buf)
 		if i != len(td.selectPks)-1 {

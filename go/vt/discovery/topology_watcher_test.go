@@ -487,6 +487,71 @@ func TestFilterByKeyspace(t *testing.T) {
 	}
 }
 
+// TestLoadTablets tests that loadTablets works as intended for the given inputs.
+func TestLoadTablets(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	hc := NewFakeHealthCheck(nil)
+	f := TabletFilters{NewFilterByKeyspace(testKeyspacesToWatch)}
+	ts := memorytopo.NewServer(ctx, testCell)
+	defer ts.Close()
+	tw := NewTopologyWatcher(context.Background(), ts, hc, f, testCell, 10*time.Minute, true)
+
+	// Add 2 tablets from 2 different tracked keyspaces to the topology.
+	tablet1 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: testCell,
+			Uid:  0,
+		},
+		Hostname: "host1",
+		PortMap: map[string]int32{
+			"vt": 123,
+		},
+		Keyspace: "ks1",
+		Shard:    "shard",
+	}
+	tablet2 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: testCell,
+			Uid:  10,
+		},
+		Hostname: "host2",
+		PortMap: map[string]int32{
+			"vt": 124,
+		},
+		Keyspace: "ks4",
+		Shard:    "shard",
+	}
+	for _, ks := range testKeyspacesToWatch {
+		_, err := ts.GetOrCreateShard(ctx, ks, "shard")
+		require.NoError(t, err)
+	}
+	require.NoError(t, ts.CreateTablet(ctx, tablet1))
+	require.NoError(t, ts.CreateTablet(ctx, tablet2))
+
+	// Let's refresh the information for a different keyspace shard. We shouldn't
+	// reload either tablet's information.
+	tw.loadTabletsForKeyspaceShard("ks2", "shard")
+	key1 := TabletToMapKey(tablet1)
+	key2 := TabletToMapKey(tablet2)
+	allTablets := hc.GetAllTablets()
+	assert.NotContains(t, allTablets, key1)
+	assert.NotContains(t, allTablets, key2)
+
+	// Now, if we reload the first tablet's shard, we should see this tablet
+	// but not the other.
+	tw.loadTabletsForKeyspaceShard("ks1", "shard")
+	allTablets = hc.GetAllTablets()
+	assert.Contains(t, allTablets, key1)
+	assert.NotContains(t, allTablets, key2)
+
+	// Finally, if we load all the tablets, both the tablets should be visible.
+	tw.loadTablets()
+	allTablets = hc.GetAllTablets()
+	assert.Contains(t, allTablets, key1)
+	assert.Contains(t, allTablets, key2)
+}
+
 // TestFilterByKeyspaceSkipsIgnoredTablets confirms a bug fix for the case when a TopologyWatcher
 // has a FilterByKeyspace TabletFilter configured along with refreshKnownTablets turned off. We want
 // to ensure that the TopologyWatcher:

@@ -93,6 +93,8 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	// Set clusters to watch to only watch ks1 and ks3
 	onlyKs1and3 := []string{"ks1/-80", "ks3/-80", "ks3/80-"}
 	clustersToWatch = onlyKs1and3
+	err := initializeShardsToWatch()
+	require.NoError(t, err)
 	require.NoError(t, RefreshAllKeyspacesAndShards(context.Background()))
 
 	// Verify that we only have ks1 and ks3 in vtorc's db.
@@ -106,6 +108,8 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 
 	// Set clusters to watch to watch all keyspaces
 	clustersToWatch = nil
+	err = initializeShardsToWatch()
+	require.NoError(t, err)
 	// Change the durability policy of ks1
 	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks1", policy.DurabilitySemiSync)
 	require.NoError(t, RefreshAllKeyspacesAndShards(context.Background()))
@@ -119,7 +123,6 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	verifyPrimaryAlias(t, "ks3", "80-", "zone_ks3-0000000101", "")
 	verifyKeyspaceInfo(t, "ks4", keyspaceDurabilityTest, "")
 	verifyPrimaryAlias(t, "ks4", "80-", "zone_ks4-0000000101", "")
-
 }
 
 func TestRefreshKeyspace(t *testing.T) {
@@ -307,4 +310,45 @@ func verifyPrimaryAlias(t *testing.T, keyspaceName, shardName string, primaryAli
 	}
 	require.NoError(t, err)
 	require.Equal(t, primaryAliasWanted, primaryAlias)
+}
+
+func TestRefreshAllShards(t *testing.T) {
+	// Store the old flags and restore on test completion
+	oldClustersToWatch := clustersToWatch
+	oldTs := ts
+	defer func() {
+		clustersToWatch = oldClustersToWatch
+		ts = oldTs
+		db.ClearVTOrcDatabase()
+	}()
+
+	ctx := context.Background()
+	ts = memorytopo.NewServer(ctx, "zone1")
+	require.NoError(t, initializeShardsToWatch())
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", keyspaceDurabilityNone))
+	shards := []string{"-40", "40-80", "80-c0", "c0-"}
+	for _, shard := range shards {
+		require.NoError(t, ts.CreateShard(ctx, "ks1", shard))
+	}
+
+	// test shard refresh
+	require.NoError(t, refreshAllShards(ctx, "ks1"))
+	shardNames, err := inst.ReadShardNames("ks1")
+	require.NoError(t, err)
+	require.Equal(t, []string{"-40", "40-80", "80-c0", "c0-"}, shardNames)
+
+	// test topo shard delete propagates
+	require.NoError(t, ts.DeleteShard(ctx, "ks1", "c0-"))
+	require.NoError(t, refreshAllShards(ctx, "ks1"))
+	shardNames, err = inst.ReadShardNames("ks1")
+	require.NoError(t, err)
+	require.Equal(t, []string{"-40", "40-80", "80-c0"}, shardNames)
+
+	// test clustersToWatch filters what shards are saved
+	clustersToWatch = []string{"ks1/-80"}
+	require.NoError(t, initializeShardsToWatch())
+	require.NoError(t, refreshAllShards(ctx, "ks1"))
+	shardNames, err = inst.ReadShardNames("ks1")
+	require.NoError(t, err)
+	require.Equal(t, []string{"-40", "40-80"}, shardNames)
 }

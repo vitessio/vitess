@@ -51,6 +51,7 @@ type (
 		signal func() // a function that we'll call whenever we have new schema data
 
 		// map of keyspace currently tracked
+		trackedMu    sync.Mutex
 		tracked      map[keyspaceStr]*updateController
 		consumeDelay time.Duration
 
@@ -96,7 +97,7 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 		return err
 	}
 
-	t.tracked[target.Keyspace].setLoaded(true)
+	t.setLoaded(target.Keyspace, true)
 	return nil
 }
 
@@ -209,8 +210,8 @@ func (t *Tracker) Start() {
 // getKeyspaceUpdateController returns the updateController for the given keyspace
 // the updateController will be created if there was none.
 func (t *Tracker) getKeyspaceUpdateController(th *discovery.TabletHealth) *updateController {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.trackedMu.Lock()
+	defer t.trackedMu.Unlock()
 
 	ksUpdater, exists := t.tracked[th.Target.Keyspace]
 	if !exists {
@@ -222,6 +223,16 @@ func (t *Tracker) getKeyspaceUpdateController(th *discovery.TabletHealth) *updat
 
 func (t *Tracker) newUpdateController() *updateController {
 	return &updateController{update: t.updateSchema, reloadKeyspace: t.initKeyspace, signal: t.signal, consumeDelay: t.consumeDelay}
+}
+
+// setLoaded sets the loaded status for the given keyspace.
+func (t *Tracker) setLoaded(ks keyspaceStr, loaded bool) {
+	t.trackedMu.Lock()
+	defer t.trackedMu.Unlock()
+
+	if ksUpdater, exists := t.tracked[ks]; exists {
+		ksUpdater.setLoaded(loaded)
+	}
 }
 
 func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
@@ -343,7 +354,7 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 		return nil
 	})
 	if err != nil {
-		t.tracked[th.Target.Keyspace].setLoaded(false)
+		t.setLoaded(th.Target.Keyspace, false)
 		// TODO: optimize for the tables that got errored out.
 		log.Warningf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err)
 		return false
@@ -353,7 +364,7 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 
 func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 	for tableName, tableDef := range res {
-		stmt, err := t.parser.Parse(tableDef)
+		stmt, err := t.parser.ParseStrictDDL(tableDef)
 		if err != nil {
 			log.Warningf("error parsing table definition for %s: %v", tableName, err)
 			continue
@@ -451,7 +462,7 @@ func (t *Tracker) updatedViewSchema(th *discovery.TabletHealth) bool {
 		return nil
 	})
 	if err != nil {
-		t.tracked[th.Target.Keyspace].setLoaded(false)
+		t.setLoaded(th.Target.Keyspace, false)
 		// TODO: optimize for the views that got errored out.
 		log.Warningf("error fetching new views definition for %v", viewsUpdated, err)
 		return false
@@ -467,8 +478,9 @@ func (t *Tracker) updateViews(keyspace string, res map[string]string) {
 
 // RegisterSignalReceiver allows a function to register to be called when new schema is available
 func (t *Tracker) RegisterSignalReceiver(f func()) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	t.trackedMu.Lock()
+	defer t.trackedMu.Unlock()
+
 	for _, controller := range t.tracked {
 		controller.signal = f
 	}
@@ -535,7 +547,7 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 		m = make(map[tableNameStr]sqlparser.TableStatement)
 		vm.m[ks] = m
 	}
-	stmt, err := vm.parser.Parse(sql)
+	stmt, err := vm.parser.ParseStrictDDL(sql)
 	if err != nil {
 		log.Warningf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql)
 		return
@@ -545,6 +557,7 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 		log.Warningf("ignoring view '%s', view definition is not a create view query: %T", tbl, stmt)
 		return
 	}
+	sqlparser.AddKeyspace(cv.Select, ks)
 	m[tbl] = cv.Select
 }
 

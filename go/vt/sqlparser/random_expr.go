@@ -246,7 +246,9 @@ func (g *Generator) randomAggregate(genConfig ExprGeneratorConfig) Expr {
 
 	options := []exprF{
 		func() Expr { return &CountStar{} },
-		func() Expr { return &Count{Args: Exprs{g.Expression(genConfig.anyTypeConfig())}, Distinct: isDistinct} },
+		func() Expr {
+			return &Count{Args: []Expr{g.Expression(genConfig.anyTypeConfig())}, Distinct: isDistinct}
+		},
 		func() Expr { return &Sum{Arg: g.Expression(genConfig), Distinct: isDistinct} },
 		func() Expr { return &Min{Arg: g.Expression(genConfig), Distinct: isDistinct} },
 		func() Expr { return &Max{Arg: g.Expression(genConfig), Distinct: isDistinct} },
@@ -269,7 +271,7 @@ func (g *Generator) booleanExpr(genConfig ExprGeneratorConfig) Expr {
 		func() Expr { return g.orExpr(genConfig) },
 		func() Expr { return g.comparison(genConfig.intTypeConfig()) },
 		func() Expr { return g.comparison(genConfig.stringTypeConfig()) },
-		//func() Expr { return g.comparison(genConfig) }, // this is not accepted by the parser
+		// func() Expr { return g.comparison(genConfig) }, // this is not accepted by the parser
 		func() Expr { return g.inExpr(genConfig) },
 		func() Expr { return g.existsExpr(genConfig) },
 		func() Expr { return g.between(genConfig.intTypeConfig()) },
@@ -374,7 +376,7 @@ func (g *Generator) randomBool(prob float32) bool {
 }
 
 func (g *Generator) intLiteral() Expr {
-	t := fmt.Sprintf("%d", rand.IntN(100)-rand.IntN(100)) //nolint SA4000
+	t := fmt.Sprintf("%d", rand.IntN(100)-rand.IntN(100)) // nolint SA4000
 
 	return NewIntLiteral(t)
 }
@@ -566,7 +568,7 @@ func (g *Generator) existsExpr(genConfig ExprGeneratorConfig) Expr {
 	} else {
 		// if g.subqueryExpr doesn't return a valid subquery, replace with
 		// select 1
-		selectExprs := SelectExprs{NewAliasedExpr(NewIntLiteral("1"), "")}
+		selectExprs := &SelectExprs{Exprs: []SelectExpr{NewAliasedExpr(NewIntLiteral("1"), "")}}
 		from := TableExprs{NewAliasedTableExpr(NewTableName("dual"), "")}
 		expr = NewExistsExpr(NewSubquery(NewSelect(nil, selectExprs, nil, nil, from, nil, nil, nil, nil)))
 	}

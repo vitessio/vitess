@@ -1327,9 +1327,15 @@ var (
 		input: "update /* a.b */ a.b set b = 3",
 	}, {
 		input: "update a.b set d = @v := d + 7 where u = 42",
+		// Assignment expresions aren't supported, so we skip the normalizer test.
+		// We only support parsing these expressions.
+		ignoreNormalizerTest: true,
 	}, {
 		input:  "select @topic3_id:= 10103;",
 		output: "select @topic3_id := 10103 from dual",
+		// Assignment expresions aren't supported, so we skip the normalizer test.
+		// We only support parsing these expressions.
+		ignoreNormalizerTest: true,
 	}, {
 		input: "update /* list */ a set b = 3, c = 4",
 	}, {
@@ -1805,6 +1811,9 @@ var (
 	}, {
 		input:  "alter table a add spatial key indexes (column1)",
 		output: "alter table a add spatial key `indexes` (column1)",
+	}, {
+		input:  "alter table locations add lat_long point as (point(geocode->>'$.geometry.location.lat', geocode->>'$.geometry.location.lng')) SRID 4326 after geocodes",
+		output: "alter table locations add column lat_long point as (point(json_unquote(json_extract(geocode, '$.geometry.location.lat')), json_unquote(json_extract(geocode, '$.geometry.location.lng')))) virtual srid 4326 after geocodes",
 	}, {
 		input:      "create table a",
 		partialDDL: true,
@@ -5975,6 +5984,10 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 			input:  "create table t (id int, vec VECTOR(4))",
 			output: "create table t (\n\tid int,\n\tvec VECTOR(4)\n)",
 		},
+		{
+			input:  "CREATE TABLE `locations` (`geocode` json DEFAULT NULL, `lat_long` point GENERATED ALWAYS AS (point(json_unquote(json_extract(`geocode`,_utf8mb4'$.geometry.location.lat')),json_unquote(json_extract(`geocode`,_utf8mb4'$.geometry.location.lng')))) VIRTUAL /*!80003 SRID 4326 */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+			output: "create table locations (\n\tgeocode json default null,\n\tlat_long point as (point(json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lat')), json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lng')))) virtual srid 4326\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci",
+		},
 	}
 	parser := NewTestParser()
 	for _, test := range createTableQueries {
@@ -6347,6 +6360,17 @@ func TestParseVersionedComments(t *testing.T) {
 partition by range (id)
 (partition x values less than (5) engine InnoDB,
  partition t values less than (20) engine InnoDB)`,
+		}, {
+			input:        "CREATE TABLE `TABLE_NAME` (\n  `col1` longblob /*!50633 COLUMN_FORMAT COMPRESSED */,\n  `id` bigint unsigned NOT NULL,\n  PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=COMPRESSED",
+			mysqlVersion: "8.0.1",
+			output: `create table TABLE_NAME (
+	col1 longblob column_format compressed,
+	id bigint unsigned not null,
+	primary key (id)
+) ENGINE InnoDB,
+  CHARSET utf8mb4,
+  COLLATE utf8mb4_bin,
+  ROW_FORMAT COMPRESSED`,
 		},
 	}
 
@@ -6354,7 +6378,7 @@ partition by range (id)
 		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
 			parser, err := New(Options{MySQLServerVersion: testcase.mysqlVersion})
 			require.NoError(t, err)
-			tree, err := parser.Parse(testcase.input)
+			tree, err := parser.ParseStrictDDL(testcase.input)
 			require.NoError(t, err, testcase.input)
 			out := String(tree)
 			require.Equal(t, testcase.output, out)

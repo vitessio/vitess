@@ -6,7 +6,15 @@ apiVersion: planetscale.com/v2
 kind: VitessCluster
 metadata:
   name: example
+  namespace: example
 spec:
+  backup:
+    engine: xtrabackup
+    locations:
+      - volume:
+          hostPath:
+            path: /tmp
+            type: Directory
   images:
     vtctld: vitess/lite:latest
     vtadmin: vitess/vtadmin:latest
@@ -15,8 +23,8 @@ spec:
     vtbackup: vitess/lite:latest
     vtorc: vitess/lite:latest
     mysqld:
-      mysql80Compatible: mysql:8.0.30
-    mysqldExporter: prom/mysqld-exporter:v0.11.0
+      mysql80Compatible: vitess/lite:latest
+    mysqldExporter: prom/mysqld-exporter:v0.14.0
   cells:
   - name: zone1
     gateway:
@@ -119,6 +127,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: example-cluster-config
+  namespace: example
 type: Opaque
 stringData:
   users.json: |

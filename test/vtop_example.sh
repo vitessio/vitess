@@ -34,9 +34,9 @@ cd "$VTROOT"
 unset VTROOT # ensure that the examples can run without VTROOT now.
 
 function checkSemiSyncSetup() {
-  for vttablet in $(kubectl get pods --no-headers -o custom-columns=":metadata.name" | grep "vttablet") ; do
+  for vttablet in $(kubectl get pods -n example --no-headers -o custom-columns=":metadata.name" | grep "vttablet") ; do
     echo "Checking semi-sync in $vttablet"
-    kubectl exec "$vttablet" -c mysqld -- mysql -S "/vt/socket/mysql.sock" -u root -e "show variables like 'rpl_semi_sync_replica_enabled'" | grep "OFF"
+    kubectl exec -n example "$vttablet" -c mysqld -- mysql -S "/vt/socket/mysql.sock" -u root -e "show variables like 'rpl_semi_sync_replica_enabled'" | grep "OFF"
     if [ $? -ne 0 ]; then
       echo "Semi Sync setup on $vttablet"
       exit 1
@@ -59,7 +59,7 @@ function checkPodStatusWithTimeout() {
   # We use this for loop instead of `kubectl wait` because we don't have access to the full pod name
   # and `kubectl wait` does not support regex to match resource name.
   for i in {1..1200} ; do
-    out=$(kubectl get pods)
+    out=$(kubectl get pods -A)
     echo "$out" | grep -E "$regex" | wc -l | grep "$nb" > /dev/null 2>&1
     if [ $? -eq 0 ]; then
       echo "$regex found"
@@ -114,10 +114,10 @@ function applySchemaWithRetry() {
 }
 
 function printMysqlErrorFiles() {
-  for vttablet in $(kubectl get pods --no-headers -o custom-columns=":metadata.name" | grep "vttablet") ; do
+  for vttablet in $(kubectl get pods -n example --no-headers -o custom-columns=":metadata.name" | grep "vttablet") ; do
     echo "Finding error.log file in $vttablet"
-    kubectl logs "$vttablet" -c mysqld
-    kubectl logs "$vttablet" -c vttablet
+    kubectl logs -n example "$vttablet" -c mysqld
+    kubectl logs -n example "$vttablet" -c vttablet
   done
 }
 
@@ -146,6 +146,9 @@ function assertSelect() {
 
 # get_started:
 function get_started() {
+    echo "Create the example namespace"
+    kubectl create namespace example
+
     echo "Apply operator.yaml"
     changeImageAndApply "operator.yaml"
     checkPodStatusWithTimeout "vitess-operator(.*)1/1(.*)Running(.*)"

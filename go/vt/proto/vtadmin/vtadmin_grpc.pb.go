@@ -215,6 +215,9 @@ type VTAdminClient interface {
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
+	// VExplain provides information on how Vitess plans to execute a
+	// particular query.
+	VExplain(ctx context.Context, in *VExplainRequest, opts ...grpc.CallOption) (*VExplainResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(ctx context.Context, in *WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
 	// WorkflowSwitchTraffic switches traffic for a VReplication workflow.
@@ -859,6 +862,15 @@ func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opt
 	return out, nil
 }
 
+func (c *vTAdminClient) VExplain(ctx context.Context, in *VExplainRequest, opts ...grpc.CallOption) (*VExplainResponse, error) {
+	out := new(VExplainResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VExplain", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) WorkflowDelete(ctx context.Context, in *WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error) {
 	out := new(vtctldata.WorkflowDeleteResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/WorkflowDelete", in, out, opts...)
@@ -1073,6 +1085,9 @@ type VTAdminServer interface {
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
+	// VExplain provides information on how Vitess plans to execute a
+	// particular query.
+	VExplain(context.Context, *VExplainRequest) (*VExplainResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(context.Context, *WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
 	// WorkflowSwitchTraffic switches traffic for a VReplication workflow.
@@ -1293,6 +1308,9 @@ func (UnimplementedVTAdminServer) VDiffShow(context.Context, *VDiffShowRequest) 
 }
 func (UnimplementedVTAdminServer) VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VTExplain not implemented")
+}
+func (UnimplementedVTAdminServer) VExplain(context.Context, *VExplainRequest) (*VExplainResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VExplain not implemented")
 }
 func (UnimplementedVTAdminServer) WorkflowDelete(context.Context, *WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowDelete not implemented")
@@ -2573,6 +2591,24 @@ func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_VExplain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VExplainRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VExplain(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VExplain",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VExplain(ctx, req.(*VExplainRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_WorkflowDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(WorkflowDeleteRequest)
 	if err := dec(in); err != nil {
@@ -2895,6 +2931,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VTExplain",
 			Handler:    _VTAdmin_VTExplain_Handler,
+		},
+		{
+			MethodName: "VExplain",
+			Handler:    _VTAdmin_VExplain_Handler,
 		},
 		{
 			MethodName: "WorkflowDelete",

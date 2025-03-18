@@ -341,7 +341,14 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			if _, ok := dependencyLevels[v.Name()]; !ok {
 				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
 				// We gather all the errors.
-				errs = errors.Join(errs, &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()})
+				dependentNames := getViewDependentTableNames(v.CreateView)
+				missingReferencedEntities := []string{}
+				for _, name := range dependentNames {
+					if _, ok := dependencyLevels[name]; !ok {
+						missingReferencedEntities = append(missingReferencedEntities, name)
+					}
+				}
+				errs = errors.Join(errs, &ViewDependencyUnresolvedError{View: v.ViewName.Name.String(), MissingReferencedEntities: missingReferencedEntities})
 				// We still add it so it shows up in the output if that is used for anything.
 				s.sorted = append(s.sorted, v)
 			}
@@ -415,6 +422,27 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			}
 		}
 	}
+
+	// Validate uniqueness of check constraint and of foreign key constraint names
+	fkConstraintNames := map[string]bool{}
+	checkConstraintNames := map[string]bool{}
+	for _, t := range s.tables {
+		for _, cs := range t.TableSpec.Constraints {
+			if _, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				if _, ok := fkConstraintNames[cs.Name.String()]; ok {
+					errs = errors.Join(errs, &DuplicateForeignKeyConstraintNameError{Table: t.Name(), Constraint: cs.Name.String()})
+				}
+				fkConstraintNames[cs.Name.String()] = true
+			}
+			if _, ok := cs.Details.(*sqlparser.CheckConstraintDefinition); ok {
+				if _, ok := checkConstraintNames[cs.Name.String()]; ok {
+					errs = errors.Join(errs, &DuplicateCheckConstraintNameError{Table: t.Name(), Constraint: cs.Name.String()})
+				}
+				checkConstraintNames[cs.Name.String()] = true
+			}
+		}
+	}
+
 	return errs
 }
 
@@ -1064,6 +1092,11 @@ func (s *Schema) ValidateViewReferences() error {
 					View:   view.Name(),
 					Column: e.Column.Name.String(),
 				}
+			case *semantics.UnsupportedConstruct:
+				// These are error types from semantic analysis for executing queries. When we
+				// have a view, we don't have Vitess execute these queries but MySQL does, so
+				// we don't want to return errors for these.
+				return nil
 			}
 			return err
 		}

@@ -128,13 +128,13 @@ func TestMain(m *testing.M) {
 						}
 						shard := fmt.Sprintf("%s/%s@primary", ks.Name, s.Name)
 						session := vtgateConn.Session(shard, nil)
-						_, err := session.Execute(ctx, "SHOW CREATE TABLE zip_detail", map[string]*querypb.BindVariable{})
+						_, err := session.Execute(ctx, "SHOW CREATE TABLE zip_detail", map[string]*querypb.BindVariable{}, false)
 						if err != nil {
 							fmt.Fprintf(os.Stderr, "Failed to SHOW CREATE TABLE zip_detail; might not exist yet: %v\n", err)
 							time.Sleep(1 * time.Second)
 							continue
 						}
-						qr, err := session.Execute(ctx, "SELECT * FROM zip_detail", map[string]*querypb.BindVariable{})
+						qr, err := session.Execute(ctx, "SELECT * FROM zip_detail", map[string]*querypb.BindVariable{}, false)
 						if err != nil {
 							fmt.Fprintf(os.Stderr, "Failed to query sharded keyspace for zip_detail rows: %v\n", err)
 							done <- false
@@ -155,24 +155,14 @@ func TestMain(m *testing.M) {
 		}()
 
 		// Materialize zip_detail to sharded keyspace.
-		output, err := clusterInstance.VtctlProcess.ExecuteCommandWithOutput(
+		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(
 			"Materialize",
-			"--",
-			"--tablet_types",
-			"PRIMARY",
-			`{
-				"workflow": "copy_zip_detail",
-				"source_keyspace": "`+unshardedKeyspaceName+`",
-				"target_keyspace": "`+shardedKeyspaceName+`",
-				"tablet_types": "PRIMARY",
-				"table_settings": [
-					{
-						"target_table": "zip_detail",
-						"source_expression": "select * from zip_detail",
-						"create_ddl": "copy"
-					}
-				]
-			}`,
+			"--workflow", "copy_zip_detail",
+			"--target-keyspace", shardedKeyspaceName,
+			"create",
+			"--source-keyspace", unshardedKeyspaceName,
+			"--table-settings", `[{"target_table": "zip_detail", "source_expression": "select * from zip_detail", "create_ddl": "copy" }]`,
+			"--tablet-types", "PRIMARY",
 		)
 		fmt.Fprintf(os.Stderr, "Output from materialize: %s\n", output)
 		if err != nil {
@@ -194,7 +184,7 @@ func TestMain(m *testing.M) {
 			INSERT INTO zip_detail(id, zip_id, discontinued_at)
 			VALUES (1, 1, '2022-05-13'),
 				   (2, 2, '2022-08-15')
-		`, map[string]*querypb.BindVariable{}); err != nil {
+		`, map[string]*querypb.BindVariable{}, false); err != nil {
 			return 1
 		}
 
@@ -204,7 +194,7 @@ func TestMain(m *testing.M) {
 			VALUES (1, 1, 'Failed delivery due to discontinued zipcode.'),
 			       (2, 2, 'Failed delivery due to discontinued zipcode.'),
 			       (3, 3, 'Failed delivery due to unknown reason.');
-		`, map[string]*querypb.BindVariable{}); err != nil {
+		`, map[string]*querypb.BindVariable{}, false); err != nil {
 			return 1
 		}
 
@@ -214,11 +204,12 @@ func TestMain(m *testing.M) {
 		}
 
 		// Stop materialize zip_detail to sharded keyspace.
-		err = clusterInstance.VtctlProcess.ExecuteCommand(
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand(
 			"Workflow",
-			"--",
-			shardedKeyspaceName+".copy_zip_detail",
+			"--keyspace", shardedKeyspaceName,
 			"delete",
+			"--workflow", "copy_zip_detail",
+			"--keep-data",
 		)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to stop materialization workflow: %v", err)

@@ -44,7 +44,7 @@ func (cv *converter) ToNative(v sqltypes.Value) (any, error) {
 	case v.IsFloat():
 		return v.ToFloat64()
 	case v.Type() == sqltypes.Datetime, v.Type() == sqltypes.Timestamp, v.Type() == sqltypes.Date:
-		return v.ToTimeInLocation(cv.location)
+		return v.ToTime(cv.location)
 	case v.IsQuoted() || v.Type() == sqltypes.Bit || v.Type() == sqltypes.Decimal:
 		out, err = v.ToBytes()
 	case v.Type() == sqltypes.Expression:

@@ -40,9 +40,7 @@ import (
 // VtgateProcess is a generic handle for a running vtgate .
 // It can be spawned manually
 type VtgateProcess struct {
-	Name                  string
-	Binary                string
-	CommonArg             VtctlProcess
+	VtProcess
 	LogDir                string
 	ErrorLog              string
 	FileToLogQueries      string
@@ -149,9 +147,9 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
 	args := []string{
-		"--topo_implementation", vtgate.CommonArg.TopoImplementation,
-		"--topo_global_server_address", vtgate.CommonArg.TopoGlobalAddress,
-		"--topo_global_root", vtgate.CommonArg.TopoGlobalRoot,
+		"--topo_implementation", vtgate.TopoImplementation,
+		"--topo_global_server_address", vtgate.TopoGlobalAddress,
+		"--topo_global_root", vtgate.TopoGlobalRoot,
 		"--config-file", vtgate.ConfigFile,
 		"--log_dir", vtgate.LogDir,
 		"--log_queries_to_file", vtgate.FileToLogQueries,
@@ -374,10 +372,9 @@ func VtgateProcessInstance(
 	extraArgs []string,
 	plannerVersion plancontext.PlannerVersion,
 ) *VtgateProcess {
-	vtctl := VtctlProcessInstance(topoPort, hostname)
+	base := VtProcessInstance("vtgate", "vtgate", topoPort, hostname)
 	vtgate := &VtgateProcess{
-		Name:                  "vtgate",
-		Binary:                "vtgate",
+		VtProcess:             base,
 		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
 		ConfigFile:            path.Join(tmpDirectory, fmt.Sprintf("vtgate-config-%d.json", port)),
 		Directory:             os.Getenv("VTDATAROOT"),
@@ -390,7 +387,6 @@ func VtgateProcessInstance(
 		Cell:                  cell,
 		CellsToWatch:          cellsToWatch,
 		TabletTypesToWait:     tabletTypesToWait,
-		CommonArg:             *vtctl,
 		MySQLAuthServerImpl:   "none",
 		ExtraArgs:             extraArgs,
 		PlannerVersion:        plannerVersion,

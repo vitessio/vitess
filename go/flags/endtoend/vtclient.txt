@@ -35,7 +35,7 @@ Flags:
       --logtostderr                                                 log to standard error instead of files
       --max_sequence_id int                                         max sequence ID.
       --min_sequence_id int                                         min sequence ID to generate. When max_sequence_id > min_sequence_id, for each query, a number is generated in [min_sequence_id, max_sequence_id) and attached to the end of the bind variables.
-      --mysql_server_version string                                 MySQL server version to advertise. (default "8.0.30-Vitess")
+      --mysql_server_version string                                 MySQL server version to advertise. (default "8.0.40-Vitess")
       --parallel int                                                DMLs only: Number of threads executing the same query in parallel. Useful for simple load testing. (default 1)
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints

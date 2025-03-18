@@ -26,16 +26,17 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
-	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 )
 
 func TestQuerylogzHandlerFormatting(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := logstats.NewLogStats(context.Background(), "Execute", "select name, 'inject <script>alert();</script>' from test_table limit 1000", "suuid", nil)
+	logStats := logstats.NewLogStats(context.Background(), "Execute",
+		"select name, 'inject <script>alert();</script>' from test_table limit 1000", "suuid", nil, streamlog.NewQueryLogConfigForTest())
 	logStats.StmtType = "select"
 	logStats.RowsAffected = 1000
 	logStats.ShardQueries = 1
@@ -139,8 +140,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
 
 	// ensure querylogz is not affected by the filter tag
-	streamlog.SetQueryLogFilterTag("XXX_SKIP_ME")
-	defer func() { streamlog.SetQueryLogFilterTag("") }()
+	logStats.Config.FilterTag = "XXX_SKIP_ME"
 	ch = make(chan *logstats.LogStats, 1)
 	ch <- logStats
 	querylogzHandler(ch, response, req, sqlparser.NewTestParser())

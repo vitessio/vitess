@@ -699,7 +699,7 @@ func getInfoSchema57() map[string][]vindexes.Column {
 // getInfoSchema80 returns a map of all information_schema tables and their columns with types
 // To recreate this information from MySQL, you can run the test in info_schema_gen_test.go
 func getInfoSchema80() map[string][]vindexes.Column {
-	parser, err := sqlparser.New(sqlparser.Options{MySQLServerVersion: "8.0.30"})
+	parser, err := sqlparser.New(sqlparser.Options{MySQLServerVersion: "8.0.40"})
 	if err != nil {
 		panic(err)
 	}
@@ -1627,7 +1627,7 @@ func loadSchemaInfo(version string) map[string][]vindexes.Column {
 }
 
 // FindTableOrVindex implements the SchemaInformation interface
-func (i *infoSchemaWithColumns) FindTableOrVindex(tbl sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+func (i *infoSchemaWithColumns) FindTableOrVindex(tbl sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
 	if !strings.EqualFold(tbl.Qualifier.String(), "information_schema") {
 		return i.inner.FindTableOrVindex(tbl)
 	}
@@ -1636,7 +1636,7 @@ func (i *infoSchemaWithColumns) FindTableOrVindex(tbl sqlparser.TableName) (*vin
 	if !found {
 		return nil, nil, "", topodatapb.TabletType_UNKNOWN, nil, vindexes.NotFoundError{TableName: tbl.Name.String()}
 	}
-	vtbl := &vindexes.Table{
+	vtbl := &vindexes.BaseTable{
 		Type:                    "View",
 		Name:                    sqlparser.NewIdentifierCS(tbl.Name.String()),
 		Columns:                 cols,

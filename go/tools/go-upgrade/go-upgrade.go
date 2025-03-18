@@ -343,8 +343,10 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		"./build.env",
 		"./docker/bootstrap/Dockerfile.common",
 		"./docker/lite/Dockerfile",
+		"./docker/lite/Dockerfile.mysql84",
 		"./docker/lite/Dockerfile.percona80",
 		"./docker/vttestserver/Dockerfile.mysql80",
+		"./docker/vttestserver/Dockerfile.mysql84",
 	}
 	filesToChange, err := getListOfFilesInPaths(explore)
 	if err != nil {

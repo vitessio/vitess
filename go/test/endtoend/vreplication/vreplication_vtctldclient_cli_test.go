@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -57,7 +58,7 @@ func TestVtctldclientCLI(t *testing.T) {
 	vc = setupMinimalCluster(t)
 	vttablet.InitVReplicationConfigDefaults()
 
-	err = vc.Vtctl.AddCellInfo("zone2")
+	err = vc.VtctldClient.AddCellInfo("zone2")
 	require.NoError(t, err)
 	zone2, err := vc.AddCell(t, "zone2")
 	require.NoError(t, err)
@@ -501,6 +502,28 @@ func splitShard(t *testing.T, keyspace, workflowName, sourceShards, targetShards
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
 	rs.Start()
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+
+	t.Run("Test --shards in workflow start/stop", func(t *testing.T) {
+		// This subtest expects workflow to be running at the start and restarts it at the end.
+		type tCase struct {
+			shards   string
+			action   string
+			expected int
+		}
+		testCases := []tCase{
+			{"-40", "stop", 1},
+			{"40-80", "stop", 1},
+			{"-40,40-80", "start", 2},
+		}
+		for _, tc := range testCases {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", keyspace, tc.action, "--workflow", workflowName, "--shards", tc.shards)
+			require.NoError(t, err, "failed to %s workflow: %v", tc.action, err)
+			cnt := gjson.Get(output, "details.#").Int()
+			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
+		}
+	})
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+
 	for _, targetTab := range targetTabs {
 		catchup(t, targetTab, workflowName, "Reshard")
 	}

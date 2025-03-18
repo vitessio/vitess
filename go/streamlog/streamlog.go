@@ -20,7 +20,7 @@ package streamlog
 import (
 	"fmt"
 	"io"
-	rand "math/rand/v2"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -47,40 +47,42 @@ var (
 		[]string{"Log", "Subscriber"})
 )
 
-var (
-	redactDebugUIQueries bool
-	queryLogFilterTag    string
-	queryLogRowThreshold uint64
-	queryLogFormat       = "text"
-	queryLogSampleRate   float64
+const (
+	// QueryLogFormatText is the format specifier for text querylog output
+	QueryLogFormatText = "text"
+
+	// QueryLogFormatJSON is the format specifier for json querylog output
+	QueryLogFormatJSON = "json"
+
+	// QueryLogModeAll is the mode specifier for logging all queries
+	QueryLogModeAll = "all"
+
+	// QueryLogModeError is the mode specifier for logging only queries that return an error
+	QueryLogModeError = "error"
 )
 
-func GetRedactDebugUIQueries() bool {
-	return redactDebugUIQueries
+type QueryLogConfig struct {
+	RedactDebugUIQueries bool
+	FilterTag            string
+	Format               string
+	Mode                 string
+	RowThreshold         uint64
+	sampleRate           float64
 }
 
-func SetRedactDebugUIQueries(newRedactDebugUIQueries bool) {
-	redactDebugUIQueries = newRedactDebugUIQueries
+var queryLogConfigInstance = QueryLogConfig{
+	Format: QueryLogFormatText,
+	Mode:   QueryLogModeAll,
 }
 
-func SetQueryLogFilterTag(newQueryLogFilterTag string) {
-	queryLogFilterTag = newQueryLogFilterTag
+func GetQueryLogConfig() QueryLogConfig {
+	return queryLogConfigInstance
 }
 
-func SetQueryLogRowThreshold(newQueryLogRowThreshold uint64) {
-	queryLogRowThreshold = newQueryLogRowThreshold
-}
-
-func SetQueryLogSampleRate(sampleRate float64) {
-	queryLogSampleRate = sampleRate
-}
-
-func GetQueryLogFormat() string {
-	return queryLogFormat
-}
-
-func SetQueryLogFormat(newQueryLogFormat string) {
-	queryLogFormat = newQueryLogFormat
+func NewQueryLogConfigForTest() QueryLogConfig {
+	return QueryLogConfig{
+		Format: QueryLogFormatText,
+	}
 }
 
 func init() {
@@ -91,28 +93,23 @@ func init() {
 
 func registerStreamLogFlags(fs *pflag.FlagSet) {
 	// RedactDebugUIQueries controls whether full queries and bind variables are suppressed from debug UIs.
-	fs.BoolVar(&redactDebugUIQueries, "redact-debug-ui-queries", redactDebugUIQueries, "redact full queries and bind variables from debug UI")
+	fs.BoolVar(&queryLogConfigInstance.RedactDebugUIQueries, "redact-debug-ui-queries", queryLogConfigInstance.RedactDebugUIQueries, "redact full queries and bind variables from debug UI")
 
 	// QueryLogFormat controls the format of the query log (either text or json)
-	fs.StringVar(&queryLogFormat, "querylog-format", queryLogFormat, "format for query logs (\"text\" or \"json\")")
+	fs.StringVar(&queryLogConfigInstance.Format, "querylog-format", queryLogConfigInstance.Format, "format for query logs (\"text\" or \"json\")")
 
 	// QueryLogFilterTag contains an optional string that must be present in the query for it to be logged
-	fs.StringVar(&queryLogFilterTag, "querylog-filter-tag", queryLogFilterTag, "string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization")
+	fs.StringVar(&queryLogConfigInstance.FilterTag, "querylog-filter-tag", queryLogConfigInstance.FilterTag, "string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization")
 
 	// QueryLogRowThreshold only log queries returning or affecting this many rows
-	fs.Uint64Var(&queryLogRowThreshold, "querylog-row-threshold", queryLogRowThreshold, "Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.")
+	fs.Uint64Var(&queryLogConfigInstance.RowThreshold, "querylog-row-threshold", queryLogConfigInstance.RowThreshold, "Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.")
 
 	// QueryLogSampleRate causes a sample of queries to be logged
-	fs.Float64Var(&queryLogSampleRate, "querylog-sample-rate", queryLogSampleRate, "Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)")
+	fs.Float64Var(&queryLogConfigInstance.sampleRate, "querylog-sample-rate", queryLogConfigInstance.sampleRate, "Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)")
+
+	// QueryLogMode controls the mode for logging queries (all or error)
+	fs.StringVar(&queryLogConfigInstance.Mode, "querylog-mode", queryLogConfigInstance.Mode, `Mode for logging queries. "error" will only log queries that return an error. Otherwise all queries will be logged.`)
 }
-
-const (
-	// QueryLogFormatText is the format specifier for text querylog output
-	QueryLogFormatText = "text"
-
-	// QueryLogFormatJSON is the format specifier for json querylog output
-	QueryLogFormatJSON = "json"
-)
 
 // StreamLogger is a non-blocking broadcaster of messages.
 // Subscribers can use channels or HTTP.
@@ -257,27 +254,30 @@ func GetFormatter[T any](logger *StreamLogger[T]) LogFormatter {
 	}
 }
 
-// shouldSampleQuery returns true if a query should be sampled based on queryLogSampleRate
-func shouldSampleQuery() bool {
-	if queryLogSampleRate <= 0 {
+// shouldSampleQuery returns true if a query should be sampled based on sampleRate
+func (qlConfig QueryLogConfig) shouldSampleQuery() bool {
+	if qlConfig.sampleRate <= 0 {
 		return false
-	} else if queryLogSampleRate >= 1 {
+	} else if qlConfig.sampleRate >= 1 {
 		return true
 	}
-	return rand.Float64() <= queryLogSampleRate
+	return rand.Float64() <= qlConfig.sampleRate
 }
 
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
-func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64) bool {
-	if shouldSampleQuery() {
+func (qlConfig QueryLogConfig) ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64, hasError bool) bool {
+	if qlConfig.shouldSampleQuery() {
 		return true
 	}
-	if queryLogRowThreshold > max(rowsAffected, rowsReturned) && queryLogFilterTag == "" {
+	if qlConfig.RowThreshold > max(rowsAffected, rowsReturned) && qlConfig.FilterTag == "" {
 		return false
 	}
-	if queryLogFilterTag != "" {
-		return strings.Contains(sql, queryLogFilterTag)
+	if qlConfig.FilterTag != "" {
+		return strings.Contains(sql, qlConfig.FilterTag)
+	}
+	if qlConfig.Mode == QueryLogModeError {
+		return hasError
 	}
 	return true
 }

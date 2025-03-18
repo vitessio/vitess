@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ func (cached *Decimal) CachedSize(alloc bool) int64 {
 	}
 	// field value *math/big.Int
 	if cached.value != nil {
+		size += hack.RuntimeAllocSize(int64(cap(cached.value.Bits())) * 4)
 		size += hack.RuntimeAllocSize(int64(32))
 	}
 	return size

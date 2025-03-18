@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"vitess.io/vitess/go/textutil"
 )
 
 // MetricName is a formalized name for a metric, such as "lag" or "threads_running". A metric name
@@ -77,6 +79,14 @@ func (metric MetricName) DefaultScope() Scope {
 	return SelfScope
 }
 
+// Pascal case representation of this name, e.g. "ThreadsRunning"
+func (metric MetricName) Pascal() string {
+	if pascal, ok := pascalMetricNames[metric]; ok {
+		return pascal
+	}
+	return textutil.PascalCase(metric.String())
+}
+
 func (metric MetricName) String() string {
 	return string(metric)
 }
@@ -113,6 +123,7 @@ var (
 	// - no textual parsing is needed in the critical path
 	// - we can easily check if a metric name is valid
 	aggregatedMetricNames = make(map[string]AggregatedMetricName)
+	pascalMetricNames     = make(map[MetricName]string)
 )
 
 // DisaggregateMetricName splits a metric name into its scope name and metric name

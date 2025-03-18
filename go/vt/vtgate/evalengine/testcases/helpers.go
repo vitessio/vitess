@@ -30,7 +30,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-type Query func(query string, row []sqltypes.Value)
+type Query func(query string, row []sqltypes.Value, skipCollationCheck bool)
 type Runner func(yield Query)
 type TestCase struct {
 	Run     Runner

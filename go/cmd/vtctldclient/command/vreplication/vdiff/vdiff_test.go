@@ -680,6 +680,75 @@ func TestVDiffSharded(t *testing.T) {
 	}
 }
 
+func TestVDiffTextTemplate(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	env := newTestVDiffEnv(t, ctx, []string{"0"}, []string{"0"}, "", nil)
+	defer env.close()
+
+	now := time.Now()
+	UUID := uuid.New().String()
+	req := &tabletmanagerdatapb.VDiffRequest{
+		Keyspace:  env.targetKeyspace,
+		Workflow:  env.workflow,
+		Action:    string(vdiff.ShowAction),
+		ActionArg: UUID,
+	}
+	starttime := now.UTC().Format(vdiff.TimestampFormat)
+
+	testCases := []struct {
+		id     string
+		res    *sqltypes.Result
+		report string
+	}{{
+		id: "1",
+		res: sqltypes.MakeTestResult(fields,
+			"started||t1|"+UUID+"|started|300|"+starttime+"|30||0|"+
+				`{"TableName": "t1", "MatchingRows": 30, "ProcessedRows": 30, "MismatchedRows": 0, "ExtraRowsSource": 0, `+
+				`"ExtraRowsTarget": 0}`),
+		report: fmt.Sprintf(`
+VDiff Summary for targetks.vdiffTest (%s)
+State:        started
+RowsCompared: 30
+HasMismatch:  false
+StartedAt:    %s
+Progress:     10.00%%, ETA: %s
+ 
+Table t1:
+	State:            started
+	ProcessedRows:    30
+	MatchingRows:     30
+ 
+Use "--format=json" for more detailed output.
+
+`, UUID, starttime, starttime),
+	}}
+
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+			res := &tabletmanagerdatapb.VDiffResponse{
+				Id:     1,
+				Output: sqltypes.ResultToProto3(tc.res),
+			}
+			env.tmc.setVDResults(env.tablets[200].tablet, req, res)
+			req := &vtctldatapb.VDiffShowRequest{
+				TargetKeyspace: env.targetKeyspace,
+				Workflow:       env.workflow,
+				Arg:            UUID,
+			}
+
+			resp, err := env.ws.VDiffShow(context.Background(), req)
+			require.NoError(t, err)
+			vds, err := displayShowSingleSummary(env.out, "text", env.targetKeyspace, env.workflow, UUID, resp, true)
+			require.NoError(t, err)
+			require.Equal(t, vdiff.StartedState, vds)
+
+			require.Equal(t, tc.report, env.getOutput())
+			env.resetOutput()
+		})
+	}
+}
+
 func TestGetStructNames(t *testing.T) {
 	type s struct {
 		A string

@@ -22,15 +22,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.nullable;
-import static org.mockito.Matchers.anyList;
-import static org.mockito.Matchers.anyMap;
-import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.verify;
-import static org.powermock.api.mockito.PowerMockito.doReturn;
-import static org.powermock.api.mockito.PowerMockito.mock;
-import static org.powermock.api.mockito.PowerMockito.when;
 
 import io.vitess.client.Context;
 import io.vitess.client.SQLFuture;
@@ -52,18 +45,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mockito;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 /**
  * Created by harshit.gangal on 19/01/16.
  */
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({VTGateConnection.class, Vtrpc.RPCError.class})
 public class VitessStatementTest {
 
   private String sqlSelect = "select 1 from test_table";
@@ -76,7 +63,7 @@ public class VitessStatementTest {
 
   @Test
   public void testGetConnection() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
 
     VitessStatement statement = new VitessStatement(mockConn);
     assertEquals(mockConn, statement.getConnection());
@@ -84,24 +71,24 @@ public class VitessStatementTest {
 
   @Test
   public void testGetResultSet() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
     VitessStatement statement = new VitessStatement(mockConn);
     assertEquals(null, statement.getResultSet());
   }
 
   @Test
   public void testExecuteQuery() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
-    VTGateConnection mockVtGateConn = mock(VTGateConnection.class);
-    Cursor mockCursor = mock(Cursor.class);
-    SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
+    VTGateConnection mockVtGateConn = Mockito.mock(VTGateConnection.class);
+    Cursor mockCursor = Mockito.mock(Cursor.class);
+    SQLFuture mockSqlFutureCursor = Mockito.mock(SQLFuture.class);
 
-    when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
+    Mockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+    Mockito.when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
-    when(mockConn.isSimpleExecute()).thenReturn(true);
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
-    when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
+    Mockito.when(mockConn.isSimpleExecute()).thenReturn(true);
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+    Mockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
     VitessStatement statement = new VitessStatement(mockConn);
     //Empty Sql Statement
@@ -116,13 +103,13 @@ public class VitessStatementTest {
     assertEquals(-1, statement.getUpdateCount());
 
     //autocommit is false and not in transaction
-    when(mockConn.getAutoCommit()).thenReturn(false);
-    when(mockConn.isInTransaction()).thenReturn(false);
+    Mockito.when(mockConn.getAutoCommit()).thenReturn(false);
+    Mockito.when(mockConn.isInTransaction()).thenReturn(false);
     rs = statement.executeQuery(sqlSelect);
     assertEquals(-1, statement.getUpdateCount());
 
     //when returned cursor is null
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(null);
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(null);
     try {
       statement.executeQuery(sqlSelect);
       fail("Should have thrown exception for cursor null");
@@ -133,18 +120,18 @@ public class VitessStatementTest {
 
   @Test
   public void testExecuteQueryWithStreamExecuteType() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
-    VTGateConnection mockVtGateConn = mock(VTGateConnection.class);
-    Cursor mockCursor = mock(Cursor.class);
-    SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
+    VTGateConnection mockVtGateConn = Mockito.mock(VTGateConnection.class);
+    Cursor mockCursor = Mockito.mock(Cursor.class);
+    SQLFuture mockSqlFutureCursor = Mockito.mock(SQLFuture.class);
 
-    when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockVtGateConn
+    Mockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+    Mockito.when(mockVtGateConn
         .streamExecute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockCursor);
-    when(mockConn.getExecuteType()).thenReturn(Constants.QueryExecuteType.STREAM);
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
-    when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
+    Mockito.when(mockConn.getExecuteType()).thenReturn(Constants.QueryExecuteType.STREAM);
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+    Mockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
     VitessStatement statement = new VitessStatement(mockConn);
     //Empty Sql Statement
@@ -164,13 +151,13 @@ public class VitessStatementTest {
     assertEquals(-1, statement.getUpdateCount());
 
     //select on primary when tx is null and autocommit is false
-    when(mockConn.getAutoCommit()).thenReturn(false);
-    when(mockConn.isInTransaction()).thenReturn(false);
+    Mockito.when(mockConn.getAutoCommit()).thenReturn(false);
+    Mockito.when(mockConn.isInTransaction()).thenReturn(false);
     rs = statement.executeQuery(sqlSelect);
     assertEquals(-1, statement.getUpdateCount());
 
     //when returned cursor is null
-    when(mockVtGateConn
+    Mockito.when(mockVtGateConn
         .streamExecute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(null);
     try {
@@ -191,19 +178,19 @@ public class VitessStatementTest {
 
   private void testExecute(int fetchSize, boolean simpleExecute, boolean shouldRunExecute,
       boolean shouldRunStreamExecute) throws SQLException {
-    VTGateConnection mockVtGateConn = mock(VTGateConnection.class);
+    VTGateConnection mockVtGateConn = Mockito.mock(VTGateConnection.class);
 
-    VitessConnection mockConn = mock(VitessConnection.class);
-    when(mockConn.isSimpleExecute()).thenReturn(simpleExecute);
-    when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
+    Mockito.when(mockConn.isSimpleExecute()).thenReturn(simpleExecute);
+    Mockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
 
-    Cursor mockCursor = mock(Cursor.class);
-    SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+    Cursor mockCursor = Mockito.mock(Cursor.class);
+    SQLFuture mockSqlFutureCursor = Mockito.mock(SQLFuture.class);
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
 
-    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
+    Mockito.when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
-    when(mockVtGateConn
+    Mockito.when(mockVtGateConn
         .streamExecute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockCursor);
 
@@ -224,17 +211,17 @@ public class VitessStatementTest {
 
   @Test
   public void testExecuteUpdate() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
-    VTGateConnection mockVtGateConn = mock(VTGateConnection.class);
-    Cursor mockCursor = mock(Cursor.class);
-    SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
-    List<Query.Field> fieldList = mock(ArrayList.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
+    VTGateConnection mockVtGateConn = Mockito.mock(VTGateConnection.class);
+    Cursor mockCursor = Mockito.mock(Cursor.class);
+    SQLFuture mockSqlFutureCursor = Mockito.mock(SQLFuture.class);
+    List<Query.Field> fieldList = Mockito.mock(ArrayList.class);
 
-    when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
+    Mockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+    Mockito.when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
-    when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+    Mockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
     VitessStatement statement = new VitessStatement(mockConn);
     //executing dml on primary
@@ -242,13 +229,13 @@ public class VitessStatementTest {
     assertEquals(0, updateCount);
 
     //tx is null & autoCommit is true
-    when(mockConn.getAutoCommit()).thenReturn(true);
+    Mockito.when(mockConn.getAutoCommit()).thenReturn(true);
     updateCount = statement.executeUpdate(sqlUpdate);
     assertEquals(0, updateCount);
 
     //cursor fields is not null
-    when(mockCursor.getFields()).thenReturn(fieldList);
-    when(fieldList.isEmpty()).thenReturn(false);
+    Mockito.when(mockCursor.getFields()).thenReturn(fieldList);
+    Mockito.when(fieldList.isEmpty()).thenReturn(false);
     try {
       statement.executeUpdate(sqlSelect);
       fail("Should have thrown exception for field not null");
@@ -257,7 +244,7 @@ public class VitessStatementTest {
     }
 
     //cursor is null
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(null);
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(null);
     try {
       statement.executeUpdate(sqlUpdate);
       fail("Should have thrown exception for cursor null");
@@ -266,7 +253,7 @@ public class VitessStatementTest {
     }
 
     //read only
-    when(mockConn.isReadOnly()).thenReturn(true);
+    Mockito.when(mockConn.isReadOnly()).thenReturn(true);
     try {
       statement.execute("UPDATE SET foo = 1 ON mytable WHERE id = 1");
       fail("Should have thrown exception for read only");
@@ -275,7 +262,7 @@ public class VitessStatementTest {
     }
 
     //read only
-    when(mockConn.isReadOnly()).thenReturn(true);
+    Mockito.when(mockConn.isReadOnly()).thenReturn(true);
     try {
       statement.executeBatch();
       fail("Should have thrown exception for read only");
@@ -286,27 +273,27 @@ public class VitessStatementTest {
 
   @Test
   public void testExecute() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
-    VTGateConnection mockVtGateConn = mock(VTGateConnection.class);
-    Cursor mockCursor = mock(Cursor.class);
-    SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
-    List<Query.Field> mockFieldList = PowerMockito.spy(new ArrayList<>());
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
+    VTGateConnection mockVtGateConn = Mockito.mock(VTGateConnection.class);
+    Cursor mockCursor = Mockito.mock(Cursor.class);
+    SQLFuture mockSqlFutureCursor = Mockito.mock(SQLFuture.class);
+    List<Query.Field> mockFieldList = Mockito.spy(new ArrayList<>());
 
-    when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
+    Mockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+    Mockito.when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
-    when(mockConn.getAutoCommit()).thenReturn(true);
-    when(mockConn.getExecuteType()).thenReturn(Constants.QueryExecuteType.SIMPLE);
-    when(mockConn.isSimpleExecute()).thenReturn(true);
+    Mockito.when(mockConn.getAutoCommit()).thenReturn(true);
+    Mockito.when(mockConn.getExecuteType()).thenReturn(Constants.QueryExecuteType.SIMPLE);
+    Mockito.when(mockConn.isSimpleExecute()).thenReturn(true);
 
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
-    when(mockCursor.getFields()).thenReturn(mockFieldList);
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+    Mockito.when(mockCursor.getFields()).thenReturn(mockFieldList);
 
     VitessStatement statement = new VitessStatement(mockConn);
     int fieldSize = 5;
-    when(mockCursor.getFields()).thenReturn(mockFieldList);
-    doReturn(fieldSize).when(mockFieldList).size();
-    doReturn(false).when(mockFieldList).isEmpty();
+    Mockito.when(mockCursor.getFields()).thenReturn(mockFieldList);
+    Mockito.doReturn(fieldSize).when(mockFieldList).size();
+    Mockito.doReturn(false).when(mockFieldList).isEmpty();
 
     boolean hasResultSet = statement.execute(sqlSelect);
     assertTrue(hasResultSet);
@@ -317,15 +304,15 @@ public class VitessStatementTest {
     assertNotNull(statement.getResultSet());
 
     int mockUpdateCount = 10;
-    when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
-    when(mockCursor.getRowsAffected()).thenReturn((long) mockUpdateCount);
+    Mockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
+    Mockito.when(mockCursor.getRowsAffected()).thenReturn((long) mockUpdateCount);
     hasResultSet = statement.execute(sqlUpdate);
     assertFalse(hasResultSet);
     assertNull(statement.getResultSet());
     assertEquals(mockUpdateCount, statement.getUpdateCount());
 
     //cursor is null
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(null);
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(null);
     try {
       statement.execute(sqlUpdate);
       fail("Should have thrown exception for cursor null");
@@ -336,47 +323,47 @@ public class VitessStatementTest {
 
   @Test
   public void testGetUpdateCount() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
-    VTGateConnection mockVtGateConn = mock(VTGateConnection.class);
-    Cursor mockCursor = mock(Cursor.class);
-    SQLFuture mockSqlFuture = mock(SQLFuture.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
+    VTGateConnection mockVtGateConn = Mockito.mock(VTGateConnection.class);
+    Cursor mockCursor = Mockito.mock(Cursor.class);
+    SQLFuture mockSqlFuture = Mockito.mock(SQLFuture.class);
 
-    when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
+    Mockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+    Mockito.when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFuture);
-    when(mockSqlFuture.checkedGet()).thenReturn(mockCursor);
-    when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
+    Mockito.when(mockSqlFuture.checkedGet()).thenReturn(mockCursor);
+    Mockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
     VitessStatement statement = new VitessStatement(mockConn);
-    when(mockCursor.getRowsAffected()).thenReturn(10L);
+    Mockito.when(mockCursor.getRowsAffected()).thenReturn(10L);
     int updateCount = statement.executeUpdate(sqlUpdate);
     assertEquals(10L, updateCount);
     assertEquals(10L, statement.getUpdateCount());
 
     // Truncated Update Count
-    when(mockCursor.getRowsAffected()).thenReturn((long) Integer.MAX_VALUE + 10);
+    Mockito.when(mockCursor.getRowsAffected()).thenReturn((long) Integer.MAX_VALUE + 10);
     updateCount = statement.executeUpdate(sqlUpdate);
     assertEquals(Integer.MAX_VALUE, updateCount);
     assertEquals(Integer.MAX_VALUE, statement.getUpdateCount());
 
-    when(mockConn.isSimpleExecute()).thenReturn(true);
+    Mockito.when(mockConn.isSimpleExecute()).thenReturn(true);
     statement.executeQuery(sqlSelect);
     assertEquals(-1, statement.getUpdateCount());
   }
 
   @Test
   public void testClose() throws Exception {
-    VitessConnection mockConn = mock(VitessConnection.class);
-    VTGateConnection mockVtGateConn = mock(VTGateConnection.class);
-    Cursor mockCursor = mock(Cursor.class);
-    SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
+    VTGateConnection mockVtGateConn = Mockito.mock(VTGateConnection.class);
+    Cursor mockCursor = Mockito.mock(Cursor.class);
+    SQLFuture mockSqlFutureCursor = Mockito.mock(SQLFuture.class);
 
-    when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
+    Mockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+    Mockito.when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
-    when(mockConn.getExecuteType()).thenReturn(Constants.QueryExecuteType.SIMPLE);
-    when(mockConn.isSimpleExecute()).thenReturn(true);
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+    Mockito.when(mockConn.getExecuteType()).thenReturn(Constants.QueryExecuteType.SIMPLE);
+    Mockito.when(mockConn.isSimpleExecute()).thenReturn(true);
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
 
     VitessStatement statement = new VitessStatement(mockConn);
     ResultSet rs = statement.executeQuery(sqlSelect);
@@ -391,7 +378,7 @@ public class VitessStatementTest {
 
   @Test
   public void testGetMaxFieldSize() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
 
     VitessStatement statement = new VitessStatement(mockConn);
     assertEquals(65535, statement.getMaxFieldSize());
@@ -399,7 +386,7 @@ public class VitessStatementTest {
 
   @Test
   public void testGetMaxRows() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
 
     VitessStatement statement = new VitessStatement(mockConn);
 
@@ -417,7 +404,7 @@ public class VitessStatementTest {
 
   @Test
   public void testGetQueryTimeout() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
     Mockito.when(mockConn.getTimeout()).thenReturn((long) Constants.DEFAULT_TIMEOUT);
 
     VitessStatement statement = new VitessStatement(mockConn);
@@ -426,7 +413,7 @@ public class VitessStatementTest {
 
   @Test
   public void testGetQueryTimeoutZeroDefault() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
     Mockito.when(mockConn.getTimeout()).thenReturn(0L);
 
     VitessStatement statement = new VitessStatement(mockConn);
@@ -435,7 +422,7 @@ public class VitessStatementTest {
 
   @Test
   public void testSetQueryTimeout() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
     Mockito.when(mockConn.getTimeout()).thenReturn((long) Constants.DEFAULT_TIMEOUT);
 
     VitessStatement statement = new VitessStatement(mockConn);
@@ -457,7 +444,7 @@ public class VitessStatementTest {
 
   @Test
   public void testGetWarnings() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
 
     VitessStatement statement = new VitessStatement(mockConn);
     assertNull(statement.getWarnings());
@@ -465,7 +452,7 @@ public class VitessStatementTest {
 
   @Test
   public void testGetFetchDirection() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
 
     VitessStatement statement = new VitessStatement(mockConn);
     assertEquals(ResultSet.FETCH_FORWARD, statement.getFetchDirection());
@@ -473,7 +460,7 @@ public class VitessStatementTest {
 
   @Test
   public void testGetFetchSize() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
 
     VitessStatement statement = new VitessStatement(mockConn);
     assertEquals(0, statement.getFetchSize());
@@ -481,7 +468,7 @@ public class VitessStatementTest {
 
   @Test
   public void testGetResultSetConcurrency() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
 
     VitessStatement statement = new VitessStatement(mockConn);
     assertEquals(ResultSet.CONCUR_READ_ONLY, statement.getResultSetConcurrency());
@@ -489,7 +476,7 @@ public class VitessStatementTest {
 
   @Test
   public void testGetResultSetType() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
 
     VitessStatement statement = new VitessStatement(mockConn);
     assertEquals(ResultSet.TYPE_FORWARD_ONLY, statement.getResultSetType());
@@ -497,7 +484,7 @@ public class VitessStatementTest {
 
   @Test
   public void testIsClosed() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
 
     VitessStatement statement = new VitessStatement(mockConn);
     assertFalse(statement.isClosed());
@@ -507,23 +494,23 @@ public class VitessStatementTest {
 
   @Test
   public void testAutoGeneratedKeys() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
-    VTGateConnection mockVtGateConn = mock(VTGateConnection.class);
-    Cursor mockCursor = mock(Cursor.class);
-    SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
+    VTGateConnection mockVtGateConn = Mockito.mock(VTGateConnection.class);
+    Cursor mockCursor = Mockito.mock(Cursor.class);
+    SQLFuture mockSqlFutureCursor = Mockito.mock(SQLFuture.class);
 
-    when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
+    Mockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+    Mockito.when(mockVtGateConn.execute(nullable(Context.class), nullable(String.class), nullable(Map.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
-    when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+    Mockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
     VitessStatement statement = new VitessStatement(mockConn);
     long expectedFirstGeneratedId = 121;
     long[] expectedGeneratedIds = {121, 122, 123, 124, 125};
     int expectedAffectedRows = 5;
-    when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
-    when(mockCursor.getRowsAffected()).thenReturn(Long.valueOf(expectedAffectedRows));
+    Mockito.when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
+    Mockito.when(mockCursor.getRowsAffected()).thenReturn(Long.valueOf(expectedAffectedRows));
 
     //Executing Insert Statement
     int updateCount = statement.executeUpdate(sqlInsert, Statement.RETURN_GENERATED_KEYS);
@@ -550,7 +537,7 @@ public class VitessStatementTest {
 
     //Fetching Generated Keys on update query
     expectedFirstGeneratedId = 0;
-    when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
+    Mockito.when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
     updateCount = statement.executeUpdate(sqlUpdate, Statement.RETURN_GENERATED_KEYS);
     assertEquals(expectedAffectedRows, updateCount);
 
@@ -560,7 +547,7 @@ public class VitessStatementTest {
 
   @Test
   public void testAddBatch() throws Exception {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
     VitessStatement statement = new VitessStatement(mockConn);
     statement.addBatch(sqlInsert);
     Field privateStringField = VitessStatement.class.getDeclaredField("batchedArgs");
@@ -570,7 +557,7 @@ public class VitessStatementTest {
 
   @Test
   public void testClearBatch() throws Exception {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
     VitessStatement statement = new VitessStatement(mockConn);
     statement.addBatch(sqlInsert);
     statement.clearBatch();
@@ -581,36 +568,36 @@ public class VitessStatementTest {
 
   @Test
   public void testExecuteBatch() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
     VitessStatement statement = new VitessStatement(mockConn);
     int[] updateCounts = statement.executeBatch();
     assertEquals(0, updateCounts.length);
 
-    VTGateConnection mockVtGateConn = mock(VTGateConnection.class);
-    when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockConn.getAutoCommit()).thenReturn(true);
+    VTGateConnection mockVtGateConn = Mockito.mock(VTGateConnection.class);
+    Mockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+    Mockito.when(mockConn.getAutoCommit()).thenReturn(true);
 
-    SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
-    when(
+    SQLFuture mockSqlFutureCursor = Mockito.mock(SQLFuture.class);
+    Mockito.when(
         mockVtGateConn.executeBatch(nullable(Context.class), nullable(List.class), nullable(List.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
 
     List<CursorWithError> mockCursorWithErrorList = new ArrayList<>();
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);
 
-    CursorWithError mockCursorWithError1 = mock(CursorWithError.class);
-    when(mockCursorWithError1.getError()).thenReturn(null);
-    when(mockCursorWithError1.getCursor()).thenReturn(mock(Cursor.class));
+    CursorWithError mockCursorWithError1 = Mockito.mock(CursorWithError.class);
+    Mockito.when(mockCursorWithError1.getError()).thenReturn(null);
+    Mockito.when(mockCursorWithError1.getCursor()).thenReturn(Mockito.mock(Cursor.class));
     mockCursorWithErrorList.add(mockCursorWithError1);
 
     statement.addBatch(sqlUpdate);
     updateCounts = statement.executeBatch();
     assertEquals(1, updateCounts.length);
 
-    CursorWithError mockCursorWithError2 = mock(CursorWithError.class);
+    CursorWithError mockCursorWithError2 = Mockito.mock(CursorWithError.class);
     Vtrpc.RPCError rpcError = Vtrpc.RPCError.newBuilder()
         .setMessage("statement execute batch error").build();
-    when(mockCursorWithError2.getError()).thenReturn(rpcError);
+    Mockito.when(mockCursorWithError2.getError()).thenReturn(rpcError);
     mockCursorWithErrorList.add(mockCursorWithError2);
     statement.addBatch(sqlUpdate);
     statement.addBatch(sqlUpdate);
@@ -627,33 +614,33 @@ public class VitessStatementTest {
 
   @Test
   public void testBatchGeneratedKeys() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
     VitessStatement statement = new VitessStatement(mockConn);
-    Cursor mockCursor = mock(Cursor.class);
-    SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
+    Cursor mockCursor = Mockito.mock(Cursor.class);
+    SQLFuture mockSqlFutureCursor = Mockito.mock(SQLFuture.class);
 
-    VTGateConnection mockVtGateConn = mock(VTGateConnection.class);
-    when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockConn.getAutoCommit()).thenReturn(true);
+    VTGateConnection mockVtGateConn = Mockito.mock(VTGateConnection.class);
+    Mockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+    Mockito.when(mockConn.getAutoCommit()).thenReturn(true);
 
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
-    when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+    Mockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
-    when(
+    Mockito.when(
         mockVtGateConn.executeBatch(nullable(Context.class), nullable(List.class), nullable(List.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
     List<CursorWithError> mockCursorWithErrorList = new ArrayList<>();
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);
 
-    CursorWithError mockCursorWithError = mock(CursorWithError.class);
-    when(mockCursorWithError.getError()).thenReturn(null);
-    when(mockCursorWithError.getCursor()).thenReturn(mockCursor);
+    CursorWithError mockCursorWithError = Mockito.mock(CursorWithError.class);
+    Mockito.when(mockCursorWithError.getError()).thenReturn(null);
+    Mockito.when(mockCursorWithError.getCursor()).thenReturn(mockCursor);
     mockCursorWithErrorList.add(mockCursorWithError);
 
     long expectedFirstGeneratedId = 121;
     long[] expectedGeneratedIds = {121, 122, 123, 124, 125};
-    when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
-    when(mockCursor.getRowsAffected()).thenReturn(Long.valueOf(expectedGeneratedIds.length));
+    Mockito.when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
+    Mockito.when(mockCursor.getRowsAffected()).thenReturn(Long.valueOf(expectedGeneratedIds.length));
 
     statement.addBatch(sqlInsert);
     statement.executeBatch();
@@ -668,33 +655,33 @@ public class VitessStatementTest {
 
   @Test
   public void testBatchUpsertGeneratedKeys() throws SQLException {
-    VitessConnection mockConn = mock(VitessConnection.class);
+    VitessConnection mockConn = Mockito.mock(VitessConnection.class);
     VitessStatement statement = new VitessStatement(mockConn);
-    Cursor mockCursor = mock(Cursor.class);
-    SQLFuture mockSqlFutureCursor = mock(SQLFuture.class);
+    Cursor mockCursor = Mockito.mock(Cursor.class);
+    SQLFuture mockSqlFutureCursor = Mockito.mock(SQLFuture.class);
 
-    VTGateConnection mockVtGateConn = mock(VTGateConnection.class);
-    when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
-    when(mockConn.getAutoCommit()).thenReturn(true);
+    VTGateConnection mockVtGateConn = Mockito.mock(VTGateConnection.class);
+    Mockito.when(mockConn.getVtGateConn()).thenReturn(mockVtGateConn);
+    Mockito.when(mockConn.getAutoCommit()).thenReturn(true);
 
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
-    when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursor);
+    Mockito.when(mockCursor.getFields()).thenReturn(Query.QueryResult.getDefaultInstance().getFieldsList());
 
-    when(
+    Mockito.when(
         mockVtGateConn.executeBatch(nullable(Context.class), nullable(List.class), nullable(List.class), nullable(VTSession.class)))
         .thenReturn(mockSqlFutureCursor);
     List<CursorWithError> mockCursorWithErrorList = new ArrayList<>();
-    when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);
+    Mockito.when(mockSqlFutureCursor.checkedGet()).thenReturn(mockCursorWithErrorList);
 
-    CursorWithError mockCursorWithError = mock(CursorWithError.class);
-    when(mockCursorWithError.getError()).thenReturn(null);
-    when(mockCursorWithError.getCursor()).thenReturn(mockCursor);
+    CursorWithError mockCursorWithError = Mockito.mock(CursorWithError.class);
+    Mockito.when(mockCursorWithError.getError()).thenReturn(null);
+    Mockito.when(mockCursorWithError.getCursor()).thenReturn(mockCursor);
     mockCursorWithErrorList.add(mockCursorWithError);
 
     long expectedFirstGeneratedId = 121;
     long[] expectedGeneratedIds = {121, 122};
-    when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
-    when(mockCursor.getRowsAffected()).thenReturn(Long.valueOf(expectedGeneratedIds.length));
+    Mockito.when(mockCursor.getInsertId()).thenReturn(expectedFirstGeneratedId);
+    Mockito.when(mockCursor.getRowsAffected()).thenReturn(Long.valueOf(expectedGeneratedIds.length));
 
     statement.addBatch(sqlUpsert);
     statement.executeBatch();
@@ -709,8 +696,8 @@ public class VitessStatementTest {
     }
 
     VitessStatement noUpdate = new VitessStatement(mockConn);
-    when(mockCursor.getInsertId()).thenReturn(0L);
-    when(mockCursor.getRowsAffected()).thenReturn(1L);
+    Mockito.when(mockCursor.getInsertId()).thenReturn(0L);
+    Mockito.when(mockCursor.getRowsAffected()).thenReturn(1L);
 
     noUpdate.addBatch(sqlUpsert);
     noUpdate.executeBatch();

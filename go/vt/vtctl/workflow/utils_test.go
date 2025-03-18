@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -22,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -247,7 +249,6 @@ func startEtcd(t *testing.T) string {
 }
 
 func TestValidateSourceTablesExist(t *testing.T) {
-	ctx := context.Background()
 	ks := "source_keyspace"
 	ksTables := []string{"table1", "table2"}
 
@@ -272,7 +273,7 @@ func TestValidateSourceTablesExist(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateSourceTablesExist(ctx, ks, ksTables, tc.tables)
+			err := validateSourceTablesExist(ks, ksTables, tc.tables)
 			if tc.errContains != "" {
 				assert.ErrorContains(t, err, tc.errContains)
 			} else {
@@ -280,4 +281,78 @@ func TestValidateSourceTablesExist(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLegacyBuildTargets(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"-80", "80-"},
+	}
+
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = schema
+
+	result1 := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+		"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
+		"1|keyspace:\"source\" shard:\"-80\" filter:{rules:{match:\"t1\"} rules:{match:\"t2\"}}||||0|0|0",
+	)
+	result2 := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+		"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
+		"1|keyspace:\"source\" shard:\"80-\" filter:{rules:{match:\"t1\"} rules:{match:\"t2\"}}||||0|0|0",
+		"2|keyspace:\"source\" shard:\"80-\" filter:{rules:{match:\"t3\"} rules:{match:\"t4\"}}||||0|0|0",
+	)
+	env.tmc.expectVRQuery(200, "select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='wf1' and db_name='vt_targetks'", result1)
+	env.tmc.expectVRQuery(210, "select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='wf1' and db_name='vt_targetks'", result2)
+
+	ti, err := LegacyBuildTargets(ctx, env.ts, env.tmc, targetKeyspace.KeyspaceName, workflowName, targetKeyspace.ShardNames)
+	require.NoError(t, err)
+	// Expect 2 targets as there are 2 target shards.
+	assert.Len(t, ti.Targets, 2)
+
+	assert.NotNil(t, ti.Targets["-80"])
+	assert.NotNil(t, ti.Targets["80-"])
+
+	t1 := ti.Targets["-80"]
+	t2 := ti.Targets["80-"]
+	assert.Len(t, t1.Sources, 1)
+	assert.Len(t, t2.Sources, 2)
+	assert.Len(t, t1.Sources[1].Filter.Rules, 2)
+
+	assert.Equal(t, t1.Sources[1].Filter.Rules[0].Match, "t1")
+	assert.Equal(t, t1.Sources[1].Filter.Rules[1].Match, "t2")
+	assert.Equal(t, t1.Sources[1].Shard, "-80")
+
+	assert.Len(t, t2.Sources[1].Filter.Rules, 2)
+	assert.Len(t, t2.Sources[2].Filter.Rules, 2)
+
+	assert.Equal(t, t2.Sources[1].Shard, "80-")
+	assert.Equal(t, t2.Sources[2].Shard, "80-")
+	assert.Equal(t, t2.Sources[1].Filter.Rules[0].Match, "t1")
+	assert.Equal(t, t2.Sources[1].Filter.Rules[1].Match, "t2")
+	assert.Equal(t, t2.Sources[2].Filter.Rules[0].Match, "t3")
+	assert.Equal(t, t2.Sources[2].Filter.Rules[1].Match, "t4")
 }

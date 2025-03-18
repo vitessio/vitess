@@ -69,7 +69,7 @@ type VSchema struct {
 	// table is uniquely named, the value will be the qualified Table object
 	// with the keyspace where this table exists. If multiple keyspaces have a
 	// table with the same name, the value will be a `nil`.
-	globalTables         map[string]*Table
+	globalTables         map[string]Table
 	uniqueVindexes       map[string]Vindex
 	Keyspaces            map[string]*KeyspaceSchema `json:"keyspaces"`
 	ShardRoutingRules    map[string]string          `json:"shard_routing_rules"`
@@ -82,8 +82,8 @@ type VSchema struct {
 // MirrorRule represents one mirror rule.
 type MirrorRule struct {
 	Error   error
-	Percent float32 `json:"percent,omitempty"`
-	Table   *Table  `json:"table,omitempty"`
+	Percent float32    `json:"percent,omitempty"`
+	Table   *BaseTable `json:"table,omitempty"`
 }
 
 // MarshalJSON returns a JSON representation of MirrorRule.
@@ -93,7 +93,7 @@ func (mr *MirrorRule) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(struct {
 		Percent float32
-		Table   *Table
+		Table   *BaseTable
 	}{
 		Percent: mr.Percent,
 		Table:   mr.Table,
@@ -102,7 +102,7 @@ func (mr *MirrorRule) MarshalJSON() ([]byte, error) {
 
 // RoutingRule represents one routing rule.
 type RoutingRule struct {
-	Tables []*Table
+	Tables []*BaseTable
 	Error  error
 }
 
@@ -119,8 +119,15 @@ func (rr *RoutingRule) MarshalJSON() ([]byte, error) {
 	return json.Marshal(tables)
 }
 
-// Table represents a table in VSchema.
-type Table struct {
+// View represents a view in VSchema.
+type View struct {
+	Name      string
+	Keyspace  *Keyspace
+	Statement sqlparser.TableStatement
+}
+
+// BaseTable represents a table in VSchema.
+type BaseTable struct {
 	Type                    string                 `json:"type,omitempty"`
 	Name                    sqlparser.IdentifierCS `json:"name"`
 	Keyspace                *Keyspace              `json:"-"`
@@ -136,7 +143,7 @@ type Table struct {
 	//
 	// This is useful in route-planning for quickly selecting the optimal route
 	// when JOIN-ing a reference table to a sharded table.
-	ReferencedBy map[string]*Table `json:"-"`
+	ReferencedBy map[string]*BaseTable `json:"-"`
 	// Source is a keyspace-qualified table name that points to the source of a
 	// reference table. Only applicable for tables with Type set to "reference".
 	Source *Source `json:"source,omitempty"`
@@ -147,12 +154,12 @@ type Table struct {
 	// index can be columns or expression.
 	// For Primary key, functional indexes are not allowed, therefore it will only be columns.
 	// MySQL error message: ERROR 3756 (HY000): The primary key cannot be a functional index
-	PrimaryKey sqlparser.Columns `json:"primary_key,omitempty"`
-	UniqueKeys []sqlparser.Exprs `json:"unique_keys,omitempty"`
+	PrimaryKey sqlparser.Columns  `json:"primary_key,omitempty"`
+	UniqueKeys [][]sqlparser.Expr `json:"unique_keys,omitempty"`
 }
 
 // GetTableName gets the sqlparser.TableName for the vindex Table.
-func (t *Table) GetTableName() sqlparser.TableName {
+func (t *BaseTable) GetTableName() sqlparser.TableName {
 	return sqlparser.NewTableNameWithQualifier(t.Name.String(), t.Keyspace.Name)
 }
 
@@ -261,9 +268,9 @@ func (col *Column) ToEvalengineType(collationEnv *collations.Environment) evalen
 type KeyspaceSchema struct {
 	Keyspace        *Keyspace
 	ForeignKeyMode  vschemapb.Keyspace_ForeignKeyMode
-	Tables          map[string]*Table
+	Tables          map[string]*BaseTable
 	Vindexes        map[string]Vindex
-	Views           map[string]sqlparser.TableStatement
+	Views           map[string]*View
 	Error           error
 	MultiTenantSpec *vschemapb.MultiTenantSpec
 
@@ -274,7 +281,7 @@ type KeyspaceSchema struct {
 type ksJSON struct {
 	Sharded         bool                       `json:"sharded,omitempty"`
 	ForeignKeyMode  string                     `json:"foreignKeyMode,omitempty"`
-	Tables          map[string]*Table          `json:"tables,omitempty"`
+	Tables          map[string]*BaseTable      `json:"tables,omitempty"`
 	Vindexes        map[string]Vindex          `json:"vindexes,omitempty"`
 	Views           map[string]string          `json:"views,omitempty"`
 	Error           string                     `json:"error,omitempty"`
@@ -291,14 +298,14 @@ type ksJSON struct {
 func (ks *KeyspaceSchema) findTable(
 	tablename string,
 	constructUnshardedIfNotFound bool,
-) *Table {
+) *BaseTable {
 	table := ks.Tables[tablename]
 	if table != nil {
 		return table
 	}
 
 	if constructUnshardedIfNotFound && !ks.Keyspace.Sharded {
-		return &Table{Name: sqlparser.NewIdentifierCS(tablename), Keyspace: ks.Keyspace}
+		return &BaseTable{Name: sqlparser.NewIdentifierCS(tablename), Keyspace: ks.Keyspace}
 	}
 
 	return nil
@@ -320,7 +327,7 @@ func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 		ksJ.Views = make(map[string]string, len(ks.Views))
 	}
 	for view, def := range ks.Views {
-		ksJ.Views[view] = sqlparser.String(def)
+		ksJ.Views[view] = sqlparser.String(def.Statement)
 	}
 
 	return json.Marshal(ksJ)
@@ -329,7 +336,7 @@ func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 // AutoIncrement contains the auto-inc information for a table.
 type AutoIncrement struct {
 	Column   sqlparser.IdentifierCI `json:"column"`
-	Sequence *Table                 `json:"sequence"`
+	Sequence *BaseTable             `json:"sequence"`
 }
 
 type Source struct {
@@ -347,7 +354,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema, parser *sqlparser.Parser) (vsche
 	vschema = &VSchema{
 		MirrorRules:    make(map[string]*MirrorRule),
 		RoutingRules:   make(map[string]*RoutingRule),
-		globalTables:   make(map[string]*Table),
+		globalTables:   make(map[string]Table),
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 		created:        time.Now(),
@@ -379,7 +386,7 @@ func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string, parser *sql
 		},
 	}
 	vschema := &VSchema{
-		globalTables:   make(map[string]*Table),
+		globalTables:   make(map[string]Table),
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
@@ -402,7 +409,7 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlp
 				Sharded: ks.Sharded,
 			},
 			ForeignKeyMode:  replaceUnspecifiedForeignKeyMode(ks.ForeignKeyMode),
-			Tables:          make(map[string]*Table),
+			Tables:          make(map[string]*BaseTable),
 			Vindexes:        make(map[string]Vindex),
 			MultiTenantSpec: ks.MultiTenantSpec,
 		}
@@ -435,16 +442,15 @@ func (vschema *VSchema) AddView(ksname, viewName, query string, parser *sqlparse
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected SELECT or UNION query, got %T", ast)
 	}
 	if ks.Views == nil {
-		ks.Views = make(map[string]sqlparser.TableStatement)
+		ks.Views = make(map[string]*View)
 	}
-	ks.Views[viewName] = selectStmt
-	t := &Table{
-		Type:                    "View",
-		Name:                    sqlparser.NewIdentifierCS(viewName),
-		Keyspace:                ks.Keyspace,
-		ColumnListAuthoritative: true,
+	view := &View{
+		Name:      viewName,
+		Keyspace:  ks.Keyspace,
+		Statement: selectStmt,
 	}
-	vschema.addTableName(t)
+	ks.Views[viewName] = view
+	vschema.addToGlobalTables(view)
 	return nil
 }
 
@@ -477,13 +483,32 @@ func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 // which means that the global tables are already populated with the tables from the sharded keyspaces and from
 // unsharded keyspaces which have tables specified in associated vschemas.
 func AddAdditionalGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
-	newTables := make(map[string]*Table)
+	newTables := make(map[string]Table)
 
 	// Collect valid uniquely named tables from unsharded keyspaces.
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
-		// Ignore sharded keyspaces and those flagged for explicit routing.
-		if ks.RequireExplicitRouting || ks.Sharded {
+		// Ignore keyspaces marked for explicit routing.
+		if ks.RequireExplicitRouting {
+			continue
+		}
+		// Views does not require routing, so this can be added to global tables
+		// for sharded keyspace as well
+		for tname, table := range ksvschema.Views {
+			// Ignore tables already global (i.e. if specified in the vschema of an unsharded keyspace) or ambiguous.
+			if _, found := vschema.globalTables[tname]; found {
+				continue
+			}
+			_, ok := newTables[tname]
+			if ok {
+				newTables[tname] = nil
+				continue
+			}
+			table.Keyspace = ksvschema.Keyspace
+			newTables[tname] = table
+		}
+		// Sharded tables needs vindex information, adding to global table will not help.
+		if ks.Sharded {
 			continue
 		}
 		for tname, table := range ksvschema.Tables {
@@ -514,18 +539,17 @@ func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema) {
 			if gt == nil {
 				// Table name is already marked ambiguous, nothing to do.
 				continue
-			} else {
-				// Special handling for reference tables which specify their source.
-				if t.Type == TypeReference && t.Source != nil {
-					// If the reference table points to the already stored
-					// global table, there is no ambiguity.
-					if t.Source.Qualifier.IsEmpty() || t.Source.Qualifier.String() == gt.Keyspace.Name {
-						continue
-					}
-				}
-				// Otherwise, mark this table name ambiguous.
-				vschema.globalTables[tname] = nil
 			}
+			// Special handling for reference tables which specify their source.
+			if t.Type == TypeReference && t.Source != nil {
+				// If the reference table points to the already stored
+				// global table, there is no ambiguity.
+				if t.Source.Qualifier.IsEmpty() || t.Source.Qualifier.String() == gt.GetKeyspace().Name {
+					continue
+				}
+			}
+			// Otherwise, mark this table name ambiguous.
+			vschema.globalTables[tname] = nil
 		} else {
 			// Reference tables which define a source with the same name may be
 			// globally routable through their source, as long as the source
@@ -661,7 +685,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		ksvschema.Vindexes[vname] = vindex
 	}
 	for tname, table := range ks.Tables {
-		t := &Table{
+		t := &BaseTable{
 			Name:                    sqlparser.NewIdentifierCS(tname),
 			Keyspace:                keyspace,
 			ColumnListAuthoritative: table.ColumnListAuthoritative,
@@ -886,8 +910,9 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 	return nil
 }
 
-func (vschema *VSchema) addTableName(t *Table) {
-	tname := t.Name.String()
+// addToGlobalTables adds a table to the global tables map if unique otherwise marks it as ambiguous.
+func (vschema *VSchema) addToGlobalTables(t Table) {
+	tname := t.GetName()
 	if _, ok := vschema.globalTables[tname]; ok {
 		vschema.globalTables[tname] = nil
 	} else {
@@ -904,7 +929,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema, parser
 				continue
 			}
 			seqks, seqtab, err := parser.ParseTable(table.AutoIncrement.Sequence)
-			var seq *Table
+			var seq *BaseTable
 			if err == nil {
 				// Ensure that sequence tables also obey routing rules.
 				seq, err = vschema.FindRoutedTable(seqks, seqtab, topodatapb.TabletType_PRIMARY)
@@ -1298,7 +1323,7 @@ func buildMirrorRule(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sql
 // keyspace in the vschema, and it's unsharded, then all table requests are considered
 // valid and belonging to that keyspace.
 // FindTable bypasses routing rules and returns at most one table.
-func (vschema *VSchema) FindTable(keyspace, tablename string) (*Table, error) {
+func (vschema *VSchema) FindTable(keyspace, tablename string) (*BaseTable, error) {
 	table, err := vschema.findTable(
 		keyspace,
 		tablename,
@@ -1327,23 +1352,22 @@ func (vschema *VSchema) FindTable(keyspace, tablename string) (*Table, error) {
 //
 //   - constructUnshardedIfNotFound is not requested, than no table is returned.
 //   - constructUnshardedIfNotFound is requested, and there is only one keyspace,
-//     and that keyspace is unsharded, then a *Table representing that table is
+//     and that keyspace is unsharded, then a BaseTable representing that table is
 //     returned.
 func (vschema *VSchema) findGlobalTable(
 	tablename string,
 	constructUnshardedIfNotFound bool,
-) (*Table, error) {
+) (Table, error) {
+	table, ok := vschema.globalTables[tablename]
+	if table != nil {
+		return table, nil
+	}
+
 	if len(vschema.Keyspaces) == 1 {
 		for _, ks := range vschema.Keyspaces {
 			table := ks.findTable(tablename, constructUnshardedIfNotFound)
 			return table, nil
 		}
-	}
-
-	table, ok := vschema.globalTables[tablename]
-
-	if table != nil {
-		return table, nil
 	}
 
 	if ok {
@@ -1376,9 +1400,16 @@ func (vschema *VSchema) findTable(
 	keyspace,
 	tablename string,
 	constructUnshardedIfNotFound bool,
-) (*Table, error) {
+) (*BaseTable, error) {
 	if keyspace == "" {
-		return vschema.findGlobalTable(tablename, constructUnshardedIfNotFound)
+		tbl, err := vschema.findGlobalTable(tablename, constructUnshardedIfNotFound)
+		if err != nil || tbl == nil {
+			return nil, err
+		}
+		if tbl.IsBaseTable() {
+			return tbl.(*BaseTable), nil
+		}
+		return nil, vterrors.VT13001(fmt.Sprintf("found view `%s`.`%s`, expecting table", tbl.GetKeyspace().Name, tablename))
 	}
 	ks, ok := vschema.Keyspaces[keyspace]
 	if !ok {
@@ -1425,7 +1456,7 @@ func (vschema *VSchema) findRoutedKeyspace(keyspace string, tabletType topodatap
 }
 
 // FindRoutedTable finds a table checking the routing rules.
-func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
+func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*BaseTable, error) {
 	keyspace = vschema.findRoutedKeyspace(keyspace, tabletType)
 	qualified := tablename
 	if keyspace != "" {
@@ -1458,7 +1489,7 @@ func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType t
 }
 
 // FindTableOrVindex finds a table or a Vindex by name using Find and FindVindex.
-func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topodatapb.TabletType) (*Table, Vindex, error) {
+func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topodatapb.TabletType) (*BaseTable, Vindex, error) {
 	tables, err := vschema.FindRoutedTable(keyspace, name, tabletType)
 	if err != nil {
 		return nil, nil, err
@@ -1478,22 +1509,11 @@ func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topo
 
 func (vschema *VSchema) FindView(keyspace, name string) sqlparser.TableStatement {
 	if keyspace == "" {
-		switch {
-		case len(vschema.Keyspaces) == 1:
-			for _, schema := range vschema.Keyspaces {
-				keyspace = schema.Keyspace.Name
-				break
-			}
-		default:
-			t, ok := vschema.globalTables[name]
-			if !ok {
-				return nil
-			}
-			if ok && t == nil {
-				return nil
-			}
-			keyspace = t.Keyspace.Name
+		t, err := vschema.findGlobalTable(name, false)
+		if err != nil || t == nil || t.IsBaseTable() {
+			return nil
 		}
+		return t.(*View).Statement
 	}
 
 	ks := vschema.Keyspaces[keyspace]
@@ -1501,21 +1521,18 @@ func (vschema *VSchema) FindView(keyspace, name string) sqlparser.TableStatement
 		return nil
 	}
 
-	statement, ok := ks.Views[name]
+	view, ok := ks.Views[name]
 	if !ok {
 		return nil
 	}
 
 	// We do this to make sure there is no shared state between uses of this AST
-	statement = sqlparser.Clone(statement)
-	sqlparser.SafeRewrite(statement, nil, func(cursor *sqlparser.Cursor) bool {
+	return sqlparser.CopyOnRewrite(view.Statement, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		col, ok := cursor.Node().(*sqlparser.ColName)
 		if ok {
 			cursor.Replace(sqlparser.NewColNameWithQualifier(col.Name.String(), col.Qualifier))
 		}
-		return true
-	})
-	return statement
+	}, nil).(sqlparser.TableStatement)
 }
 
 // NotFoundError represents the error where the table name was not found
@@ -1678,7 +1695,7 @@ func ChooseVindexForType(typ querypb.Type) (string, error) {
 }
 
 // FindBestColVindex finds the best ColumnVindex for VReplication.
-func FindBestColVindex(table *Table) (*ColumnVindex, error) {
+func FindBestColVindex(table *BaseTable) (*ColumnVindex, error) {
 	if len(table.ColumnVindexes) == 0 {
 		return nil, vterrors.Errorf(
 			vtrpcpb.Code_INVALID_ARGUMENT,
@@ -1742,7 +1759,7 @@ func FindVindexForSharding(tableName string, colVindexes []*ColumnVindex) (*Colu
 }
 
 // String prints the (possibly qualified) table name
-func (t *Table) String() string {
+func (t *BaseTable) String() string {
 	res := ""
 	if t == nil {
 		return res
@@ -1753,14 +1770,14 @@ func (t *Table) String() string {
 	return res + t.Name.String()
 }
 
-func (t *Table) addReferenceInKeyspace(keyspace string, table *Table) {
+func (t *BaseTable) addReferenceInKeyspace(keyspace string, table *BaseTable) {
 	if t.ReferencedBy == nil {
-		t.ReferencedBy = make(map[string]*Table)
+		t.ReferencedBy = make(map[string]*BaseTable)
 	}
 	t.ReferencedBy[keyspace] = table
 }
 
-func (t *Table) getReferenceInKeyspace(keyspace string) *Table {
+func (t *BaseTable) getReferenceInKeyspace(keyspace string) *BaseTable {
 	if t.ReferencedBy == nil {
 		return nil
 	}
@@ -1769,4 +1786,34 @@ func (t *Table) getReferenceInKeyspace(keyspace string) *Table {
 		return nil
 	}
 	return t
+}
+
+type Table interface {
+	IsBaseTable() bool
+	GetKeyspace() *Keyspace
+	GetName() string
+}
+
+func (v *View) IsBaseTable() bool {
+	return false
+}
+
+func (t *BaseTable) IsBaseTable() bool {
+	return true
+}
+
+func (v *View) GetKeyspace() *Keyspace {
+	return v.Keyspace
+}
+
+func (t *BaseTable) GetKeyspace() *Keyspace {
+	return t.Keyspace
+}
+
+func (v *View) GetName() string {
+	return v.Name
+}
+
+func (t *BaseTable) GetName() string {
+	return t.Name.String()
 }

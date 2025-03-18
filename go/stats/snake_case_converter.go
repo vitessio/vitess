@@ -19,6 +19,7 @@ package stats
 import (
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // GetSnakeName calls toSnakeName on the passed in string. It produces
@@ -57,6 +58,15 @@ var snakeConverters = []struct {
 	{regexp.MustCompile("([A-Z])([A-Z][a-z])"), "${1}_${2}"},
 	{regexp.MustCompile(`\.`), "_"},
 	{regexp.MustCompile("-"), "_"},
+}
+
+var memoizer = memoizerType{
+	memo: make(map[string]string),
+}
+
+type memoizerType struct {
+	sync.Mutex
+	memo map[string]string
 }
 
 var snakeMemoizer = memoizerType{

@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -161,8 +161,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:
 		return CloneRefOfExplainTab(in)
-	case Exprs:
-		return CloneExprs(in)
+	case *Exprs:
+		return CloneRefOfExprs(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
 	case *ExtractValueExpr:
@@ -435,8 +435,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfSavepoint(in)
 	case *Select:
 		return CloneRefOfSelect(in)
-	case SelectExprs:
-		return CloneSelectExprs(in)
+	case *SelectExprs:
+		return CloneRefOfSelectExprs(in)
 	case *SelectInto:
 		return CloneRefOfSelectInto(in)
 	case *Set:
@@ -887,7 +887,7 @@ func CloneRefOfCallProc(n *CallProc) *CallProc {
 	}
 	out := *n
 	out.Name = CloneTableName(n.Name)
-	out.Params = CloneExprs(n.Params)
+	out.Params = CloneSliceOfExpr(n.Params)
 	return &out
 }
 
@@ -932,7 +932,7 @@ func CloneRefOfCharExpr(n *CharExpr) *CharExpr {
 		return nil
 	}
 	out := *n
-	out.Exprs = CloneExprs(n.Exprs)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }
 
@@ -1091,7 +1091,7 @@ func CloneRefOfCount(n *Count) *Count {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Args = CloneSliceOfExpr(n.Args)
 	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
@@ -1307,16 +1307,14 @@ func CloneRefOfExplainTab(n *ExplainTab) *ExplainTab {
 	return &out
 }
 
-// CloneExprs creates a deep clone of the input.
-func CloneExprs(n Exprs) Exprs {
+// CloneRefOfExprs creates a deep clone of the input.
+func CloneRefOfExprs(n *Exprs) *Exprs {
 	if n == nil {
 		return nil
 	}
-	res := make(Exprs, len(n))
-	for i, x := range n {
-		res[i] = CloneExpr(x)
-	}
-	return res
+	out := *n
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
+	return &out
 }
 
 // CloneRefOfExtractFuncExpr creates a deep clone of the input.
@@ -1422,7 +1420,7 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	out := *n
 	out.Qualifier = CloneIdentifierCS(n.Qualifier)
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Exprs = CloneExprs(n.Exprs)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }
 
@@ -1569,7 +1567,7 @@ func CloneRefOfGroupConcatExpr(n *GroupConcatExpr) *GroupConcatExpr {
 		return nil
 	}
 	out := *n
-	out.Exprs = CloneExprs(n.Exprs)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	return &out
@@ -1677,7 +1675,7 @@ func CloneRefOfIntervalFuncExpr(n *IntervalFuncExpr) *IntervalFuncExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
-	out.Exprs = CloneExprs(n.Exprs)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }
 
@@ -1718,7 +1716,7 @@ func CloneRefOfJSONArrayExpr(n *JSONArrayExpr) *JSONArrayExpr {
 		return nil
 	}
 	out := *n
-	out.Params = CloneExprs(n.Params)
+	out.Params = CloneSliceOfExpr(n.Params)
 	return &out
 }
 
@@ -1850,7 +1848,7 @@ func CloneRefOfJSONRemoveExpr(n *JSONRemoveExpr) *JSONRemoveExpr {
 	}
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
-	out.PathList = CloneExprs(n.PathList)
+	out.PathList = CloneSliceOfExpr(n.PathList)
 	return &out
 }
 
@@ -1954,7 +1952,7 @@ func CloneRefOfJSONValueMergeExpr(n *JSONValueMergeExpr) *JSONValueMergeExpr {
 	}
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
-	out.JSONDocList = CloneExprs(n.JSONDocList)
+	out.JSONDocList = CloneSliceOfExpr(n.JSONDocList)
 	return &out
 }
 
@@ -2063,7 +2061,7 @@ func CloneRefOfLineStringExpr(n *LineStringExpr) *LineStringExpr {
 		return nil
 	}
 	out := *n
-	out.PointParams = CloneExprs(n.PointParams)
+	out.PointParams = CloneSliceOfExpr(n.PointParams)
 	return &out
 }
 
@@ -2199,7 +2197,7 @@ func CloneRefOfMultiLinestringExpr(n *MultiLinestringExpr) *MultiLinestringExpr 
 		return nil
 	}
 	out := *n
-	out.LinestringParams = CloneExprs(n.LinestringParams)
+	out.LinestringParams = CloneSliceOfExpr(n.LinestringParams)
 	return &out
 }
 
@@ -2209,7 +2207,7 @@ func CloneRefOfMultiPointExpr(n *MultiPointExpr) *MultiPointExpr {
 		return nil
 	}
 	out := *n
-	out.PointParams = CloneExprs(n.PointParams)
+	out.PointParams = CloneSliceOfExpr(n.PointParams)
 	return &out
 }
 
@@ -2219,7 +2217,7 @@ func CloneRefOfMultiPolygonExpr(n *MultiPolygonExpr) *MultiPolygonExpr {
 		return nil
 	}
 	out := *n
-	out.PolygonParams = CloneExprs(n.PolygonParams)
+	out.PolygonParams = CloneSliceOfExpr(n.PolygonParams)
 	return &out
 }
 
@@ -2546,7 +2544,7 @@ func CloneRefOfPolygonExpr(n *PolygonExpr) *PolygonExpr {
 		return nil
 	}
 	out := *n
-	out.LinestringParams = CloneExprs(n.LinestringParams)
+	out.LinestringParams = CloneSliceOfExpr(n.LinestringParams)
 	return &out
 }
 
@@ -2766,7 +2764,7 @@ func CloneRefOfSelect(n *Select) *Select {
 	out.With = CloneRefOfWith(n.With)
 	out.From = CloneSliceOfTableExpr(n.From)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
+	out.SelectExprs = CloneRefOfSelectExprs(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
 	out.GroupBy = CloneRefOfGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
@@ -2777,16 +2775,14 @@ func CloneRefOfSelect(n *Select) *Select {
 	return &out
 }
 
-// CloneSelectExprs creates a deep clone of the input.
-func CloneSelectExprs(n SelectExprs) SelectExprs {
+// CloneRefOfSelectExprs creates a deep clone of the input.
+func CloneRefOfSelectExprs(n *SelectExprs) *SelectExprs {
 	if n == nil {
 		return nil
 	}
-	res := make(SelectExprs, len(n))
-	for i, x := range n {
-		res[i] = CloneSelectExpr(x)
-	}
-	return res
+	out := *n
+	out.Exprs = CloneSliceOfSelectExpr(n.Exprs)
+	return &out
 }
 
 // CloneRefOfSelectInto creates a deep clone of the input.
@@ -3466,7 +3462,7 @@ func CloneRefOfWindowSpecification(n *WindowSpecification) *WindowSpecification 
 	}
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
-	out.PartitionClause = CloneExprs(n.PartitionClause)
+	out.PartitionClause = CloneSliceOfExpr(n.PartitionClause)
 	out.OrderClause = CloneOrderBy(n.OrderClause)
 	out.FrameClause = CloneRefOfFrameClause(n.FrameClause)
 	return &out
@@ -4418,6 +4414,18 @@ func CloneSliceOfTxAccessMode(n []TxAccessMode) []TxAccessMode {
 	return res
 }
 
+// CloneSliceOfExpr creates a deep clone of the input.
+func CloneSliceOfExpr(n []Expr) []Expr {
+	if n == nil {
+		return nil
+	}
+	res := make([]Expr, len(n))
+	for i, x := range n {
+		res[i] = CloneExpr(x)
+	}
+	return res
+}
+
 // CloneSliceOfRefOfWhen creates a deep clone of the input.
 func CloneSliceOfRefOfWhen(n []*When) []*When {
 	if n == nil {
@@ -4493,18 +4501,6 @@ func CloneSliceOfRefOfVariable(n []*Variable) []*Variable {
 	res := make([]*Variable, len(n))
 	for i, x := range n {
 		res[i] = CloneRefOfVariable(x)
-	}
-	return res
-}
-
-// CloneSliceOfExpr creates a deep clone of the input.
-func CloneSliceOfExpr(n []Expr) []Expr {
-	if n == nil {
-		return nil
-	}
-	res := make([]Expr, len(n))
-	for i, x := range n {
-		res[i] = CloneExpr(x)
 	}
 	return res
 }
@@ -4678,6 +4674,18 @@ func CloneRefOfRootNode(n *RootNode) *RootNode {
 	out := *n
 	out.SQLNode = CloneSQLNode(n.SQLNode)
 	return &out
+}
+
+// CloneSliceOfSelectExpr creates a deep clone of the input.
+func CloneSliceOfSelectExpr(n []SelectExpr) []SelectExpr {
+	if n == nil {
+		return nil
+	}
+	res := make([]SelectExpr, len(n))
+	for i, x := range n {
+		res[i] = CloneSelectExpr(x)
+	}
+	return res
 }
 
 // CloneRefOfTableName creates a deep clone of the input.

@@ -230,6 +230,11 @@
     "plan": "VT12001: unsupported: Assignment expression"
   },
   {
+    "comment": "Assignment expression in on duplicate clause",
+    "query": "insert into unsharded (id) values (@val := 42)",
+    "plan": "VT12001: unsupported: Assignment expression"
+  },
+  {
     "comment": "Assignment expression in union statements",
     "query": "select @val := 42 union select 1",
     "plan": "VT12001: unsupported: Assignment expression"

@@ -63,6 +63,8 @@ type QueryList struct {
 
 	parser *sqlparser.Parser
 	ca     ClusterActionState
+
+	redactUIQuery bool
 }
 
 type ClusterActionState int
@@ -76,10 +78,11 @@ const (
 // NewQueryList creates a new QueryList
 func NewQueryList(name string, parser *sqlparser.Parser) *QueryList {
 	return &QueryList{
-		name:         name,
-		queryDetails: make(map[int64][]*QueryDetail),
-		parser:       parser,
-		ca:           ClusterActionNotInProgress,
+		name:          name,
+		queryDetails:  make(map[int64][]*QueryDetail),
+		parser:        parser,
+		ca:            ClusterActionNotInProgress,
+		redactUIQuery: streamlog.GetQueryLogConfig().RedactDebugUIQueries,
 	}
 }
 
@@ -186,7 +189,7 @@ func (ql *QueryList) AppendQueryzRows(rows []QueryDetailzRow) []QueryDetailzRow 
 	for _, qds := range ql.queryDetails {
 		for _, qd := range qds {
 			query := qd.conn.Current()
-			if streamlog.GetRedactDebugUIQueries() {
+			if ql.redactUIQuery {
 				query, _ = ql.parser.RedactSQLQuery(query)
 			}
 			row := QueryDetailzRow{

@@ -66,7 +66,7 @@ func (l *LockAndComment) GetColumns(ctx *plancontext.PlanningContext) []*sqlpars
 	return l.Source.GetColumns(ctx)
 }
 
-func (l *LockAndComment) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (l *LockAndComment) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return l.Source.GetSelectExprs(ctx)
 }
 

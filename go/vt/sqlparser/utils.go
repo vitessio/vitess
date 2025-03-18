@@ -41,11 +41,12 @@ func (p *Parser) QueryMatchesTemplates(query string, queryTemplates []string) (m
 		if err != nil {
 			return "", err
 		}
-		err = Normalize(stmt, NewReservedVars("", reservedVars), bv)
+
+		out, err := Normalize(stmt, NewReservedVars("", reservedVars), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 		if err != nil {
 			return "", err
 		}
-		normalized := CanonicalString(stmt)
+		normalized := CanonicalString(out.AST)
 		return normalized, nil
 	}
 

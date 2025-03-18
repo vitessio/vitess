@@ -30,9 +30,10 @@ import (
 
 var (
 	deleteOptions = struct {
-		KeepData         bool
-		KeepRoutingRules bool
-		DeleteBatchSize  int64
+		KeepData             bool
+		KeepRoutingRules     bool
+		DeleteBatchSize      int64
+		IgnoreSourceKeyspace bool
 	}{}
 
 	// delete makes a WorkflowDelete gRPC call to a vtctld.
@@ -51,12 +52,13 @@ func commandDelete(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.WorkflowDeleteRequest{
-		Keyspace:         baseOptions.Keyspace,
-		Workflow:         baseOptions.Workflow,
-		KeepData:         deleteOptions.KeepData,
-		KeepRoutingRules: deleteOptions.KeepRoutingRules,
-		Shards:           baseOptions.Shards,
-		DeleteBatchSize:  deleteOptions.DeleteBatchSize,
+		Keyspace:             baseOptions.Keyspace,
+		Workflow:             baseOptions.Workflow,
+		KeepData:             deleteOptions.KeepData,
+		KeepRoutingRules:     deleteOptions.KeepRoutingRules,
+		Shards:               baseOptions.Shards,
+		DeleteBatchSize:      deleteOptions.DeleteBatchSize,
+		IgnoreSourceKeyspace: deleteOptions.IgnoreSourceKeyspace,
 	}
 	resp, err := common.GetClient().WorkflowDelete(common.GetCommandCtx(), req)
 	if err != nil {

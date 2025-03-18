@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -77,7 +76,7 @@ func newInsert(
 	ignore bool,
 	keyspace *vindexes.Keyspace,
 	vindexValues [][][]evalengine.Expr,
-	table *vindexes.Table,
+	table *vindexes.BaseTable,
 	prefix string,
 	mid sqlparser.Values,
 	suffix sqlparser.OnDup,
@@ -238,7 +237,7 @@ func (ins *Insert) getInsertShardedQueries(
 	// each RSS.  So we pass the ksid indexes in as ids, and get them back
 	// as values. We also skip nil KeyspaceIds, no need to resolve them.
 	var indexes []*querypb.Value
-	var destinations []key.Destination
+	var destinations []key.ShardDestination
 	for i, ksid := range keyspaceIDs {
 		if ksid != nil {
 			indexes = append(indexes, &querypb.Value{
@@ -389,11 +388,10 @@ func (ins *Insert) description() PrimitiveDescription {
 	}
 
 	return PrimitiveDescription{
-		OperatorType:     "Insert",
-		Keyspace:         ins.Keyspace,
-		Variant:          ins.Opcode.String(),
-		TargetTabletType: topodatapb.TabletType_PRIMARY,
-		Other:            other,
+		OperatorType: "Insert",
+		Keyspace:     ins.Keyspace,
+		Variant:      ins.Opcode.String(),
+		Other:        other,
 	}
 }
 
