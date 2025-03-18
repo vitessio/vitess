@@ -378,14 +378,12 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a Operator, exp sqlparse
 	// can be solved by any table in our routeTree. If an equality expression can be solved,
 	// we check if the equality expression and our table share the same vindex, if they do:
 	// the method will return the associated vindexes.SingleColumn.
-	for _, expr := range ctx.SemTable.GetExprAndEqualities(exp) {
+	_ = ctx.SemTable.ForeachExprEquality(exp, func(expr sqlparser.Expr) error {
 		col, isCol := expr.(*sqlparser.ColName)
 		if !isCol {
-			continue
+			return nil
 		}
-
 		deps := ctx.SemTable.RecursiveDeps(expr)
-
 		_ = Visit(a, func(rel Operator) error {
 			to, isTableOp := rel.(tableIDIntroducer)
 			if !isTableOp {
@@ -412,9 +410,10 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a Operator, exp sqlparse
 			return nil
 		})
 		if singCol != nil {
-			return singCol
+			return io.EOF
 		}
-	}
+		return nil
+	})
 
 	return singCol
 }
