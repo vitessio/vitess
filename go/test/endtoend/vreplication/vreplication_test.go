@@ -1431,7 +1431,7 @@ func reshardAction(t *testing.T, action, workflow, keyspaceName, sourceShards, t
 			action, workflow, output)
 	}
 	if err != nil {
-		t.Fatalf("Reshard %s command failed with %+v\n", action, err)
+		t.Fatalf("Reshard %s command failed with %+v\nOutput: %s", action, err, output)
 	}
 }
 
