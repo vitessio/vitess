@@ -21,9 +21,9 @@ Flags:
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --count int                                                   DMLs only: Number of times each thread executes the query. Useful for simple, sustained load testing. (default 1)
-      --grpc_enable_tracing                                         Enable gRPC tracing.
-      --grpc_max_message_size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
-      --grpc_prometheus                                             Enable gRPC monitoring with Prometheus.
+      --grpc-enable-tracing                                         Enable gRPC tracing.
+      --grpc-max-message-size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
+      --grpc-prometheus                                             Enable gRPC monitoring with Prometheus.
   -h, --help                                                        help for vtclient
       --json                                                        Output JSON instead of human-readable table
       --keep_logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
