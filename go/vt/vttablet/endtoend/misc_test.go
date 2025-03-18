@@ -1112,6 +1112,8 @@ func TestUpdateTableIndexMetrics(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	time.Sleep(5 * time.Second)
+
 	err = framework.Server.ReloadSchema(ctx)
 	require.NoError(t, err)
 
@@ -1119,6 +1121,8 @@ func TestUpdateTableIndexMetrics(t *testing.T) {
 	require.NoError(t, err)
 	pageSize, err := results.Rows[0][0].ToFloat64()
 	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
 
 	vars := framework.DebugVars()
 
