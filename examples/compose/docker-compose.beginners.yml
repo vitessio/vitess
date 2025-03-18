@@ -70,7 +70,7 @@ services:
         --file_backup_storage_root /vt/vtdataroot/backups \
         --logtostderr=true \
         --port $WEB_PORT \
-        --grpc_port $GRPC_PORT
+        --grpc-port $GRPC_PORT
         "]
     depends_on:
       consul1:
@@ -92,7 +92,7 @@ services:
         $TOPOLOGY_FLAGS \
         --logtostderr=true \
         --port $WEB_PORT \
-        --grpc_port $GRPC_PORT \
+        --grpc-port $GRPC_PORT \
         --mysql_server_port $MYSQL_PORT \
         --mysql_auth_server_impl none \
         --cell $CELL \

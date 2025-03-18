@@ -70,7 +70,7 @@ func TestMain(m *testing.M) {
 		var maxGrpcSize int64 = 256 * 1024 * 1024
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--queryserver-config-max-result-size", "10000000",
-			"--grpc_max_message_size", strconv.FormatInt(maxGrpcSize, 10))
+			"--grpc-max-message-size", strconv.FormatInt(maxGrpcSize, 10))
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false); err != nil {
 			return 1
 		}
@@ -78,7 +78,7 @@ func TestMain(m *testing.M) {
 		// Start vtgate
 		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--grpc_max_message_size", strconv.FormatInt(maxGrpcSize, 10),
+			"--grpc-max-message-size", strconv.FormatInt(maxGrpcSize, 10),
 			"--max_memory_rows", "999999",
 			"--allow-kill-statement")
 		if err := clusterInstance.StartVtgate(); err != nil {

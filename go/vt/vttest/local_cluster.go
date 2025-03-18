@@ -660,14 +660,14 @@ func (db *LocalCluster) JSONConfig() any {
 	config := map[string]any{
 		"bind_address":       db.vt.BindAddress,
 		"port":               db.vt.Port,
-		"grpc_bind_address":  db.vt.BindAddressGprc,
+		"grpc-bind-address":  db.vt.BindAddressGprc,
 		"socket":             db.mysql.UnixSocket(),
 		"vtcombo_mysql_port": db.Env.PortForProtocol("vtcombo_mysql_port", ""),
 		"mysql":              db.Env.PortForProtocol("mysql", ""),
 	}
 
 	if grpc := db.vt.PortGrpc; grpc != 0 {
-		config["grpc_port"] = grpc
+		config["grpc-port"] = grpc
 	}
 
 	return config

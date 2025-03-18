@@ -46,7 +46,7 @@
 "-hostname"
 "-mysql_port"
 "-port"
-"-grpc_port"
+"-grpc-port"
 "-tags"
 "-keyspace"
 "-shard"

@@ -203,7 +203,7 @@ func useEffectiveCallerID(ctx context.Context, t *testing.T) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller id
 	// into immediate caller id.
-	clusterInstance.VtGateExtraArgs = []string{"--grpc_use_effective_callerid"}
+	clusterInstance.VtGateExtraArgs = []string{"--grpc-use-effective-callerid"}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
 	err := clusterInstance.RestartVtgate()
 	require.NoError(t, err)
@@ -252,7 +252,7 @@ func useEffectiveGroups(ctx context.Context, t *testing.T) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller's groups
 	// into immediate caller id.
-	clusterInstance.VtGateExtraArgs = []string{"--grpc_use_effective_callerid", "--grpc-use-effective-groups"}
+	clusterInstance.VtGateExtraArgs = []string{"--grpc-use-effective-callerid", "--grpc-use-effective-groups"}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
 	err := clusterInstance.RestartVtgate()
 	require.NoError(t, err)
@@ -424,9 +424,9 @@ func createSignedCert(ca string, serial string, name string, commonName string) 
 }
 
 func serverExtraArguments(name string, ca string) []string {
-	args := []string{"--grpc_cert", certDirectory + "/" + name + "-cert.pem",
-		"--grpc_key", certDirectory + "/" + name + "-key.pem",
-		"--grpc_ca", certDirectory + "/" + ca + "-cert.pem"}
+	args := []string{"--grpc-cert", certDirectory + "/" + name + "-cert.pem",
+		"--grpc-key", certDirectory + "/" + name + "-key.pem",
+		"--grpc-ca", certDirectory + "/" + ca + "-cert.pem"}
 	return args
 }
 

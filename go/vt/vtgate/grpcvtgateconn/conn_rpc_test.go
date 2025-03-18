@@ -102,10 +102,10 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 
 	grpcclient.ResetStaticAuth()
 	err = fs.Parse([]string{
-		"--grpc_auth_static_client_creds",
+		"--grpc-auth-static-client-creds",
 		f.Name(),
 	})
-	require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", f.Name())
+	require.NoError(t, err, "failed to set `--grpc-auth-static-client-creds=%s`", f.Name())
 	client, err := dial(ctx, listener.Addr().String())
 	require.NoError(t, err)
 	RegisterTestDialProtocol(client)
@@ -136,10 +136,10 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 
 	grpcclient.ResetStaticAuth()
 	err = fs.Parse([]string{
-		"--grpc_auth_static_client_creds",
+		"--grpc-auth-static-client-creds",
 		f.Name(),
 	})
-	require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", f.Name())
+	require.NoError(t, err, "failed to set `--grpc-auth-static-client-creds=%s`", f.Name())
 	client, err = dial(ctx, listener.Addr().String())
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
