@@ -17,6 +17,7 @@
 # this script brings up new tablets for the two new shards that we will
 # be creating in the customer keyspace and copies the schema
 
+set -v
 source ../common/env.sh
 
 for i in 100 101 102; do

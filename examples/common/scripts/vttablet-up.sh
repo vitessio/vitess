@@ -57,6 +57,9 @@ vttablet \
  --pprof-http \
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
+
+ cat $VTDATAROOT/$tablet_dir/vttablet.out
+
 # Block waiting for the tablet to be listening
 # Not the same as healthy
 
