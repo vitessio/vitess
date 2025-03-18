@@ -41043,6 +41043,9 @@ export namespace query {
 
         /** ExecuteOptions fetch_last_insert_id */
         fetch_last_insert_id?: (boolean|null);
+
+        /** ExecuteOptions in_dml_execution */
+        in_dml_execution?: (boolean|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -41095,6 +41098,9 @@ export namespace query {
 
         /** ExecuteOptions fetch_last_insert_id. */
         public fetch_last_insert_id: boolean;
+
+        /** ExecuteOptions in_dml_execution. */
+        public in_dml_execution: boolean;
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";
