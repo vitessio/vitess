@@ -697,7 +697,7 @@ func TestColumns_FindColumn(t *testing.T) {
 	}
 }
 
-func TestSplitStatements(t *testing.T) {
+func TestParseMultipleIgnoreEmpty(t *testing.T) {
 	testcases := []struct {
 		input   string
 		stmts   int
@@ -706,6 +706,9 @@ func TestSplitStatements(t *testing.T) {
 		{
 			input: "select * from table1; \t; \n; \n\t\t ;select * from table1;",
 			stmts: 2,
+		}, {
+			input: "select 1; ; ; select 2; /* Comment only */; /* Comment */; select 3;;;; /* Comment */",
+			stmts: 3,
 		}, {
 			input: "select * from table1",
 			stmts: 1,
@@ -757,7 +760,7 @@ func TestSplitStatements(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
-			statements, err := parser.ParseMultiple(tcase.input)
+			statements, err := parser.ParseMultipleIgnoreEmpty(tcase.input)
 			if tcase.wantErr {
 				assert.Error(t, err)
 			} else {

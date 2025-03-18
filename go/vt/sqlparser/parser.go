@@ -110,6 +110,22 @@ func (p *Parser) ParseMultiple(sql string) ([]Statement, error) {
 	return tokenizer.ParseTrees, nil
 }
 
+// ParseMultipleIgnoreEmpty parses multiple statements, but ignores empty statements.
+func (p *Parser) ParseMultipleIgnoreEmpty(sql string) ([]Statement, error) {
+	stmts, err := p.ParseMultiple(sql)
+	if err != nil {
+		return nil, err
+	}
+	newStmts := make([]Statement, 0)
+	for _, stmt := range stmts {
+		// Only keep non-empty non comment only statements.
+		if _, isCommentOnly := stmt.(*CommentOnly); stmt != nil && !isCommentOnly {
+			newStmts = append(newStmts, stmt)
+		}
+	}
+	return newStmts, nil
+}
+
 // parse parses the SQL in full and returns a list of Statements, which
 // are the AST representation of the query. This command is meant to parse more than
 // one SQL statement at a time.
