@@ -11,7 +11,7 @@ The following is the full list, alphabetically ordered.
 * Frances Thai ([notfelineit](https://github.com/notfelineit)) frances@planetscale.com
 * Harshit Gangal ([harshit-gangal](https://github.com/harshit-gangal)) harshit.gangal@gmail.com
 * Manan Gupta ([GuptaManan100](https://github.com/GuptaManan100)) manan@planetscale.com
-* Matt Lord ([mattlord](https://github.com/mattlord)) mlord@planetscale.com
+* Matt Lord ([mattlord](https://github.com/mattlord)) mattalord@gmail.com
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
 * Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
 * Tim Vaillancourt ([timvaillancourt](https://github.com/timvaillancourt)) tim@timvaillancourt.com

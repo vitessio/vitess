@@ -109,7 +109,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&skipBuildInfoTags, "vttablet_skip_buildinfo_tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
-	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "timeout to use when MySQL is being shut down.")
+	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "Timeout to use when MySQL is being shut down.")
 }
 
 var (
