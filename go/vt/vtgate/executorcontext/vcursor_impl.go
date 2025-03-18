@@ -1226,6 +1226,11 @@ func (vc *VCursorImpl) SetFoundRows(foundRows uint64) {
 	vc.SafeSession.SetFoundRows(foundRows)
 }
 
+// SetInDMLExecution implements the SessionActions interface
+func (vc *VCursorImpl) SetInDMLExecution(inDMLExec bool) {
+	vc.SafeSession.SetInDMLExecution(inDMLExec)
+}
+
 // SetDDLStrategy implements the SessionActions interface
 func (vc *VCursorImpl) SetDDLStrategy(strategy string) {
 	vc.SafeSession.SetDDLStrategy(strategy)

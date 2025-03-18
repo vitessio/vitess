@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"io"
 	"slices"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
@@ -727,16 +728,20 @@ func tryMergeShardedRouting(
 
 // makeEvalEngineExpr transforms the given sqlparser.Expr into an evalengine expression
 func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) evalengine.Expr {
-	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
-		ee, _ := evalengine.Translate(expr, &evalengine.Config{
-			Collation:   ctx.SemTable.Collation,
-			ResolveType: ctx.TypeForExpr,
-			Environment: ctx.VSchema.Environment(),
-		})
-		if ee != nil {
-			return ee
-		}
+	var ee evalengine.Expr
+	cfg := &evalengine.Config{
+		Collation:   ctx.SemTable.Collation,
+		ResolveType: ctx.TypeForExpr,
+		Environment: ctx.VSchema.Environment(),
 	}
 
-	return nil
+	_ = ctx.SemTable.ForeachExprEquality(n, func(expr sqlparser.Expr) error {
+		ee, _ = evalengine.Translate(expr, cfg)
+		if ee != nil {
+			return io.EOF
+		}
+		return nil
+	})
+
+	return ee
 }

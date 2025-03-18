@@ -76,6 +76,7 @@ create table  `+"`blüb_tbl`"+` (id int, val1 varchar(20), `+"`blöb1`"+` blob, 
 create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
 create table loadtest (id int, name varchar(256), primary key(id), key(name));
 create table nopk (name varchar(128), age int unsigned);
+create table ukTable (id1 int not null, id2 int not null, name varchar(20), unique key uk1(id1, id2), key uk2(id2));
 `, customerTable)
 
 	// These should always be ignored in vreplication
@@ -114,7 +115,8 @@ create table nopk (name varchar(128), age int unsigned);
     "nopk": {},
     "reftable": {
       "type": "reference"
-    }
+    },
+	"ukTable": {}
   }
 }
 `
@@ -146,6 +148,15 @@ create table nopk (name varchar(128), age int unsigned);
         }
       ]
     },
+  "ukTable": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    
     "customer": {
       "column_vindexes": [
         {

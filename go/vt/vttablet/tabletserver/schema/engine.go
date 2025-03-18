@@ -526,7 +526,8 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		createTime, _ := row[2].ToCastInt64()
 		var fileSize, allocatedSize uint64
 
-		if includeStats {
+		// For 5.7 flavor, includeStats is ignored, so we don't get the additional columns
+		if includeStats && len(row) >= 6 {
 			fileSize, _ = row[4].ToCastUint64()
 			allocatedSize, _ = row[5].ToCastUint64()
 			// publish the size metrics
