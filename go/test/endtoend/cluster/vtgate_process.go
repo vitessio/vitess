@@ -33,7 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/utils"
+	// "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -149,9 +149,9 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4
 func (vtgate *VtgateProcess) Setup() (err error) {
 
 	flags := map[string]string{
-		"--topo-implementation":        vtgate.TopoImplementation,
-		"--topo-global-server-address": vtgate.TopoGlobalAddress,
-		"--topo-global-root":           vtgate.TopoGlobalRoot,
+		"--topo_implementation":        vtgate.TopoImplementation,
+		"--topo_global_server_address": vtgate.TopoGlobalAddress,
+		"--topo_global_root":           vtgate.TopoGlobalRoot,
 		"--config-file":                vtgate.ConfigFile,
 		"--log_dir":                    vtgate.LogDir,
 		"--log_queries_to_file":        vtgate.FileToLogQueries,
@@ -168,9 +168,9 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--grpc_bind_address":          "127.0.0.1",
 	}
 
-	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtgate.TopoImplementation)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtgate.TopoGlobalAddress)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtgate.TopoGlobalRoot)
+	// utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtgate.TopoImplementation)
+	// utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtgate.TopoGlobalAddress)
+	// utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtgate.TopoGlobalRoot)
 
 	args := []string{}
 	for flag, value := range flags {

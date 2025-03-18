@@ -43,7 +43,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/utils"
+	// "vitess.io/vitess/go/vt/utils"
 )
 
 const vttabletStateTimeout = 60 * time.Second
@@ -95,9 +95,9 @@ type VttabletProcess struct {
 func (vttablet *VttabletProcess) Setup() (err error) {
 
 	flags := map[string]string{
-		"--topo-implementation":           vttablet.TopoImplementation,
-		"--topo-global-server-address":    vttablet.TopoGlobalAddress,
-		"--topo-global-root":              vttablet.TopoGlobalRoot,
+		"--topo_implementation":           vttablet.TopoImplementation,
+		"--topo_global_server_address":    vttablet.TopoGlobalAddress,
+		"--topo_global_root":              vttablet.TopoGlobalRoot,
 		"--log_queries_to_file":           vttablet.FileToLogQueries,
 		"--tablet-path":                   vttablet.TabletPath,
 		"--port":                          fmt.Sprintf("%d", vttablet.Port),
@@ -116,9 +116,9 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--grpc_bind_address":             "127.0.0.1",
 	}
 
-	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vttablet.TopoImplementation)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vttablet.TopoGlobalAddress)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vttablet.TopoGlobalRoot)
+	// utils.SetFlagVariantsForTests(flags, "--topo-implementation", vttablet.TopoImplementation)
+	// utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vttablet.TopoGlobalAddress)
+	// utils.SetFlagVariantsForTests(flags, "--topo-global-root", vttablet.TopoGlobalRoot)
 
 	vttablet.proc = exec.Command(vttablet.Binary, "--enable_replication_reporter")
 	for flag, value := range flags {

@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
+	// "vitess.io/vitess/go/vt/utils"
 )
 
 // VtctldProcess is a generic handle for a running vtctld .
@@ -54,9 +54,9 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
 
 	flags := map[string]string{
-		"--topo-implementation":           vtctld.TopoImplementation,
-		"--topo-global-server-address":    vtctld.TopoGlobalAddress,
-		"--topo-global-root":              vtctld.TopoGlobalRoot,
+		"--topo_implementation":           vtctld.TopoImplementation,
+		"--topo_global_server_address":    vtctld.TopoGlobalAddress,
+		"--topo_global_root":              vtctld.TopoGlobalRoot,
 		"--cell":                          cell,
 		"--service_map":                   vtctld.ServiceMap,
 		"--backup_storage_implementation": vtctld.BackupStorageImplementation,
@@ -68,9 +68,9 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--grpc_bind_address":             "127.0.0.1",
 	}
 
-	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtctld.TopoImplementation)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtctld.TopoGlobalAddress)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtctld.TopoGlobalRoot)
+	// utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtctld.TopoImplementation)
+	// utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtctld.TopoGlobalAddress)
+	// utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtctld.TopoGlobalRoot)
 
 	args := []string{vtctld.Binary}
 	for flag, value := range flags {
