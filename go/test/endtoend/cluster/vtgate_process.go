@@ -33,7 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	// "vitess.io/vitess/go/vt/utils"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -147,34 +147,25 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4
 
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
-
-	flags := map[string]string{
-		"--topo_implementation":        vtgate.TopoImplementation,
-		"--topo_global_server_address": vtgate.TopoGlobalAddress,
-		"--topo_global_root":           vtgate.TopoGlobalRoot,
-		"--config-file":                vtgate.ConfigFile,
-		"--log_dir":                    vtgate.LogDir,
-		"--log_queries_to_file":        vtgate.FileToLogQueries,
-		"--port":                       fmt.Sprintf("%d", vtgate.Port),
-		"--grpc_port":                  fmt.Sprintf("%d", vtgate.GrpcPort),
-		"--mysql_server_port":          fmt.Sprintf("%d", vtgate.MySQLServerPort),
-		"--mysql_server_socket_path":   vtgate.MySQLServerSocketPath,
-		"--cell":                       vtgate.Cell,
-		"--cells_to_watch":             vtgate.CellsToWatch,
-		"--tablet_types_to_wait":       vtgate.TabletTypesToWait,
-		"--service_map":                vtgate.ServiceMap,
-		"--mysql_auth_server_impl":     vtgate.MySQLAuthServerImpl,
-		"--bind-address":               "127.0.0.1",
-		"--grpc_bind_address":          "127.0.0.1",
-	}
-
-	// utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtgate.TopoImplementation)
-	// utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtgate.TopoGlobalAddress)
-	// utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtgate.TopoGlobalRoot)
-
-	args := []string{}
-	for flag, value := range flags {
-		args = append(args, flag, value)
+	args := []string{
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		"--topo_implementation", vtgate.TopoImplementation,
+		"--topo_global_server_address", vtgate.TopoGlobalAddress,
+		"--topo_global_root", vtgate.TopoGlobalRoot,
+		"--config-file", vtgate.ConfigFile,
+		"--log_dir", vtgate.LogDir,
+		"--log_queries_to_file", vtgate.FileToLogQueries,
+		"--port", fmt.Sprintf("%d", vtgate.Port),
+		"--grpc_port", fmt.Sprintf("%d", vtgate.GrpcPort),
+		"--mysql_server_port", fmt.Sprintf("%d", vtgate.MySQLServerPort),
+		"--mysql_server_socket_path", vtgate.MySQLServerSocketPath,
+		"--cell", vtgate.Cell,
+		"--cells_to_watch", vtgate.CellsToWatch,
+		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
+		"--service_map", vtgate.ServiceMap,
+		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+		"--bind-address", "127.0.0.1",
+		"--grpc_bind_address", "127.0.0.1",
 	}
 
 	// If no explicit mysql_server_version has been specified then we autodetect

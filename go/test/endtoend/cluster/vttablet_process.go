@@ -43,7 +43,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-	// "vitess.io/vitess/go/vt/utils"
 )
 
 const vttabletStateTimeout = 60 * time.Second
@@ -93,37 +92,30 @@ type VttabletProcess struct {
 
 // Setup starts vttablet process with required arguements
 func (vttablet *VttabletProcess) Setup() (err error) {
-
-	flags := map[string]string{
-		"--topo_implementation":           vttablet.TopoImplementation,
-		"--topo_global_server_address":    vttablet.TopoGlobalAddress,
-		"--topo_global_root":              vttablet.TopoGlobalRoot,
-		"--log_queries_to_file":           vttablet.FileToLogQueries,
-		"--tablet-path":                   vttablet.TabletPath,
-		"--port":                          fmt.Sprintf("%d", vttablet.Port),
-		"--grpc_port":                     fmt.Sprintf("%d", vttablet.GrpcPort),
-		"--init_shard":                    vttablet.Shard,
-		"--log_dir":                       vttablet.LogDir,
-		"--tablet_hostname":               vttablet.TabletHostname,
-		"--init_keyspace":                 vttablet.Keyspace,
-		"--init_tablet_type":              vttablet.TabletType,
-		"--health_check_interval":         fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
-		"--backup_storage_implementation": vttablet.BackupStorageImplementation,
-		"--file_backup_storage_root":      vttablet.FileBackupStorageRoot,
-		"--service_map":                   vttablet.ServiceMap,
-		"--db_charset":                    vttablet.Charset,
-		"--bind-address":                  "127.0.0.1",
-		"--grpc_bind_address":             "127.0.0.1",
-	}
-
-	// utils.SetFlagVariantsForTests(flags, "--topo-implementation", vttablet.TopoImplementation)
-	// utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vttablet.TopoGlobalAddress)
-	// utils.SetFlagVariantsForTests(flags, "--topo-global-root", vttablet.TopoGlobalRoot)
-
-	vttablet.proc = exec.Command(vttablet.Binary, "--enable_replication_reporter")
-	for flag, value := range flags {
-		vttablet.proc.Args = append(vttablet.proc.Args, flag, value)
-	}
+	vttablet.proc = exec.Command(
+		vttablet.Binary,
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		"--topo_implementation", vttablet.TopoImplementation,
+		"--topo_global_server_address", vttablet.TopoGlobalAddress,
+		"--topo_global_root", vttablet.TopoGlobalRoot,
+		"--log_queries_to_file", vttablet.FileToLogQueries,
+		"--tablet-path", vttablet.TabletPath,
+		"--port", fmt.Sprintf("%d", vttablet.Port),
+		"--grpc_port", fmt.Sprintf("%d", vttablet.GrpcPort),
+		"--init_shard", vttablet.Shard,
+		"--log_dir", vttablet.LogDir,
+		"--tablet_hostname", vttablet.TabletHostname,
+		"--init_keyspace", vttablet.Keyspace,
+		"--init_tablet_type", vttablet.TabletType,
+		"--health_check_interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
+		"--enable_replication_reporter",
+		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
+		"--file_backup_storage_root", vttablet.FileBackupStorageRoot,
+		"--service_map", vttablet.ServiceMap,
+		"--db_charset", vttablet.Charset,
+		"--bind-address", "127.0.0.1",
+		"--grpc_bind_address", "127.0.0.1",
+	)
 
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))
