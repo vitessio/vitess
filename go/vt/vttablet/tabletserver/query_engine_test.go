@@ -199,8 +199,6 @@ func TestQueryPlanCache(t *testing.T) {
 
 	initialHits := qe.queryEnginePlanCacheHits.Get()
 	initialMisses := qe.queryEnginePlanCacheMisses.Get()
-	initialHitsDeprecated := qe.queryCacheHitsDeprecated.Get()
-	initialMissesDeprecated := qe.queryCacheMissesDeprecated.Get()
 
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false)
 	require.NoError(t, err)
@@ -211,9 +209,6 @@ func TestQueryPlanCache(t *testing.T) {
 	require.Equal(t, int64(0), qe.queryEnginePlanCacheHits.Get()-initialHits)
 	require.Equal(t, int64(1), qe.queryEnginePlanCacheMisses.Get()-initialMisses)
 
-	require.Equal(t, int64(0), qe.queryCacheHitsDeprecated.Get()-initialHitsDeprecated)
-	require.Equal(t, int64(1), qe.queryCacheMissesDeprecated.Get()-initialMissesDeprecated)
-
 	secondPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false)
 	require.NoError(t, err)
 	require.NotNil(t, secondPlan, "plan should not be nil")
@@ -222,9 +217,6 @@ func TestQueryPlanCache(t *testing.T) {
 
 	require.Equal(t, int64(1), qe.queryEnginePlanCacheHits.Get()-initialHits)
 	require.Equal(t, int64(1), qe.queryEnginePlanCacheMisses.Get()-initialMisses)
-
-	require.Equal(t, int64(1), qe.queryCacheHitsDeprecated.Get()-initialHitsDeprecated)
-	require.Equal(t, int64(1), qe.queryCacheMissesDeprecated.Get()-initialMissesDeprecated)
 
 	qe.ClearQueryPlanCache()
 }
