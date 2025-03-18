@@ -312,6 +312,8 @@ func (l *Listener) Addr() net.Addr {
 
 // Accept runs an accept loop until the listener is closed.
 func (l *Listener) Accept() {
+	sem := make(chan struct{}, l.maxConns) // Semaphore
+
 	for {
 		conn, err := l.listener.Accept()
 		if err != nil {
@@ -320,24 +322,22 @@ func (l *Listener) Accept() {
 		}
 
 		acceptTime := time.Now()
-
 		connectionID := l.connectionID
 		l.connectionID++
 
-		maxConWarn := false
-		for l.maxConns > 0 && uint64(connCount.Get()) >= l.maxConns {
-			if !maxConWarn {
-				log.Warning("max connections reached. Clients waiting. Increase server max connections")
-				maxConWarn = true // Logging once for each connection seems adequate.
-			}
-
-			// TODO: make this behavior configurable (wait v. reject)
-			time.Sleep(500 * time.Millisecond)
+		if len(sem) == cap(sem) {
+			log.Warning("max connections reached. Clients waiting. Increase server max connections")
 		}
+
+		// Wait until a connection slot is available
+		sem <- struct{}{}
 
 		connCount.Add(1)
 		connAccept.Add(1)
-		go l.handle(context.Background(), conn, connectionID, acceptTime)
+		go func() {
+			defer func() { <-sem }() // Release slot when done
+			l.handle(context.Background(), conn, connectionID, acceptTime)
+		}()
 	}
 }
 
