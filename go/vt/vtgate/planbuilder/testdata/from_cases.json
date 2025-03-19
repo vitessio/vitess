@@ -562,6 +562,57 @@
     }
   },
   {
+    "comment": "Block join for a query with a simple projection",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user.id1 + user.id2 as mas from user join music where user.id2 = music.id4 order by mas asc",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user.id1 + user.id2 as mas from user join music where user.id2 = music.id4 order by mas asc",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:mas"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Block",
+            "BindVarName": "values",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id1 + `user`.id2 as mas, `user`.id2, weight_string(`user`.id1 + `user`.id2) from `user` where 1 != 1",
+                "OrderBy": "(0|2) ASC",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.id1 + `user`.id2 as mas, `user`.id2, weight_string(`user`.id1 + `user`.id2) from `user` order by `user`.id1 + `user`.id2 asc",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `values`.x_x as ```user``.id1 + ``user``.id2` from (values ::values) as `values`(x_x, user_id2), music where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `values`.x_x as ```user``.id1 + ``user``.id2` from (values ::values) as `values`(x_x, user_id2), music where `values`.user_id2 = music.id4",
+                "Table": "music"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Left join, multi-chunk",
     "query": "select u.col from user u left join unsharded m on u.a = m.b",
     "plan": {

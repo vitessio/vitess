@@ -165,6 +165,7 @@ func breakBlockJoinExpressionInLHS(ctx *plancontext.PlanningContext,
 			RightHandVersion: rhsExpr,
 		})
 		ctx.SemTable.CopyExprInfo(expr, rhsExpr)
+		ctx.SemTable.AddExprEquality(expr, rhsExpr)
 		cursor.Replace(rhsExpr)
 		return false
 	}, nil).(sqlparser.Expr)

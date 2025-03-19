@@ -400,6 +400,22 @@ func (s *planTestSuite) TestOneWith57Version() {
 	s.testFile("onecase.json", vw, false)
 }
 
+func (s *planTestSuite) TestForeignKeyChecksOnOne() {
+	reset := operators.EnableDebugPrinting()
+	defer reset()
+
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(s.T(), err)
+
+	fkChecksState := true
+	vw.ForeignKeyChecksState = &fkChecksState
+
+	s.setFks(vschema)
+	s.testFile("onecase.json", vw, false)
+}
+
 func (s *planTestSuite) TestRubyOnRailsQueries() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/rails_schema.json", true)
