@@ -283,9 +283,11 @@ This change was introduced by [#17669](https://github.com/vitessio/vitess/pull/1
 
 ### <a id="vtorc-dynamic-keyspace-ers"/>Support for dynamic control of ERS by keyspace in VTOrc</a>
 
+**Note: disabling ERS-based recoveries introduces availability risks; please use with extreme caution!**
+
 New `vtctldclient` RPCs `EnableVtorcEmergencyReparent` and `DisableVtorcEmergencyReparent` were introduced to allow VTOrc recoveries involving `EmergencyReparentShard` actions to be disabled or paused on a per-keyspace basis. Previous to this version, disabling ERS-based recoveries was only possible globally/per-instance. VTOrc will now consider this keyspace-level setting that is refreshed from the topo on each recovery.
 
-In most cases disabling ERS-based recoveries introduces availability risks; please use with extreme caution! To provide observability of keyspaces with ERS-based VTOrc recoveries disabled, the `DisabledEmergencyReparentKeyspaces` metric was added to VTOrc. This metric can be used to create alerting to ensure ERS-based recoveries are not disabled for an undesired period of time.
+To provide observability of keyspaces with ERS-based VTOrc recoveries disabled, the `DisabledEmergencyReparentKeyspaces` metric was added to VTOrc. This metric can be used to create alerting to ensure ERS-based recoveries are not disabled for an undesired period of time.
 
 ---
 
