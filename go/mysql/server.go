@@ -232,8 +232,8 @@ type Listener struct {
 	// Reads are unbuffered if it's <=0.
 	connReadBufferSize int
 
-	// shutdown indicates that Shutdown method was called.
-	shutdown sync2.AtomicBool
+	// shutdownCh - open channel until it's not. Used to block and handle shutdown without hanging
+	shutdownCh chan struct{}
 
 	// RequireSecureTransport configures the server to reject connections from insecure clients
 	RequireSecureTransport bool
@@ -302,6 +302,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connReadBufferSize:       cfg.ConnReadBufferSize,
 		maxConns:                 cfg.MaxConns,
 		AllowClearTextWithoutTLS: sync2.NewAtomicBool(cfg.AllowClearTextWithoutTLS),
+		shutdownCh:               make(chan struct{}),
 	}, nil
 }
 
@@ -312,9 +313,12 @@ func (l *Listener) Addr() net.Addr {
 
 // Accept runs an accept loop until the listener is closed.
 func (l *Listener) Accept() {
-	sem := make(chan struct{}, l.maxConns) // Semaphore
+	var sem chan struct{}
+	if l.maxConns > 0 {
+		sem = make(chan struct{}, l.maxConns)
+	}
 
-	for {
+	for !l.isShutdown() {
 		conn, err := l.listener.Accept()
 		if err != nil {
 			// Close() was probably called.
@@ -325,17 +329,28 @@ func (l *Listener) Accept() {
 		connectionID := l.connectionID
 		l.connectionID++
 
-		if len(sem) == cap(sem) {
+		if sem != nil && len(sem) == cap(sem) {
 			log.Warning("max connections reached. Clients waiting. Increase server max connections")
 		}
 
-		// Wait until a connection slot is available
-		sem <- struct{}{}
+		if sem != nil {
+			select {
+			case sem <- struct{}{}:
+			case <-l.shutdownCh:
+				// shutdown while waiting for a slot. give up.
+				conn.Close()
+				return
+			}
+		}
 
 		connCount.Add(1)
 		connAccept.Add(1)
 		go func() {
-			defer func() { <-sem }() // Release slot when done
+			if sem != nil {
+				defer func() {
+					<-sem // release slot.
+				}()
+			}
 			l.handle(context.Background(), conn, connectionID, acceptTime)
 		}()
 	}
@@ -566,13 +581,21 @@ func (l *Listener) Close() {
 // Shutdown closes listener and fails any Ping requests from existing connections.
 // This can be used for graceful shutdown, to let clients know that they should reconnect to another server.
 func (l *Listener) Shutdown() {
-	if l.shutdown.CompareAndSwap(false, true) {
+	select {
+	case <-l.shutdownCh:
+	default:
+		close(l.shutdownCh)
 		l.Close()
 	}
 }
 
 func (l *Listener) isShutdown() bool {
-	return l.shutdown.Get()
+	select {
+	case <-l.shutdownCh:
+		return true
+	default:
+		return false
+	}
 }
 
 // writeHandshakeV10 writes the Initial Handshake Packet, server side.
