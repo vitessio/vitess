@@ -57,7 +57,7 @@ func TestAPI(t *testing.T) {
 	ks1 := &topodatapb.Keyspace{
 		DurabilityPolicy: policy.DurabilitySemiSync,
 		SidecarDbName:    "_vt_sidecar_ks1",
-		VtorcConfig: &topodatapb.VtorcConfig{
+		VtorcConfig: &topodatapb.KeyspaceVtorcConfig{
 			DisableEmergencyReparent: true,
 		},
 	}

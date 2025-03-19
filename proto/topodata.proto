@@ -300,7 +300,7 @@ message Keyspace {
   string sidecar_db_name = 10;
 
   // VtorcConfig is the keyspace config for Vtorc.
-  VtorcConfig vtorc_config = 11;
+  KeyspaceVtorcConfig vtorc_config = 11;
 }
 
 // ShardReplication describes the MySQL replication relationships
@@ -399,10 +399,10 @@ message ThrottlerConfig {
   map <string, double> metric_thresholds = 7;
 }
 
-// VtorcConfig stores configuration for Vtorc.
-message VtorcConfig {
+// KeyspaceVtorcConfig stores configuration for Vtorc.
+message KeyspaceVtorcConfig {
   // DisableEmergencyReparent reflects if EmergencyReparentShard
-  // can be used to reparent in Vtorc recoveries.
+  // can be used in Vtorc recoveries.
   bool disable_emergency_reparent = 1;
 }
 

@@ -1290,7 +1290,7 @@ func (s *VtctldServer) DisableVtorcEmergencyReparent(ctx context.Context, req *v
 
 	// set DisableEmergencyReparent to true, init VtorcConfig if nil
 	if ki.VtorcConfig == nil {
-		ki.VtorcConfig = &topodatapb.VtorcConfig{}
+		ki.VtorcConfig = &topodatapb.KeyspaceVtorcConfig{}
 	}
 	ki.VtorcConfig.DisableEmergencyReparent = true
 

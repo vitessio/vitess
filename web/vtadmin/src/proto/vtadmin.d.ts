@@ -18936,7 +18936,7 @@ export namespace topodata {
         sidecar_db_name?: (string|null);
 
         /** Keyspace vtorc_config */
-        vtorc_config?: (topodata.IVtorcConfig|null);
+        vtorc_config?: (topodata.IKeyspaceVtorcConfig|null);
     }
 
     /** Represents a Keyspace. */
@@ -18967,7 +18967,7 @@ export namespace topodata {
         public sidecar_db_name: string;
 
         /** Keyspace vtorc_config. */
-        public vtorc_config?: (topodata.IVtorcConfig|null);
+        public vtorc_config?: (topodata.IKeyspaceVtorcConfig|null);
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -19917,97 +19917,97 @@ export namespace topodata {
         }
     }
 
-    /** Properties of a VtorcConfig. */
-    interface IVtorcConfig {
+    /** Properties of a KeyspaceVtorcConfig. */
+    interface IKeyspaceVtorcConfig {
 
-        /** VtorcConfig disable_emergency_reparent */
+        /** KeyspaceVtorcConfig disable_emergency_reparent */
         disable_emergency_reparent?: (boolean|null);
     }
 
-    /** Represents a VtorcConfig. */
-    class VtorcConfig implements IVtorcConfig {
+    /** Represents a KeyspaceVtorcConfig. */
+    class KeyspaceVtorcConfig implements IKeyspaceVtorcConfig {
 
         /**
-         * Constructs a new VtorcConfig.
+         * Constructs a new KeyspaceVtorcConfig.
          * @param [properties] Properties to set
          */
-        constructor(properties?: topodata.IVtorcConfig);
+        constructor(properties?: topodata.IKeyspaceVtorcConfig);
 
-        /** VtorcConfig disable_emergency_reparent. */
+        /** KeyspaceVtorcConfig disable_emergency_reparent. */
         public disable_emergency_reparent: boolean;
 
         /**
-         * Creates a new VtorcConfig instance using the specified properties.
+         * Creates a new KeyspaceVtorcConfig instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns VtorcConfig instance
+         * @returns KeyspaceVtorcConfig instance
          */
-        public static create(properties?: topodata.IVtorcConfig): topodata.VtorcConfig;
+        public static create(properties?: topodata.IKeyspaceVtorcConfig): topodata.KeyspaceVtorcConfig;
 
         /**
-         * Encodes the specified VtorcConfig message. Does not implicitly {@link topodata.VtorcConfig.verify|verify} messages.
-         * @param message VtorcConfig message or plain object to encode
+         * Encodes the specified KeyspaceVtorcConfig message. Does not implicitly {@link topodata.KeyspaceVtorcConfig.verify|verify} messages.
+         * @param message KeyspaceVtorcConfig message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: topodata.IVtorcConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: topodata.IKeyspaceVtorcConfig, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified VtorcConfig message, length delimited. Does not implicitly {@link topodata.VtorcConfig.verify|verify} messages.
-         * @param message VtorcConfig message or plain object to encode
+         * Encodes the specified KeyspaceVtorcConfig message, length delimited. Does not implicitly {@link topodata.KeyspaceVtorcConfig.verify|verify} messages.
+         * @param message KeyspaceVtorcConfig message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: topodata.IVtorcConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: topodata.IKeyspaceVtorcConfig, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a VtorcConfig message from the specified reader or buffer.
+         * Decodes a KeyspaceVtorcConfig message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns VtorcConfig
+         * @returns KeyspaceVtorcConfig
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.VtorcConfig;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.KeyspaceVtorcConfig;
 
         /**
-         * Decodes a VtorcConfig message from the specified reader or buffer, length delimited.
+         * Decodes a KeyspaceVtorcConfig message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns VtorcConfig
+         * @returns KeyspaceVtorcConfig
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.VtorcConfig;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.KeyspaceVtorcConfig;
 
         /**
-         * Verifies a VtorcConfig message.
+         * Verifies a KeyspaceVtorcConfig message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a VtorcConfig message from a plain object. Also converts values to their respective internal types.
+         * Creates a KeyspaceVtorcConfig message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns VtorcConfig
+         * @returns KeyspaceVtorcConfig
          */
-        public static fromObject(object: { [k: string]: any }): topodata.VtorcConfig;
+        public static fromObject(object: { [k: string]: any }): topodata.KeyspaceVtorcConfig;
 
         /**
-         * Creates a plain object from a VtorcConfig message. Also converts values to other types if specified.
-         * @param message VtorcConfig
+         * Creates a plain object from a KeyspaceVtorcConfig message. Also converts values to other types if specified.
+         * @param message KeyspaceVtorcConfig
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: topodata.VtorcConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: topodata.KeyspaceVtorcConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this VtorcConfig to JSON.
+         * Converts this KeyspaceVtorcConfig to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for VtorcConfig
+         * Gets the default type url for KeyspaceVtorcConfig
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -56557,7 +56557,7 @@ export namespace vtctldata {
         sidecar_db_name?: (string|null);
 
         /** CreateKeyspaceRequest vtorc_config */
-        vtorc_config?: (topodata.IVtorcConfig|null);
+        vtorc_config?: (topodata.IKeyspaceVtorcConfig|null);
     }
 
     /** Represents a CreateKeyspaceRequest. */
@@ -56594,7 +56594,7 @@ export namespace vtctldata {
         public sidecar_db_name: string;
 
         /** CreateKeyspaceRequest vtorc_config. */
-        public vtorc_config?: (topodata.IVtorcConfig|null);
+        public vtorc_config?: (topodata.IKeyspaceVtorcConfig|null);
 
         /**
          * Creates a new CreateKeyspaceRequest instance using the specified properties.

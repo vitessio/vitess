@@ -51,7 +51,7 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt32("keyspace_type"))
 		keyspace.DurabilityPolicy = row.GetString("durability_policy")
-		keyspace.VtorcConfig = &topodatapb.VtorcConfig{
+		keyspace.VtorcConfig = &topodatapb.KeyspaceVtorcConfig{
 			DisableEmergencyReparent: row.GetBool("disable_emergency_reparent"),
 		}
 		keyspace.SetKeyspaceName(keyspaceName)

@@ -611,7 +611,7 @@ message CreateKeyspaceRequest {
   // each vttablet in the keyspace will use.
   string sidecar_db_name = 11;
   // VtorcConfig is the vtorc config for the keyspace.
-  topodata.VtorcConfig vtorc_config = 12;
+  topodata.KeyspaceVtorcConfig vtorc_config = 12;
 }
 
 message CreateKeyspaceResponse {

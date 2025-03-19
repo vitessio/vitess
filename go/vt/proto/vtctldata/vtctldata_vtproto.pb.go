@@ -38808,7 +38808,7 @@ func (m *CreateKeyspaceRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.VtorcConfig == nil {
-				m.VtorcConfig = &topodata.VtorcConfig{}
+				m.VtorcConfig = &topodata.KeyspaceVtorcConfig{}
 			}
 			if err := m.VtorcConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
