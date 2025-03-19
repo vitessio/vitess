@@ -237,6 +237,9 @@ type Listener struct {
 
 	// RequireSecureTransport configures the server to reject connections from insecure clients
 	RequireSecureTransport bool
+
+	// MaxWaitingConnections specifies the maximum number of connections that can wait to be serviced.
+	maxWaitingConnections int
 }
 
 // NewFromListener creates a new mysql listener from an existing net.Listener
@@ -318,6 +321,8 @@ func (l *Listener) Accept() {
 		sem = make(chan struct{}, l.maxConns)
 	}
 
+	waitingConnections := sync2.NewAtomicInt64(0)
+
 	for !l.isShutdown() {
 		conn, err := l.listener.Accept()
 		if err != nil {
@@ -325,27 +330,34 @@ func (l *Listener) Accept() {
 			return
 		}
 
+		if sem != nil && len(sem) == cap(sem) {
+			log.Warning("max connections reached. Clients waiting. Increase server max_connections")
+		}
+		// Make configurable. NM4.
+		if waitingConnections.Get() >= 3 {
+			log.Warning("max waiting connections reached. Client rejected. Increase server max_connections and back_log")
+			conn.Close()
+			continue
+		}
+
 		acceptTime := time.Now()
 		connectionID := l.connectionID
 		l.connectionID++
 
-		if sem != nil && len(sem) == cap(sem) {
-			log.Warning("max connections reached. Clients waiting. Increase server max connections")
-		}
-
 		go func() {
 			if sem != nil {
-			}
-			if sem != nil {
+				waitingConnections.Add(1)
 				select {
 				case sem <- struct{}{}:
 				case <-l.shutdownCh:
 					// shutdown while waiting for a slot. give up.
 					conn.Close()
+					waitingConnections.Add(-1) // probably not needed, but correct.
 					return
 				}
+				waitingConnections.Add(-1)
 				defer func() {
-					<-sem // release slot.
+					<-sem // release slot when l.handle is done.
 				}()
 			}
 
