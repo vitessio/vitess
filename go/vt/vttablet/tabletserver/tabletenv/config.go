@@ -929,7 +929,12 @@ func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
 		return errors.New("database app user not specified")
 	}
 	if c.DB.App.Password == "" {
-		return errors.New("database app user password not specified")
+		_, pass, err := dbconfigs.GetCredentialsServer().GetUserAndPassword(c.DB.App.User)
+		if err == nil && pass != "" {
+			c.DB.App.Password = pass
+		} else {
+			return errors.New("database app user password not specified")
+		}
 	}
 	// Replication fixes should be disabled for Unmanaged tablets.
 	mysqlctl.DisableActiveReparents = true
