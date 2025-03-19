@@ -95,6 +95,11 @@ func (vp *VtAdminProcess) Setup() (err error) {
 		return err
 	}
 
+	// Only allow override if explicitly set by tests; default cluster ID is "local".
+	clusterID := "local"
+	if vp.ClusterID != "" {
+		clusterID = vp.ClusterID
+	}
 	vp.proc = exec.Command(
 		vp.Binary,
 		"--addr", vp.Address(),
@@ -107,18 +112,8 @@ func (vp *VtAdminProcess) Setup() (err error) {
 		"--rbac",
 		"--rbac-config", rbacFile,
 		"--cluster", fmt.Sprintf(`id=%s,name=%s,discovery=staticfile,discovery-staticfile-path=%s,tablet-fqdn-tmpl=http://{{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }},schema-cache-default-expiration=1m`,
-			func() string {
-				if vp.ClusterID != "" {
-					return vp.ClusterID
-				}
-				return "local"
-			}(),
-			func() string {
-				if vp.ClusterID != "" {
-					return vp.ClusterID
-				}
-				return "local"
-			}(),
+			clusterID,
+			clusterID,
 			discoveryFile),
 	)
 
