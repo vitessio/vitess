@@ -333,24 +333,24 @@ func (l *Listener) Accept() {
 			log.Warning("max connections reached. Clients waiting. Increase server max connections")
 		}
 
-		if sem != nil {
-			select {
-			case sem <- struct{}{}:
-			case <-l.shutdownCh:
-				// shutdown while waiting for a slot. give up.
-				conn.Close()
-				return
-			}
-		}
-
-		connCount.Add(1)
-		connAccept.Add(1)
 		go func() {
 			if sem != nil {
+			}
+			if sem != nil {
+				select {
+				case sem <- struct{}{}:
+				case <-l.shutdownCh:
+					// shutdown while waiting for a slot. give up.
+					conn.Close()
+					return
+				}
 				defer func() {
 					<-sem // release slot.
 				}()
 			}
+
+			connCount.Add(1)
+			connAccept.Add(1)
 			l.handle(context.Background(), conn, connectionID, acceptTime)
 		}()
 	}
