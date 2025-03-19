@@ -15,7 +15,7 @@ jobs:
 
   build:
     name: Unit Test (Evalengine_Race)
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    runs-on: oracle-16cpu-64gb-x86-64
     steps:
     - name: Skip CI
       run: |
@@ -93,10 +93,13 @@ jobs:
         sudo apt-get -qq install -y mysql-server mysql-client
 
         sudo apt-get -qq install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
-        sudo service mysql stop
-        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
+        
+        # Running on CNCF ARC Runners no longer needs this
+        # Leaving this in as a tombstone for now
+        #sudo service mysql stop
+        #sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
+        #sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        #sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         mkdir -p dist bin
         curl -s -L https://github.com/coreos/etcd/releases/download/v3.5.17/etcd-v3.5.17-linux-amd64.tar.gz | tar -zxC dist
