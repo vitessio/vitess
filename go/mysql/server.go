@@ -575,7 +575,7 @@ func (l *Listener) handleConnectionWarning(c *Conn, reason string) {
 
 // Close stops the listener, which prevents accept of any new connections. Existing connections won't be closed.
 func (l *Listener) Close() {
-	l.listener.Close()
+	l.Shutdown()
 }
 
 // Shutdown closes listener and fails any Ping requests from existing connections.
@@ -585,7 +585,7 @@ func (l *Listener) Shutdown() {
 	case <-l.shutdownCh:
 	default:
 		close(l.shutdownCh)
-		l.Close()
+		l.listener.Close()
 	}
 }
 
