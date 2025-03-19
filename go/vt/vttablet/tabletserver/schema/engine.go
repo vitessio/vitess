@@ -127,10 +127,10 @@ func NewEngine(env tabletenv.Env) *Engine {
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
 	se.tableFileSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableFileSize", "tracks table file size", "Table")
 	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
-	se.tableRowsGauge = env.Exporter().NewGaugesWithSingleLabel("TableRows", "the estimated number of rows in the table", "Table")
-	se.tableClusteredIndexSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableClusteredIndexSize", "the byte size of the clustered index (i.e. row data)", "Table")
+	se.tableRowsGauge = env.Exporter().NewGaugesWithSingleLabel("TableRows", "estimated number of rows in the table", "Table")
+	se.tableClusteredIndexSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableClusteredIndexSize", "byte size of the clustered index (i.e. row data)", "Table")
 	se.indexCardinalityGauge = env.Exporter().NewGaugesWithMultiLabels("IndexCardinality", "estimated number of unique values in the index", []string{"Table", "Index"})
-	se.indexBytesGauge = env.Exporter().NewGaugesWithMultiLabels("IndexBytes", "byte size of the the index", []string{"Table", "Index"})
+	se.indexBytesGauge = env.Exporter().NewGaugesWithMultiLabels("IndexBytes", "byte size of the index", []string{"Table", "Index"})
 	se.innoDbReadRowsCounter = env.Exporter().NewCounter("InnodbRowsRead", "number of rows read by mysql")
 	se.SchemaReloadTimings = env.Exporter().NewTimings("SchemaReload", "time taken to reload the schema", "type")
 	se.reloadTimeout = env.Config().SchemaChangeReloadTimeout
