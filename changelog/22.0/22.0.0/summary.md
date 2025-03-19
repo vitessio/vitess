@@ -25,7 +25,7 @@
   - **[Support for Filtering Query logs on Error](#query-logs)**
   - **[Semi-sync monitor in vttablet](#semi-sync-monitor)**
   - **[Wrapped fatal transaction errors](#new-errors-fatal-tx)**
-  - **[Support for dynamic control of ERS by keyspace in VTOrc](#vtorc-dynamic-keyspace-ers)
+  - **[Support for dynamic control of ERS by keyspace in VTOrc](#vtorc-dynamic-keyspace-ers)**
 - **[Minor Changes](#minor-changes)**
   - **[VTTablet Flags](#flags-vttablet)**
   - **[VTTablet ACL enforcement and reloading](#reloading-vttablet-acl)**
