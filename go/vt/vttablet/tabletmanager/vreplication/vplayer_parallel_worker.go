@@ -244,6 +244,13 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 	// 		return
 	// 	}
 	// }()
+	if lowest := w.producer.lowestUncommittedSequence.Load(); event.CommitParent >= lowest {
+		// Parent depends on yet uncommitted event. Wait for it.
+		// log.Errorf("========== QQQ applyQueuedEvent worker %v event %v WAITING on commit parent %v because lowest is %v", w.index, event.Type, event.CommitParent, lowest)
+		// newLowest := <-w.producer.registerLowestSequenceListener(event.CommitParent)
+		<-w.producer.registerLowestSequenceListener(event.CommitParent)
+		// log.Errorf("========== QQQ applyQueuedEvent worker %v event %v RELEASED on commit parent %v on new lowest %v", w.index, event.Type, event.CommitParent, newLowest)
+	}
 
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
@@ -310,6 +317,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 		if err := w.updatePosByEvent(ctx, event); err != nil {
 			return err
 		}
+		w.flushSequenceNumbers()
 	case binlogdatapb.VEventType_DDL:
 		if w.dbClient.InTransaction {
 			// Unreachable
@@ -323,6 +331,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			if err := w.updatePosByEvent(ctx, event); err != nil {
 				return err
 			}
+			w.flushSequenceNumbers()
 		case binlogdatapb.OnDDLAction_STOP:
 			if err := w.dbClient.Begin(); err != nil {
 				return err
@@ -330,6 +339,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			if err := w.updatePosByEvent(ctx, event); err != nil {
 				return err
 			}
+			w.flushSequenceNumbers()
 			if err := w.setVRState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at DDL %s", event.Statement)); err != nil {
 				return err
 			}
@@ -348,6 +358,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			if err := w.updatePosByEvent(ctx, event); err != nil {
 				return err
 			}
+			w.flushSequenceNumbers()
 		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
 			if _, err := w.queryFunc(ctx, event.Statement); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
@@ -355,6 +366,7 @@ func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdata
 			if err := w.updatePosByEvent(ctx, event); err != nil {
 				return err
 			}
+			w.flushSequenceNumbers()
 		}
 	case binlogdatapb.VEventType_JOURNAL:
 		if w.dbClient.InTransaction {
@@ -604,14 +616,18 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, event *binlogdat
 		w.numCommits++
 		w.numEvents += len(w.sequenceNumbers)
 	}
+	w.flushSequenceNumbers()
+	if w.producer.posReached.Load() {
+		return io.EOF
+	}
+	return nil
+}
+
+func (w *parallelWorker) flushSequenceNumbers() {
 	// We now let the producer know that we've completed the sequence numbers.
 	// It will deassign these sequence numebrs from the worker.
 	for _, sequenceNumber := range w.sequenceNumbers {
 		w.producer.completedSequenceNumbers <- sequenceNumber
 	}
 	w.sequenceNumbers = w.sequenceNumbers[:0]
-	if w.producer.posReached.Load() {
-		return io.EOF
-	}
-	return nil
 }

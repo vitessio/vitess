@@ -41,6 +41,8 @@ const (
 	maxIdleWorkerDuration = 250 * time.Millisecond
 
 	aggregatePosInterval = 250 * time.Millisecond
+
+	noUncommittedSequence = math.MaxInt64
 )
 
 type parallelProducer struct {
@@ -49,10 +51,14 @@ type parallelProducer struct {
 	workers  []*parallelWorker
 	startPos replication.Position
 
-	posReached                atomic.Bool
-	workerErrors              chan error
+	posReached   atomic.Bool
+	workerErrors chan error
+
 	sequenceToWorkersMap      map[int64]int // sequence number => worker index
+	lowestUncommittedSequence atomic.Int64
+	lowestSequenceListeners   map[int64]chan int64
 	sequenceToWorkersMapMu    sync.RWMutex
+
 	completedSequenceNumbers  chan int64
 	commitWorkerEventSequence atomic.Int64
 	assignSequence            int64
@@ -75,8 +81,10 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 		workerErrors:             make(chan error, countWorkers+1),
 		sequenceToWorkersMap:     make(map[int64]int),
 		completedSequenceNumbers: make(chan int64, countWorkers),
+		lowestSequenceListeners:  make(map[int64]chan int64),
 		aggregateWorkersPosQuery: binlogplayer.ReadVReplicationCombinedWorkersGTIDs(vp.vr.id),
 	}
+	p.lowestUncommittedSequence.Store(noUncommittedSequence)
 
 	p.newDBClient = func() (*vdbClient, error) {
 		dbClient, err := dbClientGen()
@@ -88,7 +96,8 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 		if err != nil {
 			return nil, err
 		}
-		vdbClient.maxBatchSize = vp.vr.dbClient.maxBatchSize
+		// vdbClient.maxBatchSize = vp.vr.dbClient.maxBatchSize
+		vdbClient.maxBatchSize = 0
 
 		return vdbClient, nil
 	}
@@ -99,13 +108,17 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 			return nil, err
 		}
 		w.queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-			if !w.dbClient.InTransaction { // Should be sent down the wire immediately
-				return w.dbClient.Execute(sql)
-			}
-			return nil, w.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
+			// REMOVE for batched commit
+			// if !w.dbClient.InTransaction { // Should be sent down the wire immediately
+			// 	return w.dbClient.Execute(sql)
+			// }
+			// return nil, w.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
+			return w.dbClient.Execute(sql)
 		}
 		w.commitFunc = func() error {
-			return w.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
+			// REMOVE for batched commit
+			// return w.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
+			return w.dbClient.Commit()
 		}
 		// INSERT a row into _vt.vreplication_worker_pos with an empty position
 		query := binlogplayer.GenerateInitWorkerPos(vp.vr.id, w.index)
@@ -315,6 +328,13 @@ func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastC
 	p.sequenceToWorkersMapMu.RLock()
 	defer p.sequenceToWorkersMapMu.RUnlock()
 
+	if sequenceNumber != 0 {
+		if lowest := p.lowestUncommittedSequence.Load(); sequenceNumber < lowest {
+			// log.Errorf("========== QQQ process lowest has CHANGED DOWN to %v", sequenceNumber)
+			p.lowestUncommittedSequence.Store(sequenceNumber)
+		}
+	}
+
 	p.assignSequence++
 	if workerIndex, ok := p.sequenceToWorkersMap[sequenceNumber]; ok {
 		// All events of same sequence should be executed by same worker
@@ -342,6 +362,47 @@ func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastC
 	return workerIndex
 }
 
+func (p *parallelProducer) registerLowestSequenceListener(notifyOnLowestAbove int64) chan int64 {
+	p.sequenceToWorkersMapMu.Lock()
+	defer p.sequenceToWorkersMapMu.Unlock()
+
+	if lowest := p.lowestUncommittedSequence.Load(); lowest != noUncommittedSequence && lowest > notifyOnLowestAbove {
+		// lowest uncommitted sequence is already above the requested value, so there is no  need to
+		// register a listener, We return a fulfilled channel response.
+		// log.Errorf("========== QQQ registerLowestSequenceListener free pass for notifyOnLowestAbove=%v because lowest=%v", notifyOnLowestAbove, lowest)
+		ch := make(chan int64, countWorkers)
+		ch <- lowest
+		return ch
+	}
+	// log.Errorf("========== QQQ registerLowestSequenceListener registered for notifyOnLowestAbove=%v", notifyOnLowestAbove)
+	if ch, ok := p.lowestSequenceListeners[notifyOnLowestAbove]; ok {
+		// listener already exists
+		return ch
+	}
+	ch := make(chan int64, countWorkers)
+	p.lowestSequenceListeners[notifyOnLowestAbove] = ch
+	return ch
+}
+
+func (p *parallelProducer) evaluateLowestUncommittedSequence(deletedSequence int64) (lowest int64, changed bool) {
+	// assumed to be protected by sequenceToWorkersMapMu lock
+	lowest = p.lowestUncommittedSequence.Load()
+	if deletedSequence != lowest {
+		// means p.lowestUncommittedSequence is still undeleted
+		return lowest, false
+	}
+	if len(p.sequenceToWorkersMap) == 0 {
+		return noUncommittedSequence, true
+	}
+	// Find the lowest sequence number that is not yet committed.
+	for {
+		lowest++
+		if _, ok := p.sequenceToWorkersMap[lowest]; ok {
+			return lowest, true
+		}
+	}
+}
+
 // process is a goroutine that reads events from the input channel and assigns them to workers.
 func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatapb.VEvent) error {
 	go func() {
@@ -352,6 +413,19 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 			case sequenceNumber := <-p.completedSequenceNumbers:
 				p.sequenceToWorkersMapMu.Lock()
 				delete(p.sequenceToWorkersMap, sequenceNumber)
+				if lowest, changed := p.evaluateLowestUncommittedSequence(sequenceNumber); changed {
+					// log.Errorf("========== QQQ process lowest has CHANGED to %v", lowest)
+					p.lowestUncommittedSequence.Store(lowest)
+					for notifyOnLowestAbove, ch := range p.lowestSequenceListeners {
+						if lowest > notifyOnLowestAbove {
+							// log.Errorf("========== QQQ process notifying listener for %v on new lowest %v", notifyOnLowestAbove, lowest)
+							for range countWorkers {
+								ch <- lowest
+							}
+							delete(p.lowestSequenceListeners, notifyOnLowestAbove)
+						}
+					}
+				}
 				p.sequenceToWorkersMapMu.Unlock()
 			}
 		}
@@ -557,7 +631,8 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 					// applying the next set of events as part of the current transaction. This approach
 					// also handles the case where the last transaction is partial. In that case,
 					// we only group the transactions with commits we've seen so far.
-					if countPinnedWorkerEvents < 2*maxCountWorkersEvents && hasAnotherCommit(items, i, j+1) {
+					if countPinnedWorkerEvents < 2*maxCountWorkersEvents && false {
+						// if countPinnedWorkerEvents < 2*maxCountWorkersEvents && hasAnotherCommit(items, i, j+1) {
 						pinWorker = true
 						event.Skippable = true
 					} else {
