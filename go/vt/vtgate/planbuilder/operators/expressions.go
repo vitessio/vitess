@@ -130,32 +130,43 @@ func getFirstSelect(selStmt sqlparser.TableStatement) *sqlparser.Select {
 	return firstSelect
 }
 
+// breakBlockJoinExpressionInLHS rewrites the given expression so that any references that come
+// solely from the LHS (left-hand side) table set are replaced by a corresponding expression
+// referencing a "values" table name. The function also indicates whether the entire expression
+// is contained in the LHS (pureLHS).
 func breakBlockJoinExpressionInLHS(ctx *plancontext.PlanningContext,
-	expr sqlparser.Expr,
+	in sqlparser.Expr,
 	lhs semantics.TableSet,
 	valuesName string,
 ) (result blockJoinColumn, pureLHS bool) {
-	result.Original = sqlparser.Clone(expr)
+	result.Original = sqlparser.Clone(in)
 	pureLHS = true
-	result.RHS = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+	result.RHS = sqlparser.Rewrite(in, func(cursor *sqlparser.Cursor) bool {
 		node := cursor.Node()
-		col, ok := node.(*sqlparser.ColName)
-		if !ok || !ctx.SemTable.RecursiveDeps(col).IsSolvedBy(lhs) {
+		expr, ok := node.(sqlparser.Expr)
+		if !ok {
+			return true
+		}
+
+		deps := ctx.SemTable.RecursiveDeps(expr)
+		canPushLeft := deps.IsSolvedBy(lhs)
+		shouldPushLeft := canPushLeft && deps.NotEmpty()
+		if !shouldPushLeft {
 			// we are only interested in ColNames from the LHS
 			pureLHS = false
 			return true
 		}
 
-		colName := getBlockJoinColName(ctx, valuesName, lhs, col)
+		colName := getBlockJoinColName(ctx, valuesName, lhs, expr)
 		qualifier := sqlparser.NewTableName(valuesName)
 		rhsExpr := sqlparser.NewColNameWithQualifier(colName, qualifier)
 		result.LHS = append(result.LHS, leftHandSideExpression{
-			Original:         col,
+			Original:         expr,
 			RightHandVersion: rhsExpr,
 		})
-		ctx.SemTable.CopyExprInfo(col, rhsExpr)
+		ctx.SemTable.CopyExprInfo(expr, rhsExpr)
 		cursor.Replace(rhsExpr)
-		return true
+		return false
 	}, nil).(sqlparser.Expr)
 	return
 }

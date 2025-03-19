@@ -43,7 +43,7 @@ type (
 	}
 
 	leftHandSideExpression struct {
-		Original         *sqlparser.ColName
+		Original,
 		RightHandVersion sqlparser.Expr
 	}
 )
@@ -181,18 +181,28 @@ func (bj *BlockJoin) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	for _, jc := range bj.JoinPredicates {
 		// for join predicates, we only need to push the LHS dependencies. The RHS expressions are already pushed
 		for _, lh := range jc.LHS {
-			bj.LHS.AddColumn(ctx, true, false, aeWrap(lh.Original))
-			ctx.AddBlockJoinColumn(bj.Destination, lh.RightHandVersion)
+			offset := bj.LHS.FindCol(ctx, lh.Original, false)
+			if offset < 0 {
+				bj.LHS.AddColumn(ctx, true, false, aeWrap(lh.Original))
+				ctx.AddBlockJoinColumn(bj.Destination, lh.RightHandVersion)
+			}
 		}
 	}
 	return bj
 }
 
+const blockJoinCol = "x_x"
+
 func getBlockJoinColName(ctx *plancontext.PlanningContext, destination string, tableID semantics.TableSet, expr sqlparser.Expr) string {
 	col, isCol := expr.(*sqlparser.ColName)
-	if !isCol {
-		panic(fmt.Sprintf("expected a col named '%v'", expr))
+	if isCol {
+		return getBlockJoinColNameForColName(ctx, destination, tableID, col)
 	}
+
+	return ctx.ReservedVars.ReserveVariable(blockJoinCol)
+}
+
+func getBlockJoinColNameForColName(ctx *plancontext.PlanningContext, destination string, tableID semantics.TableSet, col *sqlparser.ColName) string {
 	tableName := col.Qualifier.Name.String()
 	if tableName == "" {
 		ti, err := ctx.SemTable.TableInfoFor(tableID)
