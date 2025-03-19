@@ -131,7 +131,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
 		tables := []string{
-			"s_tbl", "num_vdx_tbl", "user_tbl", "order_tbl", "oevent_tbl", "oextra_tbl",
+			"s_tbl", "num_vdx_tbl", "col_vdx_tbl", "user_tbl", "order_tbl", "oevent_tbl", "oextra_tbl",
 			"auto_tbl", "oid_vdx_tbl", "unq_idx", "nonunq_idx", "u_tbl", "mixed_tbl", "lkp_map_idx", "j_tbl", "j_utbl",
 		}
 		for _, table := range tables {
