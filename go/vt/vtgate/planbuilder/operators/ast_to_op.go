@@ -436,15 +436,8 @@ func createQueryTableForDML(
 func addColumnEquality(ctx *plancontext.PlanningContext, expr sqlparser.Expr) {
 	switch expr := expr.(type) {
 	case *sqlparser.ComparisonExpr:
-		if expr.Operator != sqlparser.EqualOp {
-			return
-		}
-
-		if left, isCol := expr.Left.(*sqlparser.ColName); isCol {
-			ctx.SemTable.AddColumnEquality(left, expr.Right)
-		}
-		if right, isCol := expr.Right.(*sqlparser.ColName); isCol {
-			ctx.SemTable.AddColumnEquality(right, expr.Left)
+		if expr.Operator == sqlparser.EqualOp {
+			ctx.SemTable.AddExprEquality(expr.Left, expr.Right)
 		}
 	}
 }

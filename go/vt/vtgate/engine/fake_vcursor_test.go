@@ -263,6 +263,10 @@ func (t *noopVCursor) SetFoundRows(u uint64) {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetInDMLExecution(inDMLExec bool) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) InTransactionAndIsDML() bool {
 	panic("implement me")
 }
@@ -513,6 +517,10 @@ func (f *loggingVCursor) GetSystemVariables(func(k string, v string)) {
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
 	panic("implement me")
+}
+
+func (f *loggingVCursor) SetInDMLExecution(inDMLExec bool) {
+	f.log = append(f.log, fmt.Sprintf("InDMLExecution set to %v", inDMLExec))
 }
 
 func (f *loggingVCursor) InTransactionAndIsDML() bool {
