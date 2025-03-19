@@ -35,21 +35,25 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 		return nil, err
 	}
 
-	query := `
-		select
+	query := `select
 			keyspace_type,
-			durability_policy
+			durability_policy,
+			disable_emergency_reparent
 		from
 			vitess_keyspace
-		where keyspace=?
-		`
+		where
+			keyspace = ?`
 	args := sqlutils.Args(keyspaceName)
+
 	keyspace := &topo.KeyspaceInfo{
 		Keyspace: &topodatapb.Keyspace{},
 	}
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt32("keyspace_type"))
 		keyspace.DurabilityPolicy = row.GetString("durability_policy")
+		keyspace.VtorcConfig = &topodatapb.VtorcConfig{
+			DisableEmergencyReparent: row.GetBool("disable_emergency_reparent"),
+		}
 		keyspace.SetKeyspaceName(keyspaceName)
 		return nil
 	})
@@ -62,19 +66,40 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 	return keyspace, nil
 }
 
+// ReadERSDisabledKeyspaces returns a slice containing the names of
+// keyspaces with EmergencyReparentShard disabled. This uses the
+// index: disable_emergency_reparent_idx_vitess_keyspace.
+func ReadERSDisabledKeyspaces() ([]string, error) {
+	keyspaces := make([]string, 0)
+	query := `SELECT
+			keyspace
+		FROM
+			vitess_keyspace
+		WHERE
+			disable_emergency_reparent = 1`
+	err := db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
+		keyspaces = append(keyspaces, row.GetString("keyspace"))
+		return nil
+	})
+	return keyspaces, err
+}
+
 // SaveKeyspace saves the keyspace record against the keyspace name.
 func SaveKeyspace(keyspace *topo.KeyspaceInfo) error {
+	var disableEmergencyReparent int
+	if keyspace.VtorcConfig != nil && keyspace.VtorcConfig.DisableEmergencyReparent {
+		disableEmergencyReparent = 1
+	}
 	_, err := db.ExecVTOrc(`
-		replace
-			into vitess_keyspace (
-				keyspace, keyspace_type, durability_policy
-			) values (
-				?, ?, ?
-			)
-		`,
+		replace	into vitess_keyspace (
+			keyspace, keyspace_type, durability_policy, disable_emergency_reparent
+		) values (
+			?, ?, ?, ?
+		)`,
 		keyspace.KeyspaceName(),
 		int(keyspace.KeyspaceType),
 		keyspace.GetDurabilityPolicy(),
+		disableEmergencyReparent,
 	)
 	return err
 }

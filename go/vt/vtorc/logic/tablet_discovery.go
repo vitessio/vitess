@@ -55,23 +55,25 @@ var (
 	// This is populated by parsing `--clusters_to_watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
 
+	// ErrNoPrimaryTablet is a fixed error message.
+	ErrNoPrimaryTablet = errors.New("no primary tablet found")
+)
+
+func init() {
 	// tablet stats
-	statsTabletsWatchedByCell = stats.NewGaugesFuncWithMultiLabels(
+	stats.NewGaugesFuncWithMultiLabels(
 		"TabletsWatchedByCell",
 		"Number of tablets watched by cell",
 		[]string{"Cell"},
 		getTabletsWatchedByCellStats,
 	)
-	statsTabletsWatchedByShard = stats.NewGaugesFuncWithMultiLabels(
+	stats.NewGaugesFuncWithMultiLabels(
 		"TabletsWatchedByShard",
 		"Number of tablets watched by keyspace/shard",
 		[]string{"Keyspace", "Shard"},
 		getTabletsWatchedByShardStats,
 	)
-
-	// ErrNoPrimaryTablet is a fixed error message.
-	ErrNoPrimaryTablet = errors.New("no primary tablet found")
-)
+}
 
 // getTabletsWatchedByCellStats returns the number of tablets watched by cell in stats format.
 func getTabletsWatchedByCellStats() map[string]int64 {

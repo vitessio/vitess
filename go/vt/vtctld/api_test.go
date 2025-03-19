@@ -57,6 +57,9 @@ func TestAPI(t *testing.T) {
 	ks1 := &topodatapb.Keyspace{
 		DurabilityPolicy: policy.DurabilitySemiSync,
 		SidecarDbName:    "_vt_sidecar_ks1",
+		VtorcConfig: &topodatapb.VtorcConfig{
+			DisableEmergencyReparent: true,
+		},
 	}
 
 	// Populate topo. Remove ServedTypes from shards to avoid ordering issues.
@@ -248,7 +251,10 @@ func TestAPI(t *testing.T) {
 				"snapshot_time":null,
 				"durability_policy":"semi_sync",
 				"throttler_config": null,
-				"sidecar_db_name":"_vt_sidecar_ks1"
+				"sidecar_db_name":"_vt_sidecar_ks1",
+				"vtorc_config": {
+					"disable_emergency_reparent": true
+				}
 			}`, http.StatusOK},
 		{"GET", "keyspaces/nonexistent", "", "404 page not found", http.StatusNotFound},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{
@@ -329,11 +335,11 @@ func TestAPI(t *testing.T) {
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt_sidecar_ks1\"\n}\n\n"
+		   "Output": "{\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt_sidecar_ks1\",\n  \"vtorc_config\": {\n    \"disable_emergency_reparent\": true\n  }\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt\"\n}\n\n"
+		   "Output": "{\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt\",\n  \"vtorc_config\": null\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
 		   "Error": "",

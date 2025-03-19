@@ -936,6 +936,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 		SnapshotTime:     req.SnapshotTime,
 		DurabilityPolicy: req.DurabilityPolicy,
 		SidecarDbName:    req.SidecarDbName,
+		VtorcConfig:      req.VtorcConfig,
 	}
 
 	err = s.ts.CreateKeyspace(ctx, req.Name, ki)
@@ -1265,6 +1266,41 @@ func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.Delet
 	return &vtctldatapb.DeleteTabletsResponse{}, nil
 }
 
+// DisableVtorcEmergencyReparent disables VTOrc's usage of EmergencyReparentShard on a given keyspace.
+func (s *VtctldServer) DisableVtorcEmergencyReparent(ctx context.Context, req *vtctldatapb.DisableVtorcEmergencyReparentRequest) (resp *vtctldatapb.DisableVtorcEmergencyReparentResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.DisableVtorcEmergencyReparent")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "DisableVtorcEmergencyReparent")
+	if lockErr != nil {
+		err = lockErr
+		return nil, err
+	}
+
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	if ki.VtorcConfig == nil {
+		ki.VtorcConfig = &topodatapb.VtorcConfig{}
+	}
+	ki.VtorcConfig.DisableEmergencyReparent = true
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.DisableVtorcEmergencyReparentResponse{}, nil
+}
+
 // EmergencyReparentShard is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldatapb.EmergencyReparentShardRequest) (resp *vtctldatapb.EmergencyReparentShardResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.EmergencyReparentShard")
@@ -1333,6 +1369,41 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	copy(resp.Events, logstream)
 
 	return resp, err
+}
+
+// EnableVtorcEmergencyReparent disables VTOrc's usage of EmergencyReparentShard on a given keyspace.
+func (s *VtctldServer) EnableVtorcEmergencyReparent(ctx context.Context, req *vtctldatapb.EnableVtorcEmergencyReparentRequest) (resp *vtctldatapb.EnableVtorcEmergencyReparentResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.EnableVtorcEmergencyReparent")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "EnableVtorcEmergencyReparent")
+	if lockErr != nil {
+		err = lockErr
+		return nil, err
+	}
+
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	if ki.VtorcConfig == nil {
+		ki.VtorcConfig = &topodatapb.VtorcConfig{}
+	}
+	ki.VtorcConfig.DisableEmergencyReparent = false
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.EnableVtorcEmergencyReparentResponse{}, nil
 }
 
 // ExecuteFetchAsApp is part of the vtctlservicepb.VtctldServer interface.
