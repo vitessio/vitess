@@ -82,7 +82,7 @@ func TestDeleteWithLimit(t *testing.T) {
 	defer closer()
 
 	// initial rows
-	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (2,10), (3,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
+	mcmp.Exec("insert into s_tbl(id, col) values (1,10), (2,10), (3,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
 
 	// check rows
@@ -92,14 +92,14 @@ func TestDeleteWithLimit(t *testing.T) {
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
 
 	// delete with limit
-	qr := mcmp.Exec(`delete from s_tbl order by num, id limit 3`)
+	qr := mcmp.Exec(`delete from s_tbl order by col, id limit 3`)
 	require.EqualValues(t, 3, qr.RowsAffected)
 
 	qr = mcmp.Exec(`delete from order_tbl where region_id = 1 limit 1`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
 	// check rows
-	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
+	mcmp.AssertMatches(`select id, col from s_tbl order by id`,
 		`[[INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
 	// 2 rows matches but limit is 1, so any one of the row can remain in table.
 	mcmp.AssertMatchesAnyNoCompare(`select region_id, oid, cust_no from order_tbl order by oid`,
@@ -107,15 +107,15 @@ func TestDeleteWithLimit(t *testing.T) {
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
 
 	// delete with limit
-	qr = mcmp.Exec(`delete from s_tbl where num < 20 limit 2`)
+	qr = mcmp.Exec(`delete from s_tbl where col < 20 limit 2`)
 	require.EqualValues(t, 2, qr.RowsAffected)
 
 	qr = mcmp.Exec(`delete from order_tbl limit 5`)
 	require.EqualValues(t, 3, qr.RowsAffected)
 
 	// check rows
-	// 3 rows matches `num < 20` but limit is 2 so any one of them can remain in the table.
-	mcmp.AssertMatchesAnyNoCompare(`select id, num from s_tbl order by id`,
+	// 3 rows matches `col < 20` but limit is 2 so any one of them can remain in the table.
+	mcmp.AssertMatchesAnyNoCompare(`select id, col from s_tbl order by id`,
 		`[[INT64(4) INT64(20)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`,
 		`[[INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(8) INT64(80)]]`,
 		`[[INT64(4) INT64(20)] [INT64(6) INT64(15)] [INT64(8) INT64(80)]]`)
@@ -127,7 +127,7 @@ func TestDeleteWithLimit(t *testing.T) {
 	mcmp.Exec(`delete from order_tbl limit 5`)
 
 	// try with limit again on empty table.
-	qr = mcmp.Exec(`delete from s_tbl where num < 20 limit 2`)
+	qr = mcmp.Exec(`delete from s_tbl where col < 20 limit 2`)
 	require.EqualValues(t, 0, qr.RowsAffected)
 
 	qr = mcmp.Exec(`delete from order_tbl limit 5`)
