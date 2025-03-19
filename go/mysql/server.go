@@ -198,6 +198,9 @@ type Listener struct {
 	// Max limit for connections
 	maxConns uint64
 
+	// maxWaitConns it the number of waiting connections allowed before new connections start getting rejected.
+	maxWaitConns uint32
+
 	// The following parameters are read by multiple connection go
 	// routines.  They are not protected by a mutex, so they
 	// should be set after NewListener, and not changed while
@@ -237,9 +240,6 @@ type Listener struct {
 
 	// RequireSecureTransport configures the server to reject connections from insecure clients
 	RequireSecureTransport bool
-
-	// MaxWaitingConnections specifies the maximum number of connections that can wait to be serviced.
-	maxWaitingConnections int
 }
 
 // NewFromListener creates a new mysql listener from an existing net.Listener
@@ -277,6 +277,7 @@ type ListenerConfig struct {
 	ConnWriteTimeout         time.Duration
 	ConnReadBufferSize       int
 	MaxConns                 uint64
+	MaxWaitConns             uint32
 	AllowClearTextWithoutTLS bool
 }
 
@@ -304,6 +305,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connWriteTimeout:         cfg.ConnWriteTimeout,
 		connReadBufferSize:       cfg.ConnReadBufferSize,
 		maxConns:                 cfg.MaxConns,
+		maxWaitConns:             cfg.MaxWaitConns,
 		AllowClearTextWithoutTLS: sync2.NewAtomicBool(cfg.AllowClearTextWithoutTLS),
 		shutdownCh:               make(chan struct{}),
 	}, nil
