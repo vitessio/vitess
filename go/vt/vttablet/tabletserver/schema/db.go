@@ -114,18 +114,6 @@ SELECT f.name, i.UDF_RETURN_TYPE, f.type FROM mysql.func f left join performance
 `
 	// fetchAggregateUdfs queries fetches all the aggregate user defined functions.
 	fetchAggregateUdfs = `select function_name, function_return_type, function_type from %s.udfs`
-
-	// fetch a list of all partitions
-	fetchPartitions = `select table_name, partition_name from information_schema.partitions where table_schema = database() and partition_name is not null`
-
-	// fetch the estimated number of rows and the clustered index byte size for all tables
-	fetchTableRowCountClusteredIndex = `select table_name, n_rows, clustered_index_size * @@innodb_page_size from mysql.innodb_table_stats where database_name = database()`
-
-	// fetch the byte size of all indexes
-	fetchIndexSizes = `select table_name, index_name, stat_value * @@innodb_page_size from mysql.innodb_index_stats where database_name = database() and stat_name = 'size'`
-
-	// fetch the cardinality of all indexes
-	fetchIndexCardinalities = `select table_name, index_name, max(cardinality) from information_schema.statistics s where table_schema = database() group by s.table_name, s.index_name`
 )
 
 // reloadTablesDataInDB reloads teh tables information we have stored in our database we use for schema-tracking.

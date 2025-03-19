@@ -404,10 +404,10 @@ func TestReloadView(t *testing.T) {
 	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.`tables`", &sqltypes.Result{})
 	// adding query pattern for udfs
 	db.AddQueryPattern("SELECT name.*", &sqltypes.Result{})
-	db.AddQuery("select table_name, partition_name from information_schema.partitions where table_schema = database() and partition_name is not null", &sqltypes.Result{})
-	db.AddQuery("select table_name, n_rows, clustered_index_size * @@innodb_page_size from mysql.innodb_table_stats where database_name = database()", &sqltypes.Result{})
-	db.AddQuery("select table_name, index_name, stat_value * @@innodb_page_size from mysql.innodb_index_stats where database_name = database() and stat_name = 'size'", &sqltypes.Result{})
-	db.AddQuery("select table_name, index_name, max(cardinality) from information_schema.statistics s where table_schema = database() group by s.table_name, s.index_name", &sqltypes.Result{})
+	db.AddQuery(mysql.ShowPartitons, &sqltypes.Result{})
+	db.AddQuery(mysql.ShowTableRowCountClusteredIndex, &sqltypes.Result{})
+	db.AddQuery(mysql.ShowIndexSizes, &sqltypes.Result{})
+	db.AddQuery(mysql.ShowIndexCardinalities, &sqltypes.Result{})
 
 	se.InitDBConfig(cfg.DB.DbaWithDB())
 	hs.Open()

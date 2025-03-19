@@ -262,6 +262,10 @@ func (mysqlGRFlavor) baseShowInnodbTableSizes() string {
 	return InnoDBTableSizes
 }
 
+func (mysqlGRFlavor) showInnodbTables() string {
+	return ShowPartitons
+}
+
 // supportsCapability is part of the Flavor interface.
 func (f mysqlGRFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	return capabilities.MySQLVersionHasCapability(f.serverVersion, capability)

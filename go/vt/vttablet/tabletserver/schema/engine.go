@@ -713,13 +713,19 @@ func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.Conn)
 }
 
 func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Conn) error {
+	if conn.BaseShowIndexSizes() == "" ||
+		conn.BaseShowTableRowCountClusteredIndex() == "" ||
+		conn.BaseShowIndexSizes() == "" ||
+		conn.BaseShowIndexCardinalities() == "" {
+		return nil
+	}
 	// Load all partitions so that we can extract the base table name from tables given as "TABLE#p#PARTITION"
 	type partition struct {
 		table     string
 		partition string
 	}
 
-	partitionsResults, err := conn.Exec(ctx, fetchPartitions, 8192*maxTableCount, false)
+	partitionsResults, err := conn.Exec(ctx, conn.BaseShowPartitions(), 8192*maxTableCount, false)
 	if err != nil {
 		return err
 	}
@@ -740,7 +746,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 		rowBytes int64
 	}
 	tables := make(map[string]table)
-	tableStatsResults, err := conn.Exec(ctx, fetchTableRowCountClusteredIndex, maxTableCount*maxPartitionsPerTable, false)
+	tableStatsResults, err := conn.Exec(ctx, conn.BaseShowTableRowCountClusteredIndex(), maxTableCount*maxPartitionsPerTable, false)
 	if err != nil {
 		return err
 	}
@@ -771,7 +777,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 	indexes := make(map[[2]string]index)
 
 	// Load the byte sizes of all indexes. Results contain one row for every index/partition combination.
-	bytesResults, err := conn.Exec(ctx, fetchIndexSizes, maxTableCount*maxIndexesPerTable, false)
+	bytesResults, err := conn.Exec(ctx, conn.BaseShowIndexSizes(), maxTableCount*maxIndexesPerTable, false)
 	if err != nil {
 		return err
 	}
@@ -797,7 +803,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 	}
 
 	// Load index cardinalities. Results contain one row for every index (pre-aggregated across partitions).
-	cardinalityResults, err := conn.Exec(ctx, fetchIndexCardinalities, maxTableCount*maxPartitionsPerTable, false)
+	cardinalityResults, err := conn.Exec(ctx, conn.BaseShowIndexCardinalities(), maxTableCount*maxPartitionsPerTable, false)
 	if err != nil {
 		return err
 	}
