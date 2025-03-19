@@ -879,9 +879,7 @@ func (m *CancelSchemaMigrationRequest) CloneVT() *CancelSchemaMigrationRequest {
 	r := new(CancelSchemaMigrationRequest)
 	r.Keyspace = m.Keyspace
 	r.Uuid = m.Uuid
-	if m.CallerId != nil {
-		r.CallerId = m.CallerId.CloneVT()
-	}
+	r.CallerId = m.CallerId.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1055,9 +1053,7 @@ func (m *CleanupSchemaMigrationRequest) CloneVT() *CleanupSchemaMigrationRequest
 	r := new(CleanupSchemaMigrationRequest)
 	r.Keyspace = m.Keyspace
 	r.Uuid = m.Uuid
-	if m.CallerId != nil {
-		r.CallerId = m.CallerId.CloneVT()
-	}
+	r.CallerId = m.CallerId.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1099,9 +1095,7 @@ func (m *CompleteSchemaMigrationRequest) CloneVT() *CompleteSchemaMigrationReque
 	r := new(CompleteSchemaMigrationRequest)
 	r.Keyspace = m.Keyspace
 	r.Uuid = m.Uuid
-	if m.CallerId != nil {
-		r.CallerId = m.CallerId.CloneVT()
-	}
+	r.CallerId = m.CallerId.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1738,9 +1732,7 @@ func (m *ForceCutOverSchemaMigrationRequest) CloneVT() *ForceCutOverSchemaMigrat
 	r := new(ForceCutOverSchemaMigrationRequest)
 	r.Keyspace = m.Keyspace
 	r.Uuid = m.Uuid
-	if m.CallerId != nil {
-		r.CallerId = m.CallerId.CloneVT()
-	}
+	r.CallerId = m.CallerId.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -3080,9 +3072,7 @@ func (m *LaunchSchemaMigrationRequest) CloneVT() *LaunchSchemaMigrationRequest {
 	r := new(LaunchSchemaMigrationRequest)
 	r.Keyspace = m.Keyspace
 	r.Uuid = m.Uuid
-	if m.CallerId != nil {
-		r.CallerId = m.CallerId.CloneVT()
-	}
+	r.CallerId = m.CallerId.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -4284,9 +4274,7 @@ func (m *RetrySchemaMigrationRequest) CloneVT() *RetrySchemaMigrationRequest {
 	r := new(RetrySchemaMigrationRequest)
 	r.Keyspace = m.Keyspace
 	r.Uuid = m.Uuid
-	if m.CallerId != nil {
-		r.CallerId = m.CallerId.CloneVT()
-	}
+	r.CallerId = m.CallerId.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
