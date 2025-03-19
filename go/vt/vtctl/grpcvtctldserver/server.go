@@ -1266,7 +1266,7 @@ func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.Delet
 	return &vtctldatapb.DeleteTabletsResponse{}, nil
 }
 
-// DisableVtorcEmergencyReparent disables VTOrc's usage of EmergencyReparentShard on a given keyspace.
+// DisableVtorcEmergencyReparent disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
 func (s *VtctldServer) DisableVtorcEmergencyReparent(ctx context.Context, req *vtctldatapb.DisableVtorcEmergencyReparentRequest) (resp *vtctldatapb.DisableVtorcEmergencyReparentResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.DisableVtorcEmergencyReparent")
 	defer span.Finish()
@@ -1372,7 +1372,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	return resp, err
 }
 
-// EnableVtorcEmergencyReparent disables VTOrc's usage of EmergencyReparentShard on a given keyspace.
+// EnableVtorcEmergencyReparent enables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
 func (s *VtctldServer) EnableVtorcEmergencyReparent(ctx context.Context, req *vtctldatapb.EnableVtorcEmergencyReparentRequest) (resp *vtctldatapb.EnableVtorcEmergencyReparentResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.EnableVtorcEmergencyReparent")
 	defer span.Finish()

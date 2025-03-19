@@ -61,21 +61,21 @@ Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandDeleteKeyspace,
 	}
-	// DisableVtorcEmergencyReparent disables VTOrc's use of EmergencyReparentShard recoveries on a given keyspace.
+	// DisableVtorcEmergencyReparent disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
 	DisableVtorcEmergencyReparent = &cobra.Command{
 		Use:                   "DisableVtorcEmergencyReparent <keyspace>",
-		Short:                 "Disables VTOrc's use of EmergencyReparentShard recoveries on a given keyspace.",
+		Short:                 "Disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"disablevtorcemergencyreparent"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandDisableVtorcEmergencyReparent,
 	}
-	// EnableVtorcEmergencyReparent enables VTOrc's use of EmergencyReparentShard recoveries on a given keyspace.
+	// EnableVtorcEmergencyReparent enables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
 	EnableVtorcEmergencyReparent = &cobra.Command{
 		Use:                   "EnableVtorcEmergencyReparent <keyspace>",
-		Short:                 "Enables VTOrc's use of EmergencyReparentShard recoveries on a given keyspace.",
+		Short:                 "Enables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.",
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"disablevtorcemergencyreparent"},
+		Aliases:               []string{"enablevtorcemergencyreparent"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandEnableVtorcEmergencyReparent,
 	}

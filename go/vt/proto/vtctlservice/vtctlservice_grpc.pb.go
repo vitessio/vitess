@@ -206,12 +206,12 @@ type VtctldClient interface {
 	DeleteSrvVSchema(ctx context.Context, in *vtctldata.DeleteSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.DeleteSrvVSchemaResponse, error)
 	// DeleteTablets deletes one or more tablets from the topology.
 	DeleteTablets(ctx context.Context, in *vtctldata.DeleteTabletsRequest, opts ...grpc.CallOption) (*vtctldata.DeleteTabletsResponse, error)
-	// DisableVtorcEmergencyReparent disables VTOrc's usage of EmergencyReparentShard on a given keyspace.
+	// DisableVtorcEmergencyReparent disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
 	DisableVtorcEmergencyReparent(ctx context.Context, in *vtctldata.DisableVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldata.DisableVtorcEmergencyReparentResponse, error)
 	// EmergencyReparentShard reparents the shard to the new primary. It assumes
 	// the old primary is dead or otherwise not responding.
 	EmergencyReparentShard(ctx context.Context, in *vtctldata.EmergencyReparentShardRequest, opts ...grpc.CallOption) (*vtctldata.EmergencyReparentShardResponse, error)
-	// EnableVtorcEmergencyReparent disables VTOrc's usage of EmergencyReparentShard on a given keyspace.
+	// EnableVtorcEmergencyReparent enables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
 	EnableVtorcEmergencyReparent(ctx context.Context, in *vtctldata.EnableVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldata.EnableVtorcEmergencyReparentResponse, error)
 	// ExecuteFetchAsApp executes a SQL query on the remote tablet as the App user.
 	ExecuteFetchAsApp(ctx context.Context, in *vtctldata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteFetchAsAppResponse, error)
@@ -1799,12 +1799,12 @@ type VtctldServer interface {
 	DeleteSrvVSchema(context.Context, *vtctldata.DeleteSrvVSchemaRequest) (*vtctldata.DeleteSrvVSchemaResponse, error)
 	// DeleteTablets deletes one or more tablets from the topology.
 	DeleteTablets(context.Context, *vtctldata.DeleteTabletsRequest) (*vtctldata.DeleteTabletsResponse, error)
-	// DisableVtorcEmergencyReparent disables VTOrc's usage of EmergencyReparentShard on a given keyspace.
+	// DisableVtorcEmergencyReparent disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
 	DisableVtorcEmergencyReparent(context.Context, *vtctldata.DisableVtorcEmergencyReparentRequest) (*vtctldata.DisableVtorcEmergencyReparentResponse, error)
 	// EmergencyReparentShard reparents the shard to the new primary. It assumes
 	// the old primary is dead or otherwise not responding.
 	EmergencyReparentShard(context.Context, *vtctldata.EmergencyReparentShardRequest) (*vtctldata.EmergencyReparentShardResponse, error)
-	// EnableVtorcEmergencyReparent disables VTOrc's usage of EmergencyReparentShard on a given keyspace.
+	// EnableVtorcEmergencyReparent enables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
 	EnableVtorcEmergencyReparent(context.Context, *vtctldata.EnableVtorcEmergencyReparentRequest) (*vtctldata.EnableVtorcEmergencyReparentResponse, error)
 	// ExecuteFetchAsApp executes a SQL query on the remote tablet as the App user.
 	ExecuteFetchAsApp(context.Context, *vtctldata.ExecuteFetchAsAppRequest) (*vtctldata.ExecuteFetchAsAppResponse, error)
