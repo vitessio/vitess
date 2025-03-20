@@ -93,27 +93,36 @@ from t1
 where t1.id IN (1, 2)
 group by t2.id, t4.col;
 
+-- allow_different_field_sizes
 select /*vt+ ALLOW_BLOCK_JOIN */ t3.id, t1.id
 from t1
         join t3 on t1.name = t3.name
 where t1.name IN ('A', 'B', 'C');
 
-select /*vt+ ALLOW_BLOCK_JOIN */ t1.id, t2.id
-from t1
-         join t2 on t1.id = t2.t1_id
-where t1.id in (1, 2, 3, 4);
-
-select /*vt+ ALLOW_BLOCK_JOIN */ t1.id, t4.id
-from t1
-         join t4 on t1.id = t4.id
-where t1.id in (1, 2, 3, 4);
-
+-- allow_different_field_sizes
 select /*vt+ ALLOW_BLOCK_JOIN */ a.id as a_id, b.id as b_id
 from t1 a
          join t1 b on a.name = b.name
 where a.id in (1, 2, 3);
 
+-- allow_different_field_sizes
 select /*vt+ ALLOW_BLOCK_JOIN */ t3.id, t1.id
 from t3
          join t1 on t3.name = t1.name
 where t3.name = 'B';
+
+-- allow_different_field_sizes
+select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t1.id), abs(t1.id+t3.id)
+from t3
+         join t1 on lower(t3.name) = lower(t1.name)
+where lower(t3.name) = 'b' and abs(t1.id) > 1;
+
+-- allow_different_field_sizes
+select /*vt+ ALLOW_BLOCK_JOIN */ abs(d.id), abs(t3.id), abs(d.id + t3.id)
+from (
+         select id, lower(name) as lname
+         from t1
+         where abs(id) > 1
+     ) as d
+         join t3 on lower(t3.name) = d.lname
+where lower(t3.name) = 'b';

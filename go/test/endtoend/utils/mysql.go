@@ -24,6 +24,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -273,10 +274,11 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field,
 
 		// Here we want to fail if we have totally different types for instance: "INT64" vs "TIMESTAMP"
 		// We do this by checking the length of the regexp slices and checking the second item of the slices (the real type i.e. "INT")
-		if len(vtMatches) != 3 || len(vtMatches) != len(myMatches) || vtMatches[1] != myMatches[1] {
+		if len(vtMatches) != 3 || len(vtMatches) != len(myMatches) {
 			fail()
 			return
 		}
+
 		vtVal, vtErr := strconv.Atoi(vtMatches[2])
 		myVal, myErr := strconv.Atoi(myMatches[2])
 		if vtErr != nil || myErr != nil {
@@ -284,11 +286,24 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field,
 			return
 		}
 
-		// Types the same now, however, if the size of the type is smaller on Vitess compared to MySQL
-		// we need to fail. We can allow superset but not the opposite.
-		if !allowAnyFieldSize && vtVal < myVal {
-			fail()
-			return
+		switch allowAnyFieldSize {
+		case true:
+			// when we allow any field size, we want to allow the case where MySQL returns an unsigned
+			// type and Vitess returns a signed type with a larger size than MySQL.
+			if strings.HasPrefix(myMatches[1], "U") {
+				if myMatches[1][1:] != vtMatches[1] || vtVal <= myVal {
+					fail()
+					return
+				}
+			} else if myMatches[1] != vtMatches[1] {
+				fail()
+				return
+			}
+		case false:
+			if myMatches[1] != vtMatches[1] || vtVal < myVal {
+				fail()
+				return
+			}
 		}
 	}
 
