@@ -3364,6 +3364,11 @@ func TestNormalize(t *testing.T) {
 			from: "create table t (id boolean primary key, b boolean)",
 			to:   "CREATE TABLE `t` (\n\t`id` tinyint(1),\n\t`b` tinyint(1),\n\tPRIMARY KEY (`id`)\n)",
 		},
+		{
+			name: "normalize text and blog types with length information",
+			from: "create table t (id int primary key, t115 text(115))",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`t115` tinytext,\n\tPRIMARY KEY (`id`)\n)",
+		},
 	}
 	env := NewTestEnv()
 	for _, ts := range tt {

@@ -772,6 +772,39 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			}
 		}
 	}
+	for _, colEntity := range c.ColumnDefinitionEntities() {
+		col := colEntity.ColumnDefinition
+		if col.Type.Length == nil {
+			continue
+		}
+		colLength := *col.Type.Length
+		if col.Type.Type == "blob" {
+			if colLength <= TinyBlogStorageLength {
+				col.Type.Type = "tinyblob"
+			} else if colLength <= BlobStorageLength {
+				col.Type.Type = "blob"
+			} else if colLength <= MediumBlobStorageLength {
+				col.Type.Type = "mediumblob"
+			} else {
+				col.Type.Type = "longblob"
+			}
+		}
+		if col.Type.Type == "text" {
+			if _, _, _, maxWidth, _, err := colEntity.InferCharsetCollate(); err == nil {
+				lengthByCharset := colLength * maxWidth
+				if lengthByCharset <= TinyBlogStorageLength {
+					col.Type.Type = "tinytext"
+				} else if lengthByCharset <= BlobStorageLength {
+					col.Type.Type = "text"
+				} else if lengthByCharset <= MediumBlobStorageLength {
+					col.Type.Type = "mediumtext"
+				} else {
+					col.Type.Type = "longtext"
+				}
+				col.Type.Length = nil
+			}
+		}
+	}
 }
 
 func (c *CreateTableEntity) normalizeIndexOptions() {
