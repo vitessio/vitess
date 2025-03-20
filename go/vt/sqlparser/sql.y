@@ -5310,6 +5310,9 @@ alter_table_statement_part:
     }
     ddl.TableSpec.AddColumn($4.(*ColumnDefinition))
     ddl.Column = $4.(*ColumnDefinition).Name
+    if ddl.TableSpec.Constraints != nil {
+    	ddl.ConstraintAction = AddStr
+    }
     $$ = ddl
   }
 | ADD column_opt column_definition column_order_opt
@@ -5326,6 +5329,9 @@ alter_table_statement_part:
     }
     ddl.TableSpec.AddColumn($3.(*ColumnDefinition))
     ddl.Column = $3.(*ColumnDefinition).Name
+    if ddl.TableSpec.Constraints != nil {
+    	ddl.ConstraintAction = AddStr
+    }
     $$ = ddl
   }
 | ADD index_or_key name_opt using_opt '(' index_column_list ')' index_option_list_opt
