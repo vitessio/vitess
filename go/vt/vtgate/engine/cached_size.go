@@ -1201,6 +1201,45 @@ func (cached *SimpleProjection) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Specialized) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Conditions []vitess.io/vitess/go/vt/vtgate/engine.SpecializedCondition
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Conditions)) * int64(32))
+		for _, elem := range cached.Conditions {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field Generic vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Generic.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Specific vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Specific.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *SpecializedCondition) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field A string
+	size += hack.RuntimeAllocSize(int64(len(cached.A)))
+	// field B string
+	size += hack.RuntimeAllocSize(int64(len(cached.B)))
+	return size
+}
 func (cached *SysVarCheckAndIgnore) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
