@@ -290,7 +290,7 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field,
 		case true:
 			// when we allow any field size, we want to allow the case where MySQL returns an unsigned
 			// type and Vitess returns a signed type with a larger size than MySQL.
-			if strings.HasPrefix(myMatches[1], "U") {
+			if strings.HasPrefix(myMatches[1], "U") && !strings.HasPrefix(vtMatches[1], "U") {
 				if myMatches[1][1:] != vtMatches[1] || vtVal <= myVal {
 					fail()
 					return
