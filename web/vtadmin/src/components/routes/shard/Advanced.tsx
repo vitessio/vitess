@@ -397,7 +397,9 @@ const Advanced: React.FC = () => {
                                                 renderItem={(t: vtadmin.Tablet) => (
                                                     <div className="flex items-center">
                                                         <span>{formatAlias(t.tablet?.alias)}</span>
-                                                        <span className="text-gray-500 text-sm mx-2">{t.tablet?.hostname || 'Unknown'}</span>
+                                                        <span className="text-gray-500 text-sm mx-2">
+                                                            {t.tablet?.hostname || 'Unknown'}
+                                                        </span>
                                                         <span>({formatDisplayType(t)})</span>
                                                     </div>
                                                 )}
@@ -485,7 +487,9 @@ const Advanced: React.FC = () => {
                                                 renderItem={(t: vtadmin.Tablet) => (
                                                     <div className="flex items-center">
                                                         <span>{formatAlias(t.tablet?.alias)}</span>
-                                                        <span className="text-gray-500 text-sm mx-2">{t.tablet?.hostname || 'Unknown'}</span>
+                                                        <span className="text-gray-500 text-sm mx-2">
+                                                            {t.tablet?.hostname || 'Unknown'}
+                                                        </span>
                                                         <span>({formatDisplayType(t)})</span>
                                                     </div>
                                                 )}
@@ -523,7 +527,9 @@ const Advanced: React.FC = () => {
                                                 renderItem={(t: vtadmin.Tablet) => (
                                                     <div className="flex items-center">
                                                         <span>{formatAlias(t.tablet?.alias)}</span>
-                                                        <span className="text-gray-500 text-sm mx-2">{t.tablet?.hostname || 'Unknown'}</span>
+                                                        <span className="text-gray-500 text-sm mx-2">
+                                                            {t.tablet?.hostname || 'Unknown'}
+                                                        </span>
                                                         <span>({formatDisplayType(t)})</span>
                                                     </div>
                                                 )}
