@@ -797,11 +797,12 @@ func TestBlockJoin(t *testing.T) {
 			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1 from t1 join tbl where t1.id2 = tbl.id")
 			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1 from t1 join tbl where t1.id2 = tbl.id order by t1.id1")
 
-			// WIP - Failing query, see onecase.json
 			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1+t1.id2 as mas from t1 join tbl where t1.id2 = tbl.id order by mas")
 
 			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1, tbl.nonunq_col from t1 join tbl where t1.id2 = tbl.id")
 			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1+t1.id2 as mas, tbl.unq_col, t1.id2 from t1 join tbl where t1.id2 = tbl.id and tbl.id > 50 order by mas")
+
+			utils.AssertMatches(t, mcmp.VtConn, "select /*vt+ ALLOW_BLOCK_JOIN */ t1.id2 from t1 join tbl where t1.id2 = tbl.id and t1.id2 = 500", "[[INT32(500)]]")
 		})
 	}
 }
