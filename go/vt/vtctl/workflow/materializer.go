@@ -805,3 +805,41 @@ func (mz *materializer) IsMultiTenantMigration() bool {
 	}
 	return false
 }
+
+// Add tables to _vt.copy_state table.
+func (mz *materializer) insertTablesInCopyStateTable(ctx context.Context, streamsByTargetShard map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream) error {
+	var mu sync.Mutex
+	return forAllShards(mz.targetShards, func(si *topo.ShardInfo) error {
+		tablet, err := mz.ts.GetTablet(ctx, si.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+
+		var streams []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream
+		func() {
+			mu.Lock()
+			defer mu.Unlock()
+			streams = streamsByTargetShard[tablet.Shard]
+		}()
+		if len(streams) == 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to read workflow %s on shard %s/%s", mz.ms.Workflow, tablet.Keyspace, tablet.Shard)
+		}
+
+		var buf strings.Builder
+		buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
+		prefix := ""
+		for _, stream := range streams {
+			for _, ts := range mz.ms.TableSettings {
+				fmt.Fprintf(&buf, "%s(%d, %s)", prefix, stream.Id, encodeString(ts.TargetTable))
+				prefix = ", "
+			}
+		}
+		_, err = mz.tmc.ExecuteFetchAsAllPrivs(ctx, tablet.Tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
+			Query: []byte(buf.String()),
+		})
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to insert tables copy state for workflow %s on shard %s/%s", mz.ms.Workflow, tablet.Keyspace, tablet.Shard)
+		}
+		return nil
+	})
+}

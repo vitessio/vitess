@@ -55,6 +55,9 @@ enum MaterializationIntent {
 
   // CREATELOOKUPINDEX is when we are creating a CreateLookupIndex flow
   CREATELOOKUPINDEX = 2;
+
+  // REFERENCE is when we are creating a materialization for reference tables
+  REFERENCE = 3;
 }
 
 // TableMaterializeSttings contains the settings for one table.
@@ -1298,6 +1301,7 @@ message MaterializeAddTablesRequest {
   string workflow = 1;
   string keyspace = 2;
   repeated TableMaterializeSettings table_settings = 3;
+  MaterializationIntent materialization_intent = 4;
 }
 
 message MaterializeAddTablesResponse {

@@ -50950,7 +50950,8 @@ export namespace vtctldata {
     enum MaterializationIntent {
         CUSTOM = 0,
         MOVETABLES = 1,
-        CREATELOOKUPINDEX = 2
+        CREATELOOKUPINDEX = 2,
+        REFERENCE = 3
     }
 
     /** Properties of a TableMaterializeSettings. */
@@ -67383,6 +67384,9 @@ export namespace vtctldata {
 
         /** MaterializeAddTablesRequest table_settings */
         table_settings?: (vtctldata.ITableMaterializeSettings[]|null);
+
+        /** MaterializeAddTablesRequest materialization_intent */
+        materialization_intent?: (vtctldata.MaterializationIntent|null);
     }
 
     /** Represents a MaterializeAddTablesRequest. */
@@ -67402,6 +67406,9 @@ export namespace vtctldata {
 
         /** MaterializeAddTablesRequest table_settings. */
         public table_settings: vtctldata.ITableMaterializeSettings[];
+
+        /** MaterializeAddTablesRequest materialization_intent. */
+        public materialization_intent: vtctldata.MaterializationIntent;
 
         /**
          * Creates a new MaterializeAddTablesRequest instance using the specified properties.

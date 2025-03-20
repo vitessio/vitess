@@ -30,8 +30,8 @@ import (
 )
 
 var (
-	addReferenceTablesOptions = struct {
-		Tables []string
+	updateOptions = struct {
+		AddReferenceTables []string
 	}{}
 
 	// base is the base command for all actions related to Materialize.
@@ -43,35 +43,38 @@ var (
 		Args:                  cobra.ExactArgs(1),
 	}
 
-	// addReferenceTables makes a MaterializeAddTables gRPC call to a vtctld.
-	addReferenceTables = &cobra.Command{
-		Use:     "add-reference-tables --tables='table1,table2'",
-		Short:   "Add reference tables to the existing materialize workflow",
-		Aliases: []string{"Add-Reference-Tables"},
+	// update is the command for updating existing materialize workflow.
+	// This can be helpful if we plan to add other actions as well such as
+	// removing tables from workflow.
+	update = &cobra.Command{
+		Use:     "update --add-tables='table1,table2'",
+		Short:   "Update existing materialize workflow.",
+		Aliases: []string{"Update"},
 		Args:    cobra.NoArgs,
-		RunE:    commandAddReferenceTables,
+		RunE:    commandUpdate,
 	}
 )
 
-func commandAddReferenceTables(cmd *cobra.Command, args []string) error {
+func commandUpdate(cmd *cobra.Command, args []string) error {
 	tableSettings := []*vtctldatapb.TableMaterializeSettings{}
-	for _, table := range addReferenceTablesOptions.Tables {
+	for _, table := range updateOptions.AddReferenceTables {
 		tableSettings = append(tableSettings, &vtctldatapb.TableMaterializeSettings{
 			TargetTable: table,
 		})
 	}
 
 	_, err := common.GetClient().MaterializeAddTables(common.GetCommandCtx(), &vtctldatapb.MaterializeAddTablesRequest{
-		Workflow:      common.BaseOptions.Workflow,
-		Keyspace:      common.BaseOptions.TargetKeyspace,
-		TableSettings: tableSettings,
+		Workflow:              common.BaseOptions.Workflow,
+		Keyspace:              common.BaseOptions.TargetKeyspace,
+		TableSettings:         tableSettings,
+		MaterializationIntent: vtctldatapb.MaterializationIntent_REFERENCE,
 	})
 
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Reference table(s) %s added to the workflow %s. Use show to view the status.\n",
-		strings.Join(addReferenceTablesOptions.Tables, ", "), common.BaseOptions.Workflow)
+	fmt.Printf("Table(s) %s added to the workflow %s. Use show to view the status.\n",
+		strings.Join(updateOptions.AddReferenceTables, ", "), common.BaseOptions.Workflow)
 	return nil
 }
 
@@ -92,9 +95,9 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringSliceVarP(&common.CreateOptions.ReferenceTables, "reference-tables", "r", nil, "Used to specify the reference tables to materialize on every target shard.")
 	base.AddCommand(create)
 
-	addReferenceTables.Flags().StringSliceVar(&addReferenceTablesOptions.Tables, "tables", nil, "Used to specify the reference tables to be added to the existing workflow")
-	addReferenceTables.MarkFlagRequired("tables")
-	base.AddCommand(addReferenceTables)
+	update.Flags().StringSliceVar(&updateOptions.AddReferenceTables, "add-reference-tables", nil, "Used to specify the reference tables to be added to the existing workflow")
+	update.MarkFlagRequired("add-reference-tables")
+	base.AddCommand(update)
 
 	// Generic workflow commands.
 	opts := &common.SubCommandsOpts{
