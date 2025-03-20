@@ -159,6 +159,8 @@ message Session {
 
   // MigrationContext
   string migration_context = 27;
+
+  bool error_until_rollback = 28;
 }
 
 // PrepareData keeps the prepared statement and other information related for execution of it.
