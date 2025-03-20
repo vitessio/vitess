@@ -47,8 +47,7 @@
       "TablesUsed": [
         "user.music"
       ]
-    },
-    "skip_e2e": true
+    }
   },
   {
     "comment": "'*' expression for simple route",
