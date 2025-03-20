@@ -518,7 +518,8 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) (bool, 
 			return false, nil
 		}
 
-		return aVal.Type == bVal.Type && bytes.Equal(aVal.Value, bVal.Value), &engine.SpecializedCondition{A: a, B: b}
+		return aVal.Type == bVal.Type && bytes.Equal(aVal.Value, bVal.Value),
+			&engine.SpecializedCondition{A: a.Name, B: b.Name}
 
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)

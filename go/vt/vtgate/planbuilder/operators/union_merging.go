@@ -164,7 +164,9 @@ func tryMergeUnionShardedRouting(
 		if aVdx == bVdx {
 			equal, conditions := gen4ValuesEqual(ctx, aExpr, bExpr)
 			if equal {
-				return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, tblA, conditions)
+				allCond := append(routeA.Conditions, routeB.Conditions...)
+				allCond = append(allCond, conditions...)
+				return createMergedUnion(ctx, routeA, routeB, exprsA, exprsB, distinct, tblA, allCond)
 			}
 		}
 	}

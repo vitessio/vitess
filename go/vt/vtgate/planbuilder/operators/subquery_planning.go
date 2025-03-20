@@ -644,6 +644,8 @@ func (s *subqueryRouteMerger) mergeShardedRouting(
 }
 
 func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing, conditions []engine.SpecializedCondition) *Route {
+	allCond := append(outer.Conditions, inner.Conditions...)
+	allCond = append(allCond, conditions...)
 	if !s.subq.TopLevel {
 		// if the subquery we are merging isn't a top level predicate, we can't use it for routing
 		return &Route{
@@ -652,6 +654,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 			Routing:       outer.Routing,
 			Ordering:      outer.Ordering,
 			ResultColumns: outer.ResultColumns,
+			Conditions:    allCond,
 		}
 	}
 	_, isSharded := r.(*ShardedRouting)
@@ -670,7 +673,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		Routing:       r,
 		Ordering:      s.outer.Ordering,
 		ResultColumns: s.outer.ResultColumns,
-		Conditions:    conditions,
+		Conditions:    allCond,
 	}
 }
 

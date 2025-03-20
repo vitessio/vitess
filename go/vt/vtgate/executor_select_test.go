@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -3113,6 +3112,25 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	assert.Empty(t, sbc2.Queries)
 }
 
+func assertSpecializedPlanCondition(t *testing.T, executor *Executor, sql string, condition ...engine.SpecializedCondition) {
+	var plan *engine.Plan
+	executor.ForEachPlan(func(p *engine.Plan) bool {
+		if p.Original == sql {
+			plan = p
+			return false
+		}
+		return true
+	})
+	assert.NotNil(t, plan, "plan not found")
+	sp, ok := plan.Instructions.(*engine.Specialized)
+	require.True(t, ok, "specialized plan not created")
+	require.Equal(t, len(condition), len(sp.Conditions), "specialized plan conditions count mismatch")
+	for i, cond := range condition {
+		assert.Equal(t, cond.A, sp.Conditions[i].A)
+		assert.Equal(t, cond.B, sp.Conditions[i].B)
+	}
+}
+
 func TestJoinSpecializedPlan(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	logChan := executor.queryLogger.Subscribe("Test")
@@ -3127,18 +3145,7 @@ func TestJoinSpecializedPlan(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
 	require.NoError(t, err)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	found := false
-	executor.ForEachPlan(func(plan *engine.Plan) bool {
-		if plan.Original == sql {
-			planOutput, err := json.MarshalIndent(engine.PrimitiveToPlanDescription(plan.Instructions, nil), "", "  ")
-			require.NoError(t, err)
-			fmt.Println(string(planOutput))
-			found = true
-			return false
-		}
-		return true
-	})
-	assert.True(t, found, "plan not found")
+	assertSpecializedPlanCondition(t, executor, sql, engine.SpecializedCondition{A: "v1", B: "v2"})
 
 	bv = map[string]*querypb.BindVariable{
 		"v1": sqltypes.Int64BindVariable(2),
@@ -3151,6 +3158,42 @@ func TestJoinSpecializedPlan(t *testing.T) {
 	bv = map[string]*querypb.BindVariable{
 		"v1": sqltypes.Int64BindVariable(200),
 		"v2": sqltypes.Int64BindVariable(200),
+	}
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.NoError(t, err)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
+}
+
+func TestThreeJoinSpecializedPlan(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	sql := "select count(*) from `user` u1, `user` u2, `user` u3 where u1.id = ? and u2.id = ? and u3.id = ?"
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+	bv := map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(1),
+		"v2": sqltypes.Int64BindVariable(1),
+		"v3": sqltypes.Int64BindVariable(1),
+	}
+	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.NoError(t, err)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
+	assertSpecializedPlanCondition(t, executor, sql, engine.SpecializedCondition{A: "v1", B: "v2"}, engine.SpecializedCondition{A: "v3", B: "v1"})
+
+	bv = map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(1),
+		"v2": sqltypes.Int64BindVariable(1),
+		"v3": sqltypes.Int64BindVariable(2),
+	}
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.NoError(t, err)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 3)
+
+	bv = map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(200),
+		"v2": sqltypes.Int64BindVariable(200),
+		"v3": sqltypes.Int64BindVariable(200),
 	}
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
 	require.NoError(t, err)
@@ -3171,18 +3214,7 @@ func TestUnionSpecializedPlan(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
 	require.NoError(t, err)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	found := false
-	executor.ForEachPlan(func(plan *engine.Plan) bool {
-		if plan.Original == sql {
-			planOutput, err := json.MarshalIndent(engine.PrimitiveToPlanDescription(plan.Instructions, nil), "", "  ")
-			require.NoError(t, err)
-			fmt.Println(string(planOutput))
-			found = true
-			return false
-		}
-		return true
-	})
-	assert.True(t, found, "plan not found")
+	assertSpecializedPlanCondition(t, executor, sql, engine.SpecializedCondition{A: "v1", B: "v2"})
 
 	bv = map[string]*querypb.BindVariable{
 		"v1": sqltypes.Int64BindVariable(2),
@@ -3215,18 +3247,7 @@ func TestSubquerySpecializedPlan(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
 	require.NoError(t, err)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	found := false
-	executor.ForEachPlan(func(plan *engine.Plan) bool {
-		if plan.Original == sql {
-			planOutput, err := json.MarshalIndent(engine.PrimitiveToPlanDescription(plan.Instructions, nil), "", "  ")
-			require.NoError(t, err)
-			fmt.Println(string(planOutput))
-			found = true
-			return false
-		}
-		return true
-	})
-	assert.True(t, found, "plan not found")
+	assertSpecializedPlanCondition(t, executor, sql, engine.SpecializedCondition{A: "v2", B: "v1"})
 
 	bv = map[string]*querypb.BindVariable{
 		"v1": sqltypes.Int64BindVariable(2),

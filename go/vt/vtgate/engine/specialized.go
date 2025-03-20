@@ -23,13 +23,12 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // SpecializedCondition lists arguments that need to point to the same value for the plan to be used
 type SpecializedCondition struct {
 	// these arguments need to have equal values for this condition to be true
-	A, B *sqlparser.Argument
+	A, B string
 }
 
 // Specialized is a plan that can be used when certain conditions are met.
@@ -78,30 +77,26 @@ func (s *Specialized) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 }
 
 func (s *Specialized) Inputs() ([]Primitive, []map[string]any) {
-	return []Primitive{s.Generic, s.Specific}, []map[string]any{{inputName: "Generic"}, {inputName: "Specific"}}
+	var conds []string
+	for _, condition := range s.Conditions {
+		conds = append(conds, condition.A+"="+condition.B)
+	}
+	return []Primitive{s.Generic, s.Specific}, []map[string]any{{inputName: "Generic"}, {inputName: "Specific", "Conditions": strings.Join(conds, ",")}}
 }
 
 func (s *Specialized) description() PrimitiveDescription {
-	var conds []string
-	for _, condition := range s.Conditions {
-		conds = append(conds, condition.A.Name+"="+condition.B.Name)
-	}
-
 	return PrimitiveDescription{
 		OperatorType: s.RouteType(),
-		Other: map[string]interface{}{
-			"Conditions": strings.Join(conds, ","),
-		},
 	}
 }
 
 func (s *Specialized) metCondition(bindVars map[string]*querypb.BindVariable) bool {
 	for _, condition := range s.Conditions {
-		aVal, ok := bindVars[condition.A.Name]
+		aVal, ok := bindVars[condition.A]
 		if !ok {
 			return false
 		}
-		bVal, ok := bindVars[condition.B.Name]
+		bVal, ok := bindVars[condition.B]
 		if !ok {
 			return false
 		}
