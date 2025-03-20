@@ -5451,6 +5451,33 @@
     }
   },
   {
+    "comment": "Joining with a subquery that uses an aggregate column and an `EqualUnique` route with additional subquery can be merged together",
+    "query": "SELECT music.id FROM music INNER JOIN (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5 AND music.col NOT IN (SELECT col FROM user WHERE user.id = 5)) other ON other.maxt = music.id",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT music.id FROM music INNER JOIN (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5 AND music.col NOT IN (SELECT col FROM user WHERE user.id = 5)) other ON other.maxt = music.id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from (select max(id) as maxt from music where 1 != 1) as other, music where 1 != 1",
+        "Query": "select music.id from (select max(id) as maxt from music where music.user_id = 5 and music.col not in (select col from `user` where `user`.id = 5)) as other, music where other.maxt = music.id",
+        "Table": "music",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
     "comment": "Joining with a subquery that uses an `EqualUnique` route can be merged",
     "query": "SELECT music.id FROM music INNER JOIN (SELECT id FROM music WHERE music.user_id = 5) other ON other.id = music.id",
     "plan": {
