@@ -155,6 +155,51 @@
           "name": "hash"
         }
       ]
+    },
+    "example": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ],
+      "columns": [
+        {
+          "name": "foo",
+          "type": "ENUM",
+          "values": ["a", "b"]
+        }
+      ]
+    },
+    "example_enum_unknown": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ],
+      "columns": [
+        {
+          "name": "foo",
+          "type": "ENUM",
+          "values": ["a", "b"]
+        }
+      ]
+    },
+    "example_set_unknown": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ],
+      "columns": [
+        {
+          "name": "foo",
+          "type": "SET",
+          "values": ["a", "b"]
+        }
+      ]
     }
   }
 }
