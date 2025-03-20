@@ -17,7 +17,7 @@ jobs:
   build:
     timeout-minutes: 60
     name: Run endtoend tests on Cluster (vreplication_vtctldclient_vdiff2_movetables_tz)
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    runs-on: oracle-16cpu-64gb-x86-64
 
     steps:
     - name: Skip CI
