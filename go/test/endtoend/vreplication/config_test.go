@@ -69,7 +69,13 @@ create table  `+"`blüb_tbl`"+` (id int, val1 varchar(20), `+"`blöb1`"+` blob, 
 create table reftable (id int, val1 varchar(20), primary key(id), key(val1));
 create table loadtest (id int, name varchar(256), primary key(id), key(name));
 create table nopk (name varchar(128), age int unsigned);
+<<<<<<< HEAD
 `, strings.Join(customerTypes, ","))
+=======
+create table ukTable (id1 int not null, id2 int not null, name varchar(20), unique key uk1(id1, id2), key uk2(id2));
+`, customerTable)
+
+>>>>>>> 3f638eb55e (VDiff: Fix bug with handling tables with no pks but only a unique key. (#17968))
 	// These should always be ignored in vreplication
 	internalSchema = `
  create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id));
@@ -106,7 +112,8 @@ create table nopk (name varchar(128), age int unsigned);
     "nopk": {},
     "reftable": {
       "type": "reference"
-    }
+    },
+	"ukTable": {}
   }
 }
 `
@@ -138,6 +145,15 @@ create table nopk (name varchar(128), age int unsigned);
         }
       ]
     },
+  "ukTable": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    
     "customer": {
       "column_vindexes": [
         {
