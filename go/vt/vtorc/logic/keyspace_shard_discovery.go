@@ -23,12 +23,36 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
+
+func init() {
+	stats.NewGaugesFuncWithMultiLabels(
+		"DisabledEmergencyReparentKeyspaces",
+		"Keyspaces with EmergencyReparentShard disabled",
+		[]string{"Keyspace"},
+		getDisabledEmergencyReparentKeyspacesStats,
+	)
+}
+
+// getDisabledEmergencyReparentKeyspacesStats returns keyspaces with
+// EmergencyReparentShard disabled in stats format.
+func getDisabledEmergencyReparentKeyspacesStats() map[string]int64 {
+	disabledKeyspaces := make(map[string]int64)
+	keyspaces, err := inst.ReadERSDisabledKeyspaces()
+	if err != nil {
+		log.Errorf("Failed to read keyspaces with ERS disabled: %+v", err)
+	}
+	for _, keyspace := range keyspaces {
+		disabledKeyspaces[keyspace] = 1
+	}
+	return disabledKeyspaces
+}
 
 // refreshAllKeyspacesAndShardsMu ensures RefreshAllKeyspacesAndShards
 // is not executed concurrently.

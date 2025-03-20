@@ -77,6 +77,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		vitess_keyspace.keyspace AS keyspace,
 		vitess_keyspace.keyspace_type AS keyspace_type,
 		vitess_keyspace.durability_policy AS durability_policy,
+		vitess_keyspace.disable_emergency_reparent AS disable_emergency_reparent,
 		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
 		primary_instance.read_only AS read_only,
 		MIN(primary_instance.gtid_errant) AS gtid_errant,
@@ -302,6 +303,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.TabletType = tablet.Type
 		a.AnalyzedKeyspace = m.GetString("keyspace")
 		a.AnalyzedShard = m.GetString("shard")
+		a.AnalyzedKeyspaceEmergencyReparentDisabled = m.GetBool("disable_emergency_reparent")
 		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
 
 		if keyspaceType := topodatapb.KeyspaceType(m.GetInt32("keyspace_type")); keyspaceType == topodatapb.KeyspaceType_SNAPSHOT {

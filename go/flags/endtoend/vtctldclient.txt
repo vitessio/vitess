@@ -9,113 +9,115 @@ Usage:
   vtctldclient [command]
 
 Available Commands:
-  AddCellInfo                 Registers a local topology service in a new cell by creating the CellInfo.
-  AddCellsAlias               Defines a group of cells that can be referenced by a single name (the alias).
-  ApplyKeyspaceRoutingRules   Applies the provided keyspace routing rules.
-  ApplyRoutingRules           Applies the VSchema routing rules.
-  ApplySchema                 Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication.
-  ApplyShardRoutingRules      Applies the provided shard routing rules.
-  ApplyVSchema                Applies the VTGate routing schema to the provided keyspace. Shows the result after application.
-  Backup                      Uses the BackupStorage service on the given tablet to create and store a new backup.
-  BackupShard                 Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
-  ChangeTabletTags            Changes the tablet tags for the specified tablet, if possible.
-  ChangeTabletType            Changes the db type for the specified tablet, if possible.
-  CheckThrottler              Issue a throttler check on the given tablet.
-  CopySchemaShard             Copies the schema from a source shard's primary (or a specific tablet) to a destination shard. The schema is applied directly on the primary of the destination shard, and it is propagated to the replicas through binlogs.
-  CreateKeyspace              Creates the specified keyspace in the topology.
-  CreateShard                 Creates the specified shard in the topology.
-  DeleteCellInfo              Deletes the CellInfo for the provided cell.
-  DeleteCellsAlias            Deletes the CellsAlias for the provided alias.
-  DeleteKeyspace              Deletes the specified keyspace from the topology.
-  DeleteShards                Deletes the specified shards from the topology.
-  DeleteSrvVSchema            Deletes the SrvVSchema object in the given cell.
-  DeleteTablets               Deletes tablet(s) from the topology.
-  DistributedTransaction      Perform commands on distributed transaction
-  EmergencyReparentShard      Reparents the shard to the new primary. Assumes the old primary is dead and not responding.
-  ExecuteFetchAsApp           Executes the given query as the App user on the remote tablet.
-  ExecuteFetchAsDBA           Executes the given query as the DBA user on the remote tablet.
-  ExecuteHook                 Runs the specified hook on the given tablet.
-  ExecuteMultiFetchAsDBA      Executes given multiple queries as the DBA user on the remote tablet.
-  FindAllShardsInKeyspace     Returns a map of shard names to shard references for a given keyspace.
-  GenerateShardRanges         Print a set of shard ranges assuming a keyspace with N shards.
-  GetBackups                  Lists backups for the given shard.
-  GetCellInfo                 Gets the CellInfo object for the given cell.
-  GetCellInfoNames            Lists the names of all cells in the cluster.
-  GetCellsAliases             Gets all CellsAlias objects in the cluster.
-  GetFullStatus               Outputs a JSON structure that contains full status of MySQL including the replication information, semi-sync information, GTID information among others.
-  GetKeyspace                 Returns information about the given keyspace from the topology.
-  GetKeyspaceRoutingRules     Displays the currently active keyspace routing rules.
-  GetKeyspaces                Returns information about every keyspace in the topology.
-  GetMirrorRules              Displays the VSchema mirror rules.
-  GetPermissions              Displays the permissions for a tablet.
-  GetRoutingRules             Displays the VSchema routing rules.
-  GetSchema                   Displays the full schema for a tablet, optionally restricted to the specified tables/views.
-  GetShard                    Returns information about a shard in the topology.
-  GetShardReplication         Returns information about the replication relationships for a shard in the given cell(s).
-  GetShardRoutingRules        Displays the currently active shard routing rules as a JSON document.
-  GetSrvKeyspaceNames         Outputs a JSON mapping of cell=>keyspace names served in that cell. Omit to query all cells.
-  GetSrvKeyspaces             Returns the SrvKeyspaces for the given keyspace in one or more cells.
-  GetSrvVSchema               Returns the SrvVSchema for the given cell.
-  GetSrvVSchemas              Returns the SrvVSchema for all cells, optionally filtered by the given cells.
-  GetTablet                   Outputs a JSON structure that contains information about the tablet.
-  GetTabletVersion            Print the version of a tablet from its debug vars.
-  GetTablets                  Looks up tablets according to filter criteria.
-  GetThrottlerStatus          Get the throttler status for the given tablet.
-  GetTopologyPath             Gets the value associated with the particular path (key) in the topology server.
-  GetVSchema                  Prints a JSON representation of a keyspace's topo record.
-  GetWorkflows                Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.
-  LegacyVtctlCommand          Invoke a legacy vtctlclient command. Flag parsing is best effort.
-  LookupVindex                Perform commands related to creating, backfilling, and externalizing Lookup Vindexes using VReplication workflows.
-  Materialize                 Perform commands related to materializing query results from the source keyspace into tables in the target keyspace.
-  Migrate                     Migrate is used to import data from an external cluster into the current cluster.
-  Mount                       Mount is used to link an external Vitess cluster in order to migrate data from it.
-  MoveTables                  Perform commands related to moving tables from a source keyspace to a target keyspace.
-  OnlineDDL                   Operates on online DDL (schema migrations).
-  PingTablet                  Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
-  PlannedReparentShard        Reparents the shard to a new primary, or away from an old primary. Both the old and new primaries must be up and running.
-  RebuildKeyspaceGraph        Rebuilds the serving data for the keyspace(s). This command may trigger an update to all connected clients.
-  RebuildVSchemaGraph         Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided).
-  RefreshState                Reloads the tablet record on the specified tablet.
-  RefreshStateByShard         Reloads the tablet record all tablets in the shard, optionally limited to the specified cells.
-  ReloadSchema                Reloads the schema on a remote tablet.
-  ReloadSchemaKeyspace        Reloads the schema on all tablets in a keyspace. This is done on a best-effort basis.
-  ReloadSchemaShard           Reloads the schema on all tablets in a shard. This is done on a best-effort basis.
-  RemoveBackup                Removes the given backup from the BackupStorage used by vtctld.
-  RemoveKeyspaceCell          Removes the specified cell from the Cells list for all shards in the specified keyspace (by calling RemoveShardCell on every shard). It also removes the SrvKeyspace for that keyspace in that cell.
-  RemoveShardCell             Remove the specified cell from the specified shard's Cells list.
-  ReparentTablet              Reparent a tablet to the current primary in the shard.
-  Reshard                     Perform commands related to resharding a keyspace.
-  RestoreFromBackup           Stops mysqld on the specified tablet and restores the data from either the latest backup or closest before `backup-timestamp`.
-  RunHealthCheck              Runs a healthcheck on the remote tablet.
-  SetKeyspaceDurabilityPolicy Sets the durability-policy used by the specified keyspace.
-  SetShardIsPrimaryServing    Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graphs; i.e. it does not run `RebuildKeyspaceGraph`.
-  SetShardTabletControl       Sets the TabletControl record for a shard and tablet type. Only use this for an emergency fix or after a finished MoveTables.
-  SetWritable                 Sets the specified tablet as writable or read-only.
-  ShardReplicationFix         Walks through a ShardReplication object and fixes the first error encountered.
-  ShardReplicationPositions   
-  SleepTablet                 Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing.
-  SourceShardAdd              Adds the SourceShard record with the provided index for emergencies only. It does not call RefreshState for the shard primary.
-  SourceShardDelete           Deletes the SourceShard record with the provided index. This should only be used for emergency cleanup. It does not call RefreshState for the shard primary.
-  StartReplication            Starts replication on the specified tablet.
-  StopReplication             Stops replication on the specified tablet.
-  TabletExternallyReparented  Updates the topology record for the tablet's shard to acknowledge that an external tool made this tablet the primary.
-  UpdateCellInfo              Updates the content of a CellInfo with the provided parameters, creating the CellInfo if it does not exist.
-  UpdateCellsAlias            Updates the content of a CellsAlias with the provided parameters, creating the CellsAlias if it does not exist.
-  UpdateThrottlerConfig       Update the tablet throttler configuration for all tablets in the given keyspace (across all cells)
-  VDiff                       Perform commands related to diffing tables involved in a VReplication workflow between the source and target.
-  Validate                    Validates that all nodes reachable from the global replication graph, as well as all tablets in discoverable cells, are consistent.
-  ValidateKeyspace            Validates that all nodes reachable from the specified keyspace are consistent.
-  ValidatePermissionsKeyspace Validates that the permissions on the primary of the first shard match those of all of the other tablets in the keyspace.
-  ValidatePermissionsShard    Validates that the permissions on the primary match all of the replicas.
-  ValidateSchemaKeyspace      Validates that the schema on the primary tablet for the first shard matches the schema on all other tablets in the keyspace.
-  ValidateSchemaShard         Validates that the schema on the primary tablet for the specified shard matches the schema on all other tablets in that shard.
-  ValidateShard               Validates that all nodes reachable from the specified shard are consistent.
-  ValidateVersionKeyspace     Validates that the version on the primary tablet of the first shard matches all of the other tablets in the keyspace.
-  ValidateVersionShard        Validates that the version on the primary matches all of the replicas.
-  Workflow                    Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace.
-  WriteTopologyPath           Copies a local file to the topology server at the given path.
-  completion                  Generate the autocompletion script for the specified shell
-  help                        Help about any command
+  AddCellInfo                   Registers a local topology service in a new cell by creating the CellInfo.
+  AddCellsAlias                 Defines a group of cells that can be referenced by a single name (the alias).
+  ApplyKeyspaceRoutingRules     Applies the provided keyspace routing rules.
+  ApplyRoutingRules             Applies the VSchema routing rules.
+  ApplySchema                   Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication.
+  ApplyShardRoutingRules        Applies the provided shard routing rules.
+  ApplyVSchema                  Applies the VTGate routing schema to the provided keyspace. Shows the result after application.
+  Backup                        Uses the BackupStorage service on the given tablet to create and store a new backup.
+  BackupShard                   Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
+  ChangeTabletTags              Changes the tablet tags for the specified tablet, if possible.
+  ChangeTabletType              Changes the db type for the specified tablet, if possible.
+  CheckThrottler                Issue a throttler check on the given tablet.
+  CopySchemaShard               Copies the schema from a source shard's primary (or a specific tablet) to a destination shard. The schema is applied directly on the primary of the destination shard, and it is propagated to the replicas through binlogs.
+  CreateKeyspace                Creates the specified keyspace in the topology.
+  CreateShard                   Creates the specified shard in the topology.
+  DeleteCellInfo                Deletes the CellInfo for the provided cell.
+  DeleteCellsAlias              Deletes the CellsAlias for the provided alias.
+  DeleteKeyspace                Deletes the specified keyspace from the topology.
+  DeleteShards                  Deletes the specified shards from the topology.
+  DeleteSrvVSchema              Deletes the SrvVSchema object in the given cell.
+  DeleteTablets                 Deletes tablet(s) from the topology.
+  DisableVtorcEmergencyReparent Disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
+  DistributedTransaction        Perform commands on distributed transaction
+  EmergencyReparentShard        Reparents the shard to the new primary. Assumes the old primary is dead and not responding.
+  EnableVtorcEmergencyReparent  Enables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
+  ExecuteFetchAsApp             Executes the given query as the App user on the remote tablet.
+  ExecuteFetchAsDBA             Executes the given query as the DBA user on the remote tablet.
+  ExecuteHook                   Runs the specified hook on the given tablet.
+  ExecuteMultiFetchAsDBA        Executes given multiple queries as the DBA user on the remote tablet.
+  FindAllShardsInKeyspace       Returns a map of shard names to shard references for a given keyspace.
+  GenerateShardRanges           Print a set of shard ranges assuming a keyspace with N shards.
+  GetBackups                    Lists backups for the given shard.
+  GetCellInfo                   Gets the CellInfo object for the given cell.
+  GetCellInfoNames              Lists the names of all cells in the cluster.
+  GetCellsAliases               Gets all CellsAlias objects in the cluster.
+  GetFullStatus                 Outputs a JSON structure that contains full status of MySQL including the replication information, semi-sync information, GTID information among others.
+  GetKeyspace                   Returns information about the given keyspace from the topology.
+  GetKeyspaceRoutingRules       Displays the currently active keyspace routing rules.
+  GetKeyspaces                  Returns information about every keyspace in the topology.
+  GetMirrorRules                Displays the VSchema mirror rules.
+  GetPermissions                Displays the permissions for a tablet.
+  GetRoutingRules               Displays the VSchema routing rules.
+  GetSchema                     Displays the full schema for a tablet, optionally restricted to the specified tables/views.
+  GetShard                      Returns information about a shard in the topology.
+  GetShardReplication           Returns information about the replication relationships for a shard in the given cell(s).
+  GetShardRoutingRules          Displays the currently active shard routing rules as a JSON document.
+  GetSrvKeyspaceNames           Outputs a JSON mapping of cell=>keyspace names served in that cell. Omit to query all cells.
+  GetSrvKeyspaces               Returns the SrvKeyspaces for the given keyspace in one or more cells.
+  GetSrvVSchema                 Returns the SrvVSchema for the given cell.
+  GetSrvVSchemas                Returns the SrvVSchema for all cells, optionally filtered by the given cells.
+  GetTablet                     Outputs a JSON structure that contains information about the tablet.
+  GetTabletVersion              Print the version of a tablet from its debug vars.
+  GetTablets                    Looks up tablets according to filter criteria.
+  GetThrottlerStatus            Get the throttler status for the given tablet.
+  GetTopologyPath               Gets the value associated with the particular path (key) in the topology server.
+  GetVSchema                    Prints a JSON representation of a keyspace's topo record.
+  GetWorkflows                  Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.
+  LegacyVtctlCommand            Invoke a legacy vtctlclient command. Flag parsing is best effort.
+  LookupVindex                  Perform commands related to creating, backfilling, and externalizing Lookup Vindexes using VReplication workflows.
+  Materialize                   Perform commands related to materializing query results from the source keyspace into tables in the target keyspace.
+  Migrate                       Migrate is used to import data from an external cluster into the current cluster.
+  Mount                         Mount is used to link an external Vitess cluster in order to migrate data from it.
+  MoveTables                    Perform commands related to moving tables from a source keyspace to a target keyspace.
+  OnlineDDL                     Operates on online DDL (schema migrations).
+  PingTablet                    Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.
+  PlannedReparentShard          Reparents the shard to a new primary, or away from an old primary. Both the old and new primaries must be up and running.
+  RebuildKeyspaceGraph          Rebuilds the serving data for the keyspace(s). This command may trigger an update to all connected clients.
+  RebuildVSchemaGraph           Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided).
+  RefreshState                  Reloads the tablet record on the specified tablet.
+  RefreshStateByShard           Reloads the tablet record all tablets in the shard, optionally limited to the specified cells.
+  ReloadSchema                  Reloads the schema on a remote tablet.
+  ReloadSchemaKeyspace          Reloads the schema on all tablets in a keyspace. This is done on a best-effort basis.
+  ReloadSchemaShard             Reloads the schema on all tablets in a shard. This is done on a best-effort basis.
+  RemoveBackup                  Removes the given backup from the BackupStorage used by vtctld.
+  RemoveKeyspaceCell            Removes the specified cell from the Cells list for all shards in the specified keyspace (by calling RemoveShardCell on every shard). It also removes the SrvKeyspace for that keyspace in that cell.
+  RemoveShardCell               Remove the specified cell from the specified shard's Cells list.
+  ReparentTablet                Reparent a tablet to the current primary in the shard.
+  Reshard                       Perform commands related to resharding a keyspace.
+  RestoreFromBackup             Stops mysqld on the specified tablet and restores the data from either the latest backup or closest before `backup-timestamp`.
+  RunHealthCheck                Runs a healthcheck on the remote tablet.
+  SetKeyspaceDurabilityPolicy   Sets the durability-policy used by the specified keyspace.
+  SetShardIsPrimaryServing      Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graphs; i.e. it does not run `RebuildKeyspaceGraph`.
+  SetShardTabletControl         Sets the TabletControl record for a shard and tablet type. Only use this for an emergency fix or after a finished MoveTables.
+  SetWritable                   Sets the specified tablet as writable or read-only.
+  ShardReplicationFix           Walks through a ShardReplication object and fixes the first error encountered.
+  ShardReplicationPositions     
+  SleepTablet                   Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing.
+  SourceShardAdd                Adds the SourceShard record with the provided index for emergencies only. It does not call RefreshState for the shard primary.
+  SourceShardDelete             Deletes the SourceShard record with the provided index. This should only be used for emergency cleanup. It does not call RefreshState for the shard primary.
+  StartReplication              Starts replication on the specified tablet.
+  StopReplication               Stops replication on the specified tablet.
+  TabletExternallyReparented    Updates the topology record for the tablet's shard to acknowledge that an external tool made this tablet the primary.
+  UpdateCellInfo                Updates the content of a CellInfo with the provided parameters, creating the CellInfo if it does not exist.
+  UpdateCellsAlias              Updates the content of a CellsAlias with the provided parameters, creating the CellsAlias if it does not exist.
+  UpdateThrottlerConfig         Update the tablet throttler configuration for all tablets in the given keyspace (across all cells)
+  VDiff                         Perform commands related to diffing tables involved in a VReplication workflow between the source and target.
+  Validate                      Validates that all nodes reachable from the global replication graph, as well as all tablets in discoverable cells, are consistent.
+  ValidateKeyspace              Validates that all nodes reachable from the specified keyspace are consistent.
+  ValidatePermissionsKeyspace   Validates that the permissions on the primary of the first shard match those of all of the other tablets in the keyspace.
+  ValidatePermissionsShard      Validates that the permissions on the primary match all of the replicas.
+  ValidateSchemaKeyspace        Validates that the schema on the primary tablet for the first shard matches the schema on all other tablets in the keyspace.
+  ValidateSchemaShard           Validates that the schema on the primary tablet for the specified shard matches the schema on all other tablets in that shard.
+  ValidateShard                 Validates that all nodes reachable from the specified shard are consistent.
+  ValidateVersionKeyspace       Validates that the version on the primary tablet of the first shard matches all of the other tablets in the keyspace.
+  ValidateVersionShard          Validates that the version on the primary matches all of the replicas.
+  Workflow                      Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace.
+  WriteTopologyPath             Copies a local file to the topology server at the given path.
+  completion                    Generate the autocompletion script for the specified shell
+  help                          Help about any command
 
 Flags:
       --action_timeout duration                  timeout to use for the command (default 1h0m0s)

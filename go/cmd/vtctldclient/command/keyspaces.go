@@ -61,6 +61,24 @@ Otherwise, the keyspace must be empty (have no shards), or returns an error.`,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandDeleteKeyspace,
 	}
+	// DisableVtorcEmergencyReparent disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
+	DisableVtorcEmergencyReparent = &cobra.Command{
+		Use:                   "DisableVtorcEmergencyReparent <keyspace>",
+		Short:                 "Disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.",
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"disablevtorcemergencyreparent"},
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandDisableVtorcEmergencyReparent,
+	}
+	// EnableVtorcEmergencyReparent enables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
+	EnableVtorcEmergencyReparent = &cobra.Command{
+		Use:                   "EnableVtorcEmergencyReparent <keyspace>",
+		Short:                 "Enables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.",
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"enablevtorcemergencyreparent"},
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandEnableVtorcEmergencyReparent,
+	}
 	// FindAllShardsInKeyspace makes a FindAllShardsInKeyspace gRPC call to a vtctld.
 	FindAllShardsInKeyspace = &cobra.Command{
 		Use:                   "FindAllShardsInKeyspace <keyspace>",
@@ -230,6 +248,40 @@ func commandDeleteKeyspace(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandDisableVtorcEmergencyReparent(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	ks := cmd.Flags().Arg(0)
+	_, err := client.DisableVtorcEmergencyReparent(commandCtx, &vtctldatapb.DisableVtorcEmergencyReparentRequest{
+		Keyspace: ks,
+	})
+
+	if err != nil {
+		return fmt.Errorf("DisableVtorcEmergencyReparent(%v) error: %w; please check the topo", ks, err)
+	}
+
+	fmt.Printf("Successfully updated keyspace %v.\n", ks)
+
+	return nil
+}
+
+func commandEnableVtorcEmergencyReparent(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	ks := cmd.Flags().Arg(0)
+	_, err := client.EnableVtorcEmergencyReparent(commandCtx, &vtctldatapb.EnableVtorcEmergencyReparentRequest{
+		Keyspace: ks,
+	})
+
+	if err != nil {
+		return fmt.Errorf("EnableVtorcEmergencyReparent(%v) error: %w; please check the topo", ks, err)
+	}
+
+	fmt.Printf("Successfully updated keyspace %v.\n", ks)
+
+	return nil
+}
+
 func commandFindAllShardsInKeyspace(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
@@ -376,6 +428,9 @@ func init() {
 	DeleteKeyspace.Flags().BoolVarP(&deleteKeyspaceOptions.Recursive, "recursive", "r", false, "Recursively delete all shards in the keyspace, and all tablets in those shards.")
 	DeleteKeyspace.Flags().BoolVarP(&deleteKeyspaceOptions.Force, "force", "f", false, "Delete the keyspace even if it cannot be locked; this should only be used for cleanup operations.")
 	Root.AddCommand(DeleteKeyspace)
+
+	Root.AddCommand(DisableVtorcEmergencyReparent)
+	Root.AddCommand(EnableVtorcEmergencyReparent)
 
 	Root.AddCommand(FindAllShardsInKeyspace)
 	Root.AddCommand(GetKeyspace)

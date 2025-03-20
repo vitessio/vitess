@@ -289,20 +289,37 @@ func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.Repl
 	return false, nil, nil
 }
 
+// isERSEnabled returns true if ERS can be used globally or for the given keyspace.
+func isERSEnabled(analysisEntry *inst.ReplicationAnalysis) bool {
+	// If ERS is disabled globally we have no way of repairing the cluster.
+	if !config.ERSEnabled() {
+		log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisEntry.Analysis)
+		return false
+	}
+
+	// Return false if ERS is disabled on the keyspace.
+	if analysisEntry.AnalyzedKeyspaceEmergencyReparentDisabled {
+		log.Infof("ERS is disabled on keyspace %s, skipping recovering %v", analysisEntry.AnalyzedKeyspace, analysisEntry.Analysis)
+		return false
+	}
+	return true
+}
+
 // getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
-func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias string) recoveryFunction {
+func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) recoveryFunction {
+	analysisCode := analysisEntry.Analysis
 	switch analysisCode {
 	// primary
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
-		// If ERS is disabled, we have no way of repairing the cluster.
-		if !config.ERSEnabled() {
+		// If ERS is disabled globally or on the keyspace, skip recovery.
+		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
 			return noRecoveryFunc
 		}
 		return recoverDeadPrimaryFunc
 	case inst.PrimaryTabletDeleted:
-		// If ERS is disabled, we have no way of repairing the cluster.
-		if !config.ERSEnabled() {
+		// If ERS is disabled globally or on the keyspace, skip recovery.
+		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
 			return noRecoveryFunc
 		}
@@ -444,8 +461,8 @@ func isClusterWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not
 func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.ReplicationAnalysis) bool {
-	prevRecoveryFunctionCode := getCheckAndRecoverFunctionCode(prevAnalysis.Analysis, prevAnalysis.AnalyzedInstanceAlias)
-	newRecoveryFunctionCode := getCheckAndRecoverFunctionCode(newAnalysis.Analysis, newAnalysis.AnalyzedInstanceAlias)
+	prevRecoveryFunctionCode := getCheckAndRecoverFunctionCode(prevAnalysis)
+	newRecoveryFunctionCode := getCheckAndRecoverFunctionCode(newAnalysis)
 	return prevRecoveryFunctionCode == newRecoveryFunctionCode
 }
 
@@ -458,7 +475,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	logger := log.NewPrefixedLogger(fmt.Sprintf("Recovery for %s on %s/%s", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard))
 	logger.Info("Starting checkAndRecover")
 
-	checkAndRecoverFunctionCode := getCheckAndRecoverFunctionCode(analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	checkAndRecoverFunctionCode := getCheckAndRecoverFunctionCode(analysisEntry)
 	isActionableRecovery := hasActionableRecovery(checkAndRecoverFunctionCode)
 	analysisEntry.IsActionableRecovery = isActionableRecovery
 

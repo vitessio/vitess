@@ -1188,6 +1188,7 @@ func (m *CreateKeyspaceRequest) CloneVT() *CreateKeyspaceRequest {
 	r.SnapshotTime = m.SnapshotTime.CloneVT()
 	r.DurabilityPolicy = m.DurabilityPolicy
 	r.SidecarDbName = m.SidecarDbName
+	r.VtorcConfig = m.VtorcConfig.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -5955,6 +5956,72 @@ func (m *WorkflowMirrorTrafficResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
+func (m *DisableVtorcEmergencyReparentRequest) CloneVT() *DisableVtorcEmergencyReparentRequest {
+	if m == nil {
+		return (*DisableVtorcEmergencyReparentRequest)(nil)
+	}
+	r := new(DisableVtorcEmergencyReparentRequest)
+	r.Keyspace = m.Keyspace
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *DisableVtorcEmergencyReparentRequest) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *DisableVtorcEmergencyReparentResponse) CloneVT() *DisableVtorcEmergencyReparentResponse {
+	if m == nil {
+		return (*DisableVtorcEmergencyReparentResponse)(nil)
+	}
+	r := new(DisableVtorcEmergencyReparentResponse)
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *DisableVtorcEmergencyReparentResponse) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *EnableVtorcEmergencyReparentRequest) CloneVT() *EnableVtorcEmergencyReparentRequest {
+	if m == nil {
+		return (*EnableVtorcEmergencyReparentRequest)(nil)
+	}
+	r := new(EnableVtorcEmergencyReparentRequest)
+	r.Keyspace = m.Keyspace
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *EnableVtorcEmergencyReparentRequest) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *EnableVtorcEmergencyReparentResponse) CloneVT() *EnableVtorcEmergencyReparentResponse {
+	if m == nil {
+		return (*EnableVtorcEmergencyReparentResponse)(nil)
+	}
+	r := new(EnableVtorcEmergencyReparentResponse)
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *EnableVtorcEmergencyReparentResponse) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
 func (m *ExecuteVtctlCommandRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
@@ -9567,6 +9634,16 @@ func (m *CreateKeyspaceRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.VtorcConfig != nil {
+		size, err := m.VtorcConfig.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x62
 	}
 	if len(m.SidecarDbName) > 0 {
 		i -= len(m.SidecarDbName)
@@ -22197,6 +22274,152 @@ func (m *WorkflowMirrorTrafficResponse) MarshalToSizedBufferVT(dAtA []byte) (int
 	return len(dAtA) - i, nil
 }
 
+func (m *DisableVtorcEmergencyReparentRequest) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *DisableVtorcEmergencyReparentRequest) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *DisableVtorcEmergencyReparentRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *DisableVtorcEmergencyReparentResponse) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *DisableVtorcEmergencyReparentResponse) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *DisableVtorcEmergencyReparentResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *EnableVtorcEmergencyReparentRequest) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *EnableVtorcEmergencyReparentRequest) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *EnableVtorcEmergencyReparentRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *EnableVtorcEmergencyReparentResponse) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *EnableVtorcEmergencyReparentResponse) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *EnableVtorcEmergencyReparentResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *ExecuteVtctlCommandRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
@@ -23633,6 +23856,10 @@ func (m *CreateKeyspaceRequest) SizeVT() (n int) {
 	}
 	l = len(m.SidecarDbName)
 	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.VtorcConfig != nil {
+		l = m.VtorcConfig.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -28305,6 +28532,54 @@ func (m *WorkflowMirrorTrafficResponse) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *DisableVtorcEmergencyReparentRequest) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *DisableVtorcEmergencyReparentResponse) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *EnableVtorcEmergencyReparentRequest) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *EnableVtorcEmergencyReparentResponse) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
 	n += len(m.unknownFields)
 	return n
 }
@@ -38502,6 +38777,42 @@ func (m *CreateKeyspaceRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.SidecarDbName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 12:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field VtorcConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.VtorcConfig == nil {
+				m.VtorcConfig = &topodata.KeyspaceVtorcConfig{}
+			}
+			if err := m.VtorcConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -68295,6 +68606,274 @@ func (m *WorkflowMirrorTrafficResponse) UnmarshalVT(dAtA []byte) error {
 			}
 			m.CurrentState = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *DisableVtorcEmergencyReparentRequest) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: DisableVtorcEmergencyReparentRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: DisableVtorcEmergencyReparentRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *DisableVtorcEmergencyReparentResponse) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: DisableVtorcEmergencyReparentResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: DisableVtorcEmergencyReparentResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *EnableVtorcEmergencyReparentRequest) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: EnableVtorcEmergencyReparentRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: EnableVtorcEmergencyReparentRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *EnableVtorcEmergencyReparentResponse) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: EnableVtorcEmergencyReparentResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: EnableVtorcEmergencyReparentResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

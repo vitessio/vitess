@@ -297,8 +297,12 @@ CREATE TABLE vitess_keyspace (
 	keyspace varchar(128) NOT NULL,
 	keyspace_type smallint(5) NOT NULL,
 	durability_policy varchar(512) NOT NULL,
+	disable_emergency_reparent tinyint NOT NULL,
 	PRIMARY KEY (keyspace)
 )`,
+	`
+CREATE INDEX disable_emergency_reparent_idx_vitess_keyspace ON vitess_keyspace (disable_emergency_reparent)
+	`,
 	`
 DROP TABLE IF EXISTS vitess_shard
 `,

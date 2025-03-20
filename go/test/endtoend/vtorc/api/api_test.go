@@ -99,6 +99,7 @@ func TestAPIEndpoints(t *testing.T) {
 		"TableName": "vitess_keyspace",
 		"Rows": [
 			{
+				"disable_emergency_reparent": "0",
 				"durability_policy": "none",
 				"keyspace": "ks",
 				"keyspace_type": "0"

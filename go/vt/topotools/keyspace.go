@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -141,7 +143,7 @@ func UpdateShardRecords(
 	return nil
 }
 
-// KeyspaceEquality returns true iff two Keyspace fields are identical for testing purposes.
+// KeyspaceEquality returns true if two Keyspace fields are identical for testing purposes.
 func KeyspaceEquality(left, right *topodatapb.Keyspace) bool {
 	if left.KeyspaceType != right.KeyspaceType {
 		return false
@@ -159,5 +161,9 @@ func KeyspaceEquality(left, right *topodatapb.Keyspace) bool {
 		return false
 	}
 
-	return left.DurabilityPolicy == right.DurabilityPolicy
+	if left.DurabilityPolicy != right.DurabilityPolicy {
+		return false
+	}
+
+	return proto.Equal(left.VtorcConfig, right.VtorcConfig)
 }

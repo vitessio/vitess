@@ -254,6 +254,15 @@ func (client *gRPCVtctldClient) DeleteTablets(ctx context.Context, in *vtctldata
 	return client.c.DeleteTablets(ctx, in, opts...)
 }
 
+// DisableVtorcEmergencyReparent is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) DisableVtorcEmergencyReparent(ctx context.Context, in *vtctldatapb.DisableVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldatapb.DisableVtorcEmergencyReparentResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.DisableVtorcEmergencyReparent(ctx, in, opts...)
+}
+
 // EmergencyReparentShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) EmergencyReparentShard(ctx context.Context, in *vtctldatapb.EmergencyReparentShardRequest, opts ...grpc.CallOption) (*vtctldatapb.EmergencyReparentShardResponse, error) {
 	if client.c == nil {
@@ -261,6 +270,15 @@ func (client *gRPCVtctldClient) EmergencyReparentShard(ctx context.Context, in *
 	}
 
 	return client.c.EmergencyReparentShard(ctx, in, opts...)
+}
+
+// EnableVtorcEmergencyReparent is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) EnableVtorcEmergencyReparent(ctx context.Context, in *vtctldatapb.EnableVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldatapb.EnableVtorcEmergencyReparentResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.EnableVtorcEmergencyReparent(ctx, in, opts...)
 }
 
 // ExecuteFetchAsApp is part of the vtctlservicepb.VtctldClient interface.
