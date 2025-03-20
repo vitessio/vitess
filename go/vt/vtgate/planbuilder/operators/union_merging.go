@@ -230,6 +230,7 @@ func createMergedUnion(
 		unaryOperator: newUnaryOp(union),
 		MergedWith:    []*Route{rhsRoute},
 		Routing:       routing,
+		Conditions:    conditions,
 	}, selectExprs
 }
 

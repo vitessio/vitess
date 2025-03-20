@@ -3157,6 +3157,50 @@ func TestJoinSpecializedPlan(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
 }
 
+func TestUnionSpecializedPlan(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	sql := "select col, count(*) from (select col from `user` where id = ? union select foo from `user` where id = ?) x group by col"
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+	bv := map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(1),
+		"v2": sqltypes.Int64BindVariable(1),
+	}
+	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.NoError(t, err)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
+	found := false
+	executor.ForEachPlan(func(plan *engine.Plan) bool {
+		if plan.Original == sql {
+			planOutput, err := json.MarshalIndent(engine.PrimitiveToPlanDescription(plan.Instructions, nil), "", "  ")
+			require.NoError(t, err)
+			fmt.Println(string(planOutput))
+			found = true
+			return false
+		}
+		return true
+	})
+	assert.True(t, found, "plan not found")
+
+	bv = map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(2),
+		"v2": sqltypes.Int64BindVariable(1),
+	}
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.NoError(t, err)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 2)
+
+	bv = map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(200),
+		"v2": sqltypes.Int64BindVariable(200),
+	}
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.NoError(t, err)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
+}
+
 func TestSelectDatabasePrepare(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	logChan := executor.queryLogger.Subscribe("Test")
