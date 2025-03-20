@@ -784,9 +784,14 @@ func (v *Value) ForEachValue(each func(bv Value)) error {
 	return nil
 }
 
+// EqualIgnoreType compares this Value to other. It ignores any flags set and the type fhe value.
+func (v Value) EqualIgnoreType(other Value) bool {
+	return bytes.Equal(v.val, other.val)
+}
+
 // Equal compares this Value to other. It ignores any flags set.
 func (v Value) Equal(other Value) bool {
-	return v.typ == other.typ && bytes.Equal(v.val, other.val)
+	return v.typ == other.typ && v.EqualIgnoreType(other)
 }
 
 // SetTinyWeight sets this Value's tiny weight string
