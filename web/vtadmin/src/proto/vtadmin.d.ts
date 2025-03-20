@@ -31301,6 +31301,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest backup_engine */
         backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a BackupRequest. */
@@ -31326,6 +31329,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -40810,6 +40816,9 @@ export namespace query {
 
         /** ExecuteOptions fetch_last_insert_id */
         fetch_last_insert_id?: (boolean|null);
+
+        /** ExecuteOptions in_dml_execution */
+        in_dml_execution?: (boolean|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -40862,6 +40871,9 @@ export namespace query {
 
         /** ExecuteOptions fetch_last_insert_id. */
         public fetch_last_insert_id: boolean;
+
+        /** ExecuteOptions in_dml_execution. */
+        public in_dml_execution: boolean;
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";
@@ -54342,6 +54354,9 @@ export namespace vtctldata {
 
         /** BackupRequest backup_engine */
         backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a BackupRequest. */
@@ -54370,6 +54385,9 @@ export namespace vtctldata {
 
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -54584,6 +54602,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest incremental_from_pos */
         incremental_from_pos?: (string|null);
+
+        /** BackupShardRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -54612,6 +54633,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest incremental_from_pos. */
         public incremental_from_pos: string;
+
+        /** BackupShardRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.

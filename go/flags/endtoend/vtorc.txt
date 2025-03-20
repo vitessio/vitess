@@ -34,6 +34,7 @@ Flags:
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul_auth_static_file string                              JSON File to read the topos/tokens from.
+      --discovery-workers int                                       Number of workers used for tablet discovery (default 300)
       --emit_stats                                                  If set, emit stats to push-based monitoring and stats backends
       --enable-primary-disk-stalled-recovery                        Whether VTOrc should detect a stalled disk on the primary and failover
       --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)

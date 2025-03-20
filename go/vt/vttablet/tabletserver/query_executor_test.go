@@ -77,6 +77,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 		input string
 		// passThrough specifies if planbuilder.PassthroughDML must be set.
 		passThrough bool
+		inDMLExec   bool
 		// dbResponses specifies the list of queries and responses to add to the fake db.
 		dbResponses []dbResponse
 		// resultWant is the result we want.
@@ -89,8 +90,9 @@ func TestQueryExecutorPlans(t *testing.T) {
 		// If empty, then we should expect the same as logWant.
 		inTxWant string
 		// errorWant is the error we expect to get, if any, and should be nil if no error should be returned
-		errorWant   string
-		onlyInTxErr bool
+		errorWant    string
+		onlyInTxErr  bool
+		outsideTxErr bool
 		// TxThrottler allows the test case to override the transaction throttler
 		txThrottler txthrottler.TxThrottler
 	}{{
@@ -161,6 +163,19 @@ func TestQueryExecutorPlans(t *testing.T) {
 		// it needs to roll back on failure.
 		logWant:  "begin; update test_table set a = 1 limit 10001; commit",
 		inTxWant: "update test_table set a = 1 limit 10001",
+	}, {
+		input:       "select a, b from test_table",
+		passThrough: true,
+		inDMLExec:   true,
+		dbResponses: []dbResponse{{
+			query:  "select a, b from test_table",
+			result: selectResult,
+		}},
+		resultWant:   selectResult,
+		planWant:     "SelectNoLimit",
+		logWant:      "select a, b from test_table",
+		outsideTxErr: true,
+		errorWant:    "[BUG] SelectNoLimit unexpected plan type",
 	}, {
 		input:       "update test_table set a=1",
 		passThrough: true,
@@ -322,9 +337,9 @@ func TestQueryExecutorPlans(t *testing.T) {
 			tsv.SetPassthroughDMLs(tcase.passThrough)
 
 			// Test outside a transaction.
-			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
+			qre := newTestQueryExecutorWithRowsLimit(ctx, tsv, tcase.input, 0, tcase.passThrough && tcase.inDMLExec)
 			got, err := qre.Execute()
-			if tcase.errorWant != "" && !tcase.onlyInTxErr {
+			if tcase.outsideTxErr || (tcase.errorWant != "" && !tcase.onlyInTxErr) {
 				assert.EqualError(t, err, tcase.errorWant)
 			} else {
 				require.NoError(t, err, tcase.input)
@@ -338,7 +353,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 			// Test inside a transaction.
 			target := tsv.sm.Target()
 			state, err := tsv.Begin(ctx, target, nil)
-			if tcase.errorWant != "" && !tcase.onlyInTxErr {
+			if !tcase.outsideTxErr && tcase.errorWant != "" && !tcase.onlyInTxErr {
 				require.EqualError(t, err, tcase.errorWant)
 				return
 			}
@@ -347,7 +362,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 			assert.Equal(t, tsv.alias, state.TabletAlias, "Wrong alias returned by Begin")
 			defer tsv.Commit(ctx, target, state.TransactionID)
 
-			qre = newTestQueryExecutor(ctx, tsv, tcase.input, state.TransactionID)
+			qre = newTestQueryExecutorWithRowsLimit(ctx, tsv, tcase.input, state.TransactionID, tcase.passThrough && tcase.inDMLExec)
 			got, err = qre.Execute()
 			if tcase.onlyInTxErr {
 				require.EqualError(t, err, tcase.errorWant)
@@ -1558,20 +1573,16 @@ func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 }
 
 func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
+	return newTestQueryExecutorWithRowsLimit(ctx, tsv, sql, txID, false)
+}
+
+func newTestQueryExecutorWithRowsLimit(ctx context.Context, tsv *TabletServer, sql string, txID int64, noRowsLimit bool) *QueryExecutor {
 	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor", streamlog.NewQueryLogConfigForTest())
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, noRowsLimit)
 	if err != nil {
 		panic(err)
 	}
-	return &QueryExecutor{
-		ctx:      ctx,
-		query:    sql,
-		bindVars: make(map[string]*querypb.BindVariable),
-		connID:   txID,
-		plan:     plan,
-		logStats: logStats,
-		tsv:      tsv,
-	}
+	return newQueryExec(ctx, tsv, sql, txID, plan, logStats)
 }
 
 func newTestQueryExecutorStreaming(ctx context.Context, tsv *TabletServer, sql string, txID int64) *QueryExecutor {
@@ -1580,6 +1591,10 @@ func newTestQueryExecutorStreaming(ctx context.Context, tsv *TabletServer, sql s
 	if err != nil {
 		panic(err)
 	}
+	return newQueryExec(ctx, tsv, sql, txID, plan, logStats)
+}
+
+func newQueryExec(ctx context.Context, tsv *TabletServer, sql string, txID int64, plan *TabletPlan, logStats *tabletenv.LogStats) *QueryExecutor {
 	return &QueryExecutor{
 		ctx:      ctx,
 		query:    sql,

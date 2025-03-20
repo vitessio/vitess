@@ -16,7 +16,7 @@ permissions: read-all
 jobs:
   build_and_push_vttestserver:
     name: Build and push vttestserver
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    runs-on: oracle-16cpu-64gb-x86-64
     if: github.repository == 'vitessio/vitess'
 
     strategy:
@@ -136,7 +136,7 @@ jobs:
 
   build_and_push_components:
     name: Build and push
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    runs-on: oracle-16cpu-64gb-x86-64
     if: github.repository == 'vitessio/vitess' && needs.build_and_push_lite.result == 'success'
     needs:
       - build_and_push_lite

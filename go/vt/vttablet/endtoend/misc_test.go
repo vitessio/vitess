@@ -1090,6 +1090,66 @@ func TestEngineReload(t *testing.T) {
 	})
 }
 
+func TestUpdateTableIndexMetrics(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	if query := conn.BaseShowInnodbTableSizes(); query == "" {
+		t.Skip("additional table/index metrics not updated in this version of MySQL")
+	}
+	client := framework.NewClient()
+
+	_, err = client.Execute("insert into vitess_part (id) values (5),(15),(25)", nil)
+	require.NoError(t, err)
+	defer client.Execute("delete from vitess_part where id in (5,15,25)", nil)
+
+	// Analyze tables to make sure stats are updated prior to reload
+	tables := []string{"vitess_a", "vitess_part", "vitess_autoinc_seq"}
+	for _, table := range tables {
+		_, err = client.Execute(fmt.Sprintf("analyze table %s", table), nil)
+		require.NoError(t, err)
+	}
+
+	// Wait up to 5s for the rows added to vitess_part to be reflected in DebugVars
+	updated := false
+	for i := 0; !updated && i < 10; i++ {
+		err = framework.Server.ReloadSchema(ctx)
+		require.NoError(t, err)
+
+		if framework.FetchVal(framework.DebugVars(), "TableRows/vitess_part") == 3 {
+			updated = true
+		} else {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	results, err := client.Execute("select @@innodb_page_size", nil)
+	require.NoError(t, err)
+	pageSize, err := results.Rows[0][0].ToFloat64()
+	require.NoError(t, err)
+
+	vars := framework.DebugVars()
+
+	assert.Equal(t, 2.0, framework.FetchVal(vars, "TableRows/vitess_a"))
+	assert.Equal(t, 3.0, framework.FetchVal(vars, "TableRows/vitess_part"))
+	partTableCountResult, _ := client.Execute("select count(1) from vitess_part", nil)
+	partTableRows, _ := partTableCountResult.Rows[0][0].ToInt()
+	assert.Equal(t, 3, partTableRows)
+
+	assert.Equal(t, pageSize, framework.FetchVal(vars, "TableClusteredIndexSize/vitess_a"))
+	assert.Equal(t, pageSize*2, framework.FetchVal(vars, "TableClusteredIndexSize/vitess_part"))
+
+	assert.Equal(t, 2.0, framework.FetchVal(vars, "IndexCardinality/vitess_a.PRIMARY"))
+	assert.Equal(t, 3.0, framework.FetchVal(vars, "IndexCardinality/vitess_part.PRIMARY"))
+	assert.Equal(t, 0.0, framework.FetchVal(vars, "IndexCardinality/vitess_autoinc_seq.name"))
+
+	assert.Equal(t, pageSize, framework.FetchVal(vars, "IndexBytes/vitess_a.PRIMARY"))
+	assert.Equal(t, pageSize*2, framework.FetchVal(vars, "IndexBytes/vitess_part.PRIMARY"))
+	assert.Equal(t, pageSize, framework.FetchVal(vars, "IndexBytes/vitess_autoinc_seq.name"))
+}
+
 // TestTuple tests that bind variables having tuple values work with vttablet.
 func TestTuple(t *testing.T) {
 	client := framework.NewClient()
@@ -1133,4 +1193,45 @@ func TestTuple(t *testing.T) {
 	res, err = client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
 	require.NoError(t, err)
 	require.Zero(t, len(res.Rows))
+}
+
+// TestMaxRows tests different scenarios with max rows.
+func TestMaxRows(t *testing.T) {
+	oldPT := framework.Server.Config().PassthroughDML
+	oldMR := framework.Server.MaxResultSize()
+	defer func() {
+		framework.Server.SetPassthroughDMLs(oldPT)
+		framework.Server.SetMaxResultSize(oldMR)
+	}()
+
+	client := framework.NewClient()
+
+	_, err := client.Execute(`insert into maxrows_tbl (id, col) values (100, 200), (300, 400)`, nil)
+	require.NoError(t, err)
+
+	framework.Server.SetMaxResultSize(1)
+	_, err = client.Execute(`select * from maxrows_tbl`, nil)
+	require.ErrorContains(t, err, "Row count exceeded 1")
+
+	// setting passthrough dml to true
+	framework.Server.Config().PassthroughDML = true
+
+	// this should still fail as InDMLExecution should be true as well.
+	_, err = client.Execute(`select * from maxrows_tbl`, nil)
+	require.ErrorContains(t, err, "Row count exceeded 1")
+
+	// setting InDMLExecution to true
+	inDMLExecOption := &querypb.ExecuteOptions{InDmlExecution: true}
+
+	// this should still fail as it only works inside a transaction
+	_, err = client.ExecuteWithOptions(`select * from maxrows_tbl`, nil, inDMLExecOption)
+	require.ErrorContains(t, err, "[BUG] SelectNoLimit unexpected plan type", "this is expected only inside a transaction")
+
+	// this should work as it is inside a transaction.
+	require.NoError(t,
+		client.Begin(false))
+	_, err = client.ExecuteWithOptions(`select * from maxrows_tbl`, nil, inDMLExecOption)
+	require.NoError(t, err, "Passthrough DML with In DML Execution should not be affected by max rows")
+	require.NoError(t,
+		client.Commit())
 }
