@@ -5181,5 +5181,99 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "Block joins two select expressions with same column name needing a simple projection",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user.user_id from user_extra join user on user_extra.hello = user.textcol2 where user_extra.hello = 'B'",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user.user_id from user_extra join user on user_extra.hello = user.textcol2 where user_extra.hello = 'B'",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:user_id",
+          "1:user_id"
+        ],
+        "Columns": "1,0",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Block",
+            "BindVarName": "values",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_extra.user_id, user_extra.hello from user_extra where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user_extra.hello from user_extra where user_extra.hello = 'B'",
+                "Table": "user_extra"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_hello), `user` where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_hello), `user` where `values`.user_extra_hello = `user`.textcol2",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Block joins two select expressions with same column name not needing a simple projection",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user.user_id, user_extra.user_id from user_extra join user on user_extra.hello = user.textcol2 where user_extra.hello = 'B'",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user.user_id, user_extra.user_id from user_extra join user on user_extra.hello = user.textcol2 where user_extra.hello = 'B'",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Block",
+        "BindVarName": "values",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.user_id, user_extra.hello from user_extra where 1 != 1",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user_extra.hello from user_extra where user_extra.hello = 'B'",
+            "Table": "user_extra"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_hello), `user` where 1 != 1",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_hello), `user` where `values`.user_extra_hello = `user`.textcol2",
+            "Table": "`user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]

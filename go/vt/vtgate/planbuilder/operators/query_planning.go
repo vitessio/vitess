@@ -955,14 +955,15 @@ func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, s
 
 	cols := output.GetSelectExprs(ctx)
 	sizeCorrect := len(selExprs) == len(cols) || tryTruncateColumnsAt(output, len(selExprs))
-	if sizeCorrect && colNamesAlign(selExprs, cols) {
+	_, rootIsBlockJoin := output.(*BlockJoin)
+	if sizeCorrect && colNamesAlign(ctx, selExprs, cols, rootIsBlockJoin) {
 		return output
 	}
 
 	return createSimpleProjection(ctx, selExprs, output)
 }
 
-func colNamesAlign(expected, actual []sqlparser.SelectExpr) bool {
+func colNamesAlign(ctx *plancontext.PlanningContext, expected, actual []sqlparser.SelectExpr, rootIsBlockJoin bool) bool {
 	if len(expected) > len(actual) {
 		// if we expect more columns than we have, we can't align
 		return false
@@ -971,6 +972,16 @@ func colNamesAlign(expected, actual []sqlparser.SelectExpr) bool {
 	for i, seE := range expected {
 		switch se := seE.(type) {
 		case *sqlparser.AliasedExpr:
+			if actualAe, ok := actual[i].(*sqlparser.AliasedExpr); rootIsBlockJoin && ok {
+				depsExpected := ctx.SemTable.RecursiveDeps(se.Expr)
+				depsActual := ctx.SemTable.RecursiveDeps(actualAe.Expr)
+
+				if depsActual.IsSolvedBy(depsExpected) && actualAe.ColumnName() == se.ColumnName() {
+					return true
+				}
+				return false
+			}
+
 			if !areColumnNamesAligned(se, actual[i]) {
 				return false
 			}
