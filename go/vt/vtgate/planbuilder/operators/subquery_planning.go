@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -585,7 +586,12 @@ type subqueryRouteMerger struct {
 	subq     *SubQuery
 }
 
-func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, old1, old2 *Route) *Route {
+func (s *subqueryRouteMerger) mergeShardedRouting(
+	ctx *plancontext.PlanningContext,
+	r1, r2 *ShardedRouting,
+	old1, old2 *Route,
+	conditions []engine.SpecializedCondition,
+) *Route {
 	tr := &ShardedRouting{
 		VindexPreds: append(r1.VindexPreds, r2.VindexPreds...),
 		keyspace:    r1.keyspace,
@@ -634,10 +640,10 @@ func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningConte
 	}
 
 	routing := tr.resetRoutingLogic(ctx)
-	return s.merge(ctx, old1, old2, routing)
+	return s.merge(ctx, old1, old2, routing, conditions)
 }
 
-func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing) *Route {
+func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing, conditions []engine.SpecializedCondition) *Route {
 	if !s.subq.TopLevel {
 		// if the subquery we are merging isn't a top level predicate, we can't use it for routing
 		return &Route{
@@ -664,6 +670,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		Routing:       r,
 		Ordering:      s.outer.Ordering,
 		ResultColumns: s.outer.ResultColumns,
+		Conditions:    conditions,
 	}
 }
 
@@ -746,19 +753,19 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 	// which means that we have to be careful with merging when the outer side
 	case inner == dual ||
 		(inner == anyShard && sameKeyspace):
-		return m.merge(ctx, inRoute, outRoute, outRouting)
+		return m.merge(ctx, inRoute, outRoute, outRouting, nil)
 
 	case inner == none && sameKeyspace:
-		return m.merge(ctx, inRoute, outRoute, inRouting)
+		return m.merge(ctx, inRoute, outRoute, inRouting, nil)
 
 	// we can merge dual-outer subqueries only if the
 	// inner is guaranteed to hit a single shard
 	case inRoute.IsSingleShard() &&
 		(outer == dual || (outer == anyShard && sameKeyspace)):
-		return m.merge(ctx, inRoute, outRoute, inRouting)
+		return m.merge(ctx, inRoute, outRoute, inRouting, nil)
 
 	case outer == none && sameKeyspace:
-		return m.merge(ctx, inRoute, outRoute, outRouting)
+		return m.merge(ctx, inRoute, outRoute, outRouting, nil)
 
 	// infoSchema routing is complex, so we handle it in a separate method
 	case inner == infoSchema && outer == infoSchema:

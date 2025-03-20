@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -32,8 +33,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
-
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -47,6 +46,8 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -3110,6 +3111,50 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	assert.Empty(t, sbc2.Queries)
+}
+
+func TestJoinSpecializedPlan(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	sql := "select count(*) from `user` u1 join user u2 where u1.id = ? and u2.id = ?"
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+	bv := map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(1),
+		"v2": sqltypes.Int64BindVariable(1),
+	}
+	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.NoError(t, err)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
+	found := false
+	executor.ForEachPlan(func(plan *engine.Plan) bool {
+		if plan.Original == sql {
+			planOutput, err := json.MarshalIndent(engine.PrimitiveToPlanDescription(plan.Instructions, nil), "", "  ")
+			require.NoError(t, err)
+			fmt.Println(string(planOutput))
+			found = true
+			return false
+		}
+		return true
+	})
+	assert.True(t, found, "plan not found")
+
+	bv = map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(2),
+		"v2": sqltypes.Int64BindVariable(1),
+	}
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.NoError(t, err)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 2)
+
+	bv = map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(200),
+		"v2": sqltypes.Int64BindVariable(200),
+	}
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.NoError(t, err)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
 }
 
 func TestSelectDatabasePrepare(t *testing.T) {

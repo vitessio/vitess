@@ -1109,6 +1109,7 @@ func (e *Executor) fetchOrCreatePlan(
 	parameterize bool,
 	preparedPlan bool,
 	logStats *logstats.LogStats,
+	executePath bool, // this means we are trying to execute the query - this is not a PREPARE call
 ) (
 	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, err error) {
 	if e.VSchema() == nil {
@@ -1130,9 +1131,26 @@ func (e *Executor) fetchOrCreatePlan(
 	}
 
 	if plan == nil {
-		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey)
+		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
 		if err != nil {
 			return nil, nil, nil, err
+		}
+	}
+
+	// TODO (fix me): reading and writing on specialized bool can be racy.
+	if preparedPlan && !plan.Specialized && executePath {
+		vcursor.SetBindVars(bindVars)
+		sPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if sp, isSpecialized := sPlan.Instructions.(*engine.Specialized); !isSpecialized {
+			plan.Specialized = true
+		} else {
+			sp.Generic = plan.Instructions
+			sPlan.Specialized = true
+			plan = sPlan
+			e.plans.Set(planKey.Hash(), sPlan, 0, e.epoch.Load())
 		}
 	}
 
@@ -1157,6 +1175,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	setVarComment string,
 	parameterize bool,
 	planKey engine.PlanKey,
+	ignoreCache bool,
 ) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
@@ -1212,7 +1231,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	}
 
 	planCachable := sqlparser.CachePlan(stmt) && vcursor.CachePlan()
-	if planCachable {
+	if planCachable && !ignoreCache {
 		if !preparedPlan {
 			// build Plan key
 			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
@@ -1514,7 +1533,7 @@ func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 }
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	plan, vcursor, _, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats)
+	plan, vcursor, _, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
@@ -1686,7 +1705,7 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *econtext.SafeSessio
 func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, error) {
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
-	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats)
+	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
 	return plan, err
 }
 

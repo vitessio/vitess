@@ -327,6 +327,10 @@ func (vw *VSchemaWrapper) ErrorIfShardedF(keyspace *vindexes.Keyspace, _, errFmt
 	return nil
 }
 
+func (vw *VSchemaWrapper) GetBindVars() map[string]*querypb.BindVariable {
+	return nil
+}
+
 func (vw *VSchemaWrapper) CurrentDb() string {
 	ksName := ""
 	if vw.Keyspace != nil {

@@ -195,9 +195,9 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 	switch {
 	// if either side has no predicates to help us route, we can merge them
 	case emptyA:
-		return m.merge(ctx, lhsRoute, rhsRoute, isrB)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrB, nil)
 	case emptyB:
-		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrA, nil)
 
 	// if we have no schema predicates on either side, we can merge if the table info is the same
 	case len(isrA.SysTableTableSchema) == 0 && len(isrB.SysTableTableSchema) == 0:
@@ -208,14 +208,14 @@ func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, rout
 			}
 			isrA.SysTableTableName[k] = expr
 		}
-		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrA, nil)
 
 	// if both sides have the same schema predicate, we can safely merge them
 	case equalExprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
 		for k, expr := range isrB.SysTableTableName {
 			isrA.SysTableTableName[k] = expr
 		}
-		return m.merge(ctx, lhsRoute, rhsRoute, isrA)
+		return m.merge(ctx, lhsRoute, rhsRoute, isrA, nil)
 
 	// give up
 	default:

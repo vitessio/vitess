@@ -700,8 +700,11 @@ func tryMergeShardedRouting(
 			bVdx := tblB.SelectedVindex()
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
-			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB)
+			if aVdx == bVdx {
+				equal, conditions := gen4ValuesEqual(ctx, aExpr, bExpr)
+				if equal {
+					return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB, conditions)
+				}
 			}
 		}
 
@@ -721,7 +724,7 @@ func tryMergeShardedRouting(
 		if !canMerge {
 			return nil
 		}
-		return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB)
+		return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB, nil)
 	}
 	return nil
 }

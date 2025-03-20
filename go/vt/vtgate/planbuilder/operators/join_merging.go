@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -49,28 +50,28 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 		if !(jm.joinType.IsInner() || newRouting.OpCode().IsSingleShard()) {
 			return nil
 		}
-		return jm.merge(ctx, lhsRoute, rhsRoute, newRouting)
+		return jm.merge(ctx, lhsRoute, rhsRoute, newRouting, nil)
 
 	// If a dual is on the right side.
 	case b == dual:
-		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)
+		return jm.merge(ctx, lhsRoute, rhsRoute, routingA, nil)
 
 	// As both are reference route. We need to merge the alternates as well.
 	case a == anyShard && b == anyShard && sameKeyspace:
 		newrouting := mergeAnyShardRoutings(ctx, routingA.(*AnyShardRouting), routingB.(*AnyShardRouting), jm.predicates, jm.joinType)
-		return jm.merge(ctx, lhsRoute, rhsRoute, newrouting)
+		return jm.merge(ctx, lhsRoute, rhsRoute, newrouting, nil)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
-		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
+		return jm.merge(ctx, lhsRoute, rhsRoute, routingB, nil)
 	case b == anyShard && sameKeyspace:
-		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)
+		return jm.merge(ctx, lhsRoute, rhsRoute, routingA, nil)
 
 	// None routing can always be merged, as long as we are aiming for the same keyspace
 	case a == none && sameKeyspace:
-		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)
+		return jm.merge(ctx, lhsRoute, rhsRoute, routingA, nil)
 	case b == none && sameKeyspace:
-		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
+		return jm.merge(ctx, lhsRoute, rhsRoute, routingB, nil)
 
 	// infoSchema routing is complex, so we handle it in a separate method
 	case a == infoSchema && b == infoSchema:
@@ -119,8 +120,8 @@ func prepareInputRoutes(ctx *plancontext.PlanningContext, lhs Operator, rhs Oper
 
 type (
 	merger interface {
-		mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route) *Route
-		merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) *Route
+		mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route, conditions []engine.SpecializedCondition) *Route
+		merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions []engine.SpecializedCondition) *Route
 	}
 
 	joinMerger struct {
@@ -218,8 +219,8 @@ func newJoinMerge(predicates []sqlparser.Expr, joinType sqlparser.JoinType) *joi
 	}
 }
 
-func (jm *joinMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route) *Route {
-	return jm.merge(ctx, op1, op2, mergeShardedRouting(r1, r2))
+func (jm *joinMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route, conditions []engine.SpecializedCondition) *Route {
+	return jm.merge(ctx, op1, op2, mergeShardedRouting(r1, r2), conditions)
 }
 
 func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting {
@@ -237,7 +238,7 @@ func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting
 	return tr
 }
 
-func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing) *Route {
+func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions []engine.SpecializedCondition) *Route {
 	aj := NewApplyJoin(ctx, op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), jm.joinType, false)
 	for _, column := range aj.JoinPredicates.columns {
 		if column.JoinPredicateID != nil {
@@ -248,5 +249,6 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 		unaryOperator: newUnaryOp(aj),
 		MergedWith:    []*Route{op2},
 		Routing:       r,
+		Conditions:    conditions,
 	}
 }
