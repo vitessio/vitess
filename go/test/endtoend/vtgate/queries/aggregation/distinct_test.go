@@ -19,6 +19,7 @@ package aggregation
 import (
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -44,6 +45,28 @@ func TestDistinctIt(t *testing.T) {
 	mcmp.AssertMatchesNoOrder("select distinct val1 from aggr_test", `[[VARCHAR("c")] [VARCHAR("d")] [VARCHAR("e")] [VARCHAR("a")] [VARCHAR("b")]]`)
 	mcmp.AssertMatchesNoOrder("select distinct val2 from aggr_test", `[[INT64(1)] [INT64(4)] [INT64(3)] [NULL]]`)
 	mcmp.AssertMatchesNoOrder("select distinct id from aggr_test", `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(5)] [INT64(4)] [INT64(6)] [INT64(7)] [INT64(8)]]`)
+
+	ver, _ := cluster.GetMajorVersion("vtgate")
+	if ver == 20 {
+		// We can only run the following tests for v20 only, because upgrade tests
+		// run against a released version of v21 that doesn't support these statements.
+
+		// Ensure DISTINCT on enum columns across shards works correctly.
+		mcmp.Exec("insert into example(id, foo) values (1, 'a'), (2, 'b')")
+		mcmp.AssertMatchesNoOrder("select distinct foo from example", `[[ENUM("a")] [ENUM("b")]]`)
+
+		// Exercise fallback hashing for unknown enum values. The vschema for the
+		// example_enum_unknown table deliberately omits the "c" enum member so that
+		// vtgate will treat it as unknown.
+		mcmp.Exec("insert into example_enum_unknown(id, foo) values (1, 'a'), (2, 'c')")
+		mcmp.AssertMatchesNoOrder("select distinct foo from example_enum_unknown", `[[ENUM("a")] [ENUM("c")]]`)
+
+		// Exercise fallback hashing for unknown set values. The vschema for the
+		// example_set_unknown table deliberately omits the "c" set member so that
+		// vtgate will treat it as unknown.
+		mcmp.Exec("insert into example_set_unknown(id, foo) values (1, 'a'), (2, 'c')")
+		mcmp.AssertMatchesNoOrder("select distinct foo from example_set_unknown", `[[SET("a")] [SET("c")]]`)
+	}
 
 	if utils.BinaryIsAtLeastAtVersion(17, "vtgate") {
 		mcmp.AssertMatches("select distinct val1 from aggr_test order by val1 desc", `[[VARCHAR("e")] [VARCHAR("d")] [VARCHAR("c")] [VARCHAR("b")] [VARCHAR("a")]]`)
