@@ -74,6 +74,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vtctl/vschema"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -92,9 +93,10 @@ const (
 // VtctldServer implements the Vtctld RPC service protocol.
 type VtctldServer struct {
 	vtctlservicepb.UnimplementedVtctldServer
-	ts  *topo.Server
-	tmc tmclient.TabletManagerClient
-	ws  *workflow.Server
+	ts   *topo.Server
+	tmc  tmclient.TabletManagerClient
+	ws   *workflow.Server
+	vapi *vschema.VSchemaAPI
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
@@ -102,9 +104,10 @@ func NewVtctldServer(env *vtenv.Environment, ts *topo.Server) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
 
 	return &VtctldServer{
-		ts:  ts,
-		tmc: tmc,
-		ws:  workflow.NewServer(env, ts, tmc),
+		ts:   ts,
+		tmc:  tmc,
+		ws:   workflow.NewServer(env, ts, tmc),
+		vapi: vschema.NewVSchemaAPI(ts),
 	}
 }
 
@@ -5524,6 +5527,21 @@ func (s *VtctldServer) WorkflowDelete(ctx context.Context, req *vtctldatapb.Work
 
 	resp, err = s.ws.WorkflowDelete(ctx, req)
 	return resp, err
+}
+
+// VSchemaAddReference is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaAddReference(ctx context.Context, req *vtctldatapb.VSchemaSetReferenceRequest) (resp *vtctldatapb.VSchemaSetReferenceResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaAddReference")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+	span.Annotate("table_name", req.TableName)
+	span.Annotate("source", req.Source)
+
+	err = s.vapi.SetReference(ctx, req)
+	return &vtctldatapb.VSchemaSetReferenceResponse{}, err
 }
 
 // WorkflowStatus is part of the vtctlservicepb.VtctldServer interface.

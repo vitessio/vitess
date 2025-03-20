@@ -737,6 +737,11 @@ func (client *localVtctldClient) VDiffStop(ctx context.Context, in *vtctldatapb.
 	return client.s.VDiffStop(ctx, in)
 }
 
+// VSchemaSetReference is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaSetReference(ctx context.Context, in *vtctldatapb.VSchemaSetReferenceRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaSetReferenceResponse, error) {
+	return client.s.VSchemaSetReference(ctx, in)
+}
+
 // Validate is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) Validate(ctx context.Context, in *vtctldatapb.ValidateRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateResponse, error) {
 	return client.s.Validate(ctx, in)

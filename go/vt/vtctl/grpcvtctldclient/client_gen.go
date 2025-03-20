@@ -1055,6 +1055,15 @@ func (client *gRPCVtctldClient) VDiffStop(ctx context.Context, in *vtctldatapb.V
 	return client.c.VDiffStop(ctx, in, opts...)
 }
 
+// VSchemaSetReference is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaSetReference(ctx context.Context, in *vtctldatapb.VSchemaSetReferenceRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaSetReferenceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaSetReference(ctx, in, opts...)
+}
+
 // Validate is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) Validate(ctx context.Context, in *vtctldatapb.ValidateRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateResponse, error) {
 	if client.c == nil {

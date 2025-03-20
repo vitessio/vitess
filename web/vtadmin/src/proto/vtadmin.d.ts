@@ -79004,6 +79004,206 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a VSchemaSetReferenceRequest. */
+    interface IVSchemaSetReferenceRequest {
+
+        /** VSchemaSetReferenceRequest v_schema_name */
+        v_schema_name?: (string|null);
+
+        /** VSchemaSetReferenceRequest table_name */
+        table_name?: (string|null);
+
+        /** VSchemaSetReferenceRequest source */
+        source?: (string|null);
+    }
+
+    /** Represents a VSchemaSetReferenceRequest. */
+    class VSchemaSetReferenceRequest implements IVSchemaSetReferenceRequest {
+
+        /**
+         * Constructs a new VSchemaSetReferenceRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVSchemaSetReferenceRequest);
+
+        /** VSchemaSetReferenceRequest v_schema_name. */
+        public v_schema_name: string;
+
+        /** VSchemaSetReferenceRequest table_name. */
+        public table_name: string;
+
+        /** VSchemaSetReferenceRequest source. */
+        public source: string;
+
+        /**
+         * Creates a new VSchemaSetReferenceRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VSchemaSetReferenceRequest instance
+         */
+        public static create(properties?: vtctldata.IVSchemaSetReferenceRequest): vtctldata.VSchemaSetReferenceRequest;
+
+        /**
+         * Encodes the specified VSchemaSetReferenceRequest message. Does not implicitly {@link vtctldata.VSchemaSetReferenceRequest.verify|verify} messages.
+         * @param message VSchemaSetReferenceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVSchemaSetReferenceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VSchemaSetReferenceRequest message, length delimited. Does not implicitly {@link vtctldata.VSchemaSetReferenceRequest.verify|verify} messages.
+         * @param message VSchemaSetReferenceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVSchemaSetReferenceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VSchemaSetReferenceRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VSchemaSetReferenceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VSchemaSetReferenceRequest;
+
+        /**
+         * Decodes a VSchemaSetReferenceRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VSchemaSetReferenceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VSchemaSetReferenceRequest;
+
+        /**
+         * Verifies a VSchemaSetReferenceRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VSchemaSetReferenceRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VSchemaSetReferenceRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VSchemaSetReferenceRequest;
+
+        /**
+         * Creates a plain object from a VSchemaSetReferenceRequest message. Also converts values to other types if specified.
+         * @param message VSchemaSetReferenceRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VSchemaSetReferenceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VSchemaSetReferenceRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VSchemaSetReferenceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VSchemaSetReferenceResponse. */
+    interface IVSchemaSetReferenceResponse {
+    }
+
+    /** Represents a VSchemaSetReferenceResponse. */
+    class VSchemaSetReferenceResponse implements IVSchemaSetReferenceResponse {
+
+        /**
+         * Constructs a new VSchemaSetReferenceResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVSchemaSetReferenceResponse);
+
+        /**
+         * Creates a new VSchemaSetReferenceResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VSchemaSetReferenceResponse instance
+         */
+        public static create(properties?: vtctldata.IVSchemaSetReferenceResponse): vtctldata.VSchemaSetReferenceResponse;
+
+        /**
+         * Encodes the specified VSchemaSetReferenceResponse message. Does not implicitly {@link vtctldata.VSchemaSetReferenceResponse.verify|verify} messages.
+         * @param message VSchemaSetReferenceResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVSchemaSetReferenceResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VSchemaSetReferenceResponse message, length delimited. Does not implicitly {@link vtctldata.VSchemaSetReferenceResponse.verify|verify} messages.
+         * @param message VSchemaSetReferenceResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVSchemaSetReferenceResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VSchemaSetReferenceResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VSchemaSetReferenceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VSchemaSetReferenceResponse;
+
+        /**
+         * Decodes a VSchemaSetReferenceResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VSchemaSetReferenceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VSchemaSetReferenceResponse;
+
+        /**
+         * Verifies a VSchemaSetReferenceResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VSchemaSetReferenceResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VSchemaSetReferenceResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VSchemaSetReferenceResponse;
+
+        /**
+         * Creates a plain object from a VSchemaSetReferenceResponse message. Also converts values to other types if specified.
+         * @param message VSchemaSetReferenceResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VSchemaSetReferenceResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VSchemaSetReferenceResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VSchemaSetReferenceResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a WorkflowDeleteRequest. */
     interface IWorkflowDeleteRequest {
 

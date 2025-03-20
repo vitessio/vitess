@@ -2112,6 +2112,15 @@ message VDiffStopRequest {
 message VDiffStopResponse {
 }
 
+message VSchemaSetReferenceRequest {
+  string v_schema_name = 1;
+  string table_name = 2;
+  string source = 3;
+}
+
+message VSchemaSetReferenceResponse {
+}
+
 message WorkflowDeleteRequest {
   string keyspace = 1;
   string workflow = 2;

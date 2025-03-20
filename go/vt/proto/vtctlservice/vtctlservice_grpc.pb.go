@@ -471,6 +471,9 @@ type VtctldClient interface {
 	VDiffResume(ctx context.Context, in *vtctldata.VDiffResumeRequest, opts ...grpc.CallOption) (*vtctldata.VDiffResumeResponse, error)
 	VDiffShow(ctx context.Context, in *vtctldata.VDiffShowRequest, opts ...grpc.CallOption) (*vtctldata.VDiffShowResponse, error)
 	VDiffStop(ctx context.Context, in *vtctldata.VDiffStopRequest, opts ...grpc.CallOption) (*vtctldata.VDiffStopResponse, error)
+	// VSchemaSetReference sets up a reference table, which points to a source
+	// table in another vschema.
+	VSchemaSetReference(ctx context.Context, in *vtctldata.VSchemaSetReferenceRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetReferenceResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
 	WorkflowStatus(ctx context.Context, in *vtctldata.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
@@ -1649,6 +1652,15 @@ func (c *vtctldClient) VDiffStop(ctx context.Context, in *vtctldata.VDiffStopReq
 	return out, nil
 }
 
+func (c *vtctldClient) VSchemaSetReference(ctx context.Context, in *vtctldata.VSchemaSetReferenceRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetReferenceResponse, error) {
+	out := new(vtctldata.VSchemaSetReferenceResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaSetReference", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error) {
 	out := new(vtctldata.WorkflowDeleteResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowDelete", in, out, opts...)
@@ -2042,6 +2054,9 @@ type VtctldServer interface {
 	VDiffResume(context.Context, *vtctldata.VDiffResumeRequest) (*vtctldata.VDiffResumeResponse, error)
 	VDiffShow(context.Context, *vtctldata.VDiffShowRequest) (*vtctldata.VDiffShowResponse, error)
 	VDiffStop(context.Context, *vtctldata.VDiffStopRequest) (*vtctldata.VDiffStopResponse, error)
+	// VSchemaSetReference sets up a reference table, which points to a source
+	// table in another vschema.
+	VSchemaSetReference(context.Context, *vtctldata.VSchemaSetReferenceRequest) (*vtctldata.VSchemaSetReferenceResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
 	WorkflowStatus(context.Context, *vtctldata.WorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error)
@@ -2421,6 +2436,9 @@ func (UnimplementedVtctldServer) VDiffShow(context.Context, *vtctldata.VDiffShow
 }
 func (UnimplementedVtctldServer) VDiffStop(context.Context, *vtctldata.VDiffStopRequest) (*vtctldata.VDiffStopResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VDiffStop not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaSetReference(context.Context, *vtctldata.VSchemaSetReferenceRequest) (*vtctldata.VSchemaSetReferenceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaSetReference not implemented")
 }
 func (UnimplementedVtctldServer) WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowDelete not implemented")
@@ -4640,6 +4658,24 @@ func _Vtctld_VDiffStop_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_VSchemaSetReference_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaSetReferenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaSetReference(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaSetReference",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaSetReference(ctx, req.(*vtctldata.VSchemaSetReferenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_WorkflowDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.WorkflowDeleteRequest)
 	if err := dec(in); err != nil {
@@ -5226,6 +5262,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VDiffStop",
 			Handler:    _Vtctld_VDiffStop_Handler,
+		},
+		{
+			MethodName: "VSchemaSetReference",
+			Handler:    _Vtctld_VSchemaSetReference_Handler,
 		},
 		{
 			MethodName: "WorkflowDelete",
