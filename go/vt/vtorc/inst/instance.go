@@ -31,9 +31,9 @@ type Instance struct {
 	Hostname      string
 	Port          int
 	InstanceAlias string
-	// DisplayTabletType is the tablet type that the instance
+	// TabletType is the tablet type that the instance
 	// publishes to the VtGates and believes itself to be.
-	DisplayTabletType            topodatapb.TabletType
+	TabletType                   topodatapb.TabletType
 	ServerID                     uint
 	ServerUUID                   string
 	Version                      string

@@ -48817,8 +48817,8 @@ export namespace replicationdata {
         /** FullStatus semi_sync_blocked */
         semi_sync_blocked?: (boolean|null);
 
-        /** FullStatus display_tablet_type */
-        display_tablet_type?: (topodata.TabletType|null);
+        /** FullStatus tablet_type */
+        tablet_type?: (topodata.TabletType|null);
     }
 
     /** Represents a FullStatus. */
@@ -48902,8 +48902,8 @@ export namespace replicationdata {
         /** FullStatus semi_sync_blocked. */
         public semi_sync_blocked: boolean;
 
-        /** FullStatus display_tablet_type. */
-        public display_tablet_type: topodata.TabletType;
+        /** FullStatus tablet_type. */
+        public tablet_type: topodata.TabletType;
 
         /**
          * Creates a new FullStatus instance using the specified properties.

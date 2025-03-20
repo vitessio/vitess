@@ -360,7 +360,7 @@ func TestVTOrcRepairs(t *testing.T) {
 		// Wait for VTOrc to detect the mismatch and promote the tablet.
 		require.Eventuallyf(t, func() bool {
 			fs := cluster.FullStatus(t, replica, clusterInfo.ClusterInstance.Hostname)
-			return fs.DisplayTabletType == topodatapb.TabletType_PRIMARY
+			return fs.TabletType == topodatapb.TabletType_PRIMARY
 		}, 10*time.Second, 1*time.Second, "Primary tablet's display type didn't match the topo record")
 		// Also check that the replica gets promoted and can accept writes.
 		utils.CheckReplication(t, clusterInfo, replica, []*cluster.Vttablet{curPrimary, otherReplica}, 15*time.Second)

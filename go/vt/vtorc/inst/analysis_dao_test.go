@@ -303,7 +303,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 			shardWanted:    "0",
 			codeWanted:     PrimaryIsReadOnly,
 		}, {
-			name: "PrimaryDisplayTypeMismatch",
+			name: "PrimaryCurrentTypeMismatch",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -319,11 +319,11 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountReplicas:      4,
 				CountValidReplicas: 4,
 				IsPrimary:          1,
-				DisplayTabletType:  2,
+				CurrentTabletType:  2,
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			codeWanted:     PrimaryDisplayTypeMismatch,
+			codeWanted:     PrimaryCurrentTypeMismatch,
 		}, {
 			name: "PrimarySemiSyncMustNotBeSet",
 			info: []*test.InfoForRecoveryAnalysis{{

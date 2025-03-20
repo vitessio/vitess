@@ -190,7 +190,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SemiSyncBlocked:             tm.SemiSyncMonitor.AllWritesBlocked(),
 		SuperReadOnly:               superReadOnly,
 		ReplicationConfiguration:    replConfiguration,
-		DisplayTabletType:           tm.Tablet().Type,
+		TabletType:                  tm.Tablet().Type,
 	}, nil
 }
 

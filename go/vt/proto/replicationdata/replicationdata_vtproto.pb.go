@@ -145,7 +145,7 @@ func (m *FullStatus) CloneVT() *FullStatus {
 	r.ReplicationConfiguration = m.ReplicationConfiguration.CloneVT()
 	r.DiskStalled = m.DiskStalled
 	r.SemiSyncBlocked = m.SemiSyncBlocked
-	r.DisplayTabletType = m.DisplayTabletType
+	r.TabletType = m.TabletType
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -556,8 +556,8 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.DisplayTabletType != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.DisplayTabletType))
+	if m.TabletType != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TabletType))
 		i--
 		dAtA[i] = 0x1
 		i--
@@ -1016,8 +1016,8 @@ func (m *FullStatus) SizeVT() (n int) {
 	if m.SemiSyncBlocked {
 		n += 3
 	}
-	if m.DisplayTabletType != 0 {
-		n += 2 + protohelpers.SizeOfVarint(uint64(m.DisplayTabletType))
+	if m.TabletType != 0 {
+		n += 2 + protohelpers.SizeOfVarint(uint64(m.TabletType))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -2637,9 +2637,9 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 			m.SemiSyncBlocked = bool(v != 0)
 		case 25:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field DisplayTabletType", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletType", wireType)
 			}
-			m.DisplayTabletType = 0
+			m.TabletType = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -2649,7 +2649,7 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.DisplayTabletType |= topodata.TabletType(b&0x7F) << shift
+				m.TabletType |= topodata.TabletType(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

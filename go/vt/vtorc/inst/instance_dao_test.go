@@ -38,9 +38,9 @@ func stripSpaces(s string) string {
 }
 
 func mkTestInstances() []*Instance {
-	i710 := Instance{InstanceAlias: "zone1-i710", Hostname: "i710", Port: 3306, DisplayTabletType: topodatapb.TabletType_PRIMARY, ServerID: 710, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 10}}
-	i720 := Instance{InstanceAlias: "zone1-i720", Hostname: "i720", Port: 3306, DisplayTabletType: topodatapb.TabletType_REPLICA, ServerID: 720, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 20}}
-	i730 := Instance{InstanceAlias: "zone1-i730", Hostname: "i730", Port: 3306, DisplayTabletType: topodatapb.TabletType_REPLICA, ServerID: 730, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 30}}
+	i710 := Instance{InstanceAlias: "zone1-i710", Hostname: "i710", Port: 3306, TabletType: topodatapb.TabletType_PRIMARY, ServerID: 710, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 10}}
+	i720 := Instance{InstanceAlias: "zone1-i720", Hostname: "i720", Port: 3306, TabletType: topodatapb.TabletType_REPLICA, ServerID: 720, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 20}}
+	i730 := Instance{InstanceAlias: "zone1-i730", Hostname: "i730", Port: 3306, TabletType: topodatapb.TabletType_REPLICA, ServerID: 730, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 30}}
 	instances := []*Instance{&i710, &i720, &i730}
 	for _, instance := range instances {
 		instance.Version = "5.6.7"
@@ -61,7 +61,7 @@ func TestMkInsertSingle(t *testing.T) {
 
 	// one instance
 	s1 := `INSERT OR IGNORE INTO database_instance
-				(alias, hostname, port, last_checked, last_attempted_check, last_check_partial_success, display_tablet_type, server_id, server_uuid,
+				(alias, hostname, port, last_checked, last_attempted_check, last_check_partial_success, tablet_type, server_id, server_uuid,
 				version, major_version, version_comment, binlog_server, read_only, binlog_format,
 				binlog_row_image, log_bin, log_replica_updates, binary_log_file, binary_log_pos, source_host, source_port, replica_net_timeout, heartbeat_interval,
 				replica_sql_running, replica_io_running, replication_sql_thread_state, replication_io_thread_state, has_replication_filters, supports_oracle_gtid, oracle_gtid, source_uuid, ancestry_uuid, executed_gtid_set, gtid_mode, gtid_purged, gtid_errant,
@@ -84,7 +84,7 @@ func TestMkInsertThree(t *testing.T) {
 
 	// three instances
 	s3 := `REPLACE INTO database_instance
-				(alias, hostname, port, last_checked, last_attempted_check, last_check_partial_success, display_tablet_type, server_id, server_uuid,
+				(alias, hostname, port, last_checked, last_attempted_check, last_check_partial_success, tablet_type, server_id, server_uuid,
 				version, major_version, version_comment, binlog_server, read_only, binlog_format,
 				binlog_row_image, log_bin, log_replica_updates, binary_log_file, binary_log_pos, source_host, source_port, replica_net_timeout, heartbeat_interval,
 				replica_sql_running, replica_io_running, replication_sql_thread_state, replication_io_thread_state, has_replication_filters, supports_oracle_gtid, oracle_gtid, source_uuid, ancestry_uuid, executed_gtid_set, gtid_mode, gtid_purged, gtid_errant,
@@ -371,7 +371,7 @@ func TestReadInstanceAllFields(t *testing.T) {
 		Hostname:                     "localhost",
 		Port:                         6711,
 		InstanceAlias:                "zone1-0000000100",
-		DisplayTabletType:            topodatapb.TabletType_REPLICA,
+		TabletType:                   topodatapb.TabletType_REPLICA,
 		ServerID:                     1094500338,
 		ServerUUID:                   "729a5138-8680-11ed-acf8-d6b0ef9f4eaa",
 		Version:                      "8.0.31",
@@ -503,7 +503,7 @@ func TestReadInstancesByCondition(t *testing.T) {
 			instancesRequired: []string{"zone1-0000000100", "zone1-0000000112", "zone2-0000000200"},
 		}, {
 			name:              "tablet type is primary",
-			condition:         "display_tablet_type=1",
+			condition:         "database_instance.tablet_type=1",
 			sort:              "alias asc",
 			instancesRequired: []string{"zone1-0000000101"},
 		},
