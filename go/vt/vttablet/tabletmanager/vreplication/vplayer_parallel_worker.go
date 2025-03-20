@@ -131,11 +131,11 @@ func (w *parallelWorker) updatePosByEvent(ctx context.Context, event *binlogdata
 
 func (w *parallelWorker) commitEvents() chan error {
 	event := w.producer.generateCommitWorkerEvent()
-	log.Errorf("========== QQQ commitEvents: %v", event)
+	// log.Errorf("========== QQQ commitEvents: %v", event)
 	c := w.subscribeCommitWorkerEvent(event.SequenceNumber)
-	log.Errorf("========== QQQ commitEvents: subscribed to %v in worker %v", event.SequenceNumber, w.index)
+	// log.Errorf("========== QQQ commitEvents: subscribed to %v in worker %v", event.SequenceNumber, w.index)
 	w.events <- event
-	log.Errorf("========== QQQ commitEvents: pushed event")
+	// log.Errorf("========== QQQ commitEvents: pushed event")
 	return c
 }
 
