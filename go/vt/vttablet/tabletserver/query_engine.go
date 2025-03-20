@@ -189,7 +189,6 @@ type QueryEngine struct {
 	// Note: queryErrorCountsWithCode is similar to queryErrorCounts except it contains error code as an additional dimension
 	queryCounts, queryCountsWithTabletType, queryTimes, queryErrorCounts, queryErrorCountsWithCode, queryRowsAffected, queryRowsReturned, queryTextCharsProcessed *stats.CountersWithMultiLabels
 	queryEnginePlanCacheHits, queryEnginePlanCacheMisses                                                                                                          *stats.CounterFunc
-	queryCacheHitsDeprecated, queryCacheMissesDeprecated                                                                                                          *stats.CounterFunc
 
 	// stats flags
 	enablePerWorkloadTableMetrics bool
@@ -273,50 +272,26 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Load)
 	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Load)
 
-	// QueryCacheLength is deprecated in v21 and will be removed in >=v22. This metric is replaced by QueryEnginePlanCacheLength.
-	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query plan cache length (deprecated: please use QueryEnginePlanCacheLength)", func() int64 {
-		return int64(qe.plans.Len())
-	})
 	env.Exporter().NewGaugeFunc("QueryEnginePlanCacheLength", "Query engine query plan cache length", func() int64 {
 		return int64(qe.plans.Len())
 	})
 
-	// QueryCacheSize is deprecated in v21 and will be removed in >=v22. This metric is replaced QueryEnginePlanCacheSize.
-	env.Exporter().NewGaugeFunc("QueryCacheSize", "Query engine query plan cache size (deprecated: please use QueryEnginePlanCacheSize)", func() int64 {
-		return int64(qe.plans.UsedCapacity())
-	})
 	env.Exporter().NewGaugeFunc("QueryEnginePlanCacheSize", "Query engine query plan cache size", func() int64 {
 		return int64(qe.plans.UsedCapacity())
 	})
 
-	// QueryCacheCapacity is deprecated in v21 and will be removed in >=v22. This metric is replaced by QueryEnginePlanCacheCapacity.
-	env.Exporter().NewGaugeFunc("QueryCacheCapacity", "Query engine query plan cache capacity (deprecated: please use QueryEnginePlanCacheCapacity)", func() int64 {
-		return int64(qe.plans.MaxCapacity())
-	})
 	env.Exporter().NewGaugeFunc("QueryEnginePlanCacheCapacity", "Query engine query plan cache capacity", func() int64 {
 		return int64(qe.plans.MaxCapacity())
 	})
 
-	// QueryCacheEvictions is deprecated in v21 and will be removed in >=v22. This metric is replaced by QueryEnginePlanCacheEvictions.
-	env.Exporter().NewCounterFunc("QueryCacheEvictions", "Query engine query plan cache evictions (deprecated: please use QueryEnginePlanCacheEvictions)", func() int64 {
-		return qe.plans.Metrics.Evicted()
-	})
 	env.Exporter().NewCounterFunc("QueryEnginePlanCacheEvictions", "Query engine query plan cache evictions", func() int64 {
 		return qe.plans.Metrics.Evicted()
 	})
 
-	// QueryCacheHits is deprecated in v21 and will be removed in >=v22. This metric is replaced by QueryEnginePlanCacheHits.
-	qe.queryCacheHitsDeprecated = env.Exporter().NewCounterFunc("QueryCacheHits", "Query engine query plan cache hits (deprecated: please use QueryEnginePlanCacheHits)", func() int64 {
-		return qe.plans.Metrics.Hits()
-	})
 	qe.queryEnginePlanCacheHits = env.Exporter().NewCounterFunc("QueryEnginePlanCacheHits", "Query engine query plan cache hits", func() int64 {
 		return qe.plans.Metrics.Hits()
 	})
 
-	// QueryCacheMisses is deprecated in v21 and will be removed in >=v22. This metric is replaced by QueryEnginePlanCacheMisses.
-	qe.queryCacheMissesDeprecated = env.Exporter().NewCounterFunc("QueryCacheMisses", "Query engine query plan cache misses (deprecated: please use QueryEnginePlanCacheMisses)", func() int64 {
-		return qe.plans.Metrics.Misses()
-	})
 	qe.queryEnginePlanCacheMisses = env.Exporter().NewCounterFunc("QueryEnginePlanCacheMisses", "Query engine query plan cache misses", func() int64 {
 		return qe.plans.Metrics.Misses()
 	})
@@ -399,12 +374,12 @@ func (qe *QueryEngine) Close() {
 
 var errNoCache = errors.New("plan should not be cached")
 
-func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPlan, error) {
+func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string, noRowsLimit bool) (*TabletPlan, error) {
 	statement, err := qe.env.Environment().Parser().Parse(sql)
 	if err != nil {
 		return nil, err
 	}
-	splan, err := planbuilder.Build(qe.env.Environment(), statement, curSchema.tables, qe.env.Config().DB.DBName, qe.env.Config().EnableViews)
+	splan, err := planbuilder.Build(qe.env.Environment(), statement, curSchema.tables, qe.env.Config().DB.DBName, noRowsLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +394,7 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string) (*TabletPla
 }
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in an LRU cache.
-func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
+func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool, noRowsLimit bool) (*TabletPlan, error) {
 	span, _ := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
 
@@ -429,10 +404,10 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	curSchema := qe.schema.Load()
 
 	if skipQueryPlanCache {
-		plan, err = qe.getPlan(curSchema, sql)
+		plan, err = qe.getPlan(curSchema, sql, noRowsLimit)
 	} else {
-		plan, logStats.CachedPlan, err = qe.plans.GetOrLoad(PlanCacheKey(sql), curSchema.epoch, func() (*TabletPlan, error) {
-			return qe.getPlan(curSchema, sql)
+		plan, logStats.CachedPlan, err = qe.plans.GetOrLoad(PlanCacheKey(qe.getPlanCacheKey(sql, noRowsLimit)), curSchema.epoch, func() (*TabletPlan, error) {
+			return qe.getPlan(curSchema, sql, noRowsLimit)
 		})
 	}
 
@@ -492,6 +467,14 @@ func (qe *QueryEngine) GetStreamPlan(ctx context.Context, logStats *tabletenv.Lo
 // gets key used to cache stream query plan
 func (qe *QueryEngine) getStreamPlanCacheKey(sql string) string {
 	return "__STREAM__" + sql
+}
+
+// gets key used to cache stream query plan
+func (qe *QueryEngine) getPlanCacheKey(sql string, noRowsLimit bool) string {
+	if noRowsLimit {
+		return "__UNLIMITED__" + sql
+	}
+	return sql
 }
 
 // GetMessageStreamPlan builds a plan for Message streaming.

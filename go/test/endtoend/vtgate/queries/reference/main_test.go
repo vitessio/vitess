@@ -128,13 +128,13 @@ func TestMain(m *testing.M) {
 						}
 						shard := fmt.Sprintf("%s/%s@primary", ks.Name, s.Name)
 						session := vtgateConn.Session(shard, nil)
-						_, err := session.Execute(ctx, "SHOW CREATE TABLE zip_detail", map[string]*querypb.BindVariable{})
+						_, err := session.Execute(ctx, "SHOW CREATE TABLE zip_detail", map[string]*querypb.BindVariable{}, false)
 						if err != nil {
 							fmt.Fprintf(os.Stderr, "Failed to SHOW CREATE TABLE zip_detail; might not exist yet: %v\n", err)
 							time.Sleep(1 * time.Second)
 							continue
 						}
-						qr, err := session.Execute(ctx, "SELECT * FROM zip_detail", map[string]*querypb.BindVariable{})
+						qr, err := session.Execute(ctx, "SELECT * FROM zip_detail", map[string]*querypb.BindVariable{}, false)
 						if err != nil {
 							fmt.Fprintf(os.Stderr, "Failed to query sharded keyspace for zip_detail rows: %v\n", err)
 							done <- false
@@ -184,7 +184,7 @@ func TestMain(m *testing.M) {
 			INSERT INTO zip_detail(id, zip_id, discontinued_at)
 			VALUES (1, 1, '2022-05-13'),
 				   (2, 2, '2022-08-15')
-		`, map[string]*querypb.BindVariable{}); err != nil {
+		`, map[string]*querypb.BindVariable{}, false); err != nil {
 			return 1
 		}
 
@@ -194,7 +194,7 @@ func TestMain(m *testing.M) {
 			VALUES (1, 1, 'Failed delivery due to discontinued zipcode.'),
 			       (2, 2, 'Failed delivery due to discontinued zipcode.'),
 			       (3, 3, 'Failed delivery due to unknown reason.');
-		`, map[string]*querypb.BindVariable{}); err != nil {
+		`, map[string]*querypb.BindVariable{}, false); err != nil {
 			return 1
 		}
 

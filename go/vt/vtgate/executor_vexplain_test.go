@@ -138,7 +138,7 @@ func TestVExplainKeys(t *testing.T) {
 		t.Run(tt.Query, func(t *testing.T) {
 			executor, _, _, _, _ := createExecutorEnv(t)
 			session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
-			gotResult, err := executor.Execute(context.Background(), nil, "Execute", session, "vexplain keys "+tt.Query, nil)
+			gotResult, err := executorExecSession(context.Background(), executor, session, "vexplain keys "+tt.Query, nil)
 			require.NoError(t, err)
 
 			gotRowString := gotResult.Rows[0][0].ToString()

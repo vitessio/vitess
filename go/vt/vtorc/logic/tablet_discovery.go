@@ -31,6 +31,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -54,9 +55,47 @@ var (
 	// This is populated by parsing `--clusters_to_watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
 
+	// tablet stats
+	statsTabletsWatchedByCell = stats.NewGaugesFuncWithMultiLabels(
+		"TabletsWatchedByCell",
+		"Number of tablets watched by cell",
+		[]string{"Cell"},
+		getTabletsWatchedByCellStats,
+	)
+	statsTabletsWatchedByShard = stats.NewGaugesFuncWithMultiLabels(
+		"TabletsWatchedByShard",
+		"Number of tablets watched by keyspace/shard",
+		[]string{"Keyspace", "Shard"},
+		getTabletsWatchedByShardStats,
+	)
+
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
 )
+
+// getTabletsWatchedByCellStats returns the number of tablets watched by cell in stats format.
+func getTabletsWatchedByCellStats() map[string]int64 {
+	tabletCountsByCell, err := inst.ReadTabletCountsByCell()
+	if err != nil {
+		log.Errorf("Failed to read tablet counts by cell: %+v", err)
+	}
+	return tabletCountsByCell
+}
+
+// getTabletsWatchedByShardStats returns the number of tablets watched by keyspace/shard in stats format.
+func getTabletsWatchedByShardStats() map[string]int64 {
+	tabletsWatchedByShard := make(map[string]int64)
+	tabletCountsByKS, err := inst.ReadTabletCountsByKeyspaceShard()
+	if err != nil {
+		log.Errorf("Failed to read tablet counts by shard: %+v", err)
+	}
+	for keyspace, countsByShard := range tabletCountsByKS {
+		for shard, tabletCount := range countsByShard {
+			tabletsWatchedByShard[keyspace+"."+shard] = tabletCount
+		}
+	}
+	return tabletsWatchedByShard
+}
 
 // RegisterFlags registers the flags required by VTOrc
 func RegisterFlags(fs *pflag.FlagSet) {
@@ -315,22 +354,20 @@ func getLockAction(analysedInstance string, code inst.AnalysisCode) string {
 }
 
 // LockShard locks the keyspace-shard preventing others from performing conflicting actions.
-func LockShard(ctx context.Context, tabletAlias string, lockAction string) (context.Context, func(*error), error) {
-	if tabletAlias == "" {
-		return nil, nil, errors.New("can't lock shard: instance is unspecified")
+func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context.Context, func(*error), error) {
+	if keyspace == "" {
+		return nil, nil, errors.New("can't lock shard: keyspace is unspecified")
+	}
+	if shard == "" {
+		return nil, nil, errors.New("can't lock shard: shard name is unspecified")
 	}
 	val := atomic.LoadInt32(&hasReceivedSIGTERM)
 	if val > 0 {
 		return nil, nil, errors.New("can't lock shard: SIGTERM received")
 	}
 
-	tablet, err := inst.ReadTablet(tabletAlias)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	atomic.AddInt32(&shardsLockCounter, 1)
-	ctx, unlock, err := ts.TryLockShard(ctx, tablet.Keyspace, tablet.Shard, lockAction)
+	ctx, unlock, err := ts.TryLockShard(ctx, keyspace, shard, lockAction)
 	if err != nil {
 		atomic.AddInt32(&shardsLockCounter, -1)
 		return nil, nil, err

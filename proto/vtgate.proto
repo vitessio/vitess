@@ -159,6 +159,8 @@ message Session {
 
   // MigrationContext
   string migration_context = 27;
+
+  bool error_until_rollback = 28;
 }
 
 // PrepareData keeps the prepared statement and other information related for execution of it.
@@ -194,6 +196,8 @@ message ExecuteRequest {
   // Deprecated: use session.in_transaction instead
   // bool not_in_transaction = 5;
   reserved 4, 5, 6, 7;
+
+  bool prepared = 8;
 }
 
 // ExecuteResponse is the returned value from Execute.
@@ -354,6 +358,8 @@ message PrepareResponse {
 
   // fields contains the fields, only set if error is unset.
   repeated query.Field fields = 3;
+
+  uint32 params_count = 4;
 }
 
 // CloseSessionRequest is the payload to CloseSession.

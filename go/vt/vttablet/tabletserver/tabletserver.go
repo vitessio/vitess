@@ -553,7 +553,7 @@ func (tsv *TabletServer) begin(
 				return err
 			}
 			for _, query := range postBeginQueries {
-				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true)
+				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
 				if err != nil {
 					return err
 				}
@@ -902,7 +902,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
 
-			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options))
+			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options), options.GetInDmlExecution() && tsv.config.PassthroughDML)
 			if err != nil {
 				return err
 			}
@@ -1138,7 +1138,7 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *tabletenv.LogStats, sql string, bindVariables map[string]*querypb.BindVariable) (string, string) {
 	// Strip trailing comments so we don't pollute the query cache.
 	sql, _ = sqlparser.SplitMarginComments(sql)
-	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false)
+	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false)
 	if err != nil {
 		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)
 		return "", ""
@@ -1345,7 +1345,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 			}
 
 			for _, query := range postBeginQueries {
-				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true)
+				plan, err := tsv.qe.GetPlan(ctx, logStats, query, true, false)
 				if err != nil {
 					return err
 				}
@@ -1948,62 +1948,12 @@ func (tsv *TabletServer) registerThrottlerCheckHandlers() {
 			}
 		})
 	}
-	handle("/throttler/check", base.ShardScope)
 	handle("/throttler/check-self", base.SelfScope)
-}
-
-// registerThrottlerStatusHandler registers a throttler "status" request
-func (tsv *TabletServer) registerThrottlerStatusHandler() {
-	tsv.exporter.HandleFunc("/throttler/status", func(w http.ResponseWriter, r *http.Request) {
-		status := tsv.lagThrottler.Status()
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(status)
-	})
-}
-
-// registerThrottlerThrottleAppHandler registers a throttler "throttle-app" request
-func (tsv *TabletServer) registerThrottlerThrottleAppHandler() {
-	tsv.exporter.HandleFunc("/throttler/throttle-app", func(w http.ResponseWriter, r *http.Request) {
-		appName := r.URL.Query().Get("app")
-		d, err := time.ParseDuration(r.URL.Query().Get("duration"))
-		if err != nil {
-			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
-			return
-		}
-		var ratio = throttle.DefaultThrottleRatio
-		if ratioParam := r.URL.Query().Get("ratio"); ratioParam != "" {
-			ratio, err = strconv.ParseFloat(ratioParam, 64)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
-				return
-			}
-		}
-		appThrottle := tsv.lagThrottler.ThrottleApp(appName, time.Now().Add(d), ratio, false)
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(appThrottle)
-	})
-	tsv.exporter.HandleFunc("/throttler/unthrottle-app", func(w http.ResponseWriter, r *http.Request) {
-		appName := r.URL.Query().Get("app")
-		appThrottle := tsv.lagThrottler.UnthrottleApp(appName)
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(appThrottle)
-	})
-	tsv.exporter.HandleFunc("/throttler/throttled-apps", func(w http.ResponseWriter, r *http.Request) {
-		throttledApps := tsv.lagThrottler.ThrottledApps()
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(throttledApps)
-	})
 }
 
 // registerThrottlerHandlers registers all throttler handlers
 func (tsv *TabletServer) registerThrottlerHandlers() {
 	tsv.registerThrottlerCheckHandlers()
-	tsv.registerThrottlerStatusHandler()
-	tsv.registerThrottlerThrottleAppHandler()
 }
 
 func (tsv *TabletServer) registerDebugEnvHandler() {

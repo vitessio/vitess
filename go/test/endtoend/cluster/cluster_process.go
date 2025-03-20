@@ -966,7 +966,7 @@ func (cluster *LocalProcessCluster) ExecOnVTGate(ctx context.Context, addr strin
 	session := conn.Session(target, opts)
 	defer conn.Close()
 
-	return session.Execute(ctx, sql, bindvars)
+	return session.Execute(ctx, sql, bindvars, false)
 }
 
 // StreamTabletHealth invokes a HealthStream on a local cluster Vttablet and

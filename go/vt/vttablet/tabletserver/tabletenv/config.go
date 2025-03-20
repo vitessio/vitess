@@ -209,8 +209,6 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
 	fs.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
 	fs.BoolVar(&currentConfig.SanitizeLogMessages, "sanitize_log_messages", false, "Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.")
-	_ = fs.Bool("queryserver-enable-settings-pool", true, "Enable pooling of connections with modified system settings")
-	_ = fs.MarkDeprecated("queryserver-enable-settings-pool", "New pool implementation does it internally and at the api level this has been enabled since v17")
 
 	fs.Int64Var(&currentConfig.RowStreamer.MaxInnoDBTrxHistLen, "vreplication_copy_phase_max_innodb_history_list_length", 1000000, "The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 	fs.Int64Var(&currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
@@ -931,7 +929,12 @@ func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
 		return errors.New("database app user not specified")
 	}
 	if c.DB.App.Password == "" {
-		return errors.New("database app user password not specified")
+		_, pass, err := dbconfigs.GetCredentialsServer().GetUserAndPassword(c.DB.App.User)
+		if err == nil && pass != "" {
+			c.DB.App.Password = pass
+		} else {
+			return errors.New("database app user password not specified")
+		}
 	}
 	// Replication fixes should be disabled for Unmanaged tablets.
 	mysqlctl.DisableActiveReparents = true

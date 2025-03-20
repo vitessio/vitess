@@ -60,7 +60,7 @@ func TestDDLFlags(t *testing.T) {
 			session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 			enableDirectDDL.Set(testcase.enableDirectDDL)
 			enableOnlineDDL.Set(testcase.enableOnlineDDL)
-			_, err := executor.Execute(ctx, nil, "TestDDLFlags", session, testcase.sql, nil)
+			_, err := executor.Execute(ctx, nil, "TestDDLFlags", session, testcase.sql, nil, false)
 			if testcase.wantErr {
 				require.EqualError(t, err, testcase.err)
 			} else {

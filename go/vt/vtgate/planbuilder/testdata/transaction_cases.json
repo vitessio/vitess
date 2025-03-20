@@ -3,6 +3,7 @@
     "comment": "Begin",
     "query": "begin",
     "plan": {
+      "Type": "Complex",
       "QueryType": "BEGIN",
       "Original": "begin"
     }
@@ -11,6 +12,7 @@
     "comment": "Start Transaction",
     "query": "start transaction",
     "plan": {
+      "Type": "Complex",
       "QueryType": "BEGIN",
       "Original": "start transaction"
     }
@@ -19,6 +21,7 @@
     "comment": "Commit",
     "query": "commit",
     "plan": {
+      "Type": "Complex",
       "QueryType": "COMMIT",
       "Original": "commit"
     }
@@ -27,6 +30,7 @@
     "comment": "Rollback",
     "query": "rollback",
     "plan": {
+      "Type": "Complex",
       "QueryType": "ROLLBACK",
       "Original": "rollback"
     }
@@ -35,6 +39,7 @@
     "comment": "Savepoint",
     "query": "savepoint a",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SAVEPOINT",
       "Original": "savepoint a"
     }
@@ -43,6 +48,7 @@
     "comment": "Savepoint rollback",
     "query": "rollback work to savepoint a",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SAVEPOINT_ROLLBACK",
       "Original": "rollback work to savepoint a"
     }
@@ -51,6 +57,7 @@
     "comment": "Savepoint release",
     "query": "release savepoint a",
     "plan": {
+      "Type": "Complex",
       "QueryType": "RELEASE",
       "Original": "release savepoint a"
     }

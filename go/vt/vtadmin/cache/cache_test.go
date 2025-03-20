@@ -226,3 +226,48 @@ func TestEnqueueBackfillTimeout(t *testing.T) {
 		assert.Equal(t, q.shouldFail, !ok, "enqueue should %s wait timeout", q.msg)
 	}
 }
+
+func TestUpsertCacheKey(t *testing.T) {
+	var callcount int
+	c := cache.New(func(ctx context.Context, req intkey) (any, error) {
+		time.Sleep(time.Millisecond * 50) // make fills take time so that the second enqueue exceeds WaitTimeout
+		callcount++
+		return nil, nil
+	}, cache.Config{
+		BackfillEnqueueWaitTime: time.Millisecond * 10,
+	})
+
+	var inserts = []struct {
+		shouldFail  bool
+		msg         string
+		key         intkey
+		val         any
+		expectedVal any
+		duration    time.Duration
+	}{
+		{
+			shouldFail:  false,
+			key:         intkey(1),
+			val:         "Old Value",
+			msg:         "first add should succeed",
+			expectedVal: "Old Value",
+		},
+		{
+			shouldFail:  false,
+			key:         intkey(1),
+			val:         "New Value",
+			msg:         "second update should succeed",
+			expectedVal: "New Value",
+		},
+	}
+	for _, tt := range inserts {
+		err := c.Add(tt.key, tt.val, tt.duration)
+		if !tt.shouldFail {
+			assert.Nil(t, err)
+		}
+
+		val, exists := c.Get(tt.key)
+		assert.True(t, exists)
+		assert.Equal(t, val, tt.expectedVal)
+	}
+}

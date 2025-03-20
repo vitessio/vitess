@@ -46,6 +46,8 @@ func (c *cow) copyOnRewriteAST(n AST, parent AST) (out AST, changed bool) {
 		return c.copyOnRewriteValueContainer(n, parent)
 	case ValueSliceContainer:
 		return c.copyOnRewriteValueSliceContainer(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -286,6 +288,8 @@ func (c *cow) copyOnRewriteSubIface(n SubIface, parent AST) (out AST, changed bo
 	switch n := n.(type) {
 	case *SubImpl:
 		return c.copyOnRewriteRefOfSubImpl(n, parent)
+	case Visitable:
+		return c.copyOnRewriteVisitable(n, parent)
 	default:
 		// this should never happen
 		return nil, false
@@ -365,6 +369,24 @@ func (c *cow) copyOnRewriteRefOfValueSliceContainer(n *ValueSliceContainer, pare
 			if c.cloned != nil {
 				c.cloned(n, out)
 			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteVisitable(n Visitable, parent AST) (out AST, changed bool) {
+	if c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_inner, changedInner := c.copyOnRewriteAST(n.VisitThis(), n)
+		if changedInner {
+			res := n.Clone(_inner)
+			out = res
 			changed = true
 		}
 	}

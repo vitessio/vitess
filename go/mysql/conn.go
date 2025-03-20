@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -1122,7 +1121,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
-	fieldSent := false
+	receivedResult := false
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
 	prepare := c.PrepareData[stmtID]
@@ -1132,8 +1131,8 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 			return io.EOF
 		}
 
-		if !fieldSent {
-			fieldSent = true
+		if !receivedResult {
+			receivedResult = true
 
 			if len(qr.Fields) == 0 {
 				sendFinished = true
@@ -1157,7 +1156,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	})
 
 	// If no field was sent, we expect an error.
-	if !fieldSent {
+	if !receivedResult {
 		// This is just a failsafe. Should never happen.
 		if err == nil || err == io.EOF {
 			err = sqlerror.NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
@@ -1200,10 +1199,8 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	query := c.parseComPrepare(data)
 	c.recycleReadPacket()
 
-	var queries []string
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
-		var err error
-		queries, err = handler.Env().Parser().SplitStatementToPieces(query)
+		queries, err := handler.Env().Parser().SplitStatementToPieces(query)
 		if err != nil {
 			log.Errorf("Conn %v: Error splitting query: %v", c, err)
 			return c.writeErrorPacketFromErrorAndLog(err)
@@ -1212,56 +1209,26 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 			log.Errorf("Conn %v: can not prepare multiple statements", c)
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
-	} else {
-		queries = []string{query}
+		query = queries[0]
+	}
+
+	fld, paramsCount, err := handler.ComPrepare(c, query)
+	if err != nil {
+		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
 	// Populate PrepareData
 	c.StatementID++
 	prepare := &PrepareData{
 		StatementID: c.StatementID,
-		PrepareStmt: queries[0],
+		PrepareStmt: query,
+		ParamsCount: paramsCount,
+		ParamsType:  make([]int32, paramsCount),
+		BindVars:    make(map[string]*querypb.BindVariable, paramsCount),
 	}
-
-	statement, err := handler.Env().Parser().ParseStrictDDL(query)
-	if err != nil {
-		log.Errorf("Conn %v: Error parsing prepared statement: %v", c, err)
-		if !c.writeErrorPacketFromErrorAndLog(err) {
-			return false
-		}
-	}
-
-	paramsCount := uint16(0)
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		switch node := node.(type) {
-		case *sqlparser.Argument:
-			if strings.HasPrefix(node.Name, "v") {
-				paramsCount++
-			}
-		}
-		return true, nil
-	}, statement)
-
-	if paramsCount > 0 {
-		prepare.ParamsCount = paramsCount
-		prepare.ParamsType = make([]int32, paramsCount)
-		prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
-	}
-
-	bindVars := make(map[string]*querypb.BindVariable, paramsCount)
-	for i := range uint16(paramsCount) {
-		parameterID := fmt.Sprintf("v%d", i+1)
-		bindVars[parameterID] = &querypb.BindVariable{}
-	}
-
 	c.PrepareData[c.StatementID] = prepare
 
-	fld, err := handler.ComPrepare(c, queries[0], bindVars)
-	if err != nil {
-		return c.writeErrorPacketFromErrorAndLog(err)
-	}
-
-	if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
+	if err := c.writePrepare(fld, prepare); err != nil {
 		log.Error("Error writing prepare data to client %v: %v", c.ConnectionID, err)
 		return false
 	}

@@ -3,6 +3,7 @@
     "comment": "select unsharded, qualified, table mirrored to unsharded table",
     "query": "select t1.id from unsharded_src1.t1 where t1.id = 1",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select t1.id from unsharded_src1.t1 where t1.id = 1",
       "Instructions": {
@@ -44,6 +45,7 @@
     "comment": "select unsharded, qualified, table mirrored to unsharded table with zero percentage",
     "query": "select t3.id from unsharded_src1.t3 where t3.id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select t3.id from unsharded_src1.t3 where t3.id = 1",
       "Instructions": {
@@ -66,6 +68,7 @@
     "comment": "select unsharded, qualified, table mirrored to sharded table",
     "query": "select t2.id from unsharded_src1.t2 where t2.id = 1",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select t2.id from unsharded_src1.t2 where t2.id = 1",
       "Instructions": {
@@ -111,6 +114,7 @@
     "comment": "select two unsharded, qualified, tables, one mirrored to unsharded table, other to sharded table",
     "query": "select t1.id, t2.id from unsharded_src1.t1, unsharded_src1.t2 where t1.id = t2.id",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select t1.id, t2.id from unsharded_src1.t1, unsharded_src1.t2 where t1.id = t2.id",
       "Instructions": {
@@ -180,6 +184,7 @@
     "comment": "union of selects from unsharded, qualified, tables, one mirrored to unsharded table, other to sharded table",
     "query": "select t1.id from unsharded_src1.t1 union select t2.id from unsharded_src1.t2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select t1.id from unsharded_src1.t1 union select t2.id from unsharded_src1.t2",
       "Instructions": {
@@ -247,6 +252,7 @@
     "comment": "inserts are not mirrored",
     "query": "insert into unsharded_src1.t1 (id) values(1)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into unsharded_src1.t1 (id) values(1)",
       "Instructions": {
@@ -256,7 +262,6 @@
           "Name": "unsharded_src1",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "insert into t1(id) values (1)",
         "TableName": "t1"
       },
@@ -269,6 +274,7 @@
     "comment": "updates are not mirrored",
     "query": "update unsharded_src1.t1 set data = 'a' where id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update unsharded_src1.t1 set data = 'a' where id = 1",
       "Instructions": {
@@ -278,7 +284,6 @@
           "Name": "unsharded_src1",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "update t1 set `data` = 'a' where id = 1",
         "Table": "t1"
       },
@@ -291,6 +296,7 @@
     "comment": "deletes are not mirrored",
     "query": "delete from unsharded_src1.t1 where id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DELETE",
       "Original": "delete from unsharded_src1.t1 where id = 1",
       "Instructions": {
@@ -300,7 +306,6 @@
           "Name": "unsharded_src1",
           "Sharded": false
         },
-        "TargetTabletType": "PRIMARY",
         "Query": "delete from t1 where id = 1",
         "Table": "t1"
       },
@@ -313,6 +318,7 @@
     "comment": "self-mirror is not allowed",
     "query": "select t1.id from unsharded_src2.t1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select t1.id from unsharded_src2.t1",
       "Instructions": {
@@ -335,6 +341,7 @@
     "comment": "chained mirror is not allowed",
     "query": "select t2.id from unsharded_src2.t2",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select t2.id from unsharded_src2.t2",
       "Instructions": {
@@ -376,6 +383,7 @@
     "comment": "circular mirror is not allowed",
     "query": "select t1.id from unsharded_src3.t1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select t1.id from unsharded_src3.t1",
       "Instructions": {

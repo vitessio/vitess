@@ -22,15 +22,38 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
+
+var (
+	cells   = []string{"zone1", "zone2"}
+	kss     = []string{"ks1", "ks2"}
+	shards  = []string{"-80", "80-"}
+	tablets []*topodatapb.Tablet
+)
+
+func init() {
+	uid := 1
+	for _, cell := range cells {
+		for _, ks := range kss {
+			for _, shard := range shards {
+				tablet := getTablet(ks, shard, cell, int32(uid))
+				tablets = append(tablets, tablet)
+				uid++
+			}
+		}
+	}
+}
 
 // Test various cases of calls to GetTabletsByCell.
 // GetTabletsByCell first tries to get all the tablets using List.
@@ -369,6 +392,12 @@ func TestServerGetTabletsByCell(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, out, len(tt.expectedTablets))
 
+			// We also check that the results for getting tablets individually
+			// matches the output we get from listing them.
+			out2, err := ts.GetTabletsIndividuallyByCell(ctx, cell, tt.opt)
+			require.NoError(t, err)
+			require.ElementsMatch(t, out, out2)
+
 			slices.SortFunc(out, func(i, j *topo.TabletInfo) int {
 				return cmp.Compare(i.Alias.Uid, j.Alias.Uid)
 			})
@@ -377,10 +406,7 @@ func TestServerGetTabletsByCell(t *testing.T) {
 			})
 
 			for i, tablet := range out {
-				expected := tt.expectedTablets[i]
-				require.Equal(t, expected.Alias.String(), tablet.Alias.String())
-				require.Equal(t, expected.Keyspace, tablet.Keyspace)
-				require.Equal(t, expected.Shard, tablet.Shard)
+				checkTabletsEqual(t, tt.expectedTablets[i], tablet.Tablet)
 			}
 		})
 	}
@@ -436,4 +462,264 @@ func TestServerGetTabletsByCellPartialResults(t *testing.T) {
 	assert.Len(t, out, 2)
 	assert.True(t, proto.Equal(tablets[0].Tablet, out[0].Tablet), "Got: %v, want %v", tablets[0].Tablet, out[0].Tablet)
 	assert.True(t, proto.Equal(tablets[2].Tablet, out[1].Tablet), "Got: %v, want %v", tablets[2].Tablet, out[1].Tablet)
+}
+
+func getTablet(keyspace string, shard string, cell string, uid int32) *topodatapb.Tablet {
+	return &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell,
+			Uid:  uint32(uid),
+		},
+		Hostname: "host1",
+		PortMap: map[string]int32{
+			"vt": uid,
+		},
+		Keyspace: keyspace,
+		Shard:    shard,
+	}
+}
+
+func checkTabletsEqual(t *testing.T, expected, tablet *topodatapb.Tablet) {
+	t.Helper()
+	require.Equal(t, expected.Alias.String(), tablet.Alias.String())
+	require.Equal(t, expected.Keyspace, tablet.Keyspace)
+	require.Equal(t, expected.Shard, tablet.Shard)
+}
+
+func checkTabletMapEqual(t *testing.T, expected, tabletMap map[string]*topo.TabletInfo) {
+	t.Helper()
+	require.Len(t, tabletMap, len(expected))
+	for key, tablet := range tabletMap {
+		expectedTablet, ok := expected[key]
+		require.True(t, ok, "unexpected tablet %v", key)
+		checkTabletsEqual(t, expectedTablet.Tablet, tablet.Tablet)
+	}
+}
+
+func checkTabletListEqual(t *testing.T, expected, tabletMap []*topo.TabletInfo) {
+	t.Helper()
+	require.Len(t, tabletMap, len(expected))
+	for _, tablet := range tabletMap {
+		found := false
+		for _, expectedTablet := range expected {
+			if topoproto.TabletAliasString(tablet.Alias) == topoproto.TabletAliasString(expectedTablet.Alias) {
+				checkTabletsEqual(t, expectedTablet.Tablet, tablet.Tablet)
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "unexpected tablet %v", tablet)
+	}
+}
+
+func setupFunc(t *testing.T, ctx context.Context, ts *topo.Server) {
+	for _, ks := range kss {
+		for _, shard := range shards {
+			_, err := ts.GetOrCreateShard(ctx, ks, shard)
+			require.NoError(t, err)
+		}
+	}
+	for _, tablet := range tablets {
+		require.NoError(t, ts.CreateTablet(ctx, tablet))
+	}
+}
+
+// TestServerGetTabletMapAndList tests the GetTabletMap and GetTabletList methods.
+func TestServerGetTabletMapAndList(t *testing.T) {
+	tests := []struct {
+		name          string
+		tabletAliases []*topodatapb.TabletAlias
+		opt           *topo.GetTabletsByCellOptions
+		want          map[string]*topo.TabletInfo
+	}{
+		{
+			name: "single tablet without filtering - found",
+			tabletAliases: []*topodatapb.TabletAlias{
+				{
+					Cell: cells[0],
+					Uid:  2,
+				},
+			},
+			opt: nil,
+			want: map[string]*topo.TabletInfo{
+				"zone1-0000000002": {
+					Tablet: tablets[1],
+				},
+			},
+		},
+		{
+			name: "single tablet without filtering - not found",
+			tabletAliases: []*topodatapb.TabletAlias{
+				{
+					Cell: cells[0],
+					Uid:  2050,
+				},
+			},
+			opt:  nil,
+			want: map[string]*topo.TabletInfo{},
+		},
+		{
+			name: "multiple tablets without filtering",
+			tabletAliases: []*topodatapb.TabletAlias{
+				{
+					Cell: cells[0],
+					Uid:  2,
+				},
+				{
+					Cell: cells[0],
+					Uid:  3,
+				},
+				{
+					Cell: cells[0],
+					Uid:  4,
+				},
+				{
+					Cell: cells[1],
+					Uid:  5,
+				},
+				{
+					Cell: cells[1],
+					Uid:  205,
+				},
+			},
+			opt: nil,
+			want: map[string]*topo.TabletInfo{
+				"zone1-0000000002": {
+					Tablet: tablets[1],
+				},
+				"zone1-0000000003": {
+					Tablet: tablets[2],
+				},
+				"zone1-0000000004": {
+					Tablet: tablets[3],
+				},
+				"zone2-0000000005": {
+					Tablet: tablets[4],
+				},
+			},
+		},
+		{
+			name: "multiple tablets with filtering",
+			tabletAliases: []*topodatapb.TabletAlias{
+				{
+					Cell: cells[0],
+					Uid:  2,
+				},
+				{
+					Cell: cells[0],
+					Uid:  3,
+				},
+				{
+					Cell: cells[0],
+					Uid:  4,
+				},
+				{
+					Cell: cells[1],
+					Uid:  5,
+				},
+				{
+					Cell: cells[1],
+					Uid:  6,
+				},
+				{
+					Cell: cells[1],
+					Uid:  205,
+				},
+			},
+			opt: &topo.GetTabletsByCellOptions{
+				KeyspaceShard: &topo.KeyspaceShard{
+					Keyspace: kss[0],
+					Shard:    shards[1],
+				},
+			},
+			want: map[string]*topo.TabletInfo{
+				"zone1-0000000002": {
+					Tablet: tablets[1],
+				},
+				"zone2-0000000006": {
+					Tablet: tablets[5],
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, cells...)
+			defer ts.Close()
+			// This creates a tablet in each cell, keyspace, and shard, totalling 8 tablets.
+			setupFunc(t, ctx, ts)
+
+			tabletMap, err := ts.GetTabletMap(ctx, tt.tabletAliases, tt.opt)
+			require.NoError(t, err)
+			checkTabletMapEqual(t, tt.want, tabletMap)
+
+			tabletList, err := ts.GetTabletList(ctx, tt.tabletAliases, tt.opt)
+			require.NoError(t, err)
+			checkTabletListEqual(t, maps.Values(tt.want), tabletList)
+		})
+	}
+}
+
+// TestGetTabletsIndividuallyByCell tests the GetTabletsIndividuallyByCell function.
+func TestGetTabletsIndividuallyByCell(t *testing.T) {
+	tests := []struct {
+		name     string
+		keyspace string
+		shard    string
+		cell     string
+		want     []*topo.TabletInfo
+	}{
+		{
+			name:     "cell with filtering",
+			keyspace: kss[0],
+			shard:    shards[1],
+			cell:     cells[0],
+			want: []*topo.TabletInfo{
+				{
+					Tablet: tablets[1],
+				},
+			},
+		},
+		{
+			name: "cell without filtering",
+			cell: cells[0],
+			want: []*topo.TabletInfo{
+				{
+					Tablet: tablets[0],
+				},
+				{
+					Tablet: tablets[1],
+				},
+				{
+					Tablet: tablets[2],
+				},
+				{
+					Tablet: tablets[3],
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			ts := memorytopo.NewServer(ctx, cells...)
+			defer ts.Close()
+			// This creates a tablet in each cell, keyspace, and shard, totalling 8 tablets.
+			setupFunc(t, ctx, ts)
+
+			tabletList, err := ts.GetTabletsIndividuallyByCell(ctx, tt.cell, &topo.GetTabletsByCellOptions{KeyspaceShard: &topo.KeyspaceShard{Keyspace: tt.keyspace, Shard: tt.shard}})
+			require.NoError(t, err)
+			checkTabletListEqual(t, tt.want, tabletList)
+
+			if tt.keyspace != "" && tt.shard != "" {
+				// We can also check that this result matches what we get from GetTabletsByShardCell.
+				tl, err := ts.GetTabletsByShardCell(ctx, tt.keyspace, tt.shard, []string{tt.cell})
+				require.NoError(t, err)
+				checkTabletListEqual(t, tabletList, tl)
+			}
+		})
+	}
 }

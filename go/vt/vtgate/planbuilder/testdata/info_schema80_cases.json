@@ -3,6 +3,7 @@
     "comment": "Single information_schema query",
     "query": "select TABLE_NAME from information_schema.TABLES",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select TABLE_NAME from information_schema.TABLES",
       "Instructions": {
@@ -22,6 +23,7 @@
     "comment": "',' join information_schema",
     "query": "select a.ENGINE, b.DATA_TYPE from information_schema.TABLES as a, information_schema.COLUMNS as b",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select a.ENGINE, b.DATA_TYPE from information_schema.TABLES as a, information_schema.COLUMNS as b",
       "Instructions": {
@@ -41,6 +43,7 @@
     "comment": "information schema query that uses table_schema",
     "query": "select column_name from information_schema.columns where table_schema = (select schema())",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select column_name from information_schema.columns where table_schema = (select schema())",
       "Instructions": {
@@ -60,6 +63,7 @@
     "comment": "information schema join",
     "query": "select tables.TABLE_SCHEMA, files.`STATUS` from information_schema.tables join information_schema.files",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select tables.TABLE_SCHEMA, files.`STATUS` from information_schema.tables join information_schema.files",
       "Instructions": {
@@ -79,6 +83,7 @@
     "comment": "access to qualified column names in information_schema",
     "query": "select * from information_schema.COLUMNS where information_schema.COLUMNS.COLUMN_NAME='toto'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from information_schema.COLUMNS where information_schema.COLUMNS.COLUMN_NAME='toto'",
       "Instructions": {
@@ -98,6 +103,7 @@
     "comment": "union of information_schema",
     "query": "select TABLE_NAME from information_schema.columns union select table_schema from information_schema.tables",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select TABLE_NAME from information_schema.columns union select table_schema from information_schema.tables",
       "Instructions": {
@@ -141,6 +147,7 @@
     "comment": "union between information_schema tables that should not be merged",
     "query": "select * from information_schema.tables where table_schema = 'user' union select * from information_schema.tables where table_schema = 'main'",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select * from information_schema.tables where table_schema = 'user' union select * from information_schema.tables where table_schema = 'main'",
       "Instructions": {
@@ -206,6 +213,7 @@
     "comment": "Select from information schema query with two tables that route should be merged",
     "query": "SELECT RC.CONSTRAINT_NAME, ORDINAL_POSITION FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.COLUMN_NAME = 'id' AND KCU.REFERENCED_TABLE_SCHEMA = 'test' AND KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT RC.CONSTRAINT_NAME, ORDINAL_POSITION FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.COLUMN_NAME = 'id' AND KCU.REFERENCED_TABLE_SCHEMA = 'test' AND KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
       "Instructions": {
@@ -227,6 +235,7 @@
     "comment": "Select from information schema query with three tables such that route for 2 should be merged but not for the last.",
     "query": "SELECT KCU.`TABLE_NAME`, S.`TABLE_NAME` FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME, INFORMATION_SCHEMA.`TABLES` AS S WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.TABLE_NAME = 'data_type_table' AND S.TABLE_SCHEMA = 'test' AND S.TABLE_NAME = 'sc' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT KCU.`TABLE_NAME`, S.`TABLE_NAME` FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME, INFORMATION_SCHEMA.`TABLES` AS S WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.TABLE_NAME = 'data_type_table' AND S.TABLE_SCHEMA = 'test' AND S.TABLE_NAME = 'sc' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
       "Instructions": {
@@ -248,6 +257,7 @@
     "comment": "information_schema.routines",
     "query": "SELECT routine_name AS name, routine_definition AS definition FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'PROCEDURE'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT routine_name AS name, routine_definition AS definition FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'PROCEDURE'",
       "Instructions": {
@@ -268,6 +278,7 @@
     "comment": "information_schema table sizes",
     "query": "SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?",
       "Instructions": {
@@ -288,6 +299,7 @@
     "comment": "information_schema referential contraints - cant merge without knowing values",
     "query": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
       "Instructions": {
@@ -331,6 +343,7 @@
     "comment": "rails query",
     "query": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = ':vtg1' and rc.constraint_schema = database() and rc.table_name = ':vtg1'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = ':vtg1' and rc.constraint_schema = database() and rc.table_name = ':vtg1'",
       "Instructions": {
@@ -351,6 +364,7 @@
     "comment": "rails_query 2",
     "query": "SELECT * FROM information_schema.schemata WHERE schema_name = 'user'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT * FROM information_schema.schemata WHERE schema_name = 'user'",
       "Instructions": {
@@ -371,6 +385,7 @@
     "comment": "rails_query 3",
     "query": "SELECT table_comment FROM information_schema.tables WHERE table_schema = 'schema_name' AND table_name = 'table_name'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT table_comment FROM information_schema.tables WHERE table_schema = 'schema_name' AND table_name = 'table_name'",
       "Instructions": {
@@ -392,6 +407,7 @@
     "comment": "rails_query 4",
     "query": "SELECT fk.referenced_table_name AS 'to_table', fk.referenced_column_name AS 'primary_key',fk.column_name AS 'column',fk.constraint_name AS 'name',rc.update_rule AS 'on_update',rc.delete_rule AS 'on_delete' FROM information_schema.referential_constraints rc JOIN information_schema.key_column_usage fk USING (constraint_schema, constraint_name) WHERE fk.referenced_column_name IS NOT NULL AND fk.table_schema = 'table_schema' AND fk.table_name = 'table_name' AND rc.constraint_schema = 'table_schema' AND rc.table_name = 'table_name'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT fk.referenced_table_name AS 'to_table', fk.referenced_column_name AS 'primary_key',fk.column_name AS 'column',fk.constraint_name AS 'name',rc.update_rule AS 'on_update',rc.delete_rule AS 'on_delete' FROM information_schema.referential_constraints rc JOIN information_schema.key_column_usage fk USING (constraint_schema, constraint_name) WHERE fk.referenced_column_name IS NOT NULL AND fk.table_schema = 'table_schema' AND fk.table_name = 'table_name' AND rc.constraint_schema = 'table_schema' AND rc.table_name = 'table_name'",
       "Instructions": {
@@ -413,6 +429,7 @@
     "comment": "rails_query 5",
     "query": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
       "Instructions": {
@@ -445,9 +462,9 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from information_schema.table_constraints as tc where 1 != 1",
-            "Query": "select 1 from information_schema.table_constraints as tc where tc.table_schema = :__vtschemaname /* VARCHAR */ and tc.table_name = :tc_table_name /* VARCHAR */ and tc.constraint_name = :cc_constraint_name /* VARCHAR(64) */ and tc.constraint_schema = :__vtschemaname /* VARCHAR */",
+            "Query": "select 1 from information_schema.table_constraints as tc where tc.table_schema = :__vtschemaname /* VARCHAR */ and tc.table_name = :tc_table_name /* VARCHAR */ and tc.constraint_name = :cc_constraint_name /* VARCHAR(64) */ and tc.constraint_schema = :cc_constraint_schema /* VARCHAR(64) */",
             "SysTableTableName": "[tc_table_name:'table_name']",
-            "SysTableTableSchema": "['table_schema', :cc_constraint_schema]",
+            "SysTableTableSchema": "['table_schema']",
             "Table": "information_schema.table_constraints"
           }
         ]
@@ -458,6 +475,7 @@
     "comment": "rails_query 6",
     "query": "SELECT column_name FROM information_schema.statistics WHERE index_name = 'PRIMARY' AND table_schema = 'table_schema' AND table_name = 'table_name' ORDER BY seq_in_index",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT column_name FROM information_schema.statistics WHERE index_name = 'PRIMARY' AND table_schema = 'table_schema' AND table_name = 'table_name' ORDER BY seq_in_index",
       "Instructions": {
@@ -479,6 +497,7 @@
     "comment": "rails_query 7",
     "query": "SELECT generation_expression FROM information_schema.columns WHERE table_schema = 'table_schema' AND table_name = 'table_name' AND column_name = 'column_name'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT generation_expression FROM information_schema.columns WHERE table_schema = 'table_schema' AND table_name = 'table_name' AND column_name = 'column_name'",
       "Instructions": {
@@ -500,6 +519,7 @@
     "comment": "rails_query 8",
     "query": "SELECT id FROM information_schema.processlist WHERE info LIKE '% FOR UPDATE'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT id FROM information_schema.processlist WHERE info LIKE '% FOR UPDATE'",
       "Instructions": {
@@ -519,6 +539,7 @@
     "comment": "rails_query 9",
     "query": "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery",
       "Instructions": {
@@ -539,6 +560,7 @@
     "comment": "rails_query 10",
     "query": "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery WHERE _subquery.table_type = 'table_type' AND _subquery.table_name = 'table_name'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery WHERE _subquery.table_type = 'table_type' AND _subquery.table_name = 'table_name'",
       "Instructions": {
@@ -559,6 +581,7 @@
     "comment": "two predicates specifying the database for the same table work if the database is the same",
     "query": "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'a' AND cc.`CONSTRAINT_CATALOG` = 'a'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'a' AND cc.`CONSTRAINT_CATALOG` = 'a'",
       "Instructions": {
@@ -579,6 +602,7 @@
     "comment": "system schema in where clause of information_schema query",
     "query": "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'performance_schema' AND table_name = 'foo'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'performance_schema' AND table_name = 'foo'",
       "Instructions": {
@@ -600,6 +624,7 @@
     "comment": "subquery of information_schema with itself",
     "query": "select TABLES.CHECKSUM from information_schema.`TABLES` where `TABLE_NAME` in (select `TABLE_NAME` from information_schema.`COLUMNS`)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select TABLES.CHECKSUM from information_schema.`TABLES` where `TABLE_NAME` in (select `TABLE_NAME` from information_schema.`COLUMNS`)",
       "Instructions": {
@@ -619,6 +644,7 @@
     "comment": "query trying to query two different keyspaces at the same time",
     "query": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'",
       "Instructions": {
@@ -639,6 +665,7 @@
     "comment": "information_schema query using database() func",
     "query": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()",
       "Instructions": {
@@ -658,6 +685,7 @@
     "comment": "table_schema predicate the wrong way around",
     "query": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE 'ks' = TABLE_SCHEMA",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE 'ks' = TABLE_SCHEMA",
       "Instructions": {
@@ -678,6 +706,7 @@
     "comment": "table_name predicate against a routed table",
     "query": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 'route1'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' AND TABLE_NAME = 'route1'",
       "Instructions": {
@@ -699,6 +728,7 @@
     "comment": "information_schema query with additional predicates",
     "query": "SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' and DATA_FREE = 42",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT `TABLE_NAME` FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' and DATA_FREE = 42",
       "Instructions": {
@@ -719,6 +749,7 @@
     "comment": "able to isolate table_schema value even when hidden inside of ORs",
     "query": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and DATA_FREE = 42) OR (TABLE_SCHEMA = 'ks' and CHECKSUM = 'value')",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and DATA_FREE = 42) OR (TABLE_SCHEMA = 'ks' and CHECKSUM = 'value')",
       "Instructions": {
@@ -739,6 +770,7 @@
     "comment": "expand star with information schema",
     "query": "select x.table_name from (select a.* from information_schema.key_column_usage a) x",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select x.table_name from (select a.* from information_schema.key_column_usage a) x",
       "Instructions": {
@@ -758,6 +790,7 @@
     "comment": "expand star with information schema in a derived table",
     "query": "select x.table_name from (select a.* from information_schema.key_column_usage a) x join user on x.`COLUMN_NAME` = user.id",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select x.table_name from (select a.* from information_schema.key_column_usage a) x join user on x.`COLUMN_NAME` = user.id",
       "Instructions": {
@@ -806,6 +839,7 @@
     "comment": "join of information_schema queries with select stars exprs",
     "query": "select a.*, b.* from information_schema.CHECK_CONSTRAINTS a, information_schema.CHARACTER_SETS b",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select a.*, b.* from information_schema.CHECK_CONSTRAINTS a, information_schema.CHARACTER_SETS b",
       "Instructions": {
@@ -825,6 +859,7 @@
     "comment": "join two routes with SysTableTableName entries in LHS and RHS",
     "query": "select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b",
       "Instructions": {
@@ -845,6 +880,7 @@
     "comment": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
     "query": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
       "Instructions": {
@@ -889,6 +925,7 @@
     "comment": "union as a derived table",
     "query": "select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
       "Instructions": {
@@ -926,6 +963,7 @@
     "comment": "merge system schema queries as long as they have any same table_schema",
     "query": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
       "Instructions": {
@@ -963,6 +1001,7 @@
     "comment": "merge system schema queries as long as they have any same table_name",
     "query": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
       "Instructions": {
@@ -1000,6 +1039,7 @@
     "comment": "merge union subquery with outer query referencing the same system schemas",
     "query": "select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' and exists (select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' union all (select 1 as found from information_schema.views where table_name = 'music' and table_name = 'user' limit 1))",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' and exists (select 1 as found from information_schema.`tables` where table_name = 'music' and table_name = 'Music' union all (select 1 as found from information_schema.views where table_name = 'music' and table_name = 'user' limit 1))",
       "Instructions": {
@@ -1066,6 +1106,7 @@
     "comment": "merge even one side have schema name in derived table",
     "query": "select * from (select TABLE_NAME from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select TABLE_NAME from information_schema.columns) dt",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select * from (select TABLE_NAME from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select TABLE_NAME from information_schema.columns) dt",
       "Instructions": {
@@ -1110,6 +1151,7 @@
     "comment": "merge even one side have schema name in subquery",
     "query": "select `COLLATION_NAME` from information_schema.`COLUMNS` t where `COLUMN_NAME` in (select `TABLE_NAME` from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select `COLUMN_NAME` from information_schema.columns)",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select `COLLATION_NAME` from information_schema.`COLUMNS` t where `COLUMN_NAME` in (select `TABLE_NAME` from information_schema.tables t where t.TABLE_SCHEMA = 'a' union select `COLUMN_NAME` from information_schema.columns)",
       "Instructions": {
@@ -1177,6 +1219,7 @@
     "comment": "table_schema OR predicate\n# It is unsupported because we do not route queries to multiple keyspaces right now",
     "query": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
       "Instructions": {
@@ -1196,6 +1239,7 @@
     "comment": "select variable, value from sys.sys_config",
     "query": "select variable, value from sys.sys_config",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select variable, value from sys.sys_config",
       "Instructions": {
@@ -1215,6 +1259,7 @@
     "comment": "select host, db from mysql.`db`",
     "query": "select host, db from mysql.`db`",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select host, db from mysql.`db`",
       "Instructions": {
@@ -1234,6 +1279,7 @@
     "comment": "select logged, prio from performance_schema.error_log",
     "query": "select logged, prio from performance_schema.error_log",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select logged, prio from performance_schema.error_log",
       "Instructions": {
@@ -1253,6 +1299,7 @@
     "comment": "Non-existing information_schema table is still OK",
     "query": "select TABLE_NAME from information_schema.apa",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select TABLE_NAME from information_schema.apa",
       "Instructions": {
@@ -1272,41 +1319,19 @@
     "comment": "LIMIT 1 inside derived table on the RHS should not be a problem",
     "query": "SELECT c.column_name FROM information_schema.columns c JOIN ( SELECT table_name FROM information_schema.tables WHERE table_schema != 'information_schema' LIMIT 1 ) AS tables ON tables.table_name = c.table_name",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT c.column_name FROM information_schema.columns c JOIN ( SELECT table_name FROM information_schema.tables WHERE table_schema != 'information_schema' LIMIT 1 ) AS tables ON tables.table_name = c.table_name",
       "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0",
-        "JoinVars": {
-          "tables_table_name": 0
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
         },
-        "TableName": "information_schema.`tables`_information_schema.`columns`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select `tables`.table_name from (select table_name from information_schema.`tables` where 1 != 1) as `tables` where 1 != 1",
-            "Query": "select `tables`.table_name from (select table_name from information_schema.`tables` where table_schema != 'information_schema' limit 1) as `tables`",
-            "Table": "information_schema.`tables`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "DBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select c.column_name from information_schema.`columns` as c where 1 != 1",
-            "Query": "select c.column_name from information_schema.`columns` as c where c.table_name = :c_table_name /* VARCHAR */",
-            "SysTableTableName": "[c_table_name::tables_table_name]",
-            "Table": "information_schema.`columns`"
-          }
-        ]
+        "FieldQuery": "select c.column_name from (select table_name from information_schema.`tables` where 1 != 1) as `tables`, information_schema.`columns` as c where 1 != 1",
+        "Query": "select c.column_name from (select table_name from information_schema.`tables` where table_schema != 'information_schema' limit 1) as `tables`, information_schema.`columns` as c where `tables`.table_name = c.table_name",
+        "Table": "information_schema.`columns`, information_schema.`tables`"
       }
     }
   }

@@ -285,7 +285,7 @@ func positionAtLeast(t *testing.T, tablet *Vttablet, a string, b string) bool {
 
 // ExecuteQueriesUsingVtgate sends query to vtgate using vtgate session.
 func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
-	_, err := session.Execute(context.Background(), query, nil)
+	_, err := session.Execute(context.Background(), query, nil, false)
 	require.Nil(t, err)
 }
 

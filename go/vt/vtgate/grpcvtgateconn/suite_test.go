@@ -91,7 +91,14 @@ func (q *queryExecute) equal(q2 *queryExecute) bool {
 }
 
 // Execute is part of the VTGateService interface
-func (f *fakeVTGateService) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (f *fakeVTGateService) Execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if f.hasError {
 		return session, nil, errTestVtGateError
 	}
@@ -197,9 +204,9 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgatese
 }
 
 // Prepare is part of the VTGateService interface
-func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
 	if f.hasError {
-		return session, nil, errTestVtGateError
+		return session, nil, 0, errTestVtGateError
 	}
 	if f.panics {
 		panic(fmt.Errorf("test forced panic"))
@@ -207,22 +214,21 @@ func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Sessi
 	f.checkCallerID(ctx, "Prepare")
 	execCase, ok := execMap[sql]
 	if !ok {
-		return session, nil, fmt.Errorf("no match for: %s", sql)
+		return session, nil, 0, fmt.Errorf("no match for: %s", sql)
 	}
 	query := &queryExecute{
-		SQL:           sql,
-		BindVariables: bindVariables,
-		Session:       session,
+		SQL:     sql,
+		Session: session,
 	}
 	if !query.equal(execCase.execQuery) {
 		f.t.Errorf("Prepare:\n%+v, want\n%+v", query, execCase.execQuery)
-		return session, nil, nil
+		return session, nil, 0, nil
 	}
 	if execCase.outSession != nil {
 		proto.Reset(session)
 		proto.Merge(session, execCase.outSession)
 	}
-	return session, execCase.result.Fields, nil
+	return session, execCase.result.Fields, execCase.paramsCount, nil
 }
 
 // CloseSession is part of the VTGateService interface
@@ -341,13 +347,13 @@ func verifyErrorString(t *testing.T, err error, method string) {
 func testExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	qr, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	qr, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, false)
 	require.NoError(t, err)
 	if !qr.Equal(execCase.result) {
 		t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
 	}
 
-	_, err = session.Execute(ctx, "none", nil)
+	_, err = session.Execute(ctx, "none", nil, false)
 	want := "no match for: none"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("none request: %v, want %v", err, want)
@@ -358,14 +364,14 @@ func testExecuteError(t *testing.T, session *vtgateconn.VTGateSession, fake *fak
 	ctx := newContext()
 	execCase := execMap["errorRequst"]
 
-	_, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	_, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, false)
 	verifyError(t, err, "Execute")
 }
 
 func testExecutePanic(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	_, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, false)
 	expectPanic(t, err)
 }
 
@@ -484,13 +490,12 @@ func testStreamExecutePanic(t *testing.T, session *vtgateconn.VTGateSession) {
 func testPrepare(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := session.Prepare(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	fields, paramsCount, err := session.Prepare(ctx, execCase.execQuery.SQL)
 	require.NoError(t, err)
-	// if !qr.Equal(execCase.result) {
-	//	t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
-	// }
+	require.True(t, sqltypes.FieldsEqual(fields, execCase.result.Fields))
+	require.Equal(t, execCase.paramsCount, paramsCount)
 
-	_, err = session.Prepare(ctx, "none", nil)
+	_, _, err = session.Prepare(ctx, "none")
 	require.EqualError(t, err, "no match for: none")
 }
 
@@ -498,14 +503,14 @@ func testPrepareError(t *testing.T, session *vtgateconn.VTGateSession, fake *fak
 	ctx := newContext()
 	execCase := execMap["errorRequst"]
 
-	_, err := session.Prepare(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	_, _, err := session.Prepare(ctx, execCase.execQuery.SQL)
 	verifyError(t, err, "Prepare")
 }
 
 func testPreparePanic(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
-	_, err := session.Prepare(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
+	_, _, err := session.Prepare(ctx, execCase.execQuery.SQL)
 	expectPanic(t, err)
 }
 
@@ -520,17 +525,15 @@ var testExecuteOptions = &querypb.ExecuteOptions{
 }
 
 var execMap = map[string]struct {
-	execQuery  *queryExecute
-	result     *sqltypes.Result
-	outSession *vtgatepb.Session
-	err        error
+	execQuery   *queryExecute
+	paramsCount uint16
+	result      *sqltypes.Result
+	outSession  *vtgatepb.Session
+	err         error
 }{
 	"request1": {
 		execQuery: &queryExecute{
 			SQL: "request1",
-			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": sqltypes.Int64BindVariable(0),
-			},
 			Session: &vtgatepb.Session{
 				TargetString: "connection_ks@rdonly",
 				Options:      testExecuteOptions,
@@ -584,5 +587,3 @@ var streamResultFields = sqltypes.Result{
 	Fields: result1.Fields,
 	Rows:   [][]sqltypes.Value{},
 }
-
-var dtid2 = "aa"

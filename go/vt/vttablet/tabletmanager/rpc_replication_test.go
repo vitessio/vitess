@@ -135,7 +135,7 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 		<-ch
 	})
 	// Add a fake query that makes the semi-sync monitor believe that the tablet is blocked on semi-sync ACKs.
-	fakeDb.AddQuery("select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1"))
+	fakeDb.AddQuery("select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_value", "varchar"), "1"))
 
 	// Verify that in the beginning the tablet is serving.
 	require.True(t, tm.QueryServiceControl.IsServing())
@@ -160,7 +160,7 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	require.False(t, fakeMysqlDaemon.SuperReadOnly.Load())
 
 	// Now we unblock the semi-sync monitor.
-	fakeDb.AddQuery("select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|0"))
+	fakeDb.AddQuery("select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_value", "varchar"), "0"))
 	close(ch)
 
 	// This should unblock the demote primary operation eventually.
