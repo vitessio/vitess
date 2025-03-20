@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -241,8 +242,8 @@ func (p *Parser) SplitStatement(blob string) (string, string, error) {
 	return blob, "", nil
 }
 
-// SplitStatementToPieces split raw sql statement that may have multi sql pieces to sql pieces
-// returns the sql pieces blob contains; or error if sql cannot be parsed
+// SplitStatementToPieces splits raw sql statement that may have multi sql pieces to sql pieces
+// returns the sql pieces blob contains; or error if sql cannot be parsed.
 func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error) {
 	// fast path: the vast majority of SQL statements do not have semicolons in them
 	if blob == "" {
@@ -256,9 +257,6 @@ func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error
 	}
 
 	pieces = make([]string, 0, 16)
-	// It's safe here to not case about version specific tokenization
-	// because we are only interested in semicolons and splitting
-	// statements.
 	tokenizer := p.NewStringTokenizer(blob)
 
 	tkn := 0
@@ -271,6 +269,12 @@ loop:
 		switch tkn {
 		case ';':
 			stmt = blob[stmtBegin : tokenizer.Pos-1]
+			// We now try to parse the statement to see if its complete.
+			// If it is a create procedure, then it might not be complete, and we
+			// would need to scan to the next ;
+			if p.IsStatementIncomplete(stmt) {
+				continue
+			}
 			if !emptyStatement {
 				pieces = append(pieces, stmt)
 				emptyStatement = true
@@ -292,6 +296,21 @@ loop:
 
 	err = tokenizer.LastError
 	return
+}
+
+// IsStatementIncomplete returns true if the statement is incomplete.
+func (p *Parser) IsStatementIncomplete(stmt string) bool {
+	tkn := p.NewStringTokenizer(stmt)
+	yyParsePooled(tkn)
+	if tkn.LastError != nil {
+		var pe PositionedErr
+		isPe := errors.As(tkn.LastError, &pe)
+		if isPe && pe.Pos == len(stmt)+1 {
+			// The error is at the end of the statement, which means it is incomplete.
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Parser) IsMySQL80AndAbove() bool {
