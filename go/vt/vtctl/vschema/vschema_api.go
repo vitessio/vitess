@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -40,30 +41,27 @@ func NewVSchemaAPI(ts *topo.Server) *VSchemaAPI {
 // SetReference sets up a reference table, which points to a source table in
 // another vschema.
 func (api *VSchemaAPI) SetReference(ctx context.Context, req *vtctldatapb.VSchemaSetReferenceRequest) error {
-	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
+	vsInfo, table, err := getVSchemaAndTable(ctx, api.ts, req.VSchemaName, req.TableName)
 	if err != nil {
-		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace:", req.VSchemaName)
-	}
-
-	table := vsInfo.Tables[req.TableName]
-	if table == nil {
-		return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table '%s' not found in '%s' keyspace", req.TableName, req.VSchemaName)
+		return err
 	}
 	if table.Type == vindexes.TypeReference {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table '%s' is already a reference table", req.TableName)
 	}
 
-	sourceKs, sourceTableName, err := vindexes.ExtractTableParts(req.Source, false /* allowUnqualified */)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed to parse source")
+	if req.Source != "" {
+		sourceKs, sourceTableName, err := vindexes.ExtractTableParts(req.Source, false /* allowUnqualified */)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to parse source")
 
-	}
-	sourceVSchemaInfo, err := api.ts.GetVSchema(ctx, sourceKs)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace:", req.VSchemaName)
-	}
-	if _, ok := sourceVSchemaInfo.Tables[sourceTableName]; !ok {
-		return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table '%s' not found in '%s' keyspace", sourceTableName, sourceKs)
+		}
+		_, sourceTable, err := getVSchemaAndTable(ctx, api.ts, sourceKs, sourceTableName)
+		if err != nil {
+			return vterrors.Wrapf(err, "invalid reference table source")
+		}
+		if sourceTable.Type != vindexes.TypeReference {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table '%s' is not a reference table", sourceTableName)
+		}
 	}
 
 	table.Source = req.Source
@@ -73,4 +71,18 @@ func (api *VSchemaAPI) SetReference(ctx context.Context, req *vtctldatapb.VSchem
 			vsInfo, req.VSchemaName)
 	}
 	return nil
+}
+
+func getVSchemaAndTable(ctx context.Context, ts *topo.Server, vschemaName string, tableName string) (*topo.KeyspaceVSchemaInfo, *vschemapb.Table, error) {
+	vsInfo, err := ts.GetVSchema(ctx, vschemaName)
+	if err != nil {
+		return nil, nil, vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace:", vschemaName)
+	}
+
+	table, ok := vsInfo.Tables[tableName]
+	if !ok {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table '%s' not found in '%s' keyspace", tableName, vschemaName)
+	}
+
+	return vsInfo, table, nil
 }

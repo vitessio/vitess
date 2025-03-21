@@ -5529,9 +5529,9 @@ func (s *VtctldServer) WorkflowDelete(ctx context.Context, req *vtctldatapb.Work
 	return resp, err
 }
 
-// VSchemaAddReference is part of the vtctlservicepb.VtctldServer interface.
-func (s *VtctldServer) VSchemaAddReference(ctx context.Context, req *vtctldatapb.VSchemaSetReferenceRequest) (resp *vtctldatapb.VSchemaSetReferenceResponse, err error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaAddReference")
+// VSchemaSetReference is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaSetReference(ctx context.Context, req *vtctldatapb.VSchemaSetReferenceRequest) (resp *vtctldatapb.VSchemaSetReferenceResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaSetReference")
 	defer span.Finish()
 
 	defer panicHandler(&err)

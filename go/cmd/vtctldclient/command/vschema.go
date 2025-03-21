@@ -64,17 +64,16 @@ func commandSetReference(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("reference table '%s' successfully added to vschema '%s'\n", setReferenceOptions.Table, commonOptions.Name)
-
+	fmt.Printf("Reference table '%s' has been successfully set up in VSchema '%s'.\n", setReferenceOptions.Table, commonOptions.Name)
 	return nil
 }
 
 func init() {
-	// TODO(beingnoble03): Flag usage.
-	SetReference.Flags().StringVar(&setReferenceOptions.Table, "table", "", "reference table name")
-	SetReference.Flags().StringVar(&setReferenceOptions.Source, "source", "", "source of the reference table")
+	SetReference.Flags().StringVar(&setReferenceOptions.Table, "table", "", "The name of the table that will be set as reference table.")
+	SetReference.MarkFlagRequired("table")
+	SetReference.Flags().StringVar(&setReferenceOptions.Source, "source", "", "Source of the reference table in qualified form i.e. <keyspace_name>.<table_name>.")
 	VSchema.AddCommand(SetReference)
 
-	VSchema.Flags().StringVar(&commonOptions.Name, "name", "", "vschema name")
+	VSchema.Flags().StringVar(&commonOptions.Name, "name", "", "The name of the vschema/keyspace.")
 	Root.AddCommand(VSchema)
 }
