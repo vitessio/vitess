@@ -1,7 +1,7 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "query": "select sum(foo+bar)\nfrom (select foo, bar\n      from user\n      where id in (1, 2, 3, 4)\n      union all\n      select baz, qux\n      from user_extra\n      where user_id = (5, 6, 7, 8)) as t",
     "plan": {
     }
   }

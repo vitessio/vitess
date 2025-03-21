@@ -124,7 +124,22 @@ func TestUnionAll(t *testing.T) {
 		})
 	}
 	mcmp.Run("union push down", func(mcmp *utils.MySQLCompare) {
-		mcmp.Exec("select sum(case when col = 1 then 1 else 0 end) from (select id1 as col from t1 union all select id3 as col from t2) as t")
+		mcmp.Exec(`
+select sum(case when col = 1 then 1 else 0 end) 
+from (
+	select id1 as col from t1 
+	union all 
+	select id3 as col from t2
+) as t`)
+		mcmp.Exec(`
+select sum(id+id2+foo) 
+from (
+	select id1, id2, id+id2 as foo from t1 
+	union all 
+	select id3, id4, i4*id4 from t2
+	union all 
+	select id3, id4, id1+id4 from t1 join t2 on id3 + 1 = id1
+) as t`)
 	})
 }
 
