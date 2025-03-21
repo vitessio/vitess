@@ -95,12 +95,12 @@ func TestRegisterGRPCClientFlags(t *testing.T) {
 
 	// Use SetFlagVariantsForTests to randomly pick dashed or underscored keys.
 	flagMap := map[string]string{}
-	utils.SetFlagVariantsForTests(flagMap, "--grpc_keepalive_time", "5s")
-	utils.SetFlagVariantsForTests(flagMap, "--grpc_keepalive_timeout", "5s")
-	utils.SetFlagVariantsForTests(flagMap, "--grpc_initial_conn_window_size", "10")
-	utils.SetFlagVariantsForTests(flagMap, "--grpc_initial_window_size", "10")
-	utils.SetFlagVariantsForTests(flagMap, "--grpc_compression", "not-snappy")
-	utils.SetFlagVariantsForTests(flagMap, "--grpc_auth_static_client_creds", "tempfile")
+	utils.SetFlagVariantsForTests(flagMap, "--grpc-keepalive-time", "5s")
+	utils.SetFlagVariantsForTests(flagMap, "--grpc-keepalive-timeout", "5s")
+	utils.SetFlagVariantsForTests(flagMap, "--grpc-initial-conn-window-size", "10")
+	utils.SetFlagVariantsForTests(flagMap, "--grpc-initial-window-size", "10")
+	utils.SetFlagVariantsForTests(flagMap, "--grpc-compression", "not-snappy")
+	utils.SetFlagVariantsForTests(flagMap, "--grpc-auth-static-client-creds", "tempfile")
 
 	// Build command-line args using the randomly chosen flag variants
 	// Test setting flags from command-line arguments

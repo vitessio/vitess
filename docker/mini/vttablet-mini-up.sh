@@ -54,7 +54,7 @@ vttablet \
  -backup_storage_implementation file \
  -file_backup_storage_root $VTDATAROOT/backups \
  -port $port \
- -grpc_port $grpc_port \
+ -grpc-port $grpc_port \
  -db_host $mysql_host \
  -db_port $mysql_port \
  -db_app_user $TOPOLOGY_USER \

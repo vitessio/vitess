@@ -152,7 +152,7 @@ exec $VTROOT/bin/vttablet \
   --health_check_interval 5s \
   --disable_active_reparents=true \
   --port $web_port \
-  --grpc_port $grpc_port \
+  --grpc-port $grpc_port \
   --service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
   --init_keyspace $keyspace \
   --init_shard $shard \
