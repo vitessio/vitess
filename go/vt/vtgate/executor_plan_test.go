@@ -69,14 +69,15 @@ func TestDeferredOptimization(t *testing.T) {
 		resolver:    resolver,
 		vschema:     vindexes.BuildVSchema(result, parser),
 		queryLogger: queryLogger,
+		plans:       DefaultPlanCache(),
 	}
 	opts := jsondiff.DefaultConsoleOptions()
-
 	for _, tcase := range readJSONTests("prepared_statements.json") {
 		testName := tcase.Comment
 		if testName == "" {
 			testName = tcase.Query
 		}
+		executor.plans.Close()
 		executor.plans = DefaultPlanCache()
 		t.Run(testName, func(t *testing.T) {
 			sess := executorcontext.NewSafeSession(&vtgatepb.Session{})
