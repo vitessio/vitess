@@ -57,6 +57,67 @@
     }
   },
   {
+    "comment": "union distinct between two scatter selects",
+    "query": "select sum(case when tb.col = 1 then 1 else 2 end) from (select 1 as col from user where id = 14 union all select 2 from music where user_id = 12) tb",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select sum(case when tb.col = 1 then 1 else 2 end) from (select 1 as col from user where id = 14 union all select 2 from music where user_id = 12) tb",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum(0) AS sum(case when tb.col = 1 then 1 else 2 end)",
+        "Inputs": [
+          {
+            "OperatorType": "SimpleProjection",
+            "Columns": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 as col, case when 1 = 1 then 1 else 2 end from `user` where 1 != 1",
+                    "Query": "select 1 as col, case when 1 = 1 then 1 else 2 end from `user` where id = 14",
+                    "Table": "`user`",
+                    "Values": [
+                      "14"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 2, case when 2 = 1 then 1 else 2 end from music where 1 != 1",
+                    "Query": "select 2, case when 2 = 1 then 1 else 2 end from music where user_id = 12",
+                    "Table": "music",
+                    "Values": [
+                      "12"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "union all between two SelectEqualUnique",
     "query": "select id from user where id = 1 union all select id from user where id = 5",
     "plan": {
