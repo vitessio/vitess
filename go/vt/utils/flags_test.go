@@ -151,4 +151,3 @@ func TestGetFlagVariantForTests(t *testing.T) {
 		}
 	}
 }
-
