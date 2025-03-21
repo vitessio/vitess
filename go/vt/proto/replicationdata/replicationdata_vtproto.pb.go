@@ -12,6 +12,7 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	math "math"
+	topodata "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -144,6 +145,7 @@ func (m *FullStatus) CloneVT() *FullStatus {
 	r.ReplicationConfiguration = m.ReplicationConfiguration.CloneVT()
 	r.DiskStalled = m.DiskStalled
 	r.SemiSyncBlocked = m.SemiSyncBlocked
+	r.TabletType = m.TabletType
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -553,6 +555,13 @@ func (m *FullStatus) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.TabletType != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TabletType))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xc8
 	}
 	if m.SemiSyncBlocked {
 		i--
@@ -1006,6 +1015,9 @@ func (m *FullStatus) SizeVT() (n int) {
 	}
 	if m.SemiSyncBlocked {
 		n += 3
+	}
+	if m.TabletType != 0 {
+		n += 2 + protohelpers.SizeOfVarint(uint64(m.TabletType))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -2623,6 +2635,25 @@ func (m *FullStatus) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.SemiSyncBlocked = bool(v != 0)
+		case 25:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TabletType", wireType)
+			}
+			m.TabletType = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.TabletType |= topodata.TabletType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
