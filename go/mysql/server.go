@@ -201,6 +201,9 @@ type Listener struct {
 	// maxWaitConns it the number of waiting connections allowed before new connections start getting rejected.
 	maxWaitConns uint32
 
+	// maxWaitConnsTimeout is the amount of time to block a new connection before giving up and rejecting it.
+	maxWaitConnsTimeout time.Duration
+
 	// The following parameters are read by multiple connection go
 	// routines.  They are not protected by a mutex, so they
 	// should be set after NewListener, and not changed while
@@ -278,6 +281,7 @@ type ListenerConfig struct {
 	ConnReadBufferSize       int
 	MaxConns                 uint64
 	MaxWaitConns             uint32
+	MaxWaitConnsTimeout      time.Duration
 	AllowClearTextWithoutTLS bool
 }
 
@@ -306,6 +310,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connReadBufferSize:       cfg.ConnReadBufferSize,
 		maxConns:                 cfg.MaxConns,
 		maxWaitConns:             cfg.MaxWaitConns,
+		maxWaitConnsTimeout:      cfg.MaxWaitConnsTimeout,
 		AllowClearTextWithoutTLS: sync2.NewAtomicBool(cfg.AllowClearTextWithoutTLS),
 		shutdownCh:               make(chan struct{}),
 	}, nil
@@ -334,12 +339,13 @@ func (l *Listener) Accept() {
 
 		if sem != nil && len(sem) == cap(sem) {
 			log.Warning("max connections reached. Clients waiting. Increase server max_connections")
-		}
-		// Make configurable. NM4.
-		if waitingConnections.Get() >= 3 {
-			log.Warning("max waiting connections reached. Client rejected. Increase server max_connections and back_log")
-			conn.Close()
-			continue
+
+			if waitingConnections.Get() >= int64(l.maxWaitConns) {
+				// There is little hope for this connection to be accepted. Give up early before we spawn a goroutine.
+				log.Warning("max waiting connections reached. Client rejected. Increase server max_connections and back_log")
+				conn.Close()
+				continue
+			}
 		}
 
 		acceptTime := time.Now()
@@ -347,25 +353,55 @@ func (l *Listener) Accept() {
 		l.connectionID++
 
 		go func() {
+			cont := true
 			if sem != nil {
-				waitingConnections.Add(1)
 				select {
 				case sem <- struct{}{}:
-				case <-l.shutdownCh:
-					// shutdown while waiting for a slot. give up.
-					conn.Close()
-					waitingConnections.Add(-1) // probably not needed, but correct.
-					return
+				default: // Didn't get a slot right away. Wait for one, but indicate that we're waiting using the waitingConnections counter.
+					// bool returns true if it's ok to continue to handle the request.
+					cont = func() bool {
+						for { // optimistic lock loop.
+							curWait := waitingConnections.Get()
+							if curWait+1 > int64(l.maxWaitConns) {
+								// Too many waiting connections. Reject this one.
+								log.Warning("max waiting connections reached. Client rejected. Increase server max_connections and back_log")
+								conn.Close()
+								return false
+							}
+							if waitingConnections.CompareAndSwap(curWait, curWait+1) {
+								break
+							}
+						}
+						// We'll only get here if we successfully incremented the counter once. Decrement it when we're done.
+						defer waitingConnections.Add(-1)
+
+						select {
+						case sem <- struct{}{}:
+						case <-l.shutdownCh:
+							// shutdown while waiting for a slot. give up.
+							conn.Close()
+							return false
+						case <-time.After(l.maxWaitConnsTimeout):
+							// Timed out waiting for a slot
+							conn.Close()
+							return false
+						}
+						return true
+					}()
 				}
-				waitingConnections.Add(-1)
-				defer func() {
-					<-sem // release slot when l.handle is done.
-				}()
+				if cont {
+					// We only reach this point if we have a slot in the semaphore.
+					defer func() {
+						<-sem // release slot when l.handle is done.
+					}()
+				}
 			}
 
-			connCount.Add(1)
-			connAccept.Add(1)
-			l.handle(context.Background(), conn, connectionID, acceptTime)
+			if cont {
+				connCount.Add(1)
+				connAccept.Add(1)
+				l.handle(context.Background(), conn, connectionID, acceptTime)
+			}
 		}()
 	}
 }
