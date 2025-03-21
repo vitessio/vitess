@@ -163,12 +163,12 @@ func (tw *TopologyWatcher) Stop() {
 
 func (tw *TopologyWatcher) loadTabletsForKeyspaceShard(keyspace string, shard string) {
 	if keyspace == "" || shard == "" {
-		log.Errorf("topologyWatcher: loadTabletsForKeyspaceShard: keyspace and shard are required")
+		tw.logger().Errorf("topologyWatcher: loadTabletsForKeyspaceShard: keyspace and shard are required")
 		return
 	}
 	tabletInfos, err := tw.getTabletsByShard(keyspace, shard)
 	if err != nil {
-		log.Errorf("error getting tablets for keyspace-shard: %v:%v: %v", keyspace, shard, err)
+		tw.logger().Errorf("error getting tablets for keyspace-shard: %v:%v: %v", keyspace, shard, err)
 		return
 	}
 	// Since we are only reading tablets for a keyspace shard,

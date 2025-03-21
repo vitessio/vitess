@@ -304,7 +304,7 @@ type HealthCheckImpl struct {
 	subscribers map[chan *TabletHealth]string
 	// loadTabletsTrigger is used to immediately load information about tablets of a specific shard.
 	loadTabletsTrigger chan topo.KeyspaceShard
- 	// options contains optional settings used to modify HealthCheckImpl
+	// options contains optional settings used to modify HealthCheckImpl
 	// behavior.
 	options Options
 }
@@ -554,7 +554,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 		// causing an interruption where no primary is assigned to the shard.
 		if prevTarget.TabletType == topodata.TabletType_PRIMARY {
 			if primaries := hc.healthData[oldTargetKey]; len(primaries) == 0 {
-        hc.logger().Infof("We will have no health data for the next new primary tablet after demoting the tablet: %v, so start loading tablets now", topotools.TabletIdent(th.Tablet))
+				hc.logger().Infof("We will have no health data for the next new primary tablet after demoting the tablet: %v, so start loading tablets now", topotools.TabletIdent(th.Tablet))
 				// We want to trigger a call to load tablets for this keyspace-shard,
 				// but we want this to be non-blocking to prevent the code from deadlocking as described in https://github.com/vitessio/vitess/issues/16994.
 				// If the buffer is exhausted, then we'll just receive the update when all the tablets are loaded on the ticker.
@@ -677,9 +677,9 @@ func (hc *HealthCheckImpl) broadcast(th *TabletHealth) {
 		default:
 			// If the channel is full, we drop the message.
 			hcChannelFullCounter.Add(1)
-      hc.logger().Warningf("HealthCheck broadcast channel is full for %v, dropping message for %s", subscriber, topotools.TabletIdent(th.Tablet))
+			hc.logger().Warningf("HealthCheck broadcast channel is full for %v, dropping message for %s", subscriber, topotools.TabletIdent(th.Tablet))
 			// Print the stack trace only once.
-      printStack()
+			printStack()
 		}
 	}
 }
