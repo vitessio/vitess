@@ -3112,7 +3112,7 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	assert.Empty(t, sbc2.Queries)
 }
 
-func assertSpecializedPlanCondition(t *testing.T, executor *Executor, sql string, condition ...engine.SpecializedCondition) {
+func assertSpecializedPlanCondition(t *testing.T, executor *Executor, sql string, condition ...engine.SpecializedCondition) *engine.Specialized {
 	var plan *engine.Plan
 	executor.ForEachPlan(func(p *engine.Plan) bool {
 		if p.Original == sql {
@@ -3129,6 +3129,7 @@ func assertSpecializedPlanCondition(t *testing.T, executor *Executor, sql string
 		assert.Equal(t, cond.A, sp.Conditions[i].A)
 		assert.Equal(t, cond.B, sp.Conditions[i].B)
 	}
+	return sp
 }
 
 func TestJoinSpecializedPlan(t *testing.T) {
@@ -3264,6 +3265,34 @@ func TestSubquerySpecializedPlan(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
 	require.NoError(t, err)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
+}
+
+// TestOnlySpecializedPlan tests that a query errors on generic planning but succeeds on specialized planning.
+func TestOnlySpecializedPlan(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	sql := "select col, trim((select user_name from user where id = ?)) val from user where id = ? group by col order by val"
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+	bv := map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(1),
+		"v2": sqltypes.Int64BindVariable(2),
+	}
+	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.ErrorContains(t, err, "VT12001: unsupported: subquery with aggregation in order by")
+	testQueryLog(t, executor, logChan, "TestExecute", "", sql, 0)
+
+	bv = map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(3),
+		"v2": sqltypes.Int64BindVariable(3),
+	}
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.NoError(t, err)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
+	sp := assertSpecializedPlanCondition(t, executor, sql, engine.SpecializedCondition{A: "v1", B: "v2"})
+	require.NotNil(t, sp)
+	require.ErrorContains(t, sp.GenericPlanErr, "VT12001: unsupported: subquery with aggregation in order by")
 }
 
 func TestSelectDatabasePrepare(t *testing.T) {
