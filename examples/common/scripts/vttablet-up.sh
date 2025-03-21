@@ -50,7 +50,7 @@ vttablet \
  --file_backup_storage_root $VTDATAROOT/backups \
  --restore_from_backup \
  --port $port \
- --grpc-port $grpc_port \
+ --grpc_port $grpc_port \
  --service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
  --pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
  --heartbeat_on_demand_duration=5s \

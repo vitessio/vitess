@@ -31,7 +31,7 @@ vtgate \
   --log_dir $VTDATAROOT/tmp \
   --log_queries_to_file $VTDATAROOT/tmp/vtgate_querylog.txt \
   --port $web_port \
-  --grpc-port $grpc_port \
+  --grpc_port $grpc_port \
   --mysql_server_port $mysql_server_port \
   --mysql_server_socket_path $mysql_server_socket_path \
   --cell $cell \
