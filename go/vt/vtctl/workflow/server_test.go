@@ -2721,6 +2721,7 @@ func TestMaterializeAddTables(t *testing.T) {
 						TargetTable: "t2",
 					},
 				},
+				MaterializationIntent: vtctldatapb.MaterializationIntent_REFERENCE,
 			},
 			addUpdateVReplicationWorkflowRequestResponses: []*updateVReplicationWorkflowRequestResponse{
 				{
@@ -2754,6 +2755,7 @@ func TestMaterializeAddTables(t *testing.T) {
 						TargetTable: "t1",
 					},
 				},
+				MaterializationIntent: vtctldatapb.MaterializationIntent_REFERENCE,
 			},
 			expectedErrContains: "rule for table t1 already exists",
 		},
@@ -2767,6 +2769,7 @@ func TestMaterializeAddTables(t *testing.T) {
 						TargetTable: "t3",
 					},
 				},
+				MaterializationIntent: vtctldatapb.MaterializationIntent_REFERENCE,
 			},
 			addUpdateVReplicationWorkflowRequestResponses: []*updateVReplicationWorkflowRequestResponse{
 				{
