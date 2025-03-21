@@ -145,9 +145,9 @@ func (vind *NumericStaticMap) Verify(ctx context.Context, vcursor VCursor, ids [
 	return out, nil
 }
 
-// Map can map ids to key.Destination objects.
-func (vind *NumericStaticMap) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
+// Map can map ids to key.ShardDestination objects.
+func (vind *NumericStaticMap) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(ids))
 	for _, id := range ids {
 		ksid, err := vind.Hash(id)
 		if err != nil {

@@ -99,8 +99,8 @@ func (ge *RegionExperimental) NeedsVCursor() bool {
 }
 
 // Map satisfies MultiColumn.
-func (ge *RegionExperimental) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
-	destinations := make([]key.Destination, 0, len(rowsColValues))
+func (ge *RegionExperimental) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.ShardDestination, error) {
+	destinations := make([]key.ShardDestination, 0, len(rowsColValues))
 	for _, row := range rowsColValues {
 		if len(row) > 2 {
 			destinations = append(destinations, key.DestinationNone{})

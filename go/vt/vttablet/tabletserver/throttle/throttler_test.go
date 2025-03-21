@@ -317,7 +317,7 @@ func newTestThrottler() *Throttler {
 		}
 		return selfMetrics
 	}
-	throttler.ThrottleApp(throttlerapp.TestingAlwaysThrottlerName.String(), time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
+	throttler.ThrottleApp(throttlerapp.TestingAlwaysThrottledName.String(), time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
 
 	return throttler
 }
@@ -1648,7 +1648,7 @@ func TestDormant(t *testing.T) {
 			select {
 			case <-ctx.Done():
 				require.FailNow(t, "context expired before testing completed")
-			case <-time.After(throttler.dormantPeriod):
+			case <-time.After(throttler.dormantPeriod + 2*recentCheckRateLimiterInterval):
 				assert.True(t, throttler.isDormant())
 			}
 		}()

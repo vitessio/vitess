@@ -2236,3 +2236,74 @@ func TestFilteredBetweenOperator(t *testing.T) {
 		})
 	}
 }
+
+func TestFilteredIsNullOperator(t *testing.T) {
+	testCases := []struct {
+		name        string
+		filter      string
+		testQueries []*TestQuery
+	}{
+		{
+			name:   "is-null",
+			filter: "select id1, val from t1 where val is null",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'aaa')", noEvents},
+				{"insert into t1 values (2, 200, 'bbb')", noEvents},
+				{"insert into t1 values (3, 100, 'ccc')", noEvents},
+				{"insert into t1 values (4, 200, NULL)", nil},
+				{"insert into t1 values (5, 200, NULL)", nil},
+				{"commit", nil},
+			},
+		},
+		{
+			name:   "is-null-and-is-not-null",
+			filter: "select id1, val from t1 where val is null and id2 is not null",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'aaa')", noEvents},
+				{"insert into t1 values (2, 200, 'bbb')", noEvents},
+				{"insert into t1 values (3, 100, NULL)", nil},
+				{"insert into t1 values (4, NULL, NULL)", noEvents},
+				{"insert into t1 values (5, 200, NULL)", nil},
+				{"commit", nil},
+			},
+		},
+		{
+			name:   "is-null-and-other-op",
+			filter: "select id1, val from t1 where val is null and id1 != 4 and id2 not between 100 and 150",
+			testQueries: []*TestQuery{
+				{"begin", nil},
+				{"insert into t1 values (1, 100, 'd')", noEvents},
+				{"insert into t1 values (2, 200, 'e')", noEvents},
+				{"insert into t1 values (3, 100, NULL)", noEvents},
+				{"insert into t1 values (4, 200, NULL)", noEvents},
+				{"insert into t1 values (5, 200, NULL)", nil},
+				{"commit", nil},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := &TestSpec{
+				t: t,
+				ddls: []string{
+					"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+				},
+				options: &TestSpecOptions{
+					filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{{
+							Match:  "t1",
+							Filter: tc.filter,
+						}},
+					},
+				},
+			}
+			defer ts.Close()
+			ts.Init()
+			ts.fieldEvents["t1"].cols[1].skip = true
+			ts.tests = [][]*TestQuery{tc.testQueries}
+			ts.Run()
+		})
+	}
+}

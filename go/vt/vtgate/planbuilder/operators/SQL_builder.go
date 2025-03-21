@@ -21,6 +21,8 @@ import (
 	"slices"
 	"sort"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
+
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -116,9 +118,12 @@ func (qb *queryBuilder) addTableExpr(
 }
 
 func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
-	if qb.ctx.ShouldSkip(expr) {
-		// This is a predicate that was added to the RHS of an ApplyJoin.
-		// The original predicate will be added, so we don't have to add this here
+	if jp, ok := expr.(*predicates.JoinPredicate); ok {
+		// we have to strip out the join predicate containers,
+		// otherwise precedence calculations get messed up
+		expr = jp.Current()
+	}
+	if expr == nil {
 		return
 	}
 
@@ -142,7 +147,7 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 		addPred = sel.AddWhere
 		qb.stmt = sel
 	default:
-		panic(fmt.Sprintf("cant add WHERE to %T", qb.stmt))
+		panic(fmt.Sprintf("cant add WHERE to %T, %s", qb.stmt, sqlparser.String(expr)))
 	}
 
 	for _, exp := range sqlparser.SplitAndExpression(nil, expr) {
@@ -609,15 +614,13 @@ func buildProjection(op *Projection, qb *queryBuilder) {
 }
 
 func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
-	predicates := slice.Map(op.JoinPredicates.columns, func(jc applyJoinColumn) sqlparser.Expr {
-		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
-		err := qb.ctx.SkipJoinPredicates(jc.Original)
-		if err != nil {
-			panic(err)
+	preds := slice.Map(op.JoinPredicates.columns, func(jc applyJoinColumn) sqlparser.Expr {
+		if jc.JoinPredicateID != nil {
+			qb.ctx.PredTracker.Skip(*jc.JoinPredicateID)
 		}
 		return jc.Original
 	})
-	pred := sqlparser.AndExpressions(predicates...)
+	pred := sqlparser.AndExpressions(preds...)
 
 	buildQuery(op.LHS, qb)
 
@@ -718,19 +721,9 @@ func buildHorizon(op *Horizon, qb *queryBuilder) {
 }
 
 func buildRecursiveCTE(op *RecurseCTE, qb *queryBuilder) {
-	predicates := slice.Map(op.Predicates, func(jc *plancontext.RecurseExpression) sqlparser.Expr {
-		// since we are adding these join predicates, we need to mark to broken up version (RHSExpr) of it as done
-		err := qb.ctx.SkipJoinPredicates(jc.Original)
-		if err != nil {
-			panic(err)
-		}
-		return jc.Original
-	})
-	pred := sqlparser.AndExpressions(predicates...)
 	buildQuery(op.Seed(), qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildQuery(op.Term(), qbR)
-	qbR.addPredicate(pred)
 	infoFor, err := qb.ctx.SemTable.TableInfoFor(op.OuterID)
 	if err != nil {
 		panic(err)

@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -104,11 +105,13 @@ type (
 		// updateRoutingLogic updates the routing to take predicates into account. This can be used for routing
 		// using vindexes or for figuring out which keyspace an information_schema query should be sent to.
 		updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing
+
+		resetRoutingLogic(ctx *plancontext.PlanningContext) Routing
 	}
 )
 
 // UpdateRoutingLogic first checks if we are dealing with a predicate that
-func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r Routing) Routing {
+func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r Routing) Routing {
 	ks := r.Keyspace()
 	if ks == nil {
 		var err error
@@ -119,12 +122,19 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 	}
 	nr := &NoneRouting{keyspace: ks}
 
+	expr := in
+	// If we have a JoinPredicate, let's get the inner expression
+	pred, isJP := in.(*predicates.JoinPredicate)
+	if isJP {
+		expr = pred.Current()
+	}
+
 	if b := ctx.IsConstantBool(expr); b != nil && !*b {
 		return nr
 	}
 
 	exit := func() Routing {
-		return r.updateRoutingLogic(ctx, expr)
+		return r.updateRoutingLogic(ctx, in)
 	}
 
 	// For some expressions, even if we can't evaluate them, we know that they will always return false or null
@@ -156,6 +166,8 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 		if len(tuples) == 1 && sqlparser.IsNull(tuples[0]) {
 			return nr
 		}
+	default:
+		// We only have special handling of IN and NOT IN for now
 	}
 
 	return exit()
@@ -349,7 +361,19 @@ func findVSchemaTableAndCreateRoute(
 	tableName sqlparser.TableName,
 	planAlternates bool,
 ) *Route {
-	vschemaTable, _, _, tabletType, target, err := ctx.VSchema.FindTableOrVindex(tableName)
+	var (
+		vschemaTable *vindexes.BaseTable
+		tabletType   topodatapb.TabletType
+		target       key.ShardDestination
+		err          error
+	)
+
+	if ctx.IsMirrored() {
+		vschemaTable, _, tabletType, target, err = ctx.VSchema.FindTable(tableName)
+	} else {
+		vschemaTable, _, _, tabletType, target, err = ctx.VSchema.FindTableOrVindex(tableName)
+	}
+
 	if err != nil {
 		panic(err)
 	}
@@ -365,7 +389,7 @@ func findVSchemaTableAndCreateRoute(
 	)
 }
 
-func createTargetedRouting(ctx *plancontext.PlanningContext, target key.Destination, tabletType topodatapb.TabletType, vschemaTable *vindexes.BaseTable) Routing {
+func createTargetedRouting(ctx *plancontext.PlanningContext, target key.ShardDestination, tabletType topodatapb.TabletType, vschemaTable *vindexes.BaseTable) Routing {
 	switch ctx.Statement.(type) {
 	case *sqlparser.Update:
 		if tabletType != topodatapb.TabletType_PRIMARY {

@@ -148,6 +148,14 @@ type Vttablet struct {
 	VttabletProcess  *VttabletProcess
 }
 
+// GetAlias returns the tablet alias.
+func (tablet *Vttablet) GetAlias() *topodatapb.TabletAlias {
+	return &topodatapb.TabletAlias{
+		Cell: tablet.Cell,
+		Uid:  uint32(tablet.TabletUID),
+	}
+}
+
 // Keyspace : Cluster accepts keyspace to launch it
 type Keyspace struct {
 	Name             string
@@ -958,7 +966,7 @@ func (cluster *LocalProcessCluster) ExecOnVTGate(ctx context.Context, addr strin
 	session := conn.Session(target, opts)
 	defer conn.Close()
 
-	return session.Execute(ctx, sql, bindvars)
+	return session.Execute(ctx, sql, bindvars, false)
 }
 
 // StreamTabletHealth invokes a HealthStream on a local cluster Vttablet and
@@ -1324,6 +1332,7 @@ func (cluster *LocalProcessCluster) NewVTAdminProcess() {
 		Binary:         "vtadmin",
 		Port:           cluster.GetAndReservePort(),
 		LogDir:         cluster.TmpDirectory,
+		ClusterID:      "local",
 		VtGateGrpcPort: cluster.VtgateProcess.GrpcPort,
 		VtGateWebPort:  cluster.VtgateProcess.Port,
 		VtctldWebPort:  cluster.VtctldProcess.Port,

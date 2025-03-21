@@ -28,7 +28,7 @@ func (p *Parser) RedactSQLQuery(sql string) (string, error) {
 		return "", err
 	}
 
-	out, err := PrepareAST(stmt, NewReservedVars("redacted", reservedVars), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
+	out, err := Normalize(stmt, NewReservedVars("redacted", reservedVars), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 	if err != nil {
 		return "", err
 	}

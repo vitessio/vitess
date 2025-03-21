@@ -41,6 +41,7 @@ type (
 	// Set contains the instructions to perform set.
 	Set struct {
 		noTxNeeded
+		noFields
 
 		Ops   []SetOp
 		Input Primitive
@@ -68,7 +69,7 @@ type (
 	SysVarCheckAndIgnore struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
-		TargetDestination key.Destination `json:",omitempty"`
+		TargetDestination key.ShardDestination `json:",omitempty"`
 		Expr              string
 	}
 
@@ -76,7 +77,7 @@ type (
 	SysVarReservedConn struct {
 		Name              string
 		Keyspace          *vindexes.Keyspace
-		TargetDestination key.Destination `json:",omitempty"`
+		TargetDestination key.ShardDestination `json:",omitempty"`
 		Expr              string
 		SupportSetVar     bool
 	}
@@ -140,11 +141,6 @@ func (s *Set) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		return err
 	}
 	return callback(result)
-}
-
-// GetFields implements the Primitive interface method.
-func (s *Set) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return &sqltypes.Result{}, nil
 }
 
 // Inputs implements the Primitive interface
@@ -234,7 +230,7 @@ func (svci *SysVarCheckAndIgnore) VariableName() string {
 
 // Execute implements the SetOp interface method
 func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
-	rss, _, err := vcursor.ResolveDestinations(ctx, svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
+	rss, _, err := vcursor.ResolveDestinations(ctx, svci.Keyspace.Name, nil, []key.ShardDestination{svci.TargetDestination})
 	if err != nil {
 		return err
 	}
@@ -276,7 +272,7 @@ func (svs *SysVarReservedConn) VariableName() string {
 func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
 	// For those running on advanced vitess settings.
 	if svs.TargetDestination != nil {
-		rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
+		rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.ShardDestination{svs.TargetDestination})
 		if err != nil {
 			return err
 		}
@@ -324,7 +320,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	if svs.Name == "sql_mode" {
 		sysVarExprValidationQuery = fmt.Sprintf("select @@%s orig, %s new", svs.Name, svs.Expr)
 	}
-	rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.Destination{key.DestinationKeyspaceID{0}})
+	rss, _, err := vcursor.ResolveDestinations(ctx, svs.Keyspace.Name, nil, []key.ShardDestination{key.DestinationKeyspaceID{0}})
 	if err != nil {
 		return false, err
 	}
@@ -356,7 +352,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 
 	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
 	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
-	if !svs.SupportSetVar || s == "''" || !vcursor.CanUseSetVar() {
+	if !svs.SupportSetVar || !vcursor.CanUseSetVar() {
 		vcursor.Session().NeedsReservedConn()
 		return true, nil
 	}

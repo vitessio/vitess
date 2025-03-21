@@ -58,6 +58,8 @@ import (
 )
 
 const maxTableCount = 10000
+const maxPartitionsPerTable = 8192
+const maxIndexesPerTable = 64
 
 type notifier func(full map[string]*Table, created, altered, dropped []*Table, udfsChanged bool)
 
@@ -95,10 +97,16 @@ type Engine struct {
 	// dbCreationFailed is for preventing log spam.
 	dbCreationFailed bool
 
-	tableFileSizeGauge      *stats.GaugesWithSingleLabel
-	tableAllocatedSizeGauge *stats.GaugesWithSingleLabel
-	innoDbReadRowsCounter   *stats.Counter
-	SchemaReloadTimings     *servenv.TimingsWrapper
+	tableFileSizeGauge           *stats.GaugesWithSingleLabel
+	tableAllocatedSizeGauge      *stats.GaugesWithSingleLabel
+	tableRowsGauge               *stats.GaugesWithSingleLabel
+	tableClusteredIndexSizeGauge *stats.GaugesWithSingleLabel
+
+	indexCardinalityGauge *stats.GaugesWithMultiLabels
+	indexBytesGauge       *stats.GaugesWithMultiLabels
+
+	innoDbReadRowsCounter *stats.Counter
+	SchemaReloadTimings   *servenv.TimingsWrapper
 }
 
 // NewEngine creates a new Engine.
@@ -119,6 +127,10 @@ func NewEngine(env tabletenv.Env) *Engine {
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
 	se.tableFileSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableFileSize", "tracks table file size", "Table")
 	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
+	se.tableRowsGauge = env.Exporter().NewGaugesWithSingleLabel("TableRows", "estimated number of rows in the table", "Table")
+	se.tableClusteredIndexSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableClusteredIndexSize", "byte size of the clustered index (i.e. row data)", "Table")
+	se.indexCardinalityGauge = env.Exporter().NewGaugesWithMultiLabels("IndexCardinality", "estimated number of unique values in the index", []string{"Table", "Index"})
+	se.indexBytesGauge = env.Exporter().NewGaugesWithMultiLabels("IndexBytes", "byte size of the index", []string{"Table", "Index"})
 	se.innoDbReadRowsCounter = env.Exporter().NewCounter("InnodbRowsRead", "number of rows read by mysql")
 	se.SchemaReloadTimings = env.Exporter().NewTimings("SchemaReload", "time taken to reload the schema", "type")
 	se.reloadTimeout = env.Config().SchemaChangeReloadTimeout
@@ -271,7 +283,8 @@ func (se *Engine) Open() error {
 	}
 
 	se.ticks.Start(func() {
-		if err := se.Reload(ctx); err != nil {
+		// update stats on periodic reloads
+		if err := se.reloadAndIncludeStats(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
 		}
 	})
@@ -364,12 +377,17 @@ func (se *Engine) Reload(ctx context.Context) error {
 	return se.ReloadAt(ctx, replication.Position{})
 }
 
+// reloadAndIncludeStats calls the ReloadAtEx function with includeStats set to true.
+func (se *Engine) reloadAndIncludeStats(ctx context.Context) error {
+	return se.ReloadAtEx(ctx, replication.Position{}, true)
+}
+
 // ReloadAt reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
 // It maintains the position at which the schema was reloaded and if the same position is provided
 // (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
 func (se *Engine) ReloadAt(ctx context.Context, pos replication.Position) error {
-	return se.ReloadAtEx(ctx, pos, true)
+	return se.ReloadAtEx(ctx, pos, false)
 }
 
 // ReloadAtEx reloads the schema info from the db.
@@ -432,7 +450,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 			// We therefore don't want to query for table sizes in getTableData()
 			includeStats = false
 
-			innodbResults, err := conn.Conn.Exec(ctx, innodbTableSizesQuery, maxTableCount, false)
+			innodbResults, err := conn.Conn.Exec(ctx, innodbTableSizesQuery, maxTableCount*maxPartitionsPerTable, false)
 			if err != nil {
 				return vterrors.Wrapf(err, "in Engine.reload(), reading innodb tables")
 			}
@@ -466,8 +484,12 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 					}
 				}
 			}
+			if err := se.updateTableIndexMetrics(ctx, conn.Conn); err != nil {
+				log.Errorf("Updating index/table statistics failed, error: %v", err)
+			}
 			// See testing in TestEngineReload
 		}
+
 	}
 	tableData, err := getTableData(ctx, conn.Conn, includeStats)
 	if err != nil {
@@ -520,7 +542,8 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		createTime, _ := row[2].ToCastInt64()
 		var fileSize, allocatedSize uint64
 
-		if includeStats {
+		// For 5.7 flavor, includeStats is ignored, so we don't get the additional columns
+		if includeStats && len(row) >= 6 {
 			fileSize, _ = row[4].ToCastUint64()
 			allocatedSize, _ = row[5].ToCastUint64()
 			// publish the size metrics
@@ -689,6 +712,136 @@ func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.Conn)
 	return nil
 }
 
+func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Conn) error {
+	if conn.BaseShowIndexSizes() == "" ||
+		conn.BaseShowTableRowCountClusteredIndex() == "" ||
+		conn.BaseShowIndexSizes() == "" ||
+		conn.BaseShowIndexCardinalities() == "" {
+		return nil
+	}
+	// Load all partitions so that we can extract the base table name from tables given as "TABLE#p#PARTITION"
+	type partition struct {
+		table     string
+		partition string
+	}
+
+	partitionsResults, err := conn.Exec(ctx, conn.BaseShowPartitions(), 8192*maxTableCount, false)
+	if err != nil {
+		return err
+	}
+	partitions := make(map[string]partition)
+	for _, row := range partitionsResults.Rows {
+		p := partition{
+			table:     row[0].ToString(),
+			partition: row[1].ToString(),
+		}
+		key := p.table + "#p#" + p.partition
+		partitions[key] = p
+	}
+
+	// Load table row counts and clustered index sizes. Results contain one row for every partition
+	type table struct {
+		table    string
+		rows     int64
+		rowBytes int64
+	}
+	tables := make(map[string]table)
+	tableStatsResults, err := conn.Exec(ctx, conn.BaseShowTableRowCountClusteredIndex(), maxTableCount*maxPartitionsPerTable, false)
+	if err != nil {
+		return err
+	}
+	for _, row := range tableStatsResults.Rows {
+		tableName := row[0].ToString()
+		rowCount, _ := row[1].ToInt64()
+		rowsBytes, _ := row[2].ToInt64()
+
+		if partition, ok := partitions[tableName]; ok {
+			tableName = partition.table
+		}
+
+		t, ok := tables[tableName]
+		if !ok {
+			t = table{table: tableName}
+		}
+		t.rows += rowCount
+		t.rowBytes += rowsBytes
+		tables[tableName] = t
+	}
+
+	type index struct {
+		table       string
+		index       string
+		bytes       int64
+		cardinality int64
+	}
+	indexes := make(map[[2]string]index)
+
+	// Load the byte sizes of all indexes. Results contain one row for every index/partition combination.
+	bytesResults, err := conn.Exec(ctx, conn.BaseShowIndexSizes(), maxTableCount*maxIndexesPerTable, false)
+	if err != nil {
+		return err
+	}
+	for _, row := range bytesResults.Rows {
+		tableName := row[0].ToString()
+		indexName := row[1].ToString()
+		indexBytes, _ := row[2].ToInt64()
+
+		if partition, ok := partitions[tableName]; ok {
+			tableName = partition.table
+		}
+
+		key := [2]string{tableName, indexName}
+		idx, ok := indexes[key]
+		if !ok {
+			idx = index{
+				table: tableName,
+				index: indexName,
+			}
+		}
+		idx.bytes += indexBytes
+		indexes[key] = idx
+	}
+
+	// Load index cardinalities. Results contain one row for every index (pre-aggregated across partitions).
+	cardinalityResults, err := conn.Exec(ctx, conn.BaseShowIndexCardinalities(), maxTableCount*maxPartitionsPerTable, false)
+	if err != nil {
+		return err
+	}
+	for _, row := range cardinalityResults.Rows {
+		tableName := row[0].ToString()
+		indexName := row[1].ToString()
+		cardinality, _ := row[2].ToInt64()
+
+		key := [2]string{tableName, indexName}
+		idx, ok := indexes[key]
+		if !ok {
+			idx = index{
+				table: tableName,
+				index: indexName,
+			}
+		}
+		idx.cardinality = cardinality
+		indexes[key] = idx
+	}
+
+	se.indexBytesGauge.ResetAll()
+	se.indexCardinalityGauge.ResetAll()
+	for _, idx := range indexes {
+		key := []string{idx.table, idx.index}
+		se.indexBytesGauge.Set(key, idx.bytes)
+		se.indexCardinalityGauge.Set(key, idx.cardinality)
+	}
+
+	se.tableRowsGauge.ResetAll()
+	se.tableClusteredIndexSizeGauge.ResetAll()
+	for _, tbl := range tables {
+		se.tableRowsGauge.Set(tbl.table, tbl.rows)
+		se.tableClusteredIndexSizeGauge.Set(tbl.table, tbl.rowBytes)
+	}
+
+	return nil
+}
+
 func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.Conn) (int64, error) {
 	// Keep `SELECT UNIX_TIMESTAMP` is in uppercase because binlog server queries are case sensitive and expect it to be so.
 	tm, err := conn.Exec(ctx, "SELECT UNIX_TIMESTAMP()", 1, false)
@@ -800,7 +953,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 	// This also allows us to perform a just-in-time initialization of the cache if
 	// a vstreamer is the first one to access it.
 	if se.conns != nil { // Test Engines (NewEngineForTests()) don't have a conns pool
-		if err := se.reload(ctx, true); err != nil {
+		if err := se.reload(ctx, false); err != nil {
 			return nil, err
 		}
 		if st, ok := se.tables[tableNameStr]; ok {

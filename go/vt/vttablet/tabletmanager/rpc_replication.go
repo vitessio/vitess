@@ -187,8 +187,10 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SemiSyncPrimaryClients:      semiSyncClients,
 		SemiSyncPrimaryTimeout:      semiSyncTimeout,
 		SemiSyncWaitForReplicaCount: semiSyncNumReplicas,
+		SemiSyncBlocked:             tm.SemiSyncMonitor.AllWritesBlocked(),
 		SuperReadOnly:               superReadOnly,
 		ReplicationConfiguration:    replConfiguration,
+		TabletType:                  tm.Tablet().Type,
 	}, nil
 }
 
@@ -592,8 +594,14 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}()
 	}
 
-	// Now that we know no writes are in-flight and no new writes can occur,
-	// set MySQL to super_read_only mode. If we are already super_read_only because of a
+	// Now we know no writes are in-flight and no new writes can occur.
+	// We just need to wait for no write being blocked on semi-sync ACKs.
+	err = tm.SemiSyncMonitor.WaitUntilSemiSyncUnblocked(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// We can now set MySQL to super_read_only mode. If we are already super_read_only because of a
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true); err != nil {
@@ -666,13 +674,26 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 		return err
 	}
 
+	// Check the display state of the tablet
+	tablet := tm.Tablet()
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		// If the tablet display type isn't primary, then we should check the tablet record.
+		// If the tablet record type is primary, then we should change the tablet display type to primary.
+		ti, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
+		if err != nil {
+			return err
+		}
+		if ti.Tablet.Type == topodatapb.TabletType_PRIMARY {
+			return tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite)
+		}
+	}
+
 	// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 	if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 		return err
 	}
 
 	// Update serving graph
-	tablet := tm.Tablet()
 	log.Infof("UndoDemotePrimary re-enabling query service")
 	if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
@@ -1052,10 +1073,24 @@ func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.
 	case SemiSyncActionNone:
 		return nil
 	case SemiSyncActionSet:
+		if tm.SemiSyncMonitor != nil {
+			// We want to enable the semi-sync monitor only if the tablet is going to start
+			// expecting semi-sync ACKs.
+			if tabletType == topodatapb.TabletType_PRIMARY {
+				tm.SemiSyncMonitor.Open()
+			} else {
+				tm.SemiSyncMonitor.Close()
+			}
+		}
 		// Always enable replica-side since it doesn't hurt to keep it on for a primary.
 		// The primary-side needs to be off for a replica, or else it will get stuck.
 		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, tabletType == topodatapb.TabletType_PRIMARY, true)
 	case SemiSyncActionUnset:
+		// The nil check is required for vtcombo, which doesn't run the semi-sync monitor
+		// but does try to turn off semi-sync.
+		if tm.SemiSyncMonitor != nil {
+			tm.SemiSyncMonitor.Close()
+		}
 		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, false, false)
 	default:
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)

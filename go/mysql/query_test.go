@@ -365,7 +365,7 @@ func TestSQLErrorOnServerClose(t *testing.T) {
 	err := cConn.WriteComQuery("close before rows read")
 	require.NoError(t, err)
 
-	handler := &testRun{t: t}
+	handler := &testRun{}
 	_ = sConn.handleNextCommand(handler)
 
 	// From the server we will receive a field packet which the client will read

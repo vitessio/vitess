@@ -106,7 +106,7 @@ func (c *grpcVtgateConn) connect(ctx context.Context, cp ConnParams) error {
 }
 
 func (c *grpcVtgateConn) execute(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return c.session.Execute(ctx, query, bindVars)
+	return c.session.Execute(ctx, query, bindVars, false)
 }
 
 type grpcVttabletConn struct {

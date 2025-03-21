@@ -32,6 +32,7 @@ export const DropdownButton: React.FC<{ icon: Icons; title?: string; className?:
             className
         )}
         id="menu-button"
+        data-testid="dropdown-btn"
         aria-haspopup="true"
         aria-label={title || 'change'}
         title={title || 'change'}

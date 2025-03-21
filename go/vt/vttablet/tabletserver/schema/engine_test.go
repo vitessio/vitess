@@ -42,7 +42,6 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -51,6 +50,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const baseShowTablesWithSizesPattern = `SELECT t\.table_name.*SUM\(i\.file_size\).*`
@@ -124,8 +124,8 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 	// Modify test_table_03
 	// Add test_table_04
 	// Drop msg
-	db.AddQueryPattern(baseShowTablesWithSizesPattern, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesWithSizesFields,
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesWithSizesRow("test_table_01", false, ""),
 			mysql.BaseShowTablesWithSizesRow("test_table_02", false, ""),
@@ -134,16 +134,14 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),    // table_type
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),      // unix_timestamp(t.create_time)
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),              // table_comment
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),             // file_size
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),             // allocated_size
 			},
 			// test_table_04 will in spite of older timestamp because it doesn't exist yet.
-			mysql.BaseShowTablesWithSizesRow("test_table_04", false, ""),
-			mysql.BaseShowTablesWithSizesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("test_table_04", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
 		},
 	})
 
-	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf("Reloading schema engine should query tables with size information"))
+	db.AddRejectedQuery(mysql.TablesWithSize57, fmt.Errorf("Reloading schema engine should query tables with size information"))
 
 	db.MockQueriesForTable("test_table_03", &sqltypes.Result{
 		Fields: []*querypb.Field{{
@@ -200,15 +198,6 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 
 	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsCounter.Get())
 
-	want["seq"].FileSize = 100
-	want["seq"].AllocatedSize = 150
-
-	want["test_table_01"].FileSize = 100
-	want["test_table_01"].AllocatedSize = 150
-
-	want["test_table_02"].FileSize = 100
-	want["test_table_02"].AllocatedSize = 150
-
 	want["test_table_03"] = &Table{
 		Name: sqlparser.NewIdentifierCS("test_table_03"),
 		Fields: []*querypb.Field{{
@@ -221,10 +210,8 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 			Name: "val",
 			Type: sqltypes.Int32,
 		}},
-		PKColumns:     []int{0, 1},
-		CreateTime:    1427325877,
-		FileSize:      128,
-		AllocatedSize: 256,
+		PKColumns:  []int{0, 1},
+		CreateTime: 1427325877,
 	}
 	want["test_table_04"] = &Table{
 		Name: sqlparser.NewIdentifierCS("test_table_04"),
@@ -232,10 +219,8 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
-		PKColumns:     []int{0},
-		CreateTime:    1427325875,
-		FileSize:      100,
-		AllocatedSize: 150,
+		PKColumns:  []int{0},
+		CreateTime: 1427325875,
 	}
 	delete(want, "msg")
 	assert.Equal(t, want, se.GetSchema())
@@ -372,8 +357,6 @@ func TestOpenAndReload(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),    // table_type
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),      // unix_timestamp(t.create_time)
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),              // table_comment
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),             // file_size
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),             // allocated_size
 			},
 			mysql.BaseShowTablesRow("test_table_04", false, ""),
 			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
@@ -391,8 +374,6 @@ func TestOpenAndReload(t *testing.T) {
 			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_02"),
 			{
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("fakesqldb/test_table_03")), // table_name
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),                       // file_size
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),                       // allocated_size
 			},
 			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_04"),
 			mysql.BaseInnoDBTableSizesRow("fakesqldb", "seq"),
@@ -455,15 +436,6 @@ func TestOpenAndReload(t *testing.T) {
 
 	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsCounter.Get())
 
-	want["seq"].FileSize = 100
-	want["seq"].AllocatedSize = 150
-
-	want["test_table_01"].FileSize = 100
-	want["test_table_01"].AllocatedSize = 150
-
-	want["test_table_02"].FileSize = 100
-	want["test_table_02"].AllocatedSize = 150
-
 	want["test_table_03"] = &Table{
 		Name: sqlparser.NewIdentifierCS("test_table_03"),
 		Fields: []*querypb.Field{{
@@ -476,10 +448,8 @@ func TestOpenAndReload(t *testing.T) {
 			Name: "val",
 			Type: sqltypes.Int32,
 		}},
-		PKColumns:     []int{0, 1},
-		CreateTime:    1427325877,
-		FileSize:      128,
-		AllocatedSize: 256,
+		PKColumns:  []int{0, 1},
+		CreateTime: 1427325877,
 	}
 	want["test_table_04"] = &Table{
 		Name: sqlparser.NewIdentifierCS("test_table_04"),
@@ -487,10 +457,8 @@ func TestOpenAndReload(t *testing.T) {
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
-		PKColumns:     []int{0},
-		CreateTime:    1427325875,
-		FileSize:      100,
-		AllocatedSize: 150,
+		PKColumns:  []int{0},
+		CreateTime: 1427325875,
 	}
 	delete(want, "msg")
 	assert.Equal(t, want, se.GetSchema())
@@ -646,31 +614,14 @@ func TestReloadWithSwappedTables(t *testing.T) {
 	err := se.Reload(context.Background())
 	require.NoError(t, err)
 
-	want["msg"].FileSize = 100
-	want["msg"].AllocatedSize = 150
-
-	want["seq"].FileSize = 100
-	want["seq"].AllocatedSize = 150
-
-	want["test_table_01"].FileSize = 100
-	want["test_table_01"].AllocatedSize = 150
-
-	want["test_table_02"].FileSize = 100
-	want["test_table_02"].AllocatedSize = 150
-
-	want["test_table_03"].FileSize = 100
-	want["test_table_03"].AllocatedSize = 150
-
 	want["test_table_04"] = &Table{
 		Name: sqlparser.NewIdentifierCS("test_table_04"),
 		Fields: []*querypb.Field{{
 			Name: "mypk",
 			Type: sqltypes.Int32,
 		}},
-		PKColumns:     []int{0},
-		CreateTime:    1427325877,
-		FileSize:      128,
-		AllocatedSize: 256,
+		PKColumns:  []int{0},
+		CreateTime: 1427325877,
 	}
 
 	mustMatch(t, want, se.GetSchema())
@@ -689,8 +640,6 @@ func TestReloadWithSwappedTables(t *testing.T) {
 			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_02"),
 			{
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("fakesqldb/test_table_03")), // table_name
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),                       // file_size
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),                       // allocated_size
 			},
 			mysql.BaseInnoDBTableSizesRow("fakesqldb", "test_table_04"),
 			mysql.BaseInnoDBTableSizesRow("fakesqldb", "seq"),
@@ -709,8 +658,6 @@ func TestReloadWithSwappedTables(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")), // unix_timestamp(create_time)
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")), // file_size
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")), // allocated_size
 			},
 			mysql.BaseShowTablesRow("test_table_04", false, ""),
 			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
@@ -755,10 +702,8 @@ func TestReloadWithSwappedTables(t *testing.T) {
 			Name: "mypk",
 			Type: sqltypes.Int32,
 		}},
-		PKColumns:     []int{0},
-		CreateTime:    1427325877,
-		FileSize:      128,
-		AllocatedSize: 256,
+		PKColumns:  []int{0},
+		CreateTime: 1427325877,
 	}
 	want["test_table_04"] = &Table{
 		Name: sqlparser.NewIdentifierCS("test_table_04"),
@@ -766,10 +711,8 @@ func TestReloadWithSwappedTables(t *testing.T) {
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
-		PKColumns:     []int{0},
-		CreateTime:    1427325875,
-		FileSize:      100,
-		AllocatedSize: 150,
+		PKColumns:  []int{0},
+		CreateTime: 1427325875,
 	}
 	mustMatch(t, want, se.GetSchema())
 }
@@ -1679,7 +1622,7 @@ func TestEngineReload(t *testing.T) {
 // that it conforms to the intended/expected behavior in various scenarios.
 // This more specifically tests the behavior of the function when the historian is
 // disabled or otherwise unable to get a table schema for the given position. When it
-// CAN, that is tested indepenently in the historian tests.
+// CAN, that is tested independently in the historian tests.
 //
 // Runs with 5.7 env
 func TestGetTableForPosLegacy(t *testing.T) {
@@ -1720,9 +1663,9 @@ func TestGetTableForPosLegacy(t *testing.T) {
 		db.AddQuery(fmt.Sprintf(readTableCreateTimes, sidecar.GetIdentifier()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|create_time", "varchar|int64")))
 		db.AddQuery(fmt.Sprintf(detectUdfChange, sidecar.GetIdentifier()), &sqltypes.Result{})
-		db.AddQueryPattern(baseShowTablesWithSizesPattern,
+		db.AddQuery(mysql.BaseShowTables,
 			&sqltypes.Result{
-				Fields:       mysql.BaseShowTablesWithSizesFields,
+				Fields:       mysql.BaseShowTablesFields,
 				RowsAffected: 0,
 				InsertID:     0,
 				Rows: [][]sqltypes.Value{
@@ -1731,8 +1674,6 @@ func TestGetTableForPosLegacy(t *testing.T) {
 						sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),                            // table_type
 						sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%d", time.Now().Unix()-1000))), // unix_timestamp(t.create_time)
 						sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),                                      // table_comment
-						sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),                                     // file_size
-						sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),                                     // allocated_size
 					},
 				},
 				SessionStateChanges: "",
@@ -1900,6 +1841,10 @@ func TestGetTableForPos(t *testing.T) {
 	se.historian.enabled = false
 
 	addExpectedReloadQueries := func(db *fakesqldb.DB) {
+		db.AddQuery(mysql.ShowPartitons, &sqltypes.Result{})
+		db.AddQuery(mysql.ShowTableRowCountClusteredIndex, &sqltypes.Result{})
+		db.AddQuery(mysql.ShowIndexSizes, &sqltypes.Result{})
+		db.AddQuery(mysql.ShowIndexCardinalities, &sqltypes.Result{})
 		db.AddQuery("SELECT UNIX_TIMESTAMP()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"UNIX_TIMESTAMP()",
 			"int64"),

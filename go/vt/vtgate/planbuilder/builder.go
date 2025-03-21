@@ -94,7 +94,7 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 		}
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", known)
-	result, err := sqlparser.PrepareAST(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, vschema.GetForeignKeyChecksState(), vschema)
+	result, err := sqlparser.Normalize(stmt, reservedVars, map[string]*querypb.BindVariable{}, false, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, vschema.GetForeignKeyChecksState(), vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -115,14 +115,7 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 		primitive = planResult.primitive
 		tablesUsed = planResult.tables
 	}
-	plan := &engine.Plan{
-		Type:         sqlparser.ASTToStatementType(stmt),
-		Original:     query,
-		Instructions: primitive,
-		BindVarNeeds: bindVarNeeds,
-		TablesUsed:   tablesUsed,
-	}
-	return plan, nil
+	return engine.NewPlan(query, stmt, primitive, bindVarNeeds, tablesUsed), nil
 }
 
 func getConfiguredPlanner(vschema plancontext.VSchema, stmt sqlparser.Statement, query string) (stmtPlanner, error) {
@@ -155,7 +148,7 @@ func getPlannerFromQueryHint(stmt sqlparser.Statement) (plancontext.PlannerVersi
 }
 
 func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, f func(statement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, schema plancontext.VSchema) (*planResult, error)) (*planResult, error) {
-	if vschema.Destination() != nil {
+	if vschema.ShardDestination() != nil {
 		return buildPlanForBypass(stmt, reservedVars, vschema)
 	}
 	return f(stmt, reservedVars, vschema)
@@ -246,7 +239,7 @@ func buildAnalyzePlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsche
 
 	var ks *vindexes.Keyspace
 	var err error
-	dest := key.Destination(key.DestinationAllShards{})
+	dest := key.ShardDestination(key.DestinationAllShards{})
 
 	if analyzeStmt.Table.Qualifier.NotEmpty() && sqlparser.SystemSchema(analyzeStmt.Table.Qualifier.String()) {
 		ks, err = vschema.AnyKeyspace()
@@ -322,7 +315,7 @@ func buildLoadPlan(query string, vschema plancontext.VSchema) (*planResult, erro
 		return nil, err
 	}
 
-	destination := vschema.Destination()
+	destination := vschema.ShardDestination()
 	if destination == nil {
 		if err := vschema.ErrorIfShardedF(keyspace, "LOAD", "LOAD is not supported on sharded keyspace"); err != nil {
 			return nil, err
@@ -367,7 +360,7 @@ func buildFlushOptions(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*pla
 		return nil, err
 	}
 
-	dest := vschema.Destination()
+	dest := vschema.ShardDestination()
 	if dest == nil {
 		dest = key.DestinationAllShards{}
 	}
@@ -387,10 +380,10 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema plancontext.VSchema) (*plan
 	tc := &tableCollector{}
 	type sendDest struct {
 		ks   *vindexes.Keyspace
-		dest key.Destination
+		dest key.ShardDestination
 	}
 
-	dest := vschema.Destination()
+	dest := vschema.ShardDestination()
 	if dest == nil {
 		dest = key.DestinationAllShards{}
 	}

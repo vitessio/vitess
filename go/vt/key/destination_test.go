@@ -258,7 +258,7 @@ func TestDestinationsString(t *testing.T) {
 		End:   []byte{0x40},
 	}
 
-	got := DestinationsString([]Destination{
+	got := DestinationsString([]ShardDestination{
 		DestinationShard("2"),
 		DestinationShards{"2", "3"},
 		DestinationExactKeyRange{KeyRange: kr2040},

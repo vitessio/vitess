@@ -18,6 +18,8 @@ package base
 
 import (
 	"time"
+
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
 // AppThrottle is the definition for an app throttling instruction
@@ -38,4 +40,8 @@ func NewAppThrottle(appName string, expireAt time.Time, ratio float64, exempt bo
 		Exempt:   exempt,
 	}
 	return result
+}
+
+func (at *AppThrottle) Name() throttlerapp.Name {
+	return throttlerapp.Name(at.AppName)
 }

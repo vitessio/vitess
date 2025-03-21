@@ -45,6 +45,7 @@ func (c *cowGen) addFunc(code *jen.Statement) {
 }
 
 func (c *cowGen) genFile(generatorSPI) (string, *jen.File) {
+	c.genVisitableMethod()
 	return "ast_copy_on_rewrite.go", c.file
 }
 
@@ -192,6 +193,9 @@ func (c *cowGen) interfaceMethod(t types.Type, iface *types.Interface, spi gener
 	})
 
 	cases = append(cases,
+		jen.Case(jen.Id(visitableName)).Block(
+			jen.Return(jen.Id("c."+cowName+visitableName).Call(jen.Id("n, parent"))),
+		),
 		jen.Default().Block(
 			jen.Comment("this should never happen"),
 			jen.Return(jen.Nil(), jen.False()),
@@ -366,6 +370,62 @@ func (c *cowGen) visitStruct(t types.Type, strct *types.Struct, spi generatorSPI
 	)
 
 	c.addFunc(funcDeclaration.Block(stmts...))
+}
+
+func (c *cowGen) genVisitableMethod() {
+	c.file.Func().
+		Params(jen.Id("c").Op("*").Id("cow")).
+		Id("copyOnRewriteVisitable").
+		Params(
+			jen.Id("n").Id("Visitable"),
+			jen.Id("parent").Id(c.baseType),
+		).
+		Params(
+			jen.Id("out").Id(c.baseType),
+			jen.Id("changed").Bool(),
+		).
+		Block(
+			// if c.cursor.stop { return n, false }
+			jen.If(jen.Id("c").Dot("cursor").Dot("stop")).Block(
+				jen.Return(jen.Id("n"), jen.False()),
+			),
+
+			// out = n
+			jen.Id("out").Op("=").Id("n"),
+
+			// if c.pre == nil || c.pre(n, parent) { ... }
+			jen.If(
+				jen.Id("c").Dot("pre").Op("==").Nil().Op("||").
+					Id("c").Dot("pre").Call(jen.Id("n"), jen.Id("parent")),
+			).Block(
+				// _inner, changedInner := c.copyOnRewriteAST(n.VisitThis(), n)
+				jen.List(jen.Id("_inner"), jen.Id("changedInner")).
+					Op(":=").
+					Id("c").Dot("copyOnRewrite"+c.baseType).
+					Call(
+						jen.Id("n").Dot("VisitThis").Call(),
+						jen.Id("n"),
+					),
+
+				// if changedInner { res := n.Clone(_inner); out = res; changed = true }
+				jen.If(jen.Id("changedInner")).Block(
+					jen.Id("res").Op(":=").Id("n").Dot("Clone").Call(jen.Id("_inner")),
+					jen.Id("out").Op("=").Id("res"),
+					jen.Id("changed").Op("=").True(),
+				),
+			),
+
+			// if c.post != nil { out, changed = c.postVisit(out, parent, changed) }
+			jen.If(jen.Id("c").Dot("post").Op("!=").Nil()).Block(
+				jen.List(jen.Id("out"), jen.Id("changed")).
+					Op("=").
+					Id("c").Dot("postVisit").
+					Call(jen.Id("out"), jen.Id("parent"), jen.Id("changed")),
+			),
+
+			// return
+			jen.Return(),
+		)
 }
 
 func ifPostNotNilVisit(out string) *jen.Statement {

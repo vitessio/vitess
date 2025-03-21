@@ -109,7 +109,7 @@ func (fhc *FakeHealthCheck) GetTabletHealth(kst KeyspaceShardTabletType, alias *
 }
 
 // Subscribe returns the channel in the struct. Subscribe should only be called in one place for this fake health check
-func (fhc *FakeHealthCheck) Subscribe() chan *TabletHealth {
+func (fhc *FakeHealthCheck) Subscribe(string) chan *TabletHealth {
 	return fhc.ch
 }
 
@@ -192,7 +192,7 @@ func (fhc *FakeHealthCheck) Unsubscribe(c chan *TabletHealth) {
 }
 
 // GetLoadTabletsTrigger is not implemented.
-func (fhc *FakeHealthCheck) GetLoadTabletsTrigger() chan struct{} {
+func (fhc *FakeHealthCheck) GetLoadTabletsTrigger() chan topo.KeyspaceShard {
 	return nil
 }
 

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -48,6 +49,7 @@ var (
 func registerSelfMetric(selfMetric SelfMetric) SelfMetric {
 	RegisteredSelfMetrics[selfMetric.Name()] = selfMetric
 	KnownMetricNames = append(KnownMetricNames, selfMetric.Name())
+	pascalMetricNames[selfMetric.Name()] = textutil.PascalCase(selfMetric.Name().String())
 	aggregatedMetricNames[selfMetric.Name().String()] = AggregatedMetricName{
 		Scope:  selfMetric.DefaultScope(),
 		Metric: selfMetric.Name(),

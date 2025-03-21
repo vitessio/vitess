@@ -116,20 +116,39 @@ func (tw *TopologyWatcher) getTablets() ([]*topo.TabletInfo, error) {
 	return tw.topoServer.GetTabletsByCell(tw.ctx, tw.cell, nil)
 }
 
+func (tw *TopologyWatcher) getTabletsByShard(keyspace string, shard string) ([]*topo.TabletInfo, error) {
+	return tw.topoServer.GetTabletsByShardCell(tw.ctx, keyspace, shard, []string{tw.cell})
+}
+
 // Start starts the topology watcher.
 func (tw *TopologyWatcher) Start() {
 	tw.wg.Add(1)
+	// Goroutine to refresh the tablets list periodically.
 	go func(t *TopologyWatcher) {
 		defer t.wg.Done()
 		ticker := time.NewTicker(t.refreshInterval)
 		defer ticker.Stop()
+		t.loadTablets()
 		for {
-			t.loadTablets()
 			select {
 			case <-t.ctx.Done():
 				return
-			case <-tw.healthcheck.GetLoadTabletsTrigger():
+			case kss := <-t.healthcheck.GetLoadTabletsTrigger():
+				t.loadTabletsForKeyspaceShard(kss.Keyspace, kss.Shard)
 			case <-ticker.C:
+				// Since we are going to load all the tablets,
+				// we can clear out the entire list for reloading
+				// specific keyspace shards.
+				func() {
+					for {
+						select {
+						case <-t.healthcheck.GetLoadTabletsTrigger():
+						default:
+							return
+						}
+					}
+				}()
+				t.loadTablets()
 			}
 		}
 	}(tw)
@@ -142,10 +161,23 @@ func (tw *TopologyWatcher) Stop() {
 	tw.wg.Wait()
 }
 
-func (tw *TopologyWatcher) loadTablets() {
-	newTablets := make(map[string]*tabletInfo)
-	var partialResult bool
+func (tw *TopologyWatcher) loadTabletsForKeyspaceShard(keyspace string, shard string) {
+	if keyspace == "" || shard == "" {
+		log.Errorf("topologyWatcher: loadTabletsForKeyspaceShard: keyspace and shard are required")
+		return
+	}
+	tabletInfos, err := tw.getTabletsByShard(keyspace, shard)
+	if err != nil {
+		log.Errorf("error getting tablets for keyspace-shard: %v:%v: %v", keyspace, shard, err)
+		return
+	}
+	// Since we are only reading tablets for a keyspace shard,
+	// this is by default a partial result.
+	tw.storeTabletInfos(tabletInfos /* partialResults */, true)
+}
 
+func (tw *TopologyWatcher) loadTablets() {
+	var partialResult bool
 	// First get the list of all tablets.
 	tabletInfos, err := tw.getTablets()
 	topologyWatcherOperations.Add(topologyWatcherOpListTablets, 1)
@@ -161,6 +193,11 @@ func (tw *TopologyWatcher) loadTablets() {
 		}
 	}
 
+	tw.storeTabletInfos(tabletInfos, partialResult)
+}
+
+func (tw *TopologyWatcher) storeTabletInfos(tabletInfos []*topo.TabletInfo, partialResult bool) {
+	newTablets := make(map[string]*tabletInfo)
 	// Accumulate a list of all known alias strings to use later
 	// when sorting.
 	tabletAliasStrs := make([]string, 0, len(tabletInfos))

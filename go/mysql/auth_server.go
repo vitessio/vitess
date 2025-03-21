@@ -277,10 +277,10 @@ func ScrambleMysqlNativePassword(salt, password []byte) []byte {
 	return scramble
 }
 
-// DecodeMysqlNativePasswordHex decodes the standard format used by MySQL
+// DecodePasswordHex decodes the standard format used by MySQL
 // for 4.1 style password hashes. It drops the optionally leading * before
 // decoding the rest as a hex encoded string.
-func DecodeMysqlNativePasswordHex(hexEncodedPassword string) ([]byte, error) {
+func DecodePasswordHex(hexEncodedPassword string) ([]byte, error) {
 	if hexEncodedPassword[0] == '*' {
 		hexEncodedPassword = hexEncodedPassword[1:]
 	}
@@ -294,7 +294,7 @@ func DecodeMysqlNativePasswordHex(hexEncodedPassword string) ([]byte, error) {
 //
 // All values here are non encoded byte slices, so if you store for example the double
 // SHA1 of the password as hex encoded characters, you need to decode that first.
-// See DecodeMysqlNativePasswordHex for a decoding helper for the standard encoding
+// See DecodePasswordHex for a decoding helper for the standard encoding
 // format of this hash used by MySQL.
 func VerifyHashedMysqlNativePassword(reply, salt, hashedNativePassword []byte) bool {
 	if len(reply) == 0 || len(hashedNativePassword) == 0 {

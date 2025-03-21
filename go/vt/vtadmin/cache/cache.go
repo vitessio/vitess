@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/patrickmn/go-cache"
+	cache "github.com/patrickmn/go-cache"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -161,8 +161,13 @@ func (c *Cache[Key, Value]) add(key string, val Value, d time.Duration) error {
 	c.lastFill[key] = time.Now().UTC()
 	c.m.Unlock()
 
-	// Then cache the actual value.
-	return c.cache.Add(key, val, d)
+	_, expr, exists := c.cache.GetWithExpiration(key)
+	if exists && (expr.IsZero() || expr.After(time.Now())) {
+		return c.cache.Replace(key, val, d)
+	} else {
+		// Then cache the actual value.
+		return c.cache.Add(key, val, d)
+	}
 }
 
 // Get returns the Value stored for the key, if present in the cache. If the key

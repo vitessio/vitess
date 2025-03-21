@@ -42,6 +42,14 @@ func (n Name) Concatenate(other Name) Name {
 func (n Name) SplitStrings() []string {
 	return strings.Split(n.String(), ":")
 }
+func (n Name) SplitMap() map[string]bool {
+	split := n.SplitStrings()
+	result := make(map[string]bool, len(split))
+	for _, s := range split {
+		result[s] = true
+	}
+	return result
+}
 
 const (
 	// AllName is a special catch-all name for all apps
@@ -70,7 +78,7 @@ const (
 	SchemaTrackerName Name = "schema-tracker"
 
 	TestingName                Name = "test"
-	TestingAlwaysThrottlerName Name = "always-throttled-app"
+	TestingAlwaysThrottledName Name = "always-throttled-app"
 )
 
 var (

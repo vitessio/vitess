@@ -105,10 +105,10 @@ func TestDropAndRecreateWithSameShards(t *testing.T) {
 	mysqlConnCountBefore, err := getMySQLConnectionCount(ctx, cur)
 	require.Nil(t, err)
 
-	_, err = cur.Execute(ctx, "DROP DATABASE "+ks1, nil)
+	_, err = cur.Execute(ctx, "DROP DATABASE "+ks1, nil, false)
 	require.Nil(t, err)
 
-	_, err = cur.Execute(ctx, "CREATE DATABASE "+ks1, nil)
+	_, err = cur.Execute(ctx, "CREATE DATABASE "+ks1, nil, false)
 	require.Nil(t, err)
 
 	assertTabletsPresent(t)
@@ -124,7 +124,7 @@ func TestDropAndRecreateWithSameShards(t *testing.T) {
 }
 
 func getMySQLConnectionCount(ctx context.Context, session *vtgateconn.VTGateSession) (int, error) {
-	result, err := session.Execute(ctx, "select variable_value from performance_schema.global_status where variable_name='threads_connected'", nil)
+	result, err := session.Execute(ctx, "select variable_value from performance_schema.global_status where variable_name='threads_connected'", nil, false)
 	if err != nil {
 		return 0, err
 	}

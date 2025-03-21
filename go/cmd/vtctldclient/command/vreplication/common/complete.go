@@ -12,11 +12,12 @@ import (
 )
 
 var CompleteOptions = struct {
-	KeepData         bool
-	KeepRoutingRules bool
-	RenameTables     bool
-	DryRun           bool
-	Shards           []string
+	KeepData             bool
+	KeepRoutingRules     bool
+	RenameTables         bool
+	DryRun               bool
+	Shards               []string
+	IgnoreSourceKeyspace bool
 }{}
 
 func GetCompleteCommand(opts *SubCommandsOpts) *cobra.Command {
@@ -41,12 +42,13 @@ func commandComplete(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.MoveTablesCompleteRequest{
-		Workflow:         BaseOptions.Workflow,
-		TargetKeyspace:   BaseOptions.TargetKeyspace,
-		KeepData:         CompleteOptions.KeepData,
-		KeepRoutingRules: CompleteOptions.KeepRoutingRules,
-		RenameTables:     CompleteOptions.RenameTables,
-		DryRun:           CompleteOptions.DryRun,
+		Workflow:             BaseOptions.Workflow,
+		TargetKeyspace:       BaseOptions.TargetKeyspace,
+		KeepData:             CompleteOptions.KeepData,
+		KeepRoutingRules:     CompleteOptions.KeepRoutingRules,
+		RenameTables:         CompleteOptions.RenameTables,
+		DryRun:               CompleteOptions.DryRun,
+		IgnoreSourceKeyspace: CompleteOptions.IgnoreSourceKeyspace,
 	}
 	resp, err := GetClient().MoveTablesComplete(GetCommandCtx(), req)
 	if err != nil {

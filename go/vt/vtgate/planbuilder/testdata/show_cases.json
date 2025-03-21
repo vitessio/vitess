@@ -3,6 +3,7 @@
     "comment": "Show table status without database name or conditions.",
     "query": "SHOW table StatUs",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "SHOW table StatUs",
       "Instructions": {
@@ -21,6 +22,7 @@
     "comment": "Show Table status with a keyspace name",
     "query": "SHOW table StatUs from main",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "SHOW table StatUs from main",
       "Instructions": {
@@ -39,6 +41,7 @@
     "comment": "Show Table status with a keyspace name using IN",
     "query": "SHOW table StatUs In main",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "SHOW table StatUs In main",
       "Instructions": {
@@ -57,6 +60,7 @@
     "comment": "Show Table status with a keyspace name with a condition",
     "query": "SHOW table StatUs In user WHERE `Rows` > 70",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "SHOW table StatUs In user WHERE `Rows` > 70",
       "Instructions": {
@@ -75,6 +79,7 @@
     "comment": "Show Table status with a Like condition",
     "query": "SHOW table StatUs LIKe '%a'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "SHOW table StatUs LIKe '%a'",
       "Instructions": {
@@ -93,6 +98,7 @@
     "comment": "show columns from user keyspace",
     "query": "show full columns from user.user_extra",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show full columns from user.user_extra",
       "Instructions": {
@@ -111,6 +117,7 @@
     "comment": "show columns from main keyspace",
     "query": "show full columns from unsharded",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show full columns from unsharded",
       "Instructions": {
@@ -129,6 +136,7 @@
     "comment": "show columns pass as dbname in from clause supersedes the qualifier",
     "query": "show full columns from user.unsharded from main",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show full columns from user.unsharded from main",
       "Instructions": {
@@ -157,6 +165,7 @@
     "comment": "show charset",
     "query": "show charset",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show charset",
       "Instructions": {
@@ -175,6 +184,7 @@
     "comment": "show function",
     "query": "show function status",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show function status",
       "Instructions": {
@@ -193,6 +203,7 @@
     "comment": "show privileges",
     "query": "show privileges",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show privileges",
       "Instructions": {
@@ -211,6 +222,7 @@
     "comment": "show procedure status",
     "query": "show procedure status",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show procedure status",
       "Instructions": {
@@ -229,6 +241,7 @@
     "comment": "show variables",
     "query": "show variables",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show variables",
       "Instructions": {
@@ -252,6 +265,7 @@
     "comment": "show global variables",
     "query": "show global variables",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show global variables",
       "Instructions": {
@@ -275,6 +289,7 @@
     "comment": "show databases",
     "query": "show databases",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show databases",
       "Instructions": {
@@ -290,6 +305,7 @@
     "comment": "show create database",
     "query": "show create database user",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show create database user",
       "Instructions": {
@@ -308,6 +324,7 @@
     "comment": "show create database system_schema",
     "query": "show create database mysql",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show create database mysql",
       "Instructions": {
@@ -326,6 +343,7 @@
     "comment": "show create procedure",
     "query": "show create procedure proc",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show create procedure proc",
       "Instructions": {
@@ -344,6 +362,7 @@
     "comment": "show create procedure from system_schema",
     "query": "show create procedure information_schema.proc",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show create procedure information_schema.proc",
       "Instructions": {
@@ -362,6 +381,7 @@
     "comment": "show create table on table present in sharded but as unsharded is selected it goes to unsharded keyspace",
     "query": "show create table user_extra",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show create table user_extra",
       "Instructions": {
@@ -380,6 +400,7 @@
     "comment": "show create table with qualifier",
     "query": "show create table user.user_extra",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show create table user.user_extra",
       "Instructions": {
@@ -398,6 +419,7 @@
     "comment": "show create table with unsharded as default keyspace",
     "query": "show create table unknown",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show create table unknown",
       "Instructions": {
@@ -421,6 +443,7 @@
     "comment": "show create table from system_schema",
     "query": "show create table information_schema.tables",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show create table information_schema.tables",
       "Instructions": {
@@ -439,6 +462,7 @@
     "comment": "show tables",
     "query": "show tables",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show tables",
       "Instructions": {
@@ -468,6 +492,7 @@
     "comment": "show tables from db",
     "query": "show tables from user",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show tables from user",
       "Instructions": {
@@ -497,6 +522,7 @@
     "comment": "show tables from system schema",
     "query": "show tables from performance_schema",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show tables from performance_schema",
       "Instructions": {
@@ -526,6 +552,7 @@
     "comment": "show migrations with db and like",
     "query": "show vitess_migrations from user like '%format'",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SHOW",
       "Original": "show vitess_migrations from user like '%format'",
       "Instructions": {
@@ -543,6 +570,7 @@
     "comment": "show migrations with db and where",
     "query": "show vitess_migrations from user where id = 5",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SHOW",
       "Original": "show vitess_migrations from user where id = 5",
       "Instructions": {
@@ -560,6 +588,7 @@
     "comment": "show vgtid",
     "query": "show global vgtid_executed",
     "plan": {
+      "Type": "Complex",
       "QueryType": "SHOW",
       "Original": "show global vgtid_executed",
       "Instructions": {
@@ -586,6 +615,7 @@
     "comment": "show gtid",
     "query": "show global gtid_executed from user",
     "plan": {
+      "Type": "Scatter",
       "QueryType": "SHOW",
       "Original": "show global gtid_executed from user",
       "Instructions": {
@@ -604,6 +634,7 @@
     "comment": "show warnings",
     "query": "show warnings",
     "plan": {
+      "Type": "Local",
       "QueryType": "SHOW",
       "Original": "show warnings",
       "Instructions": {
@@ -615,6 +646,7 @@
     "comment": "show global status",
     "query": "show global status",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show global status",
       "Instructions": {
@@ -633,6 +665,7 @@
     "comment": "show plugins",
     "query": "show plugins",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show plugins",
       "Instructions": {
@@ -652,6 +685,7 @@
     "comment": "show engines",
     "query": "show engines",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show engines",
       "Instructions": {
@@ -672,6 +706,7 @@
     "comment": "show vitess_shards",
     "query": "show vitess_shards",
     "plan": {
+      "Type": "Local",
       "QueryType": "SHOW",
       "Original": "show vitess_shards",
       "Instructions": {
@@ -684,6 +719,7 @@
     "comment": "show vitess_tablets",
     "query": "show vitess_tablets",
     "plan": {
+      "Type": "Local",
       "QueryType": "SHOW",
       "Original": "show vitess_tablets",
       "Instructions": {
@@ -696,6 +732,7 @@
     "comment": "show vitess_tablets with filter",
     "query": "show vitess_tablets like '-2%'",
     "plan": {
+      "Type": "Local",
       "QueryType": "SHOW",
       "Original": "show vitess_tablets like '-2%'",
       "Instructions": {
@@ -709,6 +746,7 @@
     "comment": "show vschema tables",
     "query": "show vschema tables",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show vschema tables",
       "Instructions": {
@@ -724,6 +762,7 @@
     "comment": "show vschema keyspaces",
     "query": "show vschema keyspaces",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show vschema keyspaces",
       "Instructions": {
@@ -742,6 +781,7 @@
     "comment": "show vschema vindexes",
     "query": "show vschema vindexes",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show vschema vindexes",
       "Instructions": {
@@ -760,6 +800,7 @@
     "comment": "show vschema vindexes on a table",
     "query": "show vschema vindexes on user.user",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show vschema vindexes on user.user",
       "Instructions": {
@@ -778,6 +819,7 @@
     "comment": "show vitess target",
     "query": "show vitess_target",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show vitess_target",
       "Instructions": {
@@ -793,6 +835,7 @@
     "comment": "show vitess_replication_status",
     "query": "show vitess_replication_status",
     "plan": {
+      "Type": "Local",
       "QueryType": "SHOW",
       "Original": "show vitess_replication_status",
       "Instructions": {
@@ -805,6 +848,7 @@
     "comment": "show vitess_replication_status with filter",
     "query": "show vitess_replication_status like 'x'",
     "plan": {
+      "Type": "Local",
       "QueryType": "SHOW",
       "Original": "show vitess_replication_status like 'x'",
       "Instructions": {
@@ -818,6 +862,7 @@
     "comment": "show vitess_metadata variables",
     "query": "show vitess_metadata variables",
     "plan": {
+      "Type": "Topology",
       "QueryType": "SHOW",
       "Original": "show vitess_metadata variables",
       "Instructions": {
@@ -830,6 +875,7 @@
     "comment": "show vitess_metadata variables with filter",
     "query": "show vitess_metadata variables like 'x'",
     "plan": {
+      "Type": "Topology",
       "QueryType": "SHOW",
       "Original": "show vitess_metadata variables like 'x'",
       "Instructions": {
@@ -843,6 +889,7 @@
     "comment": "show transaction status plan",
     "query": "show transaction status for 'ks:-80:v24s7843sf78934l3'",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "SHOW",
       "Original": "show transaction status for 'ks:-80:v24s7843sf78934l3'",
       "Instructions": {
@@ -855,6 +902,7 @@
     "comment": "show unresolved transactions for default keyspace",
     "query": "show unresolved transactions",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "SHOW",
       "Original": "show unresolved transactions",
       "Instructions": {
@@ -866,6 +914,7 @@
     "comment": "show unresolved transactions for explicitly provided keyspace",
     "query": "show unresolved transactions for ks",
     "plan": {
+      "Type": "MultiShard",
       "QueryType": "SHOW",
       "Original": "show unresolved transactions for ks",
       "Instructions": {

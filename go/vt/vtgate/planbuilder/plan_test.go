@@ -378,7 +378,7 @@ func (s *planTestSuite) TestOneWithTPCHVSchema() {
 	defer reset()
 
 	env := vtenv.NewTestEnv()
-	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vschema := loadSchema(s.T(), "vschemas/tpch_schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
 	require.NoError(s.T(), err)
 
