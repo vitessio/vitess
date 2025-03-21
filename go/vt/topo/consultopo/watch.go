@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -37,7 +38,7 @@ func init() {
 }
 
 func registerWatchFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&watchPollDuration, "topo_consul_watch_poll_duration", watchPollDuration, "time of the long poll for watch queries.")
+	utils.SetFlagDurationVar(fs, &watchPollDuration, "topo-consul-watch-poll-duration", watchPollDuration, "time of the long poll for watch queries.")
 }
 
 // Watch is part of the topo.Conn interface.

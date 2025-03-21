@@ -113,7 +113,7 @@ func (s *Server) lock(ctx context.Context, dirPath, contents, ttl string) (topo.
 	lockOpts.SessionOpts.Checks = s.lockChecks
 	if s.lockTTL != "" {
 		// Override the API default with the global default from
-		// --topo_consul_lock_session_ttl.
+		// --topo-consul-lock-session-ttl.
 		lockOpts.SessionOpts.TTL = s.lockTTL
 	}
 	if ttl != "" {

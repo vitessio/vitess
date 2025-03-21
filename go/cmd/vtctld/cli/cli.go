@@ -40,14 +40,14 @@ This is **required** to use programs such as vtadmin and vtctldclient, and The o
 To enable this newer service, include "grpc-vtctld" in the --service_map argument.
 This is demonstrated in the example usage below.`,
 		Example: `vtctld \
-	--topo_implementation etcd2 \
-	--topo_global_server_address localhost:2379 \
-	--topo_global_root /vitess/ \
+	--topo-implementation etcd2 \
+	--topo-global-server-address localhost:2379 \
+	--topo-global-root /vitess/ \
 	--service_map 'grpc-vtctl,grpc-vtctld' \
 	--backup_storage_implementation file \
 	--file_backup_storage_root $VTDATAROOT/backups \
 	--port 15000 \
-	--grpc_port 15999`,
+	--grpc-port 15999`,
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),
 		PreRunE: servenv.CobraPreRunE,

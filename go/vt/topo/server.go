@@ -54,6 +54,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -194,10 +195,10 @@ func init() {
 }
 
 func registerTopoFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&topoImplementation, "topo_implementation", topoImplementation, "the topology implementation to use")
-	fs.StringVar(&topoGlobalServerAddress, "topo_global_server_address", topoGlobalServerAddress, "the address of the global topology server")
-	fs.StringVar(&topoGlobalRoot, "topo_global_root", topoGlobalRoot, "the path of the global topology data in the global topology server")
-	fs.Int64Var(&DefaultReadConcurrency, "topo_read_concurrency", DefaultReadConcurrency, "Maximum concurrency of topo reads per global or local cell.")
+	utils.SetFlagStringVar(fs, &topoImplementation, "topo-implementation", topoImplementation, "the topology implementation to use")
+	utils.SetFlagStringVar(fs, &topoGlobalServerAddress, "topo-global-server-address", topoGlobalServerAddress, "the address of the global topology server")
+	utils.SetFlagStringVar(fs, &topoGlobalRoot, "topo-global-root", topoGlobalRoot, "the path of the global topology data in the global topology server")
+	utils.SetFlagInt64Var(fs, &DefaultReadConcurrency, "topo-read-concurrency", DefaultReadConcurrency, "Maximum concurrency of topo reads per global or local cell.")
 }
 
 // RegisterFactory registers a Factory for an implementation for a Server.
@@ -253,10 +254,10 @@ func OpenServer(implementation, serverAddress, root string) (*Server, error) {
 // for implementation, address and root. It log.Exits out if an error occurs.
 func Open() *Server {
 	if topoGlobalServerAddress == "" {
-		log.Exitf("topo_global_server_address must be configured")
+		log.Exitf("topo-global-server-address must be configured")
 	}
 	if topoGlobalRoot == "" {
-		log.Exit("topo_global_root must be non-empty")
+		log.Exit("topo-global-root must be non-empty")
 	}
 	ts, err := OpenServer(topoImplementation, topoGlobalServerAddress, topoGlobalRoot)
 	if err != nil {
