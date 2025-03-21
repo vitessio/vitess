@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateservice"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
@@ -101,11 +102,16 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	grpcclient.RegisterFlags(fs)
 
 	grpcclient.ResetStaticAuth()
+	authStaticClientCredsFlag := utils.GetFlagVariantForTests("--grpc-auth-static-client-creds")
+
+	// Parse the flag using the chosen variant
 	err = fs.Parse([]string{
-		"--grpc-auth-static-client-creds",
+		authStaticClientCredsFlag,
 		f.Name(),
 	})
-	require.NoError(t, err, "failed to set `--grpc-auth-static-client-creds=%s`", f.Name())
+
+	// Ensure error handling uses the same flag variant
+	require.NoError(t, err, "failed to set `%s=%s`", authStaticClientCredsFlag, f.Name())
 	client, err := dial(ctx, listener.Addr().String())
 	require.NoError(t, err)
 	RegisterTestDialProtocol(client)
@@ -135,11 +141,14 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	grpcclient.RegisterFlags(fs)
 
 	grpcclient.ResetStaticAuth()
+	authStaticClientCredsFlag = utils.GetFlagVariantForTests("--grpc-auth-static-client-creds")
 	err = fs.Parse([]string{
-		"--grpc-auth-static-client-creds",
+		authStaticClientCredsFlag,
 		f.Name(),
 	})
-	require.NoError(t, err, "failed to set `--grpc-auth-static-client-creds=%s`", f.Name())
+	// Ensure error handling uses the same flag variant
+	require.NoError(t, err, "failed to set `%s=%s`", authStaticClientCredsFlag, f.Name())
+
 	client, err = dial(ctx, listener.Addr().String())
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)

@@ -63,9 +63,9 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--file_backup_storage_root", vtctld.FileBackupStorageRoot,
 		"--log_dir", vtctld.LogDir,
 		"--port", fmt.Sprintf("%d", vtctld.Port),
-		"--grpc-port", fmt.Sprintf("%d", vtctld.GrpcPort),
+		"--grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
 		"--bind-address", "127.0.0.1",
-		"--grpc-bind-address", "127.0.0.1",
+		"--grpc_bind_address", "127.0.0.1",
 	)
 
 	if *isCoverage {

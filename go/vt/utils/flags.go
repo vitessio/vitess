@@ -81,12 +81,6 @@ func SetFlagDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def ti
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).DurationVar)
 }
 
-func SetFlagVariants(m map[string]string, key, value string) {
-	underscored, dashed := flagVariants(key)
-	m[underscored] = value
-	m[dashed] = value
-}
-
 func SetFlagVariantsForTests(m map[string]string, key, value string) {
 	underscored, dashed := flagVariants(key)
 	if rand.Int()%2 == 0 {
@@ -94,4 +88,14 @@ func SetFlagVariantsForTests(m map[string]string, key, value string) {
 	} else {
 		m[dashed] = value
 	}
+}
+
+func GetFlagVariantForTests(flagName string) string {
+	underscored, dashed := flagVariants(flagName)
+	if rand.Int()%2 == 0 {
+		// fmt.Print("Using flag variant: ", underscored, "\n")
+		return underscored
+	}
+	// fmt.Print("Using flag variant: ", dashed, "\n")
+	return dashed
 }

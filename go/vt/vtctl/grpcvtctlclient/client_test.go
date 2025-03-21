@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -109,12 +108,6 @@ func TestVtctlAuthClient(t *testing.T) {
 
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)
-
-	err = fs.Parse([]string{
-		"--grpc-auth-static-client-creds",
-		f.Name(),
-	})
-	require.NoError(t, err, "failed to set `--grpc-auth-static-client-creds=%s`", f.Name())
 
 	// Create a VtctlClient gRPC client to talk to the fake server
 	client, err := gRPCVtctlClientFactory(ctx, fmt.Sprintf("localhost:%v", port))
