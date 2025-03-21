@@ -405,7 +405,7 @@ const (
 	HaErrAutoincReadFailed = HandlerErrorCode(166)
 	// Failed to set row autoinc value
 	HaErrAutoincErange = HandlerErrorCode(167)
-	// Generic error
+	// BaselinePlan error
 	HaErrGeneric = HandlerErrorCode(168)
 	// row not actually updated: new values same as the old values
 	HaErrRecordIsTheSame = HandlerErrorCode(169)

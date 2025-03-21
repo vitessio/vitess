@@ -465,13 +465,13 @@ func canMergeOnFilters(ctx *plancontext.PlanningContext, a, b *Route, joinPredic
 	return false
 }
 
-func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) (bool, []engine.SpecializedCondition) {
+func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) (bool, []engine.Condition) {
 	if len(a) != len(b) {
 		return false, nil
 	}
 
 	// TODO: check SemTable's columnEqualities for better plan
-	var conditions []engine.SpecializedCondition
+	var conditions []engine.Condition
 	for i, aExpr := range a {
 		bExpr := b[i]
 		equal, c := gen4ValEqual(ctx, aExpr, bExpr)
@@ -485,7 +485,7 @@ func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) (b
 	return true, conditions
 }
 
-func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) (bool, *engine.SpecializedCondition) {
+func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) (bool, *engine.Condition) {
 	switch a := a.(type) {
 	case *sqlparser.ColName:
 		if b, ok := b.(*sqlparser.ColName); ok {
@@ -519,7 +519,7 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) (bool, 
 		}
 
 		return aVal.Type == bVal.Type && bytes.Equal(aVal.Value, bVal.Value),
-			&engine.SpecializedCondition{A: a.Name, B: b.Name}
+			&engine.Condition{A: a.Name, B: b.Name}
 
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)

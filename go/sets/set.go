@@ -110,7 +110,7 @@ func (g sortableSlice[T]) Swap(i, j int)      { g[i], g[j] = g[j], g[i] }
 // List returns the contents as a sorted T slice.
 //
 // This is a separate function and not a method because not all types supported
-// by Generic are ordered and only those can be sorted.
+// by BaselinePlan are ordered and only those can be sorted.
 func List[T ordered](s Set[T]) []T {
 	res := make(sortableSlice[T], 0, len(s))
 	for key := range s {

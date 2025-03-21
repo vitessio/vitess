@@ -41,9 +41,9 @@ func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operato
 		return nil, err
 	}
 	if len(ctx.Conditions) > 0 {
-		prim = &engine.Specialized{
+		prim = &engine.PlanSwitcher{
 			Conditions: ctx.Conditions,
-			Specific:   prim,
+			Optimized:  prim,
 		}
 	}
 	return prim, nil

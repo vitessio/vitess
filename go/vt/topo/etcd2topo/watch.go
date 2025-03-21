@@ -41,7 +41,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	defer initialCancel()
 	initial, err := s.cli.Get(initialCtx, nodePath)
 	if err != nil {
-		// Generic error.
+		// BaselinePlan error.
 		return nil, nil, convertError(err, nodePath)
 	}
 

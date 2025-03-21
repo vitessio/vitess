@@ -46,8 +46,9 @@ type (
 		Comments *sqlparser.ParsedComments
 		Lock     sqlparser.Lock
 
-		// If this query has been planned using specialization, this will contain the conditions under which this route is valid
-		Conditions []engine.SpecializedCondition
+		// If this query has been planned using deferred optimization,
+		// this field will contain the conditions under which this route is valid
+		Conditions []engine.Condition
 
 		ResultColumns int
 	}

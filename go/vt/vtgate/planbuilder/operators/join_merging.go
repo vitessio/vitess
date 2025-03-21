@@ -120,8 +120,8 @@ func prepareInputRoutes(ctx *plancontext.PlanningContext, lhs Operator, rhs Oper
 
 type (
 	merger interface {
-		mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route, conditions []engine.SpecializedCondition) *Route
-		merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions []engine.SpecializedCondition) *Route
+		mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route, conditions []engine.Condition) *Route
+		merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions []engine.Condition) *Route
 	}
 
 	joinMerger struct {
@@ -219,7 +219,7 @@ func newJoinMerge(predicates []sqlparser.Expr, joinType sqlparser.JoinType) *joi
 	}
 }
 
-func (jm *joinMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route, conditions []engine.SpecializedCondition) *Route {
+func (jm *joinMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, op1, op2 *Route, conditions []engine.Condition) *Route {
 	return jm.merge(ctx, op1, op2, mergeShardedRouting(r1, r2), conditions)
 }
 
@@ -238,7 +238,7 @@ func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting
 	return tr
 }
 
-func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions []engine.SpecializedCondition) *Route {
+func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions []engine.Condition) *Route {
 	aj := NewApplyJoin(ctx, op1.Source, op2.Source, ctx.SemTable.AndExpressions(jm.predicates...), jm.joinType, false)
 	for _, column := range aj.JoinPredicates.columns {
 		if column.JoinPredicateID != nil {

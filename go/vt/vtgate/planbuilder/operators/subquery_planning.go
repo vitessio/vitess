@@ -590,7 +590,7 @@ func (s *subqueryRouteMerger) mergeShardedRouting(
 	ctx *plancontext.PlanningContext,
 	r1, r2 *ShardedRouting,
 	old1, old2 *Route,
-	conditions []engine.SpecializedCondition,
+	conditions []engine.Condition,
 ) *Route {
 	tr := &ShardedRouting{
 		VindexPreds: append(r1.VindexPreds, r2.VindexPreds...),
@@ -643,7 +643,7 @@ func (s *subqueryRouteMerger) mergeShardedRouting(
 	return s.merge(ctx, old1, old2, routing, conditions)
 }
 
-func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing, conditions []engine.SpecializedCondition) *Route {
+func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing, conditions []engine.Condition) *Route {
 	allCond := append(outer.Conditions, inner.Conditions...)
 	allCond = append(allCond, conditions...)
 	if !s.subq.TopLevel {

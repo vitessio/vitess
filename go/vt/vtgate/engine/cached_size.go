@@ -1201,7 +1201,7 @@ func (cached *SimpleProjection) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *Specialized) CachedSize(alloc bool) int64 {
+func (cached *PlanSwitcher) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -1209,24 +1209,24 @@ func (cached *Specialized) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(64)
 	}
-	// field Conditions []vitess.io/vitess/go/vt/vtgate/engine.SpecializedCondition
+	// field Conditions []vitess.io/vitess/go/vt/vtgate/engine.Condition
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Conditions)) * int64(32))
 		for _, elem := range cached.Conditions {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field Generic vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Generic.(cachedObject); ok {
+	// field BaselinePlan vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Baseline.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	// field Specific vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Specific.(cachedObject); ok {
+	if cc, ok := cached.Optimized.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size
 }
-func (cached *SpecializedCondition) CachedSize(alloc bool) int64 {
+func (cached *Condition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}

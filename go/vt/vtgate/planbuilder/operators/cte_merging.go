@@ -77,7 +77,7 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in 
 	return nil
 }
 
-func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in *RecurseCTE, conditions []engine.SpecializedCondition) *Route {
+func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in *RecurseCTE, conditions []engine.Condition) *Route {
 	in.Def.Merged = true
 	hz := in.Horizon
 	hz.Source = term.Source

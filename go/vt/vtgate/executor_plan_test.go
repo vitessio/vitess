@@ -43,35 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type PlanTest struct {
-	Comment  string          `json:"comment,omitempty"`
-	Query    string          `json:"query,omitempty"`
-	BindVars []string        `json:"bindvars,omitempty"`
-	Plan     json.RawMessage `json:"plan,omitempty"`
-	Skip     bool            `json:"skip,omitempty"`
-	SkipE2E  bool            `json:"skip_e2e,omitempty"`
-}
-
-func locateFile(name string) string {
-	return "plantests/" + name
-}
-
-func readJSONTests(filename string) []PlanTest {
-	var output []PlanTest
-	file, err := os.Open(locateFile(filename))
-	if err != nil {
-		panic(err)
-	}
-	dec := json.NewDecoder(file)
-	dec.DisallowUnknownFields()
-	err = dec.Decode(&output)
-	if err != nil {
-		panic(err)
-	}
-	return output
-}
-
-func TestPlanSpecialized(t *testing.T) {
+func TestDeferredOptimization(t *testing.T) {
 	ctx := context.Background()
 	env := vtenv.NewTestEnv()
 	cfg := &evalengine.Config{
@@ -109,21 +81,12 @@ func TestPlanSpecialized(t *testing.T) {
 		t.Run(testName, func(t *testing.T) {
 			sess := executorcontext.NewSafeSession(&vtgatepb.Session{})
 			ls := logstats.NewLogStats(ctx, "test", tcase.Query, "", nil, streamlog.GetQueryLogConfig())
-			_, _, _, err := executor.fetchOrCreatePlan(ctx, sess, tcase.Query, nil, false, true, ls, false)
-			if err != nil {
-				t.Logf("Error: %v", err)
-			}
+			_, _, _, _ = executor.fetchOrCreatePlan(ctx, sess, tcase.Query, nil, false, true, ls, false)
 
 			bv := make(map[string]*querypb.BindVariable)
 			for i, from := range tcase.BindVars {
-				expr, err := parser.ParseExpr(from)
-				require.NoError(t, err)
-				evalExpr, err := evalengine.Translate(expr, cfg)
-				require.NoError(t, err)
-				evalResult, err := exprEnv.Evaluate(evalExpr)
-				require.NoError(t, err)
 				key := fmt.Sprintf("v%d", i+1)
-				bv[key] = sqltypes.ValueBindVariable(evalResult.Value(collations.Unknown))
+				bv[key] = makeBindVar(t, from, cfg, exprEnv)
 			}
 
 			plan, _, _, err := executor.fetchOrCreatePlan(ctx, sess, tcase.Query, bv, false, true, ls, true)
@@ -136,6 +99,17 @@ func TestPlanSpecialized(t *testing.T) {
 			}
 		})
 	}
+}
+
+func makeBindVar(t *testing.T, e string, cfg *evalengine.Config, env *evalengine.ExpressionEnv) *querypb.BindVariable {
+	parser := sqlparser.NewTestParser()
+	expr, err := parser.ParseExpr(e)
+	require.NoError(t, err)
+	evalExpr, err := evalengine.Translate(expr, cfg)
+	require.NoError(t, err)
+	evalResult, err := env.Evaluate(evalExpr)
+	require.NoError(t, err)
+	return sqltypes.ValueBindVariable(evalResult.Value(collations.Unknown))
 }
 
 func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
@@ -159,4 +133,32 @@ func loadKeyspace(schema string) *vschemapb.Keyspace {
 		panic(err)
 	}
 	return &vs
+}
+
+type PlanTest struct {
+	Comment  string          `json:"comment,omitempty"`
+	Query    string          `json:"query,omitempty"`
+	BindVars []string        `json:"bindvars,omitempty"`
+	Plan     json.RawMessage `json:"plan,omitempty"`
+	Skip     bool            `json:"skip,omitempty"`
+	SkipE2E  bool            `json:"skip_e2e,omitempty"`
+}
+
+func locateFile(name string) string {
+	return "plantests/" + name
+}
+
+func readJSONTests(filename string) []PlanTest {
+	var output []PlanTest
+	file, err := os.Open(locateFile(filename))
+	if err != nil {
+		panic(err)
+	}
+	dec := json.NewDecoder(file)
+	dec.DisallowUnknownFields()
+	err = dec.Decode(&output)
+	if err != nil {
+		panic(err)
+	}
+	return output
 }

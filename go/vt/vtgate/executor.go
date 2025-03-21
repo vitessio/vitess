@@ -1104,19 +1104,19 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 func (e *Executor) fetchOrCreatePlan(
 	ctx context.Context,
 	safeSession *econtext.SafeSession,
-	sql string,
+	queryString string,
 	bindVars map[string]*querypb.BindVariable,
 	parameterize bool,
 	preparedPlan bool,
 	logStats *logstats.LogStats,
-	executePath bool, // this means we are trying to execute the query - this is not a PREPARE call
+	isExecutePath bool, // this means we are trying to execute the query - this is not a PREPARE call
 ) (
 	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, err error) {
 	if e.VSchema() == nil {
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
-	query, comments := sqlparser.SplitMarginComments(sql)
+	query, comments := sqlparser.SplitMarginComments(queryString)
 	vcursor, _ = econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
 
 	var setVarComment string
@@ -1132,35 +1132,24 @@ func (e *Executor) fetchOrCreatePlan(
 
 	if plan == nil {
 		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
-		if err != nil {
-			if preparedPlan && executePath {
-				vcursor.SetBindVars(bindVars)
-				sPlan, _, _, err2 := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
-				if err2 == nil {
-					if sp, isSpecialized := sPlan.Instructions.(*engine.Specialized); isSpecialized {
-						sp.GenericPlanErr = err
-						sPlan.Specialized.Store(true)
-						e.plans.Set(planKey.Hash(), sPlan, 0, e.epoch.Load())
-						plan = sPlan
-						err = nil
-					}
-				}
-			}
+		if err != nil && preparedPlan && isExecutePath {
+			// The baseline plan failed to build, try to build a optimized plan
+			plan, err = e.tryOptimizedPlan(ctx, vcursor, bindVars, query, setVarComment, parameterize, planKey, plan, err)
 		}
 	}
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	if preparedPlan && executePath && !plan.Specialized.Swap(true) {
+	if preparedPlan && isExecutePath && !plan.Optimized.Swap(true) {
 		vcursor.SetBindVars(bindVars)
-		sPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
+		optimizedPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
 		if err == nil {
-			if sp, isSpecialized := sPlan.Instructions.(*engine.Specialized); isSpecialized {
-				sp.Generic = plan.Instructions
-				sPlan.Specialized.Store(true)
-				e.plans.Set(planKey.Hash(), sPlan, 0, e.epoch.Load())
-				plan = sPlan
+			if sp, ok := optimizedPlan.Instructions.(*engine.PlanSwitcher); ok {
+				sp.Baseline = plan.Instructions
+				optimizedPlan.Optimized.Store(true)
+				e.plans.Set(planKey.Hash(), optimizedPlan, 0, e.epoch.Load())
+				plan = optimizedPlan
 			}
 		}
 	}
@@ -1176,6 +1165,30 @@ func (e *Executor) fetchOrCreatePlan(
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
 	return plan, vcursor, stmt, nil
+}
+
+func (e *Executor) tryOptimizedPlan(
+	ctx context.Context,
+	vcursor *econtext.VCursorImpl,
+	bindVars map[string]*querypb.BindVariable,
+	baseQuery string,
+	setVarComment string,
+	parameterize bool,
+	planKey engine.PlanKey,
+	fallbackPlan *engine.Plan,
+	prevErr error,
+) (*engine.Plan, error) {
+	vcursor.SetBindVars(bindVars)
+	sPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
+	if err == nil {
+		if sp, ok := sPlan.Instructions.(*engine.PlanSwitcher); ok {
+			sp.BaselineErr = prevErr
+			sPlan.Optimized.Store(true)
+			e.plans.Set(planKey.Hash(), sPlan, 0, e.epoch.Load())
+			return sPlan, nil
+		}
+	}
+	return fallbackPlan, prevErr
 }
 
 func (e *Executor) getCachedOrBuildPlan(

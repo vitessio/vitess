@@ -74,7 +74,7 @@ type PlanningContext struct {
 
 	PredTracker *predicates.Tracker
 
-	Conditions []engine.SpecializedCondition
+	Conditions []engine.Condition
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -408,6 +408,6 @@ func (ctx *PlanningContext) IsConstantBool(expr sqlparser.Expr) *bool {
 	return &b
 }
 
-func (ctx *PlanningContext) CollectConditions(conditions []engine.SpecializedCondition) {
+func (ctx *PlanningContext) CollectConditions(conditions []engine.Condition) {
 	ctx.Conditions = append(ctx.Conditions, conditions...)
 }

@@ -21,98 +21,113 @@ import (
 	"context"
 	"strings"
 
+	"vitess.io/vitess/go/slice"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// SpecializedCondition lists arguments that need to point to the same value for the plan to be used
-type SpecializedCondition struct {
+// Condition lists arguments that need to point to the same value for the plan to be used
+type Condition struct {
 	// these arguments need to have equal values for this condition to be true
 	A, B string
 }
 
-// Specialized is a plan that can be used when certain conditions are met.
-// Otherwise, it falls back to a generic plan.
-type Specialized struct {
+// PlanSwitcher chooses between a baseline and an optimized plan based on conditions
+type PlanSwitcher struct {
 	noTxNeeded
 
-	// Conditions lists the conditions that need to be true for this plan to be used
-	Conditions     []SpecializedCondition
-	Generic        Primitive
-	GenericPlanErr error
-	Specific       Primitive
+	// Conditions lists the conditions that need to be true for the optimized plan to be used
+	Conditions  []Condition
+	Baseline    Primitive
+	BaselineErr error
+	Optimized   Primitive
 }
 
-func (s *Specialized) RouteType() string {
-	return "Specialized"
+func (s *PlanSwitcher) RouteType() string {
+	return "PlanSwitcher"
 }
 
-func (s *Specialized) GetKeyspaceName() string {
-	if s.Generic != nil {
-		return s.Generic.GetKeyspaceName()
+func (s *PlanSwitcher) GetKeyspaceName() string {
+	if s.Baseline != nil {
+		return s.Baseline.GetKeyspaceName()
 	}
-	return s.Specific.GetKeyspaceName()
+	return s.Optimized.GetKeyspaceName()
 }
 
-func (s *Specialized) GetTableName() string {
-	if s.Generic != nil {
-		return s.Generic.GetKeyspaceName()
+func (s *PlanSwitcher) GetTableName() string {
+	if s.Baseline != nil {
+		return s.Baseline.GetKeyspaceName()
 	}
-	return s.Specific.GetKeyspaceName()
+	return s.Optimized.GetKeyspaceName()
 }
 
-func (s *Specialized) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (s *PlanSwitcher) GetFields(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+) (*sqltypes.Result, error) {
 	if s.metCondition(bindVars) {
-		return s.Specific.GetFields(ctx, vcursor, bindVars)
+		return s.Optimized.GetFields(ctx, vcursor, bindVars)
 	}
-	if s.Generic == nil {
-		return nil, s.GenericPlanErr
+	if s.Baseline == nil {
+		return nil, s.BaselineErr
 	}
-	return s.Generic.GetFields(ctx, vcursor, bindVars)
+	return s.Baseline.GetFields(ctx, vcursor, bindVars)
 }
 
-func (s *Specialized) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (s *PlanSwitcher) TryExecute(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	wantfields bool,
+) (*sqltypes.Result, error) {
 	if s.metCondition(bindVars) {
-		return s.Specific.TryExecute(ctx, vcursor, bindVars, wantfields)
+		return s.Optimized.TryExecute(ctx, vcursor, bindVars, wantfields)
 	}
-	if s.Generic == nil {
-		return nil, s.GenericPlanErr
+	if s.Baseline == nil {
+		return nil, s.BaselineErr
 	}
-	return s.Generic.TryExecute(ctx, vcursor, bindVars, wantfields)
+	return s.Baseline.TryExecute(ctx, vcursor, bindVars, wantfields)
 }
 
-func (s *Specialized) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (s *PlanSwitcher) TryStreamExecute(
+	ctx context.Context,
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	wantfields bool,
+	callback func(*sqltypes.Result) error,
+) error {
 	if s.metCondition(bindVars) {
-		return s.Specific.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
+		return s.Optimized.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
 	}
-	if s.Generic == nil {
-		return s.GenericPlanErr
+	if s.Baseline == nil {
+		return s.BaselineErr
 	}
-	return s.Generic.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
+	return s.Baseline.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
 }
 
-func (s *Specialized) Inputs() ([]Primitive, []map[string]any) {
-	var conds []string
-	for _, condition := range s.Conditions {
-		conds = append(conds, condition.A+"="+condition.B)
-	}
+func (s *PlanSwitcher) Inputs() ([]Primitive, []map[string]any) {
+	conds := slice.Map(s.Conditions, func(c Condition) string {
+		return c.A + "=" + c.B
+	})
 	specMap := map[string]any{
-		inputName:    "Specific",
+		inputName:    "Optimized",
 		"Conditions": strings.Join(conds, ","),
 	}
-	if s.GenericPlanErr != nil || s.Generic == nil {
-		return []Primitive{s.Specific}, []map[string]any{specMap}
+	if s.BaselineErr != nil || s.Baseline == nil {
+		return []Primitive{s.Optimized}, []map[string]any{specMap}
 	}
 	genMap := map[string]any{
-		inputName: "Generic",
+		inputName: "Baseline",
 	}
-	return []Primitive{s.Generic, s.Specific}, []map[string]any{genMap, specMap}
+	return []Primitive{s.Baseline, s.Optimized}, []map[string]any{genMap, specMap}
 }
 
-func (s *Specialized) description() PrimitiveDescription {
+func (s *PlanSwitcher) description() PrimitiveDescription {
 	other := map[string]any{}
-	if s.GenericPlanErr != nil {
-		other["GenericPlanErr"] = s.GenericPlanErr.Error()
+	if s.BaselineErr != nil {
+		other["BaselineErr"] = s.BaselineErr.Error()
 	}
 	return PrimitiveDescription{
 		OperatorType: s.RouteType(),
@@ -120,7 +135,7 @@ func (s *Specialized) description() PrimitiveDescription {
 	}
 }
 
-func (s *Specialized) metCondition(bindVars map[string]*querypb.BindVariable) bool {
+func (s *PlanSwitcher) metCondition(bindVars map[string]*querypb.BindVariable) bool {
 	for _, condition := range s.Conditions {
 		aVal, ok := bindVars[condition.A]
 		if !ok {
@@ -137,4 +152,4 @@ func (s *Specialized) metCondition(bindVars map[string]*querypb.BindVariable) bo
 	return true
 }
 
-var _ Primitive = (*Specialized)(nil)
+var _ Primitive = (*PlanSwitcher)(nil)

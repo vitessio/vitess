@@ -3112,7 +3112,7 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	assert.Empty(t, sbc2.Queries)
 }
 
-func assertSpecializedPlanCondition(t *testing.T, executor *Executor, sql string, condition ...engine.SpecializedCondition) *engine.Specialized {
+func assertOptimizedPlanCondition(t *testing.T, executor *Executor, sql string, condition ...engine.Condition) *engine.PlanSwitcher {
 	var plan *engine.Plan
 	executor.ForEachPlan(func(p *engine.Plan) bool {
 		if p.Original == sql {
@@ -3122,7 +3122,7 @@ func assertSpecializedPlanCondition(t *testing.T, executor *Executor, sql string
 		return true
 	})
 	assert.NotNil(t, plan, "plan not found")
-	sp, ok := plan.Instructions.(*engine.Specialized)
+	sp, ok := plan.Instructions.(*engine.PlanSwitcher)
 	require.True(t, ok, "specialized plan not created")
 	require.Equal(t, len(condition), len(sp.Conditions), "specialized plan conditions count mismatch")
 	for i, cond := range condition {
@@ -3132,7 +3132,7 @@ func assertSpecializedPlanCondition(t *testing.T, executor *Executor, sql string
 	return sp
 }
 
-func TestJoinSpecializedPlan(t *testing.T) {
+func TestJoinOptimizedPlan(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -3146,7 +3146,7 @@ func TestJoinSpecializedPlan(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
 	require.NoError(t, err)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	assertSpecializedPlanCondition(t, executor, sql, engine.SpecializedCondition{A: "v1", B: "v2"})
+	assertOptimizedPlanCondition(t, executor, sql, engine.Condition{A: "v1", B: "v2"})
 
 	bv = map[string]*querypb.BindVariable{
 		"v1": sqltypes.Int64BindVariable(2),
@@ -3165,7 +3165,7 @@ func TestJoinSpecializedPlan(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
 }
 
-func TestThreeJoinSpecializedPlan(t *testing.T) {
+func TestThreeJoinOptimizedPlan(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -3180,7 +3180,7 @@ func TestThreeJoinSpecializedPlan(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
 	require.NoError(t, err)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	assertSpecializedPlanCondition(t, executor, sql, engine.SpecializedCondition{A: "v1", B: "v2"}, engine.SpecializedCondition{A: "v3", B: "v1"})
+	assertOptimizedPlanCondition(t, executor, sql, engine.Condition{A: "v1", B: "v2"}, engine.Condition{A: "v3", B: "v1"})
 
 	bv = map[string]*querypb.BindVariable{
 		"v1": sqltypes.Int64BindVariable(1),
@@ -3201,7 +3201,7 @@ func TestThreeJoinSpecializedPlan(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
 }
 
-func TestUnionSpecializedPlan(t *testing.T) {
+func TestUnionOptimizedPlan(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -3215,7 +3215,7 @@ func TestUnionSpecializedPlan(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
 	require.NoError(t, err)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	assertSpecializedPlanCondition(t, executor, sql, engine.SpecializedCondition{A: "v1", B: "v2"})
+	assertOptimizedPlanCondition(t, executor, sql, engine.Condition{A: "v1", B: "v2"})
 
 	bv = map[string]*querypb.BindVariable{
 		"v1": sqltypes.Int64BindVariable(2),
@@ -3234,7 +3234,7 @@ func TestUnionSpecializedPlan(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
 }
 
-func TestSubquerySpecializedPlan(t *testing.T) {
+func TestSubqueryOptimizedPlan(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -3248,7 +3248,7 @@ func TestSubquerySpecializedPlan(t *testing.T) {
 	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
 	require.NoError(t, err)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	assertSpecializedPlanCondition(t, executor, sql, engine.SpecializedCondition{A: "v2", B: "v1"})
+	assertOptimizedPlanCondition(t, executor, sql, engine.Condition{A: "v2", B: "v1"})
 
 	bv = map[string]*querypb.BindVariable{
 		"v1": sqltypes.Int64BindVariable(2),
@@ -3267,8 +3267,8 @@ func TestSubquerySpecializedPlan(t *testing.T) {
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
 }
 
-// TestOnlySpecializedPlan tests that a query errors on generic planning but succeeds on specialized planning.
-func TestOnlySpecializedPlan(t *testing.T) {
+// TestOnlyOptimizedPlan tests that a query errors on generic planning but succeeds on specialized planning.
+func TestOnlyOptimizedPlan(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
@@ -3290,9 +3290,9 @@ func TestOnlySpecializedPlan(t *testing.T) {
 	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
 	require.NoError(t, err)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	sp := assertSpecializedPlanCondition(t, executor, sql, engine.SpecializedCondition{A: "v1", B: "v2"})
+	sp := assertOptimizedPlanCondition(t, executor, sql, engine.Condition{A: "v1", B: "v2"})
 	require.NotNil(t, sp)
-	require.ErrorContains(t, sp.GenericPlanErr, "VT12001: unsupported: subquery with aggregation in order by")
+	require.ErrorContains(t, sp.BaselineErr, "VT12001: unsupported: subquery with aggregation in order by")
 }
 
 func TestSelectDatabasePrepare(t *testing.T) {
