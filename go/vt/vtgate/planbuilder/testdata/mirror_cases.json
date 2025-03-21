@@ -44,7 +44,6 @@
     "comment": "select from source of unsharded, unqualified, table mirrored to unsharded table with routing rules",
     "query": "select t4.id from t4 where t4.id = 1",
     "plan": {
-      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select t4.id from t4 where t4.id = 1",
       "Instructions": {
@@ -86,7 +85,6 @@
     "comment": "select from source of unsharded, qualified, table mirrored to unsharded table with routing rules",
     "query": "select t4.id from unsharded_src1.t4 where t4.id = 1",
     "plan": {
-      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select t4.id from unsharded_src1.t4 where t4.id = 1",
       "Instructions": {
@@ -128,7 +126,6 @@
     "comment": "select from destination of unsharded, qualified, table mirrored to unsharded table with routing rules",
     "query": "select t4.id from unsharded_dst1.t4 where t4.id = 1",
     "plan": {
-      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "select t4.id from unsharded_dst1.t4 where t4.id = 1",
       "Instructions": {
