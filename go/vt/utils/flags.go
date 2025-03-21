@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -79,7 +80,6 @@ func SetFlagStringVar(fs *pflag.FlagSet, p *string, name string, def string, usa
 func SetFlagDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def time.Duration, usage string) {
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).DurationVar)
 }
-
 
 // SetFlagVariants adds both underscored and dashed versions of the flag to maintain compatibility during the transition.
 // Underscores will be fully deprecated in v25.
