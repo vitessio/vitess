@@ -350,9 +350,9 @@ func findVSchemaTableAndCreateRoute(
 	planAlternates bool,
 ) *Route {
 	var (
-		vschemaTable *vindexes.BaseTable
+		vschemaTable *vindexes.Table
 		tabletType   topodatapb.TabletType
-		target       key.ShardDestination
+		target       key.Destination
 		err          error
 	)
 
