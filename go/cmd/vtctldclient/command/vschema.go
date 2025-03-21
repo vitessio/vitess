@@ -29,7 +29,7 @@ import (
 var (
 	VSchema = &cobra.Command{
 		Use:                   "VSchema --name <vschema_name> [command] [command-flags]",
-		Short:                 "Performs CRUD operations on VSchema",
+		Short:                 "Performs CRUD operations on VSchema.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.MinimumNArgs(2),
 		Aliases:               []string{"vschema"},
