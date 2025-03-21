@@ -156,7 +156,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--log_dir", vtgate.LogDir,
 		"--log_queries_to_file", vtgate.FileToLogQueries,
 		"--port", fmt.Sprintf("%d", vtgate.Port),
-		"--grpc-port", fmt.Sprintf("%d", vtgate.GrpcPort),
+		"--grpc_port", fmt.Sprintf("%d", vtgate.GrpcPort),
 		"--mysql_server_port", fmt.Sprintf("%d", vtgate.MySQLServerPort),
 		"--mysql_server_socket_path", vtgate.MySQLServerSocketPath,
 		"--cell", vtgate.Cell,
@@ -165,7 +165,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--service_map", vtgate.ServiceMap,
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 		"--bind-address", "127.0.0.1",
-		"--grpc-bind-address", "127.0.0.1",
+		"--grpc_bind_address", "127.0.0.1",
 	}
 
 	// If no explicit mysql_server_version has been specified then we autodetect

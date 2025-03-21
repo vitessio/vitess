@@ -81,14 +81,6 @@ func SetFlagDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def ti
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).DurationVar)
 }
 
-// SetFlagVariants adds both underscored and dashed versions of the flag to maintain compatibility during the transition.
-// Underscores will be fully deprecated in v25.
-func SetFlagVariants(m map[string]string, key, value string) {
-	underscored, dashed := flagVariants(key)
-	m[underscored] = value
-	m[dashed] = value
-}
-
 // SetFlagVariantsForTests randomly assigns either the underscored or dashed version of the flag name to the map.
 // This is designed to help catch cases where code does not properly handle both formats during testing.
 func SetFlagVariantsForTests(m map[string]string, key, value string) {
@@ -98,4 +90,14 @@ func SetFlagVariantsForTests(m map[string]string, key, value string) {
 	} else {
 		m[dashed] = value
 	}
+}
+
+func GetFlagVariantForTests(flagName string) string {
+	underscored, dashed := flagVariants(flagName)
+	if rand.Int()%2 == 0 {
+		// fmt.Print("Using flag variant: ", underscored, "\n")
+		return underscored
+	}
+	// fmt.Print("Using flag variant: ", dashed, "\n")
+	return dashed
 }

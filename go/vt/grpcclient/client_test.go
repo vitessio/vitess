@@ -31,6 +31,7 @@ import (
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtgateservicepb "vitess.io/vitess/go/vt/proto/vtgateservice"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 func TestDialErrors(t *testing.T) {
@@ -92,8 +93,22 @@ func TestRegisterGRPCClientFlags(t *testing.T) {
 	require.Equal(t, "", compression)
 	require.Equal(t, "", credsFile)
 
+	// Use SetFlagVariantsForTests to randomly pick dashed or underscored keys.
+	flagMap := map[string]string{}
+	utils.SetFlagVariantsForTests(flagMap, "--grpc_keepalive_time", "5s")
+	utils.SetFlagVariantsForTests(flagMap, "--grpc_keepalive_timeout", "5s")
+	utils.SetFlagVariantsForTests(flagMap, "--grpc_initial_conn_window_size", "10")
+	utils.SetFlagVariantsForTests(flagMap, "--grpc_initial_window_size", "10")
+	utils.SetFlagVariantsForTests(flagMap, "--grpc_compression", "not-snappy")
+	utils.SetFlagVariantsForTests(flagMap, "--grpc_auth_static_client_creds", "tempfile")
+
+	// Build command-line args using the randomly chosen flag variants
 	// Test setting flags from command-line arguments
-	os.Args = []string{"test", "--grpc-keepalive-time=5s", "--grpc-keepalive-timeout=5s", "--grpc-initial-conn-window-size=10", "--grpc-initial-window-size=10", "--grpc-compression=not-snappy", "--grpc-auth-static-client-creds=tempfile"}
+	args := []string{"test"}
+	for k, v := range flagMap {
+		args = append(args, k+"="+v)
+	}
+	os.Args = args
 	err := fs.Parse(os.Args[1:])
 	require.NoError(t, err)
 

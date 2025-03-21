@@ -101,7 +101,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--log_queries_to_file", vttablet.FileToLogQueries,
 		"--tablet-path", vttablet.TabletPath,
 		"--port", fmt.Sprintf("%d", vttablet.Port),
-		"--grpc-port", fmt.Sprintf("%d", vttablet.GrpcPort),
+		"--grpc_port", fmt.Sprintf("%d", vttablet.GrpcPort),
 		"--init_shard", vttablet.Shard,
 		"--log_dir", vttablet.LogDir,
 		"--tablet_hostname", vttablet.TabletHostname,
@@ -114,7 +114,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--service_map", vttablet.ServiceMap,
 		"--db_charset", vttablet.Charset,
 		"--bind-address", "127.0.0.1",
-		"--grpc-bind-address", "127.0.0.1",
+		"--grpc_bind_address", "127.0.0.1",
 	)
 
 	if *isCoverage {
