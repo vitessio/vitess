@@ -100,7 +100,7 @@ func (s *Specialized) Inputs() ([]Primitive, []map[string]any) {
 		inputName:    "Specific",
 		"Conditions": strings.Join(conds, ","),
 	}
-	if s.GenericPlanErr != nil {
+	if s.GenericPlanErr != nil || s.Generic == nil {
 		return []Primitive{s.Specific}, []map[string]any{specMap}
 	}
 	genMap := map[string]any{
