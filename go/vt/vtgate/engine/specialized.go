@@ -37,10 +37,10 @@ type Specialized struct {
 	noTxNeeded
 
 	// Conditions lists the conditions that need to be true for this plan to be used
-	Conditions []SpecializedCondition
-	Generic    Primitive
-
-	Specific Primitive
+	Conditions     []SpecializedCondition
+	Generic        Primitive
+	GenericPlanErr error
+	Specific       Primitive
 }
 
 func (s *Specialized) RouteType() string {
@@ -48,16 +48,25 @@ func (s *Specialized) RouteType() string {
 }
 
 func (s *Specialized) GetKeyspaceName() string {
-	return s.Generic.GetKeyspaceName()
+	if s.Generic != nil {
+		return s.Generic.GetKeyspaceName()
+	}
+	return s.Specific.GetKeyspaceName()
 }
 
 func (s *Specialized) GetTableName() string {
-	return s.Generic.GetTableName()
+	if s.Generic != nil {
+		return s.Generic.GetKeyspaceName()
+	}
+	return s.Specific.GetKeyspaceName()
 }
 
 func (s *Specialized) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if s.metCondition(bindVars) {
 		return s.Specific.GetFields(ctx, vcursor, bindVars)
+	}
+	if s.Generic == nil {
+		return nil, s.GenericPlanErr
 	}
 	return s.Generic.GetFields(ctx, vcursor, bindVars)
 }
@@ -66,12 +75,18 @@ func (s *Specialized) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	if s.metCondition(bindVars) {
 		return s.Specific.TryExecute(ctx, vcursor, bindVars, wantfields)
 	}
+	if s.Generic == nil {
+		return nil, s.GenericPlanErr
+	}
 	return s.Generic.TryExecute(ctx, vcursor, bindVars, wantfields)
 }
 
 func (s *Specialized) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	if s.metCondition(bindVars) {
 		return s.Specific.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
+	}
+	if s.Generic == nil {
+		return s.GenericPlanErr
 	}
 	return s.Generic.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
 }
@@ -81,12 +96,27 @@ func (s *Specialized) Inputs() ([]Primitive, []map[string]any) {
 	for _, condition := range s.Conditions {
 		conds = append(conds, condition.A+"="+condition.B)
 	}
-	return []Primitive{s.Generic, s.Specific}, []map[string]any{{inputName: "Generic"}, {inputName: "Specific", "Conditions": strings.Join(conds, ",")}}
+	specMap := map[string]any{
+		inputName:    "Specific",
+		"Conditions": strings.Join(conds, ","),
+	}
+	if s.GenericPlanErr != nil {
+		return []Primitive{s.Specific}, []map[string]any{specMap}
+	}
+	genMap := map[string]any{
+		inputName: "Generic",
+	}
+	return []Primitive{s.Generic, s.Specific}, []map[string]any{genMap, specMap}
 }
 
 func (s *Specialized) description() PrimitiveDescription {
+	other := map[string]any{}
+	if s.GenericPlanErr != nil {
+		other["GenericPlanErr"] = s.GenericPlanErr.Error()
+	}
 	return PrimitiveDescription{
 		OperatorType: s.RouteType(),
+		Other:        other,
 	}
 }
 

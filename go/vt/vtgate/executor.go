@@ -1133,12 +1133,26 @@ func (e *Executor) fetchOrCreatePlan(
 	if plan == nil {
 		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
 		if err != nil {
-			return nil, nil, nil, err
+			if preparedPlan && executePath {
+				vcursor.SetBindVars(bindVars)
+				sPlan, _, _, err2 := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
+				if err2 == nil {
+					if sp, isSpecialized := sPlan.Instructions.(*engine.Specialized); isSpecialized {
+						sp.GenericPlanErr = err
+						sPlan.Specialized.Store(true)
+						e.plans.Set(planKey.Hash(), sPlan, 0, e.epoch.Load())
+						plan = sPlan
+						err = nil
+					}
+				}
+			}
 		}
 	}
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
-	// TODO (fix me): reading and writing on specialized bool can be racy.
-	if preparedPlan && !plan.Specialized.Swap(true) && executePath {
+	if preparedPlan && executePath && !plan.Specialized.Swap(true) {
 		vcursor.SetBindVars(bindVars)
 		sPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
 		if err == nil {
