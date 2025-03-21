@@ -581,6 +581,7 @@ func RegisterAuthServer(name string, authServer AuthServer) {
 		log.Fatalf("AuthServer named %v already exists", name)
 	}
 	authServers[name] = authServer
+	log.Infof("registered auth server %v", name)
 }
 
 // GetAuthServer returns an AuthServer by name, or log.Exitf.
