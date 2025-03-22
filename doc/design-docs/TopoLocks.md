@@ -15,7 +15,7 @@ The implementations of `LockShard` and `CheckShardLocked` differ slightly for al
 
 ### Etcd
 
-In Etcd implementation, we use `KeepAlive` API to keep renewing the context that we have for acquiring the shard lock every 10 seconds. The duration of the lease is controlled by the `--topo_etcd_lease_ttl` flag which defaults to 10 seconds. Once we acquire the shard lock, the context for acquiring the shard lock expires and that stops the KeepAlives too.
+In Etcd implementation, we use `KeepAlive` API to keep renewing the context that we have for acquiring the shard lock every 10 seconds. The duration of the lease is controlled by the `--topo-etcd-lease-ttl` flag which defaults to 10 seconds. Once we acquire the shard lock, the context for acquiring the shard lock expires and that stops the KeepAlives too.
 
 The shard lock is released either when the unlock function is called, or if the lease ttl expires. This guards against servers crashing while holding the shard lock.
 
@@ -30,6 +30,6 @@ The Check function doesn't do anything in ZooKeeper. The implementation just ret
 
 ### Consul
 
-In Consul, the timeout for the lock is controlled by the `--topo_consul_lock_session_ttl` flag. 
+In Consul, the timeout for the lock is controlled by the `--topo-consul-lock-session-ttl` flag. 
 
 The Check function works properly and checks if the lock still exists.

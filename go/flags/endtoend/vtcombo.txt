@@ -361,24 +361,24 @@ Flags:
       --tablet_types_to_wait strings                                     Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.
       --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
       --throttle_tablet_types string                                     Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included (default "replica")
-      --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
-      --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")
-      --topo_consul_lock_session_ttl string                              TTL for consul session.
-      --topo_consul_watch_poll_duration duration                         time of the long poll for watch queries. (default 30s)
-      --topo_etcd_lease_ttl int                                          Lease TTL for locks and leader election. The client will use KeepAlive to keep the lease going. (default 30)
-      --topo_etcd_tls_ca string                                          path to the ca to use to validate the server cert when connecting to the etcd topo server
-      --topo_etcd_tls_cert string                                        path to the client cert to use to connect to the etcd topo server, requires topo_etcd_tls_key, enables TLS
-      --topo_etcd_tls_key string                                         path to the client key to use to connect to the etcd topo server, enables TLS
-      --topo_global_root string                                          the path of the global topology data in the global topology server
-      --topo_global_server_address string                                the address of the global topology server
-      --topo_implementation string                                       the topology implementation to use
-      --topo_read_concurrency int                                        Maximum concurrency of topo reads per global or local cell. (default 32)
-      --topo_zk_auth_file string                                         auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
-      --topo_zk_base_timeout duration                                    zk base timeout (see zk.Connect) (default 30s)
-      --topo_zk_max_concurrency int                                      maximum number of pending requests to send to a Zookeeper server. (default 64)
-      --topo_zk_tls_ca string                                            the server ca to use to validate servers when connecting to the zk topo server
-      --topo_zk_tls_cert string                                          the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS
-      --topo_zk_tls_key string                                           the key to use to connect to the zk topo server, enables TLS
+      --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
+      --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")
+      --topo-consul-lock-session-ttl string                              TTL for consul session.
+      --topo-consul-watch-poll-duration duration                         time of the long poll for watch queries. (default 30s)
+      --topo-etcd-lease-ttl int                                          Lease TTL for locks and leader election. The client will use KeepAlive to keep the lease going. (default 30)
+      --topo-etcd-tls-ca string                                          path to the ca to use to validate the server cert when connecting to the etcd topo server
+      --topo-etcd-tls-cert string                                        path to the client cert to use to connect to the etcd topo server, requires topo-etcd-tls-key, enables TLS
+      --topo-etcd-tls-key string                                         path to the client key to use to connect to the etcd topo server, enables TLS
+      --topo-global-root string                                          the path of the global topology data in the global topology server
+      --topo-global-server-address string                                the address of the global topology server
+      --topo-implementation string                                       the topology implementation to use
+      --topo-read-concurrency int                                        Maximum concurrency of topo reads per global or local cell. (default 32)
+      --topo-zk-auth-file string                                         auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
+      --topo-zk-base-timeout duration                                    zk base timeout (see zk.Connect) (default 30s)
+      --topo-zk-max-concurrency int                                      maximum number of pending requests to send to a Zookeeper server. (default 64)
+      --topo-zk-tls-ca string                                            the server ca to use to validate servers when connecting to the zk topo server
+      --topo-zk-tls-cert string                                          the cert to use to connect to the zk topo server, requires topo-zk-tls-key, enables TLS
+      --topo-zk-tls-key string                                           the key to use to connect to the zk topo server, enables TLS
       --tracer string                                                    tracing service to use (default "noop")
       --tracing-enable-logging                                           whether to enable logging in the tracing service
       --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
