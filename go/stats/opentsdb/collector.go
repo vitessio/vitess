@@ -99,7 +99,7 @@ func (dc *collector) addFloat(metric string, val float64, tags map[string]string
 // Well-known metric types like histograms and integers are directly converted (saving labels
 // as tags).
 //
-// Generic unrecognized expvars are serialized to json and their int/float values are exported.
+// BaselinePlan unrecognized expvars are serialized to json and their int/float values are exported.
 // Strings and lists in expvars are not exported.
 func (dc *collector) addExpVar(kv expvar.KeyValue) {
 	k := kv.Key

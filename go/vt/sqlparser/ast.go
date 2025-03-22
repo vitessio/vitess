@@ -1855,7 +1855,7 @@ type ColumnType struct {
 	// The base type string
 	Type string
 
-	// Generic field options.
+	// BaselinePlan field options.
 	Options *ColumnTypeOptions
 
 	// Numeric field options
