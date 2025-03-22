@@ -1175,8 +1175,8 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 				Type: "lookup_unique",
 				Params: map[string]string{
 					"table": "targetks.lookup",
-					"from":  "c1",
-					"to":    "c2",
+					"from":  "col2",
+					"to":    "keyspace_id",
 				},
 				Owner: "t1",
 			},
@@ -1184,8 +1184,8 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 				Type: "lookup_unique",
 				Params: map[string]string{
 					"table": "targetks.lookup",
-					"from":  "c3",
-					"to":    "c4",
+					"from":  "col4",
+					"to":    "keyspace_id",
 				},
 				Owner: "t2",
 			},
@@ -1276,8 +1276,8 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 	env.tmc.expectFetchAsAllPrivsQuery(200, "select 1 from `lookup` limit 1", &sqltypes.Result{})
 
 	// Expect this query twice for 2 vindexes.
-	env.tmc.expectVRQuery(200, "/CREATE TABLE `lookup`", &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, "/CREATE TABLE `lookup`", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "/CREATE TABLE `lookup`\\s*\\(\\s*`col2`", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "/CREATE TABLE `lookup`\\s*\\(\\s*`col4`", &sqltypes.Result{})
 
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})
@@ -1305,8 +1305,8 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 				Type: "lookup_unique",
 				Params: map[string]string{
 					"table":      "targetks.lookup",
-					"from":       "c1",
-					"to":         "c2",
+					"from":       "col2",
+					"to":         "keyspace_id",
 					"write_only": "true",
 				},
 				Owner: "t1",
@@ -1315,8 +1315,8 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 				Type: "lookup_unique",
 				Params: map[string]string{
 					"table":      "targetks.lookup",
-					"from":       "c3",
-					"to":         "c4",
+					"from":       "col4",
+					"to":         "keyspace_id",
 					"write_only": "true",
 				},
 				Owner: "t2",
