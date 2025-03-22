@@ -46,7 +46,7 @@ const (
 	cellUsage             = "Vitess Cell name"
 	DefaultExternalDbData = ""
 	externalDbDataUsage   = "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'"
-	DefaultTopologyFlags  = "--topo_implementation consul --topo_global_server_address consul1:8500 --topo_global_root vitess/global"
+	DefaultTopologyFlags  = "--topo-implementation consul --topo-global-server-address consul1:8500 --topo-global-root vitess/global"
 	topologyFlagsUsage    = "Vitess Topology Flags config"
 )
 
