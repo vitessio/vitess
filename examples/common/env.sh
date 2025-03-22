@@ -53,6 +53,7 @@ if [ "${TOPO}" = "zk2" ]; then
     # Set topology environment parameters.
     ZK_SERVER="localhost:21811,localhost:21812,localhost:21813"
     # shellcheck disable=SC2034
+    #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
     TOPOLOGY_FLAGS="--topo_implementation zk2 --topo_global_server_address ${ZK_SERVER} --topo_global_root /vitess/global"
 
     mkdir -p "${VTDATAROOT}/tmp"
@@ -61,10 +62,12 @@ elif [ "${TOPO}" = "consul" ]; then
     CONSUL_SERVER=127.0.0.1
     CONSUL_HTTP_PORT=8500
     CONSUL_SERVER_PORT=8300
+    #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
     TOPOLOGY_FLAGS="--topo_implementation consul --topo_global_server_address ${CONSUL_SERVER}:${CONSUL_HTTP_PORT} --topo_global_root vitess/global/"
     mkdir -p "${VTDATAROOT}/consul"
 else
     ETCD_SERVER="localhost:2379"
+    #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
     TOPOLOGY_FLAGS="--topo_implementation etcd2 --topo_global_server_address $ETCD_SERVER --topo_global_root /vitess/global"
 
     mkdir -p "${VTDATAROOT}/etcd"
