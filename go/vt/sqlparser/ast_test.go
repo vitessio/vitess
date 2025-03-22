@@ -697,7 +697,7 @@ func TestColumns_FindColumn(t *testing.T) {
 	}
 }
 
-func TestSplitStatements(t *testing.T) {
+func TestParseMultipleIgnoreEmpty(t *testing.T) {
 	testcases := []struct {
 		input   string
 		stmts   int
@@ -706,6 +706,9 @@ func TestSplitStatements(t *testing.T) {
 		{
 			input: "select * from table1; \t; \n; \n\t\t ;select * from table1;",
 			stmts: 2,
+		}, {
+			input: "select 1; ; ; select 2; /* Comment only */; /* Comment */; select 3;;;; /* Comment */",
+			stmts: 3,
 		}, {
 			input: "select * from table1",
 			stmts: 1,
@@ -757,7 +760,7 @@ func TestSplitStatements(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
-			statements, err := parser.SplitStatements(tcase.input)
+			statements, err := parser.ParseMultipleIgnoreEmpty(tcase.input)
 			if tcase.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -770,8 +773,9 @@ func TestSplitStatements(t *testing.T) {
 
 func TestSplitStatementToPieces(t *testing.T) {
 	testcases := []struct {
-		input  string
-		output string
+		input     string
+		output    string
+		lenWanted int
 	}{{
 		input:  "select * from table1; \t; \n; \n\t\t ;select * from table1;",
 		output: "select * from table1;select * from table1",
@@ -781,14 +785,14 @@ func TestSplitStatementToPieces(t *testing.T) {
 		input:  "select * from table;",
 		output: "select * from table",
 	}, {
-		input:  "select * from table;   ",
-		output: "select * from table",
+		input:  "select * from table1;   ",
+		output: "select * from table1",
 	}, {
 		input:  "select * from table1; select * from table2;",
 		output: "select * from table1; select * from table2",
 	}, {
-		input:  "select * from /* comment ; */ table;",
-		output: "select * from /* comment ; */ table",
+		input:  "select * from /* comment ; */ table1;",
+		output: "select * from /* comment ; */ table1",
 	}, {
 		input:  "select * from table where semi = ';';",
 		output: "select * from table where semi = ';'",
@@ -815,11 +819,19 @@ func TestSplitStatementToPieces(t *testing.T) {
 	}, {
 		// Ignore quoted semicolon
 		input:  ";create table t1 ';';;;create table t2 (id;",
-		output: "create table t1 ';';create table t2 (id",
+		output: "create table t1 ';';;create table t2 (id;",
 	}, {
 		// Ignore quoted semicolon
 		input:  "stop replica; start replica",
 		output: "stop replica; start replica",
+	}, {
+		// Test that we don't split on semicolons inside create procedure calls.
+		input:     "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end",
+		lenWanted: 1,
+	}, {
+		// Test that we don't split on semicolons inside create procedure calls.
+		input:     "select * from t1;create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;select * from t2",
+		lenWanted: 3,
 	},
 	}
 
@@ -832,7 +844,9 @@ func TestSplitStatementToPieces(t *testing.T) {
 
 			stmtPieces, err := parser.SplitStatementToPieces(tcase.input)
 			require.NoError(t, err)
-
+			if tcase.lenWanted != 0 {
+				require.Equal(t, tcase.lenWanted, len(stmtPieces))
+			}
 			out := strings.Join(stmtPieces, ";")
 			require.Equal(t, tcase.output, out)
 		})

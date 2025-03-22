@@ -225,7 +225,7 @@ func TestReplaceTableQualifiers(t *testing.T) {
 		{
 			name: "complex select",
 			in:   "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)",
-			out:  "select table_name, lastpk from copy_state where vrepl_id = 1 and id in (select max(id) from copy_state where vrepl_id = 1 group by vrepl_id, table_name)",
+			out:  "select `table_name`, lastpk from copy_state where vrepl_id = 1 and id in (select max(id) from copy_state where vrepl_id = 1 group by vrepl_id, `table_name`)",
 		},
 		{
 			name:  "complex mixed exists select",
@@ -237,7 +237,7 @@ func TestReplaceTableQualifiers(t *testing.T) {
 			name:  "derived table select",
 			in:    "select myder.id from (select max(id) as id from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name) as myder where id = 1",
 			newdb: "__vt-metadata",
-			out:   "select myder.id from (select max(id) as id from `__vt-metadata`.copy_state where vrepl_id = 1 group by vrepl_id, table_name) as myder where id = 1",
+			out:   "select myder.id from (select max(id) as id from `__vt-metadata`.copy_state where vrepl_id = 1 group by vrepl_id, `table_name`) as myder where id = 1",
 		},
 		{
 			name: "complex select",

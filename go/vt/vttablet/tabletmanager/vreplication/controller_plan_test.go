@@ -258,7 +258,7 @@ func TestControllerPlan(t *testing.T) {
 		err: "syntax error at position 4 near 'bad'",
 	}, {
 		in:  "set a = 1",
-		err: "unsupported construct: set @@a = 1",
+		err: "unsupported construct: set a = 1",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.in, func(t *testing.T) {
