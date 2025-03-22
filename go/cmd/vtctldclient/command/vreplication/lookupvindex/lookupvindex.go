@@ -190,6 +190,12 @@ var (
 		vindexes := map[string]*vschemapb.Vindex{}
 		tables := map[string]*vschemapb.Table{}
 		for vindexName, vindex := range params {
+			if len(vindex.TableOwnerColumns) == 0 {
+				return fmt.Errorf("table owner columns found empty for '%s'", vindexName)
+			}
+			if vindex.TableOwner == "" {
+				return fmt.Errorf("table owner found empty for '%s'", vindexName)
+			}
 			if vindex.TableName == "" {
 				vindex.TableName = vindexName
 			}
@@ -210,8 +216,8 @@ var (
 			}
 
 			targetTableColumnVindex := &vschemapb.ColumnVindex{
-				// If the vindex name/type is empty then we'll fill this in
-				// later using the defult for the column types.
+				// If the vindex type is empty then we'll fill this later by
+				// choosing the most appropriate vindex type for the given column.
 				Name:    vindex.TableVindexType,
 				Columns: vindex.TableOwnerColumns,
 			}
@@ -493,7 +499,7 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringVar(&createOptions.TableVindexType, "table-vindex-type", "", "The primary vindex name/type to use for the lookup table, if the table-keyspace is sharded. If no value is provided then the default type will be used based on the table-owner-columns types.")
 	create.Flags().BoolVar(&createOptions.IgnoreNulls, "ignore-nulls", false, "Do not add corresponding records in the lookup table if any of the owner table's 'from' fields are NULL.")
 	create.Flags().BoolVar(&createOptions.ContinueAfterCopyWithOwner, "continue-after-copy-with-owner", true, "Vindex will continue materialization after the backfill completes when an owner is provided.")
-	create.Flags().StringVar(&createOptions.ParamsFile, "params-file", "", "JSON file containing lookup vindex create options. Use this for creating multiple lookup vindexes.")
+	create.Flags().StringVar(&createOptions.ParamsFile, "params-file", "", "JSON file containing lookup vindex parameters. Use this for creating multiple lookup vindexes.")
 	// VReplication specific flags.
 	create.Flags().StringSliceVar(&createOptions.Cells, "cells", nil, "Cells to look in for source tablets to replicate from.")
 	create.Flags().Var((*topoprotopb.TabletTypeListFlag)(&createOptions.TabletTypes), "tablet-types", "Source tablet types to replicate from.")
