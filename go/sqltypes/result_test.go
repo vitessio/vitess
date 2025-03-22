@@ -468,16 +468,16 @@ func TestResultsEqualUnordered(t *testing.T) {
 		RowsAffected: 3,
 	}
 
-	eq := ResultsEqualUnordered([]Result{*result1, *result2}, []Result{*result2, *result1})
+	eq := ResultsEqualUnordered([]Result{*result1, *result2}, []Result{*result2, *result1}, false)
 	assert.True(t, eq)
 
-	eq = ResultsEqualUnordered([]Result{*result1}, []Result{*result2, *result1})
+	eq = ResultsEqualUnordered([]Result{*result1}, []Result{*result2, *result1}, false)
 	assert.False(t, eq)
 
-	eq = ResultsEqualUnordered([]Result{*result1}, []Result{*result2})
+	eq = ResultsEqualUnordered([]Result{*result1}, []Result{*result2}, false)
 	assert.False(t, eq)
 
-	eq = ResultsEqualUnordered([]Result{*result1, *result3}, []Result{*result2, *result1})
+	eq = ResultsEqualUnordered([]Result{*result1, *result3}, []Result{*result2, *result1}, false)
 	assert.False(t, eq)
 }
 

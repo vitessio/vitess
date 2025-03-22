@@ -205,7 +205,7 @@ func (result *Result) Equal(other *Result) bool {
 		result.InsertID == other.InsertID &&
 		result.InsertIDChanged == other.InsertIDChanged &&
 		slices.EqualFunc(result.Rows, other.Rows, func(a, b Row) bool {
-			return RowEqual(a, b)
+			return RowEqual(a, b, false)
 		})
 }
 
@@ -224,7 +224,7 @@ func ResultsEqual(r1, r2 []Result) bool {
 }
 
 // ResultsEqualUnordered compares two unordered arrays of Result.
-func ResultsEqualUnordered(r1, r2 []Result) bool {
+func ResultsEqualUnordered(r1, r2 []Result, ignoreTypes bool) bool {
 	if len(r1) != len(r2) {
 		return false
 	}
@@ -239,10 +239,10 @@ func ResultsEqualUnordered(r1, r2 []Result) bool {
 	allRows := map[string]int{}
 	countRows := 0
 	for _, r := range r1 {
-		saveRowsAnalysis(r, allRows, &countRows, true)
+		saveRowsAnalysis(r, allRows, &countRows, true, ignoreTypes)
 	}
 	for _, r := range r2 {
-		saveRowsAnalysis(r, allRows, &countRows, false)
+		saveRowsAnalysis(r, allRows, &countRows, false, ignoreTypes)
 	}
 	if countRows != 0 {
 		return false
@@ -255,9 +255,14 @@ func ResultsEqualUnordered(r1, r2 []Result) bool {
 	return true
 }
 
-func saveRowsAnalysis(r Result, allRows map[string]int, totalRows *int, increment bool) {
+func saveRowsAnalysis(r Result, allRows map[string]int, totalRows *int, increment, ignoreTypes bool) {
 	for _, row := range r.Rows {
-		newHash := hashCodeForRow(row)
+		var newHash string
+		if ignoreTypes {
+			newHash = hashCodeForRowWithoutTypes(row)
+		} else {
+			newHash = hashCodeForRow(row)
+		}
 		if increment {
 			allRows[newHash]++
 		} else {
@@ -269,6 +274,14 @@ func saveRowsAnalysis(r Result, allRows map[string]int, totalRows *int, incremen
 	} else {
 		*totalRows -= int(r.RowsAffected)
 	}
+}
+
+func hashCodeForRowWithoutTypes(val []Value) string {
+	h := sha256.New()
+	for _, value := range val {
+		h.Write(value.val)
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 func hashCodeForRow(val []Value) string {

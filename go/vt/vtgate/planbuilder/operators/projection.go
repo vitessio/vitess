@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 
@@ -261,13 +262,17 @@ func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		return -1
 	}
 
-	for offset, pe := range ap {
-		if ctx.SemTable.EqualsExprWithDeps(pe.ColExpr, expr) {
-			return offset
+	offset := -1
+	_ = ctx.SemTable.ForeachExprEquality(expr, func(expr sqlparser.Expr) error {
+		for offsetVal, pe := range ap {
+			if ctx.SemTable.EqualsExprWithDeps(pe.ColExpr, expr) {
+				offset = offsetVal
+				return io.EOF
+			}
 		}
-	}
-
-	return -1
+		return nil
+	})
+	return offset
 }
 
 func (p *Projection) addProjExpr(pe ...*ProjExpr) int {

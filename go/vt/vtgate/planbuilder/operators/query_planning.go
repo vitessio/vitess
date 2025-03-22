@@ -67,13 +67,15 @@ func runPhases(ctx *plancontext.PlanningContext, root Operator) Operator {
 		}
 
 		op = phase.act(ctx, op)
-		op = runRewriters(ctx, op)
+		op = runPushDownRewriters(ctx, op)
 	}
+
+	op = compact(ctx, op)
 
 	return addGroupByOnRHSOfJoin(op)
 }
 
-func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
+func runPushDownRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	visitor := func(in Operator, _ semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
 		switch in := in.(type) {
 		case *Horizon:
@@ -108,6 +110,8 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 			return tryPushUpdate(in)
 		case *RecurseCTE:
 			return tryMergeRecurse(ctx, in)
+		case *BlockBuild:
+			return tryPushBlockBuild(ctx, in)
 		default:
 			return in, NoRewrite
 		}
@@ -115,8 +119,8 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 
 	if pbm, ok := root.(*PercentBasedMirror); ok {
 		pbm.SetInputs([]Operator{
-			runRewriters(ctx, pbm.Operator()),
-			runRewriters(ctx.UseMirror(), pbm.Target()),
+			runPushDownRewriters(ctx, pbm.Operator()),
+			runPushDownRewriters(ctx.UseMirror(), pbm.Target()),
 		})
 	}
 
@@ -190,6 +194,24 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 	}
 
 	return r, Rewrote(success)
+}
+
+func tryPushBlockBuild(ctx *plancontext.PlanningContext, in *BlockBuild) (Operator, *ApplyResult) {
+	switch src := in.Source.(type) {
+	case *Filter:
+		return Swap(in, src, "pushed BlockBuild under filter")
+	case *Route:
+		src.Routing.AddValuesTableID(in.TableID)
+		src.Routing.resetRoutingLogic(ctx)
+		return Swap(in, src, "pushed BlockBuild under route")
+	case *SubQueryContainer:
+		src.Outer, in.Source = in, src.Outer
+		return src, Rewrote("pushed BlockBuild under subquery container")
+	case *Limit:
+		return Swap(in, src, "pushed BlockBuild under limit")
+
+	}
+	return in, NoRewrite
 }
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
@@ -311,10 +333,23 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 
 		if in.Top {
 			in.Pushed = true
-			return in, Rewrote(fmt.Sprintf("add limit to %s of apply join", side))
+			return in, Rewrotef("add limit to %s of apply join", side)
 		}
 
-		return src, Rewrote(fmt.Sprintf("push limit to %s of apply join", side))
+		return src, Rewrotef("pushed limit to %s of apply join", side)
+	case *BlockJoin:
+		if in.Pushed {
+			// This is the Top limit, and it's already pushed down
+			return in, NoRewrite
+		}
+		src.RHS = createPushedLimit(ctx, src.RHS, in)
+
+		if in.Top {
+			in.Pushed = true
+			return in, Rewrote("add limit to RHS of block join")
+		}
+
+		return src, Rewrote("pushed limit to RHS of block join")
 	case *Limit:
 		combinedLimit := mergeLimits(in.AST, src.AST)
 		if combinedLimit == nil {
@@ -771,6 +806,11 @@ func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (Operator, *App
 		}
 		src.Outer, in.Source = in, src.Outer
 		return src, Rewrote("push filter to outer query in subquery container")
+	case *BlockJoin:
+		for _, pred := range in.Predicates {
+			src.AddPredicate(ctx, pred)
+		}
+		return src, Rewrote("pushed filter predicates through block join")
 	case *Filter:
 		if len(in.Predicates) == 0 {
 			return in.Source, Rewrote("filter with no predicates removed")
@@ -920,14 +960,15 @@ func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, s
 
 	cols := output.GetSelectExprs(ctx)
 	sizeCorrect := len(selExprs) == len(cols) || tryTruncateColumnsAt(output, len(selExprs))
-	if sizeCorrect && colNamesAlign(selExprs, cols) {
+	_, rootIsBlockJoin := output.(*BlockJoin)
+	if sizeCorrect && colNamesAlign(ctx, selExprs, cols, rootIsBlockJoin) {
 		return output
 	}
 
 	return createSimpleProjection(ctx, selExprs, output)
 }
 
-func colNamesAlign(expected, actual []sqlparser.SelectExpr) bool {
+func colNamesAlign(ctx *plancontext.PlanningContext, expected, actual []sqlparser.SelectExpr, rootIsBlockJoin bool) bool {
 	if len(expected) > len(actual) {
 		// if we expect more columns than we have, we can't align
 		return false
@@ -936,6 +977,16 @@ func colNamesAlign(expected, actual []sqlparser.SelectExpr) bool {
 	for i, seE := range expected {
 		switch se := seE.(type) {
 		case *sqlparser.AliasedExpr:
+			if actualAe, ok := actual[i].(*sqlparser.AliasedExpr); rootIsBlockJoin && ok {
+				depsExpected := ctx.SemTable.RecursiveDeps(se.Expr)
+				depsActual := ctx.SemTable.RecursiveDeps(actualAe.Expr)
+
+				if depsActual.IsSolvedBy(depsExpected) && actualAe.ColumnName() == se.ColumnName() {
+					return true
+				}
+				return false
+			}
+
 			if !areColumnNamesAligned(se, actual[i]) {
 				return false
 			}
