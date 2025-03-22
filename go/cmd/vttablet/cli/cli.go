@@ -85,9 +85,9 @@ Even if a MySQL is external, you can still make vttablet perform some management
 			"* `--heartbeat_enable` and `--heartbeat_interval duration`: cause vttablet to write heartbeats to the sidecar database. This information is also used by the replication reporter to assess replica lag.\n",
 		Example: `
 vttablet \
-	--topo_implementation etcd2 \
-	--topo_global_server_address localhost:2379 \
-	--topo_global_root /vitess/ \
+	--topo-implementation etcd2 \
+	--topo-global-server-address localhost:2379 \
+	--topo-global-root /vitess/ \
 	--tablet-path $alias \
 	--init_keyspace $keyspace \
 	--init_shard $shard \

@@ -137,16 +137,16 @@ Flags:
       --tablet_manager_grpc_server_name string                           the server name to use to validate server certificate
       --tablet_manager_protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
       --tablet_refresh_interval duration                                 Interval at which vtgate refreshes tablet information from topology server. (default 10s)
-      --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
-      --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")
-      --topo_consul_lock_session_ttl string                              TTL for consul session.
-      --topo_consul_watch_poll_duration duration                         time of the long poll for watch queries. (default 30s)
-      --topo_zk_auth_file string                                         auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
-      --topo_zk_base_timeout duration                                    zk base timeout (see zk.Connect) (default 30s)
-      --topo_zk_max_concurrency int                                      maximum number of pending requests to send to a Zookeeper server. (default 64)
-      --topo_zk_tls_ca string                                            the server ca to use to validate servers when connecting to the zk topo server
-      --topo_zk_tls_cert string                                          the cert to use to connect to the zk topo server, requires topo_zk_tls_key, enables TLS
-      --topo_zk_tls_key string                                           the key to use to connect to the zk topo server, enables TLS
+      --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
+      --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")
+      --topo-consul-lock-session-ttl string                              TTL for consul session.
+      --topo-consul-watch-poll-duration duration                         time of the long poll for watch queries. (default 30s)
+      --topo-zk-auth-file string                                         auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
+      --topo-zk-base-timeout duration                                    zk base timeout (see zk.Connect) (default 30s)
+      --topo-zk-max-concurrency int                                      maximum number of pending requests to send to a Zookeeper server. (default 64)
+      --topo-zk-tls-ca string                                            the server ca to use to validate servers when connecting to the zk topo server
+      --topo-zk-tls-cert string                                          the cert to use to connect to the zk topo server, requires topo-zk-tls-key, enables TLS
+      --topo-zk-tls-key string                                           the key to use to connect to the zk topo server, enables TLS
       --transaction_mode string                                          Transaction mode MULTI (default), SINGLE or TWOPC  (default "MULTI")
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version

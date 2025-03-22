@@ -94,6 +94,7 @@ type VttabletProcess struct {
 func (vttablet *VttabletProcess) Setup() (err error) {
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--topo_implementation", vttablet.TopoImplementation,
 		"--topo_global_server_address", vttablet.TopoGlobalAddress,
 		"--topo_global_root", vttablet.TopoGlobalRoot,

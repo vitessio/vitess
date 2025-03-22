@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -49,9 +50,9 @@ func init() {
 
 func registerServerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&consulAuthClientStaticFile, "consul_auth_static_file", consulAuthClientStaticFile, "JSON File to read the topos/tokens from.")
-	fs.StringVar(&consulLockSessionChecks, "topo_consul_lock_session_checks", consulLockSessionChecks, "List of checks for consul session.")
-	fs.StringVar(&consulLockSessionTTL, "topo_consul_lock_session_ttl", consulLockSessionTTL, "TTL for consul session.")
-	fs.DurationVar(&consulLockDelay, "topo_consul_lock_delay", consulLockDelay, "LockDelay for consul session.")
+	utils.SetFlagStringVar(fs, &consulLockSessionChecks, "topo-consul-lock-session-checks", consulLockSessionChecks, "List of checks for consul session.")
+	utils.SetFlagStringVar(fs, &consulLockSessionTTL, "topo-consul-lock-session-ttl", consulLockSessionTTL, "TTL for consul session.")
+	utils.SetFlagDurationVar(fs, &consulLockDelay, "topo-consul-lock-delay", consulLockDelay, "LockDelay for consul session.")
 }
 
 // ClientAuthCred credential to use for consul clusters
