@@ -119,7 +119,9 @@ For --sql, semi-colons and repeated values may be mixed, for example:
 	}
 )
 
-var applySchemaOptions = struct {
+// ApplySchemaOptions holds the configurable options for ApplySchema and related
+// OnlineDDL subcommands.
+type ApplySchemaOptions struct {
 	AllowLongUnavailability bool
 	SQL                     []string
 	SQLFile                 string
@@ -130,7 +132,18 @@ var applySchemaOptions = struct {
 	SkipPreflight           bool
 	CallerID                string
 	BatchSize               int64
-}{}
+}
+
+// CallerIDProto returns a *vtrpcpb.CallerID constructed from this options
+// CallerID string, or nil if no caller ID is set.
+func (o *ApplySchemaOptions) CallerIDProto() *vtrpcpb.CallerID {
+	if o.CallerID != "" {
+		return &vtrpcpb.CallerID{Principal: o.CallerID}
+	}
+	return nil
+}
+
+var applySchemaOptions ApplySchemaOptions
 
 func commandApplySchema(cmd *cobra.Command, args []string) error {
 	var allSQL string
@@ -156,10 +169,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 
 	cli.FinishedParsing(cmd)
 
-	var cid *vtrpcpb.CallerID
-	if applySchemaOptions.CallerID != "" {
-		cid = &vtrpcpb.CallerID{Principal: applySchemaOptions.CallerID}
-	}
+	cid := applySchemaOptions.CallerIDProto()
 
 	ks := cmd.Flags().Arg(0)
 
