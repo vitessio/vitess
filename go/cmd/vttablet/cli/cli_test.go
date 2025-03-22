@@ -18,7 +18,6 @@ package cli
 
 import (
 	"context"
-	// "fmt"
 	"os"
 	"testing"
 

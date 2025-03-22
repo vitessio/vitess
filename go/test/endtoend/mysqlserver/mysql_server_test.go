@@ -33,7 +33,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
-	// "vitess.io/vitess/go/vt/utils"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -95,7 +94,6 @@ func TestInsertLargerThenGrpcLimit(t *testing.T) {
 	defer conn.Close()
 
 	grpcLimit := os.Getenv("grpc-max-message-size")
-	// fmt.Println("grpcLimit: ", grpcLimit)
 	limit, err := strconv.Atoi(grpcLimit)
 	require.Nilf(t, err, "int parsing error: %v", err)
 

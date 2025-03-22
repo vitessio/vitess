@@ -40,7 +40,6 @@ import (
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/utils"
 
-	// "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 	"vitess.io/vitess/go/vt/vttest"
 

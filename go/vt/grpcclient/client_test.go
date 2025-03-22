@@ -102,7 +102,6 @@ func TestRegisterGRPCClientFlags(t *testing.T) {
 	utils.SetFlagVariantsForTests(flagMap, "--grpc-compression", "not-snappy")
 	utils.SetFlagVariantsForTests(flagMap, "--grpc-auth-static-client-creds", "tempfile")
 
-	// Build command-line args using the randomly chosen flag variants
 	// Test setting flags from command-line arguments
 	args := []string{"test"}
 	for k, v := range flagMap {
