@@ -960,7 +960,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema, parser
 
 // expects table name of the form <keyspace>.<tablename>
 func escapeQualifiedTable(qualifiedTableName string) (string, error) {
-	keyspace, tableName, err := extractTableParts(qualifiedTableName, false /* allowUnqualified */)
+	keyspace, tableName, err := ExtractTableParts(qualifiedTableName, false /* allowUnqualified */)
 	if err != nil {
 		return "", err
 	}
@@ -976,7 +976,7 @@ func escapeQualifiedTable(qualifiedTableName string) (string, error) {
 	return fmt.Sprintf("%s.%s", keyspace, tableName), nil
 }
 
-func extractTableParts(tableName string, allowUnqualified bool) (string, string, error) {
+func ExtractTableParts(tableName string, allowUnqualified bool) (string, string, error) {
 	errMsgFormat := "invalid table name: '%s', it must be of the "
 	if allowUnqualified {
 		errMsgFormat = errMsgFormat + "unqualified form <table_name> or the "
@@ -999,7 +999,7 @@ func extractTableParts(tableName string, allowUnqualified bool) (string, string,
 }
 
 func parseTable(tableName string) (sqlparser.TableName, error) {
-	keyspace, tableName, err := extractTableParts(tableName, true /* allowUnqualified */)
+	keyspace, tableName, err := ExtractTableParts(tableName, true /* allowUnqualified */)
 	if err != nil {
 		return sqlparser.TableName{}, err
 	}
