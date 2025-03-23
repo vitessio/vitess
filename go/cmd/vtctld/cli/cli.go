@@ -47,7 +47,7 @@ This is demonstrated in the example usage below.`,
 	--backup_storage_implementation file \
 	--file_backup_storage_root $VTDATAROOT/backups \
 	--port 15000 \
-	--grpc_port 15999`,
+	--grpc-port 15999`,
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),
 		PreRunE: servenv.CobraPreRunE,

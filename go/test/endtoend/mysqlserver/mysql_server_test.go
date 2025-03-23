@@ -93,7 +93,7 @@ func TestInsertLargerThenGrpcLimit(t *testing.T) {
 	require.Nilf(t, err, "unable to connect mysql: %v", err)
 	defer conn.Close()
 
-	grpcLimit := os.Getenv("grpc_max_message_size")
+	grpcLimit := os.Getenv("grpc-max-message-size")
 	limit, err := strconv.Atoi(grpcLimit)
 	require.Nilf(t, err, "int parsing error: %v", err)
 

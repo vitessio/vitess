@@ -637,7 +637,7 @@ func generateVtctld(opts vtOptions) string {
         --file_backup_storage_root /vt/vtdataroot/backups \
         --logtostderr=true \
         --port %[1]d \
-        --grpc_port %[2]d \
+        --grpc-port %[2]d \
         "]
     volumes:
       - .:/script
@@ -665,7 +665,7 @@ func generateVtgate(opts vtOptions) string {
         %[4]s \
         --logtostderr=true \
         --port %[1]d \
-        --grpc_port %[2]d \
+        --grpc-port %[2]d \
         --mysql_server_port %[3]d \
         --mysql_auth_server_impl none \
         --cell %[5]s \

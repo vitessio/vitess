@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	credsFile string // registered as --grpc_auth_static_client_creds in RegisterFlags
+	credsFile string // registered as --grpc-auth-static-client-creds in RegisterFlags
 	// StaticAuthClientCreds implements client interface to be able to WithPerRPCCredentials
 	_ credentials.PerRPCCredentials = (*StaticAuthClientCreds)(nil)
 
