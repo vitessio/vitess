@@ -3366,8 +3366,8 @@ func TestNormalize(t *testing.T) {
 		},
 		{
 			name: "normalize text and blog types with length information",
-			from: "create table t (id int primary key, t115 text(115))",
-			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`t115` tinytext,\n\tPRIMARY KEY (`id`)\n)",
+			from: "create table t (id int primary key, t63_utf8mb4 text(63), t64_utf8mb4 text(64))",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`t63_utf8mb4` tinytext,\n\t`t64_utf8mb4` text,\n\tPRIMARY KEY (`id`)\n)",
 		},
 	}
 	env := NewTestEnv()
