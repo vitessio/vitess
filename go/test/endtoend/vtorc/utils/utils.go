@@ -1221,7 +1221,9 @@ func WaitForDrainedTabletInVTOrc(t *testing.T, vtorcInstance *cluster.VTOrcProce
 				continue
 			}
 			found := strings.Count(res, fmt.Sprintf(`"tablet_type": "%d"`, topodatapb.TabletType_DRAINED))
-			if found == count {
+			// There are two tables that store the tablet type, the database_instance and vitess_tablet table.
+			// Both of them should agree in the stable state.
+			if found == count*2 {
 				return
 			}
 		}
