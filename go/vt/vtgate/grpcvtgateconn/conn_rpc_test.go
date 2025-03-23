@@ -110,7 +110,6 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 		f.Name(),
 	})
 
-	// Ensure error handling uses the same flag variant
 	require.NoError(t, err, "failed to set `%s=%s`", authStaticClientCredsFlag, f.Name())
 	client, err := dial(ctx, listener.Addr().String())
 	require.NoError(t, err)
@@ -146,7 +145,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 		authStaticClientCredsFlag,
 		f.Name(),
 	})
-	// Ensure error handling uses the same flag variant
+
 	require.NoError(t, err, "failed to set `%s=%s`", authStaticClientCredsFlag, f.Name())
 
 	client, err = dial(ctx, listener.Addr().String())

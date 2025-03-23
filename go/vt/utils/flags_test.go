@@ -46,21 +46,6 @@ func TestFlagVariants(t *testing.T) {
 	}
 }
 
-// func TestSetMapStringValue(t *testing.T) {
-// 	m := make(map[string]string)
-// 	key := "test-flag"
-// 	value := "some-value"
-// 	SetFlagVariants(m, key, value)
-
-// 	underscored, dashed := flagVariants(key)
-// 	if m[underscored] != value {
-// 		t.Errorf("Expected m[%q] = %q, got %q", underscored, value, m[underscored])
-// 	}
-// 	if m[dashed] != value {
-// 		t.Errorf("Expected m[%q] = %q, got %q", dashed, value, m[dashed])
-// 	}
-// }
-
 // testFlagVar is a generic helper to test both flag setters for various data types.
 func testFlagVar[T any](t *testing.T, name string, def T, usage string, setter func(fs *pflag.FlagSet, p *T, name string, def T, usage string)) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
