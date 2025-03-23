@@ -39,6 +39,7 @@ echo "> Starting vttablet for server $mysql_host:$mysql_port"
 echo "  - Tablet alias is $alias"
 echo "  - Tablet listens on http://$hostname:$port"
 # shellcheck disable=SC2086
+#TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 vttablet \
  $TOPOLOGY_FLAGS \
  -log_dir $VTDATAROOT/tmp \
