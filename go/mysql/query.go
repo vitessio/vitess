@@ -316,13 +316,13 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 //	 2. if the server closes the connection when a command is in flight,
 //	    readComQueryResponse will fail, and we'll return CRServerLost(2013).
 func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
-	result, more, err := c.ExecuteFetchMulti(query, maxrows, wantfields)
-	if more {
+	result, status, err := c.ExecuteFetchMulti(query, maxrows, wantfields)
+	if (status & ServerMoreResultsExists) != 0 {
 		// Multiple results are unexpected. Prioritize this "unexpected" error over whatever error we got from the first result.
 		err = errors.Join(ErrExecuteFetchMultipleResults, err)
 	}
 	// draining to make the connection clean.
-	err = c.drainMoreResults(more, err)
+	err = c.drainMoreResults(status, err)
 	return result, err
 }
 
@@ -330,16 +330,16 @@ func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result 
 // caring for any results. The function returns an error if any of the statements fail.
 // The function drains the query results of all statements, even if there's an error.
 func (c *Conn) ExecuteFetchMultiDrain(query string) (err error) {
-	_, more, err := c.ExecuteFetchMulti(query, FETCH_NO_ROWS, false)
-	return c.drainMoreResults(more, err)
+	_, status, err := c.ExecuteFetchMulti(query, FETCH_NO_ROWS, false)
+	return c.drainMoreResults(status, err)
 }
 
 // drainMoreResults ensures to drain all query results, even if there's an error.
 // We collect all errors until we consume all results.
-func (c *Conn) drainMoreResults(more bool, err error) error {
-	for more {
+func (c *Conn) drainMoreResults(status uint16, err error) error {
+	for (status & ServerMoreResultsExists) != 0 {
 		var moreErr error
-		_, more, _, moreErr = c.ReadQueryResult(FETCH_NO_ROWS, false)
+		_, status, _, moreErr = c.ReadQueryResult(FETCH_NO_ROWS, false)
 		if moreErr != nil {
 			err = errors.Join(err, moreErr)
 		}
@@ -350,7 +350,7 @@ func (c *Conn) drainMoreResults(more bool, err error) error {
 // ExecuteFetchMulti is for fetching multiple results from a multi-statement result.
 // It returns an additional 'more' flag. If it is set, you must fetch the additional
 // results using ReadQueryResult.
-func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (result *sqltypes.Result, more bool, err error) {
+func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (result *sqltypes.Result, status uint16, err error) {
 	defer func() {
 		if err != nil {
 			if sqlerr, ok := err.(*sqlerror.SQLError); ok {
@@ -361,14 +361,14 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 
 	// Send the query as a COM_QUERY packet.
 	if err = c.WriteComQuery(query); err != nil {
-		return nil, false, err
+		return nil, 0, err
 	}
 
-	res, more, _, err := c.ReadQueryResult(maxrows, wantfields)
+	res, status, _, err := c.ReadQueryResult(maxrows, wantfields)
 	if err != nil {
-		return nil, false, err
+		return nil, 0, err
 	}
-	return res, more, err
+	return res, status, err
 }
 
 // ExecuteFetchWithWarningCount is for fetching results and a warning count
@@ -393,14 +393,14 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 }
 
 // ReadQueryResult gets the result from the last written query.
-func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, bool, uint16, error) {
+func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, uint16, uint16, error) {
 	var packetOk PacketOK
 	// Get the result.
 	colNumber, err := c.readComQueryResponse(&packetOk)
 	if err != nil {
-		return nil, false, 0, err
+		return nil, 0, 0, err
 	}
-	more := packetOk.statusFlags&ServerMoreResultsExists != 0
+	status := packetOk.statusFlags & ServerMoreResultsExists
 	warnings := packetOk.warnings
 	if colNumber == 0 {
 		// OK packet, means no results. Just use the numbers.
@@ -411,7 +411,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			SessionStateChanges: packetOk.sessionStateData,
 			StatusFlags:         packetOk.statusFlags,
 			Info:                packetOk.info,
-		}, more, warnings, nil
+		}, status, warnings, nil
 	}
 
 	fields := make([]querypb.Field, colNumber)
@@ -426,11 +426,11 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 
 		if wantfields {
 			if err := c.readColumnDefinition(result.Fields[i], i); err != nil {
-				return nil, false, 0, err
+				return nil, 0, 0, err
 			}
 		} else {
 			if err := c.readColumnDefinitionType(result.Fields[i], i); err != nil {
-				return nil, false, 0, err
+				return nil, 0, 0, err
 			}
 		}
 	}
@@ -439,19 +439,28 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		// EOF is only present here if it's not deprecated.
 		data, err := c.readEphemeralPacket()
 		if err != nil {
-			return nil, false, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+			return nil, 0, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 		}
 		if c.isEOFPacket(data) {
 			// This is what we expect.
-			// Warnings and status flags are ignored.
+			_, status, err = parseEOFPacket(data)
+			if err != nil {
+				return nil, 0, 0, err
+			}
 			c.recycleReadPacket()
+
+			if status&ServerStatusCursorExists != 0 {
+				// if we are using cursors, do not go into the read row loop below
+				return result, status, 0, nil
+			}
+
 			// goto: read row loop
 		} else if isErrorPacket(data) {
 			defer c.recycleReadPacket()
-			return nil, false, 0, ParseErrorPacket(data)
+			return nil, 0, 0, ParseErrorPacket(data)
 		} else {
 			defer c.recycleReadPacket()
-			return nil, false, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet after fields: %v", data)
+			return nil, 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet after fields: %v", data)
 		}
 	}
 
@@ -459,7 +468,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 	for {
 		data, err := c.readEphemeralPacket()
 		if err != nil {
-			return nil, false, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+			return nil, 0, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 		}
 
 		if c.isEOFPacket(data) {
@@ -473,29 +482,27 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 			// The deprecated EOF packets change means that this is either an
 			// EOF packet or an OK packet with the EOF type code.
 			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-				var statusFlags uint16
-				warnings, statusFlags, err = parseEOFPacket(data)
+				warnings, status, err = parseEOFPacket(data)
 				if err != nil {
-					return nil, false, 0, err
+					return nil, 0, 0, err
 				}
-				more = (statusFlags & ServerMoreResultsExists) != 0
-				result.StatusFlags = statusFlags
+				result.StatusFlags = status
 			} else {
 				var packetEof PacketOK
 				if err := c.parseOKPacket(&packetEof, data); err != nil {
-					return nil, false, 0, err
+					return nil, 0, 0, err
 				}
 				warnings = packetEof.warnings
-				more = (packetEof.statusFlags & ServerMoreResultsExists) != 0
+				status = packetEof.statusFlags
 				result.SessionStateChanges = packetEof.sessionStateData
 				result.StatusFlags = packetEof.statusFlags
 				result.Info = packetEof.info
 			}
-			return result, more, warnings, nil
+			return result, status, warnings, nil
 		} else if isErrorPacket(data) {
 			defer c.recycleReadPacket()
 			// Error packet.
-			return nil, false, 0, ParseErrorPacket(data)
+			return nil, 0, 0, ParseErrorPacket(data)
 		}
 
 		if maxrows == FETCH_NO_ROWS {
@@ -507,16 +514,73 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		if maxrows != FETCH_ALL_ROWS && len(result.Rows) == maxrows {
 			c.recycleReadPacket()
 			if err := c.drainResults(); err != nil {
-				return nil, false, 0, err
+				return nil, 0, 0, err
 			}
-			return nil, false, 0, vterrors.Errorf(vtrpc.Code_ABORTED, "Row count exceeded %d", maxrows)
+			return nil, 0, 0, vterrors.Errorf(vtrpc.Code_ABORTED, "Row count exceeded %d", maxrows)
 		}
 
 		// Regular row.
 		row, err := c.parseRow(data, result.Fields, readLenEncStringAsBytesCopy, nil)
 		if err != nil {
 			c.recycleReadPacket()
-			return nil, false, 0, err
+			return nil, 0, 0, err
+		}
+		result.Rows = append(result.Rows, row)
+		c.recycleReadPacket()
+	}
+}
+
+// FetchQueryResult gets the reset set from the last executed query.
+func (c *Conn) FetchQueryResult(maxrows int, fields []*querypb.Field) (result *sqltypes.Result, status uint16, warnings uint16, err error) {
+	result = &sqltypes.Result{}
+
+	// read each row until EOF or OK packet.
+	for {
+		data, err := c.readEphemeralPacket()
+		if err != nil {
+			return nil, 0, 0, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
+		}
+
+		if c.isEOFPacket(data) {
+			defer c.recycleReadPacket()
+
+			result.RowsAffected = uint64(len(result.Rows))
+
+			// The deprecated EOF packets change means that this is either an
+			// EOF packet or an OK packet with the EOF type code.
+			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+				warnings, status, err = parseEOFPacket(data)
+				if err != nil {
+					return nil, 0, 0, err
+				}
+			} else {
+				var packetEof PacketOK
+				if err := c.parseOKPacket(&packetEof, data); err != nil {
+					return nil, 0, 0, err
+				}
+				warnings = packetEof.warnings
+				status = packetEof.statusFlags
+			}
+			return result, status, warnings, nil
+		} else if isErrorPacket(data) {
+			defer c.recycleReadPacket()
+			return nil, 0, 0, ParseErrorPacket(data)
+		}
+
+		// Check we're not over the limit before we add more.
+		if len(result.Rows) == maxrows {
+			defer c.recycleReadPacket()
+			if err := c.drainResults(); err != nil {
+				return nil, 0, 0, err
+			}
+			return nil, 0, 0, vterrors.Errorf(vtrpc.Code_ABORTED, "Row count exceeded %d", maxrows)
+		}
+
+		// Regular row.
+		row, err := c.parseRow(data, result.Fields, readLenEncStringAsBytesCopy, nil)
+		if err != nil {
+			c.recycleReadPacket()
+			return nil, 0, 0, err
 		}
 		result.Rows = append(result.Rows, row)
 		c.recycleReadPacket()
@@ -952,6 +1016,15 @@ func (c *Conn) parseComStmtReset(data []byte) (uint32, bool) {
 	return val, ok
 }
 
+func (c *Conn) parseComStmtFetch(data []byte) (uint32, uint32, bool) {
+	stmtId, pos, ok := readUint32(data, 1)
+	if !ok {
+		return 0, 0, false
+	}
+	numRows, _, ok := readUint32(data, pos)
+	return stmtId, numRows, ok
+}
+
 func (c *Conn) parseComInitDB(data []byte) string {
 	return string(data[1:])
 }
@@ -1037,6 +1110,28 @@ func (c *Conn) writeRow(row []sqltypes.Value) error {
 // writeFields writes the fields of a Result. It should be called only
 // if there are valid columns in the result.
 func (c *Conn) writeFields(result *sqltypes.Result) error {
+	err := c.writeFieldsWithoutEOF(result)
+	if err != nil {
+		return err
+	}
+
+	// Now send an EOF packet.
+	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+		// With CapabilityClientDeprecateEOF, we do not send this EOF.
+		if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Writes the fields for a Result, but never adds the EOF_Packet on the end, even
+// if ClientDeprecateEOF == 0. This is used when returning fields in a
+// COM_STMT_EXECUTE that opens a cursor, since we immediately follow the fields
+// up with a writeEndResult, which appropriately adds an EOF or an OK_Packet
+// depending on the client capabilities.
+func (c *Conn) writeFieldsWithoutEOF(result *sqltypes.Result) error {
 	// Send the number of fields first.
 	if err := c.sendColumnCount(uint64(len(result.Fields))); err != nil {
 		return err
@@ -1045,14 +1140,6 @@ func (c *Conn) writeFields(result *sqltypes.Result) error {
 	// Now send each Field.
 	for _, field := range result.Fields {
 		if err := c.writeColumnDefinition(field); err != nil {
-			return err
-		}
-	}
-
-	// Now send an EOF packet.
-	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-		// With CapabilityClientDeprecateEOF, we do not send this EOF.
-		if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
 			return err
 		}
 	}
