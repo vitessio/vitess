@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"fmt"
+	"io"
 	"reflect"
 	"strings"
 	"sync"
@@ -143,6 +144,8 @@ func TestComStmtPrepare(t *testing.T) {
 	sConn.PrepareData = make(map[uint32]*PrepareData)
 	sConn.PrepareData[prepare.StatementID] = prepare
 
+	sConn.cursorStates = make(map[uint32]*CursorState)
+
 	// write the response to the client
 	if err := sConn.writePrepare(result.Fields, prepare); err != nil {
 		t.Fatalf("sConn.writePrepare failed: %v", err)
@@ -182,6 +185,8 @@ func TestComStmtPrepareUpdStmt(t *testing.T) {
 	sConn.PrepareData = make(map[uint32]*PrepareData)
 	sConn.PrepareData[prepare.StatementID] = prepare
 
+	sConn.cursorStates = make(map[uint32]*CursorState)
+
 	// write the response to the client
 	err = sConn.writePrepare(nil, prepare)
 	require.NoError(t, err, "sConn.writePrepare failed")
@@ -212,6 +217,8 @@ func TestComStmtSendLongData(t *testing.T) {
 		t.Fatalf("writePrepare failed: %v", err)
 	}
 
+	cConn.cursorStates = make(map[uint32]*CursorState)
+
 	// Since there's no writeComStmtSendLongData, we'll write a prepareStmt and check if we can read the StatementID
 	data, err := sConn.ReadPacket()
 	if err != nil || len(data) == 0 {
@@ -238,8 +245,10 @@ func TestComStmtExecute(t *testing.T) {
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
 
+	cConn.cursorStates = make(map[uint32]*CursorState)
+
 	// This is simulated packets for `select * from test_table where id = ?`
-	data := []byte{23, 18, 0, 0, 0, 128, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+	data := []byte{23, 18, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 
 	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
 	require.NoError(t, err, "parseComStmtExeute failed: %v", err)
@@ -322,6 +331,33 @@ func TestComStmtExecuteUpdStmt(t *testing.T) {
 	assert.EqualValues(t, querypb.Type_CHAR, prepData.ParamsType[28], "got: %s", querypb.Type(prepData.ParamsType[28]))
 }
 
+func TestComStmtFetch(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	prepare, _ := MockPrepareData(t)
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+
+	cConn.cursorStates = make(map[uint32]*CursorState)
+
+	// This is simulated packets for `select * from test_table where id = ?`
+	data := []byte{23, 18, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+
+	stmtID, cursorType, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
+	require.NoError(t, err, "parseComStmtExeute failed: %v", err)
+	if stmtID != 18 {
+		t.Fatalf("Parsed incorrect values")
+	}
+	if cursorType != CursorTypeReadOnly {
+		t.Fatalf("Expected read-only cursor")
+	}
+}
+
 func TestComStmtClose(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
@@ -336,6 +372,8 @@ func TestComStmtClose(t *testing.T) {
 	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
 		t.Fatalf("writePrepare failed: %v", err)
 	}
+
+	cConn.cursorStates = make(map[uint32]*CursorState)
 
 	// Since there's no writeComStmtClose, we'll write a prepareStmt and check if we can read the StatementID
 	data, err := sConn.ReadPacket()
@@ -768,4 +806,206 @@ func RowString(row []sqltypes.Value) string {
 	}
 	result += resultSb767.String()
 	return result
+}
+
+func writeRawPacketToConn(c *Conn, packet []byte) error {
+	c.sequence = 0
+	data, pos := c.startEphemeralPacketWithHeader(len(packet))
+	copy(data[pos:], packet)
+	return c.writeEphemeralPacket()
+}
+
+type testExec struct {
+	query             string
+	useCursor         byte
+	expectedNumFields int
+	expectedNumRows   int
+	maxRows           int
+}
+
+func clientExecute(t *testing.T, cConn *Conn, useCursor byte, maxRows int) (*sqltypes.Result, uint16) {
+	if useCursor != 0 {
+		cConn.StatusFlags |= uint16(ServerStatusCursorExists)
+	} else {
+		cConn.StatusFlags &= ^uint16(ServerStatusCursorExists)
+	}
+
+	// Write a COM_STMT_EXECUTE packet
+	mockPacket := []byte{ComStmtExecute, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+
+	if err := writeRawPacketToConn(cConn, mockPacket); err != nil {
+		t.Fatalf("WriteMockExecuteToConn failed with error: %v", err)
+	}
+
+	qr, status, _, err := cConn.ReadQueryResult(maxRows, true)
+	require.NoError(t, err, "ReadQueryResult failed with error: %v", err)
+
+	return qr, status
+}
+
+func clientFetch(t *testing.T, cConn *Conn, useCursor byte, maxRows int, fields []*querypb.Field) (*sqltypes.Result, uint16) {
+	// Write a COM_STMT_FETCH packet
+	mockPacket := []byte{ComStmtFetch, 0, 0, 0, 0, useCursor, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+
+	if err := writeRawPacketToConn(cConn, mockPacket); err != nil {
+		t.Fatalf("WriteMockDataToConn failed with error: %v", err)
+	}
+
+	qr, status, _, err := cConn.FetchQueryResult(maxRows, fields)
+	if err != nil && err != io.EOF {
+		t.Fatalf("FetchQueryResult failed with error: %v", err)
+	}
+
+	return qr, status
+}
+
+func checkExecute(t *testing.T, sConn, cConn *Conn, test testExec) {
+	// Pretend a successful COM_PREPARE was sent to server
+	prepare := &PrepareData{
+		StatementID: 0,
+		PrepareStmt: test.query,
+	}
+	sConn.PrepareData = make(map[uint32]*PrepareData)
+	sConn.PrepareData[prepare.StatementID] = prepare
+
+	sConn.cursorStates = make(map[uint32]*CursorState)
+
+	// use go routine to emulate client calls
+	var qr *sqltypes.Result
+	var status uint16
+	wg := sync.WaitGroup{}
+	wg.Go(func() {
+		qr, status = clientExecute(t, cConn, test.useCursor, test.maxRows)
+	})
+
+	// handle a single client command
+	if !sConn.handleNextCommand(&testHandler{}) {
+		t.Fatalf("handleNextComamnd failed")
+	}
+
+	// wait until client receives the query result back
+	wg.Wait()
+
+	if qr == nil {
+		t.Fatalf("execute result is nil")
+	}
+	var fields = qr.Fields
+	if test.expectedNumFields != len(fields) {
+		t.Fatalf("Expected %d fields, Received %d", test.expectedNumFields, len(fields))
+	}
+
+	// if not using cursor, we should have results without fetching
+	if test.useCursor == 0 {
+		if (status & ServerStatusCursorExists) != 0 {
+			t.Fatalf("Server StatusFlag should indicate that Cursor does not exist")
+		}
+		if test.expectedNumRows != len(qr.Rows) {
+			t.Fatalf("Expected %d rows, Received %d", test.expectedNumRows, len(qr.Rows))
+		}
+		return
+	}
+
+	// using cursor, use client to fetch results
+	if (status & ServerStatusCursorExists) == 0 {
+		t.Fatalf("Server StatusFlag should indicate that Cursor exists, status flags were: %d", status)
+	}
+
+	qr = nil
+	wg.Go(func() {
+		qr, status = clientFetch(t, cConn, test.useCursor, test.maxRows, fields)
+	})
+
+	// handle a single client command
+	if !sConn.handleNextCommand(&testHandler{}) {
+		t.Fatalf("handleNextComamnd failed")
+	}
+
+	// wait until client fetches the rows
+	wg.Wait()
+	if qr == nil {
+		t.Fatalf("fetch result is nil")
+	}
+
+	if (status & ServerStatusCursorExists) != 0 {
+		t.Fatalf("Server StatusFlag should not indicate a new Cursor, status flags were: %d", status)
+	}
+	if (status & ServerStatusLastRowSent) == 0 {
+		t.Fatalf("Server StatusFlag should indicate that we exhausted the cursor, status flags were: %d", status)
+	}
+
+	if test.expectedNumRows != len(qr.Rows) {
+		t.Fatalf("Expected %d rows, Received %d", test.expectedNumRows, len(qr.Rows))
+	}
+}
+
+func TestExecuteQueries(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	tests := []testExec{
+		{
+			query:             "empty result",
+			useCursor:         0,
+			expectedNumFields: 3,
+			expectedNumRows:   0,
+			maxRows:           100,
+		},
+		{
+			query:             "select rows",
+			useCursor:         0,
+			expectedNumFields: 2,
+			expectedNumRows:   2,
+			maxRows:           100,
+		},
+		{
+			query:             "large batch",
+			useCursor:         0,
+			expectedNumFields: 2,
+			expectedNumRows:   256,
+			maxRows:           1000,
+		},
+		{
+			query:             "empty result",
+			useCursor:         1,
+			expectedNumFields: 3,
+			expectedNumRows:   0,
+			maxRows:           100,
+		},
+		{
+			query:             "select rows",
+			useCursor:         1,
+			expectedNumFields: 2,
+			expectedNumRows:   2,
+			maxRows:           100,
+		},
+		{
+			query:             "large batch",
+			useCursor:         1,
+			expectedNumFields: 2,
+			expectedNumRows:   256,
+			maxRows:           1000,
+		},
+	}
+
+	t.Run("WithoutDeprecateEOF", func(t *testing.T) {
+		for i, test := range tests {
+			t.Run(fmt.Sprintf("%d %s", i, test.query), func(t *testing.T) {
+				checkExecute(t, sConn, cConn, test)
+			})
+		}
+	})
+
+	sConn.Capabilities = CapabilityClientDeprecateEOF
+	cConn.Capabilities = CapabilityClientDeprecateEOF
+	t.Run("WithDeprecateEOF", func(t *testing.T) {
+		for i, test := range tests {
+			t.Run(fmt.Sprintf("%d %s", i, test.query), func(t *testing.T) {
+				checkExecute(t, sConn, cConn, test)
+			})
+		}
+	})
 }
