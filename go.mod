@@ -123,14 +123,14 @@ require (
 	cloud.google.com/go/iam v1.4.2 // indirect
 	cloud.google.com/go/monitoring v1.24.1 // indirect
 	github.com/DataDog/appsec-internal-go v1.10.0 // indirect
-	github.com/DataDog/datadog-agent/comp/core/tagger/origindetection v0.63.3 // indirect
-	github.com/DataDog/datadog-agent/pkg/obfuscate v0.63.3 // indirect
-	github.com/DataDog/datadog-agent/pkg/proto v0.63.3 // indirect
-	github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.63.3 // indirect
-	github.com/DataDog/datadog-agent/pkg/trace v0.63.3 // indirect
-	github.com/DataDog/datadog-agent/pkg/util/log v0.63.3 // indirect
-	github.com/DataDog/datadog-agent/pkg/util/scrubber v0.63.3 // indirect
-	github.com/DataDog/datadog-agent/pkg/version v0.63.3 // indirect
+	github.com/DataDog/datadog-agent/comp/core/tagger/origindetection v0.64.1 // indirect
+	github.com/DataDog/datadog-agent/pkg/obfuscate v0.64.1 // indirect
+	github.com/DataDog/datadog-agent/pkg/proto v0.64.1 // indirect
+	github.com/DataDog/datadog-agent/pkg/remoteconfig/state v0.64.1 // indirect
+	github.com/DataDog/datadog-agent/pkg/trace v0.64.1 // indirect
+	github.com/DataDog/datadog-agent/pkg/util/log v0.64.1 // indirect
+	github.com/DataDog/datadog-agent/pkg/util/scrubber v0.64.1 // indirect
+	github.com/DataDog/datadog-agent/pkg/version v0.64.1 // indirect
 	github.com/DataDog/go-libddwaf/v3 v3.5.4 // indirect
 	github.com/DataDog/go-runtime-metrics-internal v0.0.4-0.20241206090539-a14610dc22b6 // indirect
 	github.com/DataDog/go-sqllexer v0.1.3 // indirect
@@ -225,7 +225,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/collector/component v1.27.0 // indirect
-	go.opentelemetry.io/collector/config/configtelemetry v0.121.0 // indirect
 	go.opentelemetry.io/collector/pdata v1.27.0 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.121.0 // indirect
 	go.opentelemetry.io/collector/semconv v0.121.0 // indirect
