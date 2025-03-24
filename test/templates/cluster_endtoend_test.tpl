@@ -156,6 +156,7 @@ jobs:
 
         sudo service mysql stop
         sudo service etcd stop
+        sudo mkdir -p /etc/apparmor.d/disable
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
