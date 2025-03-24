@@ -57,8 +57,8 @@ jobs:
           sudo apt-get -y autoremove
           sudo apt-get -y autoclean
           # sudo deluser mysql
-          # sudo rm -rf /var/lib/mysql
-          # sudo rm -rf /etc/mysql
+          sudo rm -rf /var/lib/mysql
+          sudo rm -rf /etc/mysql
           # Install mysql80
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
           wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
