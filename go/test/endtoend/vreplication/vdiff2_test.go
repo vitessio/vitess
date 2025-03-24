@@ -78,7 +78,7 @@ var testCases = []*testCase{
 		sourceShards:        "0",
 		targetShards:        "-80,80-",
 		tabletBaseID:        200,
-		tables:              "customer,Lead,Lead-1,nopk",
+		tables:              "customer,Lead,Lead-1,nopk,ukTable",
 		autoRetryError:      true,
 		retryInsert:         `insert into customer(cid, name, typ) values(2005149100, 'Testy McTester', 'soho')`,
 		resume:              true,

@@ -164,7 +164,7 @@ func (a *AuthServerVault) UserEntryWithHash(conn *mysql.Conn, salt []byte, user 
 
 	for _, entry := range userEntries {
 		if entry.MysqlNativePassword != "" {
-			hash, err := mysql.DecodeMysqlNativePasswordHex(entry.MysqlNativePassword)
+			hash, err := mysql.DecodePasswordHex(entry.MysqlNativePassword)
 			if err != nil {
 				return &mysql.StaticUserData{Username: entry.UserData, Groups: entry.Groups}, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 			}

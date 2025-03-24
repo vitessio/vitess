@@ -17,7 +17,7 @@ jobs:
   upgrade_downgrade_test:
     timeout-minutes: 60
     name: Run Upgrade Downgrade Test - Query Serving (Queries - 2)
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    runs-on: oracle-16cpu-64gb-x86-64
 
     steps:
     - name: Skip CI
@@ -95,11 +95,11 @@ jobs:
       run: |
         sudo DEBIAN_FRONTEND="noninteractive" apt-get update
         # Uninstall any previously installed MySQL first
-        sudo systemctl stop apparmor
+        # sudo systemctl stop apparmor
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
         sudo apt-get -y autoremove
         sudo apt-get -y autoclean
-        sudo deluser mysql
+        # sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
         # Install mysql80
@@ -111,11 +111,14 @@ jobs:
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
         # Install everything else we need, and configure
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
-        sudo service mysql stop
-        sudo service etcd stop
-        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
+        
+        # Running on CNCF ARC Runners no longer needs this
+        # Leaving this in as a tombstone for now
+        #sudo service mysql stop
+        #sudo service etcd stop
+        #sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
+        #sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        #sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD

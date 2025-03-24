@@ -27,18 +27,6 @@ func GenerateFullQuery(statement sqlparser.Statement) *sqlparser.ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-// GenerateFieldQuery generates a query to just fetch the field info
-// by adding impossible where clauses as needed.
-func GenerateFieldQuery(statement sqlparser.Statement) *sqlparser.ParsedQuery {
-	buf := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery).WriteNode(statement)
-
-	if buf.HasBindVars() {
-		return nil
-	}
-
-	return buf.ParsedQuery()
-}
-
 // GenerateLimitQuery generates a select query with a limit clause.
 func GenerateLimitQuery(selStmt sqlparser.SelectStatement) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)

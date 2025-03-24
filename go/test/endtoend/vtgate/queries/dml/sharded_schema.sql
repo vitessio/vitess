@@ -94,3 +94,17 @@ create table j_tbl
     jdoc json,
     primary key (id)
 ) Engine = InnoDB;
+
+create table t1
+(
+    id  bigint,
+    col bigint,
+    primary key (id)
+) Engine = InnoDB;
+
+create table t2
+(
+    id  bigint,
+    col bigint,
+    primary key (id)
+) Engine = InnoDB;
