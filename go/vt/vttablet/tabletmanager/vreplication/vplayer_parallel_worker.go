@@ -42,11 +42,13 @@ type parallelWorker struct {
 
 	producer *parallelProducer
 
-	events              chan *binlogdatapb.VEvent
-	stats               *VrLogStats
-	sequenceNumbers     []int64
-	commitSubscribers   map[int64]chan error // subscribing to commit events
-	commitSubscribersMu sync.RWMutex
+	events                         chan *binlogdatapb.VEvent
+	stats                          *VrLogStats
+	sequenceNumbers                []int64
+	sequenceNumbersMap             map[int64]int64
+	localLowestUncommittedSequence int64
+	commitSubscribers              map[int64]chan error // subscribing to commit events
+	commitSubscribersMu            sync.RWMutex
 
 	// foreignKeyChecksEnabled is the current state of the foreign key checks for the current session.
 	// It reflects what we have set the @@session.foreign_key_checks session variable to.
@@ -66,13 +68,14 @@ type parallelWorker struct {
 func newParallelWorker(index int, producer *parallelProducer, capacity int) *parallelWorker {
 	log.Errorf("======= QQQ newParallelWorker index: %v", index)
 	return &parallelWorker{
-		index:             index,
-		producer:          producer,
-		events:            make(chan *binlogdatapb.VEvent, capacity),
-		aggregatedPosChan: make(chan string),
-		sequenceNumbers:   make([]int64, maxWorkerEvents),
-		commitSubscribers: make(map[int64]chan error),
-		vp:                producer.vp,
+		index:              index,
+		producer:           producer,
+		events:             make(chan *binlogdatapb.VEvent, capacity),
+		aggregatedPosChan:  make(chan string),
+		sequenceNumbers:    make([]int64, maxWorkerEvents),
+		sequenceNumbersMap: make(map[int64]int64),
+		commitSubscribers:  make(map[int64]chan error),
+		vp:                 producer.vp,
 	}
 }
 
@@ -129,12 +132,18 @@ func (w *parallelWorker) updatePosByEvent(ctx context.Context, event *binlogdata
 	return nil
 }
 
-func (w *parallelWorker) commitEvents() chan error {
+func (w *parallelWorker) commitEvents(ctx context.Context) chan error {
 	event := w.producer.generateCommitWorkerEvent()
 	// log.Errorf("========== QQQ commitEvents: %v", event)
 	c := w.subscribeCommitWorkerEvent(event.SequenceNumber)
 	// log.Errorf("========== QQQ commitEvents: subscribed to %v in worker %v", event.SequenceNumber, w.index)
-	w.events <- event
+	select {
+	case w.events <- event:
+	case <-ctx.Done():
+		c := make(chan error, 1)
+		c <- ctx.Err()
+		return c
+	}
 	// log.Errorf("========== QQQ commitEvents: pushed event")
 	return c
 }
@@ -182,9 +191,29 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 				return err
 			}
 		case event := <-w.events:
+			if _, ch := w.applyQueuedEventBlocker(ctx, event); ch != nil {
+				if lastEventWasSkippedCommit {
+					// log.Errorf("========== QQQ applyQueuedEvent worker %v event %v (seq=%v) is going to block. lowest=%v. committing %v sequence numbers", w.index, event.Type, event.SequenceNumber, lowest, len(w.sequenceNumbersMap))
+					// log.Errorf("========== QQQ applyQueuedEvent worker %v event %v (seq=%v) is COMMITTING due to commit parent %v because lowest is %v. sequence numbers: %v", w.index, event.Type, event.SequenceNumber, event.CommitParent, lowest, w.sequenceNumbersMap)
+					if err := applyEvent(w.producer.generateCommitWorkerEvent()); err != nil {
+						return vterrors.Wrapf(err, "failed to commit idle worker %v", w.index)
+					}
+					// log.Errorf("========== QQQ applyQueuedEvent worker %v event %v (seq=%v) is going to block. committed", w.index, event.Type, event.SequenceNumber)
+				}
+				// log.Errorf("========== QQQ applyQueuedEvent worker %v event %v (seq=%v) committing everyone else", w.index, event.Type, event.SequenceNumber)
+				// w.producer.commitAll(ctx, w)
+				// log.Errorf("========== QQQ applyQueuedEvent worker %v event %v (seq=%v) is WAITING on commit parent %v because lowest is %v. sequence numbers: %v", w.index, event.Type, event.SequenceNumber, event.CommitParent, lowest, w.sequenceNumbers)
+				select {
+				case <-ch: // unblock
+					// log.Errorf("========== QQQ applyQueuedEvent worker %v event %v (seq=%v) is RELEASED on commit parent %v and newLowest=%v", w.index, event.Type, event.SequenceNumber, event.CommitParent, newLowest)
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
 			if event.SequenceNumber >= 0 {
 				// Negative values are happen in commitWorkerEvent(). These are not real events.
 				w.sequenceNumbers = append(w.sequenceNumbers, event.SequenceNumber)
+				w.sequenceNumbersMap[event.SequenceNumber] = event.CommitParent
 			}
 
 			if isConsiderCommitWorkerEvent(event) {
@@ -224,34 +253,35 @@ func (w *parallelWorker) applyQueuedEvents(ctx context.Context) (err error) {
 	}
 }
 
-func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
-	// log.Errorf("========== QQQ applyQueuedEvent, START worker=%v, event.Type=%v", w.index, event.Type)
-	// defer log.Errorf("========== QQQ applyQueuedEvent, DONE  worker=%v, event.Type=%v", w.index, event.Type)
-	// ctx, cancel := context.WithCancel(ctx)
-	// defer cancel()
-
-	// //
-	// t := time.NewTimer(5 * time.Second)
-	// defer t.Stop()
-	// go func() {
-	// 	select {
-	// 	case <-t.C:
-	// 		log.Errorf("========== QQQ applyQueuedEvent worker %v TIMED OUT. event=%v", w.index, event.Type)
-	// 		if event.Type == binlogdatapb.VEventType_ROW {
-	// 			log.Errorf("========== QQQ applyQueuedEvent worker %v TIMED OUT. event=%v. table=%v", w.index, event.Type, event.RowEvent.TableName)
-	// 		}
-	// 	case <-ctx.Done():
-	// 		return
-	// 	}
-	// }()
-	if lowest := w.producer.lowestUncommittedSequence.Load(); event.CommitParent >= lowest {
-		// Parent depends on yet uncommitted event. Wait for it.
-		// log.Errorf("========== QQQ applyQueuedEvent worker %v event %v WAITING on commit parent %v because lowest is %v", w.index, event.Type, event.CommitParent, lowest)
-		// newLowest := <-w.producer.registerLowestSequenceListener(event.CommitParent)
-		<-w.producer.registerLowestSequenceListener(event.CommitParent)
-		// log.Errorf("========== QQQ applyQueuedEvent worker %v event %v RELEASED on commit parent %v on new lowest %v", w.index, event.Type, event.CommitParent, newLowest)
+// applyQueuedEventBlocker checks if the event can be applied immediately or if it needs to wait for other
+// events to be applied first. It returns a channel that will be populated once the event can be applied.
+// If the event can be applied immediately, the function returns nil.
+func (w *parallelWorker) applyQueuedEventBlocker(ctx context.Context, event *binlogdatapb.VEvent) (int64, chan int64) {
+	lowest := w.producer.lowestUncommittedSequence.Load()
+	if event.CommitParent < lowest {
+		// Means the parent is already committed. No need to wait.
+		return lowest, nil
 	}
+	allDependenciesAreInCurrentWorker := func() bool {
+		if len(w.sequenceNumbersMap) < int(event.SequenceNumber-lowest) {
+			return false
+		}
+		for i := lowest; i <= event.CommitParent; i++ {
+			if _, ok := w.sequenceNumbersMap[i]; !ok {
+				return false
+			}
+		}
+		// log.Errorf("========== QQQ applyQueuedEvent worker %v allDependenciesAreInCurrentWorker lowest=%v, commitparent=%v, sequenceNumbers=%v", w.index, lowest, event.CommitParent, w.sequenceNumbers)
+		return true
+	}
+	if allDependenciesAreInCurrentWorker() {
+		return lowest, nil
+	}
+	return w.producer.registerLowestSequenceListener(event.CommitParent)
+}
 
+// applyQueuedEvent applies an event from the queue.
+func (w *parallelWorker) applyQueuedEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		if err := w.updatePosByEvent(ctx, event); err != nil {
@@ -626,8 +656,7 @@ func (w *parallelWorker) applyQueuedCommit(ctx context.Context, event *binlogdat
 func (w *parallelWorker) flushSequenceNumbers() {
 	// We now let the producer know that we've completed the sequence numbers.
 	// It will deassign these sequence numebrs from the worker.
-	for _, sequenceNumber := range w.sequenceNumbers {
-		w.producer.completedSequenceNumbers <- sequenceNumber
-	}
+	w.producer.completeSequenceNumbers(w.sequenceNumbers)
 	w.sequenceNumbers = w.sequenceNumbers[:0]
+	clear(w.sequenceNumbersMap)
 }

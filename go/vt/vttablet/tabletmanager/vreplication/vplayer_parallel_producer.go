@@ -36,7 +36,7 @@ import (
 
 const (
 	countWorkers          = 6
-	maxWorkerEvents       = 100
+	maxWorkerEvents       = 500
 	maxCountWorkersEvents = countWorkers * maxWorkerEvents
 	maxIdleWorkerDuration = 250 * time.Millisecond
 
@@ -59,7 +59,6 @@ type parallelProducer struct {
 	lowestSequenceListeners   map[int64]chan int64
 	sequenceToWorkersMapMu    sync.RWMutex
 
-	completedSequenceNumbers  chan int64
 	commitWorkerEventSequence atomic.Int64
 	assignSequence            int64
 
@@ -80,7 +79,6 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 		workers:                  make([]*parallelWorker, countWorkers),
 		workerErrors:             make(chan error, countWorkers+1),
 		sequenceToWorkersMap:     make(map[int64]int),
-		completedSequenceNumbers: make(chan int64, countWorkers),
 		lowestSequenceListeners:  make(map[int64]chan int64),
 		aggregateWorkersPosQuery: binlogplayer.ReadVReplicationCombinedWorkersGTIDs(vp.vr.id),
 	}
@@ -102,7 +100,7 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 		return vdbClient, nil
 	}
 	for i := range p.workers {
-		w := newParallelWorker(i, p, maxWorkerEvents*2)
+		w := newParallelWorker(i, p, maxWorkerEvents)
 		var err error
 		if w.dbClient, err = p.newDBClient(); err != nil {
 			return nil, err
@@ -140,7 +138,7 @@ func (p *parallelProducer) commitAll(ctx context.Context, except *parallelWorker
 			continue
 		}
 		eg.Go(func() error {
-			return <-w.commitEvents()
+			return <-w.commitEvents(ctx)
 		})
 	}
 	return eg.Wait()
@@ -346,6 +344,14 @@ func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastC
 		p.sequenceToWorkersMap[sequenceNumber] = workerIndex
 		return workerIndex
 	}
+	for i := p.lowestUncommittedSequence.Load(); i < lastCommitted; i++ {
+		if workerIndex, ok := p.sequenceToWorkersMap[i]; ok {
+			// Transaction depends on another transaction, that is still being owned by some worker.
+			// Use that same worker, so that this transaction is non-blocking.
+			p.sequenceToWorkersMap[sequenceNumber] = workerIndex
+			return workerIndex
+		}
+	}
 	// No specific transaction dependency constraints (any parent transactions were long since
 	// committed, and no worker longer indicates it owns any such transactions)
 	if preferCurrentWorker && p.countAssignedToCurrentWorker < maxWorkerEvents {
@@ -362,32 +368,31 @@ func (p *parallelProducer) assignTransactionToWorker(sequenceNumber int64, lastC
 	return workerIndex
 }
 
-func (p *parallelProducer) registerLowestSequenceListener(notifyOnLowestAbove int64) chan int64 {
+func (p *parallelProducer) registerLowestSequenceListener(notifyOnLowestAbove int64) (lowest int64, ch chan int64) {
 	p.sequenceToWorkersMapMu.Lock()
 	defer p.sequenceToWorkersMapMu.Unlock()
 
-	if lowest := p.lowestUncommittedSequence.Load(); lowest != noUncommittedSequence && lowest > notifyOnLowestAbove {
+	lowest = p.lowestUncommittedSequence.Load()
+	if lowest > notifyOnLowestAbove {
 		// lowest uncommitted sequence is already above the requested value, so there is no  need to
-		// register a listener, We return a fulfilled channel response.
+		// register a listener, We return an empty channel as indication.
 		// log.Errorf("========== QQQ registerLowestSequenceListener free pass for notifyOnLowestAbove=%v because lowest=%v", notifyOnLowestAbove, lowest)
-		ch := make(chan int64, countWorkers)
-		ch <- lowest
-		return ch
+		return lowest, nil
 	}
-	// log.Errorf("========== QQQ registerLowestSequenceListener registered for notifyOnLowestAbove=%v", notifyOnLowestAbove)
+	// log.Errorf("========== QQQ registerLowestSequenceListener worker %v registered for notifyOnLowestAbove=%v assigned to worker %v", worker, notifyOnLowestAbove, p.sequenceToWorkersMap[notifyOnLowestAbove])
 	if ch, ok := p.lowestSequenceListeners[notifyOnLowestAbove]; ok {
 		// listener already exists
-		return ch
+		return lowest, ch
 	}
-	ch := make(chan int64, countWorkers)
+	ch = make(chan int64, countWorkers)
 	p.lowestSequenceListeners[notifyOnLowestAbove] = ch
-	return ch
+	return lowest, ch
 }
 
-func (p *parallelProducer) evaluateLowestUncommittedSequence(deletedSequence int64) (lowest int64, changed bool) {
+func (p *parallelProducer) evaluateLowestUncommittedSequence(completedSequence int64) (lowest int64, changed bool) {
 	// assumed to be protected by sequenceToWorkersMapMu lock
 	lowest = p.lowestUncommittedSequence.Load()
-	if deletedSequence != lowest {
+	if completedSequence != lowest {
 		// means p.lowestUncommittedSequence is still undeleted
 		return lowest, false
 	}
@@ -403,33 +408,34 @@ func (p *parallelProducer) evaluateLowestUncommittedSequence(deletedSequence int
 	}
 }
 
-// process is a goroutine that reads events from the input channel and assigns them to workers.
-func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatapb.VEvent) error {
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case sequenceNumber := <-p.completedSequenceNumbers:
-				p.sequenceToWorkersMapMu.Lock()
-				delete(p.sequenceToWorkersMap, sequenceNumber)
-				if lowest, changed := p.evaluateLowestUncommittedSequence(sequenceNumber); changed {
-					// log.Errorf("========== QQQ process lowest has CHANGED to %v", lowest)
-					p.lowestUncommittedSequence.Store(lowest)
-					for notifyOnLowestAbove, ch := range p.lowestSequenceListeners {
-						if lowest > notifyOnLowestAbove {
-							// log.Errorf("========== QQQ process notifying listener for %v on new lowest %v", notifyOnLowestAbove, lowest)
-							for range countWorkers {
-								ch <- lowest
-							}
-							delete(p.lowestSequenceListeners, notifyOnLowestAbove)
-						}
+// completeSequenceNumbers is called by a worker once it committed or applies transactions.
+// The function removes the sequence numbers from the map and updates the lowest uncommitted sequence number.
+// It also notifies any listeners that may have been waiting for the lowest uncommitted sequence number to
+// cross a certain value.
+func (p *parallelProducer) completeSequenceNumbers(sequenceNumbers []int64) {
+	p.sequenceToWorkersMapMu.Lock()
+	defer p.sequenceToWorkersMapMu.Unlock()
+
+	for _, sequenceNumber := range sequenceNumbers {
+		delete(p.sequenceToWorkersMap, sequenceNumber)
+		if lowest, changed := p.evaluateLowestUncommittedSequence(sequenceNumber); changed {
+			// log.Errorf("========== QQQ process lowest has CHANGED to %v", lowest)
+			p.lowestUncommittedSequence.Store(lowest)
+			for notifyOnLowestAbove, ch := range p.lowestSequenceListeners {
+				if lowest > notifyOnLowestAbove {
+					// log.Errorf("========== QQQ process notifying listener for %v on new lowest %v", notifyOnLowestAbove, lowest)
+					for range countWorkers {
+						ch <- lowest // nonblocking. The channel has enough capacity.
 					}
+					delete(p.lowestSequenceListeners, notifyOnLowestAbove)
 				}
-				p.sequenceToWorkersMapMu.Unlock()
 			}
 		}
-	}()
+	}
+}
+
+// process is a goroutine that reads events from the input channel and assigns them to workers.
+func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatapb.VEvent) error {
 	currentWorker := p.workers[0]
 	hasFieldEvent := false
 	workerWithFieldEvent := -1
@@ -476,6 +482,7 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 				// See logic in assignTransactionToWorker()
 				p.countAssignedToCurrentWorker++
 			} else {
+				currentWorker.events <- p.generateConsiderCommitWorkerEvent()
 				p.countAssignedToCurrentWorker = 1
 				if hasFieldEvent {
 					log.Errorf("========== QQQ process FIELD issue: %v event seq=%v assigned to worker %v even though there was field event in worker %v",
@@ -494,14 +501,14 @@ func (p *parallelProducer) process(ctx context.Context, events chan *binlogdatap
 			}
 			if hasFieldEvent && event.Type == binlogdatapb.VEventType_COMMIT {
 				// We wait until the field event is applied.
-				if err := <-currentWorker.commitEvents(); err != nil {
+				if err := <-currentWorker.commitEvents(ctx); err != nil {
 					return err
 				}
 				hasFieldEvent = false
 			}
 			if !canApplyInParallel {
 				// Say this was a DDL. Then we need to wait until it is absolutely complete, before we allow the next event to be processed.
-				if err := <-currentWorker.commitEvents(); err != nil {
+				if err := <-currentWorker.commitEvents(ctx); err != nil {
 					return err
 				}
 			}
@@ -631,8 +638,8 @@ func (p *parallelProducer) applyEvents(ctx context.Context, relay *relayLog) err
 					// applying the next set of events as part of the current transaction. This approach
 					// also handles the case where the last transaction is partial. In that case,
 					// we only group the transactions with commits we've seen so far.
-					if countPinnedWorkerEvents < 2*maxCountWorkersEvents && false {
-						// if countPinnedWorkerEvents < 2*maxCountWorkersEvents && hasAnotherCommit(items, i, j+1) {
+					// if countPinnedWorkerEvents < 2*maxCountWorkersEvents && false {
+					if countPinnedWorkerEvents < maxCountWorkersEvents && hasAnotherCommit(items, i, j+1) {
 						pinWorker = true
 						event.Skippable = true
 					} else {
