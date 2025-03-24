@@ -487,6 +487,11 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 			continue
 		}
 
+		// ignore tablet with an unknown replication lag status
+		if stats[i].ReplicationLagUnknown {
+			continue
+		}
+
 		if lag := stats[i].ReplicationLagSeconds; backupTablet == nil || lag < backupTabletLag {
 			backupTablet = tablet.Tablet
 			backupTabletLag = lag

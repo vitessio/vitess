@@ -939,6 +939,9 @@ func TestBackupShard(t *testing.T) {
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
 					},
+					"zone1-0000000101": {
+						Events: []*logutilpb.Event{{}, {}, {}},
+					},
 				},
 				PrimaryPositionResults: map[string]struct {
 					Position string
@@ -955,11 +958,18 @@ func TestBackupShard(t *testing.T) {
 					"zone1-0000000100": {
 						Position: &replicationdatapb.Status{
 							ReplicationLagSeconds: 0,
+							ReplicationLagUnknown: true,
+						},
+					},
+					"zone1-0000000101": {
+						Position: &replicationdatapb.Status{
+							ReplicationLagSeconds: 1,
 						},
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -967,6 +977,15 @@ func TestBackupShard(t *testing.T) {
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
 					},
 					Keyspace: "ks",
 					Shard:    "-",
@@ -989,6 +1008,9 @@ func TestBackupShard(t *testing.T) {
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
 				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+				for _, resp := range responses {
+					assert.Equal(t, 101, int(resp.TabletAlias.Uid))
+				}
 			},
 		},
 		{
