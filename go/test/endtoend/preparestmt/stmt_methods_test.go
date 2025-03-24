@@ -468,13 +468,11 @@ func TestSpecializedPlan(t *testing.T) {
 		stmt, err := dbo.Prepare(q.query)
 		require.NoError(t, err)
 
-		// TODO (fix me) : should be enabled otherwise do not merge this PR.
-		// executing the query multiple times leading to failing the execution with error.
-		// for i := 0; i < 100; i++ {
-		rows, err := stmt.Query(q.args...)
-		require.NoError(t, err)
-		require.NoError(t, rows.Close())
-		// }
+		for i := 0; i < 5; i++ {
+			rows, err := stmt.Query(q.args...)
+			require.NoError(t, err)
+			require.NoError(t, rows.Close())
+		}
 		require.NoError(t, stmt.Close())
 	}
 
@@ -487,11 +485,11 @@ func TestSpecializedPlan(t *testing.T) {
 
 	pd, err := engine.PrimitiveDescriptionFromMap(plan.(map[string]any))
 	require.NoError(t, err)
-	require.Equal(t, "Specialized", pd.OperatorType)
+	require.Equal(t, "PlanSwitcher", pd.OperatorType)
 	require.Len(t, pd.Inputs, 2, "Unexpected number of Inputs")
 
-	require.Equal(t, "Generic", pd.Inputs[0].InputName)
-	require.Equal(t, "Specific", pd.Inputs[1].InputName)
+	require.Equal(t, "Baseline", pd.Inputs[0].InputName)
+	require.Equal(t, "Optimized", pd.Inputs[1].InputName)
 	require.Equal(t, "Route", pd.Inputs[1].OperatorType)
 	require.Equal(t, "EqualUnique", pd.Inputs[1].Variant)
 }
