@@ -659,7 +659,6 @@ func (ts *trafficSwitcher) createJournals(ctx context.Context, sourceWorkflows [
 			})
 
 		}
-		log.Infof("Creating journal %v", journal)
 		ts.Logger().Infof("Creating journal: %v", journal)
 		statement := fmt.Sprintf("insert into _vt.resharding_journal "+
 			"(id, db_name, val) "+
