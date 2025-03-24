@@ -114,11 +114,8 @@ jobs:
       run: |
         sudo apt-get update
 
-        # Uninstall any previously installed MySQL first
-        # Running on CNCF ARC Runners no longer needs this
-        # Leaving this in as a tombstone for now
-        # sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        # sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
         # sudo systemctl stop apparmor
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
@@ -146,10 +143,8 @@ jobs:
 
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
 
-        # Running on CNCF ARC Runners no longer needs this
-        # Leaving this in as a tombstone for now  
-        # sudo service mysql stop
-        # sudo service etcd stop
+        sudo service mysql stop
+        sudo service etcd stop
 
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD

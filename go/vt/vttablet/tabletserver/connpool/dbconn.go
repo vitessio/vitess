@@ -568,6 +568,22 @@ func (dbc *Conn) BaseShowInnodbTableSizes() string {
 	return dbc.conn.BaseShowInnodbTableSizes()
 }
 
+func (dbc *Conn) BaseShowPartitions() string {
+	return dbc.conn.BaseShowPartitions()
+}
+
+func (dbc *Conn) BaseShowTableRowCountClusteredIndex() string {
+	return dbc.conn.BaseShowTableRowCountClusteredIndex()
+}
+
+func (dbc *Conn) BaseShowIndexSizes() string {
+	return dbc.conn.BaseShowIndexSizes()
+}
+
+func (dbc *Conn) BaseShowIndexCardinalities() string {
+	return dbc.conn.BaseShowIndexCardinalities()
+}
+
 func (dbc *Conn) ConnCheck(ctx context.Context) error {
 	if err := dbc.conn.ConnCheck(); err != nil {
 		return dbc.Reconnect(ctx)

@@ -158,6 +158,9 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		MIN(
 			primary_instance.semi_sync_replica_enabled
 		) AS semi_sync_replica_enabled,
+		MIN(
+			primary_instance.tablet_type
+		) AS current_tablet_type,
 		SUM(replica_instance.oracle_gtid) AS count_oracle_gtid_replicas,
 		IFNULL(
 			SUM(
@@ -300,6 +303,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		}
 
 		a.TabletType = tablet.Type
+		a.CurrentTabletType = topodatapb.TabletType(m.GetInt("current_tablet_type"))
 		a.AnalyzedKeyspace = m.GetString("keyspace")
 		a.AnalyzedShard = m.GetString("shard")
 		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
@@ -448,6 +452,9 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
+		} else if a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_PRIMARY {
+			a.Analysis = PrimaryCurrentTypeMismatch
+			a.Description = "Primary tablet's current type is not PRIMARY"
 		} else if topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "" {
 			a.Analysis = ErrantGTIDDetected
 			a.Description = "Tablet has errant GTIDs"
