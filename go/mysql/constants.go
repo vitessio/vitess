@@ -156,7 +156,8 @@ const (
 
 // Status flags. They are returned by the server in a few cases.
 // Originally found in include/mysql/mysql_com.h
-// See http://dev.mysql.com/doc/internals/en/status-flags.html
+// See https://dev.mysql.com/doc/dev/mysql-server/latest/mysql__com_8h.html#a1d854e841086925be1883e4d7b4e8cad
+// and https://mariadb.com/kb/en/ok_packet/#server-status-flag
 const (
 	// a transaction is active
 	ServerStatusInTrans   uint16 = 0x0001
@@ -181,6 +182,16 @@ const (
 	ServerStatusInTransReadonly uint16 = 0x2000
 	// connection state information has changed
 	ServerSessionStateChanged uint16 = 0x4000
+)
+
+// Cursor Types. They are received on COM_STMT_EXECUTE()
+// See https://dev.mysql.com/doc/dev/mysql-server/latest/mysql__com_8h.html#a3e5e9e744ff6f7b989a604fd669977da
+// and https://mariadb.com/kb/en/com_stmt_execute/#flag
+const (
+	CursorTypeNoCursor = iota
+	CursorTypeReadOnly
+	CursorTypeCursorForUpdate
+	CursorTypeScrollableCursor
 )
 
 // State Change Information
