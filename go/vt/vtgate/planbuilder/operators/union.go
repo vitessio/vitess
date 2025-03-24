@@ -202,10 +202,13 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 }
 
 func (u *Union) pushColumnToSources(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr) int {
+	// pushColumnToSources adds a new column (defined by ae) to each source in the UNION
+	// while ensuring that the column’s offset is kept consistent across all sources.
 	colsToReplace := make(map[sqlparser.ASTPath]int)
 	cols := u.Sources[0].GetColumns(ctx)
 	expr := sqlparser.Clone(ae.Expr)
 
+	// Step 1: Identify column references in the first source's expression and record their offsets.
 	exprForFirstSource := sqlparser.RewriteWithPath(expr, nil, func(cursor *sqlparser.Cursor) bool {
 		col, ok := cursor.Node().(*sqlparser.ColName)
 		if !ok {
@@ -227,8 +230,11 @@ func (u *Union) pushColumnToSources(ctx *plancontext.PlanningContext, ae *sqlpar
 		return true
 	})
 
+	// Step 2: Add the fully substituted expression as a column in the first source's column list.
 	offset := u.Sources[0].AddColumn(ctx, false, false, aeWrap(exprForFirstSource.(sqlparser.Expr)))
 
+	// Step 3: For each subsequent source, use the same offsets to replace column references,
+	// ensuring consistent expressions across all sources in the UNION.
 	for _, src := range u.Sources[1:] {
 		cols := src.GetColumns(ctx)
 		// we don't want to use the already rewritten expression, as it might have been rewritten to a different column
@@ -244,6 +250,7 @@ func (u *Union) pushColumnToSources(ctx *plancontext.PlanningContext, ae *sqlpar
 
 			return true
 		}).(sqlparser.Expr)
+		// Add the rewritten column expression to this source. It must match the same offset as the first source.
 		thisOffset := src.AddColumn(ctx, false, false, aeWrap(rewritten))
 		if thisOffset != offset {
 			tree := ToTree(u)
@@ -251,6 +258,7 @@ func (u *Union) pushColumnToSources(ctx *plancontext.PlanningContext, ae *sqlpar
 		}
 	}
 
+	// Return the offset for the newly added/rewritten column across all sources.
 	return offset
 }
 
