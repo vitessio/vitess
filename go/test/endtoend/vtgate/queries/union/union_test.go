@@ -132,9 +132,9 @@ from (
 	select id3 as col from t2
 ) as t`)
 		mcmp.Exec(`
-select sum(id+id2+foo) 
+select sum(id1+id2+foo) 
 from (
-	select id1, id2, id+id2 as foo from t1 
+	select id1, id2, id1+id2 as foo from t1 
 	union all 
 	select id3, id4, i4*id4 from t2
 	union all 
