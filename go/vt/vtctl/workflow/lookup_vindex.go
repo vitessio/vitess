@@ -18,11 +18,12 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
-	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqlescape"
@@ -63,7 +64,7 @@ func newLookupVindex(ws *Server) *lookupVindex {
 	}
 }
 
-// prepareCreate performs the preparatory steps for creating a Lookup Vindex.
+// prepareCreate performs the preparatory steps for creating a LookupVindex.
 func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace string, specs *vschemapb.Keyspace, continueAfterCopyWithOwner bool) (
 	ms *vtctldatapb.MaterializeSettings, sourceVSchema, targetVSchema *topo.KeyspaceVSchemaInfo, cancelFunc func() error, err error) {
 	var (
@@ -72,151 +73,200 @@ func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace st
 		// sourceVindexColumns are computed from the input sourceTable.
 		sourceVindexColumns []string
 
+		// origTargetVSchema is the original target keyspace VSchema.
+		// If any error occurs, we can revert back to the original VSchema.
+		origTargetVSchema *topo.KeyspaceVSchemaInfo
+
 		// Target table info.
 		createDDL        string
 		materializeQuery string
+
+		targetKeyspace string
+		tableSettings  []*vtctldatapb.TableMaterializeSettings
 	)
 
-	// Validate input vindex.
-	vindex, vInfo, err := lv.validateAndGetVindex(specs)
-	if err != nil {
-		return nil, nil, nil, nil, err
+	if specs == nil || len(specs.Vindexes) == 0 {
+		return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no vindex provided")
 	}
 
-	vInfo.sourceTable, vInfo.sourceTableName, err = getSourceTable(specs, vInfo.targetTableName, vInfo.fromCols)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
+	targetVSchemaChanged := false
 
-	sourceVindexColumns, err = validateSourceTableAndGetVindexColumns(vInfo, vindex, keyspace)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-
-	sourceVSchema, targetVSchema, err = lv.getTargetAndSourceVSchema(ctx, keyspace, vInfo.targetKeyspace)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-
-	if existing, ok := sourceVSchema.Vindexes[vInfo.name]; ok {
-		if !proto.Equal(existing, vindex) { // If the exact same vindex already exists then we can re-use it
-			return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a conflicting vindex named %s already exists in the %s keyspace",
-				vInfo.name, keyspace)
-		}
-	}
-
-	sourceVSchemaTable = sourceVSchema.Tables[vInfo.sourceTableName]
-	if sourceVSchemaTable == nil && !schema.IsInternalOperationTableName(vInfo.sourceTableName) {
-		return nil, nil, nil, nil,
-			vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in the %s keyspace", vInfo.sourceTableName, keyspace)
-	}
-	if err := validateNonConflictingColumnVindex(sourceVSchemaTable, vInfo, sourceVindexColumns, keyspace); err != nil {
-		return nil, nil, nil, nil, err
-	}
-
-	// Validate against source schema.
-	sourceShards, err := lv.ts.GetServingShards(ctx, keyspace)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	onesource := sourceShards[0]
-	if onesource.PrimaryAlias == nil {
-		return nil, nil, nil, nil,
-			vterrors.Errorf(vtrpcpb.Code_INTERNAL, "source shard %s has no primary", onesource.ShardName())
-	}
-
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{vInfo.sourceTableName}}
-	tableSchema, err := schematools.GetSchema(ctx, lv.ts, lv.tmc, onesource.PrimaryAlias, req)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-	if len(tableSchema.TableDefinitions) != 1 {
-		return nil, nil, nil, nil,
-			vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of tables (%d) returned from %s schema",
-				len(tableSchema.TableDefinitions), keyspace)
-	}
-
-	// Generate "create table" statement.
-	createDDL, err = lv.generateCreateDDLStatement(tableSchema, sourceVindexColumns, vInfo, vindex)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-
-	// Generate vreplication query.
-	materializeQuery = generateMaterializeQuery(vInfo, vindex, sourceVindexColumns)
-
-	// Save a copy of the original vschema if we modify it and need to provide
-	// a cancelFunc. We do NOT want to clone the key version as we explicitly
-	// want to go back in time. So we only clone the internal vschema.Keyspace.
-	origTargetVSchema := &topo.KeyspaceVSchemaInfo{
-		Name:     vInfo.targetKeyspace,
-		Keyspace: targetVSchema.Keyspace.CloneVT(),
-	}
-	targetChanged := false
-
-	// Update targetVSchema.
-	targetTable := specs.Tables[vInfo.targetTableName]
-	if targetVSchema.Sharded {
-		// Choose a primary vindex type for the lookup table based on the source
-		// definition if one was not explicitly specified.
-		var targetVindexType string
-		var targetVindex *vschemapb.Vindex
-		for _, field := range tableSchema.TableDefinitions[0].Fields {
-			if sourceVindexColumns[0] == field.Name {
-				if targetTable != nil && len(targetTable.ColumnVindexes) > 0 {
-					targetVindexType = targetTable.ColumnVindexes[0].Name
-				}
-				if targetVindexType == "" {
-					targetVindexType, err = vindexes.ChooseVindexForType(field.Type)
-					if err != nil {
-						return nil, nil, nil, nil, err
-					}
-				}
-				targetVindex = &vschemapb.Vindex{
-					Type: targetVindexType,
-				}
-				break
+	// If we are about to backfill multiple vindexes, we should validate if
+	// all the vindexes are owned, as creating a backfilling workflow with a
+	// mix of unowned and owned vindexes can be a problem while performing
+	// other operations like externalize, internalize, complete and cancel.
+	if len(specs.Vindexes) > 1 {
+		for vindexName, vindex := range specs.Vindexes {
+			if vindex.Owner == "" {
+				return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex(%s) has no owner", vindexName)
 			}
 		}
-		if targetVindex == nil {
-			// Unreachable. We validated column names when generating the DDL.
-			return nil, nil, nil, nil,
-				vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %s not found in target schema %s",
-					sourceVindexColumns[0], tableSchema.TableDefinitions[0].Schema)
+	}
+
+	// Collect columnVindexes in a map, for faster access of source column vindexes
+	// in the main loop.
+	columnVindexByName := map[string]*vschemapb.ColumnVindex{}
+	for _, table := range specs.Tables {
+		for _, colVindex := range table.ColumnVindexes {
+			columnVindexByName[colVindex.Name] = colVindex
+		}
+	}
+
+	for vindexName, vindex := range specs.Vindexes {
+		vInfo, err := lv.validateAndGetVindexInfo(vindexName, vindex, specs.Tables)
+		if err != nil {
+			return nil, nil, nil, nil, err
 		}
 
-		if existing, ok := targetVSchema.Vindexes[targetVindexType]; ok {
-			if !proto.Equal(existing, targetVindex) {
-				return nil, nil, nil, nil,
-					vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting vindex named %v already exists in the %s keyspace",
-						targetVindexType, vInfo.targetKeyspace)
+		if vindex.Owner == "" {
+			// If the vindex is unowned, we need to search for source table
+			// using a loop iterating over specs.Tables. And, as we have
+			// already validated if all vindexes are owned in case of multiple
+			// vindexes, so this case should be possible only when we are
+			// backfilling a single vindex. So, this approach can be used.
+			if len(specs.Tables) < 1 || len(specs.Tables) > 2 {
+				return nil, nil, nil, nil, fmt.Errorf("one or two tables must be specified")
+			}
+			vInfo.sourceTable, vInfo.sourceTableName, err = getSourceTable(specs.Tables, vInfo.targetTableName, vInfo.fromCols)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
+			if vInfo.sourceTable == nil || vInfo.sourceTableName == "" {
+				return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "source table not found for vindex %s", vInfo.name)
 			}
 		} else {
-			targetVSchema.Vindexes[targetVindexType] = targetVindex
-			targetChanged = true
+			var ok bool
+			if vInfo.sourceTable, ok = specs.Tables[vindex.Owner]; !ok {
+				return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table owner not found for vindex %s", vInfo.name)
+			}
+			vInfo.sourceTableName = vindex.Owner
 		}
 
-		targetTable = &vschemapb.Table{
-			ColumnVindexes: []*vschemapb.ColumnVindex{{
-				Column: vInfo.fromCols[0],
-				Name:   targetVindexType,
-			}},
+		if len(specs.Vindexes) == 1 {
+			sourceVindexColumns, err = validateSourceTableAndGetVindexColumns(vInfo, vindex, keyspace)
+		} else {
+			sourceVindexColumns, err = getSourceVindexColumns(vInfo, columnVindexByName[vindexName])
 		}
-	} else {
-		targetTable = &vschemapb.Table{}
-	}
-	if existing, ok := targetVSchema.Tables[vInfo.targetTableName]; ok {
-		if !proto.Equal(existing, targetTable) {
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		// This should be possible only for the first iteration.
+		if sourceVSchema == nil || targetVSchema == nil {
+			targetKeyspace = vInfo.targetKeyspace
+			sourceVSchema, targetVSchema, err = lv.getTargetAndSourceVSchema(ctx, keyspace, vInfo.targetKeyspace)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
+			// Save a copy of the original vschema if we modify it and need to provide
+			// a cancelFunc. We do NOT want to clone the key version as we explicitly
+			// want to go back in time. So we only clone the internal vschema.Keyspace.
+			origTargetVSchema = &topo.KeyspaceVSchemaInfo{
+				Name:     vInfo.targetKeyspace,
+				Keyspace: targetVSchema.Keyspace.CloneVT(),
+			}
+		}
+
+		if existing, ok := sourceVSchema.Vindexes[vInfo.name]; ok {
+			if !proto.Equal(existing, vindex) { // If the exact same vindex already exists then we can re-use it
+				return nil, nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a conflicting vindex named %s already exists in the %s keyspace",
+					vInfo.name, keyspace)
+			}
+		}
+
+		sourceVSchemaTable = sourceVSchema.Tables[vInfo.sourceTableName]
+		if sourceVSchemaTable == nil && !schema.IsInternalOperationTableName(vInfo.sourceTableName) {
 			return nil, nil, nil, nil,
-				vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting table named %s already exists in the %s vschema",
-					vInfo.targetTableName, vInfo.targetKeyspace)
+				vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in the %s keyspace", vInfo.sourceTableName, keyspace)
 		}
-	} else {
-		targetVSchema.Tables[vInfo.targetTableName] = targetTable
-		targetChanged = true
+		if err := validateNonConflictingColumnVindex(sourceVSchemaTable, vInfo, sourceVindexColumns, keyspace); err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		// Validate against source schema.
+		sourceShards, err := lv.ts.GetServingShards(ctx, keyspace)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		onesource := sourceShards[0]
+		if onesource.PrimaryAlias == nil {
+			return nil, nil, nil, nil,
+				vterrors.Errorf(vtrpcpb.Code_INTERNAL, "source shard %s has no primary", onesource.ShardName())
+		}
+
+		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{vInfo.sourceTableName}}
+		tableSchema, err := schematools.GetSchema(ctx, lv.ts, lv.tmc, onesource.PrimaryAlias, req)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		if len(tableSchema.TableDefinitions) != 1 {
+			return nil, nil, nil, nil,
+				vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of tables (%d) returned from %s schema",
+					len(tableSchema.TableDefinitions), keyspace)
+		}
+
+		// Generate "create table" statement.
+		createDDL, err = lv.generateCreateDDLStatement(tableSchema, sourceVindexColumns, vInfo, vindex)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		// Generate vreplication query.
+		materializeQuery = generateMaterializeQuery(vInfo, vindex, sourceVindexColumns)
+
+		// Update targetVSchema.
+		targetTable := specs.Tables[vInfo.targetTableName]
+		if targetVSchema.Sharded {
+			targetVindex, err := getTargetVindex(tableSchema.TableDefinitions[0], sourceVindexColumns[0], targetTable)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
+			targetVindexType := targetVindex.Type
+
+			if existing, ok := targetVSchema.Vindexes[targetVindexType]; ok {
+				if !proto.Equal(existing, targetVindex) {
+					return nil, nil, nil, nil,
+						vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting vindex named %v already exists in the %s keyspace",
+							targetVindexType, vInfo.targetKeyspace)
+				}
+			} else {
+				targetVSchema.Vindexes[targetVindexType] = targetVindex
+				targetVSchemaChanged = true
+			}
+
+			targetTable = &vschemapb.Table{
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: vInfo.fromCols[0],
+					Name:   targetVindexType,
+				}},
+			}
+		} else {
+			targetTable = &vschemapb.Table{}
+		}
+		if existing, ok := targetVSchema.Tables[vInfo.targetTableName]; ok {
+			if !proto.Equal(existing, targetTable) {
+				return nil, nil, nil, nil,
+					vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "a conflicting table named %s already exists in the %s vschema",
+						vInfo.targetTableName, vInfo.targetKeyspace)
+			}
+		} else {
+			targetVSchema.Tables[vInfo.targetTableName] = targetTable
+			targetVSchemaChanged = true
+		}
+
+		materializeTableSettings := &vtctldatapb.TableMaterializeSettings{
+			TargetTable:      vInfo.targetTableName,
+			SourceExpression: materializeQuery,
+			CreateDdl:        createDDL,
+		}
+
+		tableSettings = append(tableSettings, materializeTableSettings)
+		// Update sourceVSchema
+		sourceVSchema.Vindexes[vInfo.name] = vindex
+		sourceVSchemaTable.ColumnVindexes = append(sourceVSchemaTable.ColumnVindexes, columnVindexByName[vindexName])
 	}
 
-	if targetChanged {
+	if targetVSchemaChanged {
 		cancelFunc = func() error {
 			// Restore the original target vschema.
 			return lv.ts.SaveVSchema(ctx, origTargetVSchema)
@@ -227,18 +277,10 @@ func (lv *lookupVindex) prepareCreate(ctx context.Context, workflow, keyspace st
 		Workflow:              workflow,
 		MaterializationIntent: vtctldatapb.MaterializationIntent_CREATELOOKUPINDEX,
 		SourceKeyspace:        keyspace,
-		TargetKeyspace:        vInfo.targetKeyspace,
-		StopAfterCopy:         vindex.Owner != "" && !continueAfterCopyWithOwner,
-		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
-			TargetTable:      vInfo.targetTableName,
-			SourceExpression: materializeQuery,
-			CreateDdl:        createDDL,
-		}},
+		TargetKeyspace:        targetKeyspace,
+		StopAfterCopy:         !continueAfterCopyWithOwner,
+		TableSettings:         tableSettings,
 	}
-
-	// Update sourceVSchema
-	sourceVSchema.Vindexes[vInfo.name] = vindex
-	sourceVSchemaTable.ColumnVindexes = append(sourceVSchemaTable.ColumnVindexes, vInfo.sourceTable.ColumnVindexes[0])
 
 	return ms, sourceVSchema, targetVSchema, cancelFunc, nil
 }
@@ -258,24 +300,14 @@ type vindexInfo struct {
 }
 
 // validateAndGetVindex validates and extracts vindex configuration
-func (lv *lookupVindex) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschemapb.Vindex, *vindexInfo, error) {
-	if specs == nil {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no vindex provided")
-	}
-	if len(specs.Vindexes) != 1 {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "only one vindex must be specified")
-	}
-
-	vindexName := maps.Keys(specs.Vindexes)[0]
-	vindex := maps.Values(specs.Vindexes)[0]
-
+func (lv *lookupVindex) validateAndGetVindexInfo(vindexName string, vindex *vschemapb.Vindex, tables map[string]*vschemapb.Table) (*vindexInfo, error) {
 	if !strings.Contains(vindex.Type, "lookup") {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex %s is not a lookup type", vindex.Type)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex %s is not a lookup type", vindex.Type)
 	}
 
 	targetKeyspace, targetTableName, err := lv.parser.ParseTable(vindex.Params["table"])
 	if err != nil || targetKeyspace == "" {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
 			"vindex table name (%s) must be in the form <keyspace>.<table>", vindex.Params["table"])
 	}
 
@@ -286,7 +318,7 @@ func (lv *lookupVindex) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschem
 
 	if strings.Contains(vindex.Type, "unique") {
 		if len(vindexFromCols) != 1 {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unique vindex 'from' should have only one column")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unique vindex 'from' should have only one column")
 		}
 	}
 
@@ -297,7 +329,7 @@ func (lv *lookupVindex) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschem
 
 	// See if we can create the vindex without errors.
 	if _, err := vindexes.CreateVindex(vindex.Type, vindexName, vindex.Params); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	ignoreNulls := false
@@ -309,18 +341,18 @@ func (lv *lookupVindex) validateAndGetVindex(specs *vschemapb.Keyspace) (*vschem
 		case "false":
 			ignoreNulls = false
 		default:
-			return nil, nil,
+			return nil,
 				vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ignore_nulls (%s) value must be 'true' or 'false'",
 					ignoreNullsStr)
 		}
 	}
 
 	// Validate input table.
-	if len(specs.Tables) < 1 || len(specs.Tables) > 2 {
-		return nil, nil, fmt.Errorf("one or two tables must be specified")
+	if len(tables) < 1 {
+		return nil, fmt.Errorf("at least one table must be specified")
 	}
 
-	return vindex, &vindexInfo{
+	return &vindexInfo{
 		name:            vindexName,
 		targetKeyspace:  targetKeyspace,
 		targetTableName: targetTableName,
@@ -358,9 +390,9 @@ func (lv *lookupVindex) getTargetAndSourceVSchema(ctx context.Context, sourceKey
 	return sourceVSchema, targetVSchema, nil
 }
 
-func getSourceTable(specs *vschemapb.Keyspace, targetTableName string, fromCols []string) (sourceTable *vschemapb.Table, sourceTableName string, err error) {
+func getSourceTable(tables map[string]*vschemapb.Table, targetTableName string, fromCols []string) (sourceTable *vschemapb.Table, sourceTableName string, err error) {
 	// Loop executes once or twice.
-	for tableName, table := range specs.Tables {
+	for tableName, table := range tables {
 		if len(table.ColumnVindexes) != 1 {
 			return nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "exactly one ColumnVindex must be specified for the %s table",
 				tableName)
@@ -471,7 +503,7 @@ func generateMaterializeQuery(vInfo *vindexInfo, vindex *vschemapb.Vindex, sourc
 }
 
 // validateSourceTableAndGetVindexColumns validates input table and vindex consistency, and returns sourceVindexColumns.
-func validateSourceTableAndGetVindexColumns(vInfo *vindexInfo, vindex *vschemapb.Vindex, keyspace string) (sourceVindexColumns []string, err error) {
+func validateSourceTableAndGetVindexColumns(vInfo *vindexInfo, vindex *vschemapb.Vindex, keyspace string) ([]string, error) {
 	if vInfo.sourceTable == nil || len(vInfo.sourceTable.ColumnVindexes) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No ColumnVindex found for the owner table (%s) in the %s keyspace",
 			vInfo.sourceTable, keyspace)
@@ -485,20 +517,29 @@ func validateSourceTableAndGetVindexColumns(vInfo *vindexInfo, vindex *vschemapb
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vindex owner (%s) must match table name (%s)",
 			vindex.Owner, vInfo.sourceTableName)
 	}
-	if len(vInfo.sourceTable.ColumnVindexes[0].Columns) != 0 {
-		sourceVindexColumns = vInfo.sourceTable.ColumnVindexes[0].Columns
+
+	return getSourceVindexColumns(vInfo, vInfo.sourceTable.ColumnVindexes[0])
+}
+
+func getSourceVindexColumns(vInfo *vindexInfo, colVindex *vschemapb.ColumnVindex) (sourceVindexColumns []string, err error) {
+	if colVindex == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column vindex name (%s) not found in table %s",
+			vInfo.name, vInfo.sourceTableName)
+	}
+
+	if len(colVindex.Columns) != 0 {
+		sourceVindexColumns = colVindex.Columns
 	} else {
-		if vInfo.sourceTable.ColumnVindexes[0].Column == "" {
+		if colVindex.Column == "" {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at least one column must be specified in ColumnVindexes for the %s table",
 				vInfo.sourceTableName)
 		}
-		sourceVindexColumns = []string{vInfo.sourceTable.ColumnVindexes[0].Column}
+		sourceVindexColumns = []string{colVindex.Column}
 	}
 	if len(sourceVindexColumns) != len(vInfo.fromCols) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "length of table columns (%d) differs from length of vindex columns (%d)",
 			len(sourceVindexColumns), len(vInfo.fromCols))
 	}
-
 	return sourceVindexColumns, nil
 }
 
@@ -547,6 +588,36 @@ func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (stri
 	return "", fmt.Errorf("column %s not found in schema %v", sourceVindexCol, lines)
 }
 
+// getTargetVindex returns the targetVindex. We choose a primary vindex type
+// for the lookup table based on the source definition if one was not explicitly specified.
+func getTargetVindex(sourceTableDefinition *tabletmanagerdatapb.TableDefinition, sourceVindexColumn string, targetTable *vschemapb.Table) (
+	targetVindex *vschemapb.Vindex, err error) {
+	var targetVindexType string
+	for _, field := range sourceTableDefinition.Fields {
+		if sourceVindexColumn == field.Name {
+			if targetTable != nil && len(targetTable.ColumnVindexes) > 0 {
+				targetVindexType = targetTable.ColumnVindexes[0].Name
+			}
+			if targetVindexType == "" {
+				targetVindexType, err = vindexes.ChooseVindexForType(field.Type)
+				if err != nil {
+					return
+				}
+			}
+			targetVindex = &vschemapb.Vindex{
+				Type: targetVindexType,
+			}
+			break
+		}
+	}
+	if targetVindex == nil {
+		err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %s not found in target schema %s",
+			sourceVindexColumn, sourceTableDefinition.Schema)
+		return
+	}
+	return
+}
+
 // validateExternalizedVindex checks if a given vindex is externalized.
 // A vindex is considered externalized if it has an owner and is not in write-only mode.
 func (lv *lookupVindex) validateExternalizedVindex(vindex *vschemapb.Vindex) error {
@@ -560,12 +631,14 @@ func (lv *lookupVindex) validateExternalizedVindex(vindex *vschemapb.Vindex) err
 	return nil
 }
 
-// validateExternalized checks if the vindex has been externalized
+// validateExternalized checks if the vindexes have been externalized
 // and verifies the state of the VReplication workflow on the target shards.
 // It ensures that all streams in the workflow are frozen.
-func (lv *lookupVindex) validateExternalized(ctx context.Context, vindex *vschemapb.Vindex, name string, targetShards []*topo.ShardInfo) error {
-	if err := lv.validateExternalizedVindex(vindex); err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s has not been externalized yet: %v", name, err)
+func (lv *lookupVindex) validateExternalized(ctx context.Context, vindexByName map[string]*vschemapb.Vindex, workflowName string, targetShards []*topo.ShardInfo) error {
+	for vindexName, vindex := range vindexByName {
+		if err := lv.validateExternalizedVindex(vindex); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s has not been externalized yet: %v", vindexName, err)
+		}
 	}
 
 	err := forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
@@ -574,13 +647,13 @@ func (lv *lookupVindex) validateExternalized(ctx context.Context, vindex *vschem
 			return err
 		}
 		res, err := lv.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
-			Workflow: name,
+			Workflow: workflowName,
 		})
 		if err != nil {
 			return err
 		}
 		if res == nil || res.Workflow == "" {
-			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", name, topoproto.TabletAliasString(targetPrimary.Alias))
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", workflowName, topoproto.TabletAliasString(targetPrimary.Alias))
 		}
 		for _, stream := range res.Streams {
 			// All streams need to be frozen.
@@ -594,4 +667,128 @@ func (lv *lookupVindex) validateExternalized(ctx context.Context, vindex *vschem
 		return err
 	}
 	return nil
+}
+
+// validateInternalizedState ensures that the workflow is running if it
+// backfills unowned vindex or we've requested that it shouldn't be stopped
+// after copy phase completes, else it ensures that the workflow is stopped.
+func (lv *lookupVindex) validateInternalizedState(ctx context.Context, workflowName string, isBackfillingOwned bool, targetShards []*topo.ShardInfo) error {
+	return forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
+		targetPrimary, err := lv.ts.GetTablet(ctx, targetShard.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		res, err := lv.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: workflowName,
+		})
+		if err != nil {
+			return err
+		}
+		if res == nil || res.Workflow == "" {
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", workflowName, topoproto.TabletAliasString(targetPrimary.Alias))
+		}
+		for _, stream := range res.Streams {
+			if stream.Bls.Filter == nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid binlog source")
+			}
+			if !isBackfillingOwned || !stream.Bls.StopAfterCopy {
+				// If there's no owner or we've requested that the workflow NOT be stopped
+				// after the copy phase completes, then all streams need to be running.
+				if stream.State != binlogdatapb.VReplicationWorkflowState_Running {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Running state: %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State)
+				}
+			} else {
+				// If there is an owner, all streams need to be stopped after copy.
+				if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || !strings.Contains(stream.Message, "Stopped after copy") {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Stopped after copy state: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
+				}
+			}
+		}
+		return nil
+	})
+}
+
+// getVindexesFromWorkflowOptions reads workflow options from each target
+// shard, and returns lookup vindex names found in workflow options.
+func (lv *lookupVindex) getVindexesFromWorkflowOptions(ctx context.Context, workflowName string, targetShards []*topo.ShardInfo) ([]string, error) {
+	var (
+		options string
+		mu      sync.Mutex
+	)
+	err := forAllShards(targetShards, func(si *topo.ShardInfo) error {
+		targetPrimary, err := lv.ts.GetTablet(ctx, si.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		res, err := lv.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: workflowName,
+		})
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if options != "" && options != res.Options {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "inconsistent workflow options on target shard %s/%s",
+				targetPrimary.Keyspace, targetPrimary.GetShard())
+		}
+		options = res.GetOptions()
+		return nil
+	})
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read workflow options")
+	}
+	workflowOptions := &vtctldatapb.WorkflowOptions{}
+	if err := json.Unmarshal([]byte(options), workflowOptions); err != nil {
+		return nil, vterrors.Wrapf(err, "failed to parse workflow options")
+	}
+	return workflowOptions.GetLookupVindexes(), nil
+}
+
+// getVindexAndVSchema gets the vindexes (from VSchema) and VSchema with the
+// provided keyspace and workflow. Uses workflow options to retrieve lookup
+// vindex names.
+func (lv *lookupVindex) getVindexesAndVSchema(ctx context.Context, keyspace string, workflowName string, targetShards []*topo.ShardInfo) (map[string]*vschemapb.Vindex, *topo.KeyspaceVSchemaInfo, error) {
+	lookupVindexes, err := lv.getVindexesFromWorkflowOptions(ctx, workflowName, targetShards)
+	if err != nil {
+		return nil, nil, vterrors.Wrapf(err, "failed to retrieve lookup vindex names from workflow")
+	}
+	if len(lookupVindexes) == 0 {
+		// If lookup vindexes from workflow options were absent, we should
+		// assume the vindex name to be same as workflow name. This will allow
+		// us to support old behaviour. Even if this was a wrong assumption,
+		// we will still error out while retrieving vindex from vschema.
+		lookupVindexes = []string{workflowName}
+	}
+
+	vschema, err := lv.ts.GetVSchema(ctx, keyspace)
+	if err != nil {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", keyspace)
+	}
+	vindexByName := make(map[string]*vschemapb.Vindex, len(lookupVindexes))
+	for _, vindexName := range lookupVindexes {
+		vindex := vschema.Vindexes[vindexName]
+		if vindex == nil {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "vindex %s not found in the %s keyspace", vindexName, keyspace)
+		}
+		vindexByName[vindexName] = vindex
+	}
+	return vindexByName, vschema, nil
+}
+
+// IsBackfillingOwnedVindexes returns if the VReplication workflow is
+// backfilling owned lookup vindexes. Also, returns error in case the
+// workflow backfills a mix of owned and unowned vindexes.
+func IsBackfillingOwnedVindexes(vindexByName map[string]*vschemapb.Vindex) (bool, error) {
+	isBackfillingOwned := false
+	for vindexName, vindex := range vindexByName {
+		if vindex.Owner != "" {
+			isBackfillingOwned = true
+		} else if isBackfillingOwned {
+			// We don't allow a workflow to backfill a mix of unowned
+			// and owned vindexes.
+			return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "workflow can't backfill mix of unowned and owned vindexes, vindex %s is unowned", vindexName)
+		}
+	}
+	return isBackfillingOwned, nil
 }

@@ -50,7 +50,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -1048,20 +1047,6 @@ func validateSourceTablesExist(sourceKeyspace string, ksTables, tables []string)
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table(s) not found in source keyspace %s: %s", sourceKeyspace, strings.Join(missingTables, ","))
 	}
 	return nil
-}
-
-// getVindexAndVSchema gets the vindex (from VSchema) and VSchema with the
-// provided vindex name and keyspace.
-func getVindexAndVSchema(ctx context.Context, ts *topo.Server, keyspace string, vindexName string) (*vschemapb.Vindex, *topo.KeyspaceVSchemaInfo, error) {
-	vschema, err := ts.GetVSchema(ctx, keyspace)
-	if err != nil {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get vschema for the %s keyspace", keyspace)
-	}
-	vindex := vschema.Vindexes[vindexName]
-	if vindex == nil {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in the %s keyspace", vindexName, keyspace)
-	}
-	return vindex, vschema, nil
 }
 
 func processWorkflowActionOptions(opts []WorkflowActionOption) workflowActionOptions {
