@@ -562,6 +562,8 @@ func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, 
 	}
 	if params.SslEnabled() {
 		args = append(args, "SOURCE_SSL = 1")
+	} else {
+		args = append(args, "GET_SOURCE_PUBLIC_KEY = 1")
 	}
 	if params.SslCa != "" {
 		args = append(args, fmt.Sprintf("SOURCE_SSL_CA = '%s'", params.SslCa))
@@ -603,7 +605,7 @@ func (mysqlFlavor) catchupToGTIDCommands(params *ConnParams, replPos replication
 		cmds = append(cmds, cmd+";")
 	} else {
 		// No TLS
-		cmds = append(cmds, fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='%s', SOURCE_PASSWORD='%s', SOURCE_AUTO_POSITION=1;", params.Host, params.Port, params.Uname, params.Pass))
+		cmds = append(cmds, fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='%s', SOURCE_PASSWORD='%s', GET_SOURCE_PUBLIC_KEY=1, SOURCE_AUTO_POSITION=1;", params.Host, params.Port, params.Uname, params.Pass))
 	}
 
 	if replPos.IsZero() { // when the there is no afterPos, that means need to replicate completely
