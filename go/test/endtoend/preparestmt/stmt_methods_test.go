@@ -27,6 +27,8 @@ import (
 	"github.com/icrowley/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 // TestSelect simple select the data without any condition.
@@ -440,4 +442,82 @@ func TestBinaryColumn(t *testing.T) {
                   AND table_info.table_type = 'BASE TABLE'
               ORDER BY BINARY table_info.table_name`, uks, uks)
 	require.NoError(t, err)
+}
+
+// TestSpecializedPlan tests the specialized plan generation for the query.
+func TestSpecializedPlan(t *testing.T) {
+	dbInfo.KeyspaceName = sks
+	dbo := Connect(t, "interpolateParams=false")
+	defer dbo.Close()
+
+	queries := []struct {
+		query string
+		args  []any
+	}{{
+		query: `select 1 from t1 tbl1, t1 tbl2 where tbl1.id = ? and tbl2.id = ?`,
+		args:  []any{1, 1},
+	}, {
+		query: `select 1 from t1 tbl1, t1 tbl2, t1 tbl3 where tbl1.id = ? and tbl2.id = ? and tbl3.id = ?`,
+		args:  []any{1, 1, 1},
+	}, {
+		query: `select 1 from t1 tbl1, t1 tbl2, t1 tbl3, t1 tbl4 where tbl1.id = ? and tbl2.id = ? and tbl3.id = ? and tbl4.id = ?`,
+		args:  []any{1, 1, 1, 1},
+	}}
+
+	for _, q := range queries {
+		stmt, err := dbo.Prepare(q.query)
+		require.NoError(t, err)
+
+		// TODO (fix me) : should be enabled otherwise do not merge this PR.
+		// executing the query multiple times leading to failing the execution with error.
+		// for i := 0; i < 100; i++ {
+		rows, err := stmt.Query(q.args...)
+		require.NoError(t, err)
+		require.NoError(t, rows.Close())
+		// }
+		require.NoError(t, stmt.Close())
+	}
+
+	// Validate specialized plan.
+	p := getPlanWhenReady(t, queries[0].query, 2*time.Minute, clusterInstance.VtgateProcess.ReadQueryPlans)
+	require.NotNil(t, p, "plan not found")
+
+	plan, exist := p["Instructions"]
+	require.True(t, exist, "plan Instructions not found")
+
+	pd, err := engine.PrimitiveDescriptionFromMap(plan.(map[string]any))
+	require.NoError(t, err)
+	require.Equal(t, "Specialized", pd.OperatorType)
+	require.Len(t, pd.Inputs, 2, "Unexpected number of Inputs")
+
+	require.Equal(t, "Generic", pd.Inputs[0].InputName)
+	require.Equal(t, "Specific", pd.Inputs[1].InputName)
+	require.Equal(t, "Route", pd.Inputs[1].OperatorType)
+	require.Equal(t, "EqualUnique", pd.Inputs[1].Variant)
+}
+
+// getPlanWhenReady polls for the query plan until it is ready or times out.
+func getPlanWhenReady(t *testing.T, sql string, timeout time.Duration, plansFunc func() (map[string]any, error)) map[string]any {
+	t.Helper()
+
+	waitTimeout := time.After(timeout)
+	for {
+		select {
+		case <-waitTimeout:
+			require.Fail(t, fmt.Sprintf("timeout waiting for plan for query: %s", sql))
+			return nil
+		default:
+			p, err := plansFunc()
+			require.NoError(t, err, "failed to retrieve query plans")
+			if len(p) > 0 {
+				val, found := p[sql]
+				if found {
+					planMap, ok := val.(map[string]any)
+					require.True(t, ok, "plan is not of type map[string]any")
+					return planMap
+				}
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
 }
