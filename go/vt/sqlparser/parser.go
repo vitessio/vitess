@@ -263,6 +263,8 @@ func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error
 	var stmt string
 	stmtBegin := 0
 	emptyStatement := true
+	var prevToken int
+	var isCreateProcedureStatement bool
 loop:
 	for {
 		tkn, _ = tokenizer.Scan()
@@ -272,12 +274,16 @@ loop:
 			// We now try to parse the statement to see if its complete.
 			// If it is a create procedure, then it might not be complete, and we
 			// would need to scan to the next ;
-			if p.IsStatementIncomplete(stmt) {
+			if isCreateProcedureStatement && p.IsStatementIncomplete(stmt) {
 				continue
 			}
 			if !emptyStatement {
 				pieces = append(pieces, stmt)
+				// We can now reset the variables for the next statement.
+				// It starts off as an empty statement and we don't know if it is
+				// a create procedure statement yet.
 				emptyStatement = true
+				isCreateProcedureStatement = false
 			}
 			stmtBegin = tokenizer.Pos
 		case 0, eofChar:
@@ -289,7 +295,17 @@ loop:
 				}
 			}
 			break loop
+		case COMMENT:
+			// We want to ignore comments and not store them in the prevToken for knowing
+			// if the current statement is a create procedure statement.
+			continue
+		case PROCEDURE:
+			if prevToken == CREATE {
+				isCreateProcedureStatement = true
+			}
+			fallthrough
 		default:
+			prevToken = tkn
 			emptyStatement = false
 		}
 	}

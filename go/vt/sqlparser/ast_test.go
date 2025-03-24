@@ -819,7 +819,7 @@ func TestSplitStatementToPieces(t *testing.T) {
 	}, {
 		// Ignore quoted semicolon
 		input:  ";create table t1 ';';;;create table t2 (id;",
-		output: "create table t1 ';';;create table t2 (id;",
+		output: "create table t1 ';';create table t2 (id",
 	}, {
 		// Ignore quoted semicolon
 		input:  "stop replica; start replica",
@@ -833,6 +833,11 @@ func TestSplitStatementToPieces(t *testing.T) {
 		input:     "select * from t1;create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;select * from t2",
 		lenWanted: 3,
 	},
+		{
+			// Create procedure with comments.
+			input:     "select * from t1; /* comment1 */ create /* comment2 */ procedure /* comment3 */ p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;select * from t2",
+			lenWanted: 3,
+		},
 	}
 
 	parser := NewTestParser()
