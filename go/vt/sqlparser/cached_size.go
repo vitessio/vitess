@@ -1053,9 +1053,9 @@ func (cached *CreateProcedure) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(96)
 	}
-	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCS
+	// field Name vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Name.CachedSize(false)
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)

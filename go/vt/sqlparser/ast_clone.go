@@ -1182,7 +1182,7 @@ func CloneRefOfCreateProcedure(n *CreateProcedure) *CreateProcedure {
 		return nil
 	}
 	out := *n
-	out.Name = CloneIdentifierCS(n.Name)
+	out.Name = CloneTableName(n.Name)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Params = CloneSliceOfRefOfProcParameter(n.Params)
@@ -4081,6 +4081,8 @@ func CloneDDLStatement(in DDLStatement) DDLStatement {
 		return CloneRefOfAlterTable(in)
 	case *AlterView:
 		return CloneRefOfAlterView(in)
+	case *CreateProcedure:
+		return CloneRefOfCreateProcedure(in)
 	case *CreateTable:
 		return CloneRefOfCreateTable(in)
 	case *CreateView:

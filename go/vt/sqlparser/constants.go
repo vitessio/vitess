@@ -534,6 +534,7 @@ const (
 	AddAutoIncDDLAction
 	DropAutoIncDDLAction
 	RevertDDLAction
+	CreateProcedureAction
 )
 
 // Constants for scope of variables

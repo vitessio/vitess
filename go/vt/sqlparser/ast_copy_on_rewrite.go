@@ -1835,7 +1835,7 @@ func (c *cow) copyOnRewriteRefOfCreateProcedure(n *CreateProcedure, parent SQLNo
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Name, changedName := c.copyOnRewriteIdentifierCS(n.Name, n)
+		_Name, changedName := c.copyOnRewriteTableName(n.Name, n)
 		_Comments, changedComments := c.copyOnRewriteRefOfParsedComments(n.Comments, n)
 		_Definer, changedDefiner := c.copyOnRewriteRefOfDefiner(n.Definer, n)
 		var changedParams bool
@@ -1850,7 +1850,7 @@ func (c *cow) copyOnRewriteRefOfCreateProcedure(n *CreateProcedure, parent SQLNo
 		_Statement, changedStatement := c.copyOnRewriteCompoundStatement(n.Statement, n)
 		if changedName || changedComments || changedDefiner || changedParams || changedStatement {
 			res := *n
-			res.Name, _ = _Name.(IdentifierCS)
+			res.Name, _ = _Name.(TableName)
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.Definer, _ = _Definer.(*Definer)
 			res.Params = _Params
@@ -7765,6 +7765,8 @@ func (c *cow) copyOnRewriteDDLStatement(n DDLStatement, parent SQLNode) (out SQL
 		return c.copyOnRewriteRefOfAlterTable(n, parent)
 	case *AlterView:
 		return c.copyOnRewriteRefOfAlterView(n, parent)
+	case *CreateProcedure:
+		return c.copyOnRewriteRefOfCreateProcedure(n, parent)
 	case *CreateTable:
 		return c.copyOnRewriteRefOfCreateTable(n, parent)
 	case *CreateView:

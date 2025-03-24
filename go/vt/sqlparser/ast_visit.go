@@ -1370,7 +1370,7 @@ func VisitRefOfCreateProcedure(in *CreateProcedure, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitIdentifierCS(in.Name, f); err != nil {
+	if err := VisitTableName(in.Name, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
@@ -5207,6 +5207,8 @@ func VisitDDLStatement(in DDLStatement, f Visit) error {
 		return VisitRefOfAlterTable(in, f)
 	case *AlterView:
 		return VisitRefOfAlterView(in, f)
+	case *CreateProcedure:
+		return VisitRefOfCreateProcedure(in, f)
 	case *CreateTable:
 		return VisitRefOfCreateTable(in, f)
 	case *CreateView:

@@ -3132,8 +3132,8 @@ func (a *application) rewriteRefOfCreateProcedure(parent SQLNode, node *CreatePr
 	if a.collectPaths {
 		a.cur.current.AddStep(uint16(RefOfCreateProcedureName))
 	}
-	if !a.rewriteIdentifierCS(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*CreateProcedure).Name = newNode.(IdentifierCS)
+	if !a.rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*CreateProcedure).Name = newNode.(TableName)
 	}) {
 		return false
 	}
@@ -15059,6 +15059,8 @@ func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, rep
 		return a.rewriteRefOfAlterTable(parent, node, replacer)
 	case *AlterView:
 		return a.rewriteRefOfAlterView(parent, node, replacer)
+	case *CreateProcedure:
+		return a.rewriteRefOfCreateProcedure(parent, node, replacer)
 	case *CreateTable:
 		return a.rewriteRefOfCreateTable(parent, node, replacer)
 	case *CreateView:

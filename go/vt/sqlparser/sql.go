@@ -2705,7 +2705,7 @@ var yyAct = [...]int{
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 3008, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 3274,
+	0, 0, 0, 0, 0, 0, 0, 0, 3273, 3274,
 	0, 3278, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -2954,7 +2954,7 @@ var yyAct = [...]int{
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 1142, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 1107, 0, 704, 3273,
+	0, 0, 0, 0, 0, 0, 1107, 0, 704, 704,
 	704, 0, 704, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -10036,7 +10036,7 @@ var yyChk = [...]int{
 	236, 236, 236, -174, -240, -333, -174, -174, -174, -174,
 	-174, -174, -174, -174, -174, -174, -223, -384, 307, -384,
 	307, -384, -301, 96, -312, 26, 18, 63, 63, -196,
-	-227, -158, -197, -337, -219, -165, 316, 324, -219, -166,
+	-227, -158, -197, -219, -219, -165, 316, 324, -219, -166,
 	266, 85, -407, -407, -407, 29, 95, -169, 101, -278,
 	729, -284, 52, -282, -283, 53, -279, 54, 62, -371,
 	-371, 184, -268, -174, -302, 85, -303, -311, -251, -243,
@@ -12460,7 +12460,7 @@ yydefault:
 		var yyLOCAL *CreateProcedure
 //line sql.y:1595
 		{
-			yyLOCAL = &CreateProcedure{Comments: Comments(yyDollar[2].strs).Parsed(), Name: yyDollar[6].identifierCS, IfNotExists: yyDollar[5].booleanUnion(), Definer: yyDollar[3].definerUnion(), Params: yyDollar[8].procParamsUnion(), Statement: yyDollar[10].compoundStatementUnion()}
+			yyLOCAL = &CreateProcedure{Comments: Comments(yyDollar[2].strs).Parsed(), Name: yyDollar[6].tableName, IfNotExists: yyDollar[5].booleanUnion(), Definer: yyDollar[3].definerUnion(), Params: yyDollar[8].procParamsUnion(), Statement: yyDollar[10].compoundStatementUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 211:

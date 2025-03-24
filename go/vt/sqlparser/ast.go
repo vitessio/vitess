@@ -531,7 +531,7 @@ type (
 
 	// CreateProcedure represents a CREATE PROCEDURE statement.
 	CreateProcedure struct {
-		Name        IdentifierCS
+		Name        TableName
 		Comments    *ParsedComments
 		IfNotExists bool
 		Definer     *Definer
@@ -940,14 +940,15 @@ func (*DeallocateStmt) iStatement()        {}
 func (*PurgeBinaryLogs) iStatement()       {}
 func (*Kill) iStatement()                  {}
 
-func (*CreateView) iDDLStatement()    {}
-func (*AlterView) iDDLStatement()     {}
-func (*CreateTable) iDDLStatement()   {}
-func (*DropTable) iDDLStatement()     {}
-func (*DropView) iDDLStatement()      {}
-func (*AlterTable) iDDLStatement()    {}
-func (*TruncateTable) iDDLStatement() {}
-func (*RenameTable) iDDLStatement()   {}
+func (*CreateView) iDDLStatement()      {}
+func (*AlterView) iDDLStatement()       {}
+func (*CreateTable) iDDLStatement()     {}
+func (*DropTable) iDDLStatement()       {}
+func (*DropView) iDDLStatement()        {}
+func (*AlterTable) iDDLStatement()      {}
+func (*TruncateTable) iDDLStatement()   {}
+func (*RenameTable) iDDLStatement()     {}
+func (*CreateProcedure) iDDLStatement() {}
 
 func (*AddConstraintDefinition) iAlterOption() {}
 func (*AddIndexDefinition) iAlterOption()      {}
@@ -995,6 +996,12 @@ func (*TruncateTable) SetFullyParsed(bool) {}
 func (*RenameTable) IsFullyParsed() bool {
 	return true
 }
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *CreateProcedure) IsFullyParsed() bool { return true }
+
+// SetFullyParsed implements the DDLStatement interface
+func (node *CreateProcedure) SetFullyParsed(bool) {}
 
 // SetFullyParsed implements the DDLStatement interface
 func (node *RenameTable) SetFullyParsed(fullyParsed bool) {}
@@ -1055,6 +1062,9 @@ func (node *AlterView) SetFullyParsed(fullyParsed bool) {}
 func (*TruncateTable) IsTemporary() bool {
 	return false
 }
+
+// IsTemporary implements the DDLStatement interface
+func (node *CreateProcedure) IsTemporary() bool { return false }
 
 // IsTemporary implements the DDLStatement interface
 func (*RenameTable) IsTemporary() bool {
@@ -1131,6 +1141,9 @@ func (node *RenameTable) GetTable() TableName {
 	return TableName{}
 }
 
+// GetTable implements the DDLStatement interface
+func (node *CreateProcedure) GetTable() TableName { return node.Name }
+
 // GetAction implements the DDLStatement interface
 func (node *TruncateTable) GetAction() DDLAction {
 	return TruncateDDLAction
@@ -1171,6 +1184,11 @@ func (node *DropView) GetAction() DDLAction {
 	return DropDDLAction
 }
 
+// GetAction implements the DDLStatement interface
+func (node *CreateProcedure) GetAction() DDLAction {
+	return CreateProcedureAction
+}
+
 // GetOptLike implements the DDLStatement interface
 func (node *CreateTable) GetOptLike() *OptLike {
 	return node.OptLike
@@ -1208,6 +1226,11 @@ func (node *DropTable) GetOptLike() *OptLike {
 
 // GetOptLike implements the DDLStatement interface
 func (node *DropView) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *CreateProcedure) GetOptLike() *OptLike {
 	return nil
 }
 
@@ -1251,6 +1274,11 @@ func (node *DropView) GetIfExists() bool {
 	return node.IfExists
 }
 
+// GetIfExists implements the DDLStatement interface
+func (node *CreateProcedure) GetIfExists() bool {
+	return false
+}
+
 // GetIfNotExists implements the DDLStatement interface
 func (node *RenameTable) GetIfNotExists() bool {
 	return false
@@ -1289,6 +1317,11 @@ func (node *DropTable) GetIfNotExists() bool {
 // GetIfNotExists implements the DDLStatement interface
 func (node *DropView) GetIfNotExists() bool {
 	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *CreateProcedure) GetIfNotExists() bool {
+	return node.IfNotExists
 }
 
 // GetIsReplace implements the DDLStatement interface
@@ -1331,6 +1364,11 @@ func (node *DropView) GetIsReplace() bool {
 	return false
 }
 
+// GetIsReplace implements the DDLStatement interface
+func (node *CreateProcedure) GetIsReplace() bool {
+	return false
+}
+
 // GetTableSpec implements the DDLStatement interface
 func (node *CreateTable) GetTableSpec() *TableSpec {
 	return node.TableSpec
@@ -1368,6 +1406,11 @@ func (node *DropTable) GetTableSpec() *TableSpec {
 
 // GetTableSpec implements the DDLStatement interface
 func (node *DropView) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *CreateProcedure) GetTableSpec() *TableSpec {
 	return nil
 }
 
@@ -1415,6 +1458,11 @@ func (node *AlterView) GetFromTables() TableNames {
 	return nil
 }
 
+// GetFromTables implements the DDLStatement interface
+func (node *CreateProcedure) GetFromTables() TableNames {
+	return nil
+}
+
 // SetFromTables implements DDLStatement.
 func (node *RenameTable) SetFromTables(tables TableNames) {
 	if len(node.TablePairs) != len(tables) {
@@ -1457,6 +1505,11 @@ func (node *DropView) SetFromTables(tables TableNames) {
 
 // SetFromTables implements DDLStatement.
 func (node *AlterView) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements the DDLStatement interface
+func (node *CreateProcedure) SetFromTables(tables TableNames) {
 	// irrelevant
 }
 
@@ -1537,6 +1590,11 @@ func (node *Update) SetComments(comments Comments) {
 
 // SetComments for VStream
 func (node *VStream) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
+
+// SetComments for CreateProcedure
+func (node *CreateProcedure) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
@@ -1625,6 +1683,9 @@ func (node *VStream) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
+// GetParsedComments implements Commented interface.
+func (node *CreateProcedure) GetParsedComments() *ParsedComments { return node.Comments }
+
 // GetToTables implements the DDLStatement interface
 func (node *RenameTable) GetToTables() TableNames {
 	var toTables TableNames
@@ -1672,6 +1733,11 @@ func (node *DropTable) GetToTables() TableNames {
 
 // GetToTables implements the DDLStatement interface
 func (node *DropView) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *CreateProcedure) GetToTables() TableNames {
 	return nil
 }
 
@@ -1727,6 +1793,11 @@ func (node *DropView) AffectedTables() TableNames {
 	return node.FromTables
 }
 
+// AffectedTables implements the DDLStatement interface
+func (node *CreateProcedure) AffectedTables() TableNames {
+	return TableNames{node.GetTable()}
+}
+
 // SetTable implements DDLStatement.
 func (node *TruncateTable) SetTable(qualifier string, name string) {
 	node.Table.Qualifier = NewIdentifierCS(qualifier)
@@ -1765,6 +1836,12 @@ func (node *DropTable) SetTable(qualifier string, name string) {}
 
 // SetTable implements DDLStatement.
 func (node *DropView) SetTable(qualifier string, name string) {}
+
+// SetTable implements the DDLStatement interface
+func (node *CreateProcedure) SetTable(qualifier string, name string) {
+	node.Name.Qualifier = NewIdentifierCS(qualifier)
+	node.Name.Name = NewIdentifierCS(name)
+}
 
 func (*DropDatabase) iDBDDLStatement()   {}
 func (*CreateDatabase) iDBDDLStatement() {}

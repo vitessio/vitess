@@ -2449,7 +2449,7 @@ func (cmp *Comparator) RefOfCreateProcedure(a, b *CreateProcedure) bool {
 		return false
 	}
 	return a.IfNotExists == b.IfNotExists &&
-		cmp.IdentifierCS(a.Name, b.Name) &&
+		cmp.TableName(a.Name, b.Name) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.RefOfDefiner(a.Definer, b.Definer) &&
 		cmp.SliceOfRefOfProcParameter(a.Params, b.Params) &&
@@ -6293,6 +6293,12 @@ func (cmp *Comparator) DDLStatement(inA, inB DDLStatement) bool {
 			return false
 		}
 		return cmp.RefOfAlterView(a, b)
+	case *CreateProcedure:
+		b, ok := inB.(*CreateProcedure)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfCreateProcedure(a, b)
 	case *CreateTable:
 		b, ok := inB.(*CreateTable)
 		if !ok {

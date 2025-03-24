@@ -120,6 +120,8 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		destination, keyspace, err = buildDropTable(vschema, ddlStatement)
 	case *sqlparser.RenameTable:
 		destination, keyspace, err = buildRenameTable(vschema, ddl)
+	case *sqlparser.CreateProcedure:
+		destination, keyspace, err = buildCreateProcedurePlan(vschema, ddl)
 	default:
 		return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected DDL statement type: %T", ddlStatement))
 	}
@@ -148,6 +150,19 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 			DDL:               ddlStatement,
 			SQL:               query,
 		}, nil
+}
+
+func buildCreateProcedurePlan(vschema plancontext.VSchema, cp *sqlparser.CreateProcedure) (key.ShardDestination, *vindexes.Keyspace, error) {
+	destination, keyspace, _, err := vschema.TargetDestination(cp.Name.Qualifier.String())
+	if err != nil {
+		return nil, nil, err
+	}
+	// Clear out the qualifier from the table name.
+	cp.SetTable("", cp.Name.Name.String())
+	if keyspace.Sharded {
+		return nil, nil, vterrors.VT12001("CREATE PROCEDURE is not supported on sharded keyspaces")
+	}
+	return destination, keyspace, nil
 }
 
 func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement, keyspace *vindexes.Keyspace) error {
