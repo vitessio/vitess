@@ -791,7 +791,7 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			col.Type.Length = nil
 		}
 		if col.Type.Type == "text" {
-			if _, _, _, maxWidth, _, err := colEntity.InferCharsetCollate(); err == nil {
+			if _, _, maxWidth, _, err := colEntity.InferCharsetCollate(); err == nil {
 				lengthByCharset := colLength * maxWidth
 				if lengthByCharset <= TinyBlogStorageLength {
 					col.Type.Type = "tinytext"
@@ -2725,7 +2725,7 @@ func (c *CreateTableEntity) validate() error {
 		columnExists[colName] = true
 	}
 	for _, colEntity := range c.ColumnDefinitionEntities() {
-		if _, _, _, _, _, err := colEntity.InferCharsetCollate(); err != nil {
+		if _, _, _, _, err := colEntity.InferCharsetCollate(); err != nil {
 			return err
 		}
 	}

@@ -126,15 +126,16 @@ func (c *ColumnDefinitionEntity) SetExplicitDefaultAndNull() {
 	}
 }
 
-func (c *ColumnDefinitionEntity) InferCharsetCollate() (collation collations.ID, collateName, charsetName string, maxWidth int, isTextual bool, err error) {
+func (c *ColumnDefinitionEntity) InferCharsetCollate() (collateName, charsetName string, maxWidth int, isTextual bool, err error) {
 	if !c.IsTextual() {
-		return collation, collateName, charsetName, maxWidth, false, nil
+		return collateName, charsetName, maxWidth, false, nil
 	}
+	var collation collations.ID
 	collateName = c.ColumnDefinition.Type.Options.Collate
 	charsetName = c.ColumnDefinition.Type.Charset.Name
 	infer := func() error {
 		if charsetName != "" && collateName != "" {
-			collation = c.Env.CollationEnv().LookupByName(collateName)
+			collation := c.Env.CollationEnv().LookupByName(collateName)
 			if charsetFromCollation := c.Env.CollationEnv().LookupCharsetName(collation); charsetFromCollation != charsetName {
 				return &MismatchedColumnCharsetCollationError{Column: c.ColumnDefinition.Name.String(), Charset: charsetName, Collation: collateName}
 			}
@@ -155,31 +156,29 @@ func (c *ColumnDefinitionEntity) InferCharsetCollate() (collation collations.ID,
 				return &UnknownColumnCollationCharsetError{Column: c.ColumnDefinition.Name.String(), Collation: c.ColumnDefinition.Type.Options.Collate}
 			}
 		}
+		if charsetName == "" {
+			// Still nothing? Assign the table's charset/collation.
+			charsetName = c.tableCharsetCollate.charset
+			collation = c.Env.CollationEnv().DefaultCollationForCharset(charsetName)
+			if collateName == "" {
+				collateName = c.tableCharsetCollate.collate
+			}
+			if collateName == "" {
+				if collation == collations.Unknown {
+					return &UnknownColumnCharsetCollationError{Column: c.ColumnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
+				}
+				collateName = c.Env.CollationEnv().LookupName(collation)
+			}
+		}
 		return nil
 	}
 	if err := infer(); err != nil {
-		return collation, collateName, charsetName, maxWidth, false, err
-	}
-	if charsetName == "" {
-		// No info in column definition. Use table's charset/collation.
-		charsetName = c.tableCharsetCollate.charset
-		if err := infer(); err != nil {
-			return collation, collateName, charsetName, maxWidth, false, err
-		}
-	}
-	if collateName == "" {
-		collateName = c.tableCharsetCollate.collate
-		if err := infer(); err != nil {
-			return collation, collateName, charsetName, maxWidth, false, err
-		}
-	}
-	if collation == collations.Unknown {
-		collation = c.Env.CollationEnv().LookupByName(collateName)
+		return collateName, charsetName, maxWidth, false, err
 	}
 	if coll := colldata.Lookup(collation); coll != nil {
 		maxWidth = coll.Charset().MaxWidth()
 	}
-	return collation, collateName, charsetName, maxWidth, true, nil
+	return collateName, charsetName, maxWidth, true, nil
 }
 
 // SetExplicitCharsetCollate enriches this column definition with collation and charset. Those may be
@@ -189,7 +188,7 @@ func (c *ColumnDefinitionEntity) InferCharsetCollate() (collation collations.ID,
 // of a definition. But this function can be used (often in conjunction with Clone()) to enrich a column definition
 // so as to have explicit and authoritative view on any particular column.
 func (c *ColumnDefinitionEntity) SetExplicitCharsetCollate() error {
-	_, collateName, charsetName, _, isTextual, err := c.InferCharsetCollate()
+	collateName, charsetName, _, isTextual, err := c.InferCharsetCollate()
 	if err != nil {
 		return err
 	}
