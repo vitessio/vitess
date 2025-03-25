@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -66,7 +67,7 @@ func TestSetReference(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	api := NewVSchemaAPI(ts)
+	api := NewVSchemaAPI(ts, sqlparser.NewTestParser())
 	err = api.SetReference(ctx, &vtctldata.VSchemaSetReferenceRequest{
 		VSchemaName: "non_existent_ks",
 		TableName:   "t1",

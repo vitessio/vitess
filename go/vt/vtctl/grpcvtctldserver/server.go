@@ -107,7 +107,7 @@ func NewVtctldServer(env *vtenv.Environment, ts *topo.Server) *VtctldServer {
 		ts:   ts,
 		tmc:  tmc,
 		ws:   workflow.NewServer(env, ts, tmc),
-		vapi: vschema.NewVSchemaAPI(ts),
+		vapi: vschema.NewVSchemaAPI(ts, env.Parser()),
 	}
 }
 

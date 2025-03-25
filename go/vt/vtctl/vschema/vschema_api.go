@@ -19,22 +19,134 @@ package vschema
 import (
 	"context"
 
+	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type VSchemaAPI struct {
-	ts *topo.Server
+	ts     *topo.Server
+	parser *sqlparser.Parser
 }
 
-func NewVSchemaAPI(ts *topo.Server) *VSchemaAPI {
+func NewVSchemaAPI(ts *topo.Server, parser *sqlparser.Parser) *VSchemaAPI {
 	return &VSchemaAPI{
-		ts: ts,
+		ts:     ts,
+		parser: parser,
 	}
+}
+
+func (api *VSchemaAPI) Create(ctx context.Context, req *vtctldatapb.VSchemaCreateRequest) error {
+	// TODO(beingnoble03): Add more validation here.
+	topoKs := &topodatapb.Keyspace{}
+	err := api.ts.CreateKeyspace(ctx, req.VSchemaName, topoKs)
+	if err != nil {
+		return vterrors.Wrapf(err, "unable to create keyspace '%s'", req.VSchemaName)
+	}
+
+	var vsks *vschemapb.Keyspace
+	err = json2.UnmarshalPB([]byte(req.VSchemaJson), vsks)
+	if err != nil {
+		return vterrors.Wrapf(err, "unable to unmarshal vschema JSON")
+	}
+
+	_, err = vindexes.BuildKeyspace(vsks, api.parser)
+	if err != nil {
+		err = vterrors.Wrapf(err, "failed to build vschema '%s'", req.VSchemaName)
+		return err
+	}
+	vsks.Draft = req.Draft
+	vsks.Sharded = req.Sharded
+
+	vsInfo := &topo.KeyspaceVSchemaInfo{
+		Name:     req.VSchemaName,
+		Keyspace: vsks,
+	}
+	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
+		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
+			vsInfo, req.VSchemaName)
+	}
+	return err
+}
+
+func (api *VSchemaAPI) Update(ctx context.Context, req *vtctldatapb.VSchemaUpdateRequest) error {
+	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
+	}
+	if req.Sharded != nil {
+		vsInfo.Sharded = *req.Sharded
+	}
+	if req.ForeignKeyMode != nil {
+		fkMode, err := parseForeignKeyMode(*req.ForeignKeyMode)
+		if err != nil {
+			return err
+		}
+		vsInfo.ForeignKeyMode = fkMode
+	}
+	if req.Draft != nil {
+		vsInfo.Draft = *req.Draft
+	}
+	if req.MultiTenant != nil {
+		if *req.MultiTenant {
+			// If we are updating both tenantIdColumnName and tenantIdColumnType,
+			// we can directly replace the entire MultiTenantSpec. However, if
+			// we are looking to update only either column type or column name,
+			// we should check if MultiTenantSpec existed before. If it doesn't
+			// exist, we should return an error that both column name and column
+			// type should be provided.
+			//
+			// Also, if multiTenant was true but neither tenantIdColumnName was
+			// specified nor tenantIdColumnType, we shouldn't return any error
+			// in that case.
+			switch {
+			case req.TenantIdColumnType != nil && req.TenantIdColumnName != nil:
+				if *req.TenantIdColumnName == "" {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tenant id column name not specified")
+				}
+				typ, err := parseTenantIdColumnType(*req.TenantIdColumnType)
+				if err != nil {
+					return err
+				}
+				vsInfo.MultiTenantSpec = &vschemapb.MultiTenantSpec{
+					TenantIdColumnName: *req.TenantIdColumnName,
+					TenantIdColumnType: typ,
+				}
+			case req.TenantIdColumnType != nil:
+				if vsInfo.MultiTenantSpec == nil {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "both tenant id column name and column type should be provided")
+				}
+				typ, err := parseTenantIdColumnType(*req.TenantIdColumnType)
+				if err != nil {
+					return err
+				}
+				vsInfo.MultiTenantSpec.TenantIdColumnType = typ
+			case req.TenantIdColumnName != nil:
+				if vsInfo.MultiTenantSpec == nil {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "both tenant id column name and column type should be provided")
+				}
+				if *req.TenantIdColumnName == "" {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tenant id column name not specified")
+				}
+				vsInfo.MultiTenantSpec.TenantIdColumnName = *req.TenantIdColumnName
+			}
+		} else {
+			vsInfo.MultiTenantSpec = nil
+		}
+	}
+
+	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
+		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
+			vsInfo, req.VSchemaName)
+	}
+	return nil
 }
 
 // SetReference sets up a reference table, which points to a source table in
@@ -59,7 +171,8 @@ func (api *VSchemaAPI) SetReference(ctx context.Context, req *vtctldatapb.VSchem
 			return vterrors.Wrapf(err, "invalid reference table source")
 		}
 		if sourceTable.Type != vindexes.TypeReference {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table '%s' is not a reference table", sourceTableName)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table '%s' is not a reference table",
+				sourceTableName)
 		}
 	}
 

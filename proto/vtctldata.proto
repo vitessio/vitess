@@ -2130,6 +2130,16 @@ message VDiffStopRequest {
 message VDiffStopResponse {
 }
 
+message VSchemaCreateRequest {
+  string v_schema_name = 1;
+  bool sharded = 2;
+  bool draft = 3;
+  string v_schema_json = 4;
+}
+
+message VSchemaCreateResponse {
+}
+
 message VSchemaSetReferenceRequest {
   string v_schema_name = 1;
   string table_name = 2;
@@ -2137,6 +2147,20 @@ message VSchemaSetReferenceRequest {
 }
 
 message VSchemaSetReferenceResponse {
+}
+
+message VSchemaUpdateRequest {
+  string v_schema_name = 1;
+  optional bool sharded = 2;
+  optional string foreign_key_mode = 3;
+  optional bool draft = 4;
+
+  optional bool multi_tenant = 5;
+  optional string tenant_id_column_name = 6;
+  optional string tenant_id_column_type = 7;
+}
+
+message VSchemaUpdateResponse {
 }
 
 message WorkflowDeleteRequest {

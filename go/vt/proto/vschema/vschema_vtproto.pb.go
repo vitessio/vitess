@@ -76,6 +76,7 @@ func (m *Keyspace) CloneVT() *Keyspace {
 	r.RequireExplicitRouting = m.RequireExplicitRouting
 	r.ForeignKeyMode = m.ForeignKeyMode
 	r.MultiTenantSpec = m.MultiTenantSpec.CloneVT()
+	r.Draft = m.Draft
 	if rhs := m.Vindexes; rhs != nil {
 		tmpContainer := make(map[string]*Vindex, len(rhs))
 		for k, v := range rhs {
@@ -527,6 +528,16 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Draft {
+		i--
+		if m.Draft {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x38
 	}
 	if m.MultiTenantSpec != nil {
 		size, err := m.MultiTenantSpec.MarshalToSizedBufferVT(dAtA[:i])
@@ -1485,6 +1496,9 @@ func (m *Keyspace) SizeVT() (n int) {
 		l = m.MultiTenantSpec.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.Draft {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -2388,6 +2402,26 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Draft", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.Draft = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
