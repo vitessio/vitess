@@ -136,7 +136,7 @@ select sum(id1+id2+foo)
 from (
 	select id1, id2, id1+id2 as foo from t1 
 	union all 
-	select id3, id4, i4*id4 from t2
+	select id3, id4, id4*id4 from t2
 	union all 
 	select id3, id4, id1+id4 from t1 join t2 on id3 + 1 = id1
 ) as t`)
