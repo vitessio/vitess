@@ -2162,9 +2162,9 @@ char_type:
   {
     $$ = &ColumnType{Type: string($1), Length: $2}
   }
-| TEXT charset_opt
+| TEXT length_opt charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
   }
 | TINYTEXT charset_opt
   {
@@ -2178,9 +2178,9 @@ char_type:
   {
     $$ = &ColumnType{Type: string($1), Charset: $2}
   }
-| BLOB
+| BLOB length_opt
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | TINYBLOB
   {

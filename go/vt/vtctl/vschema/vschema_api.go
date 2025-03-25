@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -71,18 +70,4 @@ func (api *VSchemaAPI) SetReference(ctx context.Context, req *vtctldatapb.VSchem
 			vsInfo, req.VSchemaName)
 	}
 	return nil
-}
-
-func getVSchemaAndTable(ctx context.Context, ts *topo.Server, vschemaName string, tableName string) (*topo.KeyspaceVSchemaInfo, *vschemapb.Table, error) {
-	vsInfo, err := ts.GetVSchema(ctx, vschemaName)
-	if err != nil {
-		return nil, nil, vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace:", vschemaName)
-	}
-
-	table, ok := vsInfo.Tables[tableName]
-	if !ok {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table '%s' not found in '%s' keyspace", tableName, vschemaName)
-	}
-
-	return vsInfo, table, nil
 }
