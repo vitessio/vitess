@@ -16,10 +16,11 @@ binlog_expire_logs_seconds = 259200
 # disable mysqlx
 mysqlx = 0
 
-# 8.4 changes the default auth-plugin to caching_sha2_password and
-# disables mysql_native_password by default.
+# 8.4 disables mysql_native_password by default, but we keep it
+# enabled for compatibility while upgrading Vitess and / or MySQL.
+# In newer Vitess versions we can remove this.
+# TODO(dbussink): Remove once we're at Vitess 23.0 or later.
 mysql_native_password = ON
-authentication_policy = 'mysql_native_password'
 
 # Semi-sync replication is required for automated unplanned failover
 # (when the primary goes away). Here we just load the plugin so it's

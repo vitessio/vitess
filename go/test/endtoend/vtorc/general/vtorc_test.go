@@ -248,7 +248,7 @@ func TestVTOrcRepairs(t *testing.T) {
 		changeReplicationSourceCommands := []string{
 			"STOP REPLICA",
 			"RESET REPLICA ALL",
-			fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", utils.Hostname, otherReplica.MySQLPort),
+			fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", utils.Hostname, otherReplica.MySQLPort),
 			"START REPLICA",
 		}
 		err := utils.RunSQLs(t, changeReplicationSourceCommands, replica, "")
@@ -279,7 +279,7 @@ func TestVTOrcRepairs(t *testing.T) {
 		changeReplicationSourceCommands := []string{
 			"STOP REPLICA",
 			"RESET REPLICA ALL",
-			fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", replica.VttabletProcess.TabletHostname, replica.MySQLPort),
+			fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", replica.VttabletProcess.TabletHostname, replica.MySQLPort),
 			"START REPLICA",
 		}
 		err := utils.RunSQLs(t, changeReplicationSourceCommands, curPrimary, "")
