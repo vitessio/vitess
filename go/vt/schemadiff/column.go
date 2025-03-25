@@ -132,32 +132,49 @@ func (c *ColumnDefinitionEntity) InferCharsetCollate() (collation collations.ID,
 	}
 	collateName = c.ColumnDefinition.Type.Options.Collate
 	charsetName = c.ColumnDefinition.Type.Charset.Name
-	if charsetName != "" && collateName == "" {
-		// Charset defined without collation. Assign the default collation for that charset.
-		collation = c.Env.CollationEnv().DefaultCollationForCharset(charsetName)
-		if collation == collations.Unknown {
-			return collation, collateName, charsetName, maxWidth, false, &UnknownColumnCharsetCollationError{Column: c.ColumnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
+	infer := func() error {
+		if charsetName != "" && collateName != "" {
+			collation = c.Env.CollationEnv().LookupByName(collateName)
+			if charsetFromCollation := c.Env.CollationEnv().LookupCharsetName(collation); charsetFromCollation != charsetName {
+				return &MismatchedColumnCharsetCollationError{Column: c.ColumnDefinition.Name.String(), Charset: charsetName, Collation: collateName}
+			}
 		}
-		collateName = c.Env.CollationEnv().LookupName(collation)
-	}
-	if charsetName == "" && collateName != "" {
-		// Column has explicit collation but no charset. We can infer the charset from the collation.
-		collation = c.Env.CollationEnv().LookupByName(collateName)
-		charsetName = c.Env.CollationEnv().LookupCharsetName(collation)
-		if charsetName == "" {
-			return collation, collateName, charsetName, maxWidth, false, &UnknownColumnCollationCharsetError{Column: c.ColumnDefinition.Name.String(), Collation: c.ColumnDefinition.Type.Options.Collate}
-		}
-	}
-	if charsetName == "" {
-		// Still nothing? Assign the table's charset/collation.
-		charsetName = c.tableCharsetCollate.charset
-		if collateName = c.tableCharsetCollate.collate; collateName == "" {
-			collation = c.Env.CollationEnv().DefaultCollationForCharset(c.tableCharsetCollate.charset)
+		if charsetName != "" && collateName == "" {
+			// Charset defined without collation. Assign the default collation for that charset.
+			collation = c.Env.CollationEnv().DefaultCollationForCharset(charsetName)
 			if collation == collations.Unknown {
-				return collation, collateName, charsetName, maxWidth, false, &UnknownColumnCharsetCollationError{Column: c.ColumnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
+				return &UnknownColumnCharsetCollationError{Column: c.ColumnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
 			}
 			collateName = c.Env.CollationEnv().LookupName(collation)
 		}
+		if charsetName == "" && collateName != "" {
+			// Column has explicit collation but no charset. We can infer the charset from the collation.
+			collation = c.Env.CollationEnv().LookupByName(collateName)
+			charsetName = c.Env.CollationEnv().LookupCharsetName(collation)
+			if charsetName == "" {
+				return &UnknownColumnCollationCharsetError{Column: c.ColumnDefinition.Name.String(), Collation: c.ColumnDefinition.Type.Options.Collate}
+			}
+		}
+		return nil
+	}
+	if err := infer(); err != nil {
+		return collation, collateName, charsetName, maxWidth, false, err
+	}
+	if charsetName == "" {
+		// No info in column definition. Use table's charset/collation.
+		charsetName = c.tableCharsetCollate.charset
+		if err := infer(); err != nil {
+			return collation, collateName, charsetName, maxWidth, false, err
+		}
+	}
+	if collateName == "" {
+		collateName = c.tableCharsetCollate.collate
+		if err := infer(); err != nil {
+			return collation, collateName, charsetName, maxWidth, false, err
+		}
+	}
+	if collation == collations.Unknown {
+		collation = c.Env.CollationEnv().LookupByName(collateName)
 	}
 	if coll := colldata.Lookup(collation); coll != nil {
 		maxWidth = coll.Charset().MaxWidth()
