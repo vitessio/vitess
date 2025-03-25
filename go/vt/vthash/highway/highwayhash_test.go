@@ -61,7 +61,7 @@ func TestVectors(t *testing.T) {
 			useVMX = false
 		})
 	}
-	t.Run("BaselinePlan version", func(t *testing.T) {
+	t.Run("Generic version", func(t *testing.T) {
 		testVectors(New128, testVectors128, t)
 		testVectors(New, testVectors256, t)
 	})

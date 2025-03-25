@@ -494,7 +494,7 @@ var commands = []commandGroup{
 		},
 	},
 	{
-		"BaselinePlan", []command{
+		"Generic", []command{
 			{
 				name:   "Validate",
 				method: commandValidate,
@@ -751,7 +751,7 @@ func init() {
 	// This cannot be in the static `commands` slice, as it causes an init cycle.
 	// Specifically, we would see:
 	// `commands` => refers to `commandHelp` => refers to `PrintAllCommands` => refers to `commands`
-	addCommand("BaselinePlan", command{
+	addCommand("Generic", command{
 		name:   "Help",
 		method: commandHelp,
 		params: "[command name]",

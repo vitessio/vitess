@@ -54,7 +54,7 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringSliceVarP(&common.CreateOptions.ReferenceTables, "reference-tables", "r", nil, "Used to specify the reference tables to materialize on every target shard.")
 	base.AddCommand(create)
 
-	// BaselinePlan workflow commands.
+	// Generic workflow commands.
 	opts := &common.SubCommandsOpts{
 		SubCommand: "Materialize",
 		Workflow:   "product_sales",
