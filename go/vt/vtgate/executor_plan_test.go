@@ -71,14 +71,14 @@ func TestDeferredOptimization(t *testing.T) {
 		queryLogger: queryLogger,
 		plans:       DefaultPlanCache(),
 	}
+	defer executor.plans.Close()
 	opts := jsondiff.DefaultConsoleOptions()
 	for _, tcase := range readJSONTests("prepared_statements.json") {
 		testName := tcase.Comment
 		if testName == "" {
 			testName = tcase.Query
 		}
-		executor.plans.Close()
-		executor.plans = DefaultPlanCache()
+		executor.ClearPlans()
 		t.Run(testName, func(t *testing.T) {
 			sess := executorcontext.NewSafeSession(&vtgatepb.Session{})
 			ls := logstats.NewLogStats(ctx, "test", tcase.Query, "", nil, streamlog.GetQueryLogConfig())
