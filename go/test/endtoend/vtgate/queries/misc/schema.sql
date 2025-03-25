@@ -41,7 +41,7 @@ create table all_types
 (
     id                 bigint not null,
     msg                varchar(64),
-    keyspace_id        bigint(20) unsigned NOT NULL,
+    keyspace_id        bigint(20) unsigned,
     tinyint_unsigned   TINYINT,
     bool_signed        BOOL,
     smallint_unsigned  SMALLINT,

@@ -2773,7 +2773,7 @@ func TestEmptyJoinStream(t *testing.T) {
 	}, {
 		Sql: "select u2.id from `user` as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"u1_col": sqltypes.Int32BindVariable(1),
+			"u1_col": sqltypes.Int32BindVariable(0),
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
