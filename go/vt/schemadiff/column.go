@@ -135,7 +135,7 @@ func (c *ColumnDefinitionEntity) InferCharsetCollate() (collateName, charsetName
 	charsetName = c.ColumnDefinition.Type.Charset.Name
 	infer := func() error {
 		if charsetName != "" && collateName != "" {
-			collation := c.Env.CollationEnv().LookupByName(collateName)
+			collation = c.Env.CollationEnv().LookupByName(collateName)
 			if charsetFromCollation := c.Env.CollationEnv().LookupCharsetName(collation); charsetFromCollation != charsetName {
 				return &MismatchedColumnCharsetCollationError{Column: c.ColumnDefinition.Name.String(), Charset: charsetName, Collation: collateName}
 			}
