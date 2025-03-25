@@ -339,7 +339,7 @@ func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
 }
 
 func getUpdateQuery(incrementVal int32, id int) string {
-	if rand.Intn(2) == 1 {
+	if rand.IntN(2) == 1 {
 		return fmt.Sprintf(updateFuzzUpdateMulti, incrementVal, id)
 	}
 	return fmt.Sprintf(updateFuzzUpdate, incrementVal, id)
@@ -412,20 +412,20 @@ func (fz *fuzzer) runClusterDisruption(t *testing.T) {
 func (fz *fuzzer) addRandomSavePoints(queries []string) []string {
 	savePointCount := 1
 	for {
-		shouldAddSavePoint := rand.Intn(2)
+		shouldAddSavePoint := rand.IntN(2)
 		if shouldAddSavePoint == 0 {
 			return queries
 		}
 
 		savePointQueries := []string{"SAVEPOINT sp" + strconv.Itoa(savePointCount)}
-		randomDmlCount := rand.Intn(2) + 1
+		randomDmlCount := rand.IntN(2) + 1
 		for i := 0; i < randomDmlCount; i++ {
 			savePointQueries = append(savePointQueries, fz.randomDML())
 		}
 		savePointQueries = append(savePointQueries, "ROLLBACK TO sp"+strconv.Itoa(savePointCount))
 		savePointCount++
 
-		savePointPosition := rand.Intn(len(queries))
+		savePointPosition := rand.IntN(len(queries))
 		newQueries := slices.Clone(queries[:savePointPosition])
 		newQueries = append(newQueries, savePointQueries...)
 		newQueries = append(newQueries, queries[savePointPosition:]...)
@@ -435,14 +435,14 @@ func (fz *fuzzer) addRandomSavePoints(queries []string) []string {
 
 // randomDML generates a random DML to be used.
 func (fz *fuzzer) randomDML() string {
-	queryType := rand.Intn(2)
+	queryType := rand.IntN(2)
 	if queryType == 0 {
 		// Generate INSERT
-		return fmt.Sprintf(insertIntoFuzzInsert, updateRowBaseVals[rand.Intn(len(updateRowBaseVals))], rand.Intn(fz.updateSets), rand.Intn(fz.threads))
+		return fmt.Sprintf(insertIntoFuzzInsert, updateRowBaseVals[rand.IntN(len(updateRowBaseVals))], rand.IntN(fz.updateSets), rand.IntN(fz.threads))
 	}
 	// Generate UPDATE
-	updateId := fz.updateRowsVals[rand.Intn(len(fz.updateRowsVals))][rand.Intn(len(updateRowBaseVals))]
-	return getUpdateQuery(rand.Int31n(100000), updateId)
+	updateId := fz.updateRowsVals[rand.IntN(len(fz.updateRowsVals))][rand.IntN(len(updateRowBaseVals))]
+	return getUpdateQuery(rand.Int32N(100000), updateId)
 }
 
 /*
