@@ -154,8 +154,8 @@ jobs:
 
         {{end}}
 
-        sudo service mysql stop
-        sudo service etcd stop
+        sudo service mysql stop || true
+        sudo service etcd stop || true
 
         if dpkg -l apparmor; then
           sudo systemctl stop apparmor

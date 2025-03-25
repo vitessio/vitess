@@ -118,8 +118,8 @@ jobs:
         # Install everything else we need, and configure
         sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
 
-        sudo service mysql stop
-        sudo service etcd stop
+        sudo service mysql stop || true
+        sudo service etcd stop || true
 
         if dpkg -l apparmor; then
           sudo systemctl stop apparmor

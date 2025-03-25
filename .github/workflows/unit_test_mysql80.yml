@@ -113,7 +113,7 @@ jobs:
         
         sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
         
-        sudo service mysql stop
+        sudo service mysql stop || true
 
         if dpkg -l apparmor; then
           sudo systemctl stop apparmor

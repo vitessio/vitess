@@ -153,8 +153,8 @@ jobs:
 
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
 
-        sudo service mysql stop
-        sudo service etcd stop
+        sudo service mysql stop || true
+        sudo service etcd stop || true
 
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
