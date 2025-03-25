@@ -547,6 +547,67 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 	}
 }
 
+func (v Value) EncodeSQLStringBuilderWithCasting(b *strings.Builder) error {
+	castFn := func(typ string, quotes bool) {
+		b.WriteString("cast(")
+		if quotes {
+			encodeBytesSQLStringBuilder(v.val, b)
+		} else {
+			b.Write(v.val)
+		}
+		b.WriteString(" as ")
+		b.WriteString(typ)
+		b.WriteByte(')')
+	}
+
+	switch {
+	case v.Type() == Null:
+		b.Write(NullBytes)
+		v.Type().Descriptor()
+	case v.IsSigned():
+		castFn("signed", false)
+	case v.IsUnsigned():
+		castFn("unsigned", false)
+	case v.IsDecimal():
+		castFn("decimal", false)
+	case v.IsFloat(): // TODO: do we really want to support this now, given we don't store precision?
+		castFn("double", false)
+	case v.IsDate():
+		castFn("date", true)
+	case v.IsJSON():
+		castFn("json", true)
+	case v.IsText():
+		castFn("char", true)
+	case v.IsBinary():
+		castFn("binary", true)
+	case v.Type() == Tuple:
+		b.WriteByte('(')
+		var i int
+		var gotErr error
+		_ = v.ForEachValue(func(bv Value) {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			err := bv.EncodeSQLStringBuilderWithCasting(b)
+			if gotErr == nil && err != nil {
+				gotErr = err
+			}
+			i++
+		})
+		if gotErr != nil {
+			return gotErr
+		}
+		b.WriteByte(')')
+	case v.IsDateTime() || v.IsTime() || v.IsTimestamp():
+		return errors.New("datetime/time/timestamp with seconds precision are not supported in block join")
+	case v.Type() == Bit:
+		return errors.New("bit values bind variables not supported in block join")
+	default:
+		return errors.New(v.String() + " values bin variable not supported in block join")
+	}
+	return nil
+}
+
 // EncodeSQLBytes2 is identical to EncodeSQL but it takes a bytes2.Buffer
 // as its writer, so it can be inlined for performance.
 func (v Value) EncodeSQLBytes2(b *bytes2.Buffer) {
@@ -649,6 +710,11 @@ func (v *Value) IsComparable() bool {
 		return true
 	}
 	return false
+}
+
+// IsJSON returns true if the given value is a JSON.
+func (v *Value) IsJSON() bool {
+	return v.Type() == TypeJSON
 }
 
 // MarshalJSON should only be used for testing.

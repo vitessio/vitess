@@ -261,6 +261,14 @@ func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 // "TIMESTAMP" for instance.
 var checkFieldsRegExpr = regexp.MustCompile(`([a-zA-Z]*)(\d*)`)
 
+func isBinary(t string) bool {
+	return t == "BINARY" || t == "VARBINARY" || t == "BLOB" || t == "LONGBLOB"
+}
+
+func isChar(t string) bool {
+	return t == "CHAR" || t == "VARCHAR" || t == "TEXT" || t == "LONGTEXT"
+}
+
 func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field, allowAnyFieldSize bool) {
 	t.Helper()
 
@@ -279,6 +287,13 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field,
 			return
 		}
 
+		if myMatches[2] == "" {
+			myMatches[2] = "0"
+		}
+		if vtMatches[2] == "" {
+			vtMatches[2] = "0"
+		}
+
 		vtVal, vtErr := strconv.Atoi(vtMatches[2])
 		myVal, myErr := strconv.Atoi(myMatches[2])
 		if vtErr != nil || myErr != nil {
@@ -295,6 +310,10 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field,
 					fail()
 					return
 				}
+			} else if isChar(vtMatches[1]) && isChar(myMatches[1]) {
+				return
+			} else if isBinary(vtMatches[1]) && isBinary(myMatches[1]) {
+				return
 			} else if myMatches[1] != vtMatches[1] {
 				fail()
 				return
