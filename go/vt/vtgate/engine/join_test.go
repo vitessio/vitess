@@ -383,8 +383,8 @@ func TestJoinStreamExecute(t *testing.T) {
 		`StreamExecute  true`,
 	})
 	rightPrim.ExpectLog(t, []string{
-		`GetFields bv: `,
-		`Execute bv:  true`,
+		`GetFields bv: type:VARCHAR value:"1"`,
+		`Execute bv: type:VARCHAR value:"1" true`,
 		`StreamExecute bv: type:VARCHAR value:"a" false`,
 		`StreamExecute bv: type:VARCHAR value:"b" false`,
 		`StreamExecute bv: type:VARCHAR value:"c" false`,
@@ -412,8 +412,8 @@ func TestJoinStreamExecute(t *testing.T) {
 		`StreamExecute  true`,
 	})
 	rightPrim.ExpectLog(t, []string{
-		`GetFields bv: `,
-		`Execute bv:  true`,
+		`GetFields bv: type:VARCHAR value:"1"`,
+		`Execute bv: type:VARCHAR value:"1" true`,
 		`StreamExecute bv: type:VARCHAR value:"a" false`,
 		`StreamExecute bv: type:VARCHAR value:"b" false`,
 		`StreamExecute bv: type:VARCHAR value:"c" false`,
