@@ -12,6 +12,7 @@
     - [gh-ost and pt-osc Online DDL strategies](#deleted-ghost-ptosc)
   - **[RPC Changes](#rpc-changes)**
   - **[New VTGate Metrics](#new-vtgate-metrics)**
+  - **[New VTTablet Metrics](#new-vtgate-metrics)**
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
   - **[VTGate Config File Changes](#vtgate-config-file-changes)**
@@ -122,6 +123,16 @@ Metrics Published:
 ```
 
 Via this work we have deprecated several vtgate metrics, please see the [Deprecated Metrics](#deprecated-metrics) section.
+
+---
+
+### <a id="new-vttablet-metrics"/>New VTTablet Metrics
+
+Four new metrics gauge have been introduced to VTTablet:
+1.	`TableRows` – The estimated number of rows in the table. **Dimensions:** Table.
+2.	`TableClusteredIndexSize` – The byte size of the clustered index (i.e. row data). **Dimensions:** Table.
+3.	`IndexCardinality` – The estimated number of unique values in the index. **Dimensions:** Table, Index. 
+4.	`IndexBytes` – The byte size of the index. **Dimensions:** Table, Index. 
 
 ---
 

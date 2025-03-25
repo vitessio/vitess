@@ -69,6 +69,7 @@ type InfoForRecoveryAnalysis struct {
 	SemiSyncPrimaryWaitForReplicaCount        uint
 	SemiSyncPrimaryClients                    uint
 	SemiSyncReplicaEnabled                    int
+	CurrentTabletType                         int
 	CountSemiSyncReplicasEnabled              uint
 	CountLoggingReplicas                      uint
 	CountStatementBasedLoggingReplicas        uint
@@ -147,6 +148,11 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["semi_sync_primary_wait_for_replica_count"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncPrimaryWaitForReplicaCount), Valid: true}
 	rowMap["semi_sync_replica_enabled"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.SemiSyncReplicaEnabled), Valid: true}
 	res, _ := prototext.Marshal(info.TabletInfo)
+	currentType := info.CurrentTabletType
+	if currentType == 0 {
+		currentType = int(info.TabletInfo.Type)
+	}
+	rowMap["current_tablet_type"] = sqlutils.CellData{String: fmt.Sprintf("%v", currentType), Valid: true}
 	rowMap["tablet_info"] = sqlutils.CellData{String: string(res), Valid: true}
 	rowMap["is_disk_stalled"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.IsStalledDisk), Valid: true}
 	return rowMap

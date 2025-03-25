@@ -26,9 +26,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
@@ -334,6 +336,34 @@ func TestVTOrcRepairs(t *testing.T) {
 			shard0.Name,
 			0,
 		)
+	})
+
+	t.Run("Primary tablet's display type doesn't match the topo record", func(t *testing.T) {
+		// There is no easy way to make a tablet type mismatch with the topo record.
+		// In production this only happens when the call to update the topo record fails with a timeout,
+		// but the operation has succeeded. We can't reliably simulate this in a test.
+		// So, instead we are explicitly changing the tablet record for one of the tablets
+		// to make it a primary and see that VTOrc detects the mismatch and promotes the tablet.
+
+		// Initially check that replication is working as intended
+		utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_, err := clusterInfo.Ts.UpdateTabletFields(ctx, replica.GetAlias(), func(tablet *topodatapb.Tablet) error {
+			tablet.Type = topodatapb.TabletType_PRIMARY
+			tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now())
+			return nil
+		})
+		require.NoError(t, err)
+
+		// Wait for VTOrc to detect the mismatch and promote the tablet.
+		require.Eventuallyf(t, func() bool {
+			fs := cluster.FullStatus(t, replica, clusterInfo.ClusterInstance.Hostname)
+			return fs.TabletType == topodatapb.TabletType_PRIMARY
+		}, 10*time.Second, 1*time.Second, "Primary tablet's display type didn't match the topo record")
+		// Also check that the replica gets promoted and can accept writes.
+		utils.CheckReplication(t, clusterInfo, replica, []*cluster.Vttablet{curPrimary, otherReplica}, 15*time.Second)
 	})
 }
 
