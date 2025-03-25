@@ -267,6 +267,76 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	return callback(result)
 }
 
+// ComQueryMulti is a newer version of ComQuery that supports running multiple queries in a single call.
+func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	session := vh.session(c)
+	if c.IsShuttingDown() && !session.InTransaction {
+		c.MarkForClose()
+		return sqlerror.NewSQLError(sqlerror.ERServerShutdown, sqlerror.SSNetError, "Server shutdown in progress")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	c.UpdateCancelCtx(cancel)
+
+	span, ctx, err := startSpan(ctx, sql, "vtgateHandler.ComQuery")
+	if err != nil {
+		return vterrors.Wrap(err, "failed to extract span")
+	}
+	defer span.Finish()
+
+	ctx = callinfo.MysqlCallInfo(ctx, c)
+
+	// Fill in the ImmediateCallerID with the UserData returned by
+	// the AuthServer plugin for that user. If nothing was
+	// returned, use the User. This lets the plugin map a MySQL
+	// user used for authentication to a Vitess User used for
+	// Table ACLs and Vitess authentication in general.
+	im := c.UserData.Get()
+	ef := callerid.NewEffectiveCallerID(
+		c.User,                  /* principal: who */
+		c.RemoteAddr().String(), /* component: running client process */
+		"VTGate MySQL Connector" /* subcomponent: part of the client */)
+	ctx = callerid.NewContext(ctx, ef, im)
+
+	if !session.InTransaction {
+		vh.busyConnections.Add(1)
+	}
+	defer func() {
+		if !session.InTransaction {
+			vh.busyConnections.Add(-1)
+		}
+	}()
+
+	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+		session, err = vh.vtg.StreamExecuteMulti(ctx, vh, session, sql, callback)
+		if err != nil {
+			return sqlerror.NewSQLErrorFromError(err)
+		}
+		fillInTxStatusFlags(c, session)
+		return nil
+	}
+	var results []*sqltypes.Result
+	var result *sqltypes.Result
+	if c.Capabilities&mysql.CapabilityClientMultiStatements != 0 {
+		session, results, err = vh.vtg.ExecuteMulti(ctx, vh, session, sql)
+	} else {
+		session, result, err = vh.vtg.Execute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), false)
+		results = append(results, result)
+	}
+
+	for idx, res := range results {
+		if callbackErr := callback(sqltypes.QueryResponse{QueryResult: res}, idx < len(results)-1, true); callbackErr != nil {
+			return callbackErr
+		}
+	}
+
+	if err := sqlerror.NewSQLErrorFromError(err); err != nil {
+		return err
+	}
+	fillInTxStatusFlags(c, session)
+	return nil
+}
+
 func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
 	if session.InTransaction {
 		c.StatusFlags |= mysql.ServerStatusInTrans
