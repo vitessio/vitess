@@ -28,8 +28,9 @@ import (
 	"testing"
 	"time"
 
+	"math/rand/v2"
+
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/syscallutil"
@@ -290,7 +291,7 @@ func threadToWrite(t *testing.T, ctx context.Context, id int) {
 		if err != nil {
 			continue
 		}
-		_, _ = utils.ExecAllowError(t, conn, fmt.Sprintf("insert into twopc_t1(id, col) values(%d, %d)", id, rand.Intn(10000)))
+		_, _ = utils.ExecAllowError(t, conn, fmt.Sprintf("insert into twopc_t1(id, col) values(%d, %d)", id, rand.IntN(10000)))
 		conn.Close()
 	}
 }
