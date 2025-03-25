@@ -26,12 +26,7 @@ if [ "$base_release_branch" != "" ]; then
   latest_major_release=$(git show-ref | grep -E 'refs/remotes/origin/release-[0-9]*\.0$' | sed 's/[a-z0-9]* refs\/remotes\/origin\/release-//' | sed 's/\.0//' | sort -nr | head -n1)
   major_release=$(echo "$base_release_branch" | sed 's/release-*//' | sed 's/\.0//')
   target_major_release=$((major_release+1))
-  target_release_number=$(git show-ref --tags | grep -E 'refs/tags/v[0-9]*.[0-9]*.[0-9]*$' | sed 's/[a-z0-9]* refs\/tags\/v//' | awk -v FS=. -v RELEASE="$target_major_release" '{if ($1 == RELEASE) print; }' | sort -nr | head -n1)
-  target_release="v$target_release_number"
-  if [ -z "$target_release_number" ]
-  then
-    target_release="release-$target_major_release.0"
-  fi
+  target_release="release-$target_major_release.0"
   if [ "$major_release" == "$latest_major_release" ]; then
     target_release="main"
   fi
