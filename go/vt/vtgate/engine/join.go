@@ -111,6 +111,8 @@ func bindvarForType(field *querypb.Field) *querypb.BindVariable {
 		size := max(1, int(field.ColumnLength-field.Decimals))
 		scale := max(1, int(field.Decimals))
 		bv.Value = append(append(bytes.Repeat([]byte{'0'}, size), byte('.')), bytes.Repeat([]byte{'0'}, scale)...)
+	case querypb.Type_JSON:
+		bv.Value = []byte(`""`) // empty json object
 	default:
 		return sqltypes.NullBindVariable
 	}
@@ -177,11 +179,7 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 		defer mu.Unlock()
 		if fieldsSent.CompareAndSwap(false, true) {
 			for k, v := range jn.Vars {
-				newVal, err := sqltypes.NewValue(lresult.Fields[v].Type, []byte("1"))
-				if err != nil {
-					return err
-				}
-				joinVars[k] = sqltypes.ValueBindVariable(newVal)
+				joinVars[k] = bindvarForType(lresult.Fields[v])
 			}
 			result := &sqltypes.Result{}
 			rresult, err := jn.Right.GetFields(ctx, vcursor, combineVars(bindVars, joinVars))

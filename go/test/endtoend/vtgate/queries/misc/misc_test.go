@@ -710,3 +710,66 @@ func TestSemiJoin(t *testing.T) {
 		})
 	}
 }
+
+func TestEmptyJoinTypes(t *testing.T) {
+	// both tables will stay empty. since we are doing a left join, we are sure that the `all_types`
+	// table will be on the LHS of the join. We'll return all columns from the `all_types` table,
+	// checking that the return type is the same as what mysql would return.
+	mcmp, closer := start(t)
+	defer closer()
+	columns := []string{
+		"id",
+		"msg",
+		"keyspace_id",
+		"tinyint_unsigned",
+		"bool_signed",
+		"smallint_unsigned",
+		"mediumint_unsigned",
+		"int_unsigned",
+		"float_unsigned",
+		"double_unsigned",
+		"decimal_unsigned",
+		"t_date",
+		"t_datetime",
+		"t_datetime_micros",
+		"t_time",
+		"t_timestamp",
+		"c8",
+		"c16",
+		"c24",
+		"c32",
+		"c40",
+		"c48",
+		"c56",
+		"c63",
+		"c64",
+		"json_col",
+		"text_col",
+		"data",
+		"tinyint_min",
+		"tinyint_max",
+		"tinyint_pos",
+		"tinyint_neg",
+		"smallint_min",
+		"smallint_max",
+		"smallint_pos",
+		"smallint_neg",
+		"medint_min",
+		"medint_max",
+		"medint_pos",
+		"medint_neg",
+		"int_min",
+		"int_max",
+		"int_pos",
+		"int_neg",
+		"bigint_min",
+		"bigint_max",
+		"bigint_pos",
+		"bigint_neg",
+	}
+	baseQuery := "select all_types.%s from all_types left join tbl on all_types.id = tbl.id"
+	for _, column := range columns {
+		query := fmt.Sprintf(baseQuery, column)
+		mcmp.Exec(query)
+	}
+}
