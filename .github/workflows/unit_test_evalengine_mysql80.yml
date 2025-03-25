@@ -115,9 +115,7 @@ jobs:
         
         sudo service mysql stop
 
-        dpkg -l apparmor
-        app_armor_installed=$?
-        if [ "$app_armor_installed" = "0" ]; then
+        if dpkg -l apparmor; then
           sudo systemctl stop apparmor
           sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
           sudo mkdir -p /etc/apparmor.d/disable

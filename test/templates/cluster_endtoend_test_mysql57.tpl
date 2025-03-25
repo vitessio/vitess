@@ -121,9 +121,7 @@ jobs:
       run: |
         sudo apt-get update
 
-        dpkg -l apparmor
-        app_armor_installed=$?
-        if [ "$app_armor_installed" = "0" ]; then
+        if dpkg -l apparmor; then
           sudo systemctl stop apparmor
           sudo mkdir -p /etc/apparmor.d/disable
           sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
