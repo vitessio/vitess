@@ -147,12 +147,10 @@ jobs:
 
         {{end}}
 
-        # Running on CNCF ARC Runners no longer needs this
-        # Leaving this in as a tombstone for now
-        # sudo service mysql stop
-        # sudo service etcd stop
-        # sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        # sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        sudo service mysql stop
+        sudo service etcd stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
         # install JUnit report formatter

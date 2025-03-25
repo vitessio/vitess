@@ -404,6 +404,10 @@ func TestReloadView(t *testing.T) {
 	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.`tables`", &sqltypes.Result{})
 	// adding query pattern for udfs
 	db.AddQueryPattern("SELECT name.*", &sqltypes.Result{})
+	db.AddQuery(mysql.ShowPartitons, &sqltypes.Result{})
+	db.AddQuery(mysql.ShowTableRowCountClusteredIndex, &sqltypes.Result{})
+	db.AddQuery(mysql.ShowIndexSizes, &sqltypes.Result{})
+	db.AddQuery(mysql.ShowIndexCardinalities, &sqltypes.Result{})
 
 	se.InitDBConfig(cfg.DB.DbaWithDB())
 	hs.Open()

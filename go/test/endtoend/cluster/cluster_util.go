@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 
 	"github.com/buger/jsonparser"
@@ -99,6 +100,15 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 	require.Nil(t, err)
 	gtID := strings.SplitAfter(pos, "/")[1]
 	return pos, gtID
+}
+
+// FullStatus gets the full status from the given tablet.
+func FullStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.FullStatus {
+	ctx := context.Background()
+	vtablet := getTablet(vttablet.GrpcPort, hostname)
+	status, err := tmClient.FullStatus(ctx, vtablet)
+	require.NoError(t, err)
+	return status
 }
 
 // VerifyRowsInTabletForTable verifies the total number of rows in a table.
