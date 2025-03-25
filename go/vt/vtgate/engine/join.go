@@ -187,7 +187,9 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 				return err
 			}
 			result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
-			return callback(result)
+			if err := callback(result); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
