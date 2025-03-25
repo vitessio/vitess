@@ -6065,6 +6065,20 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 			input:  "CREATE TABLE `locations` (`geocode` json DEFAULT NULL, `lat_long` point GENERATED ALWAYS AS (point(json_unquote(json_extract(`geocode`,_utf8mb4'$.geometry.location.lat')),json_unquote(json_extract(`geocode`,_utf8mb4'$.geometry.location.lng')))) VIRTUAL /*!80003 SRID 4326 */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
 			output: "create table locations (\n\tgeocode json default null,\n\tlat_long point as (point(json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lat')), json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lng')))) virtual srid 4326\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci",
 		},
+		// test TEXT column with length parameter
+		{
+			input:  "CREATE TABLE t (col TEXT(1024))",
+			output: "create table t (\n\tcol TEXT(1024)\n)",
+		},
+		{
+			input:  "CREATE TABLE t (col TEXT(1024) CHARACTER SET utf8mb4)",
+			output: "create table t (\n\tcol TEXT(1024) character set utf8mb4\n)",
+		},
+		// test BLOB column with length parameter
+		{
+			input:  "CREATE TABLE t (col BLOB(1024))",
+			output: "create table t (\n\tcol BLOB(1024)\n)",
+		},
 	}
 	parser := NewTestParser()
 	for _, test := range createTableQueries {
