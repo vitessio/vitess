@@ -224,6 +224,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	{
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
 		instance.ServerID = uint(fs.ServerId)
+		instance.TabletType = fs.TabletType
 		instance.Version = fs.Version
 		instance.ReadOnly = fs.ReadOnly
 		instance.LogBinEnabled = fs.LogBinEnabled
@@ -533,6 +534,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 
 	instance.Hostname = m.GetString("hostname")
 	instance.Port = m.GetInt("port")
+	instance.TabletType = topodatapb.TabletType(m.GetInt("tablet_type"))
 	instance.ServerID = m.GetUint("server_id")
 	instance.ServerUUID = m.GetString("server_uuid")
 	instance.Version = m.GetString("version")
@@ -836,6 +838,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"last_checked",
 		"last_attempted_check",
 		"last_check_partial_success",
+		"tablet_type",
 		"server_id",
 		"server_uuid",
 		"version",
@@ -917,6 +920,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.InstanceAlias)
 		args = append(args, instance.Hostname)
 		args = append(args, instance.Port)
+		args = append(args, int(instance.TabletType))
 		args = append(args, instance.ServerID)
 		args = append(args, instance.ServerUUID)
 		args = append(args, instance.Version)

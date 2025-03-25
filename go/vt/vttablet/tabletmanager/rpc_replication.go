@@ -190,6 +190,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SemiSyncBlocked:             tm.SemiSyncMonitor.AllWritesBlocked(),
 		SuperReadOnly:               superReadOnly,
 		ReplicationConfiguration:    replConfiguration,
+		TabletType:                  tm.Tablet().Type,
 	}, nil
 }
 
@@ -673,13 +674,26 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 		return err
 	}
 
+	// Check the display state of the tablet
+	tablet := tm.Tablet()
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		// If the tablet display type isn't primary, then we should check the tablet record.
+		// If the tablet record type is primary, then we should change the tablet display type to primary.
+		ti, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
+		if err != nil {
+			return err
+		}
+		if ti.Tablet.Type == topodatapb.TabletType_PRIMARY {
+			return tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite)
+		}
+	}
+
 	// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 	if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 		return err
 	}
 
 	// Update serving graph
-	tablet := tm.Tablet()
 	log.Infof("UndoDemotePrimary re-enabling query service")
 	if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")

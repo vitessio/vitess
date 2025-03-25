@@ -38,6 +38,7 @@ func TestMysql8SetReplicationSourceCommand(t *testing.T) {
   SOURCE_USER = 'username',
   SOURCE_PASSWORD = 'password',
   SOURCE_CONNECT_RETRY = 1234,
+  GET_SOURCE_PUBLIC_KEY = 1,
   SOURCE_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor8{}}
@@ -51,6 +52,7 @@ func TestMysql8SetReplicationSourceCommand(t *testing.T) {
   SOURCE_USER = 'username',
   SOURCE_PASSWORD = 'password',
   SOURCE_CONNECT_RETRY = 1234,
+  GET_SOURCE_PUBLIC_KEY = 1,
   SOURCE_HEARTBEAT_PERIOD = 5.4,
   SOURCE_AUTO_POSITION = 1`
 

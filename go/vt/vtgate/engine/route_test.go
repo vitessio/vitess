@@ -872,7 +872,7 @@ func TestRouteGetFields(t *testing.T) {
 
 func TestRouteSort(t *testing.T) {
 	sel := NewRoute(
-		Unsharded,
+		Scatter,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -884,9 +884,8 @@ func TestRouteSort(t *testing.T) {
 		Col:             0,
 		WeightStringCol: -1,
 	}}
-
 	vc := &loggingVCursor{
-		shards: []string{"0"},
+		shards: []string{"-20", "20-"},
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -897,15 +896,16 @@ func TestRouteSort(t *testing.T) {
 				"1",
 				"3",
 				"2",
+			), sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"id",
+					"int64",
+				),
 			),
 		},
 	}
 	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
-	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: dummy_select {} false false`,
-	})
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id",
@@ -935,7 +935,7 @@ func TestRouteSort(t *testing.T) {
 	expectResult(t, result, wantResult)
 
 	vc = &loggingVCursor{
-		shards: []string{"0"},
+		shards: []string{"-20", "20-"},
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -954,7 +954,7 @@ func TestRouteSort(t *testing.T) {
 
 func TestRouteSortWeightStrings(t *testing.T) {
 	sel := NewRoute(
-		Unsharded,
+		Scatter,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -968,7 +968,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 	}}
 
 	vc := &loggingVCursor{
-		shards: []string{"0"},
+		shards: []string{"-20", "20-"},
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -990,10 +990,6 @@ func TestRouteSortWeightStrings(t *testing.T) {
 	t.Run("Sort using Weight Strings", func(t *testing.T) {
 		result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 		require.NoError(t, err)
-		vc.ExpectLog(t, []string{
-			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`ExecuteMultiShard ks.0: dummy_select {} false false`,
-		})
 		wantResult = sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"weightString|normal",
@@ -1034,7 +1030,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 		}}
 
 		vc = &loggingVCursor{
-			shards: []string{"0"},
+			shards: []string{"-20", "20-"},
 			results: []*sqltypes.Result{
 				sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
@@ -1056,7 +1052,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 
 func TestRouteSortCollation(t *testing.T) {
 	sel := NewRoute(
-		Unsharded,
+		Scatter,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -1073,7 +1069,7 @@ func TestRouteSortCollation(t *testing.T) {
 	}}
 
 	vc := &loggingVCursor{
-		shards: []string{"0"},
+		shards: []string{"-20", "20-"},
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -1095,10 +1091,6 @@ func TestRouteSortCollation(t *testing.T) {
 	t.Run("Sort using Collation", func(t *testing.T) {
 		result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 		require.NoError(t, err)
-		vc.ExpectLog(t, []string{
-			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-			`ExecuteMultiShard ks.0: dummy_select {} false false`,
-		})
 		wantResult = sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"normal",
@@ -1138,7 +1130,7 @@ func TestRouteSortCollation(t *testing.T) {
 		}}
 
 		vc := &loggingVCursor{
-			shards: []string{"0"},
+			shards: []string{"-20", "20-"},
 			results: []*sqltypes.Result{
 				sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
@@ -1164,7 +1156,7 @@ func TestRouteSortCollation(t *testing.T) {
 		}}
 
 		vc := &loggingVCursor{
-			shards: []string{"0"},
+			shards: []string{"-20", "20-"},
 			results: []*sqltypes.Result{
 				sqltypes.MakeTestResult(
 					sqltypes.MakeTestFields(
@@ -1186,7 +1178,7 @@ func TestRouteSortCollation(t *testing.T) {
 
 func TestRouteSortTruncate(t *testing.T) {
 	sel := NewRoute(
-		Unsharded,
+		Scatter,
 		&vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -1200,7 +1192,7 @@ func TestRouteSortTruncate(t *testing.T) {
 	sel.TruncateColumnCount = 1
 
 	vc := &loggingVCursor{
-		shards: []string{"0"},
+		shards: []string{"-20", "20-"},
 		results: []*sqltypes.Result{
 			sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -1216,10 +1208,6 @@ func TestRouteSortTruncate(t *testing.T) {
 	}
 	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
-	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: dummy_select {} false false`,
-	})
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id",
@@ -1231,6 +1219,96 @@ func TestRouteSortTruncate(t *testing.T) {
 		"3",
 	)
 	expectResult(t, result, wantResult)
+}
+
+func TestRouteSortWithSingleShard(t *testing.T) {
+	sel := NewRoute(
+		Unsharded,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: false,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	sel.OrderBy = []evalengine.OrderByParams{{
+		Col: 0,
+	}}
+
+	result := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|col",
+			"int64|int64",
+		),
+		"1|1",
+		"1|1",
+		"3|1",
+		"2|1",
+	)
+	vc := &loggingVCursor{
+		shards: []string{"0"},
+		results: []*sqltypes.Result{
+			result,
+		},
+	}
+	res, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	wantResult := result
+	// we need the results to be unsorted here.
+	// Even though the route has an ORDER BY clause, it should not be sorted because there is only one shard,
+	// and we expect the incoming results to be sorted.
+	expectResult(t, res, wantResult)
+}
+
+func TestRouteStreamSortWithSingleShard(t *testing.T) {
+	sel := NewRoute(
+		Unsharded,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: false,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	sel.OrderBy = []evalengine.OrderByParams{{
+		Col: 0,
+	}}
+
+	created := false
+	oldCreate := createMergeSort
+	createMergeSort = func(
+		prims []StreamExecutor,
+		orderBy evalengine.Comparison,
+		scatterErrorsAsWarnings bool,
+		fetchLastInsertID bool,
+	) *MergeSort {
+		created = true
+		return oldCreate(prims, orderBy, scatterErrorsAsWarnings, fetchLastInsertID)
+	}
+	defer func() {
+		// restore the original function so we don't mess up other tests
+		createMergeSort = oldCreate
+	}()
+
+	result := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|col",
+			"int64|int64",
+		),
+		"1|1",
+		"1|1",
+		"3|1",
+		"2|1",
+	)
+	vc := &loggingVCursor{
+		shards: []string{"0"},
+		results: []*sqltypes.Result{
+			result,
+		},
+	}
+	_, err := wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, true)
+	require.NoError(t, err)
+	require.False(t, created, "MergeSort should not be created when there is only one shard")
 }
 
 func TestRouteStreamTruncate(t *testing.T) {
