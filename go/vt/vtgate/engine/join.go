@@ -176,8 +176,12 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 		mu.Lock()
 		defer mu.Unlock()
 		if fieldsSent.CompareAndSwap(false, true) {
-			for k := range jn.Vars {
-				joinVars[k] = sqltypes.NullBindVariable
+			for k, v := range jn.Vars {
+				newVal, err := sqltypes.NewValue(lresult.Fields[v].Type, []byte("1"))
+				if err != nil {
+					return err
+				}
+				joinVars[k] = sqltypes.ValueBindVariable(newVal)
 			}
 			result := &sqltypes.Result{}
 			rresult, err := jn.Right.GetFields(ctx, vcursor, combineVars(bindVars, joinVars))
