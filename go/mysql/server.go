@@ -368,7 +368,6 @@ func (l *Listener) Accept() {
 			if warnOnWait {
 				log.Warning("max connections reached. Clients waiting. Increase server max_connections")
 				warnOnWait = false
-				continue
 			}
 			waitNum := waitingConnections.Add(1)
 			if uint32(waitNum) > l.maxWaitConns {
