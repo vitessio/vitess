@@ -477,7 +477,7 @@ func TestSpecializedPlan(t *testing.T) {
 	}
 
 	// Validate specialized plan.
-	p := getPlanWhenReady(t, queries[0].query, 2*time.Minute, clusterInstance.VtgateProcess.ReadQueryPlans)
+	p := getPlanWhenReady(t, queries[0].query, 100*time.Millisecond, clusterInstance.VtgateProcess.ReadQueryPlans)
 	require.NotNil(t, p, "plan not found")
 
 	plan, exist := p["Instructions"]
