@@ -64,7 +64,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
-        sudo service etcd stop
+        sudo service etcd stop || true
         go mod download
         go install golang.org/x/tools/cmd/goimports@latest
 

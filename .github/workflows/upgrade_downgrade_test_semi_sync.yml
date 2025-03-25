@@ -92,8 +92,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata
           
-          sudo service mysql stop
-          sudo service etcd stop
+          sudo service mysql stop || true
+          sudo service etcd stop || true
 
           if dpkg -l apparmor; then
             sudo systemctl stop apparmor
