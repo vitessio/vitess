@@ -18,6 +18,8 @@ package vschema
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -174,23 +176,65 @@ func (api *VSchemaAPI) AddVindex(ctx context.Context, req *vtctldatapb.VSchemaAd
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
 	}
-
-	if _, ok := vsInfo.Vindexes[req.VindexName]; ok {
-		return vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "vindex '%s' already exists in '%s' vschema",
-			req.VindexName, req.VSchemaName)
-	}
-
-	// Validate if we can create the vindex without any errors.
-	if _, err := vindexes.CreateVindex(req.VindexType, req.VindexName, req.Params); err != nil {
+	if err := validateNewVindex(vsInfo, req.VindexName, req.VindexType, req.Params); err != nil {
 		return err
 	}
-
 	vindex := &vschemapb.Vindex{
 		Type:   req.VindexType,
 		Params: req.Params,
 	}
 	vsInfo.Vindexes[req.VindexName] = vindex
+	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
+		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
+			vsInfo, req.VSchemaName)
+	}
+	return nil
+}
 
+func (api *VSchemaAPI) RemoveVindex(ctx context.Context, req *vtctldatapb.VSchemaRemoveVindexRequest) error {
+	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
+	}
+	if _, ok := vsInfo.Vindexes[req.VindexName]; !ok {
+		return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "vindex '%s' doesn't exist in '%s' vschema",
+			req.VindexName, req.VSchemaName)
+	}
+	delete(vsInfo.Vindexes, req.VindexName)
+	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
+		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
+			vsInfo, req.VSchemaName)
+	}
+	return nil
+}
+
+func (api *VSchemaAPI) AddLookupVindex(ctx context.Context, req *vtctldatapb.VSchemaAddLookupVindexRequest) error {
+	// TODO(beingnoble03): Check if we also need to add column vindexes on source and target tables.
+	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
+	}
+	req.LookupVindexType = strings.ToLower(req.LookupVindexType)
+	if !strings.HasPrefix(req.LookupVindexType, "lookup") {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid lookup vindex type: %s", req.LookupVindexType)
+	}
+	if len(req.FromColumns) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at least 1 column should be specified for lookup vindex")
+	}
+	params := map[string]string{
+		"table":        req.TableName,
+		"from":         strings.Join(req.FromColumns, ","),
+		"to":           "keyspace_id",
+		"ignore_nulls": fmt.Sprintf("%t", req.IgnoreNulls),
+	}
+	if err := validateNewVindex(vsInfo, req.VindexName, req.LookupVindexType, params); err != nil {
+		return err
+	}
+	vindex := &vschemapb.Vindex{
+		Type:   req.LookupVindexType,
+		Params: params,
+	}
+	vsInfo.Vindexes[req.VindexName] = vindex
 	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
 		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
 			vsInfo, req.VSchemaName)
@@ -213,7 +257,6 @@ func (api *VSchemaAPI) SetReference(ctx context.Context, req *vtctldatapb.VSchem
 		sourceKs, sourceTableName, err := vindexes.ExtractTableParts(req.Source, false /* allowUnqualified */)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to parse source")
-
 		}
 		_, sourceTable, err := getVSchemaAndTable(ctx, api.ts, sourceKs, sourceTableName)
 		if err != nil {

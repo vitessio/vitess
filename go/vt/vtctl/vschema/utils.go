@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -40,6 +41,21 @@ func getVSchemaAndTable(ctx context.Context, ts *topo.Server, vschemaName string
 	}
 
 	return vsInfo, table, nil
+}
+
+// validateNewVindex validates if we can create a vindex with given vindexName
+// vindexType and params.
+func validateNewVindex(vsInfo *topo.KeyspaceVSchemaInfo, vindexName string, vindexType string, params map[string]string) error {
+	if _, ok := vsInfo.Vindexes[vindexName]; ok {
+		return vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "vindex '%s' already exists in '%s' vschema",
+			vindexName, vsInfo.Name)
+	}
+
+	// Validate if we can create the vindex without any errors.
+	if _, err := vindexes.CreateVindex(vindexType, vindexName, params); err != nil {
+		return err
+	}
+	return nil
 }
 
 func parseForeignKeyMode(foreignKeyMode string) (vschemapb.Keyspace_ForeignKeyMode, error) {
