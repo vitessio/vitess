@@ -11,8 +11,9 @@
     - [CLI Flags](#deleted-cli-flags)
     - [gh-ost and pt-osc Online DDL strategies](#deleted-ghost-ptosc)
   - **[RPC Changes](#rpc-changes)**
-  - **[New VTGate Metrics](#new-vtgate-metrics)**
-  - **[New VTTablet Metrics](#new-vtgate-metrics)**
+  - **[New Metrics](#new-metrics)**
+    - **[VTGate](#new-vtgate-metrics)**
+    - **[VTTablet](#new-vtgate-metrics)**
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[VTOrc Config File Changes](#vtorc-config-file-changes)**
   - **[VTGate Config File Changes](#vtgate-config-file-changes)**
@@ -103,14 +104,23 @@ These are the RPC changes made in this release -
 
 ---
 
-### <a id="new-vtgate-metrics"/>New VTGate Metrics
+### <a id="new-metrics"/>New Metrics
 
-Three new metrics have been introduced for queries:
-1.	`QueryExecutions` – Counts the number of queries executed. **Dimensions:** Query type, Plan type, Tablet type.
-2.	`QueryRoutes` – Counts the number of vttablets the query was executed on. **Dimensions:** Query type, Plan type, Tablet type.
-3.	`QueryExecutionsByTable` – Tracks queries executed at VTGate, with counts recorded per table. **Dimensions:** Query type, Table. 
+#### <a id="new-vtgate-metrics"/>VTGate
 
-Example: 
+|           Name            |              Dimensions               |                         Description                         |                           PR                            |
+|:-------------------------:|:-------------------------------------:|:-----------------------------------------------------------:|:-------------------------------------------------------:|
+|     `QueryExecutions`     |       `Query`, `Plan`, `Tablet`       |                 Number of queries executed.                 | [#17727](https://github.com/vitessio/vitess/pull/17727) |
+|       `QueryRoutes`       |       `Query`, `Plan`, `Tablet`       |       Number of vttablets the query was executed on.        | [#17727](https://github.com/vitessio/vitess/pull/17727) |
+| `QueryExecutionsByTable`  |           `Query`, `Table`            | Queries executed at vtgate, with counts recorded per table. | [#17727](https://github.com/vitessio/vitess/pull/17727) |
+|      `VStreamsCount`      | `Keyspace`, `ShardName`, `TabletType` |                  Number of active vstream.                  | [#17858](https://github.com/vitessio/vitess/pull/17858) |
+| `VStreamsEventsStreamed`  | `Keyspace`, `ShardName`, `TabletType` |         Number of events sent across all vstreams.          | [#17858](https://github.com/vitessio/vitess/pull/17858) |
+| `VStreamsEndedWithErrors` | `Keyspace`, `ShardName`, `TabletType` |         Number of vstreams that ended with errors.          | [#17858](https://github.com/vitessio/vitess/pull/17858) |
+|    `CommitModeTimings`    |                `Mode`                 |      Timing metrics for commit (Single, Multi, TwoPC).      | [#16939](https://github.com/vitessio/vitess/pull/16939) |
+|    `CommitUnresolved`     |                  N/A                  |             Counter for failure after Prepare.              | [#16939](https://github.com/vitessio/vitess/pull/16939) |
+
+
+The work done [#17727](https://github.com/vitessio/vitess/pull/17727) introduces new metrics for queries. Via this work we have deprecated several vtgate metrics, please see the [Deprecated Metrics](#deprecated-metrics) section. Here is an example on how to use them: 
 ```
 Query: select t1.a, t2.b from t1 join t2 on t1.id = t2.id
 Shards: 2
@@ -122,17 +132,19 @@ Metrics Published:
 3. QueryExecutionsByTable – {select, t1}, 1 and {select, t2}, 1
 ```
 
-Via this work we have deprecated several vtgate metrics, please see the [Deprecated Metrics](#deprecated-metrics) section.
-
 ---
 
-### <a id="new-vttablet-metrics"/>New VTTablet Metrics
+#### <a id="new-vttablet-metrics"/>VTTablet
 
-Four new metrics gauge have been introduced to VTTablet:
-1.	`TableRows` – The estimated number of rows in the table. **Dimensions:** Table.
-2.	`TableClusteredIndexSize` – The byte size of the clustered index (i.e. row data). **Dimensions:** Table.
-3.	`IndexCardinality` – The estimated number of unique values in the index. **Dimensions:** Table, Index. 
-4.	`IndexBytes` – The byte size of the index. **Dimensions:** Table, Index. 
+|           Name            |    Dimensions    |                    Description                    |                           PR                            |
+|:-------------------------:|:----------------:|:-------------------------------------------------:|:-------------------------------------------------------:|
+|        `TableRows`        |     `Table`      |      Estimated number of rows in the table.       | [#17570](https://github.com/vitessio/vitess/pull/17570) |
+| `TableClusteredIndexSize` |     `Table`      | Byte size of the clustered index (i.e. row data). | [#17570](https://github.com/vitessio/vitess/pull/17570) |
+|    `IndexCardinality`     | `Table`, `Index` |  Estimated number of unique values in the index   | [#17570](https://github.com/vitessio/vitess/pull/17570) |
+|       `IndexBytes`        | `Table`, `Index` |              Byte size of the index.              | [#17570](https://github.com/vitessio/vitess/pull/17570) |
+|  `UnresolvedTransaction`  |  `ManagerType`   |    Number of events sent across all vstreams.     | [#16939](https://github.com/vitessio/vitess/pull/16939) |
+|   `CommitPreparedFail`    |  `FailureType`   |    Number of vstreams that ended with errors.     | [#16939](https://github.com/vitessio/vitess/pull/16939) |
+|    `RedoPreparedFail`     |  `FailureType`   | Timing metrics for commit (Single, Multi, TwoPC)  | [#16939](https://github.com/vitessio/vitess/pull/16939) |
 
 ---
 
