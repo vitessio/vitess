@@ -570,8 +570,6 @@ func (v Value) EncodeSQLStringBuilderWithCasting(b *strings.Builder) error {
 		castFn("unsigned", false)
 	case v.IsDecimal():
 		castFn("decimal", false)
-	case v.IsFloat(): // TODO: do we really want to support this now, given we don't store precision?
-		castFn("double", false)
 	case v.IsDate():
 		castFn("date", true)
 	case v.IsJSON():
@@ -598,12 +596,8 @@ func (v Value) EncodeSQLStringBuilderWithCasting(b *strings.Builder) error {
 			return gotErr
 		}
 		b.WriteByte(')')
-	case v.IsDateTime() || v.IsTime() || v.IsTimestamp():
-		return errors.New("datetime/time/timestamp with seconds precision are not supported in block join")
-	case v.Type() == Bit:
-		return errors.New("bit values bind variables not supported in block join")
 	default:
-		return errors.New(v.String() + " values bin variable not supported in block join")
+		return errors.New(v.String() + " types are not supported in block join")
 	}
 	return nil
 }

@@ -40,7 +40,7 @@ func start(t testing.TB) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		tables := []string{"t1", "tbl", "unq_idx", "nonunq_idx", "tbl_enum_set", "uks.unsharded"}
+		tables := []string{"t1", "tbl", "unq_idx", "nonunq_idx", "tbl_enum_set", "uks.unsharded", "all_types"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -618,8 +618,8 @@ var columns = []allTypesColumn{
 	{name: "smallint_unsigned"},
 	{name: "mediumint_unsigned"},
 	{name: "int_unsigned"},
-	{name: "float_unsigned"},
-	{name: "double_unsigned"},
+	{name: "float_unsigned", cannotEncoreInBlockJoin: true},
+	{name: "double_unsigned", cannotEncoreInBlockJoin: true},
 	{name: "decimal_unsigned"},
 	{name: "t_date"},
 	{name: "t_datetime", cannotEncoreInBlockJoin: true},
