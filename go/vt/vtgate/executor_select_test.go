@@ -3132,139 +3132,132 @@ func assertOptimizedPlanCondition(t *testing.T, executor *Executor, sql string, 
 	return sp
 }
 
-func TestJoinOptimizedPlan(t *testing.T) {
+func TestOptimizedPlan(t *testing.T) {
+	// This test verifies that the executor is able to use the deferred optimisation
+	// technique to create a specialized plan, but only when the conditions are met.
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	sql := "select count(*) from `user` u1 join user u2 where u1.id = ? and u2.id = ?"
+	twoTableJoin := "select count(*) from `user` u1 join user u2 where u1.id = ? and u2.id = ?"
+	threeTableJoin := "select count(*) from `user` u1, `user` u2, `user` u3 where u1.id = ? and u2.id = ? and u3.id = ?"
+	unionQuery := "select col, count(*) from (select col from `user` where id = ? union select foo from `user` where id = ?) x group by col"
+	queryWithSubQ := "select col from `user` where id = ? and exists (select 1 from `user` where id = ?)"
+
+	type testCase struct {
+		name           string
+		query          string
+		v1, v2, v3     int
+		expectedShards int
+	}
+
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
-	bv := map[string]*querypb.BindVariable{
-		"v1": sqltypes.Int64BindVariable(1),
-		"v2": sqltypes.Int64BindVariable(1),
+	tests := []testCase{{
+		name:           "Same value is pass-through to single shard",
+		query:          twoTableJoin,
+		v1:             1,
+		v2:             1,
+		expectedShards: 1,
+	}, {
+		name:           "Different values are sent to multiple shards",
+		query:          twoTableJoin,
+		v1:             1,
+		v2:             2,
+		expectedShards: 2,
+	}, {
+		name:           "Equal values, but different than the first, still pass-through",
+		query:          twoTableJoin,
+		v1:             200,
+		v2:             200,
+		expectedShards: 1,
+	}, {
+		name:           "Three equal values can be pushed down to a single query",
+		query:          threeTableJoin,
+		v1:             3,
+		v2:             3,
+		v3:             3,
+		expectedShards: 1,
+	}, {
+		name:           "Different values means we can't push down to a single query1",
+		query:          threeTableJoin,
+		v1:             1,
+		v2:             2,
+		v3:             3,
+		expectedShards: 3,
+	}, {
+		name:           "Different values means we can't push down to a single query2",
+		query:          threeTableJoin,
+		v1:             1,
+		v2:             1,
+		v3:             2,
+		expectedShards: 3,
+	}, {
+		name:           "Different values means we can't push down to a single query3",
+		query:          threeTableJoin,
+		v1:             1,
+		v2:             2,
+		v3:             1,
+		expectedShards: 3,
+	}, {
+		name:           "Different values means we can't push down to a single query4",
+		query:          threeTableJoin,
+		v1:             3,
+		v2:             1,
+		v3:             1,
+		expectedShards: 3,
+	}, {
+		name:           "Same values - pass-through - union",
+		query:          unionQuery,
+		v1:             1,
+		v2:             1,
+		expectedShards: 1,
+	}, {
+		name:           "Different values - baseline plan - union",
+		query:          unionQuery,
+		v1:             54,
+		v2:             22,
+		expectedShards: 2,
+	}, {
+		name:           "Same values but different - pass through - union",
+		query:          unionQuery,
+		v1:             54,
+		v2:             54,
+		expectedShards: 1,
+	}, {
+		name:           "Same values - pass-through - sub query",
+		query:          queryWithSubQ,
+		v1:             1,
+		v2:             1,
+		expectedShards: 1,
+	}, {
+		name:           "Different values - baseline plan - sub query",
+		query:          queryWithSubQ,
+		v1:             54,
+		v2:             22,
+		expectedShards: 2,
+	}, {
+		name:           "Same values but different - pass through - sub query",
+		query:          queryWithSubQ,
+		v1:             54,
+		v2:             54,
+		expectedShards: 1,
+	}}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			bv := map[string]*querypb.BindVariable{
+				"v1": sqltypes.Int64BindVariable(int64(tc.v1)),
+				"v2": sqltypes.Int64BindVariable(int64(tc.v2)),
+				"v3": sqltypes.Int64BindVariable(int64(tc.v3)),
+			}
+
+			_, err := executor.Execute(ctx, nil, "TestExecute", session, tc.query, bv, true)
+			require.NoError(t, err)
+			testQueryLog(t, executor, logChan, "TestExecute", "SELECT", tc.query, tc.expectedShards)
+		})
 	}
-	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
-	require.NoError(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	assertOptimizedPlanCondition(t, executor, sql, engine.Condition{A: "v1", B: "v2"})
-
-	bv = map[string]*querypb.BindVariable{
-		"v1": sqltypes.Int64BindVariable(2),
-		"v2": sqltypes.Int64BindVariable(1),
-	}
-	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
-	require.NoError(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 2)
-
-	bv = map[string]*querypb.BindVariable{
-		"v1": sqltypes.Int64BindVariable(200),
-		"v2": sqltypes.Int64BindVariable(200),
-	}
-	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
-	require.NoError(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-}
-
-func TestThreeJoinOptimizedPlan(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
-	logChan := executor.queryLogger.Subscribe("Test")
-	defer executor.queryLogger.Unsubscribe(logChan)
-
-	sql := "select count(*) from `user` u1, `user` u2, `user` u3 where u1.id = ? and u2.id = ? and u3.id = ?"
-	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
-	bv := map[string]*querypb.BindVariable{
-		"v1": sqltypes.Int64BindVariable(1),
-		"v2": sqltypes.Int64BindVariable(1),
-		"v3": sqltypes.Int64BindVariable(1),
-	}
-	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
-	require.NoError(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	assertOptimizedPlanCondition(t, executor, sql, engine.Condition{A: "v1", B: "v2"}, engine.Condition{A: "v3", B: "v1"})
-
-	bv = map[string]*querypb.BindVariable{
-		"v1": sqltypes.Int64BindVariable(1),
-		"v2": sqltypes.Int64BindVariable(1),
-		"v3": sqltypes.Int64BindVariable(2),
-	}
-	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
-	require.NoError(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 3)
-
-	bv = map[string]*querypb.BindVariable{
-		"v1": sqltypes.Int64BindVariable(200),
-		"v2": sqltypes.Int64BindVariable(200),
-		"v3": sqltypes.Int64BindVariable(200),
-	}
-	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
-	require.NoError(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-}
-
-func TestUnionOptimizedPlan(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
-	logChan := executor.queryLogger.Subscribe("Test")
-	defer executor.queryLogger.Unsubscribe(logChan)
-
-	sql := "select col, count(*) from (select col from `user` where id = ? union select foo from `user` where id = ?) x group by col"
-	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
-	bv := map[string]*querypb.BindVariable{
-		"v1": sqltypes.Int64BindVariable(1),
-		"v2": sqltypes.Int64BindVariable(1),
-	}
-	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
-	require.NoError(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	assertOptimizedPlanCondition(t, executor, sql, engine.Condition{A: "v1", B: "v2"})
-
-	bv = map[string]*querypb.BindVariable{
-		"v1": sqltypes.Int64BindVariable(2),
-		"v2": sqltypes.Int64BindVariable(1),
-	}
-	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
-	require.NoError(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 2)
-
-	bv = map[string]*querypb.BindVariable{
-		"v1": sqltypes.Int64BindVariable(200),
-		"v2": sqltypes.Int64BindVariable(200),
-	}
-	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
-	require.NoError(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-}
-
-func TestSubqueryOptimizedPlan(t *testing.T) {
-	executor, _, _, _, ctx := createExecutorEnv(t)
-	logChan := executor.queryLogger.Subscribe("Test")
-	defer executor.queryLogger.Unsubscribe(logChan)
-
-	sql := "select col from `user` where id = ? and exists (select 1 from `user` where id = ?)"
-	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
-	bv := map[string]*querypb.BindVariable{
-		"v1": sqltypes.Int64BindVariable(1),
-		"v2": sqltypes.Int64BindVariable(1),
-	}
-	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
-	require.NoError(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	assertOptimizedPlanCondition(t, executor, sql, engine.Condition{A: "v2", B: "v1"})
-
-	bv = map[string]*querypb.BindVariable{
-		"v1": sqltypes.Int64BindVariable(2),
-		"v2": sqltypes.Int64BindVariable(1),
-	}
-	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
-	require.NoError(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 2)
-
-	bv = map[string]*querypb.BindVariable{
-		"v1": sqltypes.Int64BindVariable(200),
-		"v2": sqltypes.Int64BindVariable(200),
-	}
-	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
-	require.NoError(t, err)
-	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
+	assertOptimizedPlanCondition(t, executor, twoTableJoin, engine.Condition{A: "v1", B: "v2"})
+	assertOptimizedPlanCondition(t, executor, threeTableJoin, engine.Condition{A: "v1", B: "v2"}, engine.Condition{A: "v3", B: "v1"})
 }
 
 // TestOnlyOptimizedPlan tests that a query errors on generic planning but succeeds on specialized planning.
