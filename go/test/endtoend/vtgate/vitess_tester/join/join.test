@@ -3,36 +3,28 @@ CREATE TABLE `t1`
     `id`   int unsigned NOT NULL AUTO_INCREMENT,
     `name` varchar(191) NOT NULL,
     PRIMARY KEY (`id`)
-) ENGINE InnoDB,
-  CHARSET utf8mb4,
-  COLLATE utf8mb4_unicode_ci;
+);
 
 CREATE TABLE `t2`
 (
     `id`    bigint unsigned NOT NULL AUTO_INCREMENT,
     `t1_id` int unsigned NOT NULL,
     PRIMARY KEY (`id`)
-) ENGINE InnoDB,
-  CHARSET utf8mb4,
-  COLLATE utf8mb4_unicode_ci;
+);
 
 CREATE TABLE `t3`
 (
     `id`   bigint unsigned NOT NULL AUTO_INCREMENT,
     `name` varchar(191) NOT NULL,
     PRIMARY KEY (`id`)
-) ENGINE InnoDB,
-  CHARSET utf8mb4,
-  COLLATE utf8mb4_unicode_ci;
+);
 
 CREATE TABLE `t4`
 (
     `id`  bigint unsigned NOT NULL AUTO_INCREMENT,
     `col` int unsigned NOT NULL,
     PRIMARY KEY (`id`)
-) ENGINE InnoDB,
-  CHARSET utf8mb4,
-  COLLATE utf8mb4_unicode_ci;
+);
 
 insert into t1 (id, name)
 values (1, 'A'),
