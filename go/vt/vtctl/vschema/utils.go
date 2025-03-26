@@ -78,20 +78,18 @@ func parseTenantIdColumnType(tenantType string) (querypb.Type, error) {
 
 // validateQualifiedTableType validates that the specified table name is
 // qualified and it matches the specified expected type.
-// Also, returns the corresponding KeyspaceVSchemaInfo and Table.
-func validateQualifiedTableType(ctx context.Context, ts *topo.Server, qualifiedTableName string, expectedType string) (
-	*topo.KeyspaceVSchemaInfo, *vschemapb.Table, error) {
+func validateQualifiedTableType(ctx context.Context, ts *topo.Server, qualifiedTableName string, expectedType string) error {
 	ksName, tableName, err := vindexes.ExtractTableParts(qualifiedTableName, false)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
-	sourceKs, sourceTable, err := getVSchemaAndTable(ctx, ts, ksName, tableName)
+	_, sourceTable, err := getVSchemaAndTable(ctx, ts, ksName, tableName)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 	if sourceTable.Type != expectedType {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table '%s' is not a %s table",
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table '%s' is not a %s table",
 			tableName, expectedType)
 	}
-	return sourceKs, sourceTable, nil
+	return nil
 }

@@ -277,7 +277,7 @@ func (api *VSchemaAPI) SetSequence(ctx context.Context, req *vtctldatapb.VSchema
 	if req.SequenceSource == "" {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "sequence source cannot be empty")
 	}
-	_, _, err = validateQualifiedTableType(ctx, api.ts, req.SequenceSource, vindexes.TypeSequence)
+	err = validateQualifiedTableType(ctx, api.ts, req.SequenceSource, vindexes.TypeSequence)
 	if err != nil {
 		return vterrors.Wrapf(err, "invalid sequence table source")
 	}
@@ -311,7 +311,7 @@ func (api *VSchemaAPI) SetReference(ctx context.Context, req *vtctldatapb.VSchem
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table '%s' is already a reference table", req.TableName)
 	}
 	if req.Source != "" {
-		_, _, err = validateQualifiedTableType(ctx, api.ts, req.Source, vindexes.TypeReference)
+		err = validateQualifiedTableType(ctx, api.ts, req.Source, vindexes.TypeReference)
 		if err != nil {
 			return vterrors.Wrapf(err, "invalid reference table source")
 		}

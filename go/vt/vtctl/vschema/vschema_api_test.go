@@ -117,7 +117,7 @@ func TestSetReference(t *testing.T) {
 		TableName:   "t3",
 		Source:      "t1",
 	})
-	assert.ErrorContains(t, err, "failed to parse source")
+	assert.ErrorContains(t, err, "invalid reference table source")
 
 	// Qualified source
 	source := fmt.Sprintf("%s.%s", sourceKs, sourceTableName)
