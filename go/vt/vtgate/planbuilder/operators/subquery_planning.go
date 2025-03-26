@@ -590,7 +590,7 @@ func (s *subqueryRouteMerger) mergeShardedRouting(
 	ctx *plancontext.PlanningContext,
 	r1, r2 *ShardedRouting,
 	old1, old2 *Route,
-	conditions []engine.Condition,
+	conditions ...engine.Condition,
 ) *Route {
 	tr := &ShardedRouting{
 		VindexPreds: append(r1.VindexPreds, r2.VindexPreds...),
@@ -640,10 +640,10 @@ func (s *subqueryRouteMerger) mergeShardedRouting(
 	}
 
 	routing := tr.resetRoutingLogic(ctx)
-	return s.merge(ctx, old1, old2, routing, conditions)
+	return s.merge(ctx, old1, old2, routing, conditions...)
 }
 
-func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing, conditions []engine.Condition) *Route {
+func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing, conditions ...engine.Condition) *Route {
 	allCond := append(outer.Conditions, inner.Conditions...)
 	allCond = append(allCond, conditions...)
 	if !s.subq.TopLevel {
@@ -756,19 +756,19 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 	// which means that we have to be careful with merging when the outer side
 	case inner == dual ||
 		(inner == anyShard && sameKeyspace):
-		return m.merge(ctx, inRoute, outRoute, outRouting, nil)
+		return m.merge(ctx, inRoute, outRoute, outRouting)
 
 	case inner == none && sameKeyspace:
-		return m.merge(ctx, inRoute, outRoute, inRouting, nil)
+		return m.merge(ctx, inRoute, outRoute, inRouting)
 
 	// we can merge dual-outer subqueries only if the
 	// inner is guaranteed to hit a single shard
 	case inRoute.IsSingleShard() &&
 		(outer == dual || (outer == anyShard && sameKeyspace)):
-		return m.merge(ctx, inRoute, outRoute, inRouting, nil)
+		return m.merge(ctx, inRoute, outRoute, inRouting)
 
 	case outer == none && sameKeyspace:
-		return m.merge(ctx, inRoute, outRoute, outRouting, nil)
+		return m.merge(ctx, inRoute, outRoute, outRouting)
 
 	// infoSchema routing is complex, so we handle it in a separate method
 	case inner == infoSchema && outer == infoSchema:

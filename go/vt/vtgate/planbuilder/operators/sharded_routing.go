@@ -705,7 +705,7 @@ func tryMergeShardedRouting(
 				if equal {
 					allCond := append(routeA.Conditions, routeB.Conditions...)
 					allCond = append(allCond, conditions...)
-					return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB, allCond)
+					return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB, allCond...)
 				}
 			}
 		}
@@ -726,7 +726,7 @@ func tryMergeShardedRouting(
 		if !canMerge {
 			return nil
 		}
-		return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB, nil)
+		return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB)
 	}
 	return nil
 }
