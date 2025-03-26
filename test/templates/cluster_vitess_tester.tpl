@@ -153,8 +153,10 @@ jobs:
           # If there is a vschema file there, we use it, otherwise we let vt tester autogenerate it.
           if [ -f $dir/vschema.json ]; then
             vt tester --xunit --vschema "$dir"vschema.json $dir/*.test
-          else 
+            vt tester --olap --xunit --vschema "$dir"vschema.json $dir/*.test
+          else
             vt tester --sharded --xunit $dir/*.test
+            vt tester --olap --sharded --xunit $dir/*.test
           fi
           # Number the reports by changing their file names.
           mv report.xml report"$i".xml
