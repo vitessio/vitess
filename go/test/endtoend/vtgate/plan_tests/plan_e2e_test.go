@@ -38,24 +38,30 @@ func TestE2ECases(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 	loadSampleData(t, mcmp)
-	for _, fileName := range e2eTestCaseFiles {
-		tests := readJSONTests(fileName)
-		for _, test := range tests {
-			mcmp.Run(test.Comment, func(mcmp *utils.MySQLCompare) {
-				if test.SkipE2E {
-					mcmp.AsT().Skip(test.Query)
-				}
-				stmt, err := sqlparser.NewTestParser().Parse(test.Query)
-				require.NoError(mcmp.AsT(), err)
-				sqlparser.RemoveKeyspaceIgnoreSysSchema(stmt)
 
-				mcmp.ExecVitessAndMySQLDifferentQueries(test.Query, sqlparser.String(stmt))
-				pd := utils.ExecTrace(mcmp.AsT(), mcmp.VtConn, test.Query)
-				verifyTestExpectations(mcmp.AsT(), pd, test)
-				if mcmp.VtConn.IsClosed() {
-					mcmp.AsT().Fatal("vtgate connection is closed")
+	for _, mode := range []string{"oltp", "olap"} {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+mode)
+			for _, fileName := range e2eTestCaseFiles {
+				tests := readJSONTests(fileName)
+				for _, test := range tests {
+					mcmp.Run(test.Comment, func(mcmp *utils.MySQLCompare) {
+						if test.SkipE2E {
+							mcmp.AsT().Skip(test.Query)
+						}
+						stmt, err := sqlparser.NewTestParser().Parse(test.Query)
+						require.NoError(mcmp.AsT(), err)
+						sqlparser.RemoveKeyspaceIgnoreSysSchema(stmt)
+
+						mcmp.ExecVitessAndMySQLDifferentQueries(test.Query, sqlparser.String(stmt))
+						pd := utils.ExecTrace(mcmp.AsT(), mcmp.VtConn, test.Query)
+						verifyTestExpectations(mcmp.AsT(), pd, test)
+						if mcmp.VtConn.IsClosed() {
+							mcmp.AsT().Fatal("vtgate connection is closed")
+						}
+					})
 				}
-			})
-		}
+			}
+		})
 	}
 }
