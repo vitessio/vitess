@@ -69,6 +69,7 @@ func (m *Session) CloneVT() *Session {
 	r.EnableSystemSettings = m.EnableSystemSettings
 	r.QueryTimeout = m.QueryTimeout
 	r.MigrationContext = m.MigrationContext
+	r.ErrorUntilRollback = m.ErrorUntilRollback
 	if rhs := m.ShardSessions; rhs != nil {
 		tmpContainer := make([]*Session_ShardSession, len(rhs))
 		for k, v := range rhs {
@@ -598,6 +599,18 @@ func (m *Session) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.ErrorUntilRollback {
+		i--
+		if m.ErrorUntilRollback {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xe0
 	}
 	if len(m.MigrationContext) > 0 {
 		i -= len(m.MigrationContext)
@@ -2073,6 +2086,9 @@ func (m *Session) SizeVT() (n int) {
 	l = len(m.MigrationContext)
 	if l > 0 {
 		n += 2 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.ErrorUntilRollback {
+		n += 3
 	}
 	n += len(m.unknownFields)
 	return n
@@ -3767,6 +3783,26 @@ func (m *Session) UnmarshalVT(dAtA []byte) error {
 			}
 			m.MigrationContext = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 28:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ErrorUntilRollback", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ErrorUntilRollback = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
