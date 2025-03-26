@@ -142,6 +142,12 @@ func (api *VSchemaAPI) Update(ctx context.Context, req *vtctldatapb.VSchemaUpdat
 				vsInfo.MultiTenantSpec.TenantIdColumnName = *req.TenantIdColumnName
 			}
 		} else {
+			// If it's not multi-tenant but tenantIdColumnName and
+			// tenantIdColumnType are specified, we should throw error.
+			// Else remove the MultiTenantSpec from VSchema.
+			if req.TenantIdColumnName != nil || req.TenantIdColumnType != nil {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify tenant-id-column-name or tenant-id-column-type if multi-tenant is false")
+			}
 			vsInfo.MultiTenantSpec = nil
 		}
 	}
