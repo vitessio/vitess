@@ -43,6 +43,8 @@ func NewVSchemaAPI(ts *topo.Server, parser *sqlparser.Parser) *VSchemaAPI {
 	}
 }
 
+// TODO(beingnoble03): Missing API comments.
+
 func (api *VSchemaAPI) Create(ctx context.Context, req *vtctldatapb.VSchemaCreateRequest) error {
 	// TODO(beingnoble03): Add more validation here.
 	topoKs := &topodatapb.Keyspace{}
@@ -105,7 +107,7 @@ func (api *VSchemaAPI) Update(ctx context.Context, req *vtctldatapb.VSchemaUpdat
 			//
 			// Also, if multiTenant was true but neither tenantIdColumnName was
 			// specified nor tenantIdColumnType, we shouldn't return any error
-			// in that case.
+			// in that case and do nothing.
 			switch {
 			case req.TenantIdColumnType != nil && req.TenantIdColumnName != nil:
 				if *req.TenantIdColumnName == "" {
@@ -141,6 +143,53 @@ func (api *VSchemaAPI) Update(ctx context.Context, req *vtctldatapb.VSchemaUpdat
 			vsInfo.MultiTenantSpec = nil
 		}
 	}
+
+	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
+		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
+			vsInfo, req.VSchemaName)
+	}
+	return nil
+}
+
+func (api *VSchemaAPI) Publish(ctx context.Context, req *vtctldatapb.VSchemaPublishRequest) error {
+	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
+	}
+	if !vsInfo.Draft {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vschema '%s' is already published", req.VSchemaName)
+	}
+	vsInfo.Draft = false
+	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
+		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
+			vsInfo, req.VSchemaName)
+	}
+	return nil
+}
+
+// AddVindex adds a vindex in vschema. It doesn't expect it to be a lookup
+// vindex, so owner is not set/required.
+func (api *VSchemaAPI) AddVindex(ctx context.Context, req *vtctldatapb.VSchemaAddVindexRequest) error {
+	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
+	}
+
+	if _, ok := vsInfo.Vindexes[req.VindexName]; ok {
+		return vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "vindex '%s' already exists in '%s' vschema",
+			req.VindexName, req.VSchemaName)
+	}
+
+	// Validate if we can create the vindex without any errors.
+	if _, err := vindexes.CreateVindex(req.VindexType, req.VindexName, req.Params); err != nil {
+		return err
+	}
+
+	vindex := &vschemapb.Vindex{
+		Type:   req.VindexType,
+		Params: req.Params,
+	}
+	vsInfo.Vindexes[req.VindexName] = vindex
 
 	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
 		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
