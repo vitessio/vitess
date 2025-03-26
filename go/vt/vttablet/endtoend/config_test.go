@@ -18,7 +18,6 @@ package endtoend
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -341,12 +340,6 @@ func TestHeartbeatMetric(t *testing.T) {
 			require.True(t, exists, "metric %s not found", tcase.metricName)
 			require.EqualValues(t, tcase.exp, mValue, "metric %s value is %d, want %d", tcase.metricName, mValue, tcase.exp)
 		})
-	}
-
-	for key, val := range metrics {
-		if strings.HasPrefix(key, "Heartbeat") {
-			fmt.Println(key, val)
-		}
 	}
 }
 
