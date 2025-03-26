@@ -794,9 +794,10 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		if ct.Options.As != nil {
 			buf.astPrintf(ct, " %s (%v)", keywordStrings[AS], ct.Options.As)
 
-			if ct.Options.Storage == VirtualStorage {
+			switch ct.Options.Storage {
+			case VirtualStorage:
 				buf.astPrintf(ct, " %s", keywordStrings[VIRTUAL])
-			} else if ct.Options.Storage == StoredStorage {
+			case StoredStorage:
 				buf.astPrintf(ct, " %s", keywordStrings[STORED])
 			}
 			if ct.Options.Null != nil {
@@ -1343,9 +1344,10 @@ func (node *NotExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%l %s", node.Left, node.Operator.ToString())
-	if node.Modifier == All {
+	switch node.Modifier {
+	case All:
 		buf.literal(" all")
-	} else if node.Modifier == Any {
+	case Any:
 		buf.literal(" any")
 	}
 	buf.astPrintf(node, " %r", node.Right)

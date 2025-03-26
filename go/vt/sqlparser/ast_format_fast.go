@@ -1049,10 +1049,11 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 			ct.Options.As.FormatFast(buf)
 			buf.WriteByte(')')
 
-			if ct.Options.Storage == VirtualStorage {
+			switch ct.Options.Storage {
+			case VirtualStorage:
 				buf.WriteByte(' ')
 				buf.WriteString(keywordStrings[VIRTUAL])
-			} else if ct.Options.Storage == StoredStorage {
+			case StoredStorage:
 				buf.WriteByte(' ')
 				buf.WriteString(keywordStrings[STORED])
 			}
@@ -1745,9 +1746,10 @@ func (node *ComparisonExpr) FormatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Left, true)
 	buf.WriteByte(' ')
 	buf.WriteString(node.Operator.ToString())
-	if node.Modifier == All {
+	switch node.Modifier {
+	case All:
 		buf.WriteString(" all")
-	} else if node.Modifier == Any {
+	case Any:
 		buf.WriteString(" any")
 	}
 	buf.WriteByte(' ')

@@ -100,7 +100,7 @@ func main() {
 			return
 		}
 
-		errStr := strings.Replace(err.Error(), "remote error: ", "", -1)
+		errStr := strings.ReplaceAll(err.Error(), "remote error: ", "")
 		fmt.Printf("%s Error: %s\n", args[0], errStr)
 		log.Error(err)
 		os.Exit(1)

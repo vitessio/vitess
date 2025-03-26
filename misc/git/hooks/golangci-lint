@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # Required version of golangci-lint
-REQUIRED_VERSION="v1.64.5"
+REQUIRED_VERSION="v2.0.2"
 
 # Function to compare versions in pure Bash
 version_greater_or_equal() {

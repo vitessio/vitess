@@ -161,7 +161,7 @@ func (bv *TupleBindVariable) FormatFast(buf *sqlparser.TrackedBuffer) {
 }
 
 func (bv *TupleBindVariable) format(buf *sqlparser.TrackedBuffer) {
-	buf.WriteString(fmt.Sprintf("%s:%d", bv.Key, bv.Index))
+	fmt.Fprintf(buf, "%s:%d", bv.Key, bv.Index)
 }
 
 func (c *Column) Format(buf *sqlparser.TrackedBuffer) {

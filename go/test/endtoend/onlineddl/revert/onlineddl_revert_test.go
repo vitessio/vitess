@@ -389,7 +389,7 @@ func testRevertible(t *testing.T) {
 	onlineddl.VtgateExecQuery(t, &vtParams, createParentTable, "")
 
 	removeBackticks := func(s string) string {
-		return strings.Replace(s, "`", "", -1)
+		return strings.ReplaceAll(s, "`", "")
 	}
 
 	for _, testcase := range testCases {

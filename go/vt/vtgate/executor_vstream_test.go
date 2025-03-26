@@ -88,10 +88,8 @@ func TestVStreamSQLUnsharded(t *testing.T) {
 	numRows, numInserts, numUpdates, numDeletes := 0, 0, 0, 0
 	expectedRows, expectedInserts, expectedUpdates, expectedDeletes := 4, 2, 1, 1
 	fieldsValidated := false
-	for {
-		if done {
-			break
-		}
+	for !done {
+
 		select {
 		case qr := <-results:
 			if !fieldsValidated {

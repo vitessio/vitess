@@ -135,7 +135,7 @@ func createInitSQLFile(mysqlDir, ksName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = f.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s;", ksName))
+	_, err = fmt.Fprintf(f, "CREATE DATABASE IF NOT EXISTS %s;", ksName)
 	if err != nil {
 		return "", err
 	}

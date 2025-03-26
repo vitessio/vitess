@@ -27,14 +27,14 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // AggregateParams specify the parameters for each aggregation.
 // It contains the opcode and input column number.
 type AggregateParams struct {
-	Opcode AggregateOpcode
+	Opcode opcode.AggregateOpcode
 	Col    int
 
 	// These are used only for distinct opcodes.
@@ -48,12 +48,12 @@ type AggregateParams struct {
 
 	// This is based on the function passed in the select expression and
 	// not what we use to aggregate at the engine primitive level.
-	OrigOpcode AggregateOpcode
+	OrigOpcode opcode.AggregateOpcode
 
 	CollationEnv *collations.Environment
 }
 
-func NewAggregateParam(opcode AggregateOpcode, col int, alias string, collationEnv *collations.Environment) *AggregateParams {
+func NewAggregateParam(opcode opcode.AggregateOpcode, col int, alias string, collationEnv *collations.Environment) *AggregateParams {
 	out := &AggregateParams{
 		Opcode:       opcode,
 		Col:          col,
@@ -80,7 +80,7 @@ func (ap *AggregateParams) String() string {
 		keyCol += " COLLATE " + ap.CollationEnv.LookupName(ap.Type.Collation())
 	}
 	dispOrigOp := ""
-	if ap.OrigOpcode != AggregateUnassigned && ap.OrigOpcode != ap.Opcode {
+	if ap.OrigOpcode != opcode.AggregateUnassigned && ap.OrigOpcode != ap.Opcode {
 		dispOrigOp = "_" + ap.OrigOpcode.String()
 	}
 	if ap.Alias != "" {
@@ -90,7 +90,7 @@ func (ap *AggregateParams) String() string {
 }
 
 func (ap *AggregateParams) typ(inputType querypb.Type) querypb.Type {
-	if ap.OrigOpcode != AggregateUnassigned {
+	if ap.OrigOpcode != opcode.AggregateUnassigned {
 		return ap.OrigOpcode.SQLType(inputType)
 	}
 	return ap.Opcode.SQLType(inputType)
@@ -372,17 +372,17 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 			}
 		}
 
-		if aggr.Opcode == AggregateMin || aggr.Opcode == AggregateMax {
+		if aggr.Opcode == opcode.AggregateMin || aggr.Opcode == opcode.AggregateMax {
 			if aggr.WAssigned() && !isComparable(sourceType) {
 				return nil, nil, vterrors.VT12001("min/max on types that are not comparable is not supported")
 			}
 		}
 
 		switch aggr.Opcode {
-		case AggregateCountStar:
+		case opcode.AggregateCountStar:
 			ag = &aggregatorCountStar{}
 
-		case AggregateCount, AggregateCountDistinct:
+		case opcode.AggregateCount, opcode.AggregateCountDistinct:
 			ag = &aggregatorCount{
 				from: aggr.Col,
 				distinct: aggregatorDistinct{
@@ -393,10 +393,10 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 				},
 			}
 
-		case AggregateSum, AggregateSumDistinct:
+		case opcode.AggregateSum, opcode.AggregateSumDistinct:
 			var sum evalengine.Sum
 			switch aggr.OrigOpcode {
-			case AggregateCount, AggregateCountStar, AggregateCountDistinct:
+			case opcode.AggregateCount, opcode.AggregateCountStar, opcode.AggregateCountDistinct:
 				sum = evalengine.NewSumOfCounts()
 			default:
 				sum = evalengine.NewAggregationSum(sourceType)
@@ -413,7 +413,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 				},
 			}
 
-		case AggregateMin:
+		case opcode.AggregateMin:
 			ag = &aggregatorMin{
 				aggregatorMinMax{
 					from:   aggr.Col,
@@ -421,7 +421,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 				},
 			}
 
-		case AggregateMax:
+		case opcode.AggregateMax:
 			ag = &aggregatorMax{
 				aggregatorMinMax{
 					from:   aggr.Col,
@@ -429,13 +429,13 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams) (agg
 				},
 			}
 
-		case AggregateGtid:
+		case opcode.AggregateGtid:
 			ag = &aggregatorGtid{from: aggr.Col}
 
-		case AggregateAnyValue:
+		case opcode.AggregateAnyValue:
 			ag = &aggregatorScalar{from: aggr.Col}
 
-		case AggregateGroupConcat:
+		case opcode.AggregateGroupConcat:
 			gcFunc := aggr.Func.(*sqlparser.GroupConcatExpr)
 			separator := []byte(gcFunc.Separator)
 			ag = &aggregatorGroupConcat{

@@ -636,7 +636,7 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 
 	response.Header().Set("Content-Type", "text/plain")
 	qe.ForEachPlan(func(plan *TabletPlan) bool {
-		response.Write([]byte(fmt.Sprintf("%#v\n", qe.env.Environment().Parser().TruncateForUI(plan.Original))))
+		fmt.Fprintf(response, "%#v\n", qe.env.Environment().Parser().TruncateForUI(plan.Original))
 		if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
 			response.Write([]byte(err.Error()))
 		} else {
@@ -720,7 +720,7 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 		response.Write([]byte("empty\n"))
 		return
 	}
-	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
+	fmt.Fprintf(response, "Length: %d\n", len(items))
 	for _, v := range items {
 		var query string
 		if qe.redactUIQuery {
@@ -728,7 +728,7 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 		} else {
 			query = v.Query
 		}
-		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Count, query)))
+		fmt.Fprintf(response, "%v: %s\n", v.Count, query)
 	}
 }
 

@@ -263,7 +263,7 @@ func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, t
 	if tableType == tmutils.TableView {
 		// Views will have the dbname in there, replace it
 		// with {{.DatabaseName}}
-		norm = strings.Replace(norm, backtickDBName, "{{.DatabaseName}}", -1)
+		norm = strings.ReplaceAll(norm, backtickDBName, "{{.DatabaseName}}")
 	}
 
 	return norm, nil
@@ -445,7 +445,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(ctx context.Context, dbName string, 
 		if td.Type == tmutils.TableView {
 			// Views will have {{.DatabaseName}} in there, replace
 			// it with _vt_preflight
-			s := strings.Replace(td.Schema, "{{.DatabaseName}}", "`_vt_preflight`", -1)
+			s := strings.ReplaceAll(td.Schema, "{{.DatabaseName}}", "`_vt_preflight`")
 			initialCopySQL += s + ";\n"
 		}
 	}

@@ -60,8 +60,8 @@ func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, *ApplyR
 }
 
 func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result Operator, changed *ApplyResult) {
-	switch {
-	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
+	switch ctx.PlannerVersion {
+	case querypb.ExecuteOptions_Gen4Left2Right:
 		result = leftToRightSolve(ctx, op)
 	default:
 		result = greedySolve(ctx, op)
