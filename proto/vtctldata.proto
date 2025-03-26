@@ -2130,6 +2130,24 @@ message VDiffStopRequest {
 message VDiffStopResponse {
 }
 
+message VSchemaRemoveTablesRequest {
+  string v_schema_name = 1;
+  repeated string tables = 2;
+}
+
+message VSchemaRemoveTablesResponse {  
+}
+
+message VSchemaSetSequenceRequest {
+  string v_schema_name = 1;
+  string table = 2;
+  string column = 3;
+  string sequence_source = 4;
+}
+
+message VSchemaSetSequenceResponse {
+}
+
 message VSchemaCreateRequest {
   string v_schema_name = 1;
   bool sharded = 2;

@@ -19,6 +19,7 @@ package vschema
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"vitess.io/vitess/go/json2"
@@ -248,6 +249,57 @@ func (api *VSchemaAPI) AddLookupVindex(ctx context.Context, req *vtctldatapb.VSc
 	return nil
 }
 
+func (api *VSchemaAPI) RemoveTables(ctx context.Context, req *vtctldatapb.VSchemaRemoveTablesRequest) error {
+	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
+	}
+	for _, tableName := range req.Tables {
+		if _, ok := vsInfo.Tables[tableName]; !ok {
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table '%s' doesn't exist in keyspace '%s'",
+				tableName, req.VSchemaName)
+		}
+		delete(vsInfo.Tables, tableName)
+	}
+	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
+		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
+			vsInfo, req.VSchemaName)
+	}
+	return nil
+}
+
+// SetSequence sets up a table column to use a sequence from an unsharded source.
+func (api *VSchemaAPI) SetSequence(ctx context.Context, req *vtctldatapb.VSchemaSetSequenceRequest) error {
+	vsInfo, table, err := getVSchemaAndTable(ctx, api.ts, req.VSchemaName, req.Table)
+	if err != nil {
+		return err
+	}
+	if req.SequenceSource == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "sequence source cannot be empty")
+	}
+	_, _, err = validateQualifiedTableType(ctx, api.ts, req.SequenceSource, vindexes.TypeSequence)
+	if err != nil {
+		return vterrors.Wrapf(err, "invalid sequence table source")
+	}
+	columnExists := slices.ContainsFunc(table.Columns, func(col *vschemapb.Column) bool {
+		return col.Name == req.Column
+	})
+	if !columnExists {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column '%s' doesn't exist on table '%s'",
+			req.Column, req.Table)
+	}
+
+	table.AutoIncrement = &vschemapb.AutoIncrement{
+		Column:   req.Column,
+		Sequence: req.SequenceSource,
+	}
+	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
+		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
+			vsInfo, req.VSchemaName)
+	}
+	return nil
+}
+
 // SetReference sets up a reference table, which points to a source table in
 // another vschema.
 func (api *VSchemaAPI) SetReference(ctx context.Context, req *vtctldatapb.VSchemaSetReferenceRequest) error {
@@ -258,19 +310,10 @@ func (api *VSchemaAPI) SetReference(ctx context.Context, req *vtctldatapb.VSchem
 	if table.Type == vindexes.TypeReference {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table '%s' is already a reference table", req.TableName)
 	}
-
 	if req.Source != "" {
-		sourceKs, sourceTableName, err := vindexes.ExtractTableParts(req.Source, false /* allowUnqualified */)
-		if err != nil {
-			return vterrors.Wrapf(err, "failed to parse source")
-		}
-		_, sourceTable, err := getVSchemaAndTable(ctx, api.ts, sourceKs, sourceTableName)
+		_, _, err = validateQualifiedTableType(ctx, api.ts, req.Source, vindexes.TypeReference)
 		if err != nil {
 			return vterrors.Wrapf(err, "invalid reference table source")
-		}
-		if sourceTable.Type != vindexes.TypeReference {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table '%s' is not a reference table",
-				sourceTableName)
 		}
 	}
 
