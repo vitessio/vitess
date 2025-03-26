@@ -29,9 +29,10 @@
   - **[Semi-sync monitor in vttablet](#semi-sync-monitor)**
   - **[Wrapped fatal transaction errors](#new-errors-fatal-tx)**
 - **[Minor Changes](#minor-changes)**
-  - **[VTTablet Flags](#flags-vttablet)**
-  - **[VTTablet ACL enforcement and reloading](#reloading-vttablet-acl)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
+  - **[VTTablet](#minor-changes-vttablet)**
+    - **[CLI Flags](#flags-vttablet)**
+    - **[ACL enforcement and reloading](#reloading-vttablet-acl)**
   - **[VTAdmin](#vtadmin)**
     - [Updated to node v22.13.1](#updated-node)
 
@@ -309,7 +310,17 @@ This change was introduced by [#17669](https://github.com/vitessio/vitess/pull/1
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
-### <a id="flags-vttablet"/>VTTablet Flags</a>
+### <a id="topo-read-concurrency-changes"/>`--topo_read_concurrency` behaviour changes
+
+The `--topo_read_concurrency` flag was added to all components that access the topology and the provided limit is now applied separately for each global or local cell _(default `32`)_.
+
+All topology read calls _(`Get`, `GetVersion`, `List` and `ListDir`)_ now respect this per-cell limit. Previous to this version a single limit was applied to all cell calls and it was not respected by many topology calls.
+
+---
+
+### <a id="minor-changes-vttablet"/>VTTablet</a>
+
+#### <a id="flags-vttablet"/>CLI Flags</a>
 
 - `twopc_abandon_age` flag now supports values in the time.Duration format (e.g., 1s, 2m, 1h). 
 While the flag will continue to accept float values (interpreted as seconds) for backward compatibility, 
@@ -319,17 +330,9 @@ While the flag will continue to accept float values (interpreted as seconds) for
 
 ---
 
-### <a id="reloading-vttablet-acl"/>VTTablet ACL enforcement and reloading</a>
+#### <a id="reloading-vttablet-acl"/>ACL enforcement and reloading</a>
 
 When a tablet is started with `--enforce-tableacl-config` it will exit with an error if the contents of the file are not valid. After the changes made in https://github.com/vitessio/vitess/pull/17485 the tablet will no longer exit when reloading the contents of the file after receiving a SIGHUP. When the file contents are invalid on reload the tablet will now log an error and the active in-memory ACLs remain in effect.
-
----
-
-### <a id="topo-read-concurrency-changes"/>`--topo_read_concurrency` behaviour changes
-
-The `--topo_read_concurrency` flag was added to all components that access the topology and the provided limit is now applied separately for each global or local cell _(default `32`)_.
-
-All topology read calls _(`Get`, `GetVersion`, `List` and `ListDir`)_ now respect this per-cell limit. Previous to this version a single limit was applied to all cell calls and it was not respected by many topology calls.
 
 ---
 
