@@ -50,6 +50,9 @@ Flags:
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
+      --db-charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
+      --db-conn-query-info                                               enable parsing and processing of QUERY_OK info fields
+      --db-connect-timeout-ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
       --db-credentials-file string                                       db credentials file; send SIGHUP to reload this file
       --db-credentials-server string                                     db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
       --db-credentials-vault-addr string                                 URL to Vault server
@@ -61,6 +64,18 @@ Flags:
       --db-credentials-vault-tls-ca string                               Path to CA PEM for validating Vault server certificate
       --db-credentials-vault-tokenfile string                            Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
       --db-credentials-vault-ttl duration                                How long to cache DB credentials from the Vault server (default 30m0s)
+      --db-flags uint                                                    Flag values as defined by MySQL.
+      --db-flavor string                                                 Flavor overrid. Valid value is FilePos.
+      --db-host string                                                   The host name for the tcp connection.
+      --db-port int                                                      tcp port
+      --db-server-name string                                            server name of the DB we are connecting to.
+      --db-socket string                                                 The unix socket to connect on. If this is specified, host and port will not be used.
+      --db-ssl-ca string                                                 connection ssl ca
+      --db-ssl-ca-path string                                            connection ssl ca path
+      --db-ssl-cert string                                               connection ssl certificate
+      --db-ssl-key string                                                connection ssl key
+      --db-ssl-mode SslMode                                              SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
+      --db-tls-min-version string                                        Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
       --db_allprivs_password string                                      db allprivs password
       --db_allprivs_use_ssl                                              Set this flag to false to make the allprivs connection to not use ssl (default true)
       --db_allprivs_user string                                          db allprivs user userKey (default "vt_allprivs")
@@ -70,33 +85,18 @@ Flags:
       --db_appdebug_password string                                      db appdebug password
       --db_appdebug_use_ssl                                              Set this flag to false to make the appdebug connection to not use ssl (default true)
       --db_appdebug_user string                                          db appdebug user userKey (default "vt_appdebug")
-      --db-charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
-      --db-conn-query-info                                               enable parsing and processing of QUERY_OK info fields
-      --db-connect-timeout-ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
-      --db-dba-password string                                           db dba password
-      --db-dba-use-ssl                                                   Set this flag to false to make the dba connection to not use ssl (default true)
-      --db-dba-user string                                               db dba user userKey (default "vt_dba")
+      --db_dba_password string                                           db dba password
+      --db_dba_use_ssl                                                   Set this flag to false to make the dba connection to not use ssl (default true)
+      --db_dba_user string                                               db dba user userKey (default "vt_dba")
       --db_erepl_password string                                         db erepl password
       --db_erepl_use_ssl                                                 Set this flag to false to make the erepl connection to not use ssl (default true)
       --db_erepl_user string                                             db erepl user userKey (default "vt_erepl")
       --db_filtered_password string                                      db filtered password
       --db_filtered_use_ssl                                              Set this flag to false to make the filtered connection to not use ssl (default true)
       --db_filtered_user string                                          db filtered user userKey (default "vt_filtered")
-      --db-flags uint                                                    Flag values as defined by MySQL.
-      --db-flavor string                                                 Flavor overrid. Valid value is FilePos.
-      --db-host string                                                   The host name for the tcp connection.
-      --db-port int                                                      tcp port
       --db_repl_password string                                          db repl password
       --db_repl_use_ssl                                                  Set this flag to false to make the repl connection to not use ssl (default true)
       --db_repl_user string                                              db repl user userKey (default "vt_repl")
-      --db-server-name string                                            server name of the DB we are connecting to.
-      --db-socket string                                                 The unix socket to connect on. If this is specified, host and port will not be used.
-      --db-ssl-ca string                                                 connection ssl ca
-      --db-ssl-ca-path string                                            connection ssl ca path
-      --db-ssl-cert string                                               connection ssl certificate
-      --db-ssl-key string                                                connection ssl key
-      --db-ssl-mode SslMode                                              SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
-      --db-tls-min-version string                                        Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --dbddl_plugin string                                              controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service (default "fail")
@@ -186,11 +186,11 @@ Flags:
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --lock_heartbeat_time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
       --lock_tables_timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
+      --log-err-stacks                                                   log stack traces for errors
+      --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
       --log_dir string                                                   If non-empty, write log files in this directory
-      --log-err-stacks                                                   log stack traces for errors
       --log_queries_to_file string                                       Enable query logging to the specified file
-      --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
@@ -220,6 +220,7 @@ Flags:
       --mysql-server-drain-onterm                                        If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work
       --mysql-server-keepalive-period duration                           TCP period between keep-alives
       --mysql-server-pool-conn-read-buffers                              If set, the server will pool incoming connection read buffers
+      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
       --mysql-shell-backup-location string                               location where the backup will be stored
       --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
       --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
@@ -244,7 +245,6 @@ Flags:
       --mysql_server_ssl_key string                                      Path to ssl key for mysql server plugin SSL
       --mysql_server_ssl_server_ca string                                path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
       --mysql_server_tls_min_version string                              Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
       --mysql_server_write_timeout duration                              connection write timeout
       --mysql_slow_connect_warn_threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish
       --mysql_tcp_version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
@@ -334,7 +334,6 @@ Flags:
       --start_mysql                                                      Should vtcombo also start mysql
       --stats-backend string                                             The name of the registered push-based monitoring/stats backend to use
       --stats-combine-dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
-      --stats-common-tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
       --stats-drop-variables string                                      Variables to be dropped from the list of exported variables.
       --stats-emit-period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
@@ -342,11 +341,8 @@ Flags:
       --stream_health_buffer_size uint                                   max streaming health entries to buffer per streaming health client (default 20)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --table_gc_lifecycle string                                        States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implicitly always included) (default "hold,purge,evac,drop")
-      --tablet-filter-tags StringMap                                     Specifies a comma-separated list of tablet tags (as key:value pairs) to filter the tablets to watch.
       --tablet-dir string                                                The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
-      --tablet_filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
-      --tablet_health_keep_alive duration                                close streaming tablet health connection if there are no requests for this long (default 5m0s)
-      --tablet_hostname string                                           if not empty, this hostname will be assumed instead of trying to resolve it
+      --tablet-filter-tags StringMap                                     Specifies a comma-separated list of tablet tags (as key:value pairs) to filter the tablets to watch.
       --tablet-manager-grpc-ca string                                    the server ca to use to validate servers when connecting
       --tablet-manager-grpc-cert string                                  the cert to use to connect
       --tablet-manager-grpc-concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus) (default 8)
@@ -355,6 +351,9 @@ Flags:
       --tablet-manager-grpc-key string                                   the key to use to connect
       --tablet-manager-grpc-server-name string                           the server name to use to validate server certificate
       --tablet-manager-protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
+      --tablet_filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
+      --tablet_health_keep_alive duration                                close streaming tablet health connection if there are no requests for this long (default 5m0s)
+      --tablet_hostname string                                           if not empty, this hostname will be assumed instead of trying to resolve it
       --tablet_refresh_interval duration                                 Tablet refresh interval. (default 1m0s)
       --tablet_refresh_known_tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
       --tablet_types_to_wait strings                                     Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.

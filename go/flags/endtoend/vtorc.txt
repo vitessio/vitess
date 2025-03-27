@@ -53,10 +53,10 @@ Flags:
       --keep-logs-by-mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                    keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock-timeout duration                                       Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
-      --log_backtrace_at traceLocations                             when logging hits line file:N, emit a stack trace
-      --log_dir string                                              If non-empty, write log files in this directory
       --log-err-stacks                                              log stack traces for errors
       --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --log_backtrace_at traceLocations                             when logging hits line file:N, emit a stack trace
+      --log_dir string                                              If non-empty, write log files in this directory
       --logtostderr                                                 log to standard error instead of files
       --max-stack-size int                                          configure the maximum stack size in bytes (default 67108864)
       --onclose-timeout duration                                    wait no more than this for OnClose handlers before stopping (default 10s)
@@ -76,7 +76,6 @@ Flags:
       --sqlite-data-file string                                     SQLite Datafile to use as VTOrc's database (default "file::memory:?mode=memory&cache=shared")
       --stats-backend string                                        The name of the registered push-based monitoring/stats backend to use
       --stats-combine-dimensions string                             List of dimensions to be combined into a single "all" value in exported stats vars
-      --stats-common-tags strings                                   Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
       --stats-drop-variables string                                 Variables to be dropped from the list of exported variables.
       --stats-emit-period duration                                  Interval between emitting stats to all registered backends (default 1m0s)
       --stderrthreshold severityFlag                                logs at or above this threshold go to stderr (default 1)

@@ -75,7 +75,7 @@ Flags:
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
       --config-name string                                               Name of the config file (without extension) to search for. (default "vtconfig")
-      --config-path strings                                              Paths to search for config files in. (default [{{ .Workdir }}])
+      --config-path strings                                              Paths to search for config files in. (default [/home/mounica/Desktop/vitess/go/flags/endtoend])
       --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                               Config file type (omit to infer config type from file extension).
       --consolidator-query-waiter-cap int                                Configure the maximum number of clients allowed to wait on the consolidator.
@@ -84,6 +84,9 @@ Flags:
       --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
+      --db-charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
+      --db-conn-query-info                                               enable parsing and processing of QUERY_OK info fields
+      --db-connect-timeout-ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
       --db-credentials-file string                                       db credentials file; send SIGHUP to reload this file
       --db-credentials-server string                                     db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
       --db-credentials-vault-addr string                                 URL to Vault server
@@ -95,6 +98,18 @@ Flags:
       --db-credentials-vault-tls-ca string                               Path to CA PEM for validating Vault server certificate
       --db-credentials-vault-tokenfile string                            Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
       --db-credentials-vault-ttl duration                                How long to cache DB credentials from the Vault server (default 30m0s)
+      --db-flags uint                                                    Flag values as defined by MySQL.
+      --db-flavor string                                                 Flavor overrid. Valid value is FilePos.
+      --db-host string                                                   The host name for the tcp connection.
+      --db-port int                                                      tcp port
+      --db-server-name string                                            server name of the DB we are connecting to.
+      --db-socket string                                                 The unix socket to connect on. If this is specified, host and port will not be used.
+      --db-ssl-ca string                                                 connection ssl ca
+      --db-ssl-ca-path string                                            connection ssl ca path
+      --db-ssl-cert string                                               connection ssl certificate
+      --db-ssl-key string                                                connection ssl key
+      --db-ssl-mode SslMode                                              SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
+      --db-tls-min-version string                                        Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
       --db_allprivs_password string                                      db allprivs password
       --db_allprivs_use_ssl                                              Set this flag to false to make the allprivs connection to not use ssl (default true)
       --db_allprivs_user string                                          db allprivs user userKey (default "vt_allprivs")
@@ -104,33 +119,18 @@ Flags:
       --db_appdebug_password string                                      db appdebug password
       --db_appdebug_use_ssl                                              Set this flag to false to make the appdebug connection to not use ssl (default true)
       --db_appdebug_user string                                          db appdebug user userKey (default "vt_appdebug")
-      --db-charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
-      --db-conn-query-info                                               enable parsing and processing of QUERY_OK info fields
-      --db-connect-timeout-ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
-      --db-dba-password string                                           db dba password
-      --db-dba-use-ssl                                                   Set this flag to false to make the dba connection to not use ssl (default true)
-      --db-dba-user string                                               db dba user userKey (default "vt_dba")
+      --db_dba_password string                                           db dba password
+      --db_dba_use_ssl                                                   Set this flag to false to make the dba connection to not use ssl (default true)
+      --db_dba_user string                                               db dba user userKey (default "vt_dba")
       --db_erepl_password string                                         db erepl password
       --db_erepl_use_ssl                                                 Set this flag to false to make the erepl connection to not use ssl (default true)
       --db_erepl_user string                                             db erepl user userKey (default "vt_erepl")
       --db_filtered_password string                                      db filtered password
       --db_filtered_use_ssl                                              Set this flag to false to make the filtered connection to not use ssl (default true)
       --db_filtered_user string                                          db filtered user userKey (default "vt_filtered")
-      --db-flags uint                                                    Flag values as defined by MySQL.
-      --db-flavor string                                                 Flavor overrid. Valid value is FilePos.
-      --db-host string                                                   The host name for the tcp connection.
-      --db-port int                                                      tcp port
       --db_repl_password string                                          db repl password
       --db_repl_use_ssl                                                  Set this flag to false to make the repl connection to not use ssl (default true)
       --db_repl_user string                                              db repl user userKey (default "vt_repl")
-      --db-server-name string                                            server name of the DB we are connecting to.
-      --db-socket string                                                 The unix socket to connect on. If this is specified, host and port will not be used.
-      --db-ssl-ca string                                                 connection ssl ca
-      --db-ssl-ca-path string                                            connection ssl ca path
-      --db-ssl-cert string                                               connection ssl certificate
-      --db-ssl-key string                                                connection ssl key
-      --db-ssl-mode SslMode                                              SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
-      --db-tls-min-version string                                        Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --degraded_threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
@@ -211,12 +211,12 @@ Flags:
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --lock_tables_timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
+      --log-err-stacks                                                   log stack traces for errors
+      --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
       --log_dir string                                                   If non-empty, write log files in this directory
-      --log-err-stacks                                                   log stack traces for errors
       --log_queries                                                      Enable query logging to syslog.
       --log_queries_to_file string                                       Enable query logging to the specified file
-      --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
@@ -240,6 +240,7 @@ Flags:
       --mycnf_slow_log_path string                                       mysql slow query log path
       --mycnf_socket_file string                                         mysql socket file
       --mycnf_tmp_dir string                                             mysql tmp directory
+      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
       --mysql-shell-backup-location string                               location where the backup will be stored
       --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
       --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
@@ -247,7 +248,6 @@ Flags:
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql-shutdown-timeout duration                                  timeout to use when MySQL is being shut down. (default 5m0s)
-      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
@@ -334,7 +334,6 @@ Flags:
       --srv_topo_timeout duration                                        topo server timeout (default 5s)
       --stats-backend string                                             The name of the registered push-based monitoring/stats backend to use
       --stats-combine-dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
-      --stats-common-tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
       --stats-drop-variables string                                      Variables to be dropped from the list of exported variables.
       --stats-emit-period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd_address string                                            Address for statsd client
@@ -345,15 +344,7 @@ Flags:
       --table-acl-config-reload-interval duration                        Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --table_gc_lifecycle string                                        States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implicitly always included) (default "hold,purge,evac,drop")
-      --tablet-path string                                               tablet alias
-      --tablet_config string                                             YAML file config for tablet
       --tablet-dir string                                                The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
-      --tablet_grpc_ca string                                            the server ca to use to validate servers when connecting
-      --tablet_grpc_cert string                                          the cert to use to connect
-      --tablet_grpc_crl string                                           the server crl to use to validate server certificates when connecting
-      --tablet_grpc_key string                                           the key to use to connect
-      --tablet_grpc_server_name string                                   the server name to use to validate server certificate
-      --tablet_hostname string                                           if not empty, this hostname will be assumed instead of trying to resolve it
       --tablet-manager-grpc-ca string                                    the server ca to use to validate servers when connecting
       --tablet-manager-grpc-cert string                                  the cert to use to connect
       --tablet-manager-grpc-concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus) (default 8)
@@ -362,6 +353,14 @@ Flags:
       --tablet-manager-grpc-key string                                   the key to use to connect
       --tablet-manager-grpc-server-name string                           the server name to use to validate server certificate
       --tablet-manager-protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
+      --tablet-path string                                               tablet alias
+      --tablet_config string                                             YAML file config for tablet
+      --tablet_grpc_ca string                                            the server ca to use to validate servers when connecting
+      --tablet_grpc_cert string                                          the cert to use to connect
+      --tablet_grpc_crl string                                           the server crl to use to validate server certificates when connecting
+      --tablet_grpc_key string                                           the key to use to connect
+      --tablet_grpc_server_name string                                   the server name to use to validate server certificate
+      --tablet_hostname string                                           if not empty, this hostname will be assumed instead of trying to resolve it
       --tablet_protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
       --throttle_tablet_types string                                     Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included (default "replica")
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
