@@ -26,7 +26,9 @@ import (
 
 func init() {
 	logger := logutil.NewConsoleLogger()
-	cli.Main.SetOutput(logutil.NewLoggerWriter(logger))
+	writer := logutil.NewLoggerWriter(logger)
+	cli.Main.SetOut(writer)
+	cli.Main.SetErr(writer)
 }
 
 func main() {
