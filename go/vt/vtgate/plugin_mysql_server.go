@@ -317,22 +317,26 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 	}
 	var results []*sqltypes.Result
 	var result *sqltypes.Result
+	var queryResults []sqltypes.QueryResponse
 	if c.Capabilities&mysql.CapabilityClientMultiStatements != 0 {
 		session, results, err = vh.vtg.ExecuteMulti(ctx, vh, session, sql)
+		for _, res := range results {
+			queryResults = append(queryResults, sqltypes.QueryResponse{QueryResult: res})
+		}
+		if err != nil {
+			queryResults = append(queryResults, sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)})
+		}
 	} else {
 		session, result, err = vh.vtg.Execute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), false)
-		results = append(results, result)
+		queryResults = append(queryResults, sqltypes.QueryResponse{QueryResult: result, QueryError: sqlerror.NewSQLErrorFromError(err)})
 	}
 
-	for idx, res := range results {
-		if callbackErr := callback(sqltypes.QueryResponse{QueryResult: res}, idx < len(results)-1, true); callbackErr != nil {
+	for idx, res := range queryResults {
+		if callbackErr := callback(res, idx < len(results)-1, true); callbackErr != nil {
 			return callbackErr
 		}
 	}
 
-	if err := sqlerror.NewSQLErrorFromError(err); err != nil {
-		return err
-	}
 	fillInTxStatusFlags(c, session)
 	return nil
 }
