@@ -127,6 +127,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
 	}
+	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if vttablet.DbFlavor != "" {
 		vttablet.proc.Args = append(vttablet.proc.Args, fmt.Sprintf("--db_flavor=%s", vttablet.DbFlavor))
 	}

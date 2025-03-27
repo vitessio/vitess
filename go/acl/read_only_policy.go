@@ -21,7 +21,7 @@ import (
 	"net/http"
 )
 
-var errReadOnly = errors.New("not allowed: read-only security_policy enforced")
+var errReadOnly = errors.New("not allowed: read-only security-policy enforced")
 
 // readOnlyPolicy allows DEBUGGING and MONITORING roles for everyone,
 // while denying any other roles (e.g. ADMIN) for everyone.

@@ -36,7 +36,7 @@ vttablet \
 	--init_tablet_type $tablet_type \
 	--port $port \
 	--grpc-port $grpc_port \
-	--service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream'
+	--service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream'
 
 `$alias` needs to be of the form: `<cell>-id`, and the cell should match one of the local cells that was created in the topology. The id can be left padded with zeroes: `cell-100` and `cell-000000100` are synonymous.
 
@@ -104,33 +104,33 @@ Flags:
       --db_appdebug_password string                                      db appdebug password
       --db_appdebug_use_ssl                                              Set this flag to false to make the appdebug connection to not use ssl (default true)
       --db_appdebug_user string                                          db appdebug user userKey (default "vt_appdebug")
-      --db_charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
-      --db_conn_query_info                                               enable parsing and processing of QUERY_OK info fields
-      --db_connect_timeout_ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
-      --db_dba_password string                                           db dba password
-      --db_dba_use_ssl                                                   Set this flag to false to make the dba connection to not use ssl (default true)
-      --db_dba_user string                                               db dba user userKey (default "vt_dba")
+      --db-charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
+      --db-conn-query-info                                               enable parsing and processing of QUERY_OK info fields
+      --db-connect-timeout-ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
+      --db-dba-password string                                           db dba password
+      --db-dba-use-ssl                                                   Set this flag to false to make the dba connection to not use ssl (default true)
+      --db-dba-user string                                               db dba user userKey (default "vt_dba")
       --db_erepl_password string                                         db erepl password
       --db_erepl_use_ssl                                                 Set this flag to false to make the erepl connection to not use ssl (default true)
       --db_erepl_user string                                             db erepl user userKey (default "vt_erepl")
       --db_filtered_password string                                      db filtered password
       --db_filtered_use_ssl                                              Set this flag to false to make the filtered connection to not use ssl (default true)
       --db_filtered_user string                                          db filtered user userKey (default "vt_filtered")
-      --db_flags uint                                                    Flag values as defined by MySQL.
-      --db_flavor string                                                 Flavor overrid. Valid value is FilePos.
-      --db_host string                                                   The host name for the tcp connection.
-      --db_port int                                                      tcp port
+      --db-flags uint                                                    Flag values as defined by MySQL.
+      --db-flavor string                                                 Flavor overrid. Valid value is FilePos.
+      --db-host string                                                   The host name for the tcp connection.
+      --db-port int                                                      tcp port
       --db_repl_password string                                          db repl password
       --db_repl_use_ssl                                                  Set this flag to false to make the repl connection to not use ssl (default true)
       --db_repl_user string                                              db repl user userKey (default "vt_repl")
-      --db_server_name string                                            server name of the DB we are connecting to.
-      --db_socket string                                                 The unix socket to connect on. If this is specified, host and port will not be used.
-      --db_ssl_ca string                                                 connection ssl ca
-      --db_ssl_ca_path string                                            connection ssl ca path
-      --db_ssl_cert string                                               connection ssl certificate
-      --db_ssl_key string                                                connection ssl key
-      --db_ssl_mode SslMode                                              SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
-      --db_tls_min_version string                                        Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
+      --db-server-name string                                            server name of the DB we are connecting to.
+      --db-socket string                                                 The unix socket to connect on. If this is specified, host and port will not be used.
+      --db-ssl-ca string                                                 connection ssl ca
+      --db-ssl-ca-path string                                            connection ssl ca path
+      --db-ssl-cert string                                               connection ssl certificate
+      --db-ssl-key string                                                connection ssl key
+      --db-ssl-mode SslMode                                              SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
+      --db-tls-min-version string                                        Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --degraded_threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
@@ -206,17 +206,17 @@ Flags:
       --init_tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
       --init_timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
-      --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
-      --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
+      --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
+      --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --lock_tables_timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
       --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
       --log_dir string                                                   If non-empty, write log files in this directory
-      --log_err_stacks                                                   log stack traces for errors
+      --log-err-stacks                                                   log stack traces for errors
       --log_queries                                                      Enable query logging to syslog.
       --log_queries_to_file string                                       Enable query logging to the specified file
-      --log_rotate_max_size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                                      log to standard error instead of files
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
@@ -247,19 +247,19 @@ Flags:
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql-shutdown-timeout duration                                  timeout to use when MySQL is being shut down. (default 5m0s)
-      --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
-      --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
-      --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
+      --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
+      --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --opentsdb_uri string                                              URI of opentsdb /api/put method
-      --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
+      --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
       --pprof-http                                                       enable pprof http endpoints
       --publish_retry_interval duration                                  how long vttablet waits to retry publishing the tablet record (default 30s)
-      --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
+      --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")
@@ -321,9 +321,9 @@ Flags:
       --sanitize_log_messages                                            Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.
       --schema-change-reload-timeout duration                            query server schema change reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up (default 30s)
       --schema-version-max-age-seconds int                               max age of schema version records to kept in memory by the vreplication historian
-      --security_policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --semi-sync-monitor-interval duration                              How frequently the semi-sync monitor checks if the primary is blocked on semi-sync ACKs (default 10s)
-      --service_map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
+      --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --serving_state_grace_period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state
       --shard_sync_retry_delay duration                                  delay between retries of updates to keep the tablet and its shard record in sync (default 30s)
       --shutdown_grace_period duration                                   how long to wait for queries and transactions to complete during graceful shutdown. (default 3s)
@@ -332,11 +332,11 @@ Flags:
       --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
       --srv_topo_cache_ttl duration                                      how long to use cached entries for topology (default 1s)
       --srv_topo_timeout duration                                        topo server timeout (default 5s)
-      --stats_backend string                                             The name of the registered push-based monitoring/stats backend to use
-      --stats_combine_dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
-      --stats_common_tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
-      --stats_drop_variables string                                      Variables to be dropped from the list of exported variables.
-      --stats_emit_period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
+      --stats-backend string                                             The name of the registered push-based monitoring/stats backend to use
+      --stats-combine-dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
+      --stats-common-tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
+      --stats-drop-variables string                                      Variables to be dropped from the list of exported variables.
+      --stats-emit-period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd_address string                                            Address for statsd client
       --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
@@ -347,21 +347,21 @@ Flags:
       --table_gc_lifecycle string                                        States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implicitly always included) (default "hold,purge,evac,drop")
       --tablet-path string                                               tablet alias
       --tablet_config string                                             YAML file config for tablet
-      --tablet_dir string                                                The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
+      --tablet-dir string                                                The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
       --tablet_grpc_ca string                                            the server ca to use to validate servers when connecting
       --tablet_grpc_cert string                                          the cert to use to connect
       --tablet_grpc_crl string                                           the server crl to use to validate server certificates when connecting
       --tablet_grpc_key string                                           the key to use to connect
       --tablet_grpc_server_name string                                   the server name to use to validate server certificate
       --tablet_hostname string                                           if not empty, this hostname will be assumed instead of trying to resolve it
-      --tablet_manager_grpc_ca string                                    the server ca to use to validate servers when connecting
-      --tablet_manager_grpc_cert string                                  the cert to use to connect
-      --tablet_manager_grpc_concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus) (default 8)
-      --tablet_manager_grpc_connpool_size int                            number of tablets to keep tmclient connections open to (default 100)
-      --tablet_manager_grpc_crl string                                   the server crl to use to validate server certificates when connecting
-      --tablet_manager_grpc_key string                                   the key to use to connect
-      --tablet_manager_grpc_server_name string                           the server name to use to validate server certificate
-      --tablet_manager_protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
+      --tablet-manager-grpc-ca string                                    the server ca to use to validate servers when connecting
+      --tablet-manager-grpc-cert string                                  the cert to use to connect
+      --tablet-manager-grpc-concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus) (default 8)
+      --tablet-manager-grpc-connpool-size int                            number of tablets to keep tmclient connections open to (default 100)
+      --tablet-manager-grpc-crl string                                   the server crl to use to validate server certificates when connecting
+      --tablet-manager-grpc-key string                                   the key to use to connect
+      --tablet-manager-grpc-server-name string                           the server name to use to validate server certificate
+      --tablet-manager-protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
       --tablet_protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
       --throttle_tablet_types string                                     Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included (default "replica")
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)

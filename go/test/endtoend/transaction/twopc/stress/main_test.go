@@ -73,8 +73,8 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--twopc_abandon_age", "1",
 			"--migration_check_interval", "2s",
-			"--onterm_timeout", "1s",
-			"--onclose_timeout", "1s",
+			vtutils.GetFlagVariantForTests("--onterm-timeout"), "1s",
+			vtutils.GetFlagVariantForTests("--onclose-timeout"), "1s",
 		)
 
 		// Start keyspace

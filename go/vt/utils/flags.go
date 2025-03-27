@@ -23,8 +23,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/vt/log"
+	// "vitess.io/vitess/go/vt/log"
 )
 
 /*
@@ -53,8 +52,9 @@ func setFlagVar[T any](fs *pflag.FlagSet, p *T, name string, def T, usage string
 
 	underscored, dashed := flagVariants(name)
 	if name == underscored {
-		log.Warning("Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
+		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
 	}
+
 	setFunc(fs, p, dashed, def, usage)
 	setFunc(fs, p, underscored, def, "")
 	_ = fs.MarkHidden(underscored)
@@ -81,12 +81,26 @@ func SetFlagDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def ti
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).DurationVar)
 }
 
-// SetFlagVariants adds both underscored and dashed versions of the flag to maintain compatibility during the transition.
-// Underscores will be fully deprecated in v25.
-func SetFlagVariants(m map[string]string, key, value string) {
-	underscored, dashed := flagVariants(key)
-	m[underscored] = value
-	m[dashed] = value
+func SetFlagUint64Var(fs *pflag.FlagSet, p *uint64, name string, def uint64, usage string) {
+	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).Uint64Var)
+}
+
+func SetFlagStringSliceVar(fs *pflag.FlagSet, p *[]string, name string, def []string, usage string) {
+	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).StringSliceVar)
+}
+
+// SetFlagVar registers a flag (that implements the pflag.Value interface)
+// using both the dashed and underscored versions of the flag name.
+// The underscored version is hidden and marked as deprecated.
+func SetFlagVar(fs *pflag.FlagSet, value pflag.Value, name, usage string) {
+	underscored, dashed := flagVariants(name)
+	if name == underscored {
+		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
+	}
+	fs.Var(value, dashed, usage)
+	fs.Var(value, underscored, "")
+	_ = fs.MarkHidden(underscored)
+	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
 }
 
 // SetFlagVariantsForTests randomly assigns either the underscored or dashed version of the flag name to the map.

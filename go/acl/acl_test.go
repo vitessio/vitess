@@ -106,8 +106,8 @@ func TestRegisterFlags(t *testing.T) {
 
 	RegisterFlags(testFs)
 
-	securityPolicyFlag := testFs.Lookup("security_policy")
-	assert.NotNil(t, securityPolicyFlag, "no security_policy flag is registered")
+	securityPolicyFlag := testFs.Lookup("security-policy")
+	assert.NotNil(t, securityPolicyFlag, "no security-policy flag is registered")
 
 	// Check the default value of the flag
 	want := "test"

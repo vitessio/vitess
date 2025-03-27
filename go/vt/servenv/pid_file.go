@@ -23,7 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-var pidFile string // registered in RegisterFlags as --pid_file
+var pidFile string // registered in RegisterFlags as --pid-file
 
 func init() {
 	pidFileCreated := false

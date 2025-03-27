@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -64,12 +65,12 @@ var (
 )
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.IntVar(&concurrency, "tablet_manager_grpc_concurrency", concurrency, "concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus)")
-	fs.StringVar(&cert, "tablet_manager_grpc_cert", cert, "the cert to use to connect")
-	fs.StringVar(&key, "tablet_manager_grpc_key", key, "the key to use to connect")
-	fs.StringVar(&ca, "tablet_manager_grpc_ca", ca, "the server ca to use to validate servers when connecting")
-	fs.StringVar(&crl, "tablet_manager_grpc_crl", crl, "the server crl to use to validate server certificates when connecting")
-	fs.StringVar(&name, "tablet_manager_grpc_server_name", name, "the server name to use to validate server certificate")
+	utils.SetFlagIntVar(fs, &concurrency, "tablet-manager-grpc-concurrency", concurrency, "concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus)")
+	utils.SetFlagStringVar(fs, &cert, "tablet-manager-grpc-cert", cert, "the cert to use to connect")
+	utils.SetFlagStringVar(fs, &key, "tablet-manager-grpc-key", key, "the key to use to connect")
+	utils.SetFlagStringVar(fs, &ca, "tablet-manager-grpc-ca", ca, "the server ca to use to validate servers when connecting")
+	utils.SetFlagStringVar(fs, &crl, "tablet-manager-grpc-crl", crl, "the server crl to use to validate server certificates when connecting")
+	utils.SetFlagStringVar(fs, &name, "tablet-manager-grpc-server-name", name, "the server name to use to validate server certificate")
 }
 
 var _binaries = []string{ // binaries that require the flags in this package
@@ -134,9 +135,9 @@ type poolDialer interface {
 // In order to more efficiently use the underlying tcp connections, you can
 // instead use the cachedConnDialer implementation by specifying
 //
-//	--tablet_manager_protocol "grpc-cached"
+//	--tablet-manager-protocol "grpc-cached"
 //
-// The cachedConnDialer keeps connections to up to --tablet_manager_grpc_connpool_size
+// The cachedConnDialer keeps connections to up to --tablet-manager-grpc-connpool-size
 // distinct tablets open at any given time, for faster per-RPC call time, and less
 // connection churn.
 type Client struct {

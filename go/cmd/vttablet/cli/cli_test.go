@@ -47,6 +47,8 @@ func TestRunFailsToStartTabletManager(t *testing.T) {
 	utils.SetFlagVariantsForTests(flags, "--topo-implementation", "test")
 	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", "localhost")
 	utils.SetFlagVariantsForTests(flags, "--topo-global-root", "cell")
+	utils.SetFlagVariantsForTests(flags, "--db-host", "localhost")
+	utils.SetFlagVariantsForTests(flags, "--db-port", "3306")
 
 	var flagArgs []string
 	for flag, value := range flags {
@@ -54,7 +56,6 @@ func TestRunFailsToStartTabletManager(t *testing.T) {
 	}
 
 	flagArgs = append(flagArgs,
-		"--db_host", "localhost", "--db_port", "3306",
 		"--tablet-path", "cell-1", "--init_keyspace", "ks",
 		"--init_shard", "0", "--init_tablet_type", "replica",
 		"--restore_from_backup",

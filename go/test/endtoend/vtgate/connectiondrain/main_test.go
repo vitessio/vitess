@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -60,7 +61,7 @@ func setupCluster(t *testing.T) (*cluster.LocalProcessCluster, mysql.ConnParams)
 	require.NoError(t, err)
 
 	// Start vtgate
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--mysql-server-drain-onterm", "--onterm_timeout", "30s")
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--mysql-server-drain-onterm", vtutils.GetFlagVariantForTests("--onterm-timeout"), "30s")
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
@@ -119,7 +120,7 @@ func TestConnectionDrainCloseConnections(t *testing.T) {
 
 	// Create a third connection, this connection should not be allowed.
 	// Set a connection timeout to 1s otherwise the connection will take forever
-	// and eventually vtgate will reach the --onterm_timeout.
+	// and eventually vtgate will reach the --onterm-timeout.
 	vtParams.ConnectTimeoutMs = 1000
 	defer func() {
 		vtParams.ConnectTimeoutMs = 0
@@ -146,10 +147,10 @@ func TestConnectionDrainCloseConnections(t *testing.T) {
 	require.NoError(t, err)
 	vtConn.Close()
 
-	// Give enough time for vtgate to finish all the onterm hooks without reaching the 30s of --onterm_timeout
+	// Give enough time for vtgate to finish all the onterm hooks without reaching the 30s of --onterm-timeout
 	time.Sleep(10 * time.Second)
 
-	// By now the vtgate should have shutdown on its own and without reaching --onterm_timeout
+	// By now the vtgate should have shutdown on its own and without reaching --onterm-timeout
 	require.True(t, clusterInstance.VtgateProcess.IsShutdown())
 }
 
@@ -168,18 +169,18 @@ func TestConnectionDrainOnTermTimeout(t *testing.T) {
 		vtConn2.Close()
 	}()
 
-	// Tearing down vtgate here, we want to reach the onterm_timeout of 30s
+	// Tearing down vtgate here, we want to reach the onterm-timeout of 30s
 	err = clusterInstance.VtgateProcess.Terminate()
 	require.NoError(t, err)
 
-	// Run a busy query that returns only after the onterm_timeout is reached, this should fail when we reach the timeout
+	// Run a busy query that returns only after the onterm-timeout is reached, this should fail when we reach the timeout
 	_, err = vtConn.ExecuteFetch("select sleep(40)", 1, false)
 	require.Error(t, err)
 
-	// Running a query after we have reached the onterm_timeout should fail
+	// Running a query after we have reached the onterm-timeout should fail
 	_, err = vtConn2.ExecuteFetch("select id from t1", 1, false)
 	require.Error(t, err)
 
-	// By now vtgate will be shutdown becaused it reached its onterm_timeout, despite idle connections still being opened
+	// By now vtgate will be shutdown becaused it reached its onterm-timeout, despite idle connections still being opened
 	require.True(t, clusterInstance.VtgateProcess.IsShutdown())
 }

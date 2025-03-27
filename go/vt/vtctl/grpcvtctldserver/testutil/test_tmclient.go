@@ -128,7 +128,7 @@ func NewVtctldServerWithTabletManagerClient(t testing.TB, ts *topo.Server, tmc t
 
 const (
 	fsName                   = "go.vt.vtctl.grpcvtctldserver.testutil"
-	tmclientProtocolFlagName = "tablet_manager_protocol"
+	tmclientProtocolFlagName = "tablet-manager-protocol"
 )
 
 var fs *pflag.FlagSet
