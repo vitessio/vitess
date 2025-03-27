@@ -190,6 +190,24 @@ func TestVisitableVisit(t *testing.T) {
 	})
 }
 
+func TestVisitablePath(t *testing.T) {
+	// Tests that Visitable containers can handle paths correctly
+	leaf := &Leaf{v: 1}
+	visitable := &testVisitable{inner: leaf}
+	refContainer := &RefContainer{ASTType: visitable}
+
+	p := map[ASTPath]AST{}
+
+	RewriteWithPaths(refContainer, func(c *Cursor) bool {
+		p[c.Path()] = c.Node()
+		return true
+	}, nil)
+
+	for path, ast := range p {
+		assert.Equal(t, GetNodeFromPath(refContainer, path), ast)
+	}
+}
+
 func TestCopyOnRewriteVisitable(t *testing.T) {
 	leaf := &Leaf{v: 1}
 	visitable := &testVisitable{inner: leaf}
