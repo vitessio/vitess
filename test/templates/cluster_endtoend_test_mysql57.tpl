@@ -121,10 +121,13 @@ jobs:
       run: |
         sudo apt-get update
 
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        if dpkg -l apparmor; then
+          sudo systemctl stop apparmor
+          sudo mkdir -p /etc/apparmor.d/disable
+          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        fi
 
-        # sudo systemctl stop apparmor
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
         sudo apt-get -y autoremove
         sudo apt-get -y autoclean
@@ -150,8 +153,8 @@ jobs:
 
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
 
-        sudo service mysql stop
-        sudo service etcd stop
+        sudo service mysql stop || true
+        sudo service etcd stop || true
 
         # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
