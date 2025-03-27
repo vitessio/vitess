@@ -1030,7 +1030,7 @@ func TestBlockJoin(t *testing.T) {
 	defer closer()
 
 	for i := 1; i <= 1000; i++ {
-		mcmp.Exec(fmt.Sprintf("insert into t1(id1, id2) values (%d, %d)", i, 2*i))
+		mcmp.Exec(fmt.Sprintf("insert into t1(id1, id2, id, name) values (%d, %d, %d, \"%d\")", i, 2*i, i, i))
 		mcmp.Exec(fmt.Sprintf("insert into tbl(id, unq_col, nonunq_col) values (%d, %d, %d)", i, 2*i, 3*i))
 	}
 
@@ -1047,7 +1047,7 @@ func TestBlockJoin(t *testing.T) {
 			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1, tbl.nonunq_col from t1 join tbl where t1.id2 = tbl.id")
 			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1+t1.id2 as mas, tbl.unq_col, t1.id2 from t1 join tbl where t1.id2 = tbl.id and tbl.id > 50 order by mas")
 
-			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t1.id), abs(t1.id+t3.id) from tbl t3 join t1 on lower(t3.name) = lower(t1.name) where lower(t3.name) = 'b' and abs(t1.id) > 1")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t1.id), abs(t1.id+t3.id) from tbl t3 join t1 on lower(t3.name) = lower(t1.name) where lower(t3.name) = '5' and abs(t1.id) > 1")
 
 			mcmp.SetAllowAnyFieldSize(true)
 			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id2 from t1 join tbl where t1.id2 = tbl.id and t1.id2 = 500")
