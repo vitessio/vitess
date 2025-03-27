@@ -49,8 +49,8 @@ type ShardedRouting struct {
 
 	// SeenPredicates contains all the predicates that have had a chance to influence routing.
 	// If we need to replan routing, we'll use this list
-	SeenPredicates  []sqlparser.Expr
-	ValuesTablesIDs semantics.TableSet
+	SeenPredicates     []sqlparser.Expr
+	BlockJoinTablesIDs semantics.TableSet
 }
 
 var _ Routing = (*ShardedRouting)(nil)
@@ -193,8 +193,8 @@ func (tr *ShardedRouting) Clone() Routing {
 	}
 }
 
-func (tr *ShardedRouting) AddValuesTableID(id semantics.TableSet) {
-	tr.ValuesTablesIDs = tr.ValuesTablesIDs.Merge(id)
+func (tr *ShardedRouting) AddBlockJoinTableID(id semantics.TableSet) {
+	tr.BlockJoinTablesIDs = tr.BlockJoinTablesIDs.Merge(id)
 }
 
 func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
@@ -567,13 +567,13 @@ func (tr *ShardedRouting) planBlockJoinsPredicate(ctx *plancontext.PlanningConte
 		return false
 	}
 	lhsCol, rhsCol := cola, colb
-	if !ctx.SemTable.RecursiveDeps(cola).IsSolvedBy(tr.ValuesTablesIDs) {
-		if !ctx.SemTable.RecursiveDeps(colb).IsSolvedBy(tr.ValuesTablesIDs) {
+	if !ctx.SemTable.RecursiveDeps(cola).IsSolvedBy(tr.BlockJoinTablesIDs) {
+		if !ctx.SemTable.RecursiveDeps(colb).IsSolvedBy(tr.BlockJoinTablesIDs) {
 			return false
 		}
 		lhsCol, rhsCol = colb, cola
 	}
-	tblName, err := ctx.GetBlockJoinTableName(tr.ValuesTablesIDs)
+	tblName, err := ctx.GetBlockJoinTableName(tr.BlockJoinTablesIDs)
 	if err != nil {
 		return false
 	}
@@ -607,7 +607,7 @@ func (tr *ShardedRouting) planOffsets(ctx *plancontext.PlanningContext) {
 	}
 
 	lhsCol := tr.Selected.ValueExprs[0]
-	columns := ctx.GetValuesColumns(trv.Key)
+	columns := ctx.GetBlockJoinColumns(trv.Key)
 	for idx, expr := range columns {
 		if ctx.SemTable.EqualsExpr(lhsCol, expr.Expr) {
 			trv.Index = idx
@@ -621,7 +621,7 @@ func (tr *ShardedRouting) planOffsets(ctx *plancontext.PlanningContext) {
 
 	columns = append(columns, aeWrap(sqlparser.NewStrLiteral("unknown")))
 	trv.Index = len(columns) - 1
-	ctx.SetValuesColumns(trv.Key, columns)
+	ctx.SetBlockJoinColumns(trv.Key, columns)
 }
 
 func (tr *ShardedRouting) planCompositeInOpRecursive(

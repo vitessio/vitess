@@ -27,8 +27,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-func TestJoinValuesExecute(t *testing.T) {
-
+func TestBlockJoinExecute(t *testing.T) {
+	// Tests executing the BlockJoin primitive with fake input primitives.
 	type testCase struct {
 		cols             []int
 		CopyColumnsToRHS []int

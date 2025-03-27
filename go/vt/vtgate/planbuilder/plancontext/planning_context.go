@@ -36,11 +36,11 @@ type PlanningContext struct {
 	SemTable     *semantics.SemTable
 	VSchema      VSchema
 
-	// skipValuesArgument tracks Values operator that should be skipped when
+	// skipBlockJoinArgument tracks BlockBuild operator that should be skipped when
 	// rewriting the operator tree to an AST tree.
-	// This happens when a BlockJoin is pushed under a route and we do not
-	// need to have a Values operator anymore on its RHS.
-	skipValuesArgument map[string]any
+	// This happens when a BlockJoin is pushed under a route, and we do not
+	// need to have a BlockBuild operator anymore on its RHS.
+	skipBlockJoinArgument map[string]any
 
 	PlannerVersion querypb.ExecuteOptions_PlannerVersion
 
@@ -77,8 +77,8 @@ type PlanningContext struct {
 	isMirrored bool
 
 	// blockJoinColumns stores the columns we need for each blockJoin in the plan.
-	blockJoinColumns map[string][]*sqlparser.AliasedExpr // TODO: this should be a map[string][]*sqlparser.ColName
-	valuesTableName  map[semantics.TableSet]string
+	blockJoinColumns   map[string][]*sqlparser.AliasedExpr // TODO: this should be a map[string][]*sqlparser.ColName
+	blockJoinTableName map[semantics.TableSet]string
 
 	emptyEnv    *evalengine.ExpressionEnv
 	constantCfg *evalengine.Config
@@ -90,12 +90,12 @@ type PlanningContext struct {
 
 func CreateEmptyPlanningContext() *PlanningContext {
 	return &PlanningContext{
-		skipValuesArgument: make(map[string]any),
-		ReservedArguments:  make(map[sqlparser.Expr]string),
-		blockJoinColumns:   make(map[string][]*sqlparser.AliasedExpr),
-		valuesTableName:    make(map[semantics.TableSet]string),
-		PredTracker:        predicates.NewTracker(),
-		SemTable:           semantics.EmptySemTable(),
+		skipBlockJoinArgument: make(map[string]any),
+		ReservedArguments:     make(map[sqlparser.Expr]string),
+		blockJoinColumns:      make(map[string][]*sqlparser.AliasedExpr),
+		blockJoinTableName:    make(map[semantics.TableSet]string),
+		PredTracker:           predicates.NewTracker(),
+		SemTable:              semantics.EmptySemTable(),
 	}
 }
 
@@ -128,17 +128,17 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 	}
 
 	return &PlanningContext{
-		ReservedVars:       reservedVars,
-		SemTable:           semTable,
-		VSchema:            vschema,
-		PlannerVersion:     version,
-		ReservedArguments:  map[sqlparser.Expr]string{},
-		Statement:          stmt,
-		PredTracker:        predicates.NewTracker(),
-		skipValuesArgument: map[string]any{},
-		blockJoinColumns:   make(map[string][]*sqlparser.AliasedExpr),
-		valuesTableName:    make(map[semantics.TableSet]string),
-		commentDirectives:  commentDirectives,
+		ReservedVars:          reservedVars,
+		SemTable:              semTable,
+		VSchema:               vschema,
+		PlannerVersion:        version,
+		ReservedArguments:     map[sqlparser.Expr]string{},
+		Statement:             stmt,
+		PredTracker:           predicates.NewTracker(),
+		skipBlockJoinArgument: map[string]any{},
+		blockJoinColumns:      make(map[string][]*sqlparser.AliasedExpr),
+		blockJoinTableName:    make(map[semantics.TableSet]string),
+		commentDirectives:     commentDirectives,
 	}, nil
 }
 
@@ -165,12 +165,12 @@ func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
 	return bvName
 }
 
-func (ctx *PlanningContext) SkipValuesArgument(name string) {
-	ctx.skipValuesArgument[name] = ""
+func (ctx *PlanningContext) SkipBlockJoinArgument(name string) {
+	ctx.skipBlockJoinArgument[name] = ""
 }
 
-func (ctx *PlanningContext) IsValuesArgumentSkipped(name string) bool {
-	_, ok := ctx.skipValuesArgument[name]
+func (ctx *PlanningContext) IsBlockJoinArgumentSkipped(name string) bool {
+	_, ok := ctx.skipBlockJoinArgument[name]
 	return ok
 }
 
@@ -385,10 +385,10 @@ func (ctx *PlanningContext) ActiveCTE() *ContextCTE {
 	return ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
 }
 
-func (ctx *PlanningContext) GetValuesColumns(joinName string) []*sqlparser.AliasedExpr {
+func (ctx *PlanningContext) GetBlockJoinColumns(joinName string) []*sqlparser.AliasedExpr {
 	return ctx.blockJoinColumns[joinName]
 }
-func (ctx *PlanningContext) SetValuesColumns(joinName string, cols []*sqlparser.AliasedExpr) {
+func (ctx *PlanningContext) SetBlockJoinColumns(joinName string, cols []*sqlparser.AliasedExpr) {
 	ctx.blockJoinColumns[joinName] = cols
 }
 
@@ -472,11 +472,11 @@ func (ctx *PlanningContext) IsConstantBool(expr sqlparser.Expr) *bool {
 }
 
 func (ctx *PlanningContext) AddBlockJoinTable(id semantics.TableSet, name string) {
-	ctx.valuesTableName[id] = name
+	ctx.blockJoinTableName[id] = name
 }
 
 func (ctx *PlanningContext) GetBlockJoinTableName(id semantics.TableSet) (string, error) {
-	name, found := ctx.valuesTableName[id]
+	name, found := ctx.blockJoinTableName[id]
 	if !found {
 		return "", vterrors.VT13001("value join table not found")
 	}

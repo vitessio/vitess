@@ -201,7 +201,7 @@ func tryPushBlockBuild(ctx *plancontext.PlanningContext, in *BlockBuild) (Operat
 	case *Filter:
 		return Swap(in, src, "pushed BlockBuild under filter")
 	case *Route:
-		src.Routing.AddValuesTableID(in.TableID)
+		src.Routing.AddBlockJoinTableID(in.TableID)
 		src.Routing.resetRoutingLogic(ctx)
 		return Swap(in, src, "pushed BlockBuild under route")
 	case *SubQueryContainer:

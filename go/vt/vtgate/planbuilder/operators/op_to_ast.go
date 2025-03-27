@@ -92,7 +92,7 @@ func buildDistinct(op *Distinct, qb *queryBuilder) {
 }
 
 func buildBlockJoin(op *BlockJoin, qb *queryBuilder) {
-	qb.ctx.SkipValuesArgument(op.Destination)
+	qb.ctx.SkipBlockJoinArgument(op.Destination)
 	buildAST(op.LHS, qb)
 	qbR := &queryBuilder{ctx: qb.ctx}
 	buildAST(op.RHS, qbR)
@@ -101,7 +101,7 @@ func buildBlockJoin(op *BlockJoin, qb *queryBuilder) {
 
 func buildBlockBuild(op *BlockBuild, qb *queryBuilder) {
 	buildAST(op.Source, qb)
-	if qb.ctx.IsValuesArgumentSkipped(op.Name) {
+	if qb.ctx.IsBlockJoinArgumentSkipped(op.Name) {
 		return
 	}
 
@@ -112,7 +112,7 @@ func buildBlockBuild(op *BlockBuild, qb *queryBuilder) {
 	}
 
 	deps := semantics.EmptyTableSet()
-	for _, ae := range qb.ctx.GetValuesColumns(op.Name) {
+	for _, ae := range qb.ctx.GetBlockJoinColumns(op.Name) {
 		deps = deps.Merge(qb.ctx.SemTable.RecursiveDeps(ae.Expr))
 	}
 

@@ -1122,11 +1122,11 @@
   },
   {
     "comment": "Block join with complex expressions",
-    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t1.id), abs(t1.id+t3.id) from user t3 join user_extra t1 on t3.name = t1.name",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(u.id), abs(ue.id), abs(ue.user_id+u.id) from user u join user_extra ue on u.name = ue.email",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t1.id), abs(t1.id+t3.id) from user t3 join user_extra t1 on t3.name = t1.name",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(u.id), abs(ue.id), abs(ue.user_id+u.id) from user u join user_extra ue on u.name = ue.email",
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "Columns": "0,2,1",
@@ -1143,8 +1143,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select abs(t1.id), t1.id, t1.`name` from user_extra as t1 where 1 != 1",
-                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(t1.id), t1.id, t1.`name` from user_extra as t1",
+                "FieldQuery": "select abs(ue.id), ue.user_id, ue.email from user_extra as ue where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(ue.id), ue.user_id, ue.email from user_extra as ue",
                 "Table": "user_extra"
               },
               {
@@ -1181,8 +1181,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select abs(t3.id), abs(`values`.t1_id + t3.id) as `abs(t1.id + t3.id)`, `values`.x_x as `abs(t1.id)` from (values ::values) as `values`(x_x, t1_id, t1_name), `user` as t3 where 1 != 1",
-                    "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(`values`.t1_id + t3.id) as `abs(t1.id + t3.id)`, `values`.x_x as `abs(t1.id)` from (values ::values) as `values`(x_x, t1_id, t1_name), `user` as t3 where t3.`name` = `values`.t1_name",
+                    "FieldQuery": "select abs(u.id), abs(`values`.ue_user_id + u.id) as `abs(ue.user_id + u.id)`, `values`.x_x as `abs(ue.id)` from (values ::values) as `values`(x_x, ue_user_id, ue_email), `user` as u where 1 != 1",
+                    "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(u.id), abs(`values`.ue_user_id + u.id) as `abs(ue.user_id + u.id)`, `values`.x_x as `abs(ue.id)` from (values ::values) as `values`(x_x, ue_user_id, ue_email), `user` as u where u.`name` = `values`.ue_email",
                     "Table": "`user`"
                   }
                 ]

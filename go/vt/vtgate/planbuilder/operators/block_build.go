@@ -62,7 +62,7 @@ func (v *BlockBuild) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 }
 
 func (v *BlockBuild) getColumnNamesFromCtx(ctx *plancontext.PlanningContext) sqlparser.Columns {
-	columns := ctx.GetValuesColumns(v.Name)
+	columns := ctx.GetBlockJoinColumns(v.Name)
 	return slice.Map(columns, func(ae *sqlparser.AliasedExpr) sqlparser.IdentifierCI {
 		return sqlparser.NewIdentifierCI(ae.ColumnName())
 	})

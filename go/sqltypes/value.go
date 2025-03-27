@@ -563,7 +563,6 @@ func (v Value) EncodeSQLStringBuilderWithCasting(b *strings.Builder) error {
 	switch {
 	case v.Type() == Null:
 		b.Write(NullBytes)
-		v.Type().Descriptor()
 	case v.IsSigned():
 		castFn("signed", false)
 	case v.IsUnsigned():
