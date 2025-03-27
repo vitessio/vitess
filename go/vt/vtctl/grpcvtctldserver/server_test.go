@@ -14291,6 +14291,114 @@ func TestValidateVersionShard(t *testing.T) {
 	}
 }
 
+func TestValidateKeyspace(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tmc := &testutil.TabletManagerClient{
+		GetReplicasResults: map[string]struct {
+			Replicas []string
+			Error    error
+		}{
+			"zone1-0000000100": {
+				Replicas: []string{"11.21.31.41", "12.22.32.42"},
+			},
+		},
+		PingResults: map[string]error{
+			"zone1-0000000100": nil,
+			"zone1-0000000101": nil,
+			"zone1-0000000102": nil,
+		},
+	}
+
+	type testcase struct {
+		name         string
+		keyspaceName string
+		wantErr      string
+		noKeyspace   bool
+		noShard      bool
+		noPrimary    bool
+	}
+	tests := []testcase{
+		{
+			keyspaceName: "consistent",
+			wantErr:      "",
+		},
+		{
+			keyspaceName: "no_keyspace",
+			wantErr:      "TopologyServer.GetShardNames(no_keyspace) failed: node doesn't exist: keyspaces",
+			noKeyspace:   true,
+		},
+		{
+			keyspaceName: "no_shard",
+			wantErr:      "no shards found in keyspace no_shard",
+			noShard:      true,
+		},
+		{
+			keyspaceName: "no_primary",
+			wantErr:      "no primary for shard no_primary/0",
+			noPrimary:    true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := memorytopo.NewServer(ctx, "zone1")
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+			if !tt.noKeyspace {
+				_, err := vtctld.CreateKeyspace(ctx, &vtctldatapb.CreateKeyspaceRequest{
+					Name:              tt.keyspaceName,
+					AllowEmptyVSchema: true,
+				})
+				require.NoError(t, err)
+				if !tt.noShard {
+					err = ts.CreateShard(ctx, tt.keyspaceName, "0")
+					require.NoError(t, err)
+					if !tt.noPrimary {
+						alias := &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						}
+						err = ts.CreateTablet(ctx, &topodatapb.Tablet{
+							Alias:    alias,
+							Keyspace: tt.keyspaceName,
+							Shard:    "0",
+							Type:     topodatapb.TabletType_PRIMARY,
+						})
+						require.NoError(t, err)
+						_, err = ts.UpdateShardFields(ctx, tt.keyspaceName, "0", func(si *topo.ShardInfo) error {
+							si.PrimaryAlias = alias
+							si.PrimaryTermStartTime = &vttime.Time{
+								Seconds: 100,
+							}
+							return nil
+						})
+						require.NoError(t, err)
+					}
+				}
+			}
+
+			req := &vtctldatapb.ValidateKeyspaceRequest{
+				Keyspace: tt.keyspaceName,
+			}
+			resp, err := vtctld.ValidateKeyspace(ctx, req)
+			require.NoError(t, err)
+			var gotErrors []string
+			gotErrors = append(gotErrors, resp.Results...)
+			for _, result := range resp.ResultsByShard {
+				gotErrors = append(gotErrors, result.Results...)
+			}
+			if tt.wantErr != "" {
+				assert.Contains(t, strings.Join(gotErrors, ", "), tt.wantErr)
+			} else {
+				require.Empty(t, gotErrors)
+			}
+		})
+	}
+}
+
 func TestValidateShard(t *testing.T) {
 	t.Parallel()
 
