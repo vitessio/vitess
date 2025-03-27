@@ -173,7 +173,7 @@ public class GrpcClientTlsClientAuthTest extends RpcClientTest {
     final String key = certDirectory.getCanonicalPath() + File.separatorChar + "server-key.pem";
 
     final String vtgateCommand = String.format(
-        "%s --grpc-cert %s --grpc-key %s --grpc-ca %s --logtostderr --grpc-port %s --service_map grpc-vtgateservice",
+        "%s --grpc-cert %s --grpc-key %s --grpc-ca %s --logtostderr --grpc-port %s --service-map grpc-vtgateservice",
         vtRoot + "/bin/vtgateclienttest", cert, key, caCert, Integer.toString(port));
     System.out.println(vtgateCommand);
     vtgateclienttest = new ProcessBuilder(vtgateCommand.split(" ")).inheritIO().start();

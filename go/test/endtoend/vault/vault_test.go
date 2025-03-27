@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -93,7 +94,7 @@ var (
 		// Make this small, so we can get a renewal
 		"--mysql_auth_vault_ttl", "21s"}
 	mysqlctlArg = []string{
-		"--db_dba_password", mysqlPassword}
+		vtutils.GetFlagVariantForTests("--db-dba-password"), mysqlPassword}
 	vttabletLogFileName = "vttablet.INFO"
 	tokenRenewalString  = "Vault client status: token renewed"
 )
