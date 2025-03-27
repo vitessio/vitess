@@ -146,6 +146,7 @@ CREATE TABLE user_extra
     extra_id INT,
     col      INT,
     m2       INT,
+    email    VARCHAR,
     PRIMARY KEY (id, extra_id)
 );
 
