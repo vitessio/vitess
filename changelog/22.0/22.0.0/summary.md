@@ -31,6 +31,7 @@
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[Semi-sync monitor in vttablet](#semi-sync-monitor)**
   - **[Wrapped fatal transaction errors](#new-errors-fatal-tx)**
+  - **[New Join type in VTGate](#new-join-type-vtgate)**
 - **[Minor Changes](#minor-changes)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
   - **[VTTablet](#minor-changes-vttablet)**
@@ -326,6 +327,20 @@ to acknowledge that the transaction was automatically rolled back and cleared by
 
 This change was introduced by [#17669](https://github.com/vitessio/vitess/pull/17669).
 
+
+### <a id="new-join-type-vtgate"/>New Join type in VTGate</a>
+
+This release introduces a new join type in vtgate: Block Joins.
+Block Joins use the MySQL `VALUES` statement to send all rows coming from the left-hand-side of the join to the right-hand-side, in a single network call.
+Unlike Apply Joins, which execute the right-hand-side of the join as many times as we got rows from the left-hand-side.
+This new approach allows vtgate to significantly reduce the amount of network calls and improve the performance of `JOIN`s.
+
+This new feature is experimental, unsupported queries include: DMLs, joins with more than two tables, joins with aggregation, information schema and non-normal tables.
+
+Block Joins can be enabled by setting the `--allow-block-joins` vtgate flag, or by using the `/*vt+ ALLOW_BLOCK_JOIN */` query hint.
+
+More information about this feature can be found in its [RFC #16508](https://github.com/vitessio/vitess/issues/16508) and
+on the Pull Request implementing it [#17641](https://github.com/vitessio/vitess/pull/17641).
 
 ---
 
