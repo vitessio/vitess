@@ -2115,7 +2115,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	// MoveTables and Reshard params
 	sourceShards := subFlags.String("source_shards", "", "Source shards")
 	*sourceShards = strings.TrimSpace(*sourceShards)
-	deferNonPKeys := subFlags.Bool("defer-secondary-keys", false, "Defer secondary index creation for a table until after it has been copied.")
+	deferNonPKeys := subFlags.Bool("defer-secondary-keys", true, "Defer secondary index creation for a table until after it has been copied.")
 
 	// Reshard params
 	targetShards := subFlags.String("target_shards", "", "Reshard only. Target shards")
