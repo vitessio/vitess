@@ -14313,7 +14313,6 @@ func TestValidateKeyspace(t *testing.T) {
 	}
 
 	type testcase struct {
-		name         string
 		keyspaceName string
 		wantErr      string
 		noKeyspace   bool
@@ -14342,7 +14341,7 @@ func TestValidateKeyspace(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.keyspaceName, func(t *testing.T) {
 			ts := memorytopo.NewServer(ctx, "zone1")
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)

@@ -4744,38 +4744,40 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 
 	if len(shards) == 0 {
 		resp.Results = append(resp.Results, fmt.Sprintf("no shards found in keyspace %v", req.Keyspace))
-	} else {
-		resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
-
-		var (
-			m  sync.Mutex
-			wg sync.WaitGroup
-		)
-		for _, shard := range shards {
-			wg.Add(1)
-			go func(shard string) {
-				defer wg.Done()
-
-				shardResp, err := s.ValidateShard(ctx, &vtctldatapb.ValidateShardRequest{
-					Keyspace:    req.Keyspace,
-					Shard:       shard,
-					PingTablets: req.PingTablets,
-				})
-
-				m.Lock()
-				defer m.Unlock()
-
-				if err != nil {
-					resp.Results = append(resp.Results, fmt.Sprintf("error validating shard %v/%v: %v", req.Keyspace, shard, err))
-					return
-				}
-
-				resp.ResultsByShard[shard] = shardResp
-			}(shard)
-		}
-
-		wg.Wait()
+		return resp, err
 	}
+
+	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
+
+	var (
+		m  sync.Mutex
+		wg sync.WaitGroup
+	)
+	for _, shard := range shards {
+		wg.Add(1)
+		go func(shard string) {
+			defer wg.Done()
+
+			shardResp, err := s.ValidateShard(ctx, &vtctldatapb.ValidateShardRequest{
+				Keyspace:    req.Keyspace,
+				Shard:       shard,
+				PingTablets: req.PingTablets,
+			})
+
+			m.Lock()
+			defer m.Unlock()
+
+			if err != nil {
+				resp.Results = append(resp.Results, fmt.Sprintf("error validating shard %v/%v: %v", req.Keyspace, shard, err))
+				return
+			}
+
+			resp.ResultsByShard[shard] = shardResp
+		}(shard)
+	}
+
+	wg.Wait()
+
 	return resp, err
 }
 
