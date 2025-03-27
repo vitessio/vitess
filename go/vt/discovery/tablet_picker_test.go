@@ -685,6 +685,61 @@ func TestPickNonServingTablets(t *testing.T) {
 	assert.True(t, picked3)
 }
 
+// TestPickNonLaggingTablets validates that lagging tablets are excluded when the
+// ExcludeTabletsWithMaxReplicationLag option is set.
+func TestPickNonLaggingTablets(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	cells := []string{"cell1"}
+	defaultCell := cells[0]
+	tabletTypes := "replica"
+	options := TabletPickerOptions{
+		ExcludeTabletsWithMaxReplicationLag: lowReplicationLag.Default(),
+	}
+	replLag := options.ExcludeTabletsWithMaxReplicationLag + (5 * time.Second)
+	te := newPickerTestEnv(t, ctx, cells)
+
+	// Tablet should not be selected as we only want replicas.
+	primaryTablet := addTablet(ctx, te, 100, topodatapb.TabletType_PRIMARY, defaultCell, true, true)
+	defer deleteTablet(t, te, primaryTablet)
+
+	// Tablet should not be selected as it is lagging.
+	laggingReplicaTablet := addTabletWithLag(ctx, te, 200, topodatapb.TabletType_REPLICA, defaultCell, true, true, uint32(replLag.Seconds()))
+	defer deleteTablet(t, te, laggingReplicaTablet)
+
+	// Tablet should be selected because it's a non-lagging replica.
+	nonLaggingReplicaTablet := addTablet(ctx, te, 300, topodatapb.TabletType_REPLICA, defaultCell, true, true)
+	defer deleteTablet(t, te, nonLaggingReplicaTablet)
+
+	_, err := te.topoServ.UpdateShardFields(ctx, te.keyspace, te.shard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primaryTablet.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	tp, err := NewTabletPicker(ctx, te.topoServ, cells, defaultCell, te.keyspace, te.shard, tabletTypes, options)
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(ctx, contextTimeout)
+	defer cancel()
+
+	var pickedPrimary, pickedLaggingReplica, pickedNonLaggingReplica int
+	for i := 0; i < numTestIterations; i++ {
+		tablet, err := tp.PickForStreaming(ctx)
+		require.NoError(t, err)
+		if proto.Equal(tablet, primaryTablet) {
+			pickedPrimary++
+		}
+		if proto.Equal(tablet, laggingReplicaTablet) {
+			pickedLaggingReplica++
+		}
+		if proto.Equal(tablet, nonLaggingReplicaTablet) {
+			pickedNonLaggingReplica++
+		}
+	}
+	require.Zero(t, pickedPrimary)
+	require.Zero(t, pickedLaggingReplica)
+	require.Equal(t, numTestIterations, pickedNonLaggingReplica)
+}
+
 type pickerTestEnv struct {
 	t        *testing.T
 	keyspace string
@@ -720,6 +775,10 @@ func newPickerTestEnv(t *testing.T, ctx context.Context, cells []string, extraCe
 }
 
 func addTablet(ctx context.Context, te *pickerTestEnv, id int, tabletType topodatapb.TabletType, cell string, serving, healthy bool) *topodatapb.Tablet {
+	return addTabletWithLag(ctx, te, id, tabletType, cell, serving, healthy, 0)
+}
+
+func addTabletWithLag(ctx context.Context, te *pickerTestEnv, id int, tabletType topodatapb.TabletType, cell string, serving, healthy bool, replLagSecs uint32) *topodatapb.Tablet {
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
@@ -748,6 +807,7 @@ func addTablet(ctx context.Context, te *pickerTestEnv, id int, tabletType topoda
 	if healthy {
 		shr.RealtimeStats.HealthError = ""
 	}
+	shr.RealtimeStats.ReplicationLagSeconds = replLagSecs
 
 	_ = createFixedHealthConn(tablet, shr)
 

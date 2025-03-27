@@ -145,8 +145,10 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 		c.asm.PushNull()
 	case tt == sqltypes.TypeJSON:
 		c.asm.PushColumn_json(column.Offset)
-	case tt == sqltypes.Datetime || tt == sqltypes.Timestamp:
+	case tt == sqltypes.Datetime:
 		c.asm.PushColumn_datetime(column.Offset)
+	case tt == sqltypes.Timestamp:
+		c.asm.PushColumn_timestamp(column.Offset)
 	case tt == sqltypes.Date:
 		c.asm.PushColumn_date(column.Offset)
 	case tt == sqltypes.Time:

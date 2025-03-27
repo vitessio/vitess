@@ -62,11 +62,13 @@ type (
 
 		onLeave      map[*AliasedExpr]func(*AliasedExpr)
 		parameterize bool
+		useASTQuery  bool
 	}
 	// RewriteASTResult holds the result of rewriting the AST, including bind variable needs.
 	RewriteASTResult struct {
 		*BindVarNeeds
-		AST Statement // The rewritten AST
+		AST                Statement // The rewritten AST
+		UpdateQueryFromAST bool
 	}
 	// VSchemaViews provides access to view definitions within the VSchema.
 	VSchemaViews interface {
@@ -99,8 +101,8 @@ var funcRewrites = map[string]string{
 	"row_count":      RowCountName,
 }
 
-// PrepareAST normalizes the input SQL statement and returns the rewritten AST along with bind variable information.
-func PrepareAST(
+// Normalize normalizes the input SQL statement and returns the rewritten AST along with bind variable information.
+func Normalize(
 	in Statement,
 	reservedVars *ReservedVars,
 	bindVars map[string]*querypb.BindVariable,
@@ -114,16 +116,18 @@ func PrepareAST(
 ) (*RewriteASTResult, error) {
 	nz := newNormalizer(reservedVars, bindVars, keyspace, selectLimit, setVarComment, sysVars, fkChecksState, views, parameterize)
 	nz.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
+	nz.determineQueryRewriteStrategy(in)
+
 	out := SafeRewrite(in, nz.walkDown, nz.walkUp)
 	if nz.err != nil {
 		return nil, nz.err
 	}
 
-	r := &RewriteASTResult{
-		AST:          out.(Statement),
-		BindVarNeeds: nz.bindVarNeeds,
-	}
-	return r, nil
+	return &RewriteASTResult{
+		AST:                out.(Statement),
+		BindVarNeeds:       nz.bindVarNeeds,
+		UpdateQueryFromAST: nz.useASTQuery,
+	}, nil
 }
 
 func newNormalizer(
@@ -153,17 +157,29 @@ func newNormalizer(
 	}
 }
 
+func (nz *normalizer) determineQueryRewriteStrategy(in Statement) {
+	switch in.(type) {
+	case *Select, *Union, *Insert, *Update, *Delete, *CallProc, *Stream, *VExplainStmt:
+		nz.useASTQuery = true
+	case *Set:
+		nz.useASTQuery = true
+		nz.parameterize = false
+	default:
+		nz.parameterize = false
+	}
+}
+
 // walkDown processes nodes when traversing down the AST.
 // It handles normalization logic based on node types.
 func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 	switch node := node.(type) {
-	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release, *OtherAdmin, *Analyze, *AssignmentExpr,
+	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release, *OtherAdmin, *Analyze,
 		*PrepareStmt, *ExecuteStmt, *FramePoint, *ColName, TableName, *ConvertType:
-		// These statement don't need normalizing
+		// These statement do not need normalizing
 		return false
-	case *Set:
-		// Disable parameterization within SET statements.
-		nz.parameterize = false
+	case *AssignmentExpr:
+		nz.err = vterrors.VT12001("Assignment expression")
+		return false
 	case *DerivedTable:
 		nz.inDerived++
 	case *Select:
@@ -216,18 +232,22 @@ func (nz *normalizer) noteAliasedExprName(node *AliasedExpr) {
 // It finalizes normalization logic based on node types.
 func (nz *normalizer) walkUp(cursor *Cursor) bool {
 	// Add SET_VAR comments if applicable.
-	if supportOptimizerHint, supports := cursor.Node().(SupportOptimizerHint); supports {
+	if stmt, supports := cursor.Node().(SupportOptimizerHint); supports {
 		if nz.setVarComment != "" {
-			newComments, err := supportOptimizerHint.GetParsedComments().AddQueryHint(nz.setVarComment)
+			newComments, err := stmt.GetParsedComments().AddQueryHint(nz.setVarComment)
 			if err != nil {
 				nz.err = err
 				return false
 			}
-			supportOptimizerHint.SetComments(newComments)
+			stmt.SetComments(newComments)
+			nz.useASTQuery = true
 		}
+
+		// use foreign key checks of normalizer and set the query hint in the query.
 		if nz.fkChecksState != nil {
-			newComments := supportOptimizerHint.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, FkChecksStateString(nz.fkChecksState))
-			supportOptimizerHint.SetComments(newComments)
+			newComments := stmt.GetParsedComments().SetMySQLSetVarValue(sysvars.ForeignKeyChecks, FkChecksStateString(nz.fkChecksState))
+			stmt.SetComments(newComments)
+			nz.useASTQuery = true
 		}
 	}
 

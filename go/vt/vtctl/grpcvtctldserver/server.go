@@ -464,6 +464,8 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("allow_primary", req.AllowPrimary)
 	span.Annotate("concurrency", req.Concurrency)
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
+	span.Annotate("upgrade_safe", req.UpgradeSafe)
+	span.Annotate("mysql_shutdown_timeout", req.MysqlShutdownTimeout)
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
 	// Instead of return on err directly, only return err when no tablets for backup at all
@@ -484,6 +486,11 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 		switch tablet.Type {
 		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE:
 		default:
+			continue
+		}
+
+		// ignore tablet with an unknown replication lag status
+		if stats[i].ReplicationLagUnknown {
 			continue
 		}
 
@@ -511,7 +518,13 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(backupTablet.Alias))
 
-	r := &vtctldatapb.BackupRequest{Concurrency: req.Concurrency, AllowPrimary: req.AllowPrimary, UpgradeSafe: req.UpgradeSafe, IncrementalFromPos: req.IncrementalFromPos}
+	r := &vtctldatapb.BackupRequest{
+		Concurrency:          req.Concurrency,
+		AllowPrimary:         req.AllowPrimary,
+		IncrementalFromPos:   req.IncrementalFromPos,
+		UpgradeSafe:          req.UpgradeSafe,
+		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
+	}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
 }
@@ -521,11 +534,12 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 },
 ) error {
 	r := &tabletmanagerdatapb.BackupRequest{
-		Concurrency:        req.Concurrency,
-		AllowPrimary:       req.AllowPrimary,
-		IncrementalFromPos: req.IncrementalFromPos,
-		UpgradeSafe:        req.UpgradeSafe,
-		BackupEngine:       req.BackupEngine,
+		Concurrency:          req.Concurrency,
+		AllowPrimary:         req.AllowPrimary,
+		IncrementalFromPos:   req.IncrementalFromPos,
+		BackupEngine:         req.BackupEngine,
+		UpgradeSafe:          req.UpgradeSafe,
+		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -575,6 +589,7 @@ func (s *VtctldServer) CancelSchemaMigration(ctx context.Context, req *vtctldata
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -794,6 +809,7 @@ func (s *VtctldServer) CleanupSchemaMigration(ctx context.Context, req *vtctldat
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -825,6 +841,7 @@ func (s *VtctldServer) ForceCutOverSchemaMigration(ctx context.Context, req *vtc
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -856,6 +873,7 @@ func (s *VtctldServer) CompleteSchemaMigration(ctx context.Context, req *vtctlda
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -2326,6 +2344,10 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			tablets = append(tablets, ti.Tablet)
 		}
 
+		// Sort the list of tablets alphabetically by alias to improve readability of output.
+		sort.Slice(tablets, func(i, j int) bool {
+			return topoproto.TabletAliasString(tablets[i].Alias) < topoproto.TabletAliasString(tablets[j].Alias)
+		})
 		return &vtctldatapb.GetTabletsResponse{Tablets: tablets}, nil
 	}
 
@@ -2414,6 +2436,10 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 		adjustedTablets[i] = ti.Tablet
 	}
+	// Sort the list of tablets alphabetically by alias to improve readability of output.
+	sort.Slice(adjustedTablets, func(i, j int) bool {
+		return topoproto.TabletAliasString(adjustedTablets[i].Alias) < topoproto.TabletAliasString(adjustedTablets[j].Alias)
+	})
 
 	return &vtctldatapb.GetTabletsResponse{
 		Tablets: adjustedTablets,
@@ -3004,6 +3030,7 @@ func (s *VtctldServer) LaunchSchemaMigration(ctx context.Context, req *vtctldata
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -3801,6 +3828,7 @@ func (s *VtctldServer) RetrySchemaMigration(ctx context.Context, req *vtctldatap
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err

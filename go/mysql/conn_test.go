@@ -816,7 +816,7 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 
 	// this handler will return results according to the query. In case the query contains "error" it will return an error
 	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-	handler := &testRun{t: t, err: fmt.Errorf("execution failed")}
+	handler := &testRun{err: fmt.Errorf("execution failed")}
 	res := sConn.handleNextCommand(handler)
 	// Execution error will occur in this case because the query sent is error and testRun will throw an error.
 	// We should send an error packet but not close the connection.
@@ -842,7 +842,7 @@ func TestMultiStatement(t *testing.T) {
 
 	// this handler will return results according to the query. In case the query contains "error" it will return an error
 	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-	handler := &testRun{t: t, err: sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")}
+	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")}
 	res := sConn.handleNextCommand(handler)
 	// The queries run will be select 1; and select 2; These queries do not return any errors, so the connection should still be open
 	require.True(t, res, "we should not break the connection in case of no errors")
@@ -890,7 +890,7 @@ func TestMultiStatementOnSplitError(t *testing.T) {
 
 	// this handler will return results according to the query. In case the query contains "error" it will return an error
 	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-	handler := &testRun{t: t, err: fmt.Errorf("execution failed")}
+	handler := &testRun{err: fmt.Errorf("execution failed")}
 
 	// We will encounter an error in split statement when this multi statement is processed.
 	res := sConn.handleNextCommand(handler)
@@ -917,7 +917,7 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 
 	// this handler will return results according to the query. In case the query contains "error" it will return an error
 	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-	handler := &testRun{t: t, err: fmt.Errorf("execution failed")}
+	handler := &testRun{err: fmt.Errorf("execution failed")}
 	res := sConn.handleNextCommand(handler)
 	require.True(t, res, "we should not break the connection because of execution errors")
 
@@ -938,7 +938,7 @@ func TestConnectionErrorWhileWritingComQuery(t *testing.T) {
 
 	// this handler will return an error on the first run, and fail the test if it's run more times
 	errorString := make([]byte, 17000)
-	handler := &testRun{t: t, err: errors.New(string(errorString))}
+	handler := &testRun{err: errors.New(string(errorString))}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -953,7 +953,7 @@ func TestConnectionErrorWhileWritingComStmtSendLongData(t *testing.T) {
 	}, DefaultFlushDelay, 0)
 
 	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &testRun{t: t, err: fmt.Errorf("not used")}
+	handler := &testRun{err: fmt.Errorf("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -967,7 +967,7 @@ func TestConnectionErrorWhileWritingComPrepare(t *testing.T) {
 	}, DefaultFlushDelay, 0)
 	sConn.Capabilities = sConn.Capabilities | CapabilityClientMultiStatements
 	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &testRun{t: t, err: fmt.Errorf("not used")}
+	handler := &testRun{err: fmt.Errorf("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -981,7 +981,7 @@ func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
 			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
 	}, DefaultFlushDelay, 0)
 	// this handler will return an error on the first run, and fail the test if it's run more times
-	handler := &testRun{t: t, err: fmt.Errorf("not used")}
+	handler := &testRun{err: fmt.Errorf("not used")}
 	res := sConn.handleNextCommand(handler)
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
@@ -1032,15 +1032,15 @@ func startGoRoutine(ctx context.Context, t *testing.T, s string) {
 		err := cConn.writePacket(mockData)
 		require.NoError(t, err)
 
-		handler := &testRun{
-			t:              t,
-			expParamCounts: 1,
-			expQuery:       sql,
-			expStmtID:      1,
-		}
+		handler := &testRun{paramCounts: 1}
 
 		ok := sConn.handleNextCommand(handler)
 		require.True(t, ok, "error handling command for id: %s", s)
+
+		prepareData, ok := sConn.PrepareData[sConn.StatementID]
+		require.True(t, ok, "prepare data not found for id: %d", sConn.StatementID)
+		require.Equal(t, uint16(1), prepareData.ParamsCount)
+		require.NotNil(t, prepareData.BindVars)
 
 		resp, err := cConn.ReadPacket()
 		require.NoError(t, err)
@@ -1083,11 +1083,9 @@ func createSendLongDataPacket(stmtID uint32, paramID uint16, data []byte) []byte
 
 type testRun struct {
 	UnimplementedHandler
-	t              *testing.T
-	err            error
-	expParamCounts int
-	expQuery       string
-	expStmtID      int
+	paramCounts uint16
+	err         error
+	expQuery    string
 }
 
 func (t testRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
@@ -1129,13 +1127,8 @@ func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result)
 	return nil
 }
 
-func (t testRun) ComPrepare(c *Conn, query string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
-	assert.Equal(t.t, t.expQuery, query)
-	assert.EqualValues(t.t, t.expStmtID, c.StatementID)
-	assert.NotNil(t.t, c.PrepareData[c.StatementID])
-	assert.EqualValues(t.t, t.expParamCounts, c.PrepareData[c.StatementID].ParamsCount)
-	assert.Len(t.t, c.PrepareData, int(c.PrepareData[c.StatementID].ParamsCount))
-	return nil, nil
+func (t testRun) ComPrepare(c *Conn, query string) ([]*querypb.Field, uint16, error) {
+	return nil, t.paramCounts, nil
 }
 
 func (t testRun) WarningCount(c *Conn) uint16 {

@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ limitations under the License.
 
 package sqlparser
 
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -564,11 +565,15 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfWith(parent, node, replacer)
 	case *XorExpr:
 		return a.rewriteRefOfXorExpr(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -587,6 +592,13 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 		}
 	}
 	for x, el := range node.Columns {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfAddColumnsColumnsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfColumnDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*AddColumns).Columns[idx] = newNode.(*ColumnDefinition)
@@ -595,10 +607,17 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 			return false
 		}
 	}
+	if a.collectPaths && len(node.Columns) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAddColumnsAfter))
+	}
 	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*AddColumns).After = newNode.(*ColName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -610,6 +629,8 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAddConstraintDefinition(parent SQLNode, node *AddConstraintDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -627,10 +648,16 @@ func (a *application) rewriteRefOfAddConstraintDefinition(parent SQLNode, node *
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAddConstraintDefinitionConstraintDefinition))
+	}
 	if !a.rewriteRefOfConstraintDefinition(node, node.ConstraintDefinition, func(newNode, parent SQLNode) {
 		parent.(*AddConstraintDefinition).ConstraintDefinition = newNode.(*ConstraintDefinition)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -642,6 +669,8 @@ func (a *application) rewriteRefOfAddConstraintDefinition(parent SQLNode, node *
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIndexDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -659,10 +688,16 @@ func (a *application) rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIn
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAddIndexDefinitionIndexDefinition))
+	}
 	if !a.rewriteRefOfIndexDefinition(node, node.IndexDefinition, func(newNode, parent SQLNode) {
 		parent.(*AddIndexDefinition).IndexDefinition = newNode.(*IndexDefinition)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -674,6 +709,8 @@ func (a *application) rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIn
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -691,15 +728,25 @@ func (a *application) rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAliasedExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*AliasedExpr).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAliasedExprAs))
+	}
 	if !a.rewriteIdentifierCI(node, node.As, func(newNode, parent SQLNode) {
 		parent.(*AliasedExpr).As = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -711,6 +758,8 @@ func (a *application) rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *AliasedTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -728,30 +777,52 @@ func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *Aliased
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAliasedTableExprExpr))
+	}
 	if !a.rewriteSimpleTableExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).Expr = newNode.(SimpleTableExpr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAliasedTableExprPartitions))
 	}
 	if !a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).Partitions = newNode.(Partitions)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAliasedTableExprAs))
+	}
 	if !a.rewriteIdentifierCS(node, node.As, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).As = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAliasedTableExprHints))
 	}
 	if !a.rewriteIndexHints(node, node.Hints, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).Hints = newNode.(IndexHints)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAliasedTableExprColumns))
+	}
 	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).Columns = newNode.(Columns)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -763,6 +834,8 @@ func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *Aliased
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharset, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -792,6 +865,8 @@ func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharse
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterCheck(parent SQLNode, node *AlterCheck, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -809,10 +884,16 @@ func (a *application) rewriteRefOfAlterCheck(parent SQLNode, node *AlterCheck, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAlterCheckName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*AlterCheck).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -824,6 +905,8 @@ func (a *application) rewriteRefOfAlterCheck(parent SQLNode, node *AlterCheck, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -841,15 +924,25 @@ func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAlterColumnColumn))
+	}
 	if !a.rewriteRefOfColName(node, node.Column, func(newNode, parent SQLNode) {
 		parent.(*AlterColumn).Column = newNode.(*ColName)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterColumnDefaultVal))
+	}
 	if !a.rewriteExpr(node, node.DefaultVal, func(newNode, parent SQLNode) {
 		parent.(*AlterColumn).DefaultVal = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -861,6 +954,8 @@ func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatabase, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -878,15 +973,25 @@ func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatab
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAlterDatabaseComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*AlterDatabase).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterDatabaseDBName))
+	}
 	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
 		parent.(*AlterDatabase).DBName = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -898,6 +1003,8 @@ func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatab
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterIndex(parent SQLNode, node *AlterIndex, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -915,10 +1022,16 @@ func (a *application) rewriteRefOfAlterIndex(parent SQLNode, node *AlterIndex, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAlterIndexName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*AlterIndex).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -930,6 +1043,8 @@ func (a *application) rewriteRefOfAlterIndex(parent SQLNode, node *AlterIndex, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigration, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -947,10 +1062,16 @@ func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigr
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAlterMigrationRatio))
+	}
 	if !a.rewriteRefOfLiteral(node, node.Ratio, func(newNode, parent SQLNode) {
 		parent.(*AlterMigration).Ratio = newNode.(*Literal)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -962,6 +1083,8 @@ func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigr
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -979,12 +1102,25 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAlterTableTable))
+	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*AlterTable).Table = newNode.(TableName)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.AlterOptions {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfAlterTableAlterOptionsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteAlterOption(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*AlterTable).AlterOptions[idx] = newNode.(AlterOption)
@@ -993,20 +1129,35 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 			return false
 		}
 	}
+	if a.collectPaths && len(node.AlterOptions) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterTablePartitionSpec))
+	}
 	if !a.rewriteRefOfPartitionSpec(node, node.PartitionSpec, func(newNode, parent SQLNode) {
 		parent.(*AlterTable).PartitionSpec = newNode.(*PartitionSpec)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterTablePartitionOption))
 	}
 	if !a.rewriteRefOfPartitionOption(node, node.PartitionOption, func(newNode, parent SQLNode) {
 		parent.(*AlterTable).PartitionOption = newNode.(*PartitionOption)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterTableComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*AlterTable).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1018,6 +1169,8 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1035,30 +1188,52 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAlterViewViewName))
+	}
 	if !a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
 		parent.(*AlterView).ViewName = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterViewDefiner))
 	}
 	if !a.rewriteRefOfDefiner(node, node.Definer, func(newNode, parent SQLNode) {
 		parent.(*AlterView).Definer = newNode.(*Definer)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterViewColumns))
+	}
 	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*AlterView).Columns = newNode.(Columns)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterViewSelect))
 	}
 	if !a.rewriteTableStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*AlterView).Select = newNode.(TableStatement)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterViewComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*AlterView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1070,6 +1245,8 @@ func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschema, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1087,17 +1264,34 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAlterVschemaTable))
+	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*AlterVschema).Table = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterVschemaVindexSpec))
 	}
 	if !a.rewriteRefOfVindexSpec(node, node.VindexSpec, func(newNode, parent SQLNode) {
 		parent.(*AlterVschema).VindexSpec = newNode.(*VindexSpec)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.VindexCols {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfAlterVschemaVindexColsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*AlterVschema).VindexCols[idx] = newNode.(IdentifierCI)
@@ -1106,10 +1300,17 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 			return false
 		}
 	}
+	if a.collectPaths && len(node.VindexCols) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAlterVschemaAutoIncSpec))
+	}
 	if !a.rewriteRefOfAutoIncSpec(node, node.AutoIncSpec, func(newNode, parent SQLNode) {
 		parent.(*AlterVschema).AutoIncSpec = newNode.(*AutoIncSpec)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1121,6 +1322,8 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAnalyze(parent SQLNode, node *Analyze, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1138,10 +1341,16 @@ func (a *application) rewriteRefOfAnalyze(parent SQLNode, node *Analyze, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAnalyzeTable))
+	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*Analyze).Table = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1153,6 +1362,8 @@ func (a *application) rewriteRefOfAnalyze(parent SQLNode, node *Analyze, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1170,15 +1381,25 @@ func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAndExprLeft))
+	}
 	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*AndExpr).Left = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAndExprRight))
+	}
 	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*AndExpr).Right = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1190,6 +1411,8 @@ func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAnyValue(parent SQLNode, node *AnyValue, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1207,10 +1430,16 @@ func (a *application) rewriteRefOfAnyValue(parent SQLNode, node *AnyValue, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAnyValueArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*AnyValue).Arg = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1222,6 +1451,8 @@ func (a *application) rewriteRefOfAnyValue(parent SQLNode, node *AnyValue, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfArgument(parent SQLNode, node *Argument, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1251,6 +1482,8 @@ func (a *application) rewriteRefOfArgument(parent SQLNode, node *Argument, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfArgumentLessWindowExpr(parent SQLNode, node *ArgumentLessWindowExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1268,10 +1501,16 @@ func (a *application) rewriteRefOfArgumentLessWindowExpr(parent SQLNode, node *A
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfArgumentLessWindowExprOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*ArgumentLessWindowExpr).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1283,6 +1522,8 @@ func (a *application) rewriteRefOfArgumentLessWindowExpr(parent SQLNode, node *A
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAssignmentExpr(parent SQLNode, node *AssignmentExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1300,15 +1541,25 @@ func (a *application) rewriteRefOfAssignmentExpr(parent SQLNode, node *Assignmen
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAssignmentExprLeft))
+	}
 	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*AssignmentExpr).Left = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAssignmentExprRight))
+	}
 	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*AssignmentExpr).Right = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1320,6 +1571,8 @@ func (a *application) rewriteRefOfAssignmentExpr(parent SQLNode, node *Assignmen
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1337,15 +1590,25 @@ func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAutoIncSpecColumn))
+	}
 	if !a.rewriteIdentifierCI(node, node.Column, func(newNode, parent SQLNode) {
 		parent.(*AutoIncSpec).Column = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAutoIncSpecSequence))
+	}
 	if !a.rewriteTableName(node, node.Sequence, func(newNode, parent SQLNode) {
 		parent.(*AutoIncSpec).Sequence = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1357,6 +1620,8 @@ func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1374,15 +1639,25 @@ func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replac
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfAvgArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*Avg).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfAvgOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*Avg).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1394,6 +1669,8 @@ func (a *application) rewriteRefOfAvg(parent SQLNode, node *Avg, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1423,6 +1700,8 @@ func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfBetweenExpr(parent SQLNode, node *BetweenExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1440,20 +1719,34 @@ func (a *application) rewriteRefOfBetweenExpr(parent SQLNode, node *BetweenExpr,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfBetweenExprLeft))
+	}
 	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*BetweenExpr).Left = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfBetweenExprFrom))
 	}
 	if !a.rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
 		parent.(*BetweenExpr).From = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfBetweenExprTo))
+	}
 	if !a.rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
 		parent.(*BetweenExpr).To = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1465,6 +1758,8 @@ func (a *application) rewriteRefOfBetweenExpr(parent SQLNode, node *BetweenExpr,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1482,15 +1777,25 @@ func (a *application) rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfBinaryExprLeft))
+	}
 	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*BinaryExpr).Left = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfBinaryExprRight))
+	}
 	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*BinaryExpr).Right = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1502,6 +1807,8 @@ func (a *application) rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfBitAnd(parent SQLNode, node *BitAnd, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1519,15 +1826,25 @@ func (a *application) rewriteRefOfBitAnd(parent SQLNode, node *BitAnd, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfBitAndArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*BitAnd).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfBitAndOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*BitAnd).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1539,6 +1856,8 @@ func (a *application) rewriteRefOfBitAnd(parent SQLNode, node *BitAnd, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfBitOr(parent SQLNode, node *BitOr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1556,15 +1875,25 @@ func (a *application) rewriteRefOfBitOr(parent SQLNode, node *BitOr, replacer re
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfBitOrArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*BitOr).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfBitOrOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*BitOr).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1576,6 +1905,8 @@ func (a *application) rewriteRefOfBitOr(parent SQLNode, node *BitOr, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1593,15 +1924,25 @@ func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfBitXorArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*BitXor).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfBitXorOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*BitXor).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1613,6 +1954,8 @@ func (a *application) rewriteRefOfBitXor(parent SQLNode, node *BitXor, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1630,12 +1973,25 @@ func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCallProcName))
+	}
 	if !a.rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*CallProc).Name = newNode.(TableName)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Params {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfCallProcParamsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*CallProc).Params[idx] = newNode.(Expr)
@@ -1643,6 +1999,9 @@ func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, repla
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1654,6 +2013,8 @@ func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1671,12 +2032,25 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCaseExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*CaseExpr).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Whens {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfCaseExprWhensOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfWhen(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*CaseExpr).Whens[idx] = newNode.(*When)
@@ -1685,10 +2059,17 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 			return false
 		}
 	}
+	if a.collectPaths && len(node.Whens) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCaseExprElse))
+	}
 	if !a.rewriteExpr(node, node.Else, func(newNode, parent SQLNode) {
 		parent.(*CaseExpr).Else = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1700,6 +2081,8 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCastExpr(parent SQLNode, node *CastExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1717,15 +2100,25 @@ func (a *application) rewriteRefOfCastExpr(parent SQLNode, node *CastExpr, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCastExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*CastExpr).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCastExprType))
+	}
 	if !a.rewriteRefOfConvertType(node, node.Type, func(newNode, parent SQLNode) {
 		parent.(*CastExpr).Type = newNode.(*ConvertType)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1737,6 +2130,8 @@ func (a *application) rewriteRefOfCastExpr(parent SQLNode, node *CastExpr, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColumn, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1754,20 +2149,34 @@ func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColum
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfChangeColumnOldColumn))
+	}
 	if !a.rewriteRefOfColName(node, node.OldColumn, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).OldColumn = newNode.(*ColName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfChangeColumnNewColDefinition))
 	}
 	if !a.rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).NewColDefinition = newNode.(*ColumnDefinition)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfChangeColumnAfter))
+	}
 	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).After = newNode.(*ColName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1779,6 +2188,8 @@ func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColum
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1797,6 +2208,13 @@ func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, repla
 		}
 	}
 	for x, el := range node.Exprs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfCharExprExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*CharExpr).Exprs[idx] = newNode.(Expr)
@@ -1804,6 +2222,9 @@ func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, repla
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1815,6 +2236,8 @@ func (a *application) rewriteRefOfCharExpr(parent SQLNode, node *CharExpr, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node *CheckConstraintDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1832,10 +2255,16 @@ func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCheckConstraintDefinitionExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*CheckConstraintDefinition).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1847,6 +2276,8 @@ func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1864,15 +2295,25 @@ func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfColNameName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ColName).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfColNameQualifier))
+	}
 	if !a.rewriteTableName(node, node.Qualifier, func(newNode, parent SQLNode) {
 		parent.(*ColName).Qualifier = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1884,6 +2325,8 @@ func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1901,10 +2344,16 @@ func (a *application) rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCollateExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*CollateExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1916,6 +2365,8 @@ func (a *application) rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1933,15 +2384,25 @@ func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnD
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfColumnDefinitionName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ColumnDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfColumnDefinitionType))
+	}
 	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
 		parent.(*ColumnDefinition).Type = newNode.(*ColumnType)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1953,6 +2414,8 @@ func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnD
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfColumnType(parent SQLNode, node *ColumnType, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1982,6 +2445,8 @@ func (a *application) rewriteRefOfColumnType(parent SQLNode, node *ColumnType, r
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2000,6 +2465,13 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(ColumnsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(Columns)[idx] = newNode.(IdentifierCI)
@@ -2007,6 +2479,9 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2018,6 +2493,8 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCommentOnly(parent SQLNode, node *CommentOnly, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2047,6 +2524,8 @@ func (a *application) rewriteRefOfCommentOnly(parent SQLNode, node *CommentOnly,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2076,6 +2555,8 @@ func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2093,20 +2574,34 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCommonTableExprID))
+	}
 	if !a.rewriteIdentifierCS(node, node.ID, func(newNode, parent SQLNode) {
 		parent.(*CommonTableExpr).ID = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCommonTableExprColumns))
 	}
 	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*CommonTableExpr).Columns = newNode.(Columns)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCommonTableExprSubquery))
+	}
 	if !a.rewriteTableStatement(node, node.Subquery, func(newNode, parent SQLNode) {
 		parent.(*CommonTableExpr).Subquery = newNode.(TableStatement)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2118,6 +2613,8 @@ func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTa
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *ComparisonExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2135,20 +2632,34 @@ func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *Compariso
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfComparisonExprLeft))
+	}
 	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*ComparisonExpr).Left = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfComparisonExprRight))
 	}
 	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*ComparisonExpr).Right = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfComparisonExprEscape))
+	}
 	if !a.rewriteExpr(node, node.Escape, func(newNode, parent SQLNode) {
 		parent.(*ComparisonExpr).Escape = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2160,6 +2671,8 @@ func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *Compariso
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *ConstraintDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2177,15 +2690,25 @@ func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *Con
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfConstraintDefinitionName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ConstraintDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfConstraintDefinitionDetails))
+	}
 	if !a.rewriteConstraintInfo(node, node.Details, func(newNode, parent SQLNode) {
 		parent.(*ConstraintDefinition).Details = newNode.(ConstraintInfo)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2197,6 +2720,8 @@ func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *Con
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2214,15 +2739,25 @@ func (a *application) rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfConvertExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*ConvertExpr).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfConvertExprType))
+	}
 	if !a.rewriteRefOfConvertType(node, node.Type, func(newNode, parent SQLNode) {
 		parent.(*ConvertExpr).Type = newNode.(*ConvertType)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2234,6 +2769,8 @@ func (a *application) rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfConvertType(parent SQLNode, node *ConvertType, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2263,6 +2800,8 @@ func (a *application) rewriteRefOfConvertType(parent SQLNode, node *ConvertType,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfConvertUsingExpr(parent SQLNode, node *ConvertUsingExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2280,10 +2819,16 @@ func (a *application) rewriteRefOfConvertUsingExpr(parent SQLNode, node *Convert
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfConvertUsingExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*ConvertUsingExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2295,6 +2840,8 @@ func (a *application) rewriteRefOfConvertUsingExpr(parent SQLNode, node *Convert
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2313,6 +2860,13 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 		}
 	}
 	for x, el := range node.Args {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfCountArgsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*Count).Args[idx] = newNode.(Expr)
@@ -2321,10 +2875,17 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 			return false
 		}
 	}
+	if a.collectPaths && len(node.Args) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCountOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*Count).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2336,6 +2897,8 @@ func (a *application) rewriteRefOfCount(parent SQLNode, node *Count, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCountStar(parent SQLNode, node *CountStar, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2353,10 +2916,16 @@ func (a *application) rewriteRefOfCountStar(parent SQLNode, node *CountStar, rep
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCountStarOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*CountStar).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2368,6 +2937,8 @@ func (a *application) rewriteRefOfCountStar(parent SQLNode, node *CountStar, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDatabase, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2385,15 +2956,25 @@ func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDat
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCreateDatabaseComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*CreateDatabase).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateDatabaseDBName))
+	}
 	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
 		parent.(*CreateDatabase).DBName = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2405,6 +2986,8 @@ func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDat
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2422,25 +3005,43 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCreateTableTable))
+	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*CreateTable).Table = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateTableTableSpec))
 	}
 	if !a.rewriteRefOfTableSpec(node, node.TableSpec, func(newNode, parent SQLNode) {
 		parent.(*CreateTable).TableSpec = newNode.(*TableSpec)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateTableOptLike))
+	}
 	if !a.rewriteRefOfOptLike(node, node.OptLike, func(newNode, parent SQLNode) {
 		parent.(*CreateTable).OptLike = newNode.(*OptLike)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateTableComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*CreateTable).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2452,6 +3053,8 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2469,30 +3072,52 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCreateViewViewName))
+	}
 	if !a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
 		parent.(*CreateView).ViewName = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateViewDefiner))
 	}
 	if !a.rewriteRefOfDefiner(node, node.Definer, func(newNode, parent SQLNode) {
 		parent.(*CreateView).Definer = newNode.(*Definer)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateViewColumns))
+	}
 	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*CreateView).Columns = newNode.(Columns)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateViewSelect))
 	}
 	if !a.rewriteTableStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*CreateView).Select = newNode.(TableStatement)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateViewComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*CreateView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2504,6 +3129,8 @@ func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2521,10 +3148,16 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfCurTimeFuncExprName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*CurTimeFuncExpr).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2536,6 +3169,8 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *DeallocateStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2553,15 +3188,25 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfDeallocateStmtComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*DeallocateStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeallocateStmtName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*DeallocateStmt).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2573,6 +3218,8 @@ func (a *application) rewriteRefOfDeallocateStmt(parent SQLNode, node *Deallocat
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2602,6 +3249,8 @@ func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDefiner(parent SQLNode, node *Definer, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2631,6 +3280,8 @@ func (a *application) rewriteRefOfDefiner(parent SQLNode, node *Definer, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2648,17 +3299,34 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfDeleteWith))
+	}
 	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
 		parent.(*Delete).With = newNode.(*With)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeleteComments))
 	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Delete).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.TableExprs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfDeleteTableExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*Delete).TableExprs[idx] = newNode.(TableExpr)
@@ -2667,30 +3335,53 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 			return false
 		}
 	}
+	if a.collectPaths && len(node.TableExprs) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeleteTargets))
+	}
 	if !a.rewriteTableNames(node, node.Targets, func(newNode, parent SQLNode) {
 		parent.(*Delete).Targets = newNode.(TableNames)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeletePartitions))
 	}
 	if !a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
 		parent.(*Delete).Partitions = newNode.(Partitions)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeleteWhere))
+	}
 	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*Delete).Where = newNode.(*Where)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeleteOrderBy))
 	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Delete).OrderBy = newNode.(OrderBy)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDeleteLimit))
+	}
 	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Delete).Limit = newNode.(*Limit)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2702,6 +3393,8 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2719,10 +3412,16 @@ func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTabl
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfDerivedTableSelect))
+	}
 	if !a.rewriteTableStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*DerivedTable).Select = newNode.(TableStatement)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2734,6 +3433,8 @@ func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTabl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2751,10 +3452,16 @@ func (a *application) rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfDropColumnName))
+	}
 	if !a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*DropColumn).Name = newNode.(*ColName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2766,6 +3473,8 @@ func (a *application) rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabase, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2783,15 +3492,25 @@ func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabas
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfDropDatabaseComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*DropDatabase).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDropDatabaseDBName))
+	}
 	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
 		parent.(*DropDatabase).DBName = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2803,6 +3522,8 @@ func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabas
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2820,10 +3541,16 @@ func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfDropKeyName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*DropKey).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2835,6 +3562,8 @@ func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2852,15 +3581,25 @@ func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, rep
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfDropTableFromTables))
+	}
 	if !a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
 		parent.(*DropTable).FromTables = newNode.(TableNames)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDropTableComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*DropTable).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2872,6 +3611,8 @@ func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2889,15 +3630,25 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfDropViewFromTables))
+	}
 	if !a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
 		parent.(*DropView).FromTables = newNode.(TableNames)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDropViewComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*DropView).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2909,6 +3660,8 @@ func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2926,17 +3679,34 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfExecuteStmtName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ExecuteStmt).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfExecuteStmtComments))
 	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*ExecuteStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Arguments {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfExecuteStmtArgumentsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfVariable(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*ExecuteStmt).Arguments[idx] = newNode.(*Variable)
@@ -2944,6 +3714,9 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2955,6 +3728,8 @@ func (a *application) rewriteRefOfExecuteStmt(parent SQLNode, node *ExecuteStmt,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -2972,10 +3747,16 @@ func (a *application) rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfExistsExprSubquery))
+	}
 	if !a.rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
 		parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -2987,6 +3768,8 @@ func (a *application) rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3004,15 +3787,25 @@ func (a *application) rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfExplainStmtStatement))
+	}
 	if !a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
 		parent.(*ExplainStmt).Statement = newNode.(Statement)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfExplainStmtComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*ExplainStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3024,6 +3817,8 @@ func (a *application) rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3041,10 +3836,16 @@ func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfExplainTabTable))
+	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*ExplainTab).Table = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3056,6 +3857,8 @@ func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExprs(parent SQLNode, node *Exprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3074,6 +3877,13 @@ func (a *application) rewriteRefOfExprs(parent SQLNode, node *Exprs, replacer re
 		}
 	}
 	for x, el := range node.Exprs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfExprsExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*Exprs).Exprs[idx] = newNode.(Expr)
@@ -3081,6 +3891,9 @@ func (a *application) rewriteRefOfExprs(parent SQLNode, node *Exprs, replacer re
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3092,6 +3905,8 @@ func (a *application) rewriteRefOfExprs(parent SQLNode, node *Exprs, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExtractFuncExpr(parent SQLNode, node *ExtractFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3109,10 +3924,16 @@ func (a *application) rewriteRefOfExtractFuncExpr(parent SQLNode, node *ExtractF
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfExtractFuncExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*ExtractFuncExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3124,6 +3945,8 @@ func (a *application) rewriteRefOfExtractFuncExpr(parent SQLNode, node *ExtractF
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfExtractValueExpr(parent SQLNode, node *ExtractValueExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3141,15 +3964,25 @@ func (a *application) rewriteRefOfExtractValueExpr(parent SQLNode, node *Extract
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfExtractValueExprFragment))
+	}
 	if !a.rewriteExpr(node, node.Fragment, func(newNode, parent SQLNode) {
 		parent.(*ExtractValueExpr).Fragment = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfExtractValueExprXPathExpr))
+	}
 	if !a.rewriteExpr(node, node.XPathExpr, func(newNode, parent SQLNode) {
 		parent.(*ExtractValueExpr).XPathExpr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3161,6 +3994,8 @@ func (a *application) rewriteRefOfExtractValueExpr(parent SQLNode, node *Extract
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfFirstOrLastValueExpr(parent SQLNode, node *FirstOrLastValueExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3178,20 +4013,34 @@ func (a *application) rewriteRefOfFirstOrLastValueExpr(parent SQLNode, node *Fir
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfFirstOrLastValueExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*FirstOrLastValueExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfFirstOrLastValueExprNullTreatmentClause))
 	}
 	if !a.rewriteRefOfNullTreatmentClause(node, node.NullTreatmentClause, func(newNode, parent SQLNode) {
 		parent.(*FirstOrLastValueExpr).NullTreatmentClause = newNode.(*NullTreatmentClause)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfFirstOrLastValueExprOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*FirstOrLastValueExpr).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3203,6 +4052,8 @@ func (a *application) rewriteRefOfFirstOrLastValueExpr(parent SQLNode, node *Fir
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfFlush(parent SQLNode, node *Flush, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3220,10 +4071,16 @@ func (a *application) rewriteRefOfFlush(parent SQLNode, node *Flush, replacer re
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfFlushTableNames))
+	}
 	if !a.rewriteTableNames(node, node.TableNames, func(newNode, parent SQLNode) {
 		parent.(*Flush).TableNames = newNode.(TableNames)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3235,6 +4092,8 @@ func (a *application) rewriteRefOfFlush(parent SQLNode, node *Flush, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfForce(parent SQLNode, node *Force, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3264,6 +4123,8 @@ func (a *application) rewriteRefOfForce(parent SQLNode, node *Force, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *ForeignKeyDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3281,20 +4142,34 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfForeignKeyDefinitionSource))
+	}
 	if !a.rewriteColumns(node, node.Source, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).Source = newNode.(Columns)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfForeignKeyDefinitionIndexName))
 	}
 	if !a.rewriteIdentifierCI(node, node.IndexName, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).IndexName = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfForeignKeyDefinitionReferenceDefinition))
+	}
 	if !a.rewriteRefOfReferenceDefinition(node, node.ReferenceDefinition, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).ReferenceDefinition = newNode.(*ReferenceDefinition)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3306,6 +4181,8 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfFrameClause(parent SQLNode, node *FrameClause, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3323,15 +4200,25 @@ func (a *application) rewriteRefOfFrameClause(parent SQLNode, node *FrameClause,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfFrameClauseStart))
+	}
 	if !a.rewriteRefOfFramePoint(node, node.Start, func(newNode, parent SQLNode) {
 		parent.(*FrameClause).Start = newNode.(*FramePoint)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfFrameClauseEnd))
+	}
 	if !a.rewriteRefOfFramePoint(node, node.End, func(newNode, parent SQLNode) {
 		parent.(*FrameClause).End = newNode.(*FramePoint)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3343,6 +4230,8 @@ func (a *application) rewriteRefOfFrameClause(parent SQLNode, node *FrameClause,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfFramePoint(parent SQLNode, node *FramePoint, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3360,10 +4249,16 @@ func (a *application) rewriteRefOfFramePoint(parent SQLNode, node *FramePoint, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfFramePointExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*FramePoint).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3375,6 +4270,8 @@ func (a *application) rewriteRefOfFramePoint(parent SQLNode, node *FramePoint, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfFromFirstLastClause(parent SQLNode, node *FromFirstLastClause, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3404,6 +4301,8 @@ func (a *application) rewriteRefOfFromFirstLastClause(parent SQLNode, node *From
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3421,17 +4320,34 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfFuncExprQualifier))
+	}
 	if !a.rewriteIdentifierCS(node, node.Qualifier, func(newNode, parent SQLNode) {
 		parent.(*FuncExpr).Qualifier = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfFuncExprName))
 	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*FuncExpr).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Exprs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfFuncExprExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*FuncExpr).Exprs[idx] = newNode.(Expr)
@@ -3439,6 +4355,9 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3450,6 +4369,8 @@ func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGTIDFuncExpr(parent SQLNode, node *GTIDFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3467,25 +4388,43 @@ func (a *application) rewriteRefOfGTIDFuncExpr(parent SQLNode, node *GTIDFuncExp
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfGTIDFuncExprSet1))
+	}
 	if !a.rewriteExpr(node, node.Set1, func(newNode, parent SQLNode) {
 		parent.(*GTIDFuncExpr).Set1 = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGTIDFuncExprSet2))
 	}
 	if !a.rewriteExpr(node, node.Set2, func(newNode, parent SQLNode) {
 		parent.(*GTIDFuncExpr).Set2 = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGTIDFuncExprTimeout))
+	}
 	if !a.rewriteExpr(node, node.Timeout, func(newNode, parent SQLNode) {
 		parent.(*GTIDFuncExpr).Timeout = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGTIDFuncExprChannel))
+	}
 	if !a.rewriteExpr(node, node.Channel, func(newNode, parent SQLNode) {
 		parent.(*GTIDFuncExpr).Channel = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3497,6 +4436,8 @@ func (a *application) rewriteRefOfGTIDFuncExpr(parent SQLNode, node *GTIDFuncExp
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeoHashFromLatLongExpr(parent SQLNode, node *GeoHashFromLatLongExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3514,20 +4455,34 @@ func (a *application) rewriteRefOfGeoHashFromLatLongExpr(parent SQLNode, node *G
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfGeoHashFromLatLongExprLatitude))
+	}
 	if !a.rewriteExpr(node, node.Latitude, func(newNode, parent SQLNode) {
 		parent.(*GeoHashFromLatLongExpr).Latitude = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeoHashFromLatLongExprLongitude))
 	}
 	if !a.rewriteExpr(node, node.Longitude, func(newNode, parent SQLNode) {
 		parent.(*GeoHashFromLatLongExpr).Longitude = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeoHashFromLatLongExprMaxLength))
+	}
 	if !a.rewriteExpr(node, node.MaxLength, func(newNode, parent SQLNode) {
 		parent.(*GeoHashFromLatLongExpr).MaxLength = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3539,6 +4494,8 @@ func (a *application) rewriteRefOfGeoHashFromLatLongExpr(parent SQLNode, node *G
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeoHashFromPointExpr(parent SQLNode, node *GeoHashFromPointExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3556,15 +4513,25 @@ func (a *application) rewriteRefOfGeoHashFromPointExpr(parent SQLNode, node *Geo
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfGeoHashFromPointExprPoint))
+	}
 	if !a.rewriteExpr(node, node.Point, func(newNode, parent SQLNode) {
 		parent.(*GeoHashFromPointExpr).Point = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeoHashFromPointExprMaxLength))
+	}
 	if !a.rewriteExpr(node, node.MaxLength, func(newNode, parent SQLNode) {
 		parent.(*GeoHashFromPointExpr).MaxLength = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3576,6 +4543,8 @@ func (a *application) rewriteRefOfGeoHashFromPointExpr(parent SQLNode, node *Geo
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeoJSONFromGeomExpr(parent SQLNode, node *GeoJSONFromGeomExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3593,20 +4562,34 @@ func (a *application) rewriteRefOfGeoJSONFromGeomExpr(parent SQLNode, node *GeoJ
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfGeoJSONFromGeomExprGeom))
+	}
 	if !a.rewriteExpr(node, node.Geom, func(newNode, parent SQLNode) {
 		parent.(*GeoJSONFromGeomExpr).Geom = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeoJSONFromGeomExprMaxDecimalDigits))
 	}
 	if !a.rewriteExpr(node, node.MaxDecimalDigits, func(newNode, parent SQLNode) {
 		parent.(*GeoJSONFromGeomExpr).MaxDecimalDigits = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeoJSONFromGeomExprBitmask))
+	}
 	if !a.rewriteExpr(node, node.Bitmask, func(newNode, parent SQLNode) {
 		parent.(*GeoJSONFromGeomExpr).Bitmask = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3618,6 +4601,8 @@ func (a *application) rewriteRefOfGeoJSONFromGeomExpr(parent SQLNode, node *GeoJ
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomCollPropertyFuncExpr(parent SQLNode, node *GeomCollPropertyFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3635,15 +4620,25 @@ func (a *application) rewriteRefOfGeomCollPropertyFuncExpr(parent SQLNode, node 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfGeomCollPropertyFuncExprGeomColl))
+	}
 	if !a.rewriteExpr(node, node.GeomColl, func(newNode, parent SQLNode) {
 		parent.(*GeomCollPropertyFuncExpr).GeomColl = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeomCollPropertyFuncExprPropertyDefArg))
+	}
 	if !a.rewriteExpr(node, node.PropertyDefArg, func(newNode, parent SQLNode) {
 		parent.(*GeomCollPropertyFuncExpr).PropertyDefArg = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3655,6 +4650,8 @@ func (a *application) rewriteRefOfGeomCollPropertyFuncExpr(parent SQLNode, node 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomFormatExpr(parent SQLNode, node *GeomFormatExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3672,15 +4669,25 @@ func (a *application) rewriteRefOfGeomFormatExpr(parent SQLNode, node *GeomForma
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfGeomFormatExprGeom))
+	}
 	if !a.rewriteExpr(node, node.Geom, func(newNode, parent SQLNode) {
 		parent.(*GeomFormatExpr).Geom = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeomFormatExprAxisOrderOpt))
+	}
 	if !a.rewriteExpr(node, node.AxisOrderOpt, func(newNode, parent SQLNode) {
 		parent.(*GeomFormatExpr).AxisOrderOpt = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3692,6 +4699,8 @@ func (a *application) rewriteRefOfGeomFormatExpr(parent SQLNode, node *GeomForma
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomFromGeoHashExpr(parent SQLNode, node *GeomFromGeoHashExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3709,15 +4718,25 @@ func (a *application) rewriteRefOfGeomFromGeoHashExpr(parent SQLNode, node *Geom
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfGeomFromGeoHashExprGeoHash))
+	}
 	if !a.rewriteExpr(node, node.GeoHash, func(newNode, parent SQLNode) {
 		parent.(*GeomFromGeoHashExpr).GeoHash = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeomFromGeoHashExprSridOpt))
+	}
 	if !a.rewriteExpr(node, node.SridOpt, func(newNode, parent SQLNode) {
 		parent.(*GeomFromGeoHashExpr).SridOpt = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3729,6 +4748,8 @@ func (a *application) rewriteRefOfGeomFromGeoHashExpr(parent SQLNode, node *Geom
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomFromGeoJSONExpr(parent SQLNode, node *GeomFromGeoJSONExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3746,20 +4767,34 @@ func (a *application) rewriteRefOfGeomFromGeoJSONExpr(parent SQLNode, node *Geom
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfGeomFromGeoJSONExprGeoJSON))
+	}
 	if !a.rewriteExpr(node, node.GeoJSON, func(newNode, parent SQLNode) {
 		parent.(*GeomFromGeoJSONExpr).GeoJSON = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeomFromGeoJSONExprHigherDimHandlerOpt))
 	}
 	if !a.rewriteExpr(node, node.HigherDimHandlerOpt, func(newNode, parent SQLNode) {
 		parent.(*GeomFromGeoJSONExpr).HigherDimHandlerOpt = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeomFromGeoJSONExprSrid))
+	}
 	if !a.rewriteExpr(node, node.Srid, func(newNode, parent SQLNode) {
 		parent.(*GeomFromGeoJSONExpr).Srid = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3771,6 +4806,8 @@ func (a *application) rewriteRefOfGeomFromGeoJSONExpr(parent SQLNode, node *Geom
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomFromTextExpr(parent SQLNode, node *GeomFromTextExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3788,20 +4825,34 @@ func (a *application) rewriteRefOfGeomFromTextExpr(parent SQLNode, node *GeomFro
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfGeomFromTextExprWktText))
+	}
 	if !a.rewriteExpr(node, node.WktText, func(newNode, parent SQLNode) {
 		parent.(*GeomFromTextExpr).WktText = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeomFromTextExprSrid))
 	}
 	if !a.rewriteExpr(node, node.Srid, func(newNode, parent SQLNode) {
 		parent.(*GeomFromTextExpr).Srid = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeomFromTextExprAxisOrderOpt))
+	}
 	if !a.rewriteExpr(node, node.AxisOrderOpt, func(newNode, parent SQLNode) {
 		parent.(*GeomFromTextExpr).AxisOrderOpt = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3813,6 +4864,8 @@ func (a *application) rewriteRefOfGeomFromTextExpr(parent SQLNode, node *GeomFro
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomFromWKBExpr(parent SQLNode, node *GeomFromWKBExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3830,20 +4883,34 @@ func (a *application) rewriteRefOfGeomFromWKBExpr(parent SQLNode, node *GeomFrom
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfGeomFromWKBExprWkbBlob))
+	}
 	if !a.rewriteExpr(node, node.WkbBlob, func(newNode, parent SQLNode) {
 		parent.(*GeomFromWKBExpr).WkbBlob = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeomFromWKBExprSrid))
 	}
 	if !a.rewriteExpr(node, node.Srid, func(newNode, parent SQLNode) {
 		parent.(*GeomFromWKBExpr).Srid = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGeomFromWKBExprAxisOrderOpt))
+	}
 	if !a.rewriteExpr(node, node.AxisOrderOpt, func(newNode, parent SQLNode) {
 		parent.(*GeomFromWKBExpr).AxisOrderOpt = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3855,6 +4922,8 @@ func (a *application) rewriteRefOfGeomFromWKBExpr(parent SQLNode, node *GeomFrom
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGeomPropertyFuncExpr(parent SQLNode, node *GeomPropertyFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3872,10 +4941,16 @@ func (a *application) rewriteRefOfGeomPropertyFuncExpr(parent SQLNode, node *Geo
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfGeomPropertyFuncExprGeom))
+	}
 	if !a.rewriteExpr(node, node.Geom, func(newNode, parent SQLNode) {
 		parent.(*GeomPropertyFuncExpr).Geom = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3887,6 +4962,8 @@ func (a *application) rewriteRefOfGeomPropertyFuncExpr(parent SQLNode, node *Geo
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3905,6 +4982,13 @@ func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replace
 		}
 	}
 	for x, el := range node.Exprs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfGroupByExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*GroupBy).Exprs[idx] = newNode.(Expr)
@@ -3912,6 +4996,9 @@ func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replace
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3923,6 +5010,8 @@ func (a *application) rewriteRefOfGroupBy(parent SQLNode, node *GroupBy, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupConcatExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3941,6 +5030,13 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 		}
 	}
 	for x, el := range node.Exprs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfGroupConcatExprExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*GroupConcatExpr).Exprs[idx] = newNode.(Expr)
@@ -3949,15 +5045,26 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 			return false
 		}
 	}
+	if a.collectPaths && len(node.Exprs) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGroupConcatExprOrderBy))
+	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*GroupConcatExpr).OrderBy = newNode.(OrderBy)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfGroupConcatExprLimit))
+	}
 	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*GroupConcatExpr).Limit = newNode.(*Limit)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3969,6 +5076,8 @@ func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupCon
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteIdentifierCI(parent SQLNode, node IdentifierCI, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -3995,6 +5104,8 @@ func (a *application) rewriteIdentifierCI(parent SQLNode, node IdentifierCI, rep
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteIdentifierCS(parent SQLNode, node IdentifierCS, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -4021,6 +5132,8 @@ func (a *application) rewriteIdentifierCS(parent SQLNode, node IdentifierCS, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4038,10 +5151,16 @@ func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDef
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfIndexDefinitionInfo))
+	}
 	if !a.rewriteRefOfIndexInfo(node, node.Info, func(newNode, parent SQLNode) {
 		parent.(*IndexDefinition).Info = newNode.(*IndexInfo)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4053,6 +5172,8 @@ func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDef
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4071,6 +5192,13 @@ func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, rep
 		}
 	}
 	for x, el := range node.Indexes {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfIndexHintIndexesOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*IndexHint).Indexes[idx] = newNode.(IdentifierCI)
@@ -4078,6 +5206,9 @@ func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, rep
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4089,6 +5220,8 @@ func (a *application) rewriteRefOfIndexHint(parent SQLNode, node *IndexHint, rep
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4107,6 +5240,13 @@ func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replace
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(IndexHintsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfIndexHint(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(IndexHints)[idx] = newNode.(*IndexHint)
@@ -4114,6 +5254,9 @@ func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replace
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4125,6 +5268,8 @@ func (a *application) rewriteIndexHints(parent SQLNode, node IndexHints, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4142,15 +5287,25 @@ func (a *application) rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, rep
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfIndexInfoName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*IndexInfo).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfIndexInfoConstraintName))
+	}
 	if !a.rewriteIdentifierCI(node, node.ConstraintName, func(newNode, parent SQLNode) {
 		parent.(*IndexInfo).ConstraintName = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4162,6 +5317,8 @@ func (a *application) rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4179,40 +5336,70 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfInsertComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Insert).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfInsertTable))
 	}
 	if !a.rewriteRefOfAliasedTableExpr(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*Insert).Table = newNode.(*AliasedTableExpr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfInsertPartitions))
+	}
 	if !a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
 		parent.(*Insert).Partitions = newNode.(Partitions)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfInsertColumns))
 	}
 	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*Insert).Columns = newNode.(Columns)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfInsertRows))
+	}
 	if !a.rewriteInsertRows(node, node.Rows, func(newNode, parent SQLNode) {
 		parent.(*Insert).Rows = newNode.(InsertRows)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfInsertRowAlias))
 	}
 	if !a.rewriteRefOfRowAlias(node, node.RowAlias, func(newNode, parent SQLNode) {
 		parent.(*Insert).RowAlias = newNode.(*RowAlias)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfInsertOnDup))
+	}
 	if !a.rewriteOnDup(node, node.OnDup, func(newNode, parent SQLNode) {
 		parent.(*Insert).OnDup = newNode.(OnDup)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4224,6 +5411,8 @@ func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4241,25 +5430,43 @@ func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfInsertExprStr))
+	}
 	if !a.rewriteExpr(node, node.Str, func(newNode, parent SQLNode) {
 		parent.(*InsertExpr).Str = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfInsertExprPos))
 	}
 	if !a.rewriteExpr(node, node.Pos, func(newNode, parent SQLNode) {
 		parent.(*InsertExpr).Pos = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfInsertExprLen))
+	}
 	if !a.rewriteExpr(node, node.Len, func(newNode, parent SQLNode) {
 		parent.(*InsertExpr).Len = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfInsertExprNewStr))
+	}
 	if !a.rewriteExpr(node, node.NewStr, func(newNode, parent SQLNode) {
 		parent.(*InsertExpr).NewStr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4271,6 +5478,8 @@ func (a *application) rewriteRefOfInsertExpr(parent SQLNode, node *InsertExpr, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIntervalDateExpr(parent SQLNode, node *IntervalDateExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4288,15 +5497,25 @@ func (a *application) rewriteRefOfIntervalDateExpr(parent SQLNode, node *Interva
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfIntervalDateExprDate))
+	}
 	if !a.rewriteExpr(node, node.Date, func(newNode, parent SQLNode) {
 		parent.(*IntervalDateExpr).Date = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfIntervalDateExprInterval))
+	}
 	if !a.rewriteExpr(node, node.Interval, func(newNode, parent SQLNode) {
 		parent.(*IntervalDateExpr).Interval = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4308,6 +5527,8 @@ func (a *application) rewriteRefOfIntervalDateExpr(parent SQLNode, node *Interva
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIntervalFuncExpr(parent SQLNode, node *IntervalFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4325,12 +5546,25 @@ func (a *application) rewriteRefOfIntervalFuncExpr(parent SQLNode, node *Interva
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfIntervalFuncExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*IntervalFuncExpr).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Exprs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfIntervalFuncExprExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*IntervalFuncExpr).Exprs[idx] = newNode.(Expr)
@@ -4338,6 +5572,9 @@ func (a *application) rewriteRefOfIntervalFuncExpr(parent SQLNode, node *Interva
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4349,6 +5586,8 @@ func (a *application) rewriteRefOfIntervalFuncExpr(parent SQLNode, node *Interva
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIntroducerExpr(parent SQLNode, node *IntroducerExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4366,10 +5605,16 @@ func (a *application) rewriteRefOfIntroducerExpr(parent SQLNode, node *Introduce
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfIntroducerExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*IntroducerExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4381,6 +5626,8 @@ func (a *application) rewriteRefOfIntroducerExpr(parent SQLNode, node *Introduce
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4398,10 +5645,16 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfIsExprLeft))
+	}
 	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*IsExpr).Left = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4413,6 +5666,8 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONArrayAgg(parent SQLNode, node *JSONArrayAgg, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4430,15 +5685,25 @@ func (a *application) rewriteRefOfJSONArrayAgg(parent SQLNode, node *JSONArrayAg
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONArrayAggExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*JSONArrayAgg).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONArrayAggOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*JSONArrayAgg).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4450,6 +5715,8 @@ func (a *application) rewriteRefOfJSONArrayAgg(parent SQLNode, node *JSONArrayAg
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4468,6 +5735,13 @@ func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayE
 		}
 	}
 	for x, el := range node.Params {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONArrayExprParamsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*JSONArrayExpr).Params[idx] = newNode.(Expr)
@@ -4475,6 +5749,9 @@ func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayE
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4486,6 +5763,8 @@ func (a *application) rewriteRefOfJSONArrayExpr(parent SQLNode, node *JSONArrayE
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONAttributesExpr(parent SQLNode, node *JSONAttributesExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4503,15 +5782,25 @@ func (a *application) rewriteRefOfJSONAttributesExpr(parent SQLNode, node *JSONA
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONAttributesExprJSONDoc))
+	}
 	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
 		parent.(*JSONAttributesExpr).JSONDoc = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONAttributesExprPath))
+	}
 	if !a.rewriteExpr(node, node.Path, func(newNode, parent SQLNode) {
 		parent.(*JSONAttributesExpr).Path = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4523,6 +5812,8 @@ func (a *application) rewriteRefOfJSONAttributesExpr(parent SQLNode, node *JSONA
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONContainsExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4540,17 +5831,34 @@ func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONCon
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONContainsExprTarget))
+	}
 	if !a.rewriteExpr(node, node.Target, func(newNode, parent SQLNode) {
 		parent.(*JSONContainsExpr).Target = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONContainsExprCandidate))
 	}
 	if !a.rewriteExpr(node, node.Candidate, func(newNode, parent SQLNode) {
 		parent.(*JSONContainsExpr).Candidate = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.PathList {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONContainsExprPathListOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*JSONContainsExpr).PathList[idx] = newNode.(Expr)
@@ -4558,6 +5866,9 @@ func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONCon
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4569,6 +5880,8 @@ func (a *application) rewriteRefOfJSONContainsExpr(parent SQLNode, node *JSONCon
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSONContainsPathExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4586,17 +5899,34 @@ func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSO
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONContainsPathExprJSONDoc))
+	}
 	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
 		parent.(*JSONContainsPathExpr).JSONDoc = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONContainsPathExprOneOrAll))
 	}
 	if !a.rewriteExpr(node, node.OneOrAll, func(newNode, parent SQLNode) {
 		parent.(*JSONContainsPathExpr).OneOrAll = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.PathList {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONContainsPathExprPathListOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*JSONContainsPathExpr).PathList[idx] = newNode.(Expr)
@@ -4604,6 +5934,9 @@ func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSO
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4615,6 +5948,8 @@ func (a *application) rewriteRefOfJSONContainsPathExpr(parent SQLNode, node *JSO
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtractExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4632,12 +5967,25 @@ func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtr
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONExtractExprJSONDoc))
+	}
 	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
 		parent.(*JSONExtractExpr).JSONDoc = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.PathList {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONExtractExprPathListOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*JSONExtractExpr).PathList[idx] = newNode.(Expr)
@@ -4645,6 +5993,9 @@ func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtr
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4656,6 +6007,8 @@ func (a *application) rewriteRefOfJSONExtractExpr(parent SQLNode, node *JSONExtr
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONKeysExpr(parent SQLNode, node *JSONKeysExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4673,15 +6026,25 @@ func (a *application) rewriteRefOfJSONKeysExpr(parent SQLNode, node *JSONKeysExp
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONKeysExprJSONDoc))
+	}
 	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
 		parent.(*JSONKeysExpr).JSONDoc = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONKeysExprPath))
+	}
 	if !a.rewriteExpr(node, node.Path, func(newNode, parent SQLNode) {
 		parent.(*JSONKeysExpr).Path = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4693,6 +6056,8 @@ func (a *application) rewriteRefOfJSONKeysExpr(parent SQLNode, node *JSONKeysExp
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONObjectAgg(parent SQLNode, node *JSONObjectAgg, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4710,20 +6075,34 @@ func (a *application) rewriteRefOfJSONObjectAgg(parent SQLNode, node *JSONObject
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONObjectAggKey))
+	}
 	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
 		parent.(*JSONObjectAgg).Key = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONObjectAggValue))
 	}
 	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
 		parent.(*JSONObjectAgg).Value = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONObjectAggOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*JSONObjectAgg).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4735,6 +6114,8 @@ func (a *application) rewriteRefOfJSONObjectAgg(parent SQLNode, node *JSONObject
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjectExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4753,6 +6134,13 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 		}
 	}
 	for x, el := range node.Params {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONObjectExprParamsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfJSONObjectParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*JSONObjectExpr).Params[idx] = newNode.(*JSONObjectParam)
@@ -4760,6 +6148,9 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4771,6 +6162,8 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObjectParam, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4788,15 +6181,25 @@ func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObje
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONObjectParamKey))
+	}
 	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
 		parent.(*JSONObjectParam).Key = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONObjectParamValue))
+	}
 	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
 		parent.(*JSONObjectParam).Value = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4808,6 +6211,8 @@ func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObje
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONOverlapsExpr(parent SQLNode, node *JSONOverlapsExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4825,15 +6230,25 @@ func (a *application) rewriteRefOfJSONOverlapsExpr(parent SQLNode, node *JSONOve
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONOverlapsExprJSONDoc1))
+	}
 	if !a.rewriteExpr(node, node.JSONDoc1, func(newNode, parent SQLNode) {
 		parent.(*JSONOverlapsExpr).JSONDoc1 = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONOverlapsExprJSONDoc2))
+	}
 	if !a.rewriteExpr(node, node.JSONDoc2, func(newNode, parent SQLNode) {
 		parent.(*JSONOverlapsExpr).JSONDoc2 = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4845,6 +6260,8 @@ func (a *application) rewriteRefOfJSONOverlapsExpr(parent SQLNode, node *JSONOve
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONPrettyExpr(parent SQLNode, node *JSONPrettyExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4862,10 +6279,16 @@ func (a *application) rewriteRefOfJSONPrettyExpr(parent SQLNode, node *JSONPrett
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONPrettyExprJSONVal))
+	}
 	if !a.rewriteExpr(node, node.JSONVal, func(newNode, parent SQLNode) {
 		parent.(*JSONPrettyExpr).JSONVal = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4877,6 +6300,8 @@ func (a *application) rewriteRefOfJSONPrettyExpr(parent SQLNode, node *JSONPrett
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONQuoteExpr(parent SQLNode, node *JSONQuoteExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4894,10 +6319,16 @@ func (a *application) rewriteRefOfJSONQuoteExpr(parent SQLNode, node *JSONQuoteE
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONQuoteExprStringArg))
+	}
 	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
 		parent.(*JSONQuoteExpr).StringArg = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4909,6 +6340,8 @@ func (a *application) rewriteRefOfJSONQuoteExpr(parent SQLNode, node *JSONQuoteE
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemoveExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4926,12 +6359,25 @@ func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemov
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONRemoveExprJSONDoc))
+	}
 	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
 		parent.(*JSONRemoveExpr).JSONDoc = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.PathList {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONRemoveExprPathListOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*JSONRemoveExpr).PathList[idx] = newNode.(Expr)
@@ -4939,6 +6385,9 @@ func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemov
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4950,6 +6399,8 @@ func (a *application) rewriteRefOfJSONRemoveExpr(parent SQLNode, node *JSONRemov
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONSchemaValidFuncExpr(parent SQLNode, node *JSONSchemaValidFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4967,15 +6418,25 @@ func (a *application) rewriteRefOfJSONSchemaValidFuncExpr(parent SQLNode, node *
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONSchemaValidFuncExprSchema))
+	}
 	if !a.rewriteExpr(node, node.Schema, func(newNode, parent SQLNode) {
 		parent.(*JSONSchemaValidFuncExpr).Schema = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONSchemaValidFuncExprDocument))
+	}
 	if !a.rewriteExpr(node, node.Document, func(newNode, parent SQLNode) {
 		parent.(*JSONSchemaValidFuncExpr).Document = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -4987,6 +6448,8 @@ func (a *application) rewriteRefOfJSONSchemaValidFuncExpr(parent SQLNode, node *
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONSchemaValidationReportFuncExpr(parent SQLNode, node *JSONSchemaValidationReportFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5004,15 +6467,25 @@ func (a *application) rewriteRefOfJSONSchemaValidationReportFuncExpr(parent SQLN
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONSchemaValidationReportFuncExprSchema))
+	}
 	if !a.rewriteExpr(node, node.Schema, func(newNode, parent SQLNode) {
 		parent.(*JSONSchemaValidationReportFuncExpr).Schema = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONSchemaValidationReportFuncExprDocument))
+	}
 	if !a.rewriteExpr(node, node.Document, func(newNode, parent SQLNode) {
 		parent.(*JSONSchemaValidationReportFuncExpr).Document = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5024,6 +6497,8 @@ func (a *application) rewriteRefOfJSONSchemaValidationReportFuncExpr(parent SQLN
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearchExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5041,27 +6516,52 @@ func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearc
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONSearchExprJSONDoc))
+	}
 	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
 		parent.(*JSONSearchExpr).JSONDoc = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONSearchExprOneOrAll))
 	}
 	if !a.rewriteExpr(node, node.OneOrAll, func(newNode, parent SQLNode) {
 		parent.(*JSONSearchExpr).OneOrAll = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONSearchExprSearchStr))
+	}
 	if !a.rewriteExpr(node, node.SearchStr, func(newNode, parent SQLNode) {
 		parent.(*JSONSearchExpr).SearchStr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONSearchExprEscapeChar))
 	}
 	if !a.rewriteExpr(node, node.EscapeChar, func(newNode, parent SQLNode) {
 		parent.(*JSONSearchExpr).EscapeChar = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.PathList {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONSearchExprPathListOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*JSONSearchExpr).PathList[idx] = newNode.(Expr)
@@ -5069,6 +6569,9 @@ func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearc
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5080,6 +6583,8 @@ func (a *application) rewriteRefOfJSONSearchExpr(parent SQLNode, node *JSONSearc
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONStorageFreeExpr(parent SQLNode, node *JSONStorageFreeExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5097,10 +6602,16 @@ func (a *application) rewriteRefOfJSONStorageFreeExpr(parent SQLNode, node *JSON
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONStorageFreeExprJSONVal))
+	}
 	if !a.rewriteExpr(node, node.JSONVal, func(newNode, parent SQLNode) {
 		parent.(*JSONStorageFreeExpr).JSONVal = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5112,6 +6623,8 @@ func (a *application) rewriteRefOfJSONStorageFreeExpr(parent SQLNode, node *JSON
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONStorageSizeExpr(parent SQLNode, node *JSONStorageSizeExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5129,10 +6642,16 @@ func (a *application) rewriteRefOfJSONStorageSizeExpr(parent SQLNode, node *JSON
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONStorageSizeExprJSONVal))
+	}
 	if !a.rewriteExpr(node, node.JSONVal, func(newNode, parent SQLNode) {
 		parent.(*JSONStorageSizeExpr).JSONVal = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5144,6 +6663,8 @@ func (a *application) rewriteRefOfJSONStorageSizeExpr(parent SQLNode, node *JSON
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5161,22 +6682,43 @@ func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableE
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONTableExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*JSONTableExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONTableExprAlias))
 	}
 	if !a.rewriteIdentifierCS(node, node.Alias, func(newNode, parent SQLNode) {
 		parent.(*JSONTableExpr).Alias = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONTableExprFilter))
+	}
 	if !a.rewriteExpr(node, node.Filter, func(newNode, parent SQLNode) {
 		parent.(*JSONTableExpr).Filter = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Columns {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONTableExprColumnsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfJtColumnDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*JSONTableExpr).Columns[idx] = newNode.(*JtColumnDefinition)
@@ -5184,6 +6726,9 @@ func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableE
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5195,6 +6740,8 @@ func (a *application) rewriteRefOfJSONTableExpr(parent SQLNode, node *JSONTableE
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONUnquoteExpr(parent SQLNode, node *JSONUnquoteExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5212,10 +6759,16 @@ func (a *application) rewriteRefOfJSONUnquoteExpr(parent SQLNode, node *JSONUnqu
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONUnquoteExprJSONValue))
+	}
 	if !a.rewriteExpr(node, node.JSONValue, func(newNode, parent SQLNode) {
 		parent.(*JSONUnquoteExpr).JSONValue = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5227,6 +6780,8 @@ func (a *application) rewriteRefOfJSONUnquoteExpr(parent SQLNode, node *JSONUnqu
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5244,30 +6799,52 @@ func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueE
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONValueExprJSONDoc))
+	}
 	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
 		parent.(*JSONValueExpr).JSONDoc = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONValueExprPath))
 	}
 	if !a.rewriteExpr(node, node.Path, func(newNode, parent SQLNode) {
 		parent.(*JSONValueExpr).Path = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONValueExprReturningType))
+	}
 	if !a.rewriteRefOfConvertType(node, node.ReturningType, func(newNode, parent SQLNode) {
 		parent.(*JSONValueExpr).ReturningType = newNode.(*ConvertType)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONValueExprEmptyOnResponse))
 	}
 	if !a.rewriteRefOfJtOnResponse(node, node.EmptyOnResponse, func(newNode, parent SQLNode) {
 		parent.(*JSONValueExpr).EmptyOnResponse = newNode.(*JtOnResponse)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJSONValueExprErrorOnResponse))
+	}
 	if !a.rewriteRefOfJtOnResponse(node, node.ErrorOnResponse, func(newNode, parent SQLNode) {
 		parent.(*JSONValueExpr).ErrorOnResponse = newNode.(*JtOnResponse)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5279,6 +6856,8 @@ func (a *application) rewriteRefOfJSONValueExpr(parent SQLNode, node *JSONValueE
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONValueMergeExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5296,12 +6875,25 @@ func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONV
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONValueMergeExprJSONDoc))
+	}
 	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
 		parent.(*JSONValueMergeExpr).JSONDoc = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.JSONDocList {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONValueMergeExprJSONDocListOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*JSONValueMergeExpr).JSONDocList[idx] = newNode.(Expr)
@@ -5309,6 +6901,9 @@ func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONV
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5320,6 +6915,8 @@ func (a *application) rewriteRefOfJSONValueMergeExpr(parent SQLNode, node *JSONV
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJSONValueModifierExpr(parent SQLNode, node *JSONValueModifierExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5337,12 +6934,25 @@ func (a *application) rewriteRefOfJSONValueModifierExpr(parent SQLNode, node *JS
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJSONValueModifierExprJSONDoc))
+	}
 	if !a.rewriteExpr(node, node.JSONDoc, func(newNode, parent SQLNode) {
 		parent.(*JSONValueModifierExpr).JSONDoc = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Params {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfJSONValueModifierExprParamsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfJSONObjectParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*JSONValueModifierExpr).Params[idx] = newNode.(*JSONObjectParam)
@@ -5350,6 +6960,9 @@ func (a *application) rewriteRefOfJSONValueModifierExpr(parent SQLNode, node *JS
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5361,6 +6974,8 @@ func (a *application) rewriteRefOfJSONValueModifierExpr(parent SQLNode, node *JS
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5378,15 +6993,25 @@ func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondit
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJoinConditionOn))
+	}
 	if !a.rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
 		parent.(*JoinCondition).On = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJoinConditionUsing))
+	}
 	if !a.rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
 		parent.(*JoinCondition).Using = newNode.(Columns)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5398,6 +7023,8 @@ func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondit
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5415,20 +7042,34 @@ func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableE
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJoinTableExprLeftExpr))
+	}
 	if !a.rewriteTableExpr(node, node.LeftExpr, func(newNode, parent SQLNode) {
 		parent.(*JoinTableExpr).LeftExpr = newNode.(TableExpr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJoinTableExprRightExpr))
 	}
 	if !a.rewriteTableExpr(node, node.RightExpr, func(newNode, parent SQLNode) {
 		parent.(*JoinTableExpr).RightExpr = newNode.(TableExpr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfJoinTableExprCondition))
+	}
 	if !a.rewriteRefOfJoinCondition(node, node.Condition, func(newNode, parent SQLNode) {
 		parent.(*JoinTableExpr).Condition = newNode.(*JoinCondition)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5440,6 +7081,8 @@ func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableE
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJtColumnDefinition(parent SQLNode, node *JtColumnDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5469,6 +7112,8 @@ func (a *application) rewriteRefOfJtColumnDefinition(parent SQLNode, node *JtCol
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfJtOnResponse(parent SQLNode, node *JtOnResponse, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5486,10 +7131,16 @@ func (a *application) rewriteRefOfJtOnResponse(parent SQLNode, node *JtOnRespons
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfJtOnResponseExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*JtOnResponse).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5501,6 +7152,8 @@ func (a *application) rewriteRefOfJtOnResponse(parent SQLNode, node *JtOnRespons
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5530,6 +7183,8 @@ func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfKill(parent SQLNode, node *Kill, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5559,6 +7214,8 @@ func (a *application) rewriteRefOfKill(parent SQLNode, node *Kill, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLagLeadExpr(parent SQLNode, node *LagLeadExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5576,30 +7233,52 @@ func (a *application) rewriteRefOfLagLeadExpr(parent SQLNode, node *LagLeadExpr,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfLagLeadExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*LagLeadExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfLagLeadExprN))
 	}
 	if !a.rewriteExpr(node, node.N, func(newNode, parent SQLNode) {
 		parent.(*LagLeadExpr).N = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfLagLeadExprDefault))
+	}
 	if !a.rewriteExpr(node, node.Default, func(newNode, parent SQLNode) {
 		parent.(*LagLeadExpr).Default = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfLagLeadExprOverClause))
 	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*LagLeadExpr).OverClause = newNode.(*OverClause)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfLagLeadExprNullTreatmentClause))
+	}
 	if !a.rewriteRefOfNullTreatmentClause(node, node.NullTreatmentClause, func(newNode, parent SQLNode) {
 		parent.(*LagLeadExpr).NullTreatmentClause = newNode.(*NullTreatmentClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5611,6 +7290,8 @@ func (a *application) rewriteRefOfLagLeadExpr(parent SQLNode, node *LagLeadExpr,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5628,15 +7309,25 @@ func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer re
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfLimitOffset))
+	}
 	if !a.rewriteExpr(node, node.Offset, func(newNode, parent SQLNode) {
 		parent.(*Limit).Offset = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfLimitRowcount))
+	}
 	if !a.rewriteExpr(node, node.Rowcount, func(newNode, parent SQLNode) {
 		parent.(*Limit).Rowcount = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5648,6 +7339,8 @@ func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStringExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5666,6 +7359,13 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 		}
 	}
 	for x, el := range node.PointParams {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfLineStringExprPointParamsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*LineStringExpr).PointParams[idx] = newNode.(Expr)
@@ -5673,6 +7373,9 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5684,6 +7387,8 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLinestrPropertyFuncExpr(parent SQLNode, node *LinestrPropertyFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5701,15 +7406,25 @@ func (a *application) rewriteRefOfLinestrPropertyFuncExpr(parent SQLNode, node *
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfLinestrPropertyFuncExprLinestring))
+	}
 	if !a.rewriteExpr(node, node.Linestring, func(newNode, parent SQLNode) {
 		parent.(*LinestrPropertyFuncExpr).Linestring = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfLinestrPropertyFuncExprPropertyDefArg))
+	}
 	if !a.rewriteExpr(node, node.PropertyDefArg, func(newNode, parent SQLNode) {
 		parent.(*LinestrPropertyFuncExpr).PropertyDefArg = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5721,6 +7436,8 @@ func (a *application) rewriteRefOfLinestrPropertyFuncExpr(parent SQLNode, node *
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLiteral(parent SQLNode, node *Literal, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5750,6 +7467,8 @@ func (a *application) rewriteRefOfLiteral(parent SQLNode, node *Literal, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLoad(parent SQLNode, node *Load, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5779,6 +7498,8 @@ func (a *application) rewriteRefOfLoad(parent SQLNode, node *Load, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLocateExpr(parent SQLNode, node *LocateExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5796,20 +7517,34 @@ func (a *application) rewriteRefOfLocateExpr(parent SQLNode, node *LocateExpr, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfLocateExprSubStr))
+	}
 	if !a.rewriteExpr(node, node.SubStr, func(newNode, parent SQLNode) {
 		parent.(*LocateExpr).SubStr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfLocateExprStr))
 	}
 	if !a.rewriteExpr(node, node.Str, func(newNode, parent SQLNode) {
 		parent.(*LocateExpr).Str = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfLocateExprPos))
+	}
 	if !a.rewriteExpr(node, node.Pos, func(newNode, parent SQLNode) {
 		parent.(*LocateExpr).Pos = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5821,6 +7556,8 @@ func (a *application) rewriteRefOfLocateExpr(parent SQLNode, node *LocateExpr, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLockOption(parent SQLNode, node *LockOption, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5850,6 +7587,8 @@ func (a *application) rewriteRefOfLockOption(parent SQLNode, node *LockOption, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLockTables(parent SQLNode, node *LockTables, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5879,6 +7618,8 @@ func (a *application) rewriteRefOfLockTables(parent SQLNode, node *LockTables, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLockingFunc(parent SQLNode, node *LockingFunc, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5896,15 +7637,25 @@ func (a *application) rewriteRefOfLockingFunc(parent SQLNode, node *LockingFunc,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfLockingFuncName))
+	}
 	if !a.rewriteExpr(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*LockingFunc).Name = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfLockingFuncTimeout))
+	}
 	if !a.rewriteExpr(node, node.Timeout, func(newNode, parent SQLNode) {
 		parent.(*LockingFunc).Timeout = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5916,6 +7667,8 @@ func (a *application) rewriteRefOfLockingFunc(parent SQLNode, node *LockingFunc,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5934,6 +7687,13 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 		}
 	}
 	for x, el := range node.Columns {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfMatchExprColumnsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfColName(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*MatchExpr).Columns[idx] = newNode.(*ColName)
@@ -5942,10 +7702,17 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 			return false
 		}
 	}
+	if a.collectPaths && len(node.Columns) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfMatchExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*MatchExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5957,6 +7724,8 @@ func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5974,15 +7743,25 @@ func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replac
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfMaxArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*Max).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfMaxOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*Max).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5994,6 +7773,8 @@ func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6011,15 +7792,25 @@ func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExp
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfMemberOfExprValue))
+	}
 	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
 		parent.(*MemberOfExpr).Value = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfMemberOfExprJSONArr))
+	}
 	if !a.rewriteExpr(node, node.JSONArr, func(newNode, parent SQLNode) {
 		parent.(*MemberOfExpr).JSONArr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6031,6 +7822,8 @@ func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExp
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6048,15 +7841,25 @@ func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replac
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfMinArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*Min).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfMinOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*Min).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6068,6 +7871,8 @@ func (a *application) rewriteRefOfMin(parent SQLNode, node *Min, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColumn, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6085,15 +7890,25 @@ func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColum
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfModifyColumnNewColDefinition))
+	}
 	if !a.rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
 		parent.(*ModifyColumn).NewColDefinition = newNode.(*ColumnDefinition)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfModifyColumnAfter))
+	}
 	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*ModifyColumn).After = newNode.(*ColName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6105,6 +7920,8 @@ func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColum
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *MultiLinestringExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6123,6 +7940,13 @@ func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *Mult
 		}
 	}
 	for x, el := range node.LinestringParams {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfMultiLinestringExprLinestringParamsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*MultiLinestringExpr).LinestringParams[idx] = newNode.(Expr)
@@ -6130,6 +7954,9 @@ func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *Mult
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6141,6 +7968,8 @@ func (a *application) rewriteRefOfMultiLinestringExpr(parent SQLNode, node *Mult
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPointExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6159,6 +7988,13 @@ func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPoin
 		}
 	}
 	for x, el := range node.PointParams {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfMultiPointExprPointParamsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*MultiPointExpr).PointParams[idx] = newNode.(Expr)
@@ -6166,6 +8002,9 @@ func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPoin
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6177,6 +8016,8 @@ func (a *application) rewriteRefOfMultiPointExpr(parent SQLNode, node *MultiPoin
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPolygonExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6195,6 +8036,13 @@ func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPo
 		}
 	}
 	for x, el := range node.PolygonParams {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfMultiPolygonExprPolygonParamsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*MultiPolygonExpr).PolygonParams[idx] = newNode.(Expr)
@@ -6202,6 +8050,9 @@ func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPo
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6213,6 +8064,8 @@ func (a *application) rewriteRefOfMultiPolygonExpr(parent SQLNode, node *MultiPo
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNTHValueExpr(parent SQLNode, node *NTHValueExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6230,30 +8083,52 @@ func (a *application) rewriteRefOfNTHValueExpr(parent SQLNode, node *NTHValueExp
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfNTHValueExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*NTHValueExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfNTHValueExprN))
 	}
 	if !a.rewriteExpr(node, node.N, func(newNode, parent SQLNode) {
 		parent.(*NTHValueExpr).N = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfNTHValueExprOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*NTHValueExpr).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfNTHValueExprFromFirstLastClause))
 	}
 	if !a.rewriteRefOfFromFirstLastClause(node, node.FromFirstLastClause, func(newNode, parent SQLNode) {
 		parent.(*NTHValueExpr).FromFirstLastClause = newNode.(*FromFirstLastClause)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfNTHValueExprNullTreatmentClause))
+	}
 	if !a.rewriteRefOfNullTreatmentClause(node, node.NullTreatmentClause, func(newNode, parent SQLNode) {
 		parent.(*NTHValueExpr).NullTreatmentClause = newNode.(*NullTreatmentClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6265,6 +8140,8 @@ func (a *application) rewriteRefOfNTHValueExpr(parent SQLNode, node *NTHValueExp
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNamedWindow(parent SQLNode, node *NamedWindow, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6282,10 +8159,16 @@ func (a *application) rewriteRefOfNamedWindow(parent SQLNode, node *NamedWindow,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfNamedWindowWindows))
+	}
 	if !a.rewriteWindowDefinitions(node, node.Windows, func(newNode, parent SQLNode) {
 		parent.(*NamedWindow).Windows = newNode.(WindowDefinitions)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6297,6 +8180,8 @@ func (a *application) rewriteRefOfNamedWindow(parent SQLNode, node *NamedWindow,
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteNamedWindows(parent SQLNode, node NamedWindows, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6315,6 +8200,13 @@ func (a *application) rewriteNamedWindows(parent SQLNode, node NamedWindows, rep
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(NamedWindowsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfNamedWindow(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(NamedWindows)[idx] = newNode.(*NamedWindow)
@@ -6322,6 +8214,9 @@ func (a *application) rewriteNamedWindows(parent SQLNode, node NamedWindows, rep
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6333,6 +8228,8 @@ func (a *application) rewriteNamedWindows(parent SQLNode, node NamedWindows, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNextval(parent SQLNode, node *Nextval, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6350,10 +8247,16 @@ func (a *application) rewriteRefOfNextval(parent SQLNode, node *Nextval, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfNextvalExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*Nextval).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6365,6 +8268,8 @@ func (a *application) rewriteRefOfNextval(parent SQLNode, node *Nextval, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6382,10 +8287,16 @@ func (a *application) rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfNotExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*NotExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6397,6 +8308,8 @@ func (a *application) rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNtileExpr(parent SQLNode, node *NtileExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6414,15 +8327,25 @@ func (a *application) rewriteRefOfNtileExpr(parent SQLNode, node *NtileExpr, rep
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfNtileExprN))
+	}
 	if !a.rewriteExpr(node, node.N, func(newNode, parent SQLNode) {
 		parent.(*NtileExpr).N = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfNtileExprOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*NtileExpr).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6434,6 +8357,8 @@ func (a *application) rewriteRefOfNtileExpr(parent SQLNode, node *NtileExpr, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNullTreatmentClause(parent SQLNode, node *NullTreatmentClause, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6463,6 +8388,8 @@ func (a *application) rewriteRefOfNullTreatmentClause(parent SQLNode, node *Null
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6492,6 +8419,8 @@ func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOffset(parent SQLNode, node *Offset, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6509,10 +8438,16 @@ func (a *application) rewriteRefOfOffset(parent SQLNode, node *Offset, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfOffsetOriginal))
+	}
 	if !a.rewriteExpr(node, node.Original, func(newNode, parent SQLNode) {
 		parent.(*Offset).Original = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6524,6 +8459,8 @@ func (a *application) rewriteRefOfOffset(parent SQLNode, node *Offset, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6542,6 +8479,13 @@ func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacer
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(OnDupOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfUpdateExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(OnDup)[idx] = newNode.(*UpdateExpr)
@@ -6549,6 +8493,9 @@ func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacer
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6560,6 +8507,8 @@ func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacer
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOptLike(parent SQLNode, node *OptLike, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6577,10 +8526,16 @@ func (a *application) rewriteRefOfOptLike(parent SQLNode, node *OptLike, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfOptLikeLikeTable))
+	}
 	if !a.rewriteTableName(node, node.LikeTable, func(newNode, parent SQLNode) {
 		parent.(*OptLike).LikeTable = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6592,6 +8547,8 @@ func (a *application) rewriteRefOfOptLike(parent SQLNode, node *OptLike, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6609,15 +8566,25 @@ func (a *application) rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfOrExprLeft))
+	}
 	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*OrExpr).Left = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfOrExprRight))
+	}
 	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*OrExpr).Right = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6629,6 +8596,8 @@ func (a *application) rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOrder(parent SQLNode, node *Order, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6646,10 +8615,16 @@ func (a *application) rewriteRefOfOrder(parent SQLNode, node *Order, replacer re
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfOrderExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*Order).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6661,6 +8636,8 @@ func (a *application) rewriteRefOfOrder(parent SQLNode, node *Order, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6679,6 +8656,13 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(OrderByOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfOrder(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(OrderBy)[idx] = newNode.(*Order)
@@ -6686,6 +8670,9 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6697,6 +8684,8 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOption, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6714,10 +8703,16 @@ func (a *application) rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOpt
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfOrderByOptionCols))
+	}
 	if !a.rewriteColumns(node, node.Cols, func(newNode, parent SQLNode) {
 		parent.(*OrderByOption).Cols = newNode.(Columns)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6729,6 +8724,8 @@ func (a *application) rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOpt
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6758,6 +8755,8 @@ func (a *application) rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6775,15 +8774,25 @@ func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfOverClauseWindowName))
+	}
 	if !a.rewriteIdentifierCI(node, node.WindowName, func(newNode, parent SQLNode) {
 		parent.(*OverClause).WindowName = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfOverClauseWindowSpec))
+	}
 	if !a.rewriteRefOfWindowSpecification(node, node.WindowSpec, func(newNode, parent SQLNode) {
 		parent.(*OverClause).WindowSpec = newNode.(*WindowSpecification)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6795,6 +8804,8 @@ func (a *application) rewriteRefOfOverClause(parent SQLNode, node *OverClause, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6812,10 +8823,16 @@ func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTabl
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfParenTableExprExprs))
+	}
 	if !a.rewriteTableExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*ParenTableExpr).Exprs = newNode.(TableExprs)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6827,6 +8844,8 @@ func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTabl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfParsedComments(parent SQLNode, node *ParsedComments, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6856,6 +8875,8 @@ func (a *application) rewriteRefOfParsedComments(parent SQLNode, node *ParsedCom
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *PartitionDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6873,15 +8894,25 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionOptions))
+	}
 	if !a.rewriteRefOfPartitionDefinitionOptions(node, node.Options, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinition).Options = newNode.(*PartitionDefinitionOptions)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6893,6 +8924,8 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, node *PartitionDefinitionOptions, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6910,35 +8943,61 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionOptionsValueRange))
+	}
 	if !a.rewriteRefOfPartitionValueRange(node, node.ValueRange, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinitionOptions).ValueRange = newNode.(*PartitionValueRange)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionOptionsComment))
 	}
 	if !a.rewriteRefOfLiteral(node, node.Comment, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinitionOptions).Comment = newNode.(*Literal)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionOptionsEngine))
+	}
 	if !a.rewriteRefOfPartitionEngine(node, node.Engine, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinitionOptions).Engine = newNode.(*PartitionEngine)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionOptionsDataDirectory))
 	}
 	if !a.rewriteRefOfLiteral(node, node.DataDirectory, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinitionOptions).DataDirectory = newNode.(*Literal)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionOptionsIndexDirectory))
+	}
 	if !a.rewriteRefOfLiteral(node, node.IndexDirectory, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinitionOptions).IndexDirectory = newNode.(*Literal)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionOptionsSubPartitionDefinitions))
+	}
 	if !a.rewriteSubPartitionDefinitions(node, node.SubPartitionDefinitions, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinitionOptions).SubPartitionDefinitions = newNode.(SubPartitionDefinitions)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -6950,6 +9009,8 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPartitionEngine(parent SQLNode, node *PartitionEngine, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6979,6 +9040,8 @@ func (a *application) rewriteRefOfPartitionEngine(parent SQLNode, node *Partitio
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *PartitionOption, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6996,22 +9059,43 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPartitionOptionColList))
+	}
 	if !a.rewriteColumns(node, node.ColList, func(newNode, parent SQLNode) {
 		parent.(*PartitionOption).ColList = newNode.(Columns)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPartitionOptionExpr))
 	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*PartitionOption).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPartitionOptionSubPartition))
+	}
 	if !a.rewriteRefOfSubPartition(node, node.SubPartition, func(newNode, parent SQLNode) {
 		parent.(*PartitionOption).SubPartition = newNode.(*SubPartition)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Definitions {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfPartitionOptionDefinitionsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfPartitionDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*PartitionOption).Definitions[idx] = newNode.(*PartitionDefinition)
@@ -7019,6 +9103,9 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7030,6 +9117,8 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionSpec, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7047,22 +9136,43 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPartitionSpecNames))
+	}
 	if !a.rewritePartitions(node, node.Names, func(newNode, parent SQLNode) {
 		parent.(*PartitionSpec).Names = newNode.(Partitions)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPartitionSpecNumber))
 	}
 	if !a.rewriteRefOfLiteral(node, node.Number, func(newNode, parent SQLNode) {
 		parent.(*PartitionSpec).Number = newNode.(*Literal)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPartitionSpecTableName))
+	}
 	if !a.rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
 		parent.(*PartitionSpec).TableName = newNode.(TableName)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Definitions {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfPartitionSpecDefinitionsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfPartitionDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*PartitionSpec).Definitions[idx] = newNode.(*PartitionDefinition)
@@ -7070,6 +9180,9 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7081,6 +9194,8 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPartitionValueRange(parent SQLNode, node *PartitionValueRange, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7098,10 +9213,16 @@ func (a *application) rewriteRefOfPartitionValueRange(parent SQLNode, node *Part
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPartitionValueRangeRange))
+	}
 	if !a.rewriteValTuple(node, node.Range, func(newNode, parent SQLNode) {
 		parent.(*PartitionValueRange).Range = newNode.(ValTuple)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7113,6 +9234,8 @@ func (a *application) rewriteRefOfPartitionValueRange(parent SQLNode, node *Part
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewritePartitions(parent SQLNode, node Partitions, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7131,6 +9254,13 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(PartitionsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteIdentifierCI(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(Partitions)[idx] = newNode.(IdentifierCI)
@@ -7138,6 +9268,9 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7149,6 +9282,8 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPerformanceSchemaFuncExpr(parent SQLNode, node *PerformanceSchemaFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7166,10 +9301,16 @@ func (a *application) rewriteRefOfPerformanceSchemaFuncExpr(parent SQLNode, node
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPerformanceSchemaFuncExprArgument))
+	}
 	if !a.rewriteExpr(node, node.Argument, func(newNode, parent SQLNode) {
 		parent.(*PerformanceSchemaFuncExpr).Argument = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7181,6 +9322,8 @@ func (a *application) rewriteRefOfPerformanceSchemaFuncExpr(parent SQLNode, node
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPointExpr(parent SQLNode, node *PointExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7198,15 +9341,25 @@ func (a *application) rewriteRefOfPointExpr(parent SQLNode, node *PointExpr, rep
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPointExprXCordinate))
+	}
 	if !a.rewriteExpr(node, node.XCordinate, func(newNode, parent SQLNode) {
 		parent.(*PointExpr).XCordinate = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPointExprYCordinate))
+	}
 	if !a.rewriteExpr(node, node.YCordinate, func(newNode, parent SQLNode) {
 		parent.(*PointExpr).YCordinate = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7218,6 +9371,8 @@ func (a *application) rewriteRefOfPointExpr(parent SQLNode, node *PointExpr, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPointPropertyFuncExpr(parent SQLNode, node *PointPropertyFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7235,15 +9390,25 @@ func (a *application) rewriteRefOfPointPropertyFuncExpr(parent SQLNode, node *Po
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPointPropertyFuncExprPoint))
+	}
 	if !a.rewriteExpr(node, node.Point, func(newNode, parent SQLNode) {
 		parent.(*PointPropertyFuncExpr).Point = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPointPropertyFuncExprValueToSet))
+	}
 	if !a.rewriteExpr(node, node.ValueToSet, func(newNode, parent SQLNode) {
 		parent.(*PointPropertyFuncExpr).ValueToSet = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7255,6 +9420,8 @@ func (a *application) rewriteRefOfPointPropertyFuncExpr(parent SQLNode, node *Po
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7273,6 +9440,13 @@ func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr,
 		}
 	}
 	for x, el := range node.LinestringParams {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfPolygonExprLinestringParamsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*PolygonExpr).LinestringParams[idx] = newNode.(Expr)
@@ -7280,6 +9454,9 @@ func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr,
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7291,6 +9468,8 @@ func (a *application) rewriteRefOfPolygonExpr(parent SQLNode, node *PolygonExpr,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPolygonPropertyFuncExpr(parent SQLNode, node *PolygonPropertyFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7308,15 +9487,25 @@ func (a *application) rewriteRefOfPolygonPropertyFuncExpr(parent SQLNode, node *
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPolygonPropertyFuncExprPolygon))
+	}
 	if !a.rewriteExpr(node, node.Polygon, func(newNode, parent SQLNode) {
 		parent.(*PolygonPropertyFuncExpr).Polygon = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPolygonPropertyFuncExprPropertyDefArg))
+	}
 	if !a.rewriteExpr(node, node.PropertyDefArg, func(newNode, parent SQLNode) {
 		parent.(*PolygonPropertyFuncExpr).PropertyDefArg = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7328,6 +9517,8 @@ func (a *application) rewriteRefOfPolygonPropertyFuncExpr(parent SQLNode, node *
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7345,20 +9536,34 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfPrepareStmtName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*PrepareStmt).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPrepareStmtStatement))
 	}
 	if !a.rewriteExpr(node, node.Statement, func(newNode, parent SQLNode) {
 		parent.(*PrepareStmt).Statement = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPrepareStmtComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*PrepareStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7370,6 +9575,8 @@ func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfPurgeBinaryLogs(parent SQLNode, node *PurgeBinaryLogs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7399,6 +9606,8 @@ func (a *application) rewriteRefOfPurgeBinaryLogs(parent SQLNode, node *PurgeBin
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *ReferenceDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7416,30 +9625,52 @@ func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *Refe
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfReferenceDefinitionReferencedTable))
+	}
 	if !a.rewriteTableName(node, node.ReferencedTable, func(newNode, parent SQLNode) {
 		parent.(*ReferenceDefinition).ReferencedTable = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfReferenceDefinitionReferencedColumns))
 	}
 	if !a.rewriteColumns(node, node.ReferencedColumns, func(newNode, parent SQLNode) {
 		parent.(*ReferenceDefinition).ReferencedColumns = newNode.(Columns)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfReferenceDefinitionMatch))
+	}
 	if !a.rewriteMatchAction(node, node.Match, func(newNode, parent SQLNode) {
 		parent.(*ReferenceDefinition).Match = newNode.(MatchAction)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfReferenceDefinitionOnDelete))
 	}
 	if !a.rewriteReferenceAction(node, node.OnDelete, func(newNode, parent SQLNode) {
 		parent.(*ReferenceDefinition).OnDelete = newNode.(ReferenceAction)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfReferenceDefinitionOnUpdate))
+	}
 	if !a.rewriteReferenceAction(node, node.OnUpdate, func(newNode, parent SQLNode) {
 		parent.(*ReferenceDefinition).OnUpdate = newNode.(ReferenceAction)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7451,6 +9682,8 @@ func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *Refe
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRegexpInstrExpr(parent SQLNode, node *RegexpInstrExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7468,35 +9701,61 @@ func (a *application) rewriteRefOfRegexpInstrExpr(parent SQLNode, node *RegexpIn
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfRegexpInstrExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*RegexpInstrExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpInstrExprPattern))
 	}
 	if !a.rewriteExpr(node, node.Pattern, func(newNode, parent SQLNode) {
 		parent.(*RegexpInstrExpr).Pattern = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpInstrExprPosition))
+	}
 	if !a.rewriteExpr(node, node.Position, func(newNode, parent SQLNode) {
 		parent.(*RegexpInstrExpr).Position = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpInstrExprOccurrence))
 	}
 	if !a.rewriteExpr(node, node.Occurrence, func(newNode, parent SQLNode) {
 		parent.(*RegexpInstrExpr).Occurrence = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpInstrExprReturnOption))
+	}
 	if !a.rewriteExpr(node, node.ReturnOption, func(newNode, parent SQLNode) {
 		parent.(*RegexpInstrExpr).ReturnOption = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpInstrExprMatchType))
+	}
 	if !a.rewriteExpr(node, node.MatchType, func(newNode, parent SQLNode) {
 		parent.(*RegexpInstrExpr).MatchType = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7508,6 +9767,8 @@ func (a *application) rewriteRefOfRegexpInstrExpr(parent SQLNode, node *RegexpIn
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRegexpLikeExpr(parent SQLNode, node *RegexpLikeExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7525,20 +9786,34 @@ func (a *application) rewriteRefOfRegexpLikeExpr(parent SQLNode, node *RegexpLik
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfRegexpLikeExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*RegexpLikeExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpLikeExprPattern))
 	}
 	if !a.rewriteExpr(node, node.Pattern, func(newNode, parent SQLNode) {
 		parent.(*RegexpLikeExpr).Pattern = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpLikeExprMatchType))
+	}
 	if !a.rewriteExpr(node, node.MatchType, func(newNode, parent SQLNode) {
 		parent.(*RegexpLikeExpr).MatchType = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7550,6 +9825,8 @@ func (a *application) rewriteRefOfRegexpLikeExpr(parent SQLNode, node *RegexpLik
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRegexpReplaceExpr(parent SQLNode, node *RegexpReplaceExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7567,35 +9844,61 @@ func (a *application) rewriteRefOfRegexpReplaceExpr(parent SQLNode, node *Regexp
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfRegexpReplaceExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*RegexpReplaceExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpReplaceExprPattern))
 	}
 	if !a.rewriteExpr(node, node.Pattern, func(newNode, parent SQLNode) {
 		parent.(*RegexpReplaceExpr).Pattern = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpReplaceExprRepl))
+	}
 	if !a.rewriteExpr(node, node.Repl, func(newNode, parent SQLNode) {
 		parent.(*RegexpReplaceExpr).Repl = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpReplaceExprOccurrence))
 	}
 	if !a.rewriteExpr(node, node.Occurrence, func(newNode, parent SQLNode) {
 		parent.(*RegexpReplaceExpr).Occurrence = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpReplaceExprPosition))
+	}
 	if !a.rewriteExpr(node, node.Position, func(newNode, parent SQLNode) {
 		parent.(*RegexpReplaceExpr).Position = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpReplaceExprMatchType))
+	}
 	if !a.rewriteExpr(node, node.MatchType, func(newNode, parent SQLNode) {
 		parent.(*RegexpReplaceExpr).MatchType = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7607,6 +9910,8 @@ func (a *application) rewriteRefOfRegexpReplaceExpr(parent SQLNode, node *Regexp
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRegexpSubstrExpr(parent SQLNode, node *RegexpSubstrExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7624,30 +9929,52 @@ func (a *application) rewriteRefOfRegexpSubstrExpr(parent SQLNode, node *RegexpS
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfRegexpSubstrExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*RegexpSubstrExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpSubstrExprPattern))
 	}
 	if !a.rewriteExpr(node, node.Pattern, func(newNode, parent SQLNode) {
 		parent.(*RegexpSubstrExpr).Pattern = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpSubstrExprOccurrence))
+	}
 	if !a.rewriteExpr(node, node.Occurrence, func(newNode, parent SQLNode) {
 		parent.(*RegexpSubstrExpr).Occurrence = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpSubstrExprPosition))
 	}
 	if !a.rewriteExpr(node, node.Position, func(newNode, parent SQLNode) {
 		parent.(*RegexpSubstrExpr).Position = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRegexpSubstrExprMatchType))
+	}
 	if !a.rewriteExpr(node, node.MatchType, func(newNode, parent SQLNode) {
 		parent.(*RegexpSubstrExpr).MatchType = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7659,6 +9986,8 @@ func (a *application) rewriteRefOfRegexpSubstrExpr(parent SQLNode, node *RegexpS
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7676,10 +10005,16 @@ func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfReleaseName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*Release).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7691,6 +10026,8 @@ func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRenameColumn(parent SQLNode, node *RenameColumn, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7708,15 +10045,25 @@ func (a *application) rewriteRefOfRenameColumn(parent SQLNode, node *RenameColum
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfRenameColumnOldName))
+	}
 	if !a.rewriteRefOfColName(node, node.OldName, func(newNode, parent SQLNode) {
 		parent.(*RenameColumn).OldName = newNode.(*ColName)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRenameColumnNewName))
+	}
 	if !a.rewriteRefOfColName(node, node.NewName, func(newNode, parent SQLNode) {
 		parent.(*RenameColumn).NewName = newNode.(*ColName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7728,6 +10075,8 @@ func (a *application) rewriteRefOfRenameColumn(parent SQLNode, node *RenameColum
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7745,15 +10094,25 @@ func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfRenameIndexOldName))
+	}
 	if !a.rewriteIdentifierCI(node, node.OldName, func(newNode, parent SQLNode) {
 		parent.(*RenameIndex).OldName = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRenameIndexNewName))
+	}
 	if !a.rewriteIdentifierCI(node, node.NewName, func(newNode, parent SQLNode) {
 		parent.(*RenameIndex).NewName = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7765,6 +10124,8 @@ func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRenameTable(parent SQLNode, node *RenameTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7794,6 +10155,8 @@ func (a *application) rewriteRefOfRenameTable(parent SQLNode, node *RenameTable,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRenameTableName(parent SQLNode, node *RenameTableName, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7811,10 +10174,16 @@ func (a *application) rewriteRefOfRenameTableName(parent SQLNode, node *RenameTa
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfRenameTableNameTable))
+	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*RenameTableName).Table = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7826,6 +10195,8 @@ func (a *application) rewriteRefOfRenameTableName(parent SQLNode, node *RenameTa
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMigration, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7843,10 +10214,16 @@ func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMi
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfRevertMigrationComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*RevertMigration).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7858,6 +10235,8 @@ func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMi
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRollback(parent SQLNode, node *Rollback, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7887,6 +10266,8 @@ func (a *application) rewriteRefOfRollback(parent SQLNode, node *Rollback, repla
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteRootNode(parent SQLNode, node RootNode, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -7901,10 +10282,16 @@ func (a *application) rewriteRootNode(parent SQLNode, node RootNode, replacer re
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RootNodeSQLNode))
+	}
 	if !a.rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'SQLNode' on 'RootNode'")
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7916,6 +10303,8 @@ func (a *application) rewriteRootNode(parent SQLNode, node RootNode, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRowAlias(parent SQLNode, node *RowAlias, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7933,15 +10322,25 @@ func (a *application) rewriteRefOfRowAlias(parent SQLNode, node *RowAlias, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfRowAliasTableName))
+	}
 	if !a.rewriteIdentifierCS(node, node.TableName, func(newNode, parent SQLNode) {
 		parent.(*RowAlias).TableName = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRowAliasColumns))
+	}
 	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*RowAlias).Columns = newNode.(Columns)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7953,6 +10352,8 @@ func (a *application) rewriteRefOfRowAlias(parent SQLNode, node *RowAlias, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -7970,10 +10371,16 @@ func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, rep
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSRollbackName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*SRollback).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -7985,6 +10392,8 @@ func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8002,10 +10411,16 @@ func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, rep
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSavepointName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*Savepoint).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8017,6 +10432,8 @@ func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8034,12 +10451,25 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSelectWith))
+	}
 	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
 		parent.(*Select).With = newNode.(*With)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.From {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfSelectFromOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*Select).From[idx] = newNode.(TableExpr)
@@ -8048,50 +10478,89 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 			return false
 		}
 	}
+	if a.collectPaths && len(node.From) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Select).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectSelectExprs))
 	}
 	if !a.rewriteRefOfSelectExprs(node, node.SelectExprs, func(newNode, parent SQLNode) {
 		parent.(*Select).SelectExprs = newNode.(*SelectExprs)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectWhere))
+	}
 	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*Select).Where = newNode.(*Where)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectGroupBy))
 	}
 	if !a.rewriteRefOfGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
 		parent.(*Select).GroupBy = newNode.(*GroupBy)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectHaving))
+	}
 	if !a.rewriteRefOfWhere(node, node.Having, func(newNode, parent SQLNode) {
 		parent.(*Select).Having = newNode.(*Where)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectWindows))
 	}
 	if !a.rewriteNamedWindows(node, node.Windows, func(newNode, parent SQLNode) {
 		parent.(*Select).Windows = newNode.(NamedWindows)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectOrderBy))
+	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Select).OrderBy = newNode.(OrderBy)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectLimit))
 	}
 	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Select).Limit = newNode.(*Limit)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSelectInto))
+	}
 	if !a.rewriteRefOfSelectInto(node, node.Into, func(newNode, parent SQLNode) {
 		parent.(*Select).Into = newNode.(*SelectInto)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8103,6 +10572,8 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSelectExprs(parent SQLNode, node *SelectExprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8121,6 +10592,13 @@ func (a *application) rewriteRefOfSelectExprs(parent SQLNode, node *SelectExprs,
 		}
 	}
 	for x, el := range node.Exprs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfSelectExprsExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteSelectExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*SelectExprs).Exprs[idx] = newNode.(SelectExpr)
@@ -8128,6 +10606,9 @@ func (a *application) rewriteRefOfSelectExprs(parent SQLNode, node *SelectExprs,
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8139,6 +10620,8 @@ func (a *application) rewriteRefOfSelectExprs(parent SQLNode, node *SelectExprs,
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8168,6 +10651,8 @@ func (a *application) rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8185,15 +10670,25 @@ func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replac
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSetComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Set).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSetExprs))
+	}
 	if !a.rewriteSetExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*Set).Exprs = newNode.(SetExprs)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8205,6 +10700,8 @@ func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8222,15 +10719,25 @@ func (a *application) rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSetExprVar))
+	}
 	if !a.rewriteRefOfVariable(node, node.Var, func(newNode, parent SQLNode) {
 		parent.(*SetExpr).Var = newNode.(*Variable)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSetExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*SetExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8242,6 +10749,8 @@ func (a *application) rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replace
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8260,6 +10769,13 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(SetExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfSetExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(SetExprs)[idx] = newNode.(*SetExpr)
@@ -8267,6 +10783,9 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8278,6 +10797,8 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8295,10 +10816,16 @@ func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer repl
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfShowInternal))
+	}
 	if !a.rewriteShowInternal(node, node.Internal, func(newNode, parent SQLNode) {
 		parent.(*Show).Internal = newNode.(ShowInternal)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8310,6 +10837,8 @@ func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8327,20 +10856,34 @@ func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, rep
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfShowBasicTbl))
+	}
 	if !a.rewriteTableName(node, node.Tbl, func(newNode, parent SQLNode) {
 		parent.(*ShowBasic).Tbl = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfShowBasicDbName))
 	}
 	if !a.rewriteIdentifierCS(node, node.DbName, func(newNode, parent SQLNode) {
 		parent.(*ShowBasic).DbName = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfShowBasicFilter))
+	}
 	if !a.rewriteRefOfShowFilter(node, node.Filter, func(newNode, parent SQLNode) {
 		parent.(*ShowBasic).Filter = newNode.(*ShowFilter)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8352,6 +10895,8 @@ func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8369,10 +10914,16 @@ func (a *application) rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfShowCreateOp))
+	}
 	if !a.rewriteTableName(node, node.Op, func(newNode, parent SQLNode) {
 		parent.(*ShowCreate).Op = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8384,6 +10935,8 @@ func (a *application) rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8401,10 +10954,16 @@ func (a *application) rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfShowFilterFilter))
+	}
 	if !a.rewriteExpr(node, node.Filter, func(newNode, parent SQLNode) {
 		parent.(*ShowFilter).Filter = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8416,6 +10975,8 @@ func (a *application) rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMigrationLogs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8433,10 +10994,16 @@ func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMi
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfShowMigrationLogsComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*ShowMigrationLogs).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8448,6 +11015,8 @@ func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMi
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowOther(parent SQLNode, node *ShowOther, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8477,6 +11046,8 @@ func (a *application) rewriteRefOfShowOther(parent SQLNode, node *ShowOther, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowThrottledApps(parent SQLNode, node *ShowThrottledApps, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8506,6 +11077,8 @@ func (a *application) rewriteRefOfShowThrottledApps(parent SQLNode, node *ShowTh
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowThrottlerStatus(parent SQLNode, node *ShowThrottlerStatus, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8535,6 +11108,8 @@ func (a *application) rewriteRefOfShowThrottlerStatus(parent SQLNode, node *Show
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfShowTransactionStatus(parent SQLNode, node *ShowTransactionStatus, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8564,6 +11139,8 @@ func (a *application) rewriteRefOfShowTransactionStatus(parent SQLNode, node *Sh
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8581,10 +11158,16 @@ func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfStarExprTableName))
+	}
 	if !a.rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
 		parent.(*StarExpr).TableName = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8596,6 +11179,8 @@ func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfStd(parent SQLNode, node *Std, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8613,15 +11198,25 @@ func (a *application) rewriteRefOfStd(parent SQLNode, node *Std, replacer replac
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfStdArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*Std).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfStdOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*Std).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8633,6 +11228,8 @@ func (a *application) rewriteRefOfStd(parent SQLNode, node *Std, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfStdDev(parent SQLNode, node *StdDev, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8650,15 +11247,25 @@ func (a *application) rewriteRefOfStdDev(parent SQLNode, node *StdDev, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfStdDevArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*StdDev).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfStdDevOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*StdDev).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8670,6 +11277,8 @@ func (a *application) rewriteRefOfStdDev(parent SQLNode, node *StdDev, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfStdPop(parent SQLNode, node *StdPop, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8687,15 +11296,25 @@ func (a *application) rewriteRefOfStdPop(parent SQLNode, node *StdPop, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfStdPopArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*StdPop).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfStdPopOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*StdPop).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8707,6 +11326,8 @@ func (a *application) rewriteRefOfStdPop(parent SQLNode, node *StdPop, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfStdSamp(parent SQLNode, node *StdSamp, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8724,15 +11345,25 @@ func (a *application) rewriteRefOfStdSamp(parent SQLNode, node *StdSamp, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfStdSampArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*StdSamp).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfStdSampOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*StdSamp).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8744,6 +11375,8 @@ func (a *application) rewriteRefOfStdSamp(parent SQLNode, node *StdSamp, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8761,20 +11394,34 @@ func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfStreamComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Stream).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfStreamSelectExpr))
 	}
 	if !a.rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
 		parent.(*Stream).SelectExpr = newNode.(SelectExpr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfStreamTable))
+	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*Stream).Table = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8786,6 +11433,8 @@ func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8803,15 +11452,25 @@ func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartitio
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSubPartitionColList))
+	}
 	if !a.rewriteColumns(node, node.ColList, func(newNode, parent SQLNode) {
 		parent.(*SubPartition).ColList = newNode.(Columns)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSubPartitionExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*SubPartition).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8823,6 +11482,8 @@ func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartitio
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSubPartitionDefinition(parent SQLNode, node *SubPartitionDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8840,15 +11501,25 @@ func (a *application) rewriteRefOfSubPartitionDefinition(parent SQLNode, node *S
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSubPartitionDefinitionName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*SubPartitionDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSubPartitionDefinitionOptions))
+	}
 	if !a.rewriteRefOfSubPartitionDefinitionOptions(node, node.Options, func(newNode, parent SQLNode) {
 		parent.(*SubPartitionDefinition).Options = newNode.(*SubPartitionDefinitionOptions)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8860,6 +11531,8 @@ func (a *application) rewriteRefOfSubPartitionDefinition(parent SQLNode, node *S
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSubPartitionDefinitionOptions(parent SQLNode, node *SubPartitionDefinitionOptions, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8877,25 +11550,43 @@ func (a *application) rewriteRefOfSubPartitionDefinitionOptions(parent SQLNode, 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSubPartitionDefinitionOptionsComment))
+	}
 	if !a.rewriteRefOfLiteral(node, node.Comment, func(newNode, parent SQLNode) {
 		parent.(*SubPartitionDefinitionOptions).Comment = newNode.(*Literal)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSubPartitionDefinitionOptionsEngine))
 	}
 	if !a.rewriteRefOfPartitionEngine(node, node.Engine, func(newNode, parent SQLNode) {
 		parent.(*SubPartitionDefinitionOptions).Engine = newNode.(*PartitionEngine)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSubPartitionDefinitionOptionsDataDirectory))
+	}
 	if !a.rewriteRefOfLiteral(node, node.DataDirectory, func(newNode, parent SQLNode) {
 		parent.(*SubPartitionDefinitionOptions).DataDirectory = newNode.(*Literal)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSubPartitionDefinitionOptionsIndexDirectory))
+	}
 	if !a.rewriteRefOfLiteral(node, node.IndexDirectory, func(newNode, parent SQLNode) {
 		parent.(*SubPartitionDefinitionOptions).IndexDirectory = newNode.(*Literal)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8907,6 +11598,8 @@ func (a *application) rewriteRefOfSubPartitionDefinitionOptions(parent SQLNode, 
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPartitionDefinitions, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8925,6 +11618,13 @@ func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPar
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(SubPartitionDefinitionsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfSubPartitionDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(SubPartitionDefinitions)[idx] = newNode.(*SubPartitionDefinition)
@@ -8932,6 +11632,9 @@ func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPar
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8943,6 +11646,8 @@ func (a *application) rewriteSubPartitionDefinitions(parent SQLNode, node SubPar
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8960,10 +11665,16 @@ func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSubquerySelect))
+	}
 	if !a.rewriteTableStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*Subquery).Select = newNode.(TableStatement)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -8975,6 +11686,8 @@ func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8992,20 +11705,34 @@ func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSubstrExprName))
+	}
 	if !a.rewriteExpr(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).Name = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSubstrExprFrom))
 	}
 	if !a.rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).From = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSubstrExprTo))
+	}
 	if !a.rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).To = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9017,6 +11744,8 @@ func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9034,15 +11763,25 @@ func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replac
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSumArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*Sum).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSumOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*Sum).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9054,6 +11793,8 @@ func (a *application) rewriteRefOfSum(parent SQLNode, node *Sum, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9072,6 +11813,13 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(TableExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(TableExprs)[idx] = newNode.(TableExpr)
@@ -9079,6 +11827,9 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9090,6 +11841,8 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -9104,15 +11857,25 @@ func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(TableNameName))
+	}
 	if !a.rewriteIdentifierCS(node, node.Name, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'Name' on 'TableName'")
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(TableNameQualifier))
+	}
 	if !a.rewriteIdentifierCS(node, node.Qualifier, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'Qualifier' on 'TableName'")
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9124,6 +11887,8 @@ func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9142,6 +11907,13 @@ func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replace
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(TableNamesOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteTableName(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(TableNames)[idx] = newNode.(TableName)
@@ -9149,6 +11921,9 @@ func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replace
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9160,6 +11935,8 @@ func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replace
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteTableOptions(parent SQLNode, node TableOptions, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9189,6 +11966,8 @@ func (a *application) rewriteTableOptions(parent SQLNode, node TableOptions, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9207,6 +11986,13 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 		}
 	}
 	for x, el := range node.Columns {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfTableSpecColumnsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfColumnDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*TableSpec).Columns[idx] = newNode.(*ColumnDefinition)
@@ -9215,7 +12001,17 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 			return false
 		}
 	}
+	if a.collectPaths && len(node.Columns) > 0 {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Indexes {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfTableSpecIndexesOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfIndexDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*TableSpec).Indexes[idx] = newNode.(*IndexDefinition)
@@ -9224,7 +12020,17 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 			return false
 		}
 	}
+	if a.collectPaths && len(node.Indexes) > 0 {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Constraints {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfTableSpecConstraintsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfConstraintDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*TableSpec).Constraints[idx] = newNode.(*ConstraintDefinition)
@@ -9233,15 +12039,26 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 			return false
 		}
 	}
+	if a.collectPaths && len(node.Constraints) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfTableSpecOptions))
+	}
 	if !a.rewriteTableOptions(node, node.Options, func(newNode, parent SQLNode) {
 		parent.(*TableSpec).Options = newNode.(TableOptions)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfTableSpecPartitionOption))
+	}
 	if !a.rewriteRefOfPartitionOption(node, node.PartitionOption, func(newNode, parent SQLNode) {
 		parent.(*TableSpec).PartitionOption = newNode.(*PartitionOption)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9253,6 +12070,8 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfTablespaceOperation(parent SQLNode, node *TablespaceOperation, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9282,6 +12101,8 @@ func (a *application) rewriteRefOfTablespaceOperation(parent SQLNode, node *Tabl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfTimestampDiffExpr(parent SQLNode, node *TimestampDiffExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9299,15 +12120,25 @@ func (a *application) rewriteRefOfTimestampDiffExpr(parent SQLNode, node *Timest
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfTimestampDiffExprExpr1))
+	}
 	if !a.rewriteExpr(node, node.Expr1, func(newNode, parent SQLNode) {
 		parent.(*TimestampDiffExpr).Expr1 = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfTimestampDiffExprExpr2))
+	}
 	if !a.rewriteExpr(node, node.Expr2, func(newNode, parent SQLNode) {
 		parent.(*TimestampDiffExpr).Expr2 = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9319,6 +12150,8 @@ func (a *application) rewriteRefOfTimestampDiffExpr(parent SQLNode, node *Timest
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfTrimFuncExpr(parent SQLNode, node *TrimFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9336,15 +12169,25 @@ func (a *application) rewriteRefOfTrimFuncExpr(parent SQLNode, node *TrimFuncExp
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfTrimFuncExprTrimArg))
+	}
 	if !a.rewriteExpr(node, node.TrimArg, func(newNode, parent SQLNode) {
 		parent.(*TrimFuncExpr).TrimArg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfTrimFuncExprStringArg))
+	}
 	if !a.rewriteExpr(node, node.StringArg, func(newNode, parent SQLNode) {
 		parent.(*TrimFuncExpr).StringArg = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9356,6 +12199,8 @@ func (a *application) rewriteRefOfTrimFuncExpr(parent SQLNode, node *TrimFuncExp
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9373,10 +12218,16 @@ func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTa
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfTruncateTableTable))
+	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*TruncateTable).Table = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9388,6 +12239,8 @@ func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTa
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9405,10 +12258,16 @@ func (a *application) rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, rep
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfUnaryExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*UnaryExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9420,6 +12279,8 @@ func (a *application) rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9437,35 +12298,61 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfUnionWith))
+	}
 	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
 		parent.(*Union).With = newNode.(*With)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUnionLeft))
 	}
 	if !a.rewriteTableStatement(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*Union).Left = newNode.(TableStatement)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUnionRight))
+	}
 	if !a.rewriteTableStatement(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*Union).Right = newNode.(TableStatement)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUnionOrderBy))
 	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Union).OrderBy = newNode.(OrderBy)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUnionLimit))
+	}
 	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Union).Limit = newNode.(*Limit)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUnionInto))
+	}
 	if !a.rewriteRefOfSelectInto(node, node.Into, func(newNode, parent SQLNode) {
 		parent.(*Union).Into = newNode.(*SelectInto)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9477,6 +12364,8 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTables, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9506,6 +12395,8 @@ func (a *application) rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTable
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9523,17 +12414,34 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfUpdateWith))
+	}
 	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
 		parent.(*Update).With = newNode.(*With)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUpdateComments))
 	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Update).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.TableExprs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfUpdateTableExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*Update).TableExprs[idx] = newNode.(TableExpr)
@@ -9542,25 +12450,44 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 			return false
 		}
 	}
+	if a.collectPaths && len(node.TableExprs) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUpdateExprs))
+	}
 	if !a.rewriteUpdateExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*Update).Exprs = newNode.(UpdateExprs)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUpdateWhere))
 	}
 	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*Update).Where = newNode.(*Where)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUpdateOrderBy))
+	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Update).OrderBy = newNode.(OrderBy)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUpdateLimit))
+	}
 	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Update).Limit = newNode.(*Limit)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9572,6 +12499,8 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9589,15 +12518,25 @@ func (a *application) rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfUpdateExprName))
+	}
 	if !a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*UpdateExpr).Name = newNode.(*ColName)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUpdateExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*UpdateExpr).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9609,6 +12548,8 @@ func (a *application) rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, r
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9627,6 +12568,13 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(UpdateExprsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfUpdateExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(UpdateExprs)[idx] = newNode.(*UpdateExpr)
@@ -9634,6 +12582,9 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9645,6 +12596,8 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUpdateXMLExpr(parent SQLNode, node *UpdateXMLExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9662,20 +12615,34 @@ func (a *application) rewriteRefOfUpdateXMLExpr(parent SQLNode, node *UpdateXMLE
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfUpdateXMLExprTarget))
+	}
 	if !a.rewriteExpr(node, node.Target, func(newNode, parent SQLNode) {
 		parent.(*UpdateXMLExpr).Target = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUpdateXMLExprXPathExpr))
 	}
 	if !a.rewriteExpr(node, node.XPathExpr, func(newNode, parent SQLNode) {
 		parent.(*UpdateXMLExpr).XPathExpr = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfUpdateXMLExprNewXML))
+	}
 	if !a.rewriteExpr(node, node.NewXML, func(newNode, parent SQLNode) {
 		parent.(*UpdateXMLExpr).NewXML = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9687,6 +12654,8 @@ func (a *application) rewriteRefOfUpdateXMLExpr(parent SQLNode, node *UpdateXMLE
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9704,10 +12673,16 @@ func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replac
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfUseDBName))
+	}
 	if !a.rewriteIdentifierCS(node, node.DBName, func(newNode, parent SQLNode) {
 		parent.(*Use).DBName = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9719,6 +12694,8 @@ func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVExplainStmt(parent SQLNode, node *VExplainStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9736,15 +12713,25 @@ func (a *application) rewriteRefOfVExplainStmt(parent SQLNode, node *VExplainStm
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfVExplainStmtStatement))
+	}
 	if !a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
 		parent.(*VExplainStmt).Statement = newNode.(Statement)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfVExplainStmtComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*VExplainStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9756,6 +12743,8 @@ func (a *application) rewriteRefOfVExplainStmt(parent SQLNode, node *VExplainStm
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9773,30 +12762,52 @@ func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfVStreamComments))
+	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*VStream).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfVStreamSelectExpr))
 	}
 	if !a.rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
 		parent.(*VStream).SelectExpr = newNode.(SelectExpr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfVStreamTable))
+	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*VStream).Table = newNode.(TableName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfVStreamWhere))
 	}
 	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*VStream).Where = newNode.(*Where)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfVStreamLimit))
+	}
 	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*VStream).Limit = newNode.(*Limit)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9808,6 +12819,8 @@ func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replace
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9826,6 +12839,13 @@ func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer re
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(ValTupleOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(ValTuple)[idx] = newNode.(Expr)
@@ -9833,6 +12853,9 @@ func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer re
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9844,6 +12867,8 @@ func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfValidation(parent SQLNode, node *Validation, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9873,6 +12898,8 @@ func (a *application) rewriteRefOfValidation(parent SQLNode, node *Validation, r
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteValues(parent SQLNode, node Values, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9891,6 +12918,13 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(ValuesOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteValTuple(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(Values)[idx] = newNode.(ValTuple)
@@ -9898,6 +12932,9 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9909,6 +12946,8 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9926,10 +12965,16 @@ func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFun
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfValuesFuncExprName))
+	}
 	if !a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ValuesFuncExpr).Name = newNode.(*ColName)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9941,6 +12986,8 @@ func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFun
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesStatement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9958,35 +13005,61 @@ func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesSt
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfValuesStatementWith))
+	}
 	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
 		parent.(*ValuesStatement).With = newNode.(*With)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfValuesStatementRows))
 	}
 	if !a.rewriteValues(node, node.Rows, func(newNode, parent SQLNode) {
 		parent.(*ValuesStatement).Rows = newNode.(Values)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfValuesStatementListArg))
+	}
 	if !a.rewriteListArg(node, node.ListArg, func(newNode, parent SQLNode) {
 		parent.(*ValuesStatement).ListArg = newNode.(ListArg)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfValuesStatementComments))
 	}
 	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*ValuesStatement).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfValuesStatementOrder))
+	}
 	if !a.rewriteOrderBy(node, node.Order, func(newNode, parent SQLNode) {
 		parent.(*ValuesStatement).Order = newNode.(OrderBy)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfValuesStatementLimit))
+	}
 	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*ValuesStatement).Limit = newNode.(*Limit)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9998,6 +13071,8 @@ func (a *application) rewriteRefOfValuesStatement(parent SQLNode, node *ValuesSt
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10015,15 +13090,25 @@ func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer 
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfVarPopArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*VarPop).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfVarPopOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*VarPop).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10035,6 +13120,8 @@ func (a *application) rewriteRefOfVarPop(parent SQLNode, node *VarPop, replacer 
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10052,15 +13139,25 @@ func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfVarSampArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*VarSamp).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfVarSampOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*VarSamp).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10072,6 +13169,8 @@ func (a *application) rewriteRefOfVarSamp(parent SQLNode, node *VarSamp, replace
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVariable(parent SQLNode, node *Variable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10089,10 +13188,16 @@ func (a *application) rewriteRefOfVariable(parent SQLNode, node *Variable, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfVariableName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*Variable).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10104,6 +13209,8 @@ func (a *application) rewriteRefOfVariable(parent SQLNode, node *Variable, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10121,15 +13228,25 @@ func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfVarianceArg))
+	}
 	if !a.rewriteExpr(node, node.Arg, func(newNode, parent SQLNode) {
 		parent.(*Variance).Arg = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfVarianceOverClause))
+	}
 	if !a.rewriteRefOfOverClause(node, node.OverClause, func(newNode, parent SQLNode) {
 		parent.(*Variance).OverClause = newNode.(*OverClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10141,6 +13258,8 @@ func (a *application) rewriteRefOfVariance(parent SQLNode, node *Variance, repla
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -10155,10 +13274,16 @@ func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(VindexParamKey))
+	}
 	if !a.rewriteIdentifierCI(node, node.Key, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'Key' on 'VindexParam'")
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10170,6 +13295,8 @@ func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10187,17 +13314,34 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfVindexSpecName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*VindexSpec).Name = newNode.(IdentifierCI)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfVindexSpecType))
 	}
 	if !a.rewriteIdentifierCI(node, node.Type, func(newNode, parent SQLNode) {
 		parent.(*VindexSpec).Type = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.Params {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfVindexSpecParamsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteVindexParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*VindexSpec).Params[idx] = newNode.(VindexParam)
@@ -10205,6 +13349,9 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10216,6 +13363,8 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfWeightStringFuncExpr(parent SQLNode, node *WeightStringFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10233,15 +13382,25 @@ func (a *application) rewriteRefOfWeightStringFuncExpr(parent SQLNode, node *Wei
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfWeightStringFuncExprExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*WeightStringFuncExpr).Expr = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfWeightStringFuncExprAs))
+	}
 	if !a.rewriteRefOfConvertType(node, node.As, func(newNode, parent SQLNode) {
 		parent.(*WeightStringFuncExpr).As = newNode.(*ConvertType)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10253,6 +13412,8 @@ func (a *application) rewriteRefOfWeightStringFuncExpr(parent SQLNode, node *Wei
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfWhen(parent SQLNode, node *When, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10270,15 +13431,25 @@ func (a *application) rewriteRefOfWhen(parent SQLNode, node *When, replacer repl
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfWhenCond))
+	}
 	if !a.rewriteExpr(node, node.Cond, func(newNode, parent SQLNode) {
 		parent.(*When).Cond = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfWhenVal))
+	}
 	if !a.rewriteExpr(node, node.Val, func(newNode, parent SQLNode) {
 		parent.(*When).Val = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10290,6 +13461,8 @@ func (a *application) rewriteRefOfWhen(parent SQLNode, node *When, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10307,10 +13480,16 @@ func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer re
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfWhereExpr))
+	}
 	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*Where).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10322,6 +13501,8 @@ func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfWindowDefinition(parent SQLNode, node *WindowDefinition, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10339,15 +13520,25 @@ func (a *application) rewriteRefOfWindowDefinition(parent SQLNode, node *WindowD
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfWindowDefinitionName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*WindowDefinition).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfWindowDefinitionWindowSpec))
+	}
 	if !a.rewriteRefOfWindowSpecification(node, node.WindowSpec, func(newNode, parent SQLNode) {
 		parent.(*WindowDefinition).WindowSpec = newNode.(*WindowSpecification)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10359,6 +13550,8 @@ func (a *application) rewriteRefOfWindowDefinition(parent SQLNode, node *WindowD
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteWindowDefinitions(parent SQLNode, node WindowDefinitions, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10377,6 +13570,13 @@ func (a *application) rewriteWindowDefinitions(parent SQLNode, node WindowDefini
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(WindowDefinitionsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfWindowDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(WindowDefinitions)[idx] = newNode.(*WindowDefinition)
@@ -10384,6 +13584,9 @@ func (a *application) rewriteWindowDefinitions(parent SQLNode, node WindowDefini
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10395,6 +13598,8 @@ func (a *application) rewriteWindowDefinitions(parent SQLNode, node WindowDefini
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *WindowSpecification, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10412,12 +13617,25 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfWindowSpecificationName))
+	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*WindowSpecification).Name = newNode.(IdentifierCI)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.PartitionClause {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfWindowSpecificationPartitionClauseOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*WindowSpecification).PartitionClause[idx] = newNode.(Expr)
@@ -10426,15 +13644,26 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 			return false
 		}
 	}
+	if a.collectPaths && len(node.PartitionClause) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfWindowSpecificationOrderClause))
+	}
 	if !a.rewriteOrderBy(node, node.OrderClause, func(newNode, parent SQLNode) {
 		parent.(*WindowSpecification).OrderClause = newNode.(OrderBy)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfWindowSpecificationFrameClause))
+	}
 	if !a.rewriteRefOfFrameClause(node, node.FrameClause, func(newNode, parent SQLNode) {
 		parent.(*WindowSpecification).FrameClause = newNode.(*FrameClause)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10446,6 +13675,8 @@ func (a *application) rewriteRefOfWindowSpecification(parent SQLNode, node *Wind
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10464,6 +13695,13 @@ func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer repl
 		}
 	}
 	for x, el := range node.CTEs {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfWithCTEsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfCommonTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*With).CTEs[idx] = newNode.(*CommonTableExpr)
@@ -10471,6 +13709,9 @@ func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer repl
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10482,6 +13723,8 @@ func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10499,15 +13742,25 @@ func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replace
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfXorExprLeft))
+	}
 	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*XorExpr).Left = newNode.(Expr)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfXorExprRight))
+	}
 	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*XorExpr).Right = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -10519,6 +13772,8 @@ func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replace
 	}
 	return true
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10564,11 +13819,15 @@ func (a *application) rewriteAggrFunc(parent SQLNode, node AggrFunc, replacer re
 		return a.rewriteRefOfVarSamp(parent, node, replacer)
 	case *Variance:
 		return a.rewriteRefOfVariance(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10618,11 +13877,15 @@ func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, repla
 		return a.rewriteRefOfTablespaceOperation(parent, node, replacer)
 	case *Validation:
 		return a.rewriteRefOfValidation(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10784,11 +14047,15 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
 	case *WeightStringFuncExpr:
 		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteColTuple(parent SQLNode, node ColTuple, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10800,11 +14067,15 @@ func (a *application) rewriteColTuple(parent SQLNode, node ColTuple, replacer re
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case ValTuple:
 		return a.rewriteValTuple(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteConstraintInfo(parent SQLNode, node ConstraintInfo, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10814,11 +14085,15 @@ func (a *application) rewriteConstraintInfo(parent SQLNode, node ConstraintInfo,
 		return a.rewriteRefOfCheckConstraintDefinition(parent, node, replacer)
 	case *ForeignKeyDefinition:
 		return a.rewriteRefOfForeignKeyDefinition(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteDBDDLStatement(parent SQLNode, node DBDDLStatement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10830,11 +14105,15 @@ func (a *application) rewriteDBDDLStatement(parent SQLNode, node DBDDLStatement,
 		return a.rewriteRefOfCreateDatabase(parent, node, replacer)
 	case *DropDatabase:
 		return a.rewriteRefOfDropDatabase(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10856,11 +14135,15 @@ func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, rep
 		return a.rewriteRefOfRenameTable(parent, node, replacer)
 	case *TruncateTable:
 		return a.rewriteRefOfTruncateTable(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteExplain(parent SQLNode, node Explain, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -10870,11 +14153,15 @@ func (a *application) rewriteExplain(parent SQLNode, node Explain, replacer repl
 		return a.rewriteRefOfExplainStmt(parent, node, replacer)
 	case *ExplainTab:
 		return a.rewriteRefOfExplainTab(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11114,11 +14401,15 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
 	case *XorExpr:
 		return a.rewriteRefOfXorExpr(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11132,11 +14423,15 @@ func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replace
 		return a.rewriteValues(parent, node, replacer)
 	case *ValuesStatement:
 		return a.rewriteRefOfValuesStatement(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteSelectExpr(parent SQLNode, node SelectExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11148,11 +14443,15 @@ func (a *application) rewriteSelectExpr(parent SQLNode, node SelectExpr, replace
 		return a.rewriteRefOfNextval(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteSelectStatement(parent SQLNode, node SelectStatement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11162,11 +14461,15 @@ func (a *application) rewriteSelectStatement(parent SQLNode, node SelectStatemen
 		return a.rewriteRefOfSelect(parent, node, replacer)
 	case *Union:
 		return a.rewriteRefOfUnion(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11180,11 +14483,15 @@ func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, rep
 		return a.rewriteRefOfShowOther(parent, node, replacer)
 	case *ShowTransactionStatus:
 		return a.rewriteRefOfShowTransactionStatus(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteSimpleTableExpr(parent SQLNode, node SimpleTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11194,11 +14501,15 @@ func (a *application) rewriteSimpleTableExpr(parent SQLNode, node SimpleTableExp
 		return a.rewriteRefOfDerivedTable(parent, node, replacer)
 	case TableName:
 		return a.rewriteTableName(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11304,11 +14615,15 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfVStream(parent, node, replacer)
 	case *ValuesStatement:
 		return a.rewriteRefOfValuesStatement(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11322,11 +14637,15 @@ func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer 
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
 	case *ParenTableExpr:
 		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteTableStatement(parent SQLNode, node TableStatement, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11338,11 +14657,15 @@ func (a *application) rewriteTableStatement(parent SQLNode, node TableStatement,
 		return a.rewriteRefOfUnion(parent, node, replacer)
 	case *ValuesStatement:
 		return a.rewriteRefOfValuesStatement(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: BasicMethod
 func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -11369,6 +14692,8 @@ func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue,
 	}
 	return true
 }
+
+// Function Generation Source: BasicMethod
 func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -11395,6 +14720,8 @@ func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: BasicMethod
 func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -11421,6 +14748,8 @@ func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: BasicMethod
 func (a *application) rewriteMatchAction(parent SQLNode, node MatchAction, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -11447,6 +14776,8 @@ func (a *application) rewriteMatchAction(parent SQLNode, node MatchAction, repla
 	}
 	return true
 }
+
+// Function Generation Source: BasicMethod
 func (a *application) rewriteReferenceAction(parent SQLNode, node ReferenceAction, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
@@ -11473,6 +14804,8 @@ func (a *application) rewriteReferenceAction(parent SQLNode, node ReferenceActio
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIdentifierCI(parent SQLNode, node *IdentifierCI, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11502,6 +14835,8 @@ func (a *application) rewriteRefOfIdentifierCI(parent SQLNode, node *IdentifierC
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfIdentifierCS(parent SQLNode, node *IdentifierCS, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11531,6 +14866,8 @@ func (a *application) rewriteRefOfIdentifierCS(parent SQLNode, node *IdentifierC
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRootNode(parent SQLNode, node *RootNode, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11548,10 +14885,16 @@ func (a *application) rewriteRefOfRootNode(parent SQLNode, node *RootNode, repla
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfRootNodeSQLNode))
+	}
 	if !a.rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
 		parent.(*RootNode).SQLNode = newNode.(SQLNode)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -11563,6 +14906,8 @@ func (a *application) rewriteRefOfRootNode(parent SQLNode, node *RootNode, repla
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11580,15 +14925,25 @@ func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, rep
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfTableNameName))
+	}
 	if !a.rewriteIdentifierCS(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*TableName).Name = newNode.(IdentifierCS)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfTableNameQualifier))
+	}
 	if !a.rewriteIdentifierCS(node, node.Qualifier, func(newNode, parent SQLNode) {
 		parent.(*TableName).Qualifier = newNode.(IdentifierCS)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -11600,6 +14955,8 @@ func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfVindexParam(parent SQLNode, node *VindexParam, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -11617,8 +14974,46 @@ func (a *application) rewriteRefOfVindexParam(parent SQLNode, node *VindexParam,
 			return true
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfVindexParamKey))
+	}
 	if !a.rewriteIdentifierCI(node, node.Key, func(newNode, parent SQLNode) {
 		parent.(*VindexParam).Key = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteVisitable(parent SQLNode, node Visitable, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		panic("[BUG] paths are not supported on 'Visitable'")
+	}
+	if !a.rewriteSQLNode(node, node.VisitThis(), func(newNode, parent SQLNode) {
+		panic("[BUG] tried to replace 'VisitThis' on 'Visitable'")
 	}) {
 		return false
 	}

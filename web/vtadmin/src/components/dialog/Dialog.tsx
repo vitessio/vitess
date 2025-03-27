@@ -119,6 +119,7 @@ const Dialog: React.FC<DialogProps> = ({
                                             disabled={loading}
                                             type="button"
                                             className="btn"
+                                            data-testid="confirm-btn"
                                             onClick={() => {
                                                 onConfirm?.();
                                             }}

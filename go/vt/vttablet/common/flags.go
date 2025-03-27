@@ -56,6 +56,9 @@ var (
 	VStreamerBinlogRotationThreshold = int64(64 * 1024 * 1024) // 64MiB
 	VStreamerDefaultPacketSize       = 250000
 	VStreamerUseDynamicPacketSize    = true
+
+	// Enable the /debug/vrlog HTTP endpoint.
+	vreplicationEnableHttpLog = false
 )
 
 func GetVReplicationNetReadTimeout() int {
@@ -96,4 +99,6 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&vreplicationParallelInsertWorkers, "vreplication-parallel-insert-workers", vreplicationParallelInsertWorkers, "Number of parallel insertion workers to use during copy phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent insertion during copy phase.")
 
 	fs.Uint64Var(&mysql.ZstdInMemoryDecompressorMaxSize, "binlog-in-memory-decompressor-max-size", mysql.ZstdInMemoryDecompressorMaxSize, "This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode.")
+
+	fs.BoolVar(&vreplicationEnableHttpLog, "vreplication-enable-http-log", vreplicationEnableHttpLog, "Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.")
 }

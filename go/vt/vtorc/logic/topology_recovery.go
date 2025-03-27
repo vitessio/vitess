@@ -293,7 +293,7 @@ func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.Repl
 func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias string) recoveryFunction {
 	switch analysisCode {
 	// primary
-	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled:
+	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
 		// If ERS is disabled, we have no way of repairing the cluster.
 		if !config.ERSEnabled() {
 			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
@@ -319,7 +319,7 @@ func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias 
 		return recoverLockedSemiSyncPrimaryFunc
 	case inst.ClusterHasNoPrimary:
 		return electNewPrimaryFunc
-	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet:
+	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
 		return fixPrimaryFunc
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
@@ -499,7 +499,9 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	}
 
 	// We lock the shard here and then refresh the tablets information
-	ctx, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedInstanceAlias, getLockAction(analysisEntry.AnalyzedInstanceAlias, analysisEntry.Analysis))
+	ctx, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
+		getLockAction(analysisEntry.AnalyzedInstanceAlias, analysisEntry.Analysis),
+	)
 	if err != nil {
 		logger.Errorf("Failed to lock shard, aborting recovery: %v", err)
 		return err

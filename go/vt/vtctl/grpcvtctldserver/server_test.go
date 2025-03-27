@@ -42,8 +42,10 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/callerid"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -52,6 +54,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
@@ -945,6 +948,9 @@ func TestBackupShard(t *testing.T) {
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
 					},
+					"zone1-0000000101": {
+						Events: []*logutilpb.Event{{}, {}, {}},
+					},
 				},
 				PrimaryPositionResults: map[string]struct {
 					Position string
@@ -961,11 +967,18 @@ func TestBackupShard(t *testing.T) {
 					"zone1-0000000100": {
 						Position: &replicationdatapb.Status{
 							ReplicationLagSeconds: 0,
+							ReplicationLagUnknown: true,
+						},
+					},
+					"zone1-0000000101": {
+						Position: &replicationdatapb.Status{
+							ReplicationLagSeconds: 1,
 						},
 					},
 				},
 				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
 				},
 			},
 			tablets: []*topodatapb.Tablet{
@@ -973,6 +986,15 @@ func TestBackupShard(t *testing.T) {
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
 					},
 					Keyspace: "ks",
 					Shard:    "-",
@@ -995,6 +1017,9 @@ func TestBackupShard(t *testing.T) {
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
 				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+				for _, resp := range responses {
+					assert.Equal(t, 101, int(resp.TabletAlias.Uid))
+				}
 			},
 		},
 		{
@@ -1260,13 +1285,27 @@ func TestBackupShard(t *testing.T) {
 	}
 }
 
+// requireCallerIDTMClient wraps the testutil TabletManagerClient and rejects ExecuteQuery calls
+// that do not have an effective caller id in their context, simulating strict table ACLs.
+type requireCallerIDTMClient struct {
+	*testutil.TabletManagerClient
+}
+
+// ExecuteQuery implements the tmclient.TabletManagerClient interface for requireCallerIDTMClient.
+func (tc *requireCallerIDTMClient) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error) {
+	if callerid.EffectiveCallerIDFromContext(ctx) == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "missing caller id")
+	}
+	return tc.TabletManagerClient.ExecuteQuery(ctx, tablet, req)
+}
+
 func TestCancelSchemaMigration(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name      string
 		tablets   []*topodatapb.Tablet
-		tmc       *testutil.TabletManagerClient
+		tmc       tmclient.TabletManagerClient
 		req       *vtctldatapb.CancelSchemaMigrationRequest
 		expected  *vtctldatapb.CancelSchemaMigrationResponse
 		shouldErr bool
@@ -1328,6 +1367,30 @@ func TestCancelSchemaMigration(t *testing.T) {
 					"80-": 0,
 				},
 			},
+		},
+		{
+			name: "strict ACL requires caller id",
+			tablets: []*topodatapb.Tablet{
+				{Keyspace: "ks", Shard: "0", Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Type: topodatapb.TabletType_PRIMARY},
+			},
+			tmc: &requireCallerIDTMClient{TabletManagerClient: &testutil.TabletManagerClient{
+				ExecuteQueryResults: map[string]struct {
+					Response *querypb.QueryResult
+					Error    error
+				}{
+					"zone1-0000000100": {Response: &querypb.QueryResult{RowsAffected: 1}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {},
+				},
+				ReloadSchemaResults: map[string]error{"zone1-0000000100": nil},
+			}},
+			req:       &vtctldatapb.CancelSchemaMigrationRequest{Keyspace: "ks", Uuid: "abc", CallerId: &vtrpc.CallerID{Principal: "strict"}},
+			expected:  &vtctldatapb.CancelSchemaMigrationResponse{RowsAffectedByShard: map[string]uint64{"0": 1}},
+			shouldErr: false,
 		},
 		{
 			name: "no shard primary",
@@ -4605,7 +4668,7 @@ func TestDeleteTablets(t *testing.T) {
 
 				resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 				assert.NoError(t, err, "cannot look up tablets from topo after issuing DeleteTablets request")
-				testutil.AssertSameTablets(t, tt.expectedRemainingTablets, resp.Tablets)
+				utils.MustMatch(t, tt.expectedRemainingTablets, resp.Tablets)
 			}
 
 			// Run the test
@@ -8277,7 +8340,7 @@ func TestGetTablets(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertSameTablets(t, tt.expected, resp.Tablets)
+			utils.MustMatch(t, tt.expected, resp.Tablets)
 		})
 	}
 }
@@ -13338,7 +13401,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 
 					resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 					require.NoError(t, err, "cannot get all tablets in the topo")
-					testutil.AssertSameTablets(t, tt.expectedTopo, resp.Tablets)
+					utils.MustMatch(t, tt.expectedTopo, resp.Tablets)
 				}()
 			}
 

@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/hack"
 )
 
@@ -27,9 +29,6 @@ func TestTypeSizes(t *testing.T) {
 	var PtrSize = hack.RuntimeAllocSize(8)
 	var SliceHeaderSize = hack.RuntimeAllocSize(3 * PtrSize)
 	var FatPointerSize = hack.RuntimeAllocSize(2 * PtrSize)
-	var BucketHeaderSize = hack.RuntimeAllocSize(8)
-	var BucketSize = hack.RuntimeAllocSize(8)
-	var HashMapHeaderSize = hack.RuntimeAllocSize(48)
 
 	cases := []struct {
 		obj  cachedObject
@@ -60,17 +59,17 @@ func TestTypeSizes(t *testing.T) {
 		{&Slice3{field1: []*Bimpl{{}, {}, {}, {}}}, SliceHeaderSize + PtrSize*4 + 8*4},
 
 		{&Map1{field1: nil}, PtrSize},
-		{&Map1{field1: map[uint8]uint8{}}, PtrSize + HashMapHeaderSize},
-		{&Map1{field1: map[uint8]uint8{0: 0}}, PtrSize + HashMapHeaderSize + BucketHeaderSize + 1*BucketSize + 1*BucketSize + PtrSize},
+		{&Map1{field1: map[uint8]uint8{}}, 56},
+		{&Map1{field1: map[uint8]uint8{0: 0}}, 80},
 
 		{&Map2{field1: nil}, PtrSize},
-		{&Map2{field1: map[uint64]A{}}, PtrSize + HashMapHeaderSize},
-		{&Map2{field1: map[uint64]A{0: {}}}, PtrSize + HashMapHeaderSize + BucketHeaderSize + 8*BucketSize + 16*BucketSize + PtrSize},
+		{&Map2{field1: map[uint64]A{}}, 56},
+		{&Map2{field1: map[uint64]A{0: {}}}, 264},
 
 		{&Map3{field1: nil}, PtrSize},
-		{&Map3{field1: map[uint64]B{}}, PtrSize + HashMapHeaderSize},
-		{&Map3{field1: map[uint64]B{0: &Bimpl{}}}, PtrSize + HashMapHeaderSize + BucketHeaderSize + 8*BucketSize + FatPointerSize*BucketSize + PtrSize + 8},
-		{&Map3{field1: map[uint64]B{0: nil}}, PtrSize + HashMapHeaderSize + BucketHeaderSize + 8*BucketSize + FatPointerSize*BucketSize + PtrSize},
+		{&Map3{field1: map[uint64]B{}}, 56},
+		{&Map3{field1: map[uint64]B{0: &Bimpl{}}}, 272},
+		{&Map3{field1: map[uint64]B{0: nil}}, 264},
 
 		{&String1{}, hack.RuntimeAllocSize(PtrSize*2 + 8)},
 		{&String1{field1: "1234"}, hack.RuntimeAllocSize(PtrSize*2+8) + hack.RuntimeAllocSize(4)},
@@ -79,9 +78,7 @@ func TestTypeSizes(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(fmt.Sprintf("sizeof(%T)", tt.obj), func(t *testing.T) {
 			size := tt.obj.CachedSize(true)
-			if size != tt.size {
-				t.Errorf("expected %T to be %d bytes, got %d", tt.obj, tt.size, size)
-			}
+			assert.Equalf(t, tt.size, size, "expected %T to be %d bytes, got %d", tt.obj, tt.size, size)
 		})
 	}
 }

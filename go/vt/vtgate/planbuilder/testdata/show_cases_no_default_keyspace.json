@@ -3,6 +3,7 @@
     "comment": "show columns from user keyspace",
     "query": "show full columns from user_extra",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show full columns from user_extra",
       "Instructions": {
@@ -21,6 +22,7 @@
     "comment": "show columns from routed table",
     "query": "show full fields from `route1`",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show full fields from `route1`",
       "Instructions": {
@@ -39,6 +41,7 @@
     "comment": "show variables",
     "query": "show variables",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show variables",
       "Instructions": {
@@ -62,6 +65,7 @@
     "comment": "show full columns from system schema",
     "query": "show full columns from sys.sys_config",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show full columns from sys.sys_config",
       "Instructions": {
@@ -80,6 +84,7 @@
     "comment": "show full columns from system schema replacing qualifier",
     "query": "show full columns from x.sys_config from sys",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show full columns from x.sys_config from sys",
       "Instructions": {
@@ -98,6 +103,7 @@
     "comment": "show global status",
     "query": "show global status",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SHOW",
       "Original": "show global status",
       "Instructions": {

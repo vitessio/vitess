@@ -24,6 +24,8 @@ import (
 )
 
 func main() {
+	cli.InitializeFlags()
+
 	var dir string
 	cmd := cobra.Command{
 		Use: "docgen [-d <dir>]",

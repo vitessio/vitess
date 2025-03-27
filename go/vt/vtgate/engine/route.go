@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var _ Primitive = (*Route)(nil)
@@ -57,10 +56,6 @@ type Route struct {
 
 	// Route does not need transaction handling
 	noTxNeeded
-
-	// TargetTabletType specifies an explicit target destination tablet type
-	// this is only used in conjunction with TargetDestination
-	TargetTabletType topodatapb.TabletType
 
 	// Query specifies the query to be executed.
 	Query string
@@ -201,7 +196,7 @@ func (route *Route) executeShards(
 		}
 	}
 
-	if len(route.OrderBy) != 0 {
+	if len(route.OrderBy) > 0 && len(rss) > 1 {
 		var err error
 		result, err = route.sort(result)
 		if err != nil {
@@ -279,7 +274,7 @@ func (route *Route) streamExecuteShards(
 		}
 	}
 
-	if len(route.OrderBy) == 0 {
+	if len(route.OrderBy) == 0 || len(rss) == 1 {
 		errs := vcursor.StreamExecuteMulti(ctx, route, route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, route.FetchLastInsertID, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
@@ -298,6 +293,21 @@ func (route *Route) streamExecuteShards(
 
 	// There is an order by. We have to merge-sort.
 	return route.mergeSort(ctx, vcursor, bindVars, wantfields, callback, rss, bvs)
+}
+
+// this is used to make mergeSort easy to test
+var createMergeSort = func(
+	prims []StreamExecutor,
+	orderBy evalengine.Comparison,
+	scatterErrorsAsWarnings bool,
+	fetchLastInsertID bool,
+) *MergeSort {
+	return &MergeSort{
+		Primitives:              prims,
+		OrderBy:                 orderBy,
+		ScatterErrorsAsWarnings: scatterErrorsAsWarnings,
+		FetchLastInsertID:       fetchLastInsertID,
+	}
 }
 
 func (route *Route) mergeSort(
@@ -319,13 +329,8 @@ func (route *Route) mergeSort(
 		})
 	}
 
-	ms := MergeSort{
-		Primitives:              prims,
-		OrderBy:                 route.OrderBy,
-		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
-		FetchLastInsertID:       route.FetchLastInsertID,
-	}
-	return vcursor.StreamExecutePrimitive(ctx, &ms, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	ms := createMergeSort(prims, route.OrderBy, route.ScatterErrorsAsWarnings, route.FetchLastInsertID)
+	return vcursor.StreamExecutePrimitive(ctx, ms, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
 }
@@ -345,7 +350,7 @@ func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map
 
 	// If not find, then pick any shard.
 	if rs == nil {
-		rss, _, err := vcursor.ResolveDestinations(ctx, route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
+		rss, _, err := vcursor.ResolveDestinations(ctx, route.Keyspace.Name, nil, []key.ShardDestination{key.DestinationAnyShard{}})
 		if err != nil {
 			return nil, err
 		}
@@ -438,7 +443,7 @@ func (route *Route) executeAfterLookup(
 	bindVars map[string]*querypb.BindVariable,
 	wantfields bool,
 	ids []sqltypes.Value,
-	dest []key.Destination,
+	dest []key.ShardDestination,
 ) (*sqltypes.Result, error) {
 	protoIds := make([]*querypb.Value, 0, len(ids))
 	for _, id := range ids {
@@ -462,7 +467,7 @@ func (route *Route) streamExecuteAfterLookup(
 	wantfields bool,
 	callback func(*sqltypes.Result) error,
 	ids []sqltypes.Value,
-	dest []key.Destination,
+	dest []key.ShardDestination,
 ) error {
 	protoIds := make([]*querypb.Value, 0, len(ids))
 	for _, id := range ids {

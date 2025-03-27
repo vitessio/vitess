@@ -89,23 +89,6 @@ type tableCopyProgress struct {
 // copyProgress stores the tableCopyProgress for all tables still being copied
 type copyProgress map[string]*tableCopyProgress
 
-// sequenceMetadata contains all of the relevant metadata for a sequence that
-// is being used by a table involved in a vreplication workflow.
-type sequenceMetadata struct {
-	// The name of the sequence table.
-	backingTableName string
-	// The keyspace where the backing table lives.
-	backingTableKeyspace string
-	// The dbName in use by the keyspace where the backing table lives.
-	backingTableDBName string
-	// The name of the table using the sequence.
-	usingTableName string
-	// The dbName in use by the keyspace where the using table lives.
-	usingTableDBName string
-	// The using table definition.
-	usingTableDefinition *vschemapb.Table
-}
-
 // vdiffOutput holds the data from all shards that is needed to generate
 // the full summary results of the vdiff in the vdiff show command output.
 type vdiffOutput struct {
@@ -429,8 +412,8 @@ func (s *Server) GetWorkflowState(ctx context.Context, targetKeyspace, workflowN
 	return s.getWorkflowState(ctx, targetKeyspace, workflowName)
 }
 
-func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *State, error) {
-	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
+func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string, opts ...WorkflowActionOption) (*trafficSwitcher, *State, error) {
+	ts, err := s.buildTrafficSwitcher(ctx, targetKeyspace, workflowName, opts...)
 	if err != nil {
 		s.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, nil, err
@@ -502,7 +485,6 @@ func (s *Server) getWorkflowState(ctx context.Context, targetKeyspace, workflowN
 			if err != nil {
 				return nil, nil, err
 			}
-
 			state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = s.GetCellsWithTableReadsSwitched(ctx, sourceKeyspace, targetKeyspace, table, topodatapb.TabletType_REPLICA)
 			if err != nil {
 				return nil, nil, err
@@ -1443,7 +1425,12 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.MoveTablesComplete")
 	defer span.Finish()
 
-	ts, state, err := s.getWorkflowState(ctx, req.GetTargetKeyspace(), req.GetWorkflow())
+	opts := []WorkflowActionOption{}
+	if req.IgnoreSourceKeyspace {
+		opts = append(opts, IgnoreSourceKeyspace())
+	}
+
+	ts, state, err := s.getWorkflowState(ctx, req.GetTargetKeyspace(), req.GetWorkflow(), opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1483,13 +1470,14 @@ func (s *Server) MoveTablesComplete(ctx context.Context, req *vtctldatapb.MoveTa
 	if !state.WritesSwitched || len(state.ReplicaCellsNotSwitched) > 0 || len(state.RdonlyCellsNotSwitched) > 0 {
 		return nil, ErrWorkflowCompleteNotFullySwitched
 	}
+
 	var renameTable TableRemovalType
 	if req.RenameTables {
 		renameTable = RenameTable
 	} else {
 		renameTable = DropTable
 	}
-	if dryRunResults, err = s.dropSources(ctx, ts, renameTable, req.KeepData, req.KeepRoutingRules, false, req.DryRun); err != nil {
+	if dryRunResults, err = s.dropSources(ctx, ts, renameTable, req.KeepData, req.KeepRoutingRules, false, req.DryRun, opts...); err != nil {
 		return nil, err
 	}
 
@@ -1568,7 +1556,12 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 	span.Annotate("keep_routing_rules", req.KeepRoutingRules)
 	span.Annotate("shards", req.Shards)
 
-	ts, state, err := s.getWorkflowState(ctx, req.GetKeyspace(), req.GetWorkflow())
+	opts := []WorkflowActionOption{}
+	if req.IgnoreSourceKeyspace {
+		opts = append(opts, IgnoreSourceKeyspace())
+	}
+
+	ts, state, err := s.getWorkflowState(ctx, req.GetKeyspace(), req.GetWorkflow(), opts...)
 	if err != nil {
 		s.Logger().Errorf("failed to get VReplication workflow state for %s.%s: %v", req.GetKeyspace(), req.GetWorkflow(), err)
 		return nil, err
@@ -1634,7 +1627,7 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 
 	// Cleanup related data and artifacts. There are none for a LookupVindex workflow.
 	if ts.workflowType != binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
-		if _, err := s.dropTargets(ctx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false); err != nil {
+		if _, err := s.dropTargets(ctx, ts, req.GetKeepData(), req.GetKeepRoutingRules(), false, opts...); err != nil {
 			if topo.IsErrType(err, topo.NoNode) {
 				return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.GetKeyspace())
 			}
@@ -2114,31 +2107,44 @@ func (s *Server) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 
 // dropTargets cleans up target tables, shards and denied tables if a MoveTables/Reshard
 // is canceled.
-func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData, keepRoutingRules, dryRun bool) (*[]string, error) {
-	var err error
+func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData, keepRoutingRules, dryRun bool, opts ...WorkflowActionOption) (*[]string, error) {
+	wopts := processWorkflowActionOptions(opts)
+	var (
+		sw                         iswitcher
+		err, lockErr               error
+		sourceUnlock, targetUnlock func(*error)
+	)
 	ts.keepRoutingRules = keepRoutingRules
-	var sw iswitcher
 	if dryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
 	} else {
 		sw = &switcher{s: s, ts: ts}
 	}
 
-	// Lock the source and target keyspaces.
-	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets")
-	if lockErr != nil {
-		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()),
-			lockErr)
-	}
-	defer sourceUnlock(&err)
-	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
+	if wopts.ignoreSourceKeyspace {
+		// Lock only the target keyspace.
+		ctx, targetUnlock, lockErr = sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
 		if lockErr != nil {
 			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()),
 				lockErr)
 		}
 		defer targetUnlock(&err)
-		ctx = lockCtx
+	} else {
+		// Lock the source and target keyspaces.
+		ctx, sourceUnlock, lockErr = sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropTargets")
+		if lockErr != nil {
+			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()),
+				lockErr)
+		}
+		defer sourceUnlock(&err)
+		if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
+			ctx, targetUnlock, lockErr = sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropTargets")
+			if lockErr != nil {
+				return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()),
+					lockErr)
+			}
+			defer targetUnlock(&err)
+		}
 	}
 
 	// Stop the workflow before we delete the artifacts so that it doesn't try and
@@ -2169,8 +2175,10 @@ func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 					return nil, err
 				}
 			}
-			if err := sw.dropSourceDeniedTables(ctx); err != nil {
-				return nil, err
+			if !wopts.ignoreSourceKeyspace {
+				if err := sw.dropSourceDeniedTables(ctx); err != nil {
+					return nil, err
+				}
 			}
 			if err := sw.dropTargetDeniedTables(ctx); err != nil {
 				return nil, err
@@ -2181,7 +2189,7 @@ func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 			}
 		}
 	}
-	if err := s.dropRelatedArtifacts(ctx, keepRoutingRules, sw); err != nil {
+	if err := s.dropRelatedArtifacts(ctx, keepRoutingRules, sw, opts...); err != nil {
 		return nil, err
 	}
 	if err := ts.TopoServer().RebuildSrvVSchema(ctx, nil); err != nil {
@@ -2240,7 +2248,8 @@ func (s *Server) deleteTenantData(ctx context.Context, ts *trafficSwitcher, batc
 	})
 }
 
-func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, error) {
+func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workflowName string, opts ...WorkflowActionOption) (*trafficSwitcher, error) {
+	wopts := processWorkflowActionOptions(opts)
 	tgtInfo, err := BuildTargets(ctx, s.ts, s.tmc, targetKeyspace, workflowName)
 	if err != nil {
 		s.Logger().Infof("Error building targets: %s", err)
@@ -2307,6 +2316,9 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 				}
 			}
 
+			if wopts.ignoreSourceKeyspace {
+				continue
+			}
 			if _, ok := ts.sources[bls.Shard]; ok {
 				continue
 			}
@@ -2339,6 +2351,14 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 			}
 		}
 	}
+	if wopts.ignoreSourceKeyspace {
+		// We cannot build the source schema then.
+		// And since we cannot compare the source and target shards we rely on
+		// the workflow sub type, which is set when creating a partial MoveTables
+		// workflow, for the determination.
+		ts.isPartialMigration = ts.workflowSubType == binlogdatapb.VReplicationWorkflowSubType_Partial
+		return ts, nil
+	}
 	vs, err := sourceTopo.GetVSchema(ctx, ts.sourceKeyspace)
 	if err != nil {
 		return nil, err
@@ -2360,9 +2380,12 @@ func (s *Server) buildTrafficSwitcher(ctx context.Context, targetKeyspace, workf
 	return ts, nil
 }
 
-func (s *Server) dropRelatedArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher) error {
-	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
-		return err
+func (s *Server) dropRelatedArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher, opts ...WorkflowActionOption) error {
+	wopts := processWorkflowActionOptions(opts)
+	if !wopts.ignoreSourceKeyspace {
+		if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
+			return err
+		}
 	}
 	if !keepRoutingRules {
 		if err := sw.deleteRoutingRules(ctx); err != nil {
@@ -2381,10 +2404,12 @@ func (s *Server) dropRelatedArtifacts(ctx context.Context, keepRoutingRules bool
 
 // dropSources cleans up source tables, shards and denied tables after a
 // MoveTables/Reshard is completed.
-func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalType TableRemovalType, keepData, keepRoutingRules, force, dryRun bool) (*[]string, error) {
+func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalType TableRemovalType, keepData, keepRoutingRules, force, dryRun bool, opts ...WorkflowActionOption) (*[]string, error) {
+	wopts := processWorkflowActionOptions(opts)
 	var (
-		sw  iswitcher
-		err error
+		sw                         iswitcher
+		err, lockErr               error
+		sourceUnlock, targetUnlock func(*error)
 	)
 	if dryRun {
 		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
@@ -2392,19 +2417,27 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 		sw = &switcher{ts: ts, s: s}
 	}
 
-	// Lock the source and target keyspaces.
-	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropSources")
-	if lockErr != nil {
-		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
-	}
-	defer sourceUnlock(&err)
-	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropSources")
+	if wopts.ignoreSourceKeyspace {
+		// Lock only the target keyspace.
+		ctx, targetUnlock, lockErr = sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropSources")
 		if lockErr != nil {
 			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
 		}
 		defer targetUnlock(&err)
-		ctx = lockCtx
+	} else {
+		// Lock the source and target keyspaces.
+		ctx, sourceUnlock, lockErr = sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "DropSources")
+		if lockErr != nil {
+			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
+		}
+		defer sourceUnlock(&err)
+		if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
+			ctx, targetUnlock, lockErr = sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "DropSources")
+			if lockErr != nil {
+				return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
+			}
+			defer targetUnlock(&err)
+		}
 	}
 
 	if !force {
@@ -2416,17 +2449,18 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 	if !keepData {
 		switch ts.MigrationType() {
 		case binlogdatapb.MigrationType_TABLES:
-			s.Logger().Infof("Deleting tables")
-			if err := sw.removeSourceTables(ctx, removalType); err != nil {
-				return nil, err
-			}
-			if err := sw.dropSourceDeniedTables(ctx); err != nil {
-				return nil, err
+			if !wopts.ignoreSourceKeyspace {
+				s.Logger().Infof("Deleting tables")
+				if err := sw.removeSourceTables(ctx, removalType); err != nil {
+					return nil, err
+				}
+				if err := sw.dropSourceDeniedTables(ctx); err != nil {
+					return nil, err
+				}
 			}
 			if err := sw.dropTargetDeniedTables(ctx); err != nil {
 				return nil, err
 			}
-
 		case binlogdatapb.MigrationType_SHARDS:
 			s.Logger().Infof("Removing shards")
 			if err := sw.dropSourceShards(ctx); err != nil {
@@ -2444,9 +2478,13 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 	return sw.logs(), nil
 }
 
-func (s *Server) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher) error {
-	if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
-		return err
+func (s *Server) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw iswitcher, opts ...WorkflowActionOption) error {
+	wopts := processWorkflowActionOptions(opts)
+
+	if !wopts.ignoreSourceKeyspace {
+		if err := sw.dropSourceReverseVReplicationStreams(ctx); err != nil {
+			return err
+		}
 	}
 	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
 		return err
@@ -2461,7 +2499,6 @@ func (s *Server) dropArtifacts(ctx context.Context, keepRoutingRules bool, sw is
 		if err := sw.deleteKeyspaceRoutingRules(ctx); err != nil {
 			return err
 		}
-
 	}
 
 	return nil
@@ -3171,7 +3208,6 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 				time.Sleep(lockTablesCycleDelay)
 			}
 		}
-
 		// Get the source positions now that writes are stopped, the streams were stopped (e.g.
 		// intra-keyspace materializations that write on the source), and we know for certain
 		// that any in progress writes are done.

@@ -29,8 +29,6 @@ import (
 	"text/template"
 
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/test/utils"
 )
 
 var (
@@ -138,7 +136,7 @@ func TestHelpOutput(t *testing.T) {
 			cmd.Stdout = &output
 			err = cmd.Run()
 			require.NoError(t, err)
-			utils.MustMatch(t, buf.String(), output.String())
+			require.Equal(t, buf.String(), output.String())
 		})
 	}
 }

@@ -56,7 +56,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&useEffective, "grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
 	fs.BoolVar(&useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
 	fs.BoolVar(&useStaticAuthenticationIdentity, "grpc-use-static-authentication-callerid", false, "If set, will set the immediate caller id to the username authenticated by the static auth plugin.")
-	fs.BoolVar(&sendSessionInStreaming, "grpc-send-session-in-streaming", false, "If set, will send the session as last packet in streaming api to support transactions in streaming")
+	fs.BoolVar(&sendSessionInStreaming, "grpc-send-session-in-streaming", true, "If set, will send the session as last packet in streaming api to support transactions in streaming")
+	_ = fs.MarkDeprecated("grpc-send-session-in-streaming", "This option is deprecated and will be deleted in a future release")
 }
 
 func init() {
@@ -145,7 +146,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if session == nil {
 		session = &vtgatepb.Session{Autocommit: true}
 	}
-	session, result, err := vtg.server.Execute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables)
+	session, result, err := vtg.server.Execute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, request.Prepared)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: session,
@@ -224,11 +225,12 @@ func (vtg *VTGate) Prepare(ctx context.Context, request *vtgatepb.PrepareRequest
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	session, fields, err := vtg.server.Prepare(ctx, session, request.Query.Sql, request.Query.BindVariables)
+	session, fields, paramsCount, err := vtg.server.Prepare(ctx, session, request.Query.Sql)
 	return &vtgatepb.PrepareResponse{
-		Fields:  fields,
-		Session: session,
-		Error:   vterrors.ToVTRPC(err),
+		Session:     session,
+		Fields:      fields,
+		ParamsCount: uint32(paramsCount),
+		Error:       vterrors.ToVTRPC(err),
 	}, nil
 }
 

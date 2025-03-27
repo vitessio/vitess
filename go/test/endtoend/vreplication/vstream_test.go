@@ -22,6 +22,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -76,11 +77,13 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{HeartbeatInterval: 3600}
-	done := false
+	done := atomic.Bool{}
+	done.Store(false)
 
 	// don't insert while PRS is going on
 	var insertMu sync.Mutex
-	stopInserting := false
+	stopInserting := atomic.Bool{}
+	stopInserting.Store(false)
 	id := 0
 
 	vtgateConn := vc.GetVTGateConn(t)
@@ -89,7 +92,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	// first goroutine that keeps inserting rows into table being streamed until some time elapses after second PRS
 	go func() {
 		for {
-			if stopInserting {
+			if stopInserting.Load() {
 				return
 			}
 			insertMu.Lock()
@@ -121,7 +124,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 				log.Infof("%s:: remote error: %v", time.Now(), err)
 			}
 
-			if done {
+			if done.Load() {
 				return
 			}
 		}
@@ -153,12 +156,12 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 				require.NoError(t, err)
 			}
 			time.Sleep(100 * time.Millisecond)
-			stopInserting = true
-			time.Sleep(2 * time.Second)
-			done = true
+			stopInserting.Store(true)
+			time.Sleep(10 * time.Second) // Give the vstream plenty of time to catchup
+			done.Store(true)
 		}
 
-		if done {
+		if done.Load() {
 			break
 		}
 	}
@@ -1127,7 +1130,7 @@ func TestVStreamPushdownFilters(t *testing.T) {
 	require.NoError(t, err)
 
 	// Coordinate go-routines.
-	streamCtx, streamCancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	streamCtx, streamCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer streamCancel()
 	done := make(chan struct{})
 
@@ -1173,19 +1176,31 @@ func TestVStreamPushdownFilters(t *testing.T) {
 			Filter: "select * from customer where name = 'påul'",
 		}},
 	}
-	flags := &vtgatepb.VStreamFlags{}
 	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
 	require.NoError(t, err)
 	defer vstreamConn.Close()
 
-	// So we should have at least one paul row event in the copy phase.
-	copyPhaseRowEvents := 0
-	// And we should have many paul row events in the running phase.
-	runningPhaseRowEvents := 0
-	copyPhase := true
+	// So we should have at least one paul row event in the copy phase, and
+	// we should have many paul row events in the running phase.
+	copyPhaseRowEvents, runningPhaseRowEvents := runVStreamAndGetNumOfRowEvents(t, ctx, vstreamConn, vgtid, filter, done)
 
+	require.NotZero(t, createdPauls)
+	require.NotZero(t, createdNonPauls)
+	require.Greater(t, createdNonPauls, createdPauls)
+	require.NotZero(t, copyPhaseRowEvents)
+	require.NotZero(t, runningPhaseRowEvents)
+
+	t.Logf("Created pauls: %d, pauls copied: %d, pauls replicated: %d", createdPauls, copyPhaseRowEvents, runningPhaseRowEvents)
+	require.Equal(t, createdPauls, copyPhaseRowEvents+runningPhaseRowEvents)
+}
+
+// runVStreamAndGetNumOfRowEvents runs VStream with the specified filter and
+// returns number of copy phase and running phase row events.
+func runVStreamAndGetNumOfRowEvents(t *testing.T, ctx context.Context, vstreamConn *vtgateconn.VTGateConn,
+	vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, done chan struct{}) (copyPhaseRowEvents int, runningPhaseRowEvents int) {
+	copyPhase := true
 	func() {
-		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+		reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{})
 		require.NoError(t, err)
 		for {
 			evs, err := reader.Recv()
@@ -1214,13 +1229,5 @@ func TestVStreamPushdownFilters(t *testing.T) {
 			}
 		}
 	}()
-
-	require.NotZero(t, createdPauls)
-	require.NotZero(t, createdNonPauls)
-	require.Greater(t, createdNonPauls, createdPauls)
-	require.NotZero(t, copyPhaseRowEvents)
-	require.NotZero(t, runningPhaseRowEvents)
-
-	t.Logf("Created pauls: %d, pauls copied: %d, pauls replicated: %d", createdPauls, copyPhaseRowEvents, runningPhaseRowEvents)
-	require.Equal(t, createdPauls, copyPhaseRowEvents+runningPhaseRowEvents)
+	return
 }

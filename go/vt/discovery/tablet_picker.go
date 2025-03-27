@@ -100,9 +100,10 @@ func SetTabletPickerRetryDelay(delay time.Duration) {
 }
 
 type TabletPickerOptions struct {
-	CellPreference           string
-	TabletOrder              string
-	IncludeNonServingTablets bool
+	CellPreference                      string
+	TabletOrder                         string
+	IncludeNonServingTablets            bool
+	ExcludeTabletsWithMaxReplicationLag time.Duration
 }
 
 func parseTabletPickerCellPreferenceString(str string) (TabletPickerCellPreference, error) {
@@ -356,8 +357,8 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		if len(candidates) == 0 {
 			// If no viable candidates were found, sleep and try again.
 			tp.incNoTabletFoundStat()
-			log.Infof("No healthy serving tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, sleeping for %.3f seconds.",
-				tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, float64(GetTabletPickerRetryDelay().Milliseconds())/1000.0)
+			log.Infof("No healthy serving tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, maxReplicationLag: %v, sleeping for %.3f seconds.",
+				tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, tp.options.ExcludeTabletsWithMaxReplicationLag, float64(GetTabletPickerRetryDelay().Milliseconds())/1000.0)
 			timer := time.NewTimer(GetTabletPickerRetryDelay())
 			select {
 			case <-ctx.Done():
@@ -471,8 +472,10 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				if err := conn.StreamHealth(shortCtx, func(shr *querypb.StreamHealthResponse) error {
 					if shr != nil &&
 						(shr.Serving || tp.options.IncludeNonServingTablets) &&
-						shr.RealtimeStats != nil &&
-						shr.RealtimeStats.HealthError == "" {
+						(shr.RealtimeStats != nil && shr.RealtimeStats.HealthError == "" &&
+							(tabletInfo.Tablet.Type == topodatapb.TabletType_PRIMARY /* lag is not relevant */ ||
+								(tp.options.ExcludeTabletsWithMaxReplicationLag == 0 /* not set */ ||
+									shr.RealtimeStats.ReplicationLagSeconds <= uint32(tp.options.ExcludeTabletsWithMaxReplicationLag.Seconds())))) {
 						return io.EOF // End the stream
 					}
 					return vterrors.New(vtrpcpb.Code_INTERNAL, "tablet is not healthy and serving")

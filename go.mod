@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.23.5
+go 1.24.1
 
 require (
 	cloud.google.com/go/storage v1.50.0
@@ -44,7 +44,7 @@ require (
 	github.com/philhofer/fwd v1.1.3-0.20240916144458-20a13a1f6b7c // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/pires/go-proxyproto v0.8.0
-	github.com/pkg/errors v0.9.1
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a
 	github.com/planetscale/vtprotobuf v0.6.1-0.20241121165744-79df5c4772f2
 	github.com/prometheus/client_golang v1.20.5
@@ -66,9 +66,9 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.18
 	go.etcd.io/etcd/client/v3 v3.5.18
 	go.uber.org/mock v0.5.0
-	golang.org/x/crypto v0.32.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
 	golang.org/x/mod v0.23.0 // indirect
-	golang.org/x/net v0.34.0
+	golang.org/x/net v0.36.0
 	golang.org/x/oauth2 v0.26.0
 	golang.org/x/sys v0.30.0
 	golang.org/x/term v0.29.0

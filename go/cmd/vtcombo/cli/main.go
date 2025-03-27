@@ -126,15 +126,6 @@ func init() {
 	// user know about this flag.
 	Main.Flags().MarkHidden("tablet_protocol")
 
-	var err error
-	env, err = vtenv.New(vtenv.Options{
-		MySQLServerVersion: servenv.MySQLServerVersion(),
-		TruncateUILen:      servenv.TruncateUILen,
-		TruncateErrLen:     servenv.TruncateErrLen,
-	})
-	if err != nil {
-		log.Fatalf("unable to initialize env: %v", err)
-	}
 	srvTopoCounts = stats.NewCountersWithSingleLabel("ResilientSrvTopoServer", "Resilient srvtopo server operations", "type")
 }
 
@@ -187,6 +178,15 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	cmd.Flags().Set("cell", tpb.Cells[0])
 	if f := cmd.Flags().Lookup("log_dir"); f != nil && !f.Changed {
 		cmd.Flags().Set("log_dir", "$VTDATAROOT/tmp")
+	}
+
+	env, err = vtenv.New(vtenv.Options{
+		MySQLServerVersion: servenv.MySQLServerVersion(),
+		TruncateUILen:      servenv.TruncateUILen,
+		TruncateErrLen:     servenv.TruncateErrLen,
+	})
+	if err != nil {
+		log.Fatalf("unable to initialize env: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(cmd.Context())

@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -235,7 +234,7 @@ func (ins *InsertSelect) getInsertShardedQueries(
 	}
 
 	var indexes []*querypb.Value
-	var destinations []key.Destination
+	var destinations []key.ShardDestination
 	for i, ksid := range keyspaceIDs {
 		if ksid != nil {
 			indexes = append(indexes, &querypb.Value{
@@ -336,11 +335,10 @@ func (ins *InsertSelect) description() PrimitiveDescription {
 	}
 
 	return PrimitiveDescription{
-		OperatorType:     "Insert",
-		Keyspace:         ins.Keyspace,
-		Variant:          "Select",
-		TargetTabletType: topodatapb.TabletType_PRIMARY,
-		Other:            other,
+		OperatorType: "Insert",
+		Keyspace:     ins.Keyspace,
+		Variant:      "Select",
+		Other:        other,
 	}
 }
 

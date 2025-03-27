@@ -430,12 +430,6 @@ func CanonicalString(node SQLNode) string {
 	return buf.String()
 }
 
-func FormatSlice[T SQLNode](buf *TrackedBuffer, valueExprs []T) {
-	for _, expr := range valueExprs {
-		buf.Myprintf("%v", expr)
-	}
-}
-
 func SliceString[T SQLNode](valueExprs []T) string {
 	return SliceStringWithSep(valueExprs, ", ")
 }

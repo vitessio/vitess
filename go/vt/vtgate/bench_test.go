@@ -70,6 +70,7 @@ func BenchmarkWithNormalizer(b *testing.B) {
 			},
 			benchQuery,
 			nil,
+			false,
 		)
 		if err != nil {
 			panic(err)
@@ -92,6 +93,7 @@ func BenchmarkWithoutNormalizer(b *testing.B) {
 			},
 			benchQuery,
 			nil,
+			false,
 		)
 		if err != nil {
 			panic(err)

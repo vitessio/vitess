@@ -17,6 +17,7 @@
 package inst
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	"github.com/sjmudd/stopwatch"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
@@ -47,13 +49,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-const (
-	backendDBConcurrency = 20
-)
+const maxBackendOpTime = time.Second * 5
 
 var (
-	instanceReadChan  = make(chan bool, backendDBConcurrency)
-	instanceWriteChan = make(chan bool, backendDBConcurrency)
+	instanceReadSem  = semaphore.NewWeighted(config.GetBackendReadConcurrency())
+	instanceWriteSem = semaphore.NewWeighted(config.GetBackendWriteConcurrency())
 )
 
 var forgetAliases *cache.Cache
@@ -88,7 +88,12 @@ func initializeInstanceDao() {
 func ExecDBWriteFunc(f func() error) error {
 	m := query.NewMetric()
 
-	instanceWriteChan <- true
+	ctx, cancel := context.WithTimeout(context.Background(), maxBackendOpTime)
+	defer cancel()
+
+	if err := instanceWriteSem.Acquire(ctx, 1); err != nil {
+		return err
+	}
 	m.WaitLatency = time.Since(m.Timestamp)
 
 	// catch the exec time and error if there is one
@@ -106,7 +111,7 @@ func ExecDBWriteFunc(f func() error) error {
 		}
 		m.ExecuteLatency = time.Since(m.Timestamp.Add(m.WaitLatency))
 		_ = backendWrites.Append(m)
-		<-instanceWriteChan // assume this takes no time
+		instanceWriteSem.Release(1)
 	}()
 	res := f()
 	return res
@@ -204,7 +209,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		goto Cleanup
 	}
 
-	fs, err = fullStatus(tabletAlias)
+	fs, err = fullStatus(tablet)
 	if err != nil {
 		goto Cleanup
 	}
@@ -219,6 +224,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 	{
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
 		instance.ServerID = uint(fs.ServerId)
+		instance.TabletType = fs.TabletType
 		instance.Version = fs.Version
 		instance.ReadOnly = fs.ReadOnly
 		instance.LogBinEnabled = fs.LogBinEnabled
@@ -240,6 +246,7 @@ func ReadTopologyInstanceBufferable(tabletAlias string, latency *stopwatch.Named
 		instance.SemiSyncPrimaryClients = uint(fs.SemiSyncPrimaryClients)
 		instance.SemiSyncPrimaryStatus = fs.SemiSyncPrimaryStatus
 		instance.SemiSyncReplicaStatus = fs.SemiSyncReplicaStatus
+		instance.SemiSyncBlocked = fs.SemiSyncBlocked
 
 		if instance.IsOracleMySQL() || instance.IsPercona() {
 			// Stuff only supported on Oracle / Percona MySQL
@@ -527,6 +534,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 
 	instance.Hostname = m.GetString("hostname")
 	instance.Port = m.GetInt("port")
+	instance.TabletType = topodatapb.TabletType(m.GetInt("tablet_type"))
 	instance.ServerID = m.GetUint("server_id")
 	instance.ServerUUID = m.GetString("server_uuid")
 	instance.Version = m.GetString("version")
@@ -579,6 +587,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.SemiSyncPrimaryStatus = m.GetBool("semi_sync_primary_status")
 	instance.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
 	instance.SemiSyncReplicaStatus = m.GetBool("semi_sync_replica_status")
+	instance.SemiSyncBlocked = m.GetBool("semi_sync_blocked")
 	instance.ReplicationDepth = m.GetUint("replication_depth")
 	instance.IsCoPrimary = m.GetBool("is_co_primary")
 	instance.HasReplicationCredentials = m.GetBool("has_replication_credentials")
@@ -646,10 +655,16 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 		}
 		return instances, err
 	}
-	instanceReadChan <- true
-	instances, err := readFunc()
-	<-instanceReadChan
-	return instances, err
+
+	ctx, cancel := context.WithTimeout(context.Background(), maxBackendOpTime)
+	defer cancel()
+
+	if err := instanceReadSem.Acquire(ctx, 1); err != nil {
+		return nil, err
+	}
+	defer instanceReadSem.Release(1)
+
+	return readFunc()
 }
 
 // ReadInstance reads an instance from the vtorc backend database
@@ -823,6 +838,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"last_checked",
 		"last_attempted_check",
 		"last_check_partial_success",
+		"tablet_type",
 		"server_id",
 		"server_uuid",
 		"version",
@@ -879,6 +895,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"semi_sync_primary_status",
 		"semi_sync_primary_clients",
 		"semi_sync_replica_status",
+		"semi_sync_blocked",
 		"last_discovery_latency",
 		"is_disk_stalled",
 	}
@@ -903,6 +920,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.InstanceAlias)
 		args = append(args, instance.Hostname)
 		args = append(args, instance.Port)
+		args = append(args, int(instance.TabletType))
 		args = append(args, instance.ServerID)
 		args = append(args, instance.ServerUUID)
 		args = append(args, instance.Version)
@@ -959,6 +977,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.SemiSyncPrimaryStatus)
 		args = append(args, instance.SemiSyncPrimaryClients)
 		args = append(args, instance.SemiSyncReplicaStatus)
+		args = append(args, instance.SemiSyncBlocked)
 		args = append(args, instance.LastDiscoveryLatency.Nanoseconds())
 		args = append(args, instance.StalledDisk)
 	}

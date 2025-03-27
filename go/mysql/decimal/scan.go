@@ -267,21 +267,6 @@ next:
 	return d, err
 }
 
-// RequireFromString returns a new Decimal from a string representation
-// or panics if NewFromString would have returned an error.
-//
-// Example:
-//
-//	d := RequireFromString("-123.45")
-//	d2 := RequireFromString(".0001")
-func RequireFromString(value string) Decimal {
-	dec, err := NewFromString(value)
-	if err != nil {
-		panic(err)
-	}
-	return dec
-}
-
 func mulWW(x, y big.Word) (z1, z0 big.Word) {
 	zz1, zz0 := bits.Mul(uint(x), uint(y))
 	return big.Word(zz1), big.Word(zz0)

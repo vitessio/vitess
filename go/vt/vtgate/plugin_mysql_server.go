@@ -258,7 +258,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		fillInTxStatusFlags(c, session)
 		return nil
 	}
-	session, result, err := vh.vtg.Execute(ctx, vh, session, query, make(map[string]*querypb.BindVariable))
+	session, result, err := vh.vtg.Execute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), false)
 
 	if err := sqlerror.NewSQLErrorFromError(err); err != nil {
 		return err
@@ -281,7 +281,7 @@ func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
 }
 
 // ComPrepare is the handler for command prepare.
-func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, uint16, error) {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	if mysqlQueryTimeout != 0 {
@@ -315,12 +315,12 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, bindVars map[st
 		}
 	}()
 
-	session, fld, err := vh.vtg.Prepare(ctx, session, query, bindVars)
+	session, fld, paramsCount, err := vh.vtg.Prepare(ctx, session, query)
 	err = sqlerror.NewSQLErrorFromError(err)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return fld, nil
+	return fld, paramsCount, nil
 }
 
 func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
@@ -364,7 +364,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		fillInTxStatusFlags(c, session)
 		return nil
 	}
-	_, qr, err := vh.vtg.Execute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars)
+	_, qr, err := vh.vtg.Execute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, true)
 	if err != nil {
 		return sqlerror.NewSQLErrorFromError(err)
 	}

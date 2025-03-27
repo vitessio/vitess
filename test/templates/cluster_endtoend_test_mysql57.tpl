@@ -19,7 +19,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1-24.04{{else}}ubuntu-24.04{{end}}
+    runs-on: {{.RunsOn}}
 
     steps:
     - name: Skip CI
@@ -114,15 +114,14 @@ jobs:
       run: |
         sudo apt-get update
 
-        # Uninstall any previously installed MySQL first
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
-        sudo systemctl stop apparmor
+        # sudo systemctl stop apparmor
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
         sudo apt-get -y autoremove
         sudo apt-get -y autoclean
-        sudo deluser mysql
+        # sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
 
@@ -143,6 +142,7 @@ jobs:
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
 
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
+
         sudo service mysql stop
         sudo service etcd stop
 

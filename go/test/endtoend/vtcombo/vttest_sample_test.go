@@ -178,7 +178,7 @@ func assertInsertedRowsExist(ctx context.Context, t *testing.T, conn *vtgateconn
 	bindVariables := map[string]*querypb.BindVariable{
 		"id_start": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(idStart), 10))},
 	}
-	res, err := cur.Execute(ctx, "select * from test_table where id >= :id_start", bindVariables)
+	res, err := cur.Execute(ctx, "select * from test_table where id >= :id_start", bindVariables, false)
 	require.NoError(t, err)
 
 	assert.Equal(t, rowCount, len(res.Rows))
@@ -199,7 +199,7 @@ func assertRouting(ctx context.Context, t *testing.T, db *sql.DB) {
 
 func assertCanInsertRow(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn) {
 	cur := conn.Session(ks1+":80-@primary", nil)
-	_, err := cur.Execute(ctx, "begin", nil)
+	_, err := cur.Execute(ctx, "begin", nil, false)
 	require.NoError(t, err)
 
 	i := 0x810000000000000
@@ -209,10 +209,10 @@ func assertCanInsertRow(ctx context.Context, t *testing.T, conn *vtgateconn.VTGa
 		"keyspace_id": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
 	}
 	query := "insert into test_table (id, msg, keyspace_id) values (:id, :msg, :keyspace_id)"
-	_, err = cur.Execute(ctx, query, bindVariables)
+	_, err = cur.Execute(ctx, query, bindVariables, false)
 	require.NoError(t, err)
 
-	_, err = cur.Execute(ctx, "commit", nil)
+	_, err = cur.Execute(ctx, "commit", nil, false)
 	require.NoError(t, err)
 }
 
@@ -220,7 +220,7 @@ func insertManyRows(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateCo
 	cur := conn.Session(ks1+":-80@primary", nil)
 
 	query := "insert into test_table (id, msg, keyspace_id) values (:id, :msg, :keyspace_id)"
-	_, err := cur.Execute(ctx, "begin", nil)
+	_, err := cur.Execute(ctx, "begin", nil, false)
 	require.NoError(t, err)
 
 	for i := idStart; i < idStart+rowCount; i++ {
@@ -229,11 +229,11 @@ func insertManyRows(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateCo
 			"msg":         {Type: querypb.Type_VARCHAR, Value: []byte("test" + strconv.FormatInt(int64(i), 10))},
 			"keyspace_id": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
 		}
-		_, err = cur.Execute(ctx, query, bindVariables)
+		_, err = cur.Execute(ctx, query, bindVariables, false)
 		require.NoError(t, err)
 	}
 
-	_, err = cur.Execute(ctx, "commit", nil)
+	_, err = cur.Execute(ctx, "commit", nil, false)
 	require.NoError(t, err)
 }
 
@@ -301,17 +301,17 @@ func assertTransactionalityAndRollbackObeyed(ctx context.Context, t *testing.T, 
 		"keyspace_id": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
 	}
 	query := "insert into test_table (id, msg, keyspace_id) values (:id, :msg, :keyspace_id)"
-	_, err := cur.Execute(ctx, query, bindVariables)
+	_, err := cur.Execute(ctx, query, bindVariables, false)
 	require.NoError(t, err)
 
 	bindVariables = map[string]*querypb.BindVariable{
 		"msg": {Type: querypb.Type_VARCHAR, Value: []byte(msg)},
 	}
-	res, err := cur.Execute(ctx, "select * from test_table where msg = :msg", bindVariables)
+	res, err := cur.Execute(ctx, "select * from test_table where msg = :msg", bindVariables, false)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(res.Rows))
 
-	_, err = cur.Execute(ctx, "begin", nil)
+	_, err = cur.Execute(ctx, "begin", nil, false)
 	require.NoError(t, err)
 
 	msg2 := msg + "2"
@@ -320,16 +320,16 @@ func assertTransactionalityAndRollbackObeyed(ctx context.Context, t *testing.T, 
 		"msg": {Type: querypb.Type_VARCHAR, Value: []byte(msg2)},
 	}
 	query = "update test_table set msg = :msg where id = :id"
-	_, err = cur.Execute(ctx, query, bindVariables)
+	_, err = cur.Execute(ctx, query, bindVariables, false)
 	require.NoError(t, err)
 
-	_, err = cur.Execute(ctx, "rollback", nil)
+	_, err = cur.Execute(ctx, "rollback", nil, false)
 	require.NoError(t, err)
 
 	bindVariables = map[string]*querypb.BindVariable{
 		"msg": {Type: querypb.Type_VARCHAR, Value: []byte(msg2)},
 	}
-	res, err = cur.Execute(ctx, "select * from test_table where msg = :msg", bindVariables)
+	res, err = cur.Execute(ctx, "select * from test_table where msg = :msg", bindVariables, false)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(res.Rows))
 }

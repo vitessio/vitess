@@ -2162,9 +2162,9 @@ char_type:
   {
     $$ = &ColumnType{Type: string($1), Length: $2}
   }
-| TEXT charset_opt
+| TEXT length_opt charset_opt
   {
-    $$ = &ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
   }
 | TINYTEXT charset_opt
   {
@@ -2178,9 +2178,9 @@ char_type:
   {
     $$ = &ColumnType{Type: string($1), Charset: $2}
   }
-| BLOB
+| BLOB length_opt
   {
-    $$ = &ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | TINYBLOB
   {
@@ -5709,7 +5709,7 @@ frame_point:
   {
     $$ = &FramePoint{Type:UnboundedFollowingType}
   }
-| NUM_literal PRECEDING
+| literal PRECEDING
   {
     $$ = &FramePoint{Type:ExprPrecedingType, Expr:$1}
   }
@@ -5717,7 +5717,7 @@ frame_point:
   {
     $$ = &FramePoint{Type:ExprPrecedingType, Expr:$2, Unit: $3}
   }
-| NUM_literal FOLLOWING
+| literal FOLLOWING
   {
     $$ = &FramePoint{Type:ExprFollowingType, Expr:$1}
   }

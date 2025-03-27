@@ -22,6 +22,7 @@ import (
 )
 
 func main() {
+	cli.InitializeFlags()
 	if err := cli.Main.Execute(); err != nil {
 		log.Exit(err)
 	}

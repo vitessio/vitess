@@ -14,7 +14,7 @@ env:
 jobs:
   test:
     name: {{.Name}}
-    runs-on: ubuntu-24.04
+    runs-on: {{.RunsOn}}
 
     steps:
     - name: Skip CI
@@ -93,11 +93,11 @@ jobs:
         sudo apt-get update
 
         # Uninstall any previously installed MySQL first
-        sudo systemctl stop apparmor
+        # sudo systemctl stop apparmor
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
         sudo apt-get -y autoremove
         sudo apt-get -y autoclean
-        sudo deluser mysql
+        # sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
 
@@ -137,6 +137,7 @@ jobs:
         {{end}}
 
         sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
+        
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/

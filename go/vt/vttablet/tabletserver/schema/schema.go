@@ -17,12 +17,11 @@ limitations under the License.
 package schema
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -85,10 +84,10 @@ func (seq *SequenceInfo) Reset() {
 	seq.LastVal = 0
 }
 
-func (seq *SequenceInfo) String() {
+func (seq *SequenceInfo) String() string {
 	seq.Lock()
 	defer seq.Unlock()
-	log.Infof("SequenceInfo: NextVal: %d, LastVal: %d", seq.NextVal, seq.LastVal)
+	return fmt.Sprintf("SequenceInfo: NextVal: %d, LastVal: %d", seq.NextVal, seq.LastVal)
 }
 
 // MessageInfo contains info specific to message tables.
@@ -129,6 +128,10 @@ type MessageInfo struct {
 
 	// IDType specifies the type of the ID column
 	IDType sqltypes.Type
+}
+
+func (mi *MessageInfo) String() string {
+	return fmt.Sprintf("MessageInfo: AckWaitDuration: %v, PurgeAfterDuration: %v, BatchSize: %v, CacheSize: %v, PollInterval: %v, MinBackoff: %v, MaxBackoff: %v, IDType: %v", mi.AckWaitDuration, mi.PurgeAfterDuration, mi.BatchSize, mi.CacheSize, mi.PollInterval, mi.MinBackoff, mi.MaxBackoff, mi.IDType)
 }
 
 // NewTable creates a new Table.

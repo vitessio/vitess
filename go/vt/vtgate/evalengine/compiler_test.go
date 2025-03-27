@@ -24,12 +24,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/olekukonko/tablewriter"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -119,7 +119,7 @@ func TestCompilerReference(t *testing.T) {
 			var supported, total int
 			env := evalengine.EmptyExpressionEnv(venv)
 
-			tc.Run(func(query string, row []sqltypes.Value) {
+			tc.Run(func(query string, row []sqltypes.Value, _ bool) {
 				env.Row = row
 				total++
 				testCompilerCase(t, query, venv, tc.Schema, env)
@@ -171,6 +171,7 @@ func testCompilerCase(t *testing.T, query string, venv *vtenv.Environment, schem
 		eval := expected.String()
 		comp := res.String()
 		assert.Equalf(t, eval, comp, "bad evaluation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, eval, comp)
+		assert.Equalf(t, expected.Collation(), res.Collation(), "bad collation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, colldata.Lookup(expected.Collation()).Name(), colldata.Lookup(res.Collation()).Name())
 	case vmErr == nil:
 		t.Errorf("failed evaluation from evalengine:\nSQL:  %s\nError: %s", query, evalErr)
 	case evalErr == nil:

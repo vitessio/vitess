@@ -31,6 +31,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -54,9 +55,47 @@ var (
 	// This is populated by parsing `--clusters_to_watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
 
+	// tablet stats
+	statsTabletsWatchedByCell = stats.NewGaugesFuncWithMultiLabels(
+		"TabletsWatchedByCell",
+		"Number of tablets watched by cell",
+		[]string{"Cell"},
+		getTabletsWatchedByCellStats,
+	)
+	statsTabletsWatchedByShard = stats.NewGaugesFuncWithMultiLabels(
+		"TabletsWatchedByShard",
+		"Number of tablets watched by keyspace/shard",
+		[]string{"Keyspace", "Shard"},
+		getTabletsWatchedByShardStats,
+	)
+
 	// ErrNoPrimaryTablet is a fixed error message.
 	ErrNoPrimaryTablet = errors.New("no primary tablet found")
 )
+
+// getTabletsWatchedByCellStats returns the number of tablets watched by cell in stats format.
+func getTabletsWatchedByCellStats() map[string]int64 {
+	tabletCountsByCell, err := inst.ReadTabletCountsByCell()
+	if err != nil {
+		log.Errorf("Failed to read tablet counts by cell: %+v", err)
+	}
+	return tabletCountsByCell
+}
+
+// getTabletsWatchedByShardStats returns the number of tablets watched by keyspace/shard in stats format.
+func getTabletsWatchedByShardStats() map[string]int64 {
+	tabletsWatchedByShard := make(map[string]int64)
+	tabletCountsByKS, err := inst.ReadTabletCountsByKeyspaceShard()
+	if err != nil {
+		log.Errorf("Failed to read tablet counts by shard: %+v", err)
+	}
+	for keyspace, countsByShard := range tabletCountsByKS {
+		for shard, tabletCount := range countsByShard {
+			tabletsWatchedByShard[keyspace+"."+shard] = tabletCount
+		}
+	}
+	return tabletsWatchedByShard
+}
 
 // RegisterFlags registers the flags required by VTOrc
 func RegisterFlags(fs *pflag.FlagSet) {
@@ -150,26 +189,30 @@ func OpenTabletDiscovery() <-chan time.Time {
 	return time.Tick(config.GetTopoInformationRefreshDuration()) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
 
-// getAllTablets gets all tablets from all cells using a goroutine per cell.
-func getAllTablets(ctx context.Context, cells []string) []*topo.TabletInfo {
-	var tabletsMu sync.Mutex
-	tablets := make([]*topo.TabletInfo, 0)
+// getAllTablets gets all tablets from all cells using a goroutine per cell. It returns a map of
+// cells (string) to slices of tablets (as topo.TabletInfo) and a slice of cells (string) that
+// failed to return a result.
+func getAllTablets(ctx context.Context, cells []string) (tabletsByCell map[string][]*topo.TabletInfo, failedCells []string) {
+	var mu sync.Mutex
+	failedCells = make([]string, 0, len(cells))
+	tabletsByCell = make(map[string][]*topo.TabletInfo, len(cells))
 	eg, ctx := errgroup.WithContext(ctx)
 	for _, cell := range cells {
 		eg.Go(func() error {
-			t, err := ts.GetTabletsByCell(ctx, cell, nil)
+			tablets, err := ts.GetTabletsByCell(ctx, cell, nil)
+			mu.Lock()
+			defer mu.Unlock()
 			if err != nil {
 				log.Errorf("Failed to load tablets from cell %s: %+v", cell, err)
-				return nil
+				failedCells = append(failedCells, cell)
+			} else {
+				tabletsByCell[cell] = tablets
 			}
-			tabletsMu.Lock()
-			defer tabletsMu.Unlock()
-			tablets = append(tablets, t...)
 			return nil
 		})
 	}
 	_ = eg.Wait() // always nil
-	return tablets
+	return tabletsByCell, failedCells
 }
 
 // refreshAllTablets reloads the tablets from topo and discovers the ones which haven't been refreshed in a while
@@ -182,9 +225,9 @@ func refreshAllTablets(ctx context.Context) error {
 // refreshTabletsUsing refreshes tablets using a provided loader.
 func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), forceRefresh bool) error {
 	// Get all cells.
-	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer cancel()
-	cells, err := ts.GetKnownCells(ctx)
+	cellsCtx, cellsCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cellsCancel()
+	cells, err := ts.GetKnownCells(cellsCtx)
 	if err != nil {
 		return err
 	}
@@ -192,25 +235,34 @@ func refreshTabletsUsing(ctx context.Context, loader func(tabletAlias string), f
 	// Get all tablets from all cells.
 	getTabletsCtx, getTabletsCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer getTabletsCancel()
-	tablets := getAllTablets(getTabletsCtx, cells)
-	if len(tablets) == 0 {
-		log.Error("Found no tablets")
+	tabletsByCell, failedCells := getAllTablets(getTabletsCtx, cells)
+	if len(tabletsByCell) == 0 {
+		log.Error("Found no cells with tablets")
 		return nil
 	}
+	if len(failedCells) > 0 {
+		log.Errorf("Got partial topo result. Failed cells: %s", strings.Join(failedCells, ", "))
+	}
 
-	// Filter tablets that should not be watched using shardsToWatch map.
-	matchedTablets := make([]*topo.TabletInfo, 0, len(tablets))
-	func() {
-		for _, t := range tablets {
-			if shouldWatchTablet(t.Tablet) {
-				matchedTablets = append(matchedTablets, t)
+	// Update each cell that provided a response. This ensures only cells that provided a
+	// response are updated in the backend and are considered for forgetting stale tablets.
+	for cell, tablets := range tabletsByCell {
+		// Filter tablets that should not be watched using func shouldWatchTablet.
+		matchedTablets := make([]*topo.TabletInfo, 0, len(tablets))
+		func() {
+			for _, t := range tablets {
+				if shouldWatchTablet(t.Tablet) {
+					matchedTablets = append(matchedTablets, t)
+				}
 			}
-		}
-	}()
+		}()
 
-	// Refresh the filtered tablets.
-	query := "select alias from vitess_tablet"
-	refreshTablets(matchedTablets, query, nil, loader, forceRefresh, nil)
+		// Refresh the filtered tablets and forget stale tablets.
+		query := "select alias from vitess_tablet where cell = ?"
+		args := sqlutils.Args(cell)
+		refreshTablets(matchedTablets, query, args, loader, forceRefresh, nil)
+	}
+
 	return nil
 }
 
@@ -302,22 +354,20 @@ func getLockAction(analysedInstance string, code inst.AnalysisCode) string {
 }
 
 // LockShard locks the keyspace-shard preventing others from performing conflicting actions.
-func LockShard(ctx context.Context, tabletAlias string, lockAction string) (context.Context, func(*error), error) {
-	if tabletAlias == "" {
-		return nil, nil, errors.New("can't lock shard: instance is unspecified")
+func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context.Context, func(*error), error) {
+	if keyspace == "" {
+		return nil, nil, errors.New("can't lock shard: keyspace is unspecified")
+	}
+	if shard == "" {
+		return nil, nil, errors.New("can't lock shard: shard name is unspecified")
 	}
 	val := atomic.LoadInt32(&hasReceivedSIGTERM)
 	if val > 0 {
 		return nil, nil, errors.New("can't lock shard: SIGTERM received")
 	}
 
-	tablet, err := inst.ReadTablet(tabletAlias)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	atomic.AddInt32(&shardsLockCounter, 1)
-	ctx, unlock, err := ts.TryLockShard(ctx, tablet.Keyspace, tablet.Shard, lockAction)
+	ctx, unlock, err := ts.TryLockShard(ctx, keyspace, shard, lockAction)
 	if err != nil {
 		atomic.AddInt32(&shardsLockCounter, -1)
 		return nil, nil, err

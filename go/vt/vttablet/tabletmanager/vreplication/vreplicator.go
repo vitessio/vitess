@@ -638,7 +638,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 //   - "vreplication" for most flows
 //   - "vreplication:online-ddl" for online ddl flows.
 //     Note that with such name, it's possible to throttle
-//     the workflow by either /throttler/throttle-app?app=vreplication and/or /throttler/throttle-app?app=online-ddl
+//     the workflow by either "vreplication" and/or "online-ddl"
 //     This is useful when we want to throttle all migrations. We throttle "online-ddl".
 func (vr *vreplicator) throttlerAppName() string {
 	names := []string{vr.WorkflowName, throttlerapp.VReplicationName.String()}

@@ -17,7 +17,11 @@ limitations under the License.
 package integration
 
 import (
+	"encoding/binary"
+	"fmt"
 	"strings"
+
+	"vitess.io/vitess/go/vt/sqlparser/pathbuilder"
 )
 
 // ast type helpers
@@ -49,10 +53,14 @@ type Cursor struct {
 	node     AST
 	// marks that the node has been replaced, and the new node should be visited
 	revisit bool
+	current *pathbuilder.ASTPathBuilder
 }
 
 // Node returns the current Node.
 func (c *Cursor) Node() AST { return c.node }
+
+// Path returns the current path of the Node.
+func (c *Cursor) Path() ASTPath { return ASTPath(c.current.ToPath()) }
 
 // Parent returns the parent of the current Node.
 func (c *Cursor) Parent() AST { return c.parent }
@@ -91,6 +99,23 @@ func Rewrite(node AST, pre, post ApplyFunc) AST {
 	return outer.AST
 }
 
+func RewriteWithPaths(node AST, pre, post ApplyFunc) AST {
+	outer := &struct{ AST }{node}
+
+	a := &application{
+		pre:          pre,
+		post:         post,
+		collectPaths: true,
+	}
+	a.cur.current = pathbuilder.NewASTPathBuilder()
+
+	a.rewriteAST(outer, node, func(newNode, parent AST) {
+		outer.AST = newNode
+	})
+
+	return outer.AST
+}
+
 type (
 	cow struct {
 		pre    func(node, parent AST) bool
@@ -99,10 +124,73 @@ type (
 		cursor cursor
 	}
 	cursor struct {
-		stop bool
+		stop           bool
+		node, replaced AST
 	}
 )
 
 func (c *cow) postVisit(a, b AST, d bool) (AST, bool) {
+	c.cursor.node = a
+	c.cursor.replaced = nil
+	c.post(&c.cursor)
+	if c.cursor.replaced != nil {
+		return c.cursor.replaced, true
+	}
+
 	return a, d
+}
+
+func (path ASTPath) DebugString() string {
+	var sb strings.Builder
+
+	remaining := []byte(path)
+	stepCount := 0
+
+	for len(remaining) >= 2 {
+		// Read the step code (2 bytes)
+		stepVal := binary.BigEndian.Uint16(remaining[:2])
+		remaining = remaining[2:]
+
+		step := ASTStep(stepVal)
+		stepStr := step.DebugString() // e.g. "CaseExprWhens8" or "CaseExprWhens32"
+
+		// If this isn't the very first step in the path, prepend a separator
+		if stepCount > 0 {
+			sb.WriteString("->")
+		}
+		stepCount++
+
+		// Write the step name
+		sb.WriteString(stepStr)
+
+		// Check suffix to see if we need to read an offset
+		switch {
+		case strings.HasSuffix(stepStr, "Offset"):
+			if len(remaining) < 1 {
+				sb.WriteString("(ERR-no-offset-byte)")
+				return sb.String()
+			}
+			offset, readBytes := binary.Varint(remaining)
+			remaining = remaining[readBytes:]
+			sb.WriteString(fmt.Sprintf("(%d)", offset))
+		}
+	}
+
+	// If there's leftover data that doesn't fit into 2 (or more) bytes, you could note it:
+	if len(remaining) != 0 {
+		sb.WriteString("->(ERR-unaligned-extra-bytes)")
+	}
+
+	return sb.String()
+}
+
+func CopyOnRewrite(
+	node AST,
+	pre func(node, parent AST) bool,
+	post func(cursor *cursor),
+	cloned func(before, after AST),
+) AST {
+	cow := cow{pre: pre, post: post, cursor: cursor{}, cloned: cloned}
+	out, _ := cow.copyOnRewriteAST(node, nil)
+	return out
 }

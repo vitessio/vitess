@@ -15,7 +15,7 @@ jobs:
   build:
     timeout-minutes: 60
     name: Run endtoend tests on {{.Name}}
-    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1-24.04{{else}}ubuntu-24.04{{end}}
+    runs-on: {{.RunsOn}}
 
     steps:
     - name: Skip CI
@@ -235,6 +235,8 @@ jobs:
         EOF
         {{end}}
 
+        # Some of these tests require specific locales to be installed.
+        # See https://github.com/cncf/automation/commit/49f2ad7a791a62ff7d038002bbb2b1f074eed5d5
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker={{if .Docker}}true -flavor={{.Platform}}{{else}}false{{end}} -follow -shard {{.Shard}}{{if .PartialKeyspace}} -partial-keyspace=true {{end}}{{if .BuildTag}} -build-tag={{.BuildTag}} {{end}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 

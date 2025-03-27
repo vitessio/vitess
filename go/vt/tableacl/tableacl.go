@@ -110,6 +110,10 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 		log.Errorf("unable to read tableACL config file: %v  Error: %v", configFile, err)
 		return err
 	}
+	if len(data) == 0 {
+		return errors.New("tableACL config file is empty")
+	}
+
 	config := &tableaclpb.Config{}
 	if err := config.UnmarshalVT(data); err != nil {
 		// try to parse tableacl as json file

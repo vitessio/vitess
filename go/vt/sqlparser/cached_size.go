@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,13 +17,7 @@ limitations under the License.
 
 package sqlparser
 
-import (
-	"math"
-	"reflect"
-	"unsafe"
-
-	hack "vitess.io/vitess/go/hack"
-)
+import hack "vitess.io/vitess/go/hack"
 
 type cachedObject interface {
 	CachedSize(alloc bool) int64
@@ -814,14 +808,7 @@ func (cached *CommentDirectives) CachedSize(alloc bool) int64 {
 	}
 	// field m map[string]string
 	if cached.m != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.m)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 272))
-		if len(cached.m) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 272))
-		}
+		size += hack.RuntimeMapSize(cached.m)
 		for k, v := range cached.m {
 			size += hack.RuntimeAllocSize(int64(len(k)))
 			size += hack.RuntimeAllocSize(int64(len(v)))
@@ -3523,6 +3510,24 @@ func (cached *PurgeBinaryLogs) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.To)))
 	// field Before string
 	size += hack.RuntimeAllocSize(int64(len(cached.Before)))
+	return size
+}
+func (cached *QueryHints) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Workload string
+	size += hack.RuntimeAllocSize(int64(len(cached.Workload)))
+	// field ForeignKeyChecks *bool
+	size += hack.RuntimeAllocSize(int64(1))
+	// field Priority string
+	size += hack.RuntimeAllocSize(int64(len(cached.Priority)))
+	// field Timeout *int
+	size += hack.RuntimeAllocSize(int64(8))
 	return size
 }
 func (cached *ReferenceDefinition) CachedSize(alloc bool) int64 {

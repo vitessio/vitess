@@ -110,14 +110,21 @@ func trimmedRequestToError(received string) error {
 	}
 }
 
-func (c *errorClient) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (c *errorClient) Execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if err := requestToPartialError(sql, session); err != nil {
 		return session, nil, err
 	}
 	if err := requestToError(sql); err != nil {
 		return session, nil, err
 	}
-	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables)
+	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables, prepared)
 }
 
 func (c *errorClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
@@ -139,14 +146,14 @@ func (c *errorClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.
 	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
 }
 
-func (c *errorClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+func (c *errorClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
 	if err := requestToPartialError(sql, session); err != nil {
-		return session, nil, err
+		return session, nil, 0, err
 	}
 	if err := requestToError(sql); err != nil {
-		return session, nil, err
+		return session, nil, 0, err
 	}
-	return c.fallbackClient.Prepare(ctx, session, sql, bindVariables)
+	return c.fallbackClient.Prepare(ctx, session, sql)
 }
 
 func (c *errorClient) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
