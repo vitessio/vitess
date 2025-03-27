@@ -148,7 +148,8 @@ jobs:
         set -exo pipefail
 
         i=1
-        for dir in {{.Path}}/*/; do 
+        for dir in {{.Path}}/*/; do
+          rm -Rf /tmp/vtroot_*
           # We go over all the directories in the given path.
           # If there is a vschema file there, we use it, otherwise we let vt tester autogenerate it.
           if [ -f $dir/vschema.json ]; then
