@@ -153,6 +153,7 @@ func (qb *queryBuilder) setWithRollup() {
 }
 
 func (qb *queryBuilder) addProjection(projection sqlparser.SelectExpr) {
+	stripJoinPredicate(projection)
 	switch stmt := qb.stmt.(type) {
 	case *sqlparser.Select:
 		stmt.AddSelectExpr(projection)
@@ -170,6 +171,16 @@ func (qb *queryBuilder) addProjection(projection sqlparser.SelectExpr) {
 		return
 	}
 	panic(vterrors.VT13001(fmt.Sprintf("unknown select statement type: %T", qb.stmt)))
+}
+
+func stripJoinPredicate(projection sqlparser.SelectExpr) {
+	ae, ok := projection.(*sqlparser.AliasedExpr)
+	if ok {
+		jp, ok := ae.Expr.(*predicates.JoinPredicate)
+		if ok {
+			ae.Expr = jp.Current()
+		}
+	}
 }
 
 func (qb *queryBuilder) pushUnionInsideDerived() {

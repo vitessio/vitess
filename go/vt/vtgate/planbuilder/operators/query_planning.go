@@ -981,10 +981,9 @@ func colNamesAlign(ctx *plancontext.PlanningContext, expected, actual []sqlparse
 				depsExpected := ctx.SemTable.RecursiveDeps(se.Expr)
 				depsActual := ctx.SemTable.RecursiveDeps(actualAe.Expr)
 
-				if depsActual.IsSolvedBy(depsExpected) && actualAe.ColumnName() == se.ColumnName() {
-					return true
+				if !depsActual.IsSolvedBy(depsExpected) || actualAe.ColumnName() != se.ColumnName() {
+					return false
 				}
-				return false
 			}
 
 			if !areColumnNamesAligned(se, actual[i]) {

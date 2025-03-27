@@ -1121,6 +1121,83 @@
     "skip_e2e": true
   },
   {
+    "comment": "Block join with complex expressions",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t1.id), abs(t1.id+t3.id) from user t3 join user_extra t1 on t3.name = t1.name",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t1.id), abs(t1.id+t3.id) from user t3 join user_extra t1 on t3.name = t1.name",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": "0,2,1",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Block",
+            "BindVarName": "values",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select abs(t1.id), t1.id, t1.`name` from user_extra as t1 where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(t1.id), t1.id, t1.`name` from user_extra as t1",
+                "Table": "user_extra"
+              },
+              {
+                "OperatorType": "VindexLookup",
+                "Variant": "MultiEqual",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "Values": [
+                  "values:2"
+                ],
+                "Vindex": "name_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Table": "name_user_vdx",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select abs(t3.id), abs(`values`.t1_id + t3.id) as `abs(t1.id + t3.id)`, `values`.x_x as `abs(t1.id)` from (values ::values) as `values`(x_x, t1_id, t1_name), `user` as t3 where 1 != 1",
+                    "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(`values`.t1_id + t3.id) as `abs(t1.id + t3.id)`, `values`.x_x as `abs(t1.id)` from (values ::values) as `values`(x_x, t1_id, t1_name), `user` as t3 where t3.`name` = `values`.t1_name",
+                    "Table": "`user`"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "syntax error",
     "query": "the quick brown fox",
     "plan": "syntax error at position 4 near 'the'",

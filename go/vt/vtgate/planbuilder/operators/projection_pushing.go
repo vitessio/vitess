@@ -330,7 +330,7 @@ func splitSubqueryExpression(
 	alias string,
 ) applyJoinColumn {
 	col := join.getJoinColumnFor(ctx, pe.Original, pe.ColExpr, false)
-	return pushDownSplitJoinCol(col, lhs, rhs, pe, alias)
+	return pushDownSplitJoinCol(ctx, col, lhs, rhs, pe, alias)
 }
 
 func splitUnexploredExpression(
@@ -348,7 +348,7 @@ func splitUnexploredExpression(
 	col := join.getJoinColumnFor(ctx, original, expr, false)
 
 	if dt == nil {
-		return pushDownSplitJoinCol(col, lhs, rhs, pe, alias)
+		return pushDownSplitJoinCol(ctx, col, lhs, rhs, pe, alias)
 	}
 
 	if !pe.isSameInAndOut(ctx) {
@@ -378,7 +378,9 @@ func splitUnexploredExpression(
 			lhs.add(newProjExpr(ae), columnName)
 		}
 		innerPE := newProjExprWithInner(pe.Original, col.RHSExpr)
-		innerPE.ColExpr = col.RHSExpr
+		jp := ctx.PredTracker.NewJoinPredicate(col.RHSExpr)
+		innerPE.ColExpr = jp
+		col.JoinPredicateID = &jp.ID
 		col.RHSExpr = colName
 		innerPE.Info = pe.Info
 		rhs.add(innerPE, alias)
@@ -386,7 +388,7 @@ func splitUnexploredExpression(
 	return col
 }
 
-func pushDownSplitJoinCol(col applyJoinColumn, lhs, rhs *projector, pe *ProjExpr, alias string) applyJoinColumn {
+func pushDownSplitJoinCol(ctx *plancontext.PlanningContext, col applyJoinColumn, lhs, rhs *projector, pe *ProjExpr, alias string) applyJoinColumn {
 	// Update the left and right child columns and names based on the applyJoinColumn type.
 	switch {
 	case col.IsPureLeft():
@@ -402,9 +404,11 @@ func pushDownSplitJoinCol(col applyJoinColumn, lhs, rhs *projector, pe *ProjExpr
 			}
 			lhs.add(newProjExpr(aeWrap(lhsExpr.Expr)), lhsAlias)
 		}
-		innerPE := newProjExprWithInner(pe.Original, col.RHSExpr)
-		innerPE.ColExpr = col.RHSExpr
+		jp := ctx.PredTracker.NewJoinPredicate(col.RHSExpr)
+		innerPE := newProjExprWithInner(pe.Original, jp)
+		innerPE.ColExpr = jp
 		innerPE.Info = pe.Info
+		col.JoinPredicateID = &jp.ID
 		rhs.add(innerPE, alias)
 	}
 	return col

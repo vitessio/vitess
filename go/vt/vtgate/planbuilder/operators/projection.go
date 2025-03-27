@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -265,7 +266,12 @@ func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	offset := -1
 	_ = ctx.SemTable.ForeachExprEquality(expr, func(expr sqlparser.Expr) error {
 		for offsetVal, pe := range ap {
-			if ctx.SemTable.EqualsExprWithDeps(pe.ColExpr, expr) {
+
+			colExpr := pe.ColExpr
+			if jp, ok := colExpr.(*predicates.JoinPredicate); ok {
+				colExpr = jp.Current()
+			}
+			if ctx.SemTable.EqualsExprWithDeps(colExpr, expr) {
 				offset = offsetVal
 				return io.EOF
 			}

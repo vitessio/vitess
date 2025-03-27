@@ -175,7 +175,15 @@ func rewriteApplyToBlock(ctx *plancontext.PlanningContext, op Operator) Operator
 		}
 
 		for _, column := range aj.JoinColumns.columns {
-			bj.AddColumn(ctx, true, false, aeWrap(column.Original))
+			if column.JoinPredicateID == nil {
+				bj.AddColumn(ctx, true, false, aeWrap(column.Original))
+				continue
+			}
+			jc, _ := breakBlockJoinExpressionInLHS(ctx, column.Original, TableID(bj.LHS), bj.Destination)
+			ctx.PredTracker.Set(*column.JoinPredicateID, jc.RHS)
+			for _, lhsExpr := range jc.LHS {
+				ctx.AddBlockJoinColumn(bj.Destination, lhsExpr.RightHandVersion)
+			}
 		}
 
 		for _, pred := range aj.JoinPredicates.columns {
