@@ -15010,12 +15010,15 @@ func (a *application) rewriteVisitable(parent SQLNode, node Visitable, replacer 
 		}
 	}
 	if a.collectPaths {
-		panic("[BUG] paths are not supported on 'Visitable'")
+		a.cur.current.AddStep(uint16(VisitableInner))
 	}
 	if !a.rewriteSQLNode(node, node.VisitThis(), func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'VisitThis' on 'Visitable'")
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
