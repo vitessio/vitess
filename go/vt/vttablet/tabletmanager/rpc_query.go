@@ -133,12 +133,12 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	// multi statement queries in ExecuteFetchAsDBA. This will be rewritten as:
 	//  (in v20): result, err := ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 	results := make([]*querypb.QueryResult, 0, len(queries))
-	result, more, err := conn.ExecuteFetchMulti(uq, maxRows, true /*wantFields*/)
+	result, status, err := conn.ExecuteFetchMulti(uq, maxRows, true /*wantFields*/)
 	if err == nil {
 		results = append(results, sqltypes.ResultToProto3(result))
 	}
-	for more {
-		result, more, _, err = conn.ReadQueryResult(maxRows, true /*wantFields*/)
+	for (status & sqltypes.ServerMoreResultsExists) != 0 {
+		result, status, _, err = conn.ReadQueryResult(maxRows, true /*wantFields*/)
 		if err != nil {
 			return nil, err
 		}
