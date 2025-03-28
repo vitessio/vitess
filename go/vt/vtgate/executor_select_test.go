@@ -1640,7 +1640,7 @@ func createExecutor(ctx context.Context, serv *sandboxTopo, cell string, resolve
 	config.Resolver = resolver
 	config.TopoServer = serv
 
-	ex := NewExecutor(ctx, config, false, plans, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	ex := NewExecutor(ctx, config, false, plans, NewDynamicViperConfig())
 	ex.SetQueryLogger(queryLogger)
 	return ex
 }
@@ -3501,7 +3501,7 @@ func TestStreamOrderByWithMultipleResults(t *testing.T) {
 	config.TopoServer = serv
 	config.Cell = cell
 	config.Resolver = resolver
-	executor := NewExecutor(ctx, config, false, plans, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	executor := NewExecutor(ctx, config, false, plans, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 	defer executor.Close()
 	// some sleep for all goroutines to start
@@ -3548,7 +3548,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	config.TopoServer = serv
 	config.Cell = cell
 	config.Resolver = resolver
-	executor := NewExecutor(ctx, config, false, plans, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	executor := NewExecutor(ctx, config, false, plans, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 	defer executor.Close()
 	// some sleep for all goroutines to start

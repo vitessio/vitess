@@ -125,6 +125,7 @@ type (
 		Resolver            *Resolver
 		SchemaInfo          SchemaInfo
 		VSchemaManager      *VSchemaManager
+		PlannerVersion      plancontext.PlannerVersion
 	}
 
 	Executor struct {
@@ -173,7 +174,6 @@ func NewExecutor(
 	eConfig ExecutorConfig,
 	warnOnShardedOnly bool,
 	plans *PlanCache,
-	pv plancontext.PlannerVersion,
 	ddlConfig dynamicconfig.DDL,
 ) *Executor {
 	e := &Executor{
@@ -185,7 +185,7 @@ func NewExecutor(
 		ddlConfig:           ddlConfig,
 	}
 	// setting the vcursor config.
-	e.initVConfig(warnOnShardedOnly, pv)
+	e.initVConfig(warnOnShardedOnly, eConfig.PlannerVersion)
 
 	// we subscribe to update from the VSchemaManager
 	eConfig.VSchemaManager = &VSchemaManager{

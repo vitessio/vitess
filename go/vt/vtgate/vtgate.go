@@ -384,9 +384,10 @@ func Init(
 		Cell:                cell,
 		Resolver:            resolver,
 		SchemaInfo:          si,
+		PlannerVersion:      pv,
 	}
 
-	executor := NewExecutor(ctx, eConfig, warnShardedOnly, plans, pv, dynamicConfig)
+	executor := NewExecutor(ctx, eConfig, warnShardedOnly, plans, dynamicConfig)
 
 	if err := executor.defaultQueryLogger(); err != nil {
 		log.Fatalf("error initializing query logger: %v", err)
