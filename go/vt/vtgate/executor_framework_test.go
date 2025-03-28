@@ -182,6 +182,7 @@ func createExecutorEnvCallback(t testing.TB, eConfig ExecutorConfig, eachShard f
 	eConfig.TopoServer = serv
 	eConfig.Resolver = resolver
 	eConfig.Cell = cell
+	//eConfig.VSchemaManager = vsc
 
 	executor = NewExecutor(ctx, eConfig, false, plans, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)

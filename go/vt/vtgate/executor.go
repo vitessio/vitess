@@ -188,14 +188,14 @@ func NewExecutor(
 	e.initVConfig(warnOnShardedOnly, eConfig.PlannerVersion)
 
 	// we subscribe to update from the VSchemaManager
-	eConfig.VSchemaManager = &VSchemaManager{
+	e.config.VSchemaManager = &VSchemaManager{
 		subscriber: e.SaveVSchema,
 		serv:       eConfig.TopoServer,
 		cell:       eConfig.Cell,
 		schema:     eConfig.SchemaInfo,
 		parser:     eConfig.Env.Parser(),
 	}
-	eConfig.TopoServer.WatchSrvVSchema(ctx, eConfig.Cell, eConfig.VSchemaManager.VSchemaUpdate)
+	e.config.TopoServer.WatchSrvVSchema(ctx, e.config.Cell, e.config.VSchemaManager.VSchemaUpdate)
 
 	executorOnce.Do(e.initStats)
 
