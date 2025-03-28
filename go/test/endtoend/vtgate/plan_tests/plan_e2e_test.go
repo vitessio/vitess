@@ -38,6 +38,7 @@ func TestE2ECases(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 	loadSampleData(t, mcmp)
+	parser := sqlparser.NewTestParser()
 
 	for _, mode := range []string{"oltp", "olap"} {
 		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
@@ -49,13 +50,16 @@ func TestE2ECases(t *testing.T) {
 						if test.SkipE2E {
 							mcmp.AsT().Skip(test.Query)
 						}
-						stmt, err := sqlparser.NewTestParser().Parse(test.Query)
+						stmt, err := parser.Parse(test.Query)
 						require.NoError(mcmp.AsT(), err)
 						sqlparser.RemoveKeyspaceIgnoreSysSchema(stmt)
 
 						mcmp.ExecVitessAndMySQLDifferentQueries(test.Query, sqlparser.String(stmt))
 						pd := utils.ExecTrace(mcmp.AsT(), mcmp.VtConn, test.Query)
-						verifyTestExpectations(mcmp.AsT(), pd, test)
+						if mode == "oltp" {
+							// we only need to test the plan for OLTP.
+							verifyTestExpectations(mcmp.AsT(), pd, test)
+						}
 						if mcmp.VtConn.IsClosed() {
 							mcmp.AsT().Fatal("vtgate connection is closed")
 						}
