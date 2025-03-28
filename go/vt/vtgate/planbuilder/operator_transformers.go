@@ -36,6 +36,20 @@ import (
 )
 
 func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operator) (engine.Primitive, error) {
+	prim, err := recursiveTransform(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+	if len(ctx.Conditions) > 0 {
+		prim = &engine.PlanSwitcher{
+			Conditions: ctx.Conditions,
+			Optimized:  prim,
+		}
+	}
+	return prim, nil
+}
+
+func recursiveTransform(ctx *plancontext.PlanningContext, op operators.Operator) (engine.Primitive, error) {
 	switch op := op.(type) {
 	case *operators.Route:
 		return transformRoutePlan(ctx, op)
@@ -600,6 +614,8 @@ func getHints(cmt *sqlparser.ParsedComments) *queryHints {
 }
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (engine.Primitive, error) {
+	ctx.CollectConditions(op.Conditions)
+
 	stmt, dmlOp, err := operators.ToAST(ctx, op.Source)
 	if err != nil {
 		return nil, err

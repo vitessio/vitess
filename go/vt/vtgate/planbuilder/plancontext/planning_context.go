@@ -20,14 +20,14 @@ import (
 	"io"
 	"slices"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -86,6 +86,8 @@ type PlanningContext struct {
 	PredTracker *predicates.Tracker
 
 	commentDirectives *sqlparser.CommentDirectives
+
+	Conditions []engine.Condition
 }
 
 func CreateEmptyPlanningContext() *PlanningContext {
@@ -485,4 +487,8 @@ func (ctx *PlanningContext) GetBlockJoinTableName(id semantics.TableSet) (string
 
 func (ctx *PlanningContext) IsCommentDirectiveSet(hint string) bool {
 	return ctx.commentDirectives != nil && ctx.commentDirectives.IsSet(hint)
+}
+
+func (ctx *PlanningContext) CollectConditions(conditions []engine.Condition) {
+	ctx.Conditions = append(ctx.Conditions, conditions...)
 }

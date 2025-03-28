@@ -32,8 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
-
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -47,6 +45,8 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -3112,6 +3112,182 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	assert.Empty(t, sbc2.Queries)
+}
+
+func assertOptimizedPlanCondition(t *testing.T, executor *Executor, sql string, condition ...engine.Condition) *engine.PlanSwitcher {
+	var plan *engine.Plan
+	executor.ForEachPlan(func(p *engine.Plan) bool {
+		if p.Original == sql {
+			plan = p
+			return false
+		}
+		return true
+	})
+	assert.NotNil(t, plan, "plan not found")
+	sp, ok := plan.Instructions.(*engine.PlanSwitcher)
+	require.True(t, ok, "specialized plan not created")
+	require.Equal(t, len(condition), len(sp.Conditions), "specialized plan conditions count mismatch")
+	for i, cond := range condition {
+		assert.Equal(t, cond.A, sp.Conditions[i].A)
+		assert.Equal(t, cond.B, sp.Conditions[i].B)
+	}
+	return sp
+}
+
+func TestOptimizedPlan(t *testing.T) {
+	// This test verifies that the executor is able to use the deferred optimisation
+	// technique to create a specialized plan, but only when the conditions are met.
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	twoTableJoin := "select count(*) from `user` u1 join user u2 where u1.id = ? and u2.id = ?"
+	threeTableJoin := "select count(*) from `user` u1, `user` u2, `user` u3 where u1.id = ? and u2.id = ? and u3.id = ?"
+	unionQuery := "select col, count(*) from (select col from `user` where id = ? union select foo from `user` where id = ?) x group by col"
+	queryWithSubQ := "select col from `user` where id = ? and exists (select 1 from `user` where id = ?)"
+
+	type testCase struct {
+		name           string
+		query          string
+		v1, v2, v3     int
+		expectedShards int
+	}
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+	tests := []testCase{{
+		name:           "Same value is pass-through to single shard",
+		query:          twoTableJoin,
+		v1:             1,
+		v2:             1,
+		expectedShards: 1,
+	}, {
+		name:           "Different values are sent to multiple shards",
+		query:          twoTableJoin,
+		v1:             1,
+		v2:             2,
+		expectedShards: 2,
+	}, {
+		name:           "Equal values, but different than the first, still pass-through",
+		query:          twoTableJoin,
+		v1:             200,
+		v2:             200,
+		expectedShards: 1,
+	}, {
+		name:           "Three equal values can be pushed down to a single query",
+		query:          threeTableJoin,
+		v1:             3,
+		v2:             3,
+		v3:             3,
+		expectedShards: 1,
+	}, {
+		name:           "Different values means we can't push down to a single query1",
+		query:          threeTableJoin,
+		v1:             1,
+		v2:             2,
+		v3:             3,
+		expectedShards: 3,
+	}, {
+		name:           "Different values means we can't push down to a single query2",
+		query:          threeTableJoin,
+		v1:             1,
+		v2:             1,
+		v3:             2,
+		expectedShards: 3,
+	}, {
+		name:           "Different values means we can't push down to a single query3",
+		query:          threeTableJoin,
+		v1:             1,
+		v2:             2,
+		v3:             1,
+		expectedShards: 3,
+	}, {
+		name:           "Different values means we can't push down to a single query4",
+		query:          threeTableJoin,
+		v1:             3,
+		v2:             1,
+		v3:             1,
+		expectedShards: 3,
+	}, {
+		name:           "Same values - pass-through - union",
+		query:          unionQuery,
+		v1:             1,
+		v2:             1,
+		expectedShards: 1,
+	}, {
+		name:           "Different values - baseline plan - union",
+		query:          unionQuery,
+		v1:             54,
+		v2:             22,
+		expectedShards: 2,
+	}, {
+		name:           "Same values but different - pass through - union",
+		query:          unionQuery,
+		v1:             54,
+		v2:             54,
+		expectedShards: 1,
+	}, {
+		name:           "Same values - pass-through - sub query",
+		query:          queryWithSubQ,
+		v1:             1,
+		v2:             1,
+		expectedShards: 1,
+	}, {
+		name:           "Different values - baseline plan - sub query",
+		query:          queryWithSubQ,
+		v1:             54,
+		v2:             22,
+		expectedShards: 2,
+	}, {
+		name:           "Same values but different - pass through - sub query",
+		query:          queryWithSubQ,
+		v1:             54,
+		v2:             54,
+		expectedShards: 1,
+	}}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			bv := map[string]*querypb.BindVariable{
+				"v1": sqltypes.Int64BindVariable(int64(tc.v1)),
+				"v2": sqltypes.Int64BindVariable(int64(tc.v2)),
+				"v3": sqltypes.Int64BindVariable(int64(tc.v3)),
+			}
+
+			_, err := executor.Execute(ctx, nil, "TestExecute", session, tc.query, bv, true)
+			require.NoError(t, err)
+			testQueryLog(t, executor, logChan, "TestExecute", "SELECT", tc.query, tc.expectedShards)
+		})
+	}
+	assertOptimizedPlanCondition(t, executor, twoTableJoin, engine.Condition{A: "v1", B: "v2"})
+	assertOptimizedPlanCondition(t, executor, threeTableJoin, engine.Condition{A: "v1", B: "v2"}, engine.Condition{A: "v3", B: "v1"})
+}
+
+// TestOnlyOptimizedPlan tests that a query errors on generic planning but succeeds on specialized planning.
+func TestOnlyOptimizedPlan(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	sql := "select col, trim((select user_name from user where id = ?)) val from user where id = ? group by col order by val"
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+	bv := map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(1),
+		"v2": sqltypes.Int64BindVariable(2),
+	}
+	_, err := executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.ErrorContains(t, err, "VT12001: unsupported: subquery with aggregation in order by")
+	testQueryLog(t, executor, logChan, "TestExecute", "", sql, 0)
+
+	bv = map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(3),
+		"v2": sqltypes.Int64BindVariable(3),
+	}
+	_, err = executor.Execute(ctx, nil, "TestExecute", session, sql, bv, true)
+	require.NoError(t, err)
+	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
+	sp := assertOptimizedPlanCondition(t, executor, sql, engine.Condition{A: "v1", B: "v2"})
+	require.NotNil(t, sp)
+	require.ErrorContains(t, sp.BaselineErr, "VT12001: unsupported: subquery with aggregation in order by")
 }
 
 func TestSelectDatabasePrepare(t *testing.T) {

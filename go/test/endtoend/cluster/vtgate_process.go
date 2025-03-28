@@ -56,6 +56,7 @@ type VtgateProcess struct {
 	Directory             string
 	VerifyURL             string
 	VSchemaURL            string
+	QueryPlanURL          string
 	ConfigFile            string
 	Config                VTGateConfiguration
 	SysVarSetEnabled      bool
@@ -394,6 +395,7 @@ func VtgateProcessInstance(
 
 	vtgate.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, port)
 	vtgate.VSchemaURL = fmt.Sprintf("http://%s:%d/debug/vschema", hostname, port)
+	vtgate.QueryPlanURL = fmt.Sprintf("http://%s:%d/debug/query_plans", hostname, port)
 
 	return vtgate
 }
@@ -437,4 +439,29 @@ func (vtgate *VtgateProcess) ReadVSchema() (*interface{}, error) {
 		return nil, err
 	}
 	return &results, nil
+}
+
+// ReadQueryPlans reads the query plans from the vtgate endpoint for it and returns
+// a pointer to the interface. To read this query plans, the caller must convert it to a map
+func (vtgate *VtgateProcess) ReadQueryPlans() (map[string]any, error) {
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Get(vtgate.QueryPlanURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	res, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var results any
+	err = json.Unmarshal(res, &results)
+	if err != nil {
+		return nil, err
+	}
+	output, ok := results.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("result is not a map")
+	}
+	return output, nil
 }

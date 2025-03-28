@@ -27,6 +27,8 @@
     - [LAST_INSERT_ID(x)](#last-insert-id)
     - [Maximum Idle Connections in the Pool](#max-idle-connections)
     - [Filtering Query logs on Error](#query-logs)
+  - **[Optimization](#optimization)**
+    - [Prepared Statement](#prepared-statement)
   - **[RPC Changes](#rpc-changes)**
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[Semi-sync monitor in vttablet](#semi-sync-monitor)**
@@ -278,6 +280,13 @@ This feature ensures that, during traffic spikes, idle connections are available
 The `querylog-mode` setting can be configured to `error` to log only queries that result in errors. This option is supported in both VTGate and VTTablet.
 
 ---
+
+### <a id="optimization"/>Optimization</a>
+
+#### <a id="prepared-statement"/>Prepared Statement</a>
+Prepared statements now benefit from Deferred Optimization, enabling parameter-aware query plans. 
+Initially, a baseline plan is created at prepare-time, and on first execution, a more efficient parameter-optimized plan is generated. 
+Subsequent executions dynamically switch between these plans based on input values, improving query performance while ensuring correctness.
 
 ### <a id="rpc-changes"/>RPC Changes</a>
 

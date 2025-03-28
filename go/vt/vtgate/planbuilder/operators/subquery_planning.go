@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -585,7 +586,12 @@ type subqueryRouteMerger struct {
 	subq     *SubQuery
 }
 
-func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, old1, old2 *Route) *Route {
+func (s *subqueryRouteMerger) mergeShardedRouting(
+	ctx *plancontext.PlanningContext,
+	r1, r2 *ShardedRouting,
+	old1, old2 *Route,
+	conditions ...engine.Condition,
+) *Route {
 	tr := &ShardedRouting{
 		VindexPreds: append(r1.VindexPreds, r2.VindexPreds...),
 		keyspace:    r1.keyspace,
@@ -634,10 +640,12 @@ func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningConte
 	}
 
 	routing := tr.resetRoutingLogic(ctx)
-	return s.merge(ctx, old1, old2, routing)
+	return s.merge(ctx, old1, old2, routing, conditions...)
 }
 
-func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing) *Route {
+func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing, conditions ...engine.Condition) *Route {
+	allCond := append(outer.Conditions, inner.Conditions...)
+	allCond = append(allCond, conditions...)
 	if !s.subq.TopLevel {
 		// if the subquery we are merging isn't a top level predicate, we can't use it for routing
 		return &Route{
@@ -646,6 +654,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 			Routing:       outer.Routing,
 			Ordering:      outer.Ordering,
 			ResultColumns: outer.ResultColumns,
+			Conditions:    allCond,
 		}
 	}
 	_, isSharded := r.(*ShardedRouting)
@@ -664,6 +673,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		Routing:       r,
 		Ordering:      s.outer.Ordering,
 		ResultColumns: s.outer.ResultColumns,
+		Conditions:    allCond,
 	}
 }
 
