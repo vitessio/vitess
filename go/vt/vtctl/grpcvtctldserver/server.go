@@ -489,6 +489,11 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 			continue
 		}
 
+		// ignore tablet with an unknown replication lag status
+		if stats[i].ReplicationLagUnknown {
+			continue
+		}
+
 		if lag := stats[i].ReplicationLagSeconds; backupTablet == nil || lag < backupTabletLag {
 			backupTablet = tablet.Tablet
 			backupTabletLag = lag
@@ -584,6 +589,7 @@ func (s *VtctldServer) CancelSchemaMigration(ctx context.Context, req *vtctldata
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -803,6 +809,7 @@ func (s *VtctldServer) CleanupSchemaMigration(ctx context.Context, req *vtctldat
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -834,6 +841,7 @@ func (s *VtctldServer) ForceCutOverSchemaMigration(ctx context.Context, req *vtc
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -865,6 +873,7 @@ func (s *VtctldServer) CompleteSchemaMigration(ctx context.Context, req *vtctlda
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -3021,6 +3030,7 @@ func (s *VtctldServer) LaunchSchemaMigration(ctx context.Context, req *vtctldata
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -3803,6 +3813,7 @@ func (s *VtctldServer) RetrySchemaMigration(ctx context.Context, req *vtctldatap
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -4731,6 +4742,11 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 		return resp, err
 	}
 
+	if len(shards) == 0 {
+		resp.Results = append(resp.Results, fmt.Sprintf("no shards found in keyspace %v", req.Keyspace))
+		return resp, err
+	}
+
 	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
 
 	var (
@@ -4741,6 +4757,7 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
+
 			shardResp, err := s.ValidateShard(ctx, &vtctldatapb.ValidateShardRequest{
 				Keyspace:    req.Keyspace,
 				Shard:       shard,
@@ -4760,6 +4777,7 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 	}
 
 	wg.Wait()
+
 	return resp, err
 }
 

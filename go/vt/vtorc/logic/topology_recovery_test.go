@@ -85,6 +85,10 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 			newAnalysisCode:  inst.PrimarySemiSyncMustNotBeSet,
 			shouldBeEqual:    true,
 		}, {
+			prevAnalysisCode: inst.PrimaryCurrentTypeMismatch,
+			newAnalysisCode:  inst.PrimarySemiSyncMustNotBeSet,
+			shouldBeEqual:    true,
+		}, {
 			prevAnalysisCode: inst.PrimaryIsReadOnly,
 			newAnalysisCode:  inst.DeadPrimary,
 			shouldBeEqual:    false,

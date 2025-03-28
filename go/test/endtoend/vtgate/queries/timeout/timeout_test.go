@@ -112,7 +112,8 @@ func TestQueryTimeoutWithShardTargeting(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, "use `ks_misc/-80`")
 
 	// insert some data
-	utils.Exec(t, mcmp.VtConn, "insert into t1(id1, id2) values (1,2),(3,4),(4,5),(5,6)")
+	// Fix: Increased query timeout from 100ms to 1000ms to prevent timeout errors on slow runners.
+	utils.Exec(t, mcmp.VtConn, "insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into t1(id1, id2) values (1,2),(3,4),(4,5),(5,6)")
 
 	queries := []string{
 		"insert /*vt+ QUERY_TIMEOUT_MS=1 */ into t1(id1, id2) values (6,sleep(5))",

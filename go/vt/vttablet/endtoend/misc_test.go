@@ -32,6 +32,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
@@ -1006,11 +1007,13 @@ func TestEngineReload(t *testing.T) {
 			`drop view if exists view_simple`,
 			`drop view if exists view_simple2`,
 			`drop table if exists tbl_simple`,
+			`drop table if exists tbl_nonpart`,
 			`drop table if exists tbl_part`,
 			`drop table if exists tbl_fts`,
 			`create table tbl_simple (id int primary key)`,
 			`create view view_simple as select * from tbl_simple`,
 			`create view view_simple2 as select * from tbl_simple`,
+			`create table tbl_nonpart (id INT NOT NULL, store_id INT)`,
 			`create table tbl_part (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
 			`create table tbl_fts (id int primary key, name text, fulltext key name_fts (name))`,
 		}
@@ -1022,6 +1025,7 @@ func TestEngineReload(t *testing.T) {
 
 		expectedTables := []string{
 			"tbl_simple",
+			"tbl_nonpart",
 			"tbl_part",
 			"tbl_fts",
 			"view_simple",
@@ -1062,32 +1066,134 @@ func TestEngineReload(t *testing.T) {
 
 		expectedTables := []string{
 			"tbl_simple",
+			"tbl_nonpart",
 			"tbl_part",
 			"tbl_fts",
 			"view_simple",
 			"view_simple3",
 		}
-		err := engine.Reload(ctx)
+		t.Run("reload without sizes", func(t *testing.T) {
+			err := engine.Reload(ctx)
+			require.NoError(t, err)
+
+			schema := engine.GetSchema()
+			require.NotEmpty(t, schema)
+			for _, expectTable := range expectedTables {
+				t.Run(expectTable, func(t *testing.T) {
+					tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
+					require.NotNil(t, tbl)
+
+					switch expectTable {
+					case "view_simple", "view_simple2", "view_simple3":
+						assert.Zero(t, tbl.FileSize)
+						assert.Zero(t, tbl.AllocatedSize)
+					default:
+						assert.Zero(t, tbl.FileSize)
+						assert.Zero(t, tbl.AllocatedSize)
+					}
+				})
+			}
+		})
+		t.Run("reload with sizes", func(t *testing.T) {
+			err := engine.ReloadAtEx(ctx, replication.Position{}, true)
+			require.NoError(t, err)
+
+			schema := engine.GetSchema()
+			require.NotEmpty(t, schema)
+			var nonPartitionedSize uint64
+			var partitionedSize uint64
+			for _, expectTable := range expectedTables {
+				t.Run(expectTable, func(t *testing.T) {
+					tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
+					require.NotNil(t, tbl)
+
+					switch expectTable {
+					case "view_simple", "view_simple2", "view_simple3":
+						assert.Zero(t, tbl.FileSize)
+						assert.Zero(t, tbl.AllocatedSize)
+					case "tbl_nonpart":
+						nonPartitionedSize = tbl.FileSize
+						assert.Positive(t, tbl.FileSize)
+						assert.Positive(t, tbl.AllocatedSize)
+					case "tbl_part":
+						partitionedSize = tbl.FileSize
+						assert.Positive(t, tbl.FileSize)
+						assert.Positive(t, tbl.AllocatedSize)
+					default:
+						assert.Positive(t, tbl.FileSize)
+						assert.Positive(t, tbl.AllocatedSize)
+					}
+				})
+			}
+			assert.Positive(t, nonPartitionedSize)
+			assert.Positive(t, partitionedSize)
+			// "tbl_part" has 4 partitions (each of which has about the same size as "tbl_nonpart")
+			// Technically partitionedSize should be 4*nonPartitionedSize, but we allow for some variance
+			assert.Greater(t, partitionedSize, nonPartitionedSize)
+			assert.Greater(t, partitionedSize, 3*nonPartitionedSize)
+			assert.Less(t, partitionedSize, 5*nonPartitionedSize)
+		})
+	})
+}
+
+func TestUpdateTableIndexMetrics(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	if query := conn.BaseShowInnodbTableSizes(); query == "" {
+		t.Skip("additional table/index metrics not updated in this version of MySQL")
+	}
+	client := framework.NewClient()
+
+	_, err = client.Execute("insert into vitess_part (id) values (5),(15),(25)", nil)
+	require.NoError(t, err)
+	defer client.Execute("delete from vitess_part where id in (5,15,25)", nil)
+
+	// Analyze tables to make sure stats are updated prior to reload
+	tables := []string{"vitess_a", "vitess_part", "vitess_autoinc_seq"}
+	for _, table := range tables {
+		_, err = client.Execute(fmt.Sprintf("analyze table %s", table), nil)
+		require.NoError(t, err)
+	}
+
+	// Wait up to 5s for the rows added to vitess_part to be reflected in DebugVars
+	updated := false
+	for i := 0; !updated && i < 10; i++ {
+		err = framework.Server.ReloadSchema(ctx)
 		require.NoError(t, err)
 
-		schema := engine.GetSchema()
-		require.NotEmpty(t, schema)
-		for _, expectTable := range expectedTables {
-			t.Run(expectTable, func(t *testing.T) {
-				tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
-				require.NotNil(t, tbl)
-
-				switch expectTable {
-				case "view_simple", "view_simple2", "view_simple3":
-					assert.Zero(t, tbl.FileSize)
-					assert.Zero(t, tbl.AllocatedSize)
-				default:
-					assert.Zero(t, tbl.FileSize)
-					assert.Zero(t, tbl.AllocatedSize)
-				}
-			})
+		if framework.FetchVal(framework.DebugVars(), "TableRows/vitess_part") == 3 {
+			updated = true
+		} else {
+			time.Sleep(500 * time.Millisecond)
 		}
-	})
+	}
+
+	results, err := client.Execute("select @@innodb_page_size", nil)
+	require.NoError(t, err)
+	pageSize, err := results.Rows[0][0].ToFloat64()
+	require.NoError(t, err)
+
+	vars := framework.DebugVars()
+
+	assert.Equal(t, 2.0, framework.FetchVal(vars, "TableRows/vitess_a"))
+	assert.Equal(t, 3.0, framework.FetchVal(vars, "TableRows/vitess_part"))
+	partTableCountResult, _ := client.Execute("select count(1) from vitess_part", nil)
+	partTableRows, _ := partTableCountResult.Rows[0][0].ToInt()
+	assert.Equal(t, 3, partTableRows)
+
+	assert.Equal(t, pageSize, framework.FetchVal(vars, "TableClusteredIndexSize/vitess_a"))
+	assert.Equal(t, pageSize*2, framework.FetchVal(vars, "TableClusteredIndexSize/vitess_part"))
+
+	assert.Equal(t, 2.0, framework.FetchVal(vars, "IndexCardinality/vitess_a.PRIMARY"))
+	assert.Equal(t, 3.0, framework.FetchVal(vars, "IndexCardinality/vitess_part.PRIMARY"))
+	assert.Equal(t, 0.0, framework.FetchVal(vars, "IndexCardinality/vitess_autoinc_seq.name"))
+
+	assert.Equal(t, pageSize, framework.FetchVal(vars, "IndexBytes/vitess_a.PRIMARY"))
+	assert.Equal(t, pageSize*2, framework.FetchVal(vars, "IndexBytes/vitess_part.PRIMARY"))
+	assert.Equal(t, pageSize, framework.FetchVal(vars, "IndexBytes/vitess_autoinc_seq.name"))
 }
 
 // TestTuple tests that bind variables having tuple values work with vttablet.
