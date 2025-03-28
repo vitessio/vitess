@@ -599,13 +599,11 @@ func testCLICreateWait(t *testing.T, ksWorkflow string, cells string) {
 		chCompleted := make(chan bool)
 		go func() {
 			_, output := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, "--wait", "--wait-update-interval=1s")
-			completed := false
+			completed := strings.Contains(output, `"State": "completed"`)
 			// We don't try to parse the JSON output as it may contain a series of outputs
 			// that together do not form a valid JSON document. We can change this in the
 			// future if we want to by printing them out as an array of JSON objects.
-			if strings.Contains(output, `"State": "completed"`) {
-				completed = true
-			}
+
 			chCompleted <- completed
 		}()
 

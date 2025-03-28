@@ -644,16 +644,17 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 			return nil, err
 		}
 
-		if id == vs.journalTableID {
+		switch id {
+		case vs.journalTableID:
 			vevents, err = vs.processJournalEvent(vevents, plan, rows)
-		} else if id == vs.versionTableID {
+		case vs.versionTableID:
 			vs.se.RegisterVersionEvent()
 			vevent := &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_VERSION,
 			}
 			vevents = append(vevents, vevent)
 
-		} else {
+		default:
 			vevents, err = vs.processRowEvent(vevents, plan, rows)
 		}
 		if err != nil {

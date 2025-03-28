@@ -1030,9 +1030,10 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 	err = localCluster.VtctldClientProcess.ExecuteCommand("StartReplication", tablet.Alias)
 	require.NoError(t, err)
 
-	if tablet.Type == "replica" {
+	switch tablet.Type {
+	case "replica":
 		verifySemiSyncStatus(t, tablet, "ON")
-	} else if tablet.Type == "rdonly" {
+	case "rdonly":
 		verifySemiSyncStatus(t, tablet, "OFF")
 	}
 }

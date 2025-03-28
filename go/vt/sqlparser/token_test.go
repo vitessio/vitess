@@ -86,9 +86,10 @@ func TestLiteralID(t *testing.T) {
 }
 
 func tokenName(id int) string {
-	if id == STRING {
+	switch id {
+	case STRING:
 		return "STRING"
-	} else if id == LEX_ERROR {
+	case LEX_ERROR:
 		return "LEX_ERROR"
 	}
 	return fmt.Sprintf("%d", id)

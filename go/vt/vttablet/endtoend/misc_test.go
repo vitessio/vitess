@@ -868,7 +868,8 @@ func TestShowTablesWithSizes(t *testing.T) {
 		assert.Equal(t, 6, len(row))
 
 		tableName := row[0].ToString()
-		if tableName == "show_tables_with_sizes_t1" {
+		switch tableName {
+		case "show_tables_with_sizes_t1":
 			// TABLE_TYPE
 			assert.Equal(t, "BASE TABLE", row[1].ToString())
 
@@ -891,7 +892,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
-		} else if tableName == "show_tables_with_sizes_v1" {
+		case "show_tables_with_sizes_v1":
 			// TABLE_TYPE
 			assert.Equal(t, "VIEW", row[1].ToString())
 
@@ -907,7 +908,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[5].IsNull())
 
 			actualTables = append(actualTables, tableName)
-		} else if tableName == "show_tables_with_sizes_employees" {
+		case "show_tables_with_sizes_employees":
 			// TABLE_TYPE
 			assert.Equal(t, "BASE TABLE", row[1].ToString())
 
@@ -930,7 +931,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
-		} else if tableName == "show_tables_with_sizes_fts" {
+		case "show_tables_with_sizes_fts":
 			// TABLE_TYPE
 			assert.Equal(t, "BASE TABLE", row[1].ToString())
 
