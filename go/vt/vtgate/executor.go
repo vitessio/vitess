@@ -1133,7 +1133,7 @@ func (e *Executor) fetchOrCreatePlan(
 	if plan == nil {
 		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
 		if err != nil && preparedPlan && isExecutePath {
-			// The baseline plan failed to build, try to build a optimized plan
+			// The baseline plan failed to build, try to build an optimized plan
 			plan, err = e.tryOptimizedPlan(ctx, vcursor, bindVars, query, setVarComment, parameterize, planKey, plan, err)
 		}
 	}
@@ -1141,7 +1141,7 @@ func (e *Executor) fetchOrCreatePlan(
 		return nil, nil, nil, err
 	}
 
-	if preparedPlan && isExecutePath && !plan.Optimized.Swap(true) {
+	if shouldOptimizePlan(preparedPlan, isExecutePath, plan) {
 		vcursor.SetBindVars(bindVars)
 		optimizedPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
 		if err == nil {
@@ -1154,12 +1154,8 @@ func (e *Executor) fetchOrCreatePlan(
 		}
 	}
 
-	qh := plan.QueryHints
-	vcursor.SetIgnoreMaxMemoryRows(qh.IgnoreMaxMemoryRows)
-	vcursor.SetConsolidator(qh.Consolidator)
-	vcursor.SetWorkloadName(qh.Workload)
-	vcursor.SetPriority(qh.Priority)
-	vcursor.SetExecQueryTimeout(qh.Timeout)
+	// Apply query hints
+	e.applyQueryHints(vcursor, plan)
 
 	logStats.SQL = comments.Leading + plan.Original + comments.Trailing
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
@@ -1189,6 +1185,29 @@ func (e *Executor) tryOptimizedPlan(
 		}
 	}
 	return fallbackPlan, prevErr
+}
+
+// shouldOptimizePlan checks if the plan should be optimized.
+// Conditions:
+// - preparedPlan and isExecutePath must be true (indicating this is an execution path, after PREPARE).
+// - plan.Optimized.Swap(true) must be false (ensuring the plan hasn’t been optimized yet).
+// - plan.Type must be either PlanJoinOp or PlanComplex (only these types can produce an optimized plan).
+// This ensures that we only attempt optimization when the query is executed and the plan type supports optimization.
+func shouldOptimizePlan(preparedPlan, isExecutePath bool, plan *engine.Plan) bool {
+	return preparedPlan &&
+		isExecutePath &&
+		plan.Optimized.CompareAndSwap(false, true) &&
+		(plan.Type == engine.PlanJoinOp || plan.Type == engine.PlanComplex)
+}
+
+// applyQueryHints applies query hints to the vcursor
+func (e *Executor) applyQueryHints(vcursor *econtext.VCursorImpl, plan *engine.Plan) {
+	qh := plan.QueryHints
+	vcursor.SetIgnoreMaxMemoryRows(qh.IgnoreMaxMemoryRows)
+	vcursor.SetConsolidator(qh.Consolidator)
+	vcursor.SetWorkloadName(qh.Workload)
+	vcursor.SetPriority(qh.Priority)
+	vcursor.SetExecQueryTimeout(qh.Timeout)
 }
 
 func (e *Executor) getCachedOrBuildPlan(

@@ -43,6 +43,63 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+// TestShouldOptimizePlan tests the shouldOptimizePlan function
+func TestShouldOptimizePlan(t *testing.T) {
+	tcases := []struct {
+		planType                    engine.PlanType
+		preparedPlan, isExecutePath bool
+		expected                    bool
+	}{{
+		planType:      engine.PlanPassthrough,
+		preparedPlan:  true,
+		isExecutePath: true,
+		expected:      false,
+	}, {
+		planType:      engine.PlanScatter,
+		preparedPlan:  true,
+		isExecutePath: true,
+		expected:      false,
+	}, {
+		planType:      engine.PlanOnlineDDL,
+		preparedPlan:  true,
+		isExecutePath: true,
+		expected:      false,
+	}, {
+		planType:      engine.PlanJoinOp,
+		preparedPlan:  true,
+		isExecutePath: true,
+		expected:      true,
+	}, {
+		planType:      engine.PlanComplex,
+		preparedPlan:  true,
+		isExecutePath: true,
+		expected:      true,
+	}, {
+		planType:      engine.PlanJoinOp,
+		preparedPlan:  false,
+		isExecutePath: true,
+		expected:      false,
+	}, {
+		planType:      engine.PlanComplex,
+		preparedPlan:  true,
+		isExecutePath: false,
+		expected:      false,
+	}}
+	for _, tcase := range tcases {
+		t.Run(fmt.Sprintf("%v %v %v", tcase.planType, tcase.preparedPlan, tcase.isExecutePath), func(t *testing.T) {
+			plan := &engine.Plan{
+				Type: tcase.planType,
+			}
+			shouldOptimize := shouldOptimizePlan(tcase.preparedPlan, tcase.isExecutePath, plan)
+			require.Equal(t, tcase.expected, shouldOptimize)
+			// Checking again should always return false for all cases
+			shouldOptimize = shouldOptimizePlan(tcase.preparedPlan, tcase.isExecutePath, plan)
+			require.False(t, shouldOptimize)
+		})
+	}
+}
+
+// TestDeferredOptimization tests plan output with deferred optimization.
 func TestDeferredOptimization(t *testing.T) {
 	ctx := context.Background()
 	env := vtenv.NewTestEnv()
