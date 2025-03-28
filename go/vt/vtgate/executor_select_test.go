@@ -43,7 +43,6 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
@@ -1636,7 +1635,12 @@ func TestSelectListArg(t *testing.T) {
 func createExecutor(ctx context.Context, serv *sandboxTopo, cell string, resolver *Resolver) *Executor {
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	ex := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfig(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	config := createExecutorConfig()
+	config.Cell = cell
+	config.Resolver = resolver
+	config.TopoServer = serv
+
+	ex := NewExecutor(ctx, config, false, plans, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
 	ex.SetQueryLogger(queryLogger)
 	return ex
 }
@@ -3493,7 +3497,11 @@ func TestStreamOrderByWithMultipleResults(t *testing.T) {
 	}
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfigWithNormalizer(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	config := createExecutorConfigWithNormalizer()
+	config.TopoServer = serv
+	config.Cell = cell
+	config.Resolver = resolver
+	executor := NewExecutor(ctx, config, false, plans, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 	defer executor.Close()
 	// some sleep for all goroutines to start
@@ -3536,7 +3544,11 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	}
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfigWithNormalizer(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	config := createExecutorConfigWithNormalizer()
+	config.TopoServer = serv
+	config.Cell = cell
+	config.Resolver = resolver
+	executor := NewExecutor(ctx, config, false, plans, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 	defer executor.Close()
 	// some sleep for all goroutines to start
@@ -4441,7 +4453,7 @@ func TestSelectCFC(t *testing.T) {
 func TestSelectView(t *testing.T) {
 	executor, sbc, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	// add the view to local vschema
-	err := executor.vschema.AddView(KsTestSharded, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id", executor.vm.parser)
+	err := executor.vschema.AddView(KsTestSharded, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id", executor.config.VSchemaManager.parser)
 	require.NoError(t, err)
 
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})

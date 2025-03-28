@@ -78,8 +78,13 @@ func (vte *VTExplain) initVtgateExecutor(ctx context.Context, ts *topo.Server, v
 		Normalize:    opts.Normalize,
 		StreamSize:   streamSize,
 		AllowScatter: true,
+		Env:          vte.env,
+		TopoServer:   vte.explainTopo,
+		Cell:         Cell,
+		Resolver:     resolver,
+		SchemaInfo:   schemaTracker,
 	}
-	vte.vtgateExecutor = vtgate.NewExecutor(ctx, vte.env, vte.explainTopo, Cell, resolver, eConfig, false, plans, schemaTracker, opts.PlannerVersion, vtgate.NewDynamicViperConfig())
+	vte.vtgateExecutor = vtgate.NewExecutor(ctx, eConfig, false, plans, opts.PlannerVersion, vtgate.NewDynamicViperConfig())
 	vte.vtgateExecutor.SetQueryLogger(streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
 
 	return nil

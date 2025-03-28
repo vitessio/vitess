@@ -178,8 +178,12 @@ func createExecutorEnvCallback(t testing.TB, eConfig ExecutorConfig, eachShard f
 	// that sometimes can cause a plan to not be cached the very first time it's seen, to prevent
 	// one-off queries from thrashing the cache. Disable the doorkeeper in the tests to prevent flakiness.
 	plans := theine.NewStore[PlanCacheKey, *engine.Plan](queryPlanCacheMemory, false)
+	eConfig.Env = vtenv.NewTestEnv()
+	eConfig.TopoServer = serv
+	eConfig.Resolver = resolver
+	eConfig.Cell = cell
 
-	executor = NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, eConfig, false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	executor = NewExecutor(ctx, eConfig, false, plans, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
@@ -231,7 +235,13 @@ func createCustomExecutor(t testing.TB, vschema string, mysqlVersion string) (ex
 	plans := DefaultPlanCache()
 	env, err := vtenv.New(vtenv.Options{MySQLServerVersion: mysqlVersion})
 	require.NoError(t, err)
-	executor = NewExecutor(ctx, env, serv, cell, resolver, createExecutorConfig(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	config := createExecutorConfig()
+	config.Cell = cell
+	config.TopoServer = serv
+	config.Resolver = resolver
+	config.Env = env
+
+	executor = NewExecutor(ctx, config, false, plans, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 
 	t.Cleanup(func() {
@@ -247,6 +257,7 @@ func createExecutorConfig() ExecutorConfig {
 	return ExecutorConfig{
 		StreamSize:   10,
 		AllowScatter: true,
+		Env:          vtenv.NewTestEnv(),
 	}
 }
 
@@ -255,6 +266,7 @@ func createExecutorConfigWithNormalizer() ExecutorConfig {
 		StreamSize:   10,
 		AllowScatter: true,
 		Normalize:    true,
+		Env:          vtenv.NewTestEnv(),
 	}
 }
 
@@ -283,7 +295,11 @@ func createCustomExecutorSetValues(t testing.TB, vschema string, values []*sqlty
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-	executor = NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfig(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	config := createExecutorConfig()
+	config.Cell = cell
+	config.TopoServer = serv
+	config.Resolver = resolver
+	executor = NewExecutor(ctx, config, false, plans, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 
 	t.Cleanup(func() {
@@ -310,7 +326,10 @@ func createExecutorEnvWithPrimaryReplicaConn(t testing.TB, ctx context.Context, 
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	eConfig := createExecutorConfig()
 	eConfig.WarmingReadsPercent = warmingReadsPercent
-	executor = NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, eConfig, false, DefaultPlanCache(), nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	eConfig.TopoServer = serv
+	eConfig.Resolver = resolver
+	eConfig.Cell = cell
+	executor = NewExecutor(ctx, eConfig, false, DefaultPlanCache(), querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 
 	t.Cleanup(func() {

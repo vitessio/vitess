@@ -110,6 +110,8 @@ func init() {
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
 type (
+	// ExecutorConfig contains the configuration for the Executor.
+	// It's state that never changes for the Executor
 	ExecutorConfig struct {
 		Normalize  bool
 		StreamSize int
@@ -117,15 +119,19 @@ type (
 		AllowScatter        bool
 		WarmingReadsPercent int
 		QueryLogToFile      string
+		Env                 *vtenv.Environment
+		TopoServer          srvtopo.Server
+		Cell                string
+		Resolver            *Resolver
+		SchemaInfo          SchemaInfo
+		VSchemaManager      *VSchemaManager
 	}
 
 	Executor struct {
+		// config contains the configuration for the Executor that never changes
 		config ExecutorConfig
 
-		env         *vtenv.Environment
-		serv        srvtopo.Server
-		cell        string
-		resolver    *Resolver
+		// runtime state, with synchronization
 		scatterConn *ScatterConn
 		txConn      *TxConn
 
@@ -135,9 +141,6 @@ type (
 
 		plans *PlanCache
 		epoch atomic.Uint32
-
-		vm            *VSchemaManager
-		schemaTracker SchemaInfo
 
 		// queryLogger is passed in for logging from this vtgate executor.
 		queryLogger *streamlog.StreamLogger[*logstats.LogStats]
@@ -167,27 +170,16 @@ func DefaultPlanCache() *PlanCache {
 // NewExecutor creates a new Executor.
 func NewExecutor(
 	ctx context.Context,
-	env *vtenv.Environment,
-	serv srvtopo.Server,
-	cell string,
-	resolver *Resolver,
 	eConfig ExecutorConfig,
 	warnOnShardedOnly bool,
 	plans *PlanCache,
-	schemaTracker SchemaInfo,
 	pv plancontext.PlannerVersion,
 	ddlConfig dynamicconfig.DDL,
 ) *Executor {
 	e := &Executor{
-		config:      eConfig,
-		env:         env,
-		serv:        serv,
-		cell:        cell,
-		resolver:    resolver,
-		scatterConn: resolver.scatterConn,
-		txConn:      resolver.scatterConn.txConn,
-
-		schemaTracker:       schemaTracker,
+		config:              eConfig,
+		scatterConn:         eConfig.Resolver.scatterConn,
+		txConn:              eConfig.Resolver.scatterConn.txConn,
 		plans:               plans,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
 		ddlConfig:           ddlConfig,
@@ -196,39 +188,43 @@ func NewExecutor(
 	e.initVConfig(warnOnShardedOnly, pv)
 
 	// we subscribe to update from the VSchemaManager
-	e.vm = &VSchemaManager{
+	eConfig.VSchemaManager = &VSchemaManager{
 		subscriber: e.SaveVSchema,
-		serv:       serv,
-		cell:       cell,
-		schema:     e.schemaTracker,
-		parser:     env.Parser(),
+		serv:       eConfig.TopoServer,
+		cell:       eConfig.Cell,
+		schema:     eConfig.SchemaInfo,
+		parser:     eConfig.Env.Parser(),
 	}
-	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
+	eConfig.TopoServer.WatchSrvVSchema(ctx, eConfig.Cell, eConfig.VSchemaManager.VSchemaUpdate)
 
-	executorOnce.Do(func() {
-		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
-			return int64(e.plans.Len())
-		})
-		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", func() int64 {
-			return int64(e.plans.UsedCapacity())
-		})
-		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", func() int64 {
-			return int64(e.plans.MaxCapacity())
-		})
-		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", func() int64 {
-			return e.plans.Metrics.Evicted()
-		})
-		stats.NewCounterFunc("QueryPlanCacheHits", "Query plan cache hits", func() int64 {
-			return e.plans.Metrics.Hits()
-		})
-		stats.NewCounterFunc("QueryPlanCacheMisses", "Query plan cache misses", func() int64 {
-			return e.plans.Metrics.Misses()
-		})
-		servenv.HTTPHandle(pathQueryPlans, e)
-		servenv.HTTPHandle(pathScatterStats, e)
-		servenv.HTTPHandle(pathVSchema, e)
-	})
+	executorOnce.Do(e.initStats)
+
 	return e
+}
+
+func (e *Executor) initStats() {
+	stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
+		return int64(e.plans.Len())
+	})
+	stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", func() int64 {
+		return int64(e.plans.UsedCapacity())
+	})
+	stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", func() int64 {
+		return int64(e.plans.MaxCapacity())
+	})
+	stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", func() int64 {
+		return e.plans.Metrics.Evicted()
+	})
+	stats.NewCounterFunc("QueryPlanCacheHits", "Query plan cache hits", func() int64 {
+		return e.plans.Metrics.Hits()
+	})
+	stats.NewCounterFunc("QueryPlanCacheMisses", "Query plan cache misses", func() int64 {
+		return e.plans.Metrics.Misses()
+	})
+	servenv.HTTPHandle(pathQueryPlans, e)
+	servenv.HTTPHandle(pathScatterStats, e)
+	servenv.HTTPHandle(pathVSchema, e)
+
 }
 
 // Execute executes a non-streaming query.
@@ -256,7 +252,7 @@ func (e *Executor) Execute(
 	}
 	if result != nil && len(result.Rows) > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
+		piiSafeSQL, err := e.config.Env.Parser().RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
@@ -398,7 +394,7 @@ func (e *Executor) StreamExecute(
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.rowsReturned, err)
 	if srr.rowsReturned > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
+		piiSafeSQL, err := e.config.Env.Parser().RedactSQLQuery(sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
@@ -549,14 +545,14 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		default:
 			if value, hasSysVar := session.SystemVariables[sysVar]; hasSysVar {
-				expr, err := e.env.Parser().ParseExpr(value)
+				expr, err := e.config.Env.Parser().ParseExpr(value)
 				if err != nil {
 					return err
 				}
 
 				evalExpr, err := evalengine.Translate(expr, &evalengine.Config{
 					Collation:   vcursor.ConnCollation(),
-					Environment: e.env,
+					Environment: e.config.Env,
 					SQLMode:     evalengine.ParseSQLMode(vcursor.SQLMode()),
 				})
 				if err != nil {
@@ -691,7 +687,7 @@ func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *econ
 			}
 			rss = append(rss, &srvtopo.ResolvedShard{
 				Target:  shardSession.Target,
-				Gateway: e.resolver.resolver.GetGateway(),
+				Gateway: e.config.Resolver.resolver.GetGateway(),
 			})
 			queries = append(queries, &querypb.BoundQuery{Sql: sql})
 		}
@@ -750,7 +746,7 @@ func (e *Executor) SetVitessMetadata(ctx context.Context, name, value string) er
 		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' not authorized to perform vitess metadata operations", user.GetUsername())
 	}
 
-	ts, err := e.serv.GetTopoServer()
+	ts, err := e.config.TopoServer.GetTopoServer()
 	if err != nil {
 		return err
 	}
@@ -762,7 +758,7 @@ func (e *Executor) SetVitessMetadata(ctx context.Context, name, value string) er
 }
 
 func (e *Executor) ShowVitessMetadata(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
-	ts, err := e.serv.GetTopoServer()
+	ts, err := e.config.TopoServer.GetTopoServer()
 	if err != nil {
 		return nil, err
 	}
@@ -829,7 +825,7 @@ func (e *Executor) ShowShards(ctx context.Context, filter *sqlparser.ShowFilter,
 
 	keyspaceFilters, shardFilters := showVitessShardsFilters(filter)
 
-	keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
+	keyspaces, err := e.config.Resolver.resolver.GetAllKeyspaces(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -848,7 +844,7 @@ func (e *Executor) ShowShards(ctx context.Context, filter *sqlparser.ShowFilter,
 			continue
 		}
 
-		_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, destTabletType)
+		_, _, shards, err := e.config.Resolver.resolver.GetKeyspaceShards(ctx, keyspace, destTabletType)
 		if err != nil {
 			// There might be a misconfigured keyspace or no shards in the keyspace.
 			// Skip any errors and move on.
@@ -986,7 +982,7 @@ func (e *Executor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlp
 			replSQLThreadHealth := ""
 			replLastError := ""
 			replLag := "-1" // A string to support NULL as a value
-			replicaQueries, _ := capabilities.MySQLVersionHasCapability(e.env.MySQLVersion(), capabilities.ReplicaTerminologyCapability)
+			replicaQueries, _ := capabilities.MySQLVersionHasCapability(e.config.Env.MySQLVersion(), capabilities.ReplicaTerminologyCapability)
 			sql := "show replica status"
 			sourceHostField := "Source_Host"
 			sourcePortField := "Source_Port"
@@ -1055,7 +1051,7 @@ func (e *Executor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlp
 // MessageStream is part of the vtgate service API. This is a V2 level API that's sent
 // to the Resolver.
 func (e *Executor) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
-	err := e.resolver.MessageStream(
+	err := e.config.Resolver.MessageStream(
 		ctx,
 		keyspace,
 		shard,
@@ -1117,7 +1113,7 @@ func (e *Executor) fetchOrCreatePlan(
 	}
 
 	query, comments := sqlparser.SplitMarginComments(queryString)
-	vcursor, _ = econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
+	vcursor, _ = econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.config.VSchemaManager, e.VSchema(), e.config.Resolver.resolver, e.config.TopoServer, nullResultsObserver{}, e.vConfig)
 
 	var setVarComment string
 	if e.vConfig.SetVarEnabled {
@@ -1220,7 +1216,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	planKey engine.PlanKey,
 	ignoreCache bool,
 ) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
+	stmt, reservedVars, err := parseAndValidateQuery(query, e.config.Env.Parser())
 	if err != nil {
 		return nil, false, nil, err
 	}
@@ -1524,11 +1520,11 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 
 func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVersion) {
 	connCollation := collations.Unknown
-	if gw, isTabletGw := e.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
+	if gw, isTabletGw := e.config.Resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
 		connCollation = gw.DefaultConnCollation()
 	}
 	if connCollation == collations.Unknown {
-		connCollation = e.env.CollationEnv().DefaultConnectionCharset()
+		connCollation = e.config.Env.CollationEnv().DefaultConnectionCharset()
 	}
 
 	e.vConfig = econtext.VCursorConfig{
@@ -1656,18 +1652,18 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: shardGtids,
 	}
-	ts, err := e.serv.GetTopoServer()
+	ts, err := e.config.TopoServer.GetTopoServer()
 	if err != nil {
 		return err
 	}
 
-	vsm := newVStreamManager(e.resolver.resolver, e.serv, e.cell)
+	vsm := newVStreamManager(e.config.Resolver.resolver, e.config.TopoServer, e.config.Cell)
 	vs := &vstream{
 		vgtid:              vgtid,
 		tabletType:         topodatapb.TabletType_PRIMARY,
 		filter:             filter,
 		send:               callback,
-		resolver:           e.resolver.resolver,
+		resolver:           e.config.Resolver.resolver,
 		journaler:          make(map[int64]*journalEvent),
 		skewTimeoutSeconds: maxSkewTimeoutSeconds,
 		timestamps:         make(map[string]int64),
@@ -1754,7 +1750,7 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 
 func (e *Executor) Close() {
 	e.scatterConn.Close()
-	topo, err := e.serv.GetTopoServer()
+	topo, err := e.config.TopoServer.GetTopoServer()
 	if err != nil {
 		panic(err)
 	}
@@ -1763,7 +1759,7 @@ func (e *Executor) Close() {
 }
 
 func (e *Executor) Environment() *vtenv.Environment {
-	return e.env
+	return e.config.Env
 }
 
 func (e *Executor) ReadTransaction(ctx context.Context, transactionID string) (*querypb.TransactionMetadata, error) {

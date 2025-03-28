@@ -144,7 +144,7 @@ func queryzHandler(e *Executor, w http.ResponseWriter, r *http.Request) {
 
 	e.ForEachPlan(func(plan *engine.Plan) bool {
 		Value := &queryzRow{
-			Query: logz.Wrappable(e.env.Parser().TruncateForUI(plan.Original)),
+			Query: logz.Wrappable(e.config.Env.Parser().TruncateForUI(plan.Original)),
 		}
 		Value.Count, Value.tm, Value.ShardQueries, Value.RowsAffected, Value.RowsReturned, Value.Errors = plan.Stats()
 		var timepq time.Duration

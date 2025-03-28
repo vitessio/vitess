@@ -121,9 +121,9 @@ func TestDeferredOptimization(t *testing.T) {
 	executor := Executor{
 		config: ExecutorConfig{
 			AllowScatter: true,
+			Env:          env,
+			Resolver:     resolver,
 		},
-		env:         env,
-		resolver:    resolver,
 		vschema:     vindexes.BuildVSchema(result, parser),
 		queryLogger: queryLogger,
 		plans:       DefaultPlanCache(),

@@ -424,7 +424,7 @@ func (vh *vtgateHandler) KillQuery(connectionID uint32) error {
 }
 
 func (vh *vtgateHandler) Env() *vtenv.Environment {
-	return vh.vtg.executor.env
+	return vh.vtg.executor.config.Env
 }
 
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
