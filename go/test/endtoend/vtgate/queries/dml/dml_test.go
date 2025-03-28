@@ -28,6 +28,92 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestUniqueLookupDuplicateEntries should fail if the is duplicate in unique lookup column.
+func TestUniqueLookupDuplicateEntries(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// initial row
+	utils.Exec(t, mcmp.VtConn, "insert into s_tbl(id, num) values (1,10)")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+
+	// insert duplicate row
+	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (2,10)", "lookup.Create: target: sks.-80.primary: vttablet: "+
+		"Duplicate entry '10' for key 'num_vdx_tbl.PRIMARY'")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+
+	// insert duplicate row in multi-row insert multi shard
+	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (3,20), (4,20),(5,30)",
+		"transaction rolled back to reverse changes of partial DML execution: target: sks.80-.primary: vttablet: "+
+			"Duplicate entry '20' for key 'num_vdx_tbl.PRIMARY'")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+
+	// insert duplicate row in multi-row insert - lookup single shard
+	utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) values (3,20), (4,20)",
+		"transaction rolled back to reverse changes of partial DML execution: lookup.Create: target: sks.80-.primary: vttablet: "+
+			"Duplicate entry '20' for key 'num_vdx_tbl.PRIMARY'")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+
+	// insert second row to test with limit update.
+	utils.Exec(t, mcmp.VtConn, "insert into s_tbl(id, num) values (10,100)")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)] [INT64(10) INT64(100)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(100) VARCHAR("594764E1A2B2D98E")]]`)
+
+	// update with limit 1 succeed.
+	utils.Exec(t, mcmp.VtConn, "update s_tbl set num = 30 order by id limit 1")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(30)] [INT64(10) INT64(100)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(30) VARCHAR("166B40B44ABA4BD6")] [INT64(100) VARCHAR("594764E1A2B2D98E")]]`)
+
+	// update to same value on multiple row should fail.
+	utils.AssertContainsError(t, mcmp.VtConn, "update s_tbl set num = 40 limit 2",
+		"lookup.Create: transaction rolled back to reverse changes of partial DML execution: target: sks.80-.primary: vttablet: "+
+			"rpc error: code = AlreadyExists desc = Duplicate entry '40' for key 'num_vdx_tbl.PRIMARY'")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(30)] [INT64(10) INT64(100)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(30) VARCHAR("166B40B44ABA4BD6")] [INT64(100) VARCHAR("594764E1A2B2D98E")]]`)
+}
+
+// TestUniqueLookupDuplicateIgnore tests the insert ignore on lookup table.
+func TestUniqueLookupDuplicateIgnore(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// initial row
+	utils.Exec(t, mcmp.VtConn, "insert into s_tbl(id, num) values (1,10)")
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+
+	// insert ignore duplicate row
+	qr := utils.Exec(t, mcmp.VtConn, "insert ignore into s_tbl(id, num) values (2,10)")
+	assert.EqualValues(t, 0, qr.RowsAffected)
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")]]`)
+
+	// insert duplicate row in multi-row insert - lookup single shard
+	// Current behavior does not work as expected—one of the rows should be inserted.
+	// The lookup table is updated, but the main table is not. This is a bug in Vitess.
+	// The issue occurs because the table has two vindex columns (`num` and `col`), both of which ignore nulls during vindex insertion.
+	// In the `INSERT IGNORE` case, after the vindex create API call, a verify call checks if the row exists in the lookup table.
+	// - If the row exists, it is inserted into the main table.
+	// - If the row does not exist, the main table insertion is skipped.
+	// Since the `col` column is null, the row is not inserted into the lookup table, causing the main table insertion to be ignored.
+	qr = utils.Exec(t, mcmp.VtConn, "insert ignore into s_tbl(id, num) values (3,20), (4,20)")
+	assert.EqualValues(t, 0, qr.RowsAffected)
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(20) VARCHAR("4EB190C9A2FA169C")]]`)
+
+	// insert duplicate row in multi-row insert - vindex values are not null
+	qr = utils.Exec(t, mcmp.VtConn, "insert ignore into s_tbl(id, num, col) values (3,20, 30), (4,20, 40)")
+	assert.EqualValues(t, 1, qr.RowsAffected)
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num, col from s_tbl order by id", `[[INT64(1) INT64(10) NULL] [INT64(3) INT64(20) INT64(30)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(20) VARCHAR("4EB190C9A2FA169C")]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select col, hex(keyspace_id) from col_vdx_tbl order by col", `[[INT64(30) VARCHAR("4EB190C9A2FA169C")]]`)
+
+}
+
 func TestMultiEqual(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
 		t.Skip("test uses multiple keyspaces, test framework only supports partial keyspace testing for a single keyspace")
@@ -81,7 +167,7 @@ func TestDeleteWithLimit(t *testing.T) {
 	defer closer()
 
 	// initial rows
-	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (2,10), (3,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
+	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
 
 	// delete with limit
@@ -93,14 +179,14 @@ func TestDeleteWithLimit(t *testing.T) {
 
 	// check rows
 	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
-		`[[INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
+		`[[INT64(4) INT64(20)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
 	// 2 rows matches but limit is 1, so any one of the row can remain in table.
 	mcmp.AssertMatchesAnyNoCompare(`select region_id, oid, cust_no from order_tbl order by oid`,
 		`[[INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`,
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
 
 	// delete with limit
-	qr = mcmp.Exec(`delete from s_tbl where num < 20 limit 2`)
+	qr = mcmp.Exec(`delete from s_tbl where num < 25 limit 2`)
 	require.EqualValues(t, 2, qr.RowsAffected)
 
 	qr = mcmp.Exec(`delete from order_tbl limit 5`)
@@ -108,10 +194,8 @@ func TestDeleteWithLimit(t *testing.T) {
 
 	// check rows
 	// 3 rows matches `num < 20` but limit is 2 so any one of them can remain in the table.
-	mcmp.AssertMatchesAnyNoCompare(`select id, num from s_tbl order by id`,
-		`[[INT64(4) INT64(20)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`,
-		`[[INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(8) INT64(80)]]`,
-		`[[INT64(4) INT64(20)] [INT64(6) INT64(15)] [INT64(8) INT64(80)]]`)
+	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
+		`[[INT64(8) INT64(80)]]`)
 	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
 		`[]`)
 
@@ -134,18 +218,18 @@ func TestUpdateWithLimit(t *testing.T) {
 	defer closer()
 
 	// initial rows
-	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
+	mcmp.Exec("insert into s_tbl(id, col) values (1,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
 
 	// update with limit
-	qr := mcmp.Exec(`update s_tbl set num = 12 order by num, id limit 1`)
+	qr := mcmp.Exec(`update s_tbl set col = 12 order by col, id limit 1`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
 	qr = mcmp.Exec(`update order_tbl set cust_no = 12 where region_id = 1 limit 1`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
 	// check rows
-	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
+	mcmp.AssertMatches(`select id, col from s_tbl order by id`,
 		`[[INT64(1) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
 	// 2 rows matches but limit is 1, so any one of the row can be modified in the table.
 	mcmp.AssertMatchesAnyNoCompare(`select region_id, oid, cust_no from order_tbl order by oid`,
@@ -153,15 +237,15 @@ func TestUpdateWithLimit(t *testing.T) {
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(12)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
 
 	// update with limit
-	qr = mcmp.Exec(`update s_tbl set num = 32 where num > 17 limit 1`)
+	qr = mcmp.Exec(`update s_tbl set col = 32 where col > 17 limit 1`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
 	qr = mcmp.Exec(`update order_tbl set cust_no = cust_no + 10  limit 5`)
 	require.EqualValues(t, 4, qr.RowsAffected)
 
 	// check rows
-	// 2 rows matches `num > 17` but limit is 1 so any one of them will be updated.
-	mcmp.AssertMatchesAnyNoCompare(`select id, num from s_tbl order by id`,
+	// 2 rows matches `col > 17` but limit is 1 so any one of them will be updated.
+	mcmp.AssertMatchesAnyNoCompare(`select id, col from s_tbl order by id`,
 		`[[INT64(1) INT64(10)] [INT64(4) INT64(32)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`,
 		`[[INT64(1) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(12)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(32)]]`)
 	mcmp.AssertMatchesAnyNoCompare(`select region_id, oid, cust_no from order_tbl order by oid`,
@@ -169,14 +253,14 @@ func TestUpdateWithLimit(t *testing.T) {
 		`[[INT64(1) INT64(1) INT64(14)] [INT64(1) INT64(2) INT64(22)] [INT64(2) INT64(3) INT64(15)] [INT64(2) INT64(4) INT64(65)]]`)
 
 	// trying with zero limit.
-	qr = mcmp.Exec(`update s_tbl set num = 44 limit 0`)
+	qr = mcmp.Exec(`update s_tbl set col = 44 limit 0`)
 	require.EqualValues(t, 0, qr.RowsAffected)
 
 	qr = mcmp.Exec(`update order_tbl set oid = 44 limit 0`)
 	require.EqualValues(t, 0, qr.RowsAffected)
 
 	// trying with limit with no-matching row.
-	qr = mcmp.Exec(`update s_tbl set num = 44 where id > 100 limit 2`)
+	qr = mcmp.Exec(`update s_tbl set col = 44 where id > 100 limit 2`)
 	require.EqualValues(t, 0, qr.RowsAffected)
 
 	qr = mcmp.Exec(`update order_tbl set oid = 44 where region_id > 100 limit 2`)
@@ -219,7 +303,7 @@ func TestDeleteWithSubquery(t *testing.T) {
 	defer closer()
 
 	// initial rows
-	mcmp.Exec("insert into s_tbl(id, num) values (1,10), (2,10), (3,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
+	mcmp.Exec("insert into s_tbl(id, col) values (1,10), (2,10), (3,10), (4,20), (5,5), (6,15), (7,17), (8,80)")
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
 
 	// delete with subquery on s_tbl
@@ -227,17 +311,17 @@ func TestDeleteWithSubquery(t *testing.T) {
 	require.EqualValues(t, 4, qr.RowsAffected)
 
 	// check rows
-	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
+	mcmp.AssertMatches(`select id, col from s_tbl order by id`,
 		`[[INT64(5) INT64(5)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
 	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
 
 	// delete with subquery on order_tbl
-	qr = mcmp.Exec(`delete from order_tbl where cust_no > (select num from s_tbl where id = 7)`)
+	qr = mcmp.Exec(`delete from order_tbl where cust_no > (select col from s_tbl where id = 7)`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
 	// check rows
-	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
+	mcmp.AssertMatches(`select id, col from s_tbl order by id`,
 		`[[INT64(5) INT64(5)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
 	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)]]`)
@@ -251,7 +335,7 @@ func TestDeleteWithSubquery(t *testing.T) {
 	require.EqualValues(t, 1, qr.RowsAffected)
 
 	// check rows
-	utils.AssertMatches(t, mcmp.VtConn, `select id, num from s_tbl order by id`,
+	utils.AssertMatches(t, mcmp.VtConn, `select id, col from s_tbl order by id`,
 		`[[INT64(5) INT64(5)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
 	utils.AssertMatches(t, mcmp.VtConn, `select region_id, oid, cust_no from order_tbl order by oid`,
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)]]`)

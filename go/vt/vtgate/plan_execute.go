@@ -387,7 +387,7 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, false, logStats)
 		// If no error, the revert is successful with the savepoint. Notify the reason as error to the client.
 		if err == nil {
-			errMsg.WriteString("reverted partial DML execution failure")
+			errMsg.WriteString(vterrors.RevertedPartialExec)
 			return vterrors.New(vtrpcpb.Code_ABORTED, errMsg.String())
 		}
 		// not able to rollback changes of the failed query, so have to abort the complete transaction.
@@ -395,7 +395,8 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 
 	// abort the transaction.
 	_ = e.txConn.Rollback(ctx, safeSession)
-	errMsg.WriteString("transaction rolled back to reverse changes of partial DML execution")
+
+	errMsg.WriteString(vterrors.TxRollbackOnPartialExec)
 	if err != nil {
 		return vterrors.Wrap(err, errMsg.String())
 	}
