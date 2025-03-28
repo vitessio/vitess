@@ -180,6 +180,9 @@ type (
 		// if this field is nil, it means that we are not logging operator traffic
 		interOpStats map[engine.Primitive]engine.RowsReceived
 		shardsStats  map[engine.Primitive]engine.ShardsQueried
+
+		// For specializing plans for the current query
+		bindVars map[string]*querypb.BindVariable
 	}
 )
 
@@ -1300,6 +1303,14 @@ func (vc *VCursorImpl) AnyAdvisoryLockTaken() bool {
 // AddAdvisoryLock implements the SessionActions interface
 func (vc *VCursorImpl) AddAdvisoryLock(name string) {
 	vc.SafeSession.AddAdvisoryLock(name)
+}
+
+// GetBindVars implements the VSchema interface
+func (vc *VCursorImpl) GetBindVars() map[string]*querypb.BindVariable {
+	return vc.bindVars
+}
+func (vc *VCursorImpl) SetBindVars(m map[string]*querypb.BindVariable) {
+	vc.bindVars = m
 }
 
 // RemoveAdvisoryLock implements the SessionActions interface

@@ -104,6 +104,11 @@ type VSchema interface {
 	// FindMirrorRule finds the mirror rule for the requested keyspace, table
 	// name, and the tablet type in the VSchema.
 	FindMirrorRule(tablename sqlparser.TableName) (*vindexes.MirrorRule, error)
+
+	// GetBindVars returns the bindvars. If we are executing a prepared statement for the first time,
+	// we re-plan with the bindvar values to see if we find any better plans now that we can see parameter values.
+	// If we find a better plan, we store it, and use it when the bindvars line up
+	GetBindVars() map[string]*querypb.BindVariable
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner
