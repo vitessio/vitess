@@ -107,6 +107,9 @@ type Handler interface {
 	// hang on to the byte slice.
 	ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error
 
+	// ComQueryMulti is a newer version of ComQuery that supports running multiple queries in a single call.
+	ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error
+
 	// ComPrepare is called when a connection receives a prepared
 	// statement query.
 	ComPrepare(c *Conn, query string) ([]*querypb.Field, uint16, error)

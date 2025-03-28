@@ -28,6 +28,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
@@ -175,6 +176,43 @@ func (f *fakeVTGateService) CloseSession(ctx context.Context, session *vtgatepb.
 
 func (f *fakeVTGateService) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
 	return nil
+}
+
+// ExecuteMulti is part of the VTGateService interface
+func (f *fakeVTGateService) ExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
+	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(sqlString)
+	if err != nil {
+		return session, nil, err
+	}
+	var result *sqltypes.Result
+	for _, query := range queries {
+		session, result, err = f.Execute(ctx, mysqlCtx, session, query, nil, false)
+		if err != nil {
+			return session, qrs, err
+		}
+		qrs = append(qrs, result)
+	}
+	return session, qrs, nil
+}
+
+// StreamExecuteMulti is part of the VTGateService interface
+func (f *fakeVTGateService) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
+	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(sqlString)
+	if err != nil {
+		return session, err
+	}
+	for idx, query := range queries {
+		firstPacket := true
+		session, err = f.StreamExecute(ctx, mysqlCtx, session, query, nil, func(result *sqltypes.Result) error {
+			err = callback(sqltypes.QueryResponse{QueryResult: result}, idx < len(queries)-1, firstPacket)
+			firstPacket = false
+			return err
+		})
+		if err != nil {
+			return session, err
+		}
+	}
+	return session, nil
 }
 
 // HandlePanic is part of the VTGateService interface

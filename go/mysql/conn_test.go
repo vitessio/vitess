@@ -1127,6 +1127,25 @@ func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result)
 	return nil
 }
 
+func (t testRun) ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	queries, err := t.Env().Parser().SplitStatementToPieces(sql)
+	if err != nil {
+		return err
+	}
+	for i, query := range queries {
+		firstPacket := true
+		err = t.ComQuery(c, query, func(result *sqltypes.Result) error {
+			err = callback(sqltypes.QueryResponse{QueryResult: result}, i < len(queries)-1, firstPacket)
+			firstPacket = false
+			return err
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (t testRun) ComPrepare(c *Conn, query string) ([]*querypb.Field, uint16, error) {
 	return nil, t.paramCounts, nil
 }

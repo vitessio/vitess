@@ -37,6 +37,12 @@ type VTGateService interface {
 	// Prepare statement support
 	Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error)
 
+	// ExecuteMulti executes multiple non-streaming queries.
+	ExecuteMulti(ctx context.Context, mysqlCtx MySQLConnection, session *vtgatepb.Session, sqlString string) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error)
+
+	// StreamExecuteMulti executes multiple streaming queries.
+	StreamExecuteMulti(ctx context.Context, mysqlCtx MySQLConnection, session *vtgatepb.Session, sqlString string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error)
+
 	// CloseSession closes the session, rolling back any implicit transactions.
 	// This has the same effect as if a "rollback" statement was executed,
 	// but does not affect the query statistics.

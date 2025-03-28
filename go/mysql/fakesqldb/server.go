@@ -358,6 +358,25 @@ func (db *DB) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Resu
 	return db.Handler.HandleQuery(c, query, callback)
 }
 
+func (db *DB) ComQueryMulti(c *mysql.Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	qries, err := db.Env().Parser().SplitStatementToPieces(sql)
+	if err != nil {
+		return err
+	}
+	for i, query := range qries {
+		firstPacket := true
+		err = db.ComQuery(c, query, func(result *sqltypes.Result) error {
+			err = callback(sqltypes.QueryResponse{QueryResult: result}, i < len(qries)-1, firstPacket)
+			firstPacket = false
+			return err
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // WarningCount is part of the mysql.Handler interface.
 func (db *DB) WarningCount(c *mysql.Conn) uint16 {
 	return 0
