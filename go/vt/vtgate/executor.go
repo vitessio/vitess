@@ -110,45 +110,108 @@ func init() {
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
 type (
-	// ExecutorConfig contains the configuration for the Executor.
-	// It's state that never changes for the Executor
+	// ExecutorConfig holds static or rarely changing configuration data for
+	// the Executor. It also contains references to major runtime components
+	// (TopoServer, Resolver, etc.) which are generally initialized once at
+	// startup and reused for the lifetime of the process.
 	ExecutorConfig struct {
-		Normalize  bool
+		// Normalize controls whether queries are normalized
+		Normalize bool
+
+		// StreamSize sets the maximum size (in bytes) of rows to buffer before
+		// streaming intermediate results. It applies to streaming queries to
+		// throttle memory use in the executor.
 		StreamSize int
-		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
-		AllowScatter        bool
+
+		// AllowScatter, if false, causes the planner to fail any query plan
+		// that would require a scatter query (i.e., routing to multiple shards).
+		// This can be used to enforce “no cross-shard queries” constraints.
+		AllowScatter bool
+
+		// WarmingReadsPercent controls the fraction of read queries that can be
+		// run in “warming reads” mode to prime the cache or gather statistics.
+		// E.g., 10 means up to 10% of reads can be “warming” queries.
 		WarmingReadsPercent int
-		QueryLogToFile      string
-		Env                 *vtenv.Environment
-		TopoServer          srvtopo.Server
-		Cell                string
-		Resolver            *Resolver
-		SchemaInfo          SchemaInfo
-		VSchemaManager      *VSchemaManager
-		PlannerVersion      plancontext.PlannerVersion
+		// QueryLogToFile is a file path or identifier where query logs can be
+		// written. If empty, logs are not written to a file (only to the stream
+		// logger).
+		QueryLogToFile string
+
+		// Env holds references and services from the Vitess environment.
+		// Includes the parser, collation environment, etc.
+		// In practice, this is mostly static once the process starts.
+		Env *vtenv.Environment
+
+		// TopoServer is the source of truth for Vitess topology data (shards,
+		// keyspaces, tablet information, etc.). It is typically initialized
+		// at startup and remains constant.
+		TopoServer srvtopo.Server
+
+		// Cell indicates the local cell (i.e., datacenter/zone) in which
+		// this VTGate is running. Used for local routing decisions.
+		Cell string
+
+		// Resolver routes queries across keyspaces and shards. It is often
+		// a long-lived component that uses the TopoServer for metadata.
+		Resolver *Resolver
+
+		// SchemaInfo gives schema-tracking capabilities (table structures, column info, etc.).
+		SchemaInfo SchemaInfo
+
+		// VSchemaManager handles VSchema updates and distribution.
+		VSchemaManager *VSchemaManager
+
+		// PlannerVersion indicates which planner version to use
+		// when building query execution plans.
+		PlannerVersion plancontext.PlannerVersion
 	}
 
+	// Executor is the central query execution engine in VTGate.
+	// It routes queries to vttablets, manages transactions, and uses the plan cache & vschema to optimize query plans.
 	Executor struct {
-		// config contains the configuration for the Executor that never changes
+		// config contains the static or rarely changing configuration
+		// parameters for the Executor (e.g. flags, timeouts).
 		config ExecutorConfig
 
-		// runtime state, with synchronization
+		// scatterConn handles sending queries to multiple shards and
+		// gathering their results.
 		scatterConn *ScatterConn
-		txConn      *TxConn
 
-		mu           sync.Mutex
-		vschema      *vindexes.VSchema
+		// txConn coordinates distributed transactions across shards.
+		txConn *TxConn
+
+		// mu protects the following fields:
+		//   - vschema
+		//   - vschemaStats
+		mu sync.Mutex
+
+		// vschema is an in-memory representation of the VSchema.
+		// It’s updated dynamically when VTGate receives new SrvVSchema updates.
+		vschema *vindexes.VSchema
+
+		// vschemaStats holds diagnostic information about the current vschema
+		// (e.g., keyspace stats) that can be exposed over debug endpoints.
 		vschemaStats *VSchemaStats
 
+		// plans is a cache of compiled query plans. The invalidation
+		// mechanism (epoch) is incremented on vschema changes.
 		plans *PlanCache
 		epoch atomic.Uint32
 
-		// queryLogger is passed in for logging from this vtgate executor.
+		// queryLogger sends query logs (via a streamlog) for debugging and auditing.
 		queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 
+		// warmingReadsChannel is used internally to throttle the concurrency
+		// of "warming reads" if that feature is enabled. It typically has a
+		// buffered capacity defined by config.
 		warmingReadsChannel chan bool
 
-		vConfig   econtext.VCursorConfig
+		// vConfig provides configuration for VCursor operations—such as
+		// collation handling, SELECT_LIMIT behavior, etc.
+		vConfig econtext.VCursorConfig
+
+		// ddlConfig provides dynamically adjustable settings for how DDL
+		// statements (e.g. create/alter table) are processed by VTGate.
 		ddlConfig dynamicconfig.DDL
 	}
 )
