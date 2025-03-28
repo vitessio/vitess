@@ -128,6 +128,7 @@ type (
 		resolver    *Resolver
 		scatterConn *ScatterConn
 		txConn      *TxConn
+		metrics     *Metrics
 
 		mu           sync.Mutex
 		vschema      *vindexes.VSchema
@@ -146,6 +147,10 @@ type (
 
 		vConfig   econtext.VCursorConfig
 		ddlConfig dynamicconfig.DDL
+	}
+
+	Metrics struct {
+		engineMetrics *engine.Metrics
 	}
 )
 
@@ -194,6 +199,9 @@ func NewExecutor(
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
+	e.metrics = &Metrics{
+		engineMetrics: engine.InitializeMetrics(),
+	}
 
 	// we subscribe to update from the VSchemaManager
 	e.vm = &VSchemaManager{
@@ -1117,7 +1125,7 @@ func (e *Executor) fetchOrCreatePlan(
 	}
 
 	query, comments := sqlparser.SplitMarginComments(queryString)
-	vcursor, _ = econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
+	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
 	var setVarComment string
 	if e.vConfig.SetVarEnabled {
@@ -1161,6 +1169,10 @@ func (e *Executor) fetchOrCreatePlan(
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
 	return plan, vcursor, stmt, nil
+}
+
+func (e *Executor) newVCursor(safeSession *econtext.SafeSession, comments sqlparser.MarginComments, logStats *logstats.LogStats) (*econtext.VCursorImpl, error) {
+	return econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig, nil)
 }
 
 func (e *Executor) tryOptimizedPlan(

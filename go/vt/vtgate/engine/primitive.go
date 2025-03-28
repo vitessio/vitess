@@ -149,6 +149,8 @@ type (
 		RecordMirrorStats(time.Duration, time.Duration, error)
 
 		SetLastInsertID(uint64)
+
+		GetExecutionMetrics() *Metrics
 	}
 
 	// SessionActions gives primitives ability to interact with the session state
