@@ -887,6 +887,88 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 	return targetSelectExprs
 }
 
+<<<<<<< HEAD
+=======
+// getSourcePKCols populates the sourcePkCols field in the tablePlan.
+// We need this information in order to save the lastpk value for the
+// source if the PK columns differ between the source and target.
+func (td *tableDiffer) getSourcePKCols() error {
+	ctx, cancel := context.WithTimeout(td.wd.ct.vde.ctx, topo.RemoteOperationTimeout*3)
+	defer cancel()
+
+	// We use the first sourceShard as all of them should have the same schema.
+	if len(td.wd.ct.sources) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no source shards found in %s keyspace",
+			td.wd.ct.sourceKeyspace)
+	}
+	sourceShardName := maps.Keys(td.wd.ct.sources)[0]
+	sourceTS, err := td.wd.getSourceTopoServer()
+	if err != nil {
+		return vterrors.Wrap(err, "failed to get source topo server")
+	}
+	sourceShard, err := sourceTS.GetShard(ctx, td.wd.ct.sourceKeyspace, sourceShardName)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to get source shard %s", sourceShardName)
+	}
+	if sourceShard.PrimaryAlias == nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "source shard %s has no primary", sourceShardName)
+	}
+	sourceTablet, err := sourceTS.GetTablet(ctx, sourceShard.PrimaryAlias)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to get primary tablet in source shard %s/%s",
+			td.wd.ct.sourceKeyspace, sourceShardName)
+	}
+	sourceSchema, err := td.wd.ct.tmc.GetSchema(ctx, sourceTablet.Tablet, &tabletmanagerdatapb.GetSchemaRequest{
+		Tables: []string{td.table.Name},
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to get the schema for table %s from source tablet %s",
+			td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
+	}
+	sourceTable := sourceSchema.TableDefinitions[0]
+	if len(sourceTable.PrimaryKeyColumns) == 0 {
+		// We use the columns from a PKE if there is one.
+		executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+			res, err := td.wd.ct.tmc.ExecuteFetchAsApp(ctx, sourceTablet.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+				Query:   []byte(query),
+				MaxRows: uint64(maxrows),
+			})
+			if err != nil {
+				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
+					topoproto.TabletAliasString(sourceTablet.Tablet.Alias), td.table.Name)
+			}
+			return sqltypes.Proto3ToResult(res), nil
+		}
+		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), td.table.Name)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to get a primary key equivalent for the %s table from source tablet %s",
+				td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
+		}
+		if len(pkeCols) > 0 {
+			log.Infof("Using primary key equivalent columns %+v for table %s", pkeCols, td.table.Name)
+			sourceTable.PrimaryKeyColumns = pkeCols
+		} else {
+			// We use every column together as a substitute PK.
+			log.Infof("Using all columns as a substitute primary key for table %s", td.table.Name)
+			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, td.table.Columns...)
+		}
+	}
+
+	sourcePKColumns := make(map[string]struct{}, len(sourceTable.PrimaryKeyColumns))
+	td.tablePlan.sourcePkCols = make([]int, 0, len(sourceTable.PrimaryKeyColumns))
+	for _, pkc := range sourceTable.PrimaryKeyColumns {
+		sourcePKColumns[pkc] = struct{}{}
+	}
+	for i, pkc := range td.table.Columns {
+		if _, ok := sourcePKColumns[pkc]; ok {
+			td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
+		}
+	}
+
+	return nil
+}
+
+>>>>>>> 3f638eb55e (VDiff: Fix bug with handling tables with no pks but only a unique key. (#17968))
 func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {
 	aliasedExpr := selectExpression.(*sqlparser.AliasedExpr)
 	expr := aliasedExpr.Expr
