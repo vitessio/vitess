@@ -152,7 +152,7 @@ func registerBaseFlags(fs *pflag.FlagSet) {
 // The flags will change the global singleton
 func registerPerUserFlags(fs *pflag.FlagSet, userKey string, uc *UserConfig, cp *mysql.ConnParams) {
 	newUserFlag := "db-" + userKey + "-user"
-	utils.SetFlagStringVar(fs, &uc.User, newUserFlag, "vt-"+userKey, "db "+userKey+" user userKey")
+	utils.SetFlagStringVar(fs, &uc.User, newUserFlag, "vt_"+userKey, "db "+userKey+" user userKey")
 	// fs.StringVar(&uc.User, newUserFlag, "vt_"+userKey, "db "+userKey+" user userKey")
 
 	newPasswordFlag := "db-" + userKey + "-password"
