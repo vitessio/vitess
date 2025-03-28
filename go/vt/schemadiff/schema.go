@@ -762,7 +762,7 @@ func (s *Schema) apply(diffs []EntityDiff, hints *DiffHints) error {
 			if _, ok := s.named[name]; ok {
 				return &ApplyDuplicateEntityError{Entity: name}
 			}
-			s.tables = append(s.tables, &CreateTableEntity{CreateTable: diff.createTable})
+			s.tables = append(s.tables, &CreateTableEntity{CreateTable: diff.createTable, Env: s.env})
 			_, s.named[name] = diff.Entities()
 		case *CreateViewEntityDiff:
 			// We expect the view to not exist
