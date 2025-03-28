@@ -36,7 +36,15 @@ import (
 // PooledDBConnection objects.
 type ConnectionPool struct {
 	*smartconnpool.ConnPool[*DBConnection]
+
+	name string
 }
+
+// usedNames is for preventing expvar from panicking. Tests
+// create pool objects multiple time. If a name was previously
+// used, expvar initialization is skipped.
+// through non-test code.
+var usedNames = make(map[string]bool)
 
 // NewConnectionPool creates a new ConnectionPool. The name is used
 // to publish stats only.
@@ -47,7 +55,18 @@ func NewConnectionPool(name string, stats *servenv.Exporter, capacity int, idleT
 		MaxLifetime:     maxLifetime,
 		RefreshInterval: dnsResolutionFrequency,
 	}
-	return &ConnectionPool{ConnPool: smartconnpool.NewPool(&config)}
+	cp := &ConnectionPool{ConnPool: smartconnpool.NewPool(&config), name: name}
+	if name == "" || usedNames[name] {
+		return cp
+	}
+	usedNames[name] = true
+
+	if stats == nil {
+		// This is unnamed exported so it will use the stats functions directly when adding to the expvar.
+		stats = servenv.NewExporter("", "")
+	}
+	cp.ConnPool.RegisterStats(stats, name)
+	return cp
 }
 
 // Open must be called before starting to use the pool.
