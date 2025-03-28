@@ -1321,14 +1321,14 @@ message MaterializeCreateRequest {
 message MaterializeCreateResponse {
 }
 
-message MaterializeAddTablesRequest {
+message WorkflowAddTablesRequest {
   string workflow = 1;
   string keyspace = 2;
   repeated TableMaterializeSettings table_settings = 3;
   MaterializationIntent materialization_intent = 4;
 }
 
-message MaterializeAddTablesResponse {
+message WorkflowAddTablesResponse {
 }
 
 message MigrateCreateRequest {

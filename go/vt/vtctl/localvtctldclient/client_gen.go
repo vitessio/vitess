@@ -456,11 +456,6 @@ func (client *localVtctldClient) LookupVindexInternalize(ctx context.Context, in
 	return client.s.LookupVindexInternalize(ctx, in)
 }
 
-// MaterializeAddTables is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) MaterializeAddTables(ctx context.Context, in *vtctldatapb.MaterializeAddTablesRequest, opts ...grpc.CallOption) (*vtctldatapb.MaterializeAddTablesResponse, error) {
-	return client.s.MaterializeAddTables(ctx, in)
-}
-
 // MaterializeCreate is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) MaterializeCreate(ctx context.Context, in *vtctldatapb.MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.MaterializeCreateResponse, error) {
 	return client.s.MaterializeCreate(ctx, in)
@@ -780,6 +775,11 @@ func (client *localVtctldClient) ValidateVersionKeyspace(ctx context.Context, in
 // ValidateVersionShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ValidateVersionShard(ctx context.Context, in *vtctldatapb.ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVersionShardResponse, error) {
 	return client.s.ValidateVersionShard(ctx, in)
+}
+
+// WorkflowAddTables is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) WorkflowAddTables(ctx context.Context, in *vtctldatapb.WorkflowAddTablesRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowAddTablesResponse, error) {
+	return client.s.WorkflowAddTables(ctx, in)
 }
 
 // WorkflowDelete is part of the vtctlservicepb.VtctldClient interface.

@@ -833,8 +833,8 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 	return mz.startStreams(ctx)
 }
 
-// MaterializeAddTables adds specified tables to the existing workflow.
-func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.MaterializeAddTablesRequest) error {
+// WorkflowAddTables adds specified tables to the existing workflow.
+func (s *Server) WorkflowAddTables(ctx context.Context, req *vtctldatapb.WorkflowAddTablesRequest) error {
 	if len(req.TableSettings) == 0 {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tables found in the request")
 	}
@@ -923,10 +923,10 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 		ms:           ms,
 		workflowType: workflowType,
 	}
-	if err = mz.buildMaterializer(); err != nil {
+	if err := mz.buildMaterializer(); err != nil {
 		return err
 	}
-	if err = mz.deploySchema(); err != nil {
+	if err := mz.deploySchema(); err != nil {
 		// If there was an error while deploying schema, we should restart the
 		// streams before returning the error.
 		if startStreamsErr := mz.startStreams(ctx); startStreamsErr != nil {
@@ -935,7 +935,7 @@ func (s *Server) MaterializeAddTables(ctx context.Context, req *vtctldatapb.Mate
 		return vterrors.Wrapf(err, "failed to deploy schema")
 	}
 
-	if err = mz.insertTablesInCopyStateTable(ctx, streamsByTargetShard); err != nil {
+	if err := mz.insertTablesInCopyStateTable(ctx, streamsByTargetShard); err != nil {
 		return err
 	}
 

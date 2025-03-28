@@ -2741,14 +2741,14 @@ func TestMaterializeAddTables(t *testing.T) {
 
 	testcases := []struct {
 		name                                          string
-		request                                       *vtctldatapb.MaterializeAddTablesRequest
+		request                                       *vtctldatapb.WorkflowAddTablesRequest
 		expectApplySchemaRequest                      bool
 		addUpdateVReplicationWorkflowRequestResponses []*updateVReplicationWorkflowRequestResponse
 		expectedErrContains                           string
 	}{
 		{
 			name: "success",
-			request: &vtctldatapb.MaterializeAddTablesRequest{
+			request: &vtctldatapb.WorkflowAddTablesRequest{
 				Workflow: "wf",
 				Keyspace: targetKeyspace.KeyspaceName,
 				TableSettings: []*vtctldatapb.TableMaterializeSettings{
@@ -2782,7 +2782,7 @@ func TestMaterializeAddTables(t *testing.T) {
 		},
 		{
 			name: "rule already exists error",
-			request: &vtctldatapb.MaterializeAddTablesRequest{
+			request: &vtctldatapb.WorkflowAddTablesRequest{
 				Workflow: "wf",
 				Keyspace: targetKeyspace.KeyspaceName,
 				TableSettings: []*vtctldatapb.TableMaterializeSettings{
@@ -2796,7 +2796,7 @@ func TestMaterializeAddTables(t *testing.T) {
 		},
 		{
 			name: "source table doesn't exist error",
-			request: &vtctldatapb.MaterializeAddTablesRequest{
+			request: &vtctldatapb.WorkflowAddTablesRequest{
 				Workflow: "wf",
 				Keyspace: targetKeyspace.KeyspaceName,
 				TableSettings: []*vtctldatapb.TableMaterializeSettings{
@@ -2855,7 +2855,7 @@ func TestMaterializeAddTables(t *testing.T) {
 				te.tmc.AddUpdateVReplicationWorkflowRequestResponse(200, reqres)
 				te.tmc.AddUpdateVReplicationWorkflowRequestResponse(210, reqres)
 			}
-			err := te.ws.MaterializeAddTables(ctx, tc.request)
+			err := te.ws.WorkflowAddTables(ctx, tc.request)
 			if tc.expectedErrContains == "" {
 				assert.NoError(t, err)
 				assert.Empty(t, te.tmc.applySchemaRequests[200])

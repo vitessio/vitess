@@ -3122,9 +3122,9 @@ func (s *VtctldServer) MaterializeCreate(ctx context.Context, req *vtctldatapb.M
 	return resp, err
 }
 
-// MaterializeAddTables is part of the vtctlservicepb.VtctldServer interface.
-func (s *VtctldServer) MaterializeAddTables(ctx context.Context, req *vtctldatapb.MaterializeAddTablesRequest) (resp *vtctldatapb.MaterializeAddTablesResponse, err error) {
-	span, ctx := trace.NewSpan(ctx, "VtctldServer.MaterializeAddTables")
+// WorkflowAddTables is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowAddTables(ctx context.Context, req *vtctldatapb.WorkflowAddTablesRequest) (resp *vtctldatapb.WorkflowAddTablesResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowAddTables")
 	defer span.Finish()
 
 	defer panicHandler(&err)
@@ -3133,7 +3133,7 @@ func (s *VtctldServer) MaterializeAddTables(ctx context.Context, req *vtctldatap
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("table_settings", req.TableSettings)
 
-	err = s.ws.MaterializeAddTables(ctx, req)
+	err = s.ws.WorkflowAddTables(ctx, req)
 	return resp, err
 }
 

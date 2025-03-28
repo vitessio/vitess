@@ -3295,11 +3295,11 @@ func (m *MaterializeCreateResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *MaterializeAddTablesRequest) CloneVT() *MaterializeAddTablesRequest {
+func (m *WorkflowAddTablesRequest) CloneVT() *WorkflowAddTablesRequest {
 	if m == nil {
-		return (*MaterializeAddTablesRequest)(nil)
+		return (*WorkflowAddTablesRequest)(nil)
 	}
-	r := new(MaterializeAddTablesRequest)
+	r := new(WorkflowAddTablesRequest)
 	r.Workflow = m.Workflow
 	r.Keyspace = m.Keyspace
 	r.MaterializationIntent = m.MaterializationIntent
@@ -3317,15 +3317,15 @@ func (m *MaterializeAddTablesRequest) CloneVT() *MaterializeAddTablesRequest {
 	return r
 }
 
-func (m *MaterializeAddTablesRequest) CloneMessageVT() proto.Message {
+func (m *WorkflowAddTablesRequest) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *MaterializeAddTablesResponse) CloneVT() *MaterializeAddTablesResponse {
+func (m *WorkflowAddTablesResponse) CloneVT() *WorkflowAddTablesResponse {
 	if m == nil {
-		return (*MaterializeAddTablesResponse)(nil)
+		return (*WorkflowAddTablesResponse)(nil)
 	}
-	r := new(MaterializeAddTablesResponse)
+	r := new(WorkflowAddTablesResponse)
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -3333,7 +3333,7 @@ func (m *MaterializeAddTablesResponse) CloneVT() *MaterializeAddTablesResponse {
 	return r
 }
 
-func (m *MaterializeAddTablesResponse) CloneMessageVT() proto.Message {
+func (m *WorkflowAddTablesResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -15042,7 +15042,7 @@ func (m *MaterializeCreateResponse) MarshalToSizedBufferVT(dAtA []byte) (int, er
 	return len(dAtA) - i, nil
 }
 
-func (m *MaterializeAddTablesRequest) MarshalVT() (dAtA []byte, err error) {
+func (m *WorkflowAddTablesRequest) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -15055,12 +15055,12 @@ func (m *MaterializeAddTablesRequest) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *MaterializeAddTablesRequest) MarshalToVT(dAtA []byte) (int, error) {
+func (m *WorkflowAddTablesRequest) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *MaterializeAddTablesRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *WorkflowAddTablesRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -15106,7 +15106,7 @@ func (m *MaterializeAddTablesRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 	return len(dAtA) - i, nil
 }
 
-func (m *MaterializeAddTablesResponse) MarshalVT() (dAtA []byte, err error) {
+func (m *WorkflowAddTablesResponse) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -15119,12 +15119,12 @@ func (m *MaterializeAddTablesResponse) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *MaterializeAddTablesResponse) MarshalToVT(dAtA []byte) (int, error) {
+func (m *WorkflowAddTablesResponse) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *MaterializeAddTablesResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *WorkflowAddTablesResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -25782,7 +25782,7 @@ func (m *MaterializeCreateResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *MaterializeAddTablesRequest) SizeVT() (n int) {
+func (m *WorkflowAddTablesRequest) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -25809,7 +25809,7 @@ func (m *MaterializeAddTablesRequest) SizeVT() (n int) {
 	return n
 }
 
-func (m *MaterializeAddTablesResponse) SizeVT() (n int) {
+func (m *WorkflowAddTablesResponse) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -51000,7 +51000,7 @@ func (m *MaterializeCreateResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *MaterializeAddTablesRequest) UnmarshalVT(dAtA []byte) error {
+func (m *WorkflowAddTablesRequest) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -51023,10 +51023,10 @@ func (m *MaterializeAddTablesRequest) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: MaterializeAddTablesRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: WorkflowAddTablesRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: MaterializeAddTablesRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: WorkflowAddTablesRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -51168,7 +51168,7 @@ func (m *MaterializeAddTablesRequest) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *MaterializeAddTablesResponse) UnmarshalVT(dAtA []byte) error {
+func (m *WorkflowAddTablesResponse) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -51191,10 +51191,10 @@ func (m *MaterializeAddTablesResponse) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: MaterializeAddTablesResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: WorkflowAddTablesResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: MaterializeAddTablesResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: WorkflowAddTablesResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:

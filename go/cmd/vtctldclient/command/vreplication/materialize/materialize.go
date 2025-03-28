@@ -63,7 +63,7 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	_, err := common.GetClient().MaterializeAddTables(common.GetCommandCtx(), &vtctldatapb.MaterializeAddTablesRequest{
+	_, err := common.GetClient().WorkflowAddTables(common.GetCommandCtx(), &vtctldatapb.WorkflowAddTablesRequest{
 		Workflow:              common.BaseOptions.Workflow,
 		Keyspace:              common.BaseOptions.TargetKeyspace,
 		TableSettings:         tableSettings,
