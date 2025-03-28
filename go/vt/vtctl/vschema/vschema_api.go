@@ -19,7 +19,6 @@ package vschema
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 
 	"vitess.io/vitess/go/json2"
@@ -49,7 +48,6 @@ func NewVSchemaAPI(ts *topo.Server, parser *sqlparser.Parser) *VSchemaAPI {
 // TODO(beingnoble03): Missing API comments.
 
 func (api *VSchemaAPI) Create(ctx context.Context, req *vtctldatapb.VSchemaCreateRequest) error {
-	// TODO(beingnoble03): Add more validation here.
 	topoKs := &topodatapb.Keyspace{}
 	err := api.ts.CreateKeyspace(ctx, req.VSchemaName, topoKs)
 	if err != nil {
@@ -62,14 +60,12 @@ func (api *VSchemaAPI) Create(ctx context.Context, req *vtctldatapb.VSchemaCreat
 		return vterrors.Wrapf(err, "unable to unmarshal vschema JSON")
 	}
 
-	_, err = vindexes.BuildKeyspace(vsks, api.parser)
-	if err != nil {
-		err = vterrors.Wrapf(err, "failed to build vschema '%s'", req.VSchemaName)
-		return err
+	if _, err := vindexes.BuildKeyspace(vsks, api.parser); err != nil {
+		return vterrors.Wrapf(err, "failed to build vschema '%s'", req.VSchemaName)
 	}
+
 	vsks.Draft = req.Draft
 	vsks.Sharded = req.Sharded
-
 	vsInfo := &topo.KeyspaceVSchemaInfo{
 		Name:     req.VSchemaName,
 		Keyspace: vsks,
@@ -79,6 +75,17 @@ func (api *VSchemaAPI) Create(ctx context.Context, req *vtctldatapb.VSchemaCreat
 			vsInfo, req.VSchemaName)
 	}
 	return err
+}
+
+func (api *VSchemaAPI) Get(ctx context.Context, req *vtctldatapb.VSchemaGetRequest) (*vschemapb.Keyspace, error) {
+	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
+	}
+	if !req.IncludeDrafts && vsInfo.Draft {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "vschema for '%s' keyspace is still marked as draft", req.VSchemaName)
+	}
+	return vsInfo.Keyspace, nil
 }
 
 func (api *VSchemaAPI) Update(ctx context.Context, req *vtctldatapb.VSchemaUpdateRequest) error {
@@ -240,6 +247,7 @@ func (api *VSchemaAPI) AddLookupVindex(ctx context.Context, req *vtctldatapb.VSc
 	vindex := &vschemapb.Vindex{
 		Type:   req.LookupVindexType,
 		Params: params,
+		Owner:  req.Owner,
 	}
 	vsInfo.Vindexes[req.VindexName] = vindex
 	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
@@ -254,12 +262,83 @@ func (api *VSchemaAPI) RemoveTables(ctx context.Context, req *vtctldatapb.VSchem
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
 	}
+	if err := ensureTablesExist(vsInfo, req.Tables); err != nil {
+		return err
+	}
 	for _, tableName := range req.Tables {
-		if _, ok := vsInfo.Tables[tableName]; !ok {
-			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table '%s' doesn't exist in keyspace '%s'",
-				tableName, req.VSchemaName)
-		}
 		delete(vsInfo.Tables, tableName)
+	}
+	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
+		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
+			vsInfo, req.VSchemaName)
+	}
+	return nil
+}
+
+func (api *VSchemaAPI) AddTables(ctx context.Context, req *vtctldatapb.VSchemaAddTablesRequest) error {
+	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
+	}
+	if err := ensureTablesDoNotExist(vsInfo, req.Tables); err != nil {
+		return err
+	}
+	for _, tableName := range req.Tables {
+		vsInfo.Tables[tableName] = &vschemapb.Table{}
+	}
+	if req.PrimaryVindexName != "" {
+		if _, ok := vsInfo.Vindexes[req.PrimaryVindexName]; !ok {
+			// Validate if we can create the vindex without any errors.
+			if _, err := vindexes.CreateVindex(req.PrimaryVindexName, req.PrimaryVindexName, nil); err != nil {
+				return vterrors.Wrapf(err, "failed to create vindex '%s'", req.PrimaryVindexName)
+			}
+			vsInfo.Vindexes[req.PrimaryVindexName] = &vschemapb.Vindex{
+				Type: req.PrimaryVindexName,
+			}
+		}
+		colVindex := &vschemapb.ColumnVindex{
+			Name:    req.PrimaryVindexName,
+			Columns: req.Columns,
+		}
+		for _, tableName := range req.Tables {
+			vsInfo.Tables[tableName].ColumnVindexes = []*vschemapb.ColumnVindex{colVindex}
+		}
+	}
+	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
+		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
+			vsInfo, req.VSchemaName)
+	}
+	return nil
+}
+
+func (api *VSchemaAPI) SetPrimaryVindex(ctx context.Context, req *vtctldatapb.VSchemaSetPrimaryVindexRequest) error {
+	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
+	}
+	if err := ensureTablesExist(vsInfo, req.Tables); err != nil {
+		return err
+	}
+	if _, ok := vsInfo.Vindexes[req.VindexName]; !ok {
+		// Validate if we can create the vindex without any errors.
+		if _, err := vindexes.CreateVindex(req.VindexName, req.VindexName, nil); err != nil {
+			return vterrors.Wrapf(err, "failed to create vindex '%s'", req.VindexName)
+		}
+		vsInfo.Vindexes[req.VindexName] = &vschemapb.Vindex{
+			Type: req.VindexName,
+		}
+	}
+	colVindex := &vschemapb.ColumnVindex{
+		Name:    req.VindexName,
+		Columns: req.Columns,
+	}
+	for _, tableName := range req.Tables {
+		if len(vsInfo.Tables[tableName].ColumnVindexes) > 0 {
+			// We will update the primary vindex if it already exists.
+			vsInfo.Tables[tableName].ColumnVindexes[0] = colVindex
+		} else {
+			vsInfo.Tables[tableName].ColumnVindexes = []*vschemapb.ColumnVindex{colVindex}
+		}
 	}
 	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
 		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
@@ -277,18 +356,13 @@ func (api *VSchemaAPI) SetSequence(ctx context.Context, req *vtctldatapb.VSchema
 	if req.SequenceSource == "" {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "sequence source cannot be empty")
 	}
+	if req.Column == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column name cannot be empty")
+	}
 	err = validateQualifiedTableType(ctx, api.ts, req.SequenceSource, vindexes.TypeSequence)
 	if err != nil {
 		return vterrors.Wrapf(err, "invalid sequence table source")
 	}
-	columnExists := slices.ContainsFunc(table.Columns, func(col *vschemapb.Column) bool {
-		return col.Name == req.Column
-	})
-	if !columnExists {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column '%s' doesn't exist on table '%s'",
-			req.Column, req.Table)
-	}
-
 	table.AutoIncrement = &vschemapb.AutoIncrement{
 		Column:   req.Column,
 		Sequence: req.SequenceSource,

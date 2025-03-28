@@ -2148,6 +2148,36 @@ message VSchemaSetSequenceRequest {
 message VSchemaSetSequenceResponse {
 }
 
+message VSchemaAddTablesRequest {
+  string v_schema_name = 1;
+  repeated string tables = 2;
+  string primary_vindex_name = 3;
+  repeated string columns = 4;
+  bool add_all = 5;
+}
+
+message VSchemaAddTablesResponse {  
+}
+
+message VSchemaSetPrimaryVindexRequest {
+  string v_schema_name = 1;
+  repeated string tables = 2;
+  string vindex_name = 3;
+  repeated string columns = 4;
+}
+
+message VSchemaSetPrimaryVindexResponse {  
+}
+
+message VSchemaGetRequest {
+  string v_schema_name = 1;
+  bool include_drafts = 2;
+}
+
+message VSchemaGetResponse {
+  vschema.Keyspace v_schema = 1;
+}
+
 message VSchemaCreateRequest {
   string v_schema_name = 1;
   bool sharded = 2;

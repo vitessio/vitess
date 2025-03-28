@@ -43,6 +43,34 @@ func getVSchemaAndTable(ctx context.Context, ts *topo.Server, vschemaName string
 	return vsInfo, table, nil
 }
 
+func ensureTablesExist(vsInfo *topo.KeyspaceVSchemaInfo, tables []string) error {
+	var missingTables []string
+	for _, tableName := range tables {
+		if _, ok := vsInfo.Tables[tableName]; !ok {
+			missingTables = append(missingTables, tableName)
+		}
+	}
+	if len(missingTables) > 0 {
+		return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table(s) %s not found in '%s' keyspace",
+			strings.Join(missingTables, ", "), vsInfo.Name)
+	}
+	return nil
+}
+
+func ensureTablesDoNotExist(vsInfo *topo.KeyspaceVSchemaInfo, tables []string) error {
+	var alreadyExistingTables []string
+	for _, tableName := range tables {
+		if _, ok := vsInfo.Tables[tableName]; ok {
+			alreadyExistingTables = append(alreadyExistingTables, tableName)
+		}
+	}
+	if len(alreadyExistingTables) > 0 {
+		return vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "table(s) %s already exist in '%s' keyspace",
+			strings.Join(alreadyExistingTables, ", "), vsInfo.Name)
+	}
+	return nil
+}
+
 // validateNewVindex validates if we can create a vindex with given vindexName
 // vindexType and params.
 func validateNewVindex(vsInfo *topo.KeyspaceVSchemaInfo, vindexName string, vindexType string, params map[string]string) error {
@@ -53,7 +81,7 @@ func validateNewVindex(vsInfo *topo.KeyspaceVSchemaInfo, vindexName string, vind
 
 	// Validate if we can create the vindex without any errors.
 	if _, err := vindexes.CreateVindex(vindexType, vindexName, params); err != nil {
-		return err
+		return vterrors.Wrapf(err, "failed to create vindex '%s'", vindexName)
 	}
 	return nil
 }
