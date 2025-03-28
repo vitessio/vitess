@@ -305,6 +305,13 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 					return err
 				}
 			} else {
+				if vr.state != binlogdatapb.VReplicationWorkflowState_Copying {
+					if err := vr.setState(binlogdatapb.VReplicationWorkflowState_Copying, ""); err != nil {
+						vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
+						return err
+					}
+					vr.insertLog(LogCopyRestart, fmt.Sprintf("Copy phase restarted for %d table(s)", numTablesToCopy))
+				}
 				if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
 					vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 					return err

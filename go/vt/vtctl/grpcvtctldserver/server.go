@@ -3122,6 +3122,21 @@ func (s *VtctldServer) MaterializeCreate(ctx context.Context, req *vtctldatapb.M
 	return resp, err
 }
 
+// WorkflowAddTables is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowAddTables(ctx context.Context, req *vtctldatapb.WorkflowAddTablesRequest) (resp *vtctldatapb.WorkflowAddTablesResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowAddTables")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("table_settings", req.TableSettings)
+
+	err = s.ws.WorkflowAddTables(ctx, req)
+	return resp, err
+}
+
 // MigrateCreate is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) MigrateCreate(ctx context.Context, req *vtctldatapb.MigrateCreateRequest) (resp *vtctldatapb.WorkflowStatusResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.MigrateCreate")
