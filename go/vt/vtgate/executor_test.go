@@ -132,7 +132,7 @@ func TestPlanKey(t *testing.T) {
 		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
 			ss := econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString})
 			resolver := &fakeResolver{resolveShards: tc.resolvedShard}
-			vc, _ := econtext.NewVCursorImpl(ss, makeComments(""), e, nil, e.vm, e.VSchema(), resolver, nil, nullResultsObserver{}, cfg)
+			vc, _ := econtext.NewVCursorImpl(ss, makeComments(""), e, nil, e.vm, e.VSchema(), resolver, nil, nullResultsObserver{}, cfg, nil)
 			key := buildPlanKey(ctx, vc, "SELECT 1", tc.setVarComment)
 			require.Equal(t, tc.expectedPlanPrefixKey, key.DebugString(), "test case %d", i)
 		})
@@ -1616,8 +1616,9 @@ var pv = querypb.ExecuteOptions_Gen4
 
 func TestGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnv(t)
-	emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
-	unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+
+	emptyvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), nil)
+	unshardedvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), nil)
 
 	query1 := "select * from music_user_map where id = 1"
 	plan1, logStats := getPlanCached(t, ctx, r, emptyvc.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1683,7 +1684,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	t.Run("Cache", func(t *testing.T) {
 		r, _, _, _, ctx := createExecutorEnv(t)
 
-		emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		emptyvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), nil)
 		query1 := "select * from music_user_map where id = 1"
 
 		_, logStats1 := getPlanCached(t, ctx, r, emptyvc.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true)
@@ -1702,7 +1703,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	t.Run("Skip Cache", func(t *testing.T) {
 		r, _, _, _, ctx := createExecutorEnv(t)
 
-		unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		unshardedvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), nil)
 
 		// Skip cache using directive
 		query1 := "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
@@ -1715,12 +1716,12 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 		assertCacheSize(t, r.plans, 1)
 
 		// the target string will be resolved and become part of the plan cache key, which adds a new entry
-		ksIDVc1, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		ksIDVc1, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), nil)
 		getPlanCached(t, ctx, r, ksIDVc1.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 
 		// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
-		ksIDVc2, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		ksIDVc2, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), nil)
 		getPlanCached(t, ctx, r, ksIDVc2.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 	})
@@ -1729,7 +1730,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 func TestGetPlanCacheNormalized(t *testing.T) {
 	t.Run("Cache", func(t *testing.T) {
 		r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
-		emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		emptyvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), nil)
 
 		query1 := "select * from music_user_map where id = 1"
 		_, logStats1 := getPlanCached(t, ctx, r, emptyvc.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
@@ -1745,7 +1746,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	t.Run("Skip Cache", func(t *testing.T) {
 		// Skip cache using directive
 		r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
-		unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		unshardedvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), nil)
 
 		query1 := "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 		getPlanCached(t, ctx, r, unshardedvc.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1756,12 +1757,12 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 		assertCacheSize(t, r.plans, 1)
 
 		// the target string will be resolved and become part of the plan cache key, which adds a new entry
-		ksIDVc1, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		ksIDVc1, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), nil)
 		getPlanCached(t, ctx, r, ksIDVc1.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 
 		// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
-		ksIDVc2, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		ksIDVc2, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), nil)
 		getPlanCached(t, ctx, r, ksIDVc2.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 	})
@@ -1770,8 +1771,8 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-	emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
-	unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+	emptyvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), nil)
+	unshardedvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), nil)
 
 	query1 := "select * from music_user_map where id = 1" // 163 -- 80
 	query2 := "select * from music_user_map where id = 2"
