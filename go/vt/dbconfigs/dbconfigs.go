@@ -151,13 +151,16 @@ func registerBaseFlags(fs *pflag.FlagSet) {
 
 // The flags will change the global singleton
 func registerPerUserFlags(fs *pflag.FlagSet, userKey string, uc *UserConfig, cp *mysql.ConnParams) {
-	newUserFlag := "db_" + userKey + "_user"
-	fs.StringVar(&uc.User, newUserFlag, "vt_"+userKey, "db "+userKey+" user userKey")
+	newUserFlag := "db-" + userKey + "-user"
+	utils.SetFlagStringVar(fs, &uc.User, newUserFlag, "vt-"+userKey, "db "+userKey+" user userKey")
+	// fs.StringVar(&uc.User, newUserFlag, "vt_"+userKey, "db "+userKey+" user userKey")
 
-	newPasswordFlag := "db_" + userKey + "_password"
-	fs.StringVar(&uc.Password, newPasswordFlag, "", "db "+userKey+" password")
+	newPasswordFlag := "db-" + userKey + "-password"
+	utils.SetFlagStringVar(fs, &uc.Password, newPasswordFlag, "", "db "+userKey+" password")
+	// fs.StringVar(&uc.Password, newPasswordFlag, "", "db "+userKey+" password")
 
-	fs.BoolVar(&uc.UseSSL, "db_"+userKey+"_use_ssl", true, "Set this flag to false to make the "+userKey+" connection to not use ssl")
+	utils.SetFlagBoolVar(fs, &uc.UseSSL, "db-"+userKey+"-use-ssl", true, "Set this flag to false to make the "+userKey+" connection to not use ssl")
+	// fs.BoolVar(&uc.UseSSL, "db_"+userKey+"_use_ssl", true, "Set this flag to false to make the "+userKey+" connection to not use ssl")
 }
 
 // Connector contains Connection Parameters for mysql connection

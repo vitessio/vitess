@@ -78,6 +78,15 @@ Flags:
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul_auth_static_file string                              JSON File to read the topos/tokens from.
+      --db-allprivs-password string                                 db allprivs password
+      --db-allprivs-use-ssl                                         Set this flag to false to make the allprivs connection to not use ssl (default true)
+      --db-allprivs-user string                                     db allprivs user userKey (default "vt-allprivs")
+      --db-app-password string                                      db app password
+      --db-app-use-ssl                                              Set this flag to false to make the app connection to not use ssl (default true)
+      --db-app-user string                                          db app user userKey (default "vt-app")
+      --db-appdebug-password string                                 db appdebug password
+      --db-appdebug-use-ssl                                         Set this flag to false to make the appdebug connection to not use ssl (default true)
+      --db-appdebug-user string                                     db appdebug user userKey (default "vt-appdebug")
       --db-charset string                                           Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
       --db-conn-query-info                                          enable parsing and processing of QUERY_OK info fields
       --db-connect-timeout-ms int                                   connection timeout to mysqld in milliseconds (0 for no timeout)
@@ -92,10 +101,22 @@ Flags:
       --db-credentials-vault-tls-ca string                          Path to CA PEM for validating Vault server certificate
       --db-credentials-vault-tokenfile string                       Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
       --db-credentials-vault-ttl duration                           How long to cache DB credentials from the Vault server (default 30m0s)
+      --db-dba-password string                                      db dba password
+      --db-dba-use-ssl                                              Set this flag to false to make the dba connection to not use ssl (default true)
+      --db-dba-user string                                          db dba user userKey (default "vt-dba")
+      --db-erepl-password string                                    db erepl password
+      --db-erepl-use-ssl                                            Set this flag to false to make the erepl connection to not use ssl (default true)
+      --db-erepl-user string                                        db erepl user userKey (default "vt-erepl")
+      --db-filtered-password string                                 db filtered password
+      --db-filtered-use-ssl                                         Set this flag to false to make the filtered connection to not use ssl (default true)
+      --db-filtered-user string                                     db filtered user userKey (default "vt-filtered")
       --db-flags uint                                               Flag values as defined by MySQL.
       --db-flavor string                                            Flavor overrid. Valid value is FilePos.
       --db-host string                                              The host name for the tcp connection.
       --db-port int                                                 tcp port
+      --db-repl-password string                                     db repl password
+      --db-repl-use-ssl                                             Set this flag to false to make the repl connection to not use ssl (default true)
+      --db-repl-user string                                         db repl user userKey (default "vt-repl")
       --db-server-name string                                       server name of the DB we are connecting to.
       --db-socket string                                            The unix socket to connect on. If this is specified, host and port will not be used.
       --db-ssl-ca string                                            connection ssl ca
@@ -104,27 +125,6 @@ Flags:
       --db-ssl-key string                                           connection ssl key
       --db-ssl-mode SslMode                                         SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
       --db-tls-min-version string                                   Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --db_allprivs_password string                                 db allprivs password
-      --db_allprivs_use_ssl                                         Set this flag to false to make the allprivs connection to not use ssl (default true)
-      --db_allprivs_user string                                     db allprivs user userKey (default "vt_allprivs")
-      --db_app_password string                                      db app password
-      --db_app_use_ssl                                              Set this flag to false to make the app connection to not use ssl (default true)
-      --db_app_user string                                          db app user userKey (default "vt_app")
-      --db_appdebug_password string                                 db appdebug password
-      --db_appdebug_use_ssl                                         Set this flag to false to make the appdebug connection to not use ssl (default true)
-      --db_appdebug_user string                                     db appdebug user userKey (default "vt_appdebug")
-      --db_dba_password string                                      db dba password
-      --db_dba_use_ssl                                              Set this flag to false to make the dba connection to not use ssl (default true)
-      --db_dba_user string                                          db dba user userKey (default "vt_dba")
-      --db_erepl_password string                                    db erepl password
-      --db_erepl_use_ssl                                            Set this flag to false to make the erepl connection to not use ssl (default true)
-      --db_erepl_user string                                        db erepl user userKey (default "vt_erepl")
-      --db_filtered_password string                                 db filtered password
-      --db_filtered_use_ssl                                         Set this flag to false to make the filtered connection to not use ssl (default true)
-      --db_filtered_user string                                     db filtered user userKey (default "vt_filtered")
-      --db_repl_password string                                     db repl password
-      --db_repl_use_ssl                                             Set this flag to false to make the repl connection to not use ssl (default true)
-      --db_repl_user string                                         db repl user userKey (default "vt_repl")
       --detach                                                      detached mode - run backups detached from the terminal
       --disable-redo-log                                            Disable InnoDB redo log during replication-from-primary phase of backup.
       --emit_stats                                                  If set, emit stats to push-based monitoring and stats backends

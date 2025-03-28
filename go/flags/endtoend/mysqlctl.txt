@@ -43,6 +43,9 @@ Flags:
       --db-credentials-vault-tls-ca string                          Path to CA PEM for validating Vault server certificate
       --db-credentials-vault-tokenfile string                       Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
       --db-credentials-vault-ttl duration                           How long to cache DB credentials from the Vault server (default 30m0s)
+      --db-dba-password string                                      db dba password
+      --db-dba-use-ssl                                              Set this flag to false to make the dba connection to not use ssl (default true)
+      --db-dba-user string                                          db dba user userKey (default "vt-dba")
       --db-flags uint                                               Flag values as defined by MySQL.
       --db-flavor string                                            Flavor overrid. Valid value is FilePos.
       --db-host string                                              The host name for the tcp connection.
@@ -55,9 +58,6 @@ Flags:
       --db-ssl-key string                                           connection ssl key
       --db-ssl-mode SslMode                                         SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
       --db-tls-min-version string                                   Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --db_dba_password string                                      db dba password
-      --db_dba_use_ssl                                              Set this flag to false to make the dba connection to not use ssl (default true)
-      --db_dba_user string                                          db dba user userKey (default "vt_dba")
       --dba_idle_timeout duration                                   Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                           Size of the connection pool for dba connections (default 20)
   -h, --help                                                        help for mysqlctl
