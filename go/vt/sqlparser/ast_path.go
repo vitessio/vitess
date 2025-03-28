@@ -99,7 +99,7 @@ const (
 	RefOfComparisonExprLeft
 	RefOfComparisonExprRight
 	RefOfComparisonExprEscape
-	CompoundStatementsOffset
+	RefOfCompoundStatementsStatementsOffset
 	RefOfConstraintDefinitionName
 	RefOfConstraintDefinitionDetails
 	RefOfConvertExprExpr
@@ -558,6 +558,7 @@ const (
 	RefOfColumnTypeOptionsEngineAttribute
 	RefOfColumnTypeOptionsSecondaryEngineAttribute
 	RefOfColumnTypeOptionsSRID
+	SliceOfCompoundStatementOffset
 	SliceOfRefOfProcParameterOffset
 	SliceOfHandlerConditionOffset
 	SliceOfTableExprOffset
@@ -755,8 +756,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ComparisonExpr).Right"
 	case RefOfComparisonExprEscape:
 		return "(*ComparisonExpr).Escape"
-	case CompoundStatementsOffset:
-		return "(CompoundStatements)[]Offset"
+	case RefOfCompoundStatementsStatementsOffset:
+		return "(*CompoundStatements).StatementsOffset"
 	case RefOfConstraintDefinitionName:
 		return "(*ConstraintDefinition).Name"
 	case RefOfConstraintDefinitionDetails:
@@ -1673,6 +1674,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ColumnTypeOptions).SecondaryEngineAttribute"
 	case RefOfColumnTypeOptionsSRID:
 		return "(*ColumnTypeOptions).SRID"
+	case SliceOfCompoundStatementOffset:
+		return "([]CompoundStatement)[]Offset"
 	case SliceOfRefOfProcParameterOffset:
 		return "([]*ProcParameter)[]Offset"
 	case SliceOfHandlerConditionOffset:
@@ -1923,10 +1926,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*ComparisonExpr).Right
 		case RefOfComparisonExprEscape:
 			node = node.(*ComparisonExpr).Escape
-		case CompoundStatementsOffset:
+		case RefOfCompoundStatementsStatementsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
-			node = node.(CompoundStatements)[idx]
+			node = node.(*CompoundStatements).Statements[idx]
 		case RefOfConstraintDefinitionName:
 			node = node.(*ConstraintDefinition).Name
 		case RefOfConstraintDefinitionDetails:

@@ -115,8 +115,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCommonTableExpr(in)
 	case *ComparisonExpr:
 		return CloneRefOfComparisonExpr(in)
-	case CompoundStatements:
-		return CloneCompoundStatements(in)
+	case *CompoundStatements:
+		return CloneRefOfCompoundStatements(in)
 	case *ConstraintDefinition:
 		return CloneRefOfConstraintDefinition(in)
 	case *ConvertExpr:
@@ -866,7 +866,7 @@ func CloneRefOfBeginEndStatement(n *BeginEndStatement) *BeginEndStatement {
 		return nil
 	}
 	out := *n
-	out.Statements = CloneCompoundStatements(n.Statements)
+	out.Statements = CloneRefOfCompoundStatements(n.Statements)
 	return &out
 }
 
@@ -1087,16 +1087,14 @@ func CloneRefOfComparisonExpr(n *ComparisonExpr) *ComparisonExpr {
 	return &out
 }
 
-// CloneCompoundStatements creates a deep clone of the input.
-func CloneCompoundStatements(n CompoundStatements) CompoundStatements {
+// CloneRefOfCompoundStatements creates a deep clone of the input.
+func CloneRefOfCompoundStatements(n *CompoundStatements) *CompoundStatements {
 	if n == nil {
 		return nil
 	}
-	res := make(CompoundStatements, len(n))
-	for i, x := range n {
-		res[i] = CloneCompoundStatement(x)
-	}
-	return res
+	out := *n
+	out.Statements = CloneSliceOfCompoundStatement(n.Statements)
+	return &out
 }
 
 // CloneRefOfConstraintDefinition creates a deep clone of the input.
@@ -1376,7 +1374,7 @@ func CloneRefOfElseIfBlock(n *ElseIfBlock) *ElseIfBlock {
 	}
 	out := *n
 	out.SearchCondition = CloneExpr(n.SearchCondition)
-	out.ThenStatements = CloneCompoundStatements(n.ThenStatements)
+	out.ThenStatements = CloneRefOfCompoundStatements(n.ThenStatements)
 	return &out
 }
 
@@ -1762,9 +1760,9 @@ func CloneRefOfIfStatement(n *IfStatement) *IfStatement {
 	}
 	out := *n
 	out.SearchCondition = CloneExpr(n.SearchCondition)
-	out.ThenStatements = CloneCompoundStatements(n.ThenStatements)
+	out.ThenStatements = CloneRefOfCompoundStatements(n.ThenStatements)
 	out.ElseIfBlocks = CloneSliceOfRefOfElseIfBlock(n.ElseIfBlocks)
-	out.ElseStatements = CloneCompoundStatements(n.ElseStatements)
+	out.ElseStatements = CloneRefOfCompoundStatements(n.ElseStatements)
 	return &out
 }
 
@@ -4760,6 +4758,18 @@ func CloneSliceOfString(n []string) []string {
 	}
 	res := make([]string, len(n))
 	copy(res, n)
+	return res
+}
+
+// CloneSliceOfCompoundStatement creates a deep clone of the input.
+func CloneSliceOfCompoundStatement(n []CompoundStatement) []CompoundStatement {
+	if n == nil {
+		return nil
+	}
+	res := make([]CompoundStatement, len(n))
+	for i, x := range n {
+		res[i] = CloneCompoundStatement(x)
+	}
 	return res
 }
 

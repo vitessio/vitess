@@ -115,8 +115,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfCommonTableExpr(parent, node, replacer)
 	case *ComparisonExpr:
 		return a.rewriteRefOfComparisonExpr(parent, node, replacer)
-	case CompoundStatements:
-		return a.rewriteCompoundStatements(parent, node, replacer)
+	case *CompoundStatements:
+		return a.rewriteRefOfCompoundStatements(parent, node, replacer)
 	case *ConstraintDefinition:
 		return a.rewriteRefOfConstraintDefinition(parent, node, replacer)
 	case *ConvertExpr:
@@ -1758,8 +1758,8 @@ func (a *application) rewriteRefOfBeginEndStatement(parent SQLNode, node *BeginE
 	if a.collectPaths {
 		a.cur.current.AddStep(uint16(RefOfBeginEndStatementStatements))
 	}
-	if !a.rewriteCompoundStatements(node, node.Statements, func(newNode, parent SQLNode) {
-		parent.(*BeginEndStatement).Statements = newNode.(CompoundStatements)
+	if !a.rewriteRefOfCompoundStatements(node, node.Statements, func(newNode, parent SQLNode) {
+		parent.(*BeginEndStatement).Statements = newNode.(*CompoundStatements)
 	}) {
 		return false
 	}
@@ -2748,8 +2748,8 @@ func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *Compariso
 	return true
 }
 
-// Function Generation Source: SliceMethod
-func (a *application) rewriteCompoundStatements(parent SQLNode, node CompoundStatements, replacer replacerFunc) bool {
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfCompoundStatements(parent SQLNode, node *CompoundStatements, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -2766,23 +2766,23 @@ func (a *application) rewriteCompoundStatements(parent SQLNode, node CompoundSta
 			return true
 		}
 	}
-	for x, el := range node {
+	for x, el := range node.Statements {
 		if a.collectPaths {
 			if x == 0 {
-				a.cur.current.AddStepWithOffset(uint16(CompoundStatementsOffset))
+				a.cur.current.AddStepWithOffset(uint16(RefOfCompoundStatementsStatementsOffset))
 			} else {
 				a.cur.current.ChangeOffset(x)
 			}
 		}
 		if !a.rewriteCompoundStatement(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
-				parent.(CompoundStatements)[idx] = newNode.(CompoundStatement)
+				parent.(*CompoundStatements).Statements[idx] = newNode.(CompoundStatement)
 			}
 		}(x)) {
 			return false
 		}
 	}
-	if a.collectPaths && len(node) > 0 {
+	if a.collectPaths {
 		a.cur.current.Pop()
 	}
 	if a.post != nil {
@@ -4064,8 +4064,8 @@ func (a *application) rewriteRefOfElseIfBlock(parent SQLNode, node *ElseIfBlock,
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfElseIfBlockThenStatements))
 	}
-	if !a.rewriteCompoundStatements(node, node.ThenStatements, func(newNode, parent SQLNode) {
-		parent.(*ElseIfBlock).ThenStatements = newNode.(CompoundStatements)
+	if !a.rewriteRefOfCompoundStatements(node, node.ThenStatements, func(newNode, parent SQLNode) {
+		parent.(*ElseIfBlock).ThenStatements = newNode.(*CompoundStatements)
 	}) {
 		return false
 	}
@@ -5789,8 +5789,8 @@ func (a *application) rewriteRefOfIfStatement(parent SQLNode, node *IfStatement,
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfIfStatementThenStatements))
 	}
-	if !a.rewriteCompoundStatements(node, node.ThenStatements, func(newNode, parent SQLNode) {
-		parent.(*IfStatement).ThenStatements = newNode.(CompoundStatements)
+	if !a.rewriteRefOfCompoundStatements(node, node.ThenStatements, func(newNode, parent SQLNode) {
+		parent.(*IfStatement).ThenStatements = newNode.(*CompoundStatements)
 	}) {
 		return false
 	}
@@ -5817,8 +5817,8 @@ func (a *application) rewriteRefOfIfStatement(parent SQLNode, node *IfStatement,
 		a.cur.current.Pop()
 		a.cur.current.AddStep(uint16(RefOfIfStatementElseStatements))
 	}
-	if !a.rewriteCompoundStatements(node, node.ElseStatements, func(newNode, parent SQLNode) {
-		parent.(*IfStatement).ElseStatements = newNode.(CompoundStatements)
+	if !a.rewriteRefOfCompoundStatements(node, node.ElseStatements, func(newNode, parent SQLNode) {
+		parent.(*IfStatement).ElseStatements = newNode.(*CompoundStatements)
 	}) {
 		return false
 	}

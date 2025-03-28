@@ -546,8 +546,11 @@ func (bes *BeginEndStatement) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
-func (cs CompoundStatements) FormatFast(buf *TrackedBuffer) {
-	for _, stmt := range cs {
+func (cs *CompoundStatements) FormatFast(buf *TrackedBuffer) {
+	if cs == nil {
+		return
+	}
+	for _, stmt := range cs.Statements {
 		buf.WriteByte(' ')
 		stmt.FormatFast(buf)
 	}

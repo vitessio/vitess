@@ -114,8 +114,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCommonTableExpr(in, f)
 	case *ComparisonExpr:
 		return VisitRefOfComparisonExpr(in, f)
-	case CompoundStatements:
-		return VisitCompoundStatements(in, f)
+	case *CompoundStatements:
+		return VisitRefOfCompoundStatements(in, f)
 	case *ConstraintDefinition:
 		return VisitRefOfConstraintDefinition(in, f)
 	case *ConvertExpr:
@@ -956,7 +956,7 @@ func VisitRefOfBeginEndStatement(in *BeginEndStatement, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitCompoundStatements(in.Statements, f); err != nil {
+	if err := VisitRefOfCompoundStatements(in.Statements, f); err != nil {
 		return err
 	}
 	return nil
@@ -1254,14 +1254,14 @@ func VisitRefOfComparisonExpr(in *ComparisonExpr, f Visit) error {
 	}
 	return nil
 }
-func VisitCompoundStatements(in CompoundStatements, f Visit) error {
+func VisitRefOfCompoundStatements(in *CompoundStatements, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in {
+	for _, el := range in.Statements {
 		if err := VisitCompoundStatement(el, f); err != nil {
 			return err
 		}
@@ -1654,7 +1654,7 @@ func VisitRefOfElseIfBlock(in *ElseIfBlock, f Visit) error {
 	if err := VisitExpr(in.SearchCondition, f); err != nil {
 		return err
 	}
-	if err := VisitCompoundStatements(in.ThenStatements, f); err != nil {
+	if err := VisitRefOfCompoundStatements(in.ThenStatements, f); err != nil {
 		return err
 	}
 	return nil
@@ -2171,7 +2171,7 @@ func VisitRefOfIfStatement(in *IfStatement, f Visit) error {
 	if err := VisitExpr(in.SearchCondition, f); err != nil {
 		return err
 	}
-	if err := VisitCompoundStatements(in.ThenStatements, f); err != nil {
+	if err := VisitRefOfCompoundStatements(in.ThenStatements, f); err != nil {
 		return err
 	}
 	for _, el := range in.ElseIfBlocks {
@@ -2179,7 +2179,7 @@ func VisitRefOfIfStatement(in *IfStatement, f Visit) error {
 			return err
 		}
 	}
-	if err := VisitCompoundStatements(in.ElseStatements, f); err != nil {
+	if err := VisitRefOfCompoundStatements(in.ElseStatements, f); err != nil {
 		return err
 	}
 	return nil

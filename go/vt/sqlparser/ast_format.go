@@ -396,8 +396,11 @@ func (bes *BeginEndStatement) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (cs CompoundStatements) Format(buf *TrackedBuffer) {
-	for _, stmt := range cs {
+func (cs *CompoundStatements) Format(buf *TrackedBuffer) {
+	if cs == nil {
+		return
+	}
+	for _, stmt := range cs.Statements {
 		buf.astPrintf(cs, " %v", stmt)
 	}
 }

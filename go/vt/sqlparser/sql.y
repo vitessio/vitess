@@ -71,7 +71,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   statements      []Statement
   selStmt         SelectStatement
   compoundStatement CompoundStatement
-  compoundStatements CompoundStatements
+  compoundStatements *CompoundStatements
   tableStmt    TableStatement
   tableExpr       TableExpr
   expr            Expr
@@ -967,11 +967,12 @@ compound_statement_list_opt:
 compound_statement_list:
   compound_statement_with_semicolon
   {
-    $$ = CompoundStatements{$1}
+    $$ = &CompoundStatements{Statements: []CompoundStatement{$1}}
   }
 | compound_statement_list compound_statement_with_semicolon
   {
-    $$ = append($1, $2)
+    $1.Statements = append($1.Statements, $2)
+    $$ = $1
   }
 
 else_opt:

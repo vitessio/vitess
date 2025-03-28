@@ -114,8 +114,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfCommonTableExpr(n, parent)
 	case *ComparisonExpr:
 		return c.copyOnRewriteRefOfComparisonExpr(n, parent)
-	case CompoundStatements:
-		return c.copyOnRewriteCompoundStatements(n, parent)
+	case *CompoundStatements:
+		return c.copyOnRewriteRefOfCompoundStatements(n, parent)
 	case *ConstraintDefinition:
 		return c.copyOnRewriteRefOfConstraintDefinition(n, parent)
 	case *ConvertExpr:
@@ -1159,10 +1159,10 @@ func (c *cow) copyOnRewriteRefOfBeginEndStatement(n *BeginEndStatement, parent S
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Statements, changedStatements := c.copyOnRewriteCompoundStatements(n.Statements, n)
+		_Statements, changedStatements := c.copyOnRewriteRefOfCompoundStatements(n.Statements, n)
 		if changedStatements {
 			res := *n
-			res.Statements, _ = _Statements.(CompoundStatements)
+			res.Statements, _ = _Statements.(*CompoundStatements)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -1646,22 +1646,29 @@ func (c *cow) copyOnRewriteRefOfComparisonExpr(n *ComparisonExpr, parent SQLNode
 	}
 	return
 }
-func (c *cow) copyOnRewriteCompoundStatements(n CompoundStatements, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfCompoundStatements(n *CompoundStatements, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		res := make(CompoundStatements, len(n))
-		for x, el := range n {
-			this, change := c.copyOnRewriteCompoundStatement(el, n)
-			res[x] = this.(CompoundStatement)
-			if change {
-				changed = true
+		var changedStatements bool
+		_Statements := make([]CompoundStatement, len(n.Statements))
+		for x, el := range n.Statements {
+			this, changed := c.copyOnRewriteCompoundStatement(el, n)
+			_Statements[x] = this.(CompoundStatement)
+			if changed {
+				changedStatements = true
 			}
 		}
-		if changed {
-			out = res
+		if changedStatements {
+			res := *n
+			res.Statements = _Statements
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
 		}
 	}
 	if c.post != nil {
@@ -2272,11 +2279,11 @@ func (c *cow) copyOnRewriteRefOfElseIfBlock(n *ElseIfBlock, parent SQLNode) (out
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_SearchCondition, changedSearchCondition := c.copyOnRewriteExpr(n.SearchCondition, n)
-		_ThenStatements, changedThenStatements := c.copyOnRewriteCompoundStatements(n.ThenStatements, n)
+		_ThenStatements, changedThenStatements := c.copyOnRewriteRefOfCompoundStatements(n.ThenStatements, n)
 		if changedSearchCondition || changedThenStatements {
 			res := *n
 			res.SearchCondition, _ = _SearchCondition.(Expr)
-			res.ThenStatements, _ = _ThenStatements.(CompoundStatements)
+			res.ThenStatements, _ = _ThenStatements.(*CompoundStatements)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -3102,7 +3109,7 @@ func (c *cow) copyOnRewriteRefOfIfStatement(n *IfStatement, parent SQLNode) (out
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_SearchCondition, changedSearchCondition := c.copyOnRewriteExpr(n.SearchCondition, n)
-		_ThenStatements, changedThenStatements := c.copyOnRewriteCompoundStatements(n.ThenStatements, n)
+		_ThenStatements, changedThenStatements := c.copyOnRewriteRefOfCompoundStatements(n.ThenStatements, n)
 		var changedElseIfBlocks bool
 		_ElseIfBlocks := make([]*ElseIfBlock, len(n.ElseIfBlocks))
 		for x, el := range n.ElseIfBlocks {
@@ -3112,13 +3119,13 @@ func (c *cow) copyOnRewriteRefOfIfStatement(n *IfStatement, parent SQLNode) (out
 				changedElseIfBlocks = true
 			}
 		}
-		_ElseStatements, changedElseStatements := c.copyOnRewriteCompoundStatements(n.ElseStatements, n)
+		_ElseStatements, changedElseStatements := c.copyOnRewriteRefOfCompoundStatements(n.ElseStatements, n)
 		if changedSearchCondition || changedThenStatements || changedElseIfBlocks || changedElseStatements {
 			res := *n
 			res.SearchCondition, _ = _SearchCondition.(Expr)
-			res.ThenStatements, _ = _ThenStatements.(CompoundStatements)
+			res.ThenStatements, _ = _ThenStatements.(*CompoundStatements)
 			res.ElseIfBlocks = _ElseIfBlocks
-			res.ElseStatements, _ = _ElseStatements.(CompoundStatements)
+			res.ElseStatements, _ = _ElseStatements.(*CompoundStatements)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

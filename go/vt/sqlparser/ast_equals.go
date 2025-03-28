@@ -302,12 +302,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfComparisonExpr(a, b)
-	case CompoundStatements:
-		b, ok := inB.(CompoundStatements)
+	case *CompoundStatements:
+		b, ok := inB.(*CompoundStatements)
 		if !ok {
 			return false
 		}
-		return cmp.CompoundStatements(a, b)
+		return cmp.RefOfCompoundStatements(a, b)
 	case *ConstraintDefinition:
 		b, ok := inB.(*ConstraintDefinition)
 		if !ok {
@@ -2076,7 +2076,7 @@ func (cmp *Comparator) RefOfBeginEndStatement(a, b *BeginEndStatement) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.CompoundStatements(a.Statements, b.Statements)
+	return cmp.RefOfCompoundStatements(a.Statements, b.Statements)
 }
 
 // RefOfBetweenExpr does deep equals between the two objects.
@@ -2338,17 +2338,15 @@ func (cmp *Comparator) RefOfComparisonExpr(a, b *ComparisonExpr) bool {
 		cmp.Expr(a.Escape, b.Escape)
 }
 
-// CompoundStatements does deep equals between the two objects.
-func (cmp *Comparator) CompoundStatements(a, b CompoundStatements) bool {
-	if len(a) != len(b) {
+// RefOfCompoundStatements does deep equals between the two objects.
+func (cmp *Comparator) RefOfCompoundStatements(a, b *CompoundStatements) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
 		return false
 	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.CompoundStatement(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
+	return cmp.SliceOfCompoundStatement(a.Statements, b.Statements)
 }
 
 // RefOfConstraintDefinition does deep equals between the two objects.
@@ -2679,7 +2677,7 @@ func (cmp *Comparator) RefOfElseIfBlock(a, b *ElseIfBlock) bool {
 		return false
 	}
 	return cmp.Expr(a.SearchCondition, b.SearchCondition) &&
-		cmp.CompoundStatements(a.ThenStatements, b.ThenStatements)
+		cmp.RefOfCompoundStatements(a.ThenStatements, b.ThenStatements)
 }
 
 // RefOfExecuteStmt does deep equals between the two objects.
@@ -3127,9 +3125,9 @@ func (cmp *Comparator) RefOfIfStatement(a, b *IfStatement) bool {
 		return false
 	}
 	return cmp.Expr(a.SearchCondition, b.SearchCondition) &&
-		cmp.CompoundStatements(a.ThenStatements, b.ThenStatements) &&
+		cmp.RefOfCompoundStatements(a.ThenStatements, b.ThenStatements) &&
 		cmp.SliceOfRefOfElseIfBlock(a.ElseIfBlocks, b.ElseIfBlocks) &&
-		cmp.CompoundStatements(a.ElseStatements, b.ElseStatements)
+		cmp.RefOfCompoundStatements(a.ElseStatements, b.ElseStatements)
 }
 
 // RefOfIndexDefinition does deep equals between the two objects.
@@ -7846,6 +7844,19 @@ func (cmp *Comparator) SliceOfString(a, b []string) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// SliceOfCompoundStatement does deep equals between the two objects.
+func (cmp *Comparator) SliceOfCompoundStatement(a, b []CompoundStatement) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.CompoundStatement(a[i], b[i]) {
 			return false
 		}
 	}

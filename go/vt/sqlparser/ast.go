@@ -770,7 +770,9 @@ type (
 // Compound Statements
 type (
 	// CompoundStatements represents a list of compound statements.
-	CompoundStatements []CompoundStatement
+	CompoundStatements struct {
+		Statements []CompoundStatement
+	}
 
 	// SingleStatement represents a single statement.
 	SingleStatement struct {
@@ -779,21 +781,21 @@ type (
 
 	// BeginEndStatement represents a BEGIN ... END block.
 	BeginEndStatement struct {
-		Statements CompoundStatements
+		Statements *CompoundStatements
 	}
 
 	// IfStatement represents a IF ... ELSEIF ... ELSE ... END IF block.
 	IfStatement struct {
 		SearchCondition Expr
-		ThenStatements  CompoundStatements
+		ThenStatements  *CompoundStatements
 		ElseIfBlocks    []*ElseIfBlock
-		ElseStatements  CompoundStatements
+		ElseStatements  *CompoundStatements
 	}
 
 	// ElseIfBlock represents a ELSEIF block in an IF statement.
 	ElseIfBlock struct {
 		SearchCondition Expr
-		ThenStatements  CompoundStatements
+		ThenStatements  *CompoundStatements
 	}
 
 	// DeclareVar represents a Local Variable DECLARE Statement
