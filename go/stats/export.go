@@ -62,6 +62,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &statsBackend, "stats-backend", statsBackend, "The name of the registered push-based monitoring/stats backend to use")
 	utils.SetFlagStringVar(fs, &combineDimensions, "stats-combine-dimensions", combineDimensions, `List of dimensions to be combined into a single "all" value in exported stats vars`)
 	utils.SetFlagStringVar(fs, &dropVariables, "stats-drop-variables", dropVariables, `Variables to be dropped from the list of exported variables.`)
+	utils.SetFlagStringSliceVar(fs, &CommonTags, "stats-common-tags", CommonTags, `Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2`)
 }
 
 // StatsAllStr is the consolidated name if a dimension gets combined.
