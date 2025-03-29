@@ -1274,7 +1274,7 @@ func TestReplaceSchemaName(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 
-	queryFmt := "select * from information_schema.schema_name where schema_name = %s"
+	queryFmt := "select * from information_schema.`schema_name` where `schema_name` = %s"
 	inQuery := fmt.Sprintf(queryFmt, ":"+sqltypes.BvSchemaName)
 	wantQuery := fmt.Sprintf(queryFmt, fmt.Sprintf(
 		"'%s' limit %d",
