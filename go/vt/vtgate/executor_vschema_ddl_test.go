@@ -60,7 +60,7 @@ func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSche
 
 	// Wait up to 100ms until the vindex manager gets notified of the update
 	for i := 0; i < 10; i++ {
-		vschema := executor.vm.GetCurrentSrvVschema()
+		vschema := executor.config.VSchemaManager.GetCurrentSrvVschema()
 		vindex, ok := vschema.Keyspaces[ks].Vindexes[name]
 		if ok {
 			return vschema, vindex
@@ -77,7 +77,7 @@ func waitForVschemaTables(t *testing.T, ks string, tables []string, executor *Ex
 
 	// Wait up to 100ms until the vindex manager gets notified of the update
 	for i := 0; i < 10; i++ {
-		vschema := executor.vm.GetCurrentSrvVschema()
+		vschema := executor.config.VSchemaManager.GetCurrentSrvVschema()
 		var gotTables []string
 		for t := range vschema.Keyspaces[ks].Tables {
 			gotTables = append(gotTables, t)
@@ -106,7 +106,7 @@ func waitForColVindexes(t *testing.T, ks, table string, names []string, executor
 	// Wait up to 10ms until the vindex manager gets notified of the update
 	for i := 0; i < 10; i++ {
 
-		vschema := executor.vm.GetCurrentSrvVschema()
+		vschema := executor.config.VSchemaManager.GetCurrentSrvVschema()
 		table, ok := vschema.Keyspaces[ks].Tables[table]
 
 		// The table is removed from the vschema when there are no
@@ -143,7 +143,7 @@ func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 2)
-	executor.serv.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
+	executor.config.TopoServer.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
 		vschemaUpdates <- vschema
 		return true
 	})
@@ -171,7 +171,7 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
+	executor.config.TopoServer.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
 		vschemaUpdates <- vschema
 		return true
 	})
@@ -213,7 +213,7 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 	ks := "TestExecutor"
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
+	executor.config.TopoServer.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
 		vschemaUpdates <- vschema
 		return true
 	})
@@ -282,7 +282,7 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 	ks := KsTestUnsharded
 
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
+	executor.config.TopoServer.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
 		vschemaUpdates <- vschema
 		return true
 	})
@@ -338,7 +338,7 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	ks := KsTestUnsharded
 
-	vschema := executor.vm.GetCurrentSrvVschema()
+	vschema := executor.config.VSchemaManager.GetCurrentSrvVschema()
 
 	var vschemaTables []string
 	for t := range vschema.Keyspaces[ks].Tables {
@@ -350,7 +350,7 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 	_, err := executorExecSession(ctx, executor, session, stmt, nil)
 	require.NoError(t, err)
 	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_seq"}...), executor)
-	vschema = executor.vm.GetCurrentSrvVschema()
+	vschema = executor.config.VSchemaManager.GetCurrentSrvVschema()
 	table := vschema.Keyspaces[ks].Tables["test_seq"]
 	wantType := "sequence"
 	if table.Type != wantType {
@@ -383,7 +383,7 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "`db-name`.test_seq"}
-	gotAutoInc := executor.vm.GetCurrentSrvVschema().Keyspaces[ksSharded].Tables["test_table"].AutoIncrement
+	gotAutoInc := executor.config.VSchemaManager.GetCurrentSrvVschema().Keyspaces[ksSharded].Tables["test_table"].AutoIncrement
 
 	if !reflect.DeepEqual(wantAutoInc, gotAutoInc) {
 		t.Errorf("want autoinc %v, got autoinc %v", wantAutoInc, gotAutoInc)
@@ -398,7 +398,7 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	ks := KsTestUnsharded
 
-	vschema := executor.vm.GetCurrentSrvVschema()
+	vschema := executor.config.VSchemaManager.GetCurrentSrvVschema()
 
 	_, ok := vschema.Keyspaces[ks].Tables["test_seq"]
 	if ok {
@@ -412,7 +412,7 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 	_, err := executorExecSession(ctx, executor, session, stmt, nil)
 	require.NoError(t, err)
 	_ = waitForVschemaTables(t, ks, []string{"test_seq"}, executor)
-	vschema = executor.vm.GetCurrentSrvVschema()
+	vschema = executor.config.VSchemaManager.GetCurrentSrvVschema()
 	table := vschema.Keyspaces[ks].Tables["test_seq"]
 	wantType := "sequence"
 	require.Equal(t, wantType, table.Type)
@@ -467,7 +467,7 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	ts = executor.VSchema().GetCreated()
 
 	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "`db-name`.test_seq"}
-	gotAutoInc := executor.vm.GetCurrentSrvVschema().Keyspaces[ks].Tables["test_table"].AutoIncrement
+	gotAutoInc := executor.config.VSchemaManager.GetCurrentSrvVschema().Keyspaces[ks].Tables["test_table"].AutoIncrement
 
 	utils.MustMatch(t, wantAutoInc, gotAutoInc)
 
@@ -478,7 +478,7 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	if !waitForNewerVSchema(ctx, executor, ts, 5*time.Second) {
 		t.Fatalf("vschema did not drop the auto_increment for 'test_table'")
 	}
-	if executor.vm.GetCurrentSrvVschema().Keyspaces[ks].Tables["test_table"].AutoIncrement != nil {
+	if executor.config.VSchemaManager.GetCurrentSrvVschema().Keyspaces[ks].Tables["test_table"].AutoIncrement != nil {
 		t.Errorf("auto increment should be nil after drop")
 	}
 }
@@ -492,7 +492,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	ks := "TestExecutor"
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
+	executor.config.TopoServer.WatchSrvVSchema(ctx, "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
 		vschemaUpdates <- vschema
 		return true
 	})

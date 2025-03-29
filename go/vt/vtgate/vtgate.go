@@ -379,9 +379,15 @@ func Init(
 		AllowScatter:        !noScatter,
 		WarmingReadsPercent: warmingReadsPercent,
 		QueryLogToFile:      queryLogToFile,
+		Env:                 env,
+		TopoServer:          serv,
+		Cell:                cell,
+		Resolver:            resolver,
+		SchemaInfo:          si,
+		PlannerVersion:      pv,
 	}
 
-	executor := NewExecutor(ctx, env, serv, cell, resolver, eConfig, warnShardedOnly, plans, si, pv, dynamicConfig)
+	executor := NewExecutor(ctx, eConfig, warnShardedOnly, plans, dynamicConfig)
 
 	if err := executor.defaultQueryLogger(); err != nil {
 		log.Fatalf("error initializing query logger: %v", err)
@@ -389,7 +395,7 @@ func Init(
 
 	// connect the schema tracker with the vschema manager
 	if enableSchemaChangeSignal {
-		st.RegisterSignalReceiver(executor.vm.Rebuild)
+		st.RegisterSignalReceiver(executor.config.VSchemaManager.Rebuild)
 	}
 
 	vtgateInst := newVTGate(executor, resolver, vsm, tc, gw)
@@ -579,7 +585,7 @@ func (vtg *VTGate) Execute(
 		"BindVariables": bindVariables,
 		"Session":       session,
 	}
-	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute, vtg.executor.vm.parser)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute, vtg.executor.config.VSchemaManager.parser)
 	return session, nil, err
 }
 
@@ -645,7 +651,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 			"BindVariables": bindVariables,
 			"Session":       session,
 		}
-		return safeSession.Session, recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute, vtg.executor.vm.parser)
+		return safeSession.Session, recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute, vtg.executor.config.VSchemaManager.parser)
 	}
 	return safeSession.Session, nil
 }
@@ -673,7 +679,7 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 		"Sql":     sql,
 		"Session": session,
 	}
-	err = recordAndAnnotateError(err, statsKey, query, vtg.logPrepare, vtg.executor.vm.parser)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logPrepare, vtg.executor.config.VSchemaManager.parser)
 	return session, nil, 0, err
 }
 

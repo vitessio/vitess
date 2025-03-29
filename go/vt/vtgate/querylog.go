@@ -42,7 +42,7 @@ func (e *Executor) defaultQueryLogger() error {
 	servenv.HTTPHandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {
 		ch := queryLogger.Subscribe("querylogz")
 		defer queryLogger.Unsubscribe(ch)
-		querylogzHandler(ch, w, r, e.env.Parser())
+		querylogzHandler(ch, w, r, e.config.Env.Parser())
 	})
 
 	servenv.HTTPHandleFunc(QueryzHandler, func(w http.ResponseWriter, r *http.Request) {

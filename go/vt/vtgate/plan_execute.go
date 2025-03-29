@@ -103,8 +103,8 @@ func (e *Executor) newExecute(
 			// within the given window of time for most queries and we should not end up waiting too long
 			// after the traffic switch fails or the buffer window has ended, retrying old queries.
 			timeout := vschemaWaitTimeout
-			if e.resolver.scatterConn.gateway.buffer != nil && e.resolver.scatterConn.gateway.buffer.GetConfig() != nil {
-				timeout = e.resolver.scatterConn.gateway.buffer.GetConfig().MaxFailoverDuration / (MaxBufferingRetries - 1)
+			if e.config.Resolver.scatterConn.gateway.buffer != nil && e.config.Resolver.scatterConn.gateway.buffer.GetConfig() != nil {
+				timeout = e.config.Resolver.scatterConn.gateway.buffer.GetConfig().MaxFailoverDuration / (MaxBufferingRetries - 1)
 			}
 			if waitForNewerVSchema(ctx, e, lastVSchemaCreated, timeout) {
 				vs = e.VSchema()

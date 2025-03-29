@@ -601,7 +601,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	s.ShardSpec = "-40-80-"
 	s.VSchema = shardedVSchema
 	srvSchema := getSandboxSrvVSchema()
-	vtg.executor.vm.VSchemaUpdate(srvSchema, nil)
+	vtg.executor.config.VSchemaManager.VSchemaUpdate(srvSchema, nil)
 
 	hc := vtg.resolver.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
 
@@ -695,7 +695,7 @@ func TestVSchemaVindexUnknownParams(t *testing.T) {
 	s.ShardSpec = "-40-80-"
 	s.VSchema = shardedVSchema
 	srvSchema := getSandboxSrvVSchema()
-	vtg.executor.vm.VSchemaUpdate(srvSchema, nil)
+	vtg.executor.config.VSchemaManager.VSchemaUpdate(srvSchema, nil)
 
 	hc := vtg.resolver.scatterConn.gateway.hc.(*discovery.FakeHealthCheck)
 	_ = hc.AddTestTablet("aa", "-40", 1, customKeyspace, "-40", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -707,14 +707,14 @@ func TestVSchemaVindexUnknownParams(t *testing.T) {
 
 	s.VSchema = shardedVSchemaUnknownParams
 	srvSchema = getSandboxSrvVSchema()
-	vtg.executor.vm.VSchemaUpdate(srvSchema, nil)
+	vtg.executor.config.VSchemaManager.VSchemaUpdate(srvSchema, nil)
 
 	unknownParams = vindexUnknownParams.Get()
 	require.Equal(t, int64(3), unknownParams)
 
 	s.VSchema = shardedVSchema
 	srvSchema = getSandboxSrvVSchema()
-	vtg.executor.vm.VSchemaUpdate(srvSchema, nil)
+	vtg.executor.config.VSchemaManager.VSchemaUpdate(srvSchema, nil)
 
 	unknownParams = vindexUnknownParams.Get()
 	require.Equal(t, int64(0), unknownParams)
@@ -726,8 +726,8 @@ func createVtgateEnv(t testing.TB) (*VTGate, *sandboxconn.SandboxConn, context.C
 	sb.ShardSpec = "-"
 	executor, _, _, sbc, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-	vsm := newVStreamManager(executor.resolver.resolver, executor.serv, cell)
-	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
+	vsm := newVStreamManager(executor.config.Resolver.resolver, executor.config.TopoServer, cell)
+	vtg := newVTGate(executor, executor.config.Resolver, vsm, nil, executor.scatterConn.gateway)
 
 	return vtg, sbc, ctx
 }

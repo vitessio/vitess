@@ -27,10 +27,8 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	"vitess.io/vitess/go/vt/vtenv"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -67,8 +65,11 @@ func TestStreamSQLSharded(t *testing.T) {
 	}
 	queryLogger := streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize)
 	plans := DefaultPlanCache()
-
-	executor := NewExecutor(ctx, vtenv.NewTestEnv(), serv, cell, resolver, createExecutorConfig(), false, plans, nil, querypb.ExecuteOptions_Gen4, NewDynamicViperConfig())
+	config := createExecutorConfig()
+	config.TopoServer = serv
+	config.Cell = cell
+	config.Resolver = resolver
+	executor := NewExecutor(ctx, config, false, plans, NewDynamicViperConfig())
 	executor.SetQueryLogger(queryLogger)
 
 	defer executor.Close()
