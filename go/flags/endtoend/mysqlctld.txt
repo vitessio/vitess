@@ -46,7 +46,7 @@ Flags:
       --db-credentials-vault-ttl duration                                How long to cache DB credentials from the Vault server (default 30m0s)
       --db-dba-password string                                           db dba password
       --db-dba-use-ssl                                                   Set this flag to false to make the dba connection to not use ssl (default true)
-      --db-dba-user string                                               db dba user userKey (default "vt-dba")
+      --db-dba-user string                                               db dba user userKey (default "vt_dba")
       --db-flags uint                                                    Flag values as defined by MySQL.
       --db-flavor string                                                 Flavor overrid. Valid value is FilePos.
       --db-host string                                                   The host name for the tcp connection.
