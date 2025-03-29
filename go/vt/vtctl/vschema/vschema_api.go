@@ -215,6 +215,7 @@ func (api *VSchemaAPI) RemoveVindex(ctx context.Context, req *vtctldatapb.VSchem
 			req.VindexName, req.VSchemaName)
 	}
 	delete(vsInfo.Vindexes, req.VindexName)
+	// TODO: Should we remove all the column vindexes that were using the vindex?
 	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
 		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
 			vsInfo, req.VSchemaName)
@@ -223,7 +224,6 @@ func (api *VSchemaAPI) RemoveVindex(ctx context.Context, req *vtctldatapb.VSchem
 }
 
 func (api *VSchemaAPI) AddLookupVindex(ctx context.Context, req *vtctldatapb.VSchemaAddLookupVindexRequest) error {
-	// TODO(beingnoble03): Check if we also need to add column vindexes on source and target tables.
 	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
@@ -234,6 +234,9 @@ func (api *VSchemaAPI) AddLookupVindex(ctx context.Context, req *vtctldatapb.VSc
 	}
 	if len(req.FromColumns) == 0 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at least 1 column should be specified for lookup vindex")
+	}
+	if err := validateQualifiedTableType(ctx, api.ts, req.TableName, vindexes.TypeTable); err != nil {
+		return vterrors.Wrapf(err, "invalid lookup table")
 	}
 	params := map[string]string{
 		"table":        req.TableName,
@@ -250,6 +253,18 @@ func (api *VSchemaAPI) AddLookupVindex(ctx context.Context, req *vtctldatapb.VSc
 		Owner:  req.Owner,
 	}
 	vsInfo.Vindexes[req.VindexName] = vindex
+
+	// Add column vindex to the owner.
+	if req.Owner != "" {
+		ownerTable, ok := vsInfo.Tables[req.Owner]
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table '%s' not found in '%s' keyspace", req.Owner, req.VSchemaName)
+		}
+		ownerTable.ColumnVindexes = append(ownerTable.ColumnVindexes, &vschemapb.ColumnVindex{
+			Name:    req.VindexName,
+			Columns: req.FromColumns,
+		})
+	}
 	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
 		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
 			vsInfo, req.VSchemaName)
@@ -359,8 +374,7 @@ func (api *VSchemaAPI) SetSequence(ctx context.Context, req *vtctldatapb.VSchema
 	if req.Column == "" {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column name cannot be empty")
 	}
-	err = validateQualifiedTableType(ctx, api.ts, req.SequenceSource, vindexes.TypeSequence)
-	if err != nil {
+	if err := validateQualifiedTableType(ctx, api.ts, req.SequenceSource, vindexes.TypeSequence); err != nil {
 		return vterrors.Wrapf(err, "invalid sequence table source")
 	}
 	table.AutoIncrement = &vschemapb.AutoIncrement{
@@ -385,8 +399,7 @@ func (api *VSchemaAPI) SetReference(ctx context.Context, req *vtctldatapb.VSchem
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table '%s' is already a reference table", req.TableName)
 	}
 	if req.Source != "" {
-		err = validateQualifiedTableType(ctx, api.ts, req.Source, vindexes.TypeReference)
-		if err != nil {
+		if err := validateQualifiedTableType(ctx, api.ts, req.Source, vindexes.TypeReference); err != nil {
 			return vterrors.Wrapf(err, "invalid reference table source")
 		}
 	}

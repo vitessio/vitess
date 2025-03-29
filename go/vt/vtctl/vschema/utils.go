@@ -105,7 +105,7 @@ func parseTenantIdColumnType(tenantType string) (querypb.Type, error) {
 }
 
 // validateQualifiedTableType validates that the specified table name is
-// qualified and it matches the specified expected type.
+// qualified, and exists in the keyspace and it matches the specified expected type.
 func validateQualifiedTableType(ctx context.Context, ts *topo.Server, qualifiedTableName string, expectedType string) error {
 	ksName, tableName, err := vindexes.ExtractTableParts(qualifiedTableName, false)
 	if err != nil {
