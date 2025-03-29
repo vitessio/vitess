@@ -849,10 +849,10 @@ func (e *Executor) ShowShards(ctx context.Context, filter *sqlparser.ShowFilter,
 		}
 
 		_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, destTabletType)
-		if err != nil {
-			// There might be a misconfigured keyspace or no shards in the keyspace.
-			// Skip any errors and move on.
-			continue
+		if err != nil && vterrors.Code(err) != vtrpcpb.Code_INVALID_ARGUMENT {
+			// We only ignore invalid argument errors, as they mean the keyspace
+			// doesn't have any shards for the given tablet type.
+			return nil, err
 		}
 
 		for _, shard := range shards {
