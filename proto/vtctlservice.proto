@@ -371,6 +371,9 @@ service Vtctld {
   rpc VDiffResume(vtctldata.VDiffResumeRequest) returns (vtctldata.VDiffResumeResponse) {};
   rpc VDiffShow(vtctldata.VDiffShowRequest) returns (vtctldata.VDiffShowResponse) {};
   rpc VDiffStop(vtctldata.VDiffStopRequest) returns (vtctldata.VDiffStopResponse) {};
+  // VSchemaSetReference sets up a reference table, which points to a source
+  // table in another vschema.
+  rpc VSchemaSetReference(vtctldata.VSchemaSetReferenceRequest) returns (vtctldata.VSchemaSetReferenceResponse) {};
   // WorkflowDelete deletes a vreplication workflow.
   rpc WorkflowDelete(vtctldata.WorkflowDeleteRequest) returns (vtctldata.WorkflowDeleteResponse) {};
   rpc WorkflowStatus(vtctldata.WorkflowStatusRequest) returns (vtctldata.WorkflowStatusResponse) {};
