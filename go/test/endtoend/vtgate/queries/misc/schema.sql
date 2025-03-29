@@ -1,7 +1,9 @@
 create table t1
 (
-    id1 bigint,
-    id2 bigint,
+    id1  bigint,
+    id2  bigint,
+    id   bigint,
+    name varchar,
     primary key (id1)
 ) Engine=InnoDB;
 

@@ -88,6 +88,7 @@ type (
 		EnableViews        bool
 		WarnShardedOnly    bool
 		PlannerVersion     plancontext.PlannerVersion
+		AllowBlockJoins    bool
 
 		WarmingReadsPercent int
 		WarmingReadsTimeout time.Duration
@@ -1575,6 +1576,10 @@ func (vc *VCursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName str
 
 func (vc *VCursorImpl) IsViewsEnabled() bool {
 	return vc.config.EnableViews
+}
+
+func (vc *VCursorImpl) AreBlockJoinsEnabled() bool {
+	return vc.config.AllowBlockJoins
 }
 
 func (vc *VCursorImpl) GetUDV(name string) *querypb.BindVariable {

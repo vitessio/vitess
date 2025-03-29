@@ -83,6 +83,9 @@ type VSchema interface {
 	// IsViewsEnabled returns true if Vitess manages the views.
 	IsViewsEnabled() bool
 
+	// AreBlockJoinsEnabled returns true if the planner can use values-based joins instead of apply joins.
+	AreBlockJoinsEnabled() bool
+
 	// GetUDV returns user defined value from the variable passed.
 	GetUDV(name string) *querypb.BindVariable
 
