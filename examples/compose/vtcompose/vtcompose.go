@@ -632,12 +632,12 @@ func generateVtctld(opts vtOptions) string {
     command: ["sh", "-c", " /vt/bin/vtctld \
         %[3]s \
         --cell %[4]s \
-        --service_map 'grpc-vtctl,grpc-vtctld' \
+        --service-map 'grpc-vtctl,grpc-vtctld' \
         --backup_storage_implementation file \
         --file_backup_storage_root /vt/vtdataroot/backups \
         --logtostderr=true \
         --port %[1]d \
-        --grpc_port %[2]d \
+        --grpc-port %[2]d \
         "]
     volumes:
       - .:/script
@@ -665,13 +665,13 @@ func generateVtgate(opts vtOptions) string {
         %[4]s \
         --logtostderr=true \
         --port %[1]d \
-        --grpc_port %[2]d \
+        --grpc-port %[2]d \
         --mysql_server_port %[3]d \
         --mysql_auth_server_impl none \
         --cell %[5]s \
         --cells_to_watch %[5]s \
         --tablet_types_to_wait PRIMARY,REPLICA,RDONLY \
-        --service_map 'grpc-vtgateservice' \
+        --service-map 'grpc-vtgateservice' \
         --normalize_queries=true \
         "]
     volumes:

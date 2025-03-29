@@ -1044,10 +1044,10 @@ func TestSuite(ctx context.Context, t *testing.T, protocol string, tablet *topod
 		grpcclient.RegisterFlags(fs)
 
 		err := fs.Parse([]string{
-			"--grpc_auth_static_client_creds",
+			"--grpc-auth-static-client-creds",
 			clientCreds.Name(),
 		})
-		require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", clientCreds.Name())
+		require.NoError(t, err, "failed to set `--grpc-auth-static-client-creds=%s`", clientCreds.Name())
 	}
 
 	conn, err := tabletconn.GetDialer()(ctx, tablet, grpcclient.FailFast(false))

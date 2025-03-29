@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -242,7 +243,7 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 		"--mysql_socket", mysqlSocket.Name(),
 
 		// Use opentsdb for stats.
-		"--stats_backend", "opentsdb",
+		utils.GetFlagVariantForTests("--stats-backend"), "opentsdb",
 		// Write stats to file for reading afterwards.
 		"--opentsdb_uri", fmt.Sprintf("file://%s", statsPath),
 	}

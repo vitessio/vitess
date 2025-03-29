@@ -136,12 +136,12 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	)
 
 	if vtp.PortGrpc != 0 {
-		vtp.proc.Args = append(vtp.proc.Args, "--grpc_port")
+		vtp.proc.Args = append(vtp.proc.Args, "--grpc-port")
 		vtp.proc.Args = append(vtp.proc.Args, fmt.Sprintf("%d", vtp.PortGrpc))
 	}
 
 	if vtp.BindAddressGprc != "" {
-		vtp.proc.Args = append(vtp.proc.Args, "--grpc_bind_address")
+		vtp.proc.Args = append(vtp.proc.Args, "--grpc-bind-address")
 		vtp.proc.Args = append(vtp.proc.Args, vtp.BindAddressGprc)
 	}
 
@@ -231,6 +231,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	}
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--db_charset", charset,
 		"--db_app_user", user,
 		"--db_app_password", pass,
@@ -277,23 +278,23 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--tablet_hostname", args.TabletHostName}...)
 	}
 	if servenv.GRPCAuth() == "mtls" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc_auth_mode", servenv.GRPCAuth(), "--grpc_key", servenv.GRPCKey(), "--grpc_cert", servenv.GRPCCert(), "--grpc_ca", servenv.GRPCCertificateAuthority(), "--grpc_auth_mtls_allowed_substrings", servenv.ClientCertSubstrings()}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc-auth-mode", servenv.GRPCAuth(), "--grpc-key", servenv.GRPCKey(), "--grpc-cert", servenv.GRPCCert(), "--grpc-ca", servenv.GRPCCertificateAuthority(), "--grpc-auth-mtls-allowed-substrings", servenv.ClientCertSubstrings()}...)
 	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
 	}
-	vt.ExtraArgs = append(vt.ExtraArgs, "--mysql_server_version", servenv.MySQLServerVersion())
+	vt.ExtraArgs = append(vt.ExtraArgs, "--mysql-server-version", servenv.MySQLServerVersion())
 	if socket != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
-			"--db_socket", socket,
+			"--db-socket", socket,
 		}...)
 	} else {
 		hostname, p := mysql.Address()
 		port := fmt.Sprintf("%d", p)
 
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
-			"--db_host", hostname,
-			"--db_port", port,
+			"--db-host", hostname,
+			"--db-port", port,
 		}...)
 	}
 

@@ -83,24 +83,6 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		vtbackup.proc.Args = append(vtbackup.proc.Args, k, v)
 	}
 
-	// vtbackup.proc = exec.Command(
-	// 	vtbackup.Binary,
-	// 	"--topo-implementation", vtbackup.TopoImplementation,
-	// 	"--topo-global-server-address", vtbackup.TopoGlobalAddress,
-	// 	"--topo-global-root", vtbackup.TopoGlobalRoot,
-	// 	"--log_dir", vtbackup.LogDir,
-
-	// 	//initDBfile is required to run vtbackup
-	// 	"--mysql_port", fmt.Sprintf("%d", vtbackup.MysqlPort),
-	// 	"--init_db_sql_file", vtbackup.initDBfile,
-	// 	"--init_keyspace", vtbackup.Keyspace,
-	// 	"--init_shard", vtbackup.Shard,
-
-	// 	//Backup Arguments are not optional
-	// 	"--backup_storage_implementation", vtbackup.BackupStorageImplementation,
-	// 	"--file_backup_storage_root", vtbackup.FileBackupStorageRoot,
-	// )
-
 	if vtbackup.initialBackup {
 		vtbackup.proc.Args = append(vtbackup.proc.Args, "--initial_backup")
 	}

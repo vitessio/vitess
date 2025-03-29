@@ -202,7 +202,7 @@ func InitTabletMap(
 	// Do this before any tablets are created so that they respect the protocol,
 	// otherwise it defaults to grpc.
 	//
-	// main() forces the --tablet_manager_protocol flag to this value.
+	// main() forces the --tablet-manager-protocol flag to this value.
 	tmclient.RegisterTabletManagerClientFactory("internal", func() tmclient.TabletManagerClient {
 		return &internalTabletManagerClient{}
 	})

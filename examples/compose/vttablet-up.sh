@@ -142,7 +142,7 @@ else
                       --restore_from_backup"
 fi
 
-
+#TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 echo "Starting vttablet..."
 exec $VTROOT/bin/vttablet \
   $TOPOLOGY_FLAGS \

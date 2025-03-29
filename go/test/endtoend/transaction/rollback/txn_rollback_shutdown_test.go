@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -74,7 +75,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Set a short onterm timeout so the test goes faster.
-		clusterInstance.VtGateExtraArgs = []string{"--onterm_timeout", "1s"}
+		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--onterm-timeout"), "1s"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			panic(err)
