@@ -17,27 +17,23 @@ limitations under the License.
 package vttest
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/utils"
 )
 
 func TestVtcomboArguments(t *testing.T) {
 	env := &LocalTestEnv{}
 	args := env.VtcomboArguments()
 
-	serviceMapFlag := utils.GetFlagVariantForTests("--service-map")
 	t.Run("service-map flag", func(t *testing.T) {
-		require.Contains(t, args, serviceMapFlag, fmt.Sprintf("vttest.LocalTestEnv must provide `%s` flag to vtcombo", serviceMapFlag))
+		require.Contains(t, args, "--service-map", "vttest.LocalTestEnv must provide `--service-map` flag to vtcombo")
 
-		x := sort.SearchStrings(args, serviceMapFlag)
-		require.Less(t, x+1, len(args), "%s vtcombo flag (idx = %d) must take an argument. full arg list: %v", serviceMapFlag, x, args)
+		x := sort.SearchStrings(args, "--service-map")
+		require.Less(t, x+1, len(args), "--service-map vtcombo flag (idx = %d) must take an argument. full arg list: %v", x, args)
 
 		expectedServiceList := []string{
 			"grpc-vtgateservice",
@@ -45,6 +41,6 @@ func TestVtcomboArguments(t *testing.T) {
 			"grpc-vtctld",
 		}
 		serviceMapList := strings.Split(args[x+1], ",")
-		assert.ElementsMatch(t, expectedServiceList, serviceMapList, fmt.Sprintf("%s list does not contain expected vtcombo services", serviceMapFlag))
+		assert.ElementsMatch(t, expectedServiceList, serviceMapList, "--service-map list does not contain expected vtcombo services")
 	})
 }
