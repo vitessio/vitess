@@ -192,6 +192,7 @@ Flags:
       --srv_topo_timeout duration                                        topo server timeout (default 5s)
       --stats-backend string                                             The name of the registered push-based monitoring/stats backend to use
       --stats-combine-dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
+      --stats-common-tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
       --stats-drop-variables string                                      Variables to be dropped from the list of exported variables.
       --stats-emit-period duration                                       Interval between emitting stats to all registered backends (default 1m0s)
       --statsd_address string                                            Address for statsd client
