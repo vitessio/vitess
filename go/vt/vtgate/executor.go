@@ -28,6 +28,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"vitess.io/vitess/go/viperutil"
 
 	"github.com/spf13/pflag"
 
@@ -70,7 +71,13 @@ import (
 )
 
 var (
-	defaultTabletType = topodatapb.TabletType_PRIMARY
+	defaultTabletType = viperutil.Configure(
+		"default_tablet_type",
+		viperutil.Options[topodatapb.TabletType]{
+			FlagName: "default_tablet_type",
+			Default:  topodatapb.TabletType_PRIMARY,
+		},
+	)
 
 	// TODO: @harshit/@systay - Remove these deprecated stats once we have a replacement in a released version.
 	queriesProcessed        = stats.NewCountersWithSingleLabel("QueriesProcessed", "Deprecated: Queries processed at vtgate by plan type", "Plan")
@@ -98,7 +105,9 @@ const (
 
 func init() {
 	registerTabletTypeFlag := func(fs *pflag.FlagSet) {
-		fs.Var((*topoproto.TabletTypeFlag)(&defaultTabletType), "default_tablet_type", "The default tablet type to set for queries, when one is not explicitly selected.")
+
+		fs.Var(topodatapb.TabletType_PRIMARY, "default_tablet_type", "The default tablet type to set for queries, when one is not explicitly selected.")
+		viperutil.BindFlags(fs, defaultTabletType)
 	}
 
 	servenv.OnParseFor("vtgate", registerTabletTypeFlag)
@@ -1098,7 +1107,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
-	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
+	return econtext.ParseDestinationTarget(targetString, topodatapb.TabletType(defaultTabletType.Get()), e.VSchema())
 }
 
 func (e *Executor) fetchOrCreatePlan(
@@ -1533,7 +1542,7 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 
 	e.vConfig = econtext.VCursorConfig{
 		Collation:         connCollation,
-		DefaultTabletType: defaultTabletType,
+		DefaultTabletType: topodatapb.TabletType(defaultTabletType.Get()),
 		PlannerVersion:    pv,
 
 		QueryTimeout:  queryTimeout,
