@@ -18568,6 +18568,9 @@ export namespace topodata {
 
         /** Shard is_primary_serving */
         is_primary_serving?: (boolean|null);
+
+        /** Shard vtorc_config */
+        vtorc_config?: (topodata.IShardVtorcConfig|null);
     }
 
     /** Represents a Shard. */
@@ -18596,6 +18599,9 @@ export namespace topodata {
 
         /** Shard is_primary_serving. */
         public is_primary_serving: boolean;
+
+        /** Shard vtorc_config. */
+        public vtorc_config?: (topodata.IShardVtorcConfig|null);
 
         /**
          * Creates a new Shard instance using the specified properties.
@@ -20008,6 +20014,103 @@ export namespace topodata {
 
         /**
          * Gets the default type url for KeyspaceVtorcConfig
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ShardVtorcConfig. */
+    interface IShardVtorcConfig {
+
+        /** ShardVtorcConfig disable_emergency_reparent */
+        disable_emergency_reparent?: (boolean|null);
+    }
+
+    /** Represents a ShardVtorcConfig. */
+    class ShardVtorcConfig implements IShardVtorcConfig {
+
+        /**
+         * Constructs a new ShardVtorcConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IShardVtorcConfig);
+
+        /** ShardVtorcConfig disable_emergency_reparent. */
+        public disable_emergency_reparent: boolean;
+
+        /**
+         * Creates a new ShardVtorcConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardVtorcConfig instance
+         */
+        public static create(properties?: topodata.IShardVtorcConfig): topodata.ShardVtorcConfig;
+
+        /**
+         * Encodes the specified ShardVtorcConfig message. Does not implicitly {@link topodata.ShardVtorcConfig.verify|verify} messages.
+         * @param message ShardVtorcConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IShardVtorcConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardVtorcConfig message, length delimited. Does not implicitly {@link topodata.ShardVtorcConfig.verify|verify} messages.
+         * @param message ShardVtorcConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IShardVtorcConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardVtorcConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardVtorcConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardVtorcConfig;
+
+        /**
+         * Decodes a ShardVtorcConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardVtorcConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardVtorcConfig;
+
+        /**
+         * Verifies a ShardVtorcConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardVtorcConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardVtorcConfig
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ShardVtorcConfig;
+
+        /**
+         * Creates a plain object from a ShardVtorcConfig message. Also converts values to other types if specified.
+         * @param message ShardVtorcConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ShardVtorcConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardVtorcConfig to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardVtorcConfig
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -56785,6 +56888,9 @@ export namespace vtctldata {
 
         /** CreateShardRequest include_parent */
         include_parent?: (boolean|null);
+
+        /** CreateShardRequest vtorc_config */
+        vtorc_config?: (topodata.IShardVtorcConfig|null);
     }
 
     /** Represents a CreateShardRequest. */
@@ -56807,6 +56913,9 @@ export namespace vtctldata {
 
         /** CreateShardRequest include_parent. */
         public include_parent: boolean;
+
+        /** CreateShardRequest vtorc_config. */
+        public vtorc_config?: (topodata.IShardVtorcConfig|null);
 
         /**
          * Creates a new CreateShardRequest instance using the specified properties.
@@ -81035,376 +81144,200 @@ export namespace vtctldata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a DisableVtorcEmergencyReparentRequest. */
-    interface IDisableVtorcEmergencyReparentRequest {
+    /** Properties of a SetVtorcEmergencyReparentRequest. */
+    interface ISetVtorcEmergencyReparentRequest {
 
-        /** DisableVtorcEmergencyReparentRequest keyspace */
+        /** SetVtorcEmergencyReparentRequest keyspace */
         keyspace?: (string|null);
+
+        /** SetVtorcEmergencyReparentRequest shard */
+        shard?: (string|null);
+
+        /** SetVtorcEmergencyReparentRequest disable */
+        disable?: (boolean|null);
     }
 
-    /** Represents a DisableVtorcEmergencyReparentRequest. */
-    class DisableVtorcEmergencyReparentRequest implements IDisableVtorcEmergencyReparentRequest {
+    /** Represents a SetVtorcEmergencyReparentRequest. */
+    class SetVtorcEmergencyReparentRequest implements ISetVtorcEmergencyReparentRequest {
 
         /**
-         * Constructs a new DisableVtorcEmergencyReparentRequest.
+         * Constructs a new SetVtorcEmergencyReparentRequest.
          * @param [properties] Properties to set
          */
-        constructor(properties?: vtctldata.IDisableVtorcEmergencyReparentRequest);
+        constructor(properties?: vtctldata.ISetVtorcEmergencyReparentRequest);
 
-        /** DisableVtorcEmergencyReparentRequest keyspace. */
+        /** SetVtorcEmergencyReparentRequest keyspace. */
         public keyspace: string;
 
+        /** SetVtorcEmergencyReparentRequest shard. */
+        public shard: string;
+
+        /** SetVtorcEmergencyReparentRequest disable. */
+        public disable: boolean;
+
         /**
-         * Creates a new DisableVtorcEmergencyReparentRequest instance using the specified properties.
+         * Creates a new SetVtorcEmergencyReparentRequest instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns DisableVtorcEmergencyReparentRequest instance
+         * @returns SetVtorcEmergencyReparentRequest instance
          */
-        public static create(properties?: vtctldata.IDisableVtorcEmergencyReparentRequest): vtctldata.DisableVtorcEmergencyReparentRequest;
+        public static create(properties?: vtctldata.ISetVtorcEmergencyReparentRequest): vtctldata.SetVtorcEmergencyReparentRequest;
 
         /**
-         * Encodes the specified DisableVtorcEmergencyReparentRequest message. Does not implicitly {@link vtctldata.DisableVtorcEmergencyReparentRequest.verify|verify} messages.
-         * @param message DisableVtorcEmergencyReparentRequest message or plain object to encode
+         * Encodes the specified SetVtorcEmergencyReparentRequest message. Does not implicitly {@link vtctldata.SetVtorcEmergencyReparentRequest.verify|verify} messages.
+         * @param message SetVtorcEmergencyReparentRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: vtctldata.IDisableVtorcEmergencyReparentRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: vtctldata.ISetVtorcEmergencyReparentRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified DisableVtorcEmergencyReparentRequest message, length delimited. Does not implicitly {@link vtctldata.DisableVtorcEmergencyReparentRequest.verify|verify} messages.
-         * @param message DisableVtorcEmergencyReparentRequest message or plain object to encode
+         * Encodes the specified SetVtorcEmergencyReparentRequest message, length delimited. Does not implicitly {@link vtctldata.SetVtorcEmergencyReparentRequest.verify|verify} messages.
+         * @param message SetVtorcEmergencyReparentRequest message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: vtctldata.IDisableVtorcEmergencyReparentRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: vtctldata.ISetVtorcEmergencyReparentRequest, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a DisableVtorcEmergencyReparentRequest message from the specified reader or buffer.
+         * Decodes a SetVtorcEmergencyReparentRequest message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns DisableVtorcEmergencyReparentRequest
+         * @returns SetVtorcEmergencyReparentRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.DisableVtorcEmergencyReparentRequest;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetVtorcEmergencyReparentRequest;
 
         /**
-         * Decodes a DisableVtorcEmergencyReparentRequest message from the specified reader or buffer, length delimited.
+         * Decodes a SetVtorcEmergencyReparentRequest message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns DisableVtorcEmergencyReparentRequest
+         * @returns SetVtorcEmergencyReparentRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.DisableVtorcEmergencyReparentRequest;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetVtorcEmergencyReparentRequest;
 
         /**
-         * Verifies a DisableVtorcEmergencyReparentRequest message.
+         * Verifies a SetVtorcEmergencyReparentRequest message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a DisableVtorcEmergencyReparentRequest message from a plain object. Also converts values to their respective internal types.
+         * Creates a SetVtorcEmergencyReparentRequest message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns DisableVtorcEmergencyReparentRequest
+         * @returns SetVtorcEmergencyReparentRequest
          */
-        public static fromObject(object: { [k: string]: any }): vtctldata.DisableVtorcEmergencyReparentRequest;
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetVtorcEmergencyReparentRequest;
 
         /**
-         * Creates a plain object from a DisableVtorcEmergencyReparentRequest message. Also converts values to other types if specified.
-         * @param message DisableVtorcEmergencyReparentRequest
+         * Creates a plain object from a SetVtorcEmergencyReparentRequest message. Also converts values to other types if specified.
+         * @param message SetVtorcEmergencyReparentRequest
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: vtctldata.DisableVtorcEmergencyReparentRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: vtctldata.SetVtorcEmergencyReparentRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this DisableVtorcEmergencyReparentRequest to JSON.
+         * Converts this SetVtorcEmergencyReparentRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for DisableVtorcEmergencyReparentRequest
+         * Gets the default type url for SetVtorcEmergencyReparentRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a DisableVtorcEmergencyReparentResponse. */
-    interface IDisableVtorcEmergencyReparentResponse {
+    /** Properties of a SetVtorcEmergencyReparentResponse. */
+    interface ISetVtorcEmergencyReparentResponse {
     }
 
-    /** Represents a DisableVtorcEmergencyReparentResponse. */
-    class DisableVtorcEmergencyReparentResponse implements IDisableVtorcEmergencyReparentResponse {
+    /** Represents a SetVtorcEmergencyReparentResponse. */
+    class SetVtorcEmergencyReparentResponse implements ISetVtorcEmergencyReparentResponse {
 
         /**
-         * Constructs a new DisableVtorcEmergencyReparentResponse.
+         * Constructs a new SetVtorcEmergencyReparentResponse.
          * @param [properties] Properties to set
          */
-        constructor(properties?: vtctldata.IDisableVtorcEmergencyReparentResponse);
+        constructor(properties?: vtctldata.ISetVtorcEmergencyReparentResponse);
 
         /**
-         * Creates a new DisableVtorcEmergencyReparentResponse instance using the specified properties.
+         * Creates a new SetVtorcEmergencyReparentResponse instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns DisableVtorcEmergencyReparentResponse instance
+         * @returns SetVtorcEmergencyReparentResponse instance
          */
-        public static create(properties?: vtctldata.IDisableVtorcEmergencyReparentResponse): vtctldata.DisableVtorcEmergencyReparentResponse;
+        public static create(properties?: vtctldata.ISetVtorcEmergencyReparentResponse): vtctldata.SetVtorcEmergencyReparentResponse;
 
         /**
-         * Encodes the specified DisableVtorcEmergencyReparentResponse message. Does not implicitly {@link vtctldata.DisableVtorcEmergencyReparentResponse.verify|verify} messages.
-         * @param message DisableVtorcEmergencyReparentResponse message or plain object to encode
+         * Encodes the specified SetVtorcEmergencyReparentResponse message. Does not implicitly {@link vtctldata.SetVtorcEmergencyReparentResponse.verify|verify} messages.
+         * @param message SetVtorcEmergencyReparentResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: vtctldata.IDisableVtorcEmergencyReparentResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: vtctldata.ISetVtorcEmergencyReparentResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified DisableVtorcEmergencyReparentResponse message, length delimited. Does not implicitly {@link vtctldata.DisableVtorcEmergencyReparentResponse.verify|verify} messages.
-         * @param message DisableVtorcEmergencyReparentResponse message or plain object to encode
+         * Encodes the specified SetVtorcEmergencyReparentResponse message, length delimited. Does not implicitly {@link vtctldata.SetVtorcEmergencyReparentResponse.verify|verify} messages.
+         * @param message SetVtorcEmergencyReparentResponse message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: vtctldata.IDisableVtorcEmergencyReparentResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: vtctldata.ISetVtorcEmergencyReparentResponse, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a DisableVtorcEmergencyReparentResponse message from the specified reader or buffer.
+         * Decodes a SetVtorcEmergencyReparentResponse message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns DisableVtorcEmergencyReparentResponse
+         * @returns SetVtorcEmergencyReparentResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.DisableVtorcEmergencyReparentResponse;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetVtorcEmergencyReparentResponse;
 
         /**
-         * Decodes a DisableVtorcEmergencyReparentResponse message from the specified reader or buffer, length delimited.
+         * Decodes a SetVtorcEmergencyReparentResponse message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns DisableVtorcEmergencyReparentResponse
+         * @returns SetVtorcEmergencyReparentResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.DisableVtorcEmergencyReparentResponse;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetVtorcEmergencyReparentResponse;
 
         /**
-         * Verifies a DisableVtorcEmergencyReparentResponse message.
+         * Verifies a SetVtorcEmergencyReparentResponse message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a DisableVtorcEmergencyReparentResponse message from a plain object. Also converts values to their respective internal types.
+         * Creates a SetVtorcEmergencyReparentResponse message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns DisableVtorcEmergencyReparentResponse
+         * @returns SetVtorcEmergencyReparentResponse
          */
-        public static fromObject(object: { [k: string]: any }): vtctldata.DisableVtorcEmergencyReparentResponse;
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetVtorcEmergencyReparentResponse;
 
         /**
-         * Creates a plain object from a DisableVtorcEmergencyReparentResponse message. Also converts values to other types if specified.
-         * @param message DisableVtorcEmergencyReparentResponse
+         * Creates a plain object from a SetVtorcEmergencyReparentResponse message. Also converts values to other types if specified.
+         * @param message SetVtorcEmergencyReparentResponse
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: vtctldata.DisableVtorcEmergencyReparentResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: vtctldata.SetVtorcEmergencyReparentResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this DisableVtorcEmergencyReparentResponse to JSON.
+         * Converts this SetVtorcEmergencyReparentResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for DisableVtorcEmergencyReparentResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of an EnableVtorcEmergencyReparentRequest. */
-    interface IEnableVtorcEmergencyReparentRequest {
-
-        /** EnableVtorcEmergencyReparentRequest keyspace */
-        keyspace?: (string|null);
-    }
-
-    /** Represents an EnableVtorcEmergencyReparentRequest. */
-    class EnableVtorcEmergencyReparentRequest implements IEnableVtorcEmergencyReparentRequest {
-
-        /**
-         * Constructs a new EnableVtorcEmergencyReparentRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.IEnableVtorcEmergencyReparentRequest);
-
-        /** EnableVtorcEmergencyReparentRequest keyspace. */
-        public keyspace: string;
-
-        /**
-         * Creates a new EnableVtorcEmergencyReparentRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns EnableVtorcEmergencyReparentRequest instance
-         */
-        public static create(properties?: vtctldata.IEnableVtorcEmergencyReparentRequest): vtctldata.EnableVtorcEmergencyReparentRequest;
-
-        /**
-         * Encodes the specified EnableVtorcEmergencyReparentRequest message. Does not implicitly {@link vtctldata.EnableVtorcEmergencyReparentRequest.verify|verify} messages.
-         * @param message EnableVtorcEmergencyReparentRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.IEnableVtorcEmergencyReparentRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified EnableVtorcEmergencyReparentRequest message, length delimited. Does not implicitly {@link vtctldata.EnableVtorcEmergencyReparentRequest.verify|verify} messages.
-         * @param message EnableVtorcEmergencyReparentRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.IEnableVtorcEmergencyReparentRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an EnableVtorcEmergencyReparentRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns EnableVtorcEmergencyReparentRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.EnableVtorcEmergencyReparentRequest;
-
-        /**
-         * Decodes an EnableVtorcEmergencyReparentRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns EnableVtorcEmergencyReparentRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.EnableVtorcEmergencyReparentRequest;
-
-        /**
-         * Verifies an EnableVtorcEmergencyReparentRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an EnableVtorcEmergencyReparentRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns EnableVtorcEmergencyReparentRequest
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.EnableVtorcEmergencyReparentRequest;
-
-        /**
-         * Creates a plain object from an EnableVtorcEmergencyReparentRequest message. Also converts values to other types if specified.
-         * @param message EnableVtorcEmergencyReparentRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.EnableVtorcEmergencyReparentRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this EnableVtorcEmergencyReparentRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for EnableVtorcEmergencyReparentRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of an EnableVtorcEmergencyReparentResponse. */
-    interface IEnableVtorcEmergencyReparentResponse {
-    }
-
-    /** Represents an EnableVtorcEmergencyReparentResponse. */
-    class EnableVtorcEmergencyReparentResponse implements IEnableVtorcEmergencyReparentResponse {
-
-        /**
-         * Constructs a new EnableVtorcEmergencyReparentResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.IEnableVtorcEmergencyReparentResponse);
-
-        /**
-         * Creates a new EnableVtorcEmergencyReparentResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns EnableVtorcEmergencyReparentResponse instance
-         */
-        public static create(properties?: vtctldata.IEnableVtorcEmergencyReparentResponse): vtctldata.EnableVtorcEmergencyReparentResponse;
-
-        /**
-         * Encodes the specified EnableVtorcEmergencyReparentResponse message. Does not implicitly {@link vtctldata.EnableVtorcEmergencyReparentResponse.verify|verify} messages.
-         * @param message EnableVtorcEmergencyReparentResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.IEnableVtorcEmergencyReparentResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified EnableVtorcEmergencyReparentResponse message, length delimited. Does not implicitly {@link vtctldata.EnableVtorcEmergencyReparentResponse.verify|verify} messages.
-         * @param message EnableVtorcEmergencyReparentResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.IEnableVtorcEmergencyReparentResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an EnableVtorcEmergencyReparentResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns EnableVtorcEmergencyReparentResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.EnableVtorcEmergencyReparentResponse;
-
-        /**
-         * Decodes an EnableVtorcEmergencyReparentResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns EnableVtorcEmergencyReparentResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.EnableVtorcEmergencyReparentResponse;
-
-        /**
-         * Verifies an EnableVtorcEmergencyReparentResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an EnableVtorcEmergencyReparentResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns EnableVtorcEmergencyReparentResponse
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.EnableVtorcEmergencyReparentResponse;
-
-        /**
-         * Creates a plain object from an EnableVtorcEmergencyReparentResponse message. Also converts values to other types if specified.
-         * @param message EnableVtorcEmergencyReparentResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.EnableVtorcEmergencyReparentResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this EnableVtorcEmergencyReparentResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for EnableVtorcEmergencyReparentResponse
+         * Gets the default type url for SetVtorcEmergencyReparentResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

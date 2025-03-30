@@ -206,13 +206,9 @@ type VtctldClient interface {
 	DeleteSrvVSchema(ctx context.Context, in *vtctldata.DeleteSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.DeleteSrvVSchemaResponse, error)
 	// DeleteTablets deletes one or more tablets from the topology.
 	DeleteTablets(ctx context.Context, in *vtctldata.DeleteTabletsRequest, opts ...grpc.CallOption) (*vtctldata.DeleteTabletsResponse, error)
-	// DisableVtorcEmergencyReparent disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
-	DisableVtorcEmergencyReparent(ctx context.Context, in *vtctldata.DisableVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldata.DisableVtorcEmergencyReparentResponse, error)
 	// EmergencyReparentShard reparents the shard to the new primary. It assumes
 	// the old primary is dead or otherwise not responding.
 	EmergencyReparentShard(ctx context.Context, in *vtctldata.EmergencyReparentShardRequest, opts ...grpc.CallOption) (*vtctldata.EmergencyReparentShardResponse, error)
-	// EnableVtorcEmergencyReparent enables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
-	EnableVtorcEmergencyReparent(ctx context.Context, in *vtctldata.EnableVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldata.EnableVtorcEmergencyReparentResponse, error)
 	// ExecuteFetchAsApp executes a SQL query on the remote tablet as the App user.
 	ExecuteFetchAsApp(ctx context.Context, in *vtctldata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteFetchAsAppResponse, error)
 	// ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
@@ -396,6 +392,8 @@ type VtctldClient interface {
 	// Reshard. See the documentation on SetShardTabletControlRequest for more
 	// information about the different update modes.
 	SetShardTabletControl(ctx context.Context, in *vtctldata.SetShardTabletControlRequest, opts ...grpc.CallOption) (*vtctldata.SetShardTabletControlResponse, error)
+	// SetVtorcEmergencyReparent enables or disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace or keyspace/shard.
+	SetVtorcEmergencyReparent(ctx context.Context, in *vtctldata.SetVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldata.SetVtorcEmergencyReparentResponse, error)
 	// SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
 	SetWritable(ctx context.Context, in *vtctldata.SetWritableRequest, opts ...grpc.CallOption) (*vtctldata.SetWritableResponse, error)
 	// ShardReplicationAdd adds an entry to a topodata.ShardReplication object.
@@ -766,27 +764,9 @@ func (c *vtctldClient) DeleteTablets(ctx context.Context, in *vtctldata.DeleteTa
 	return out, nil
 }
 
-func (c *vtctldClient) DisableVtorcEmergencyReparent(ctx context.Context, in *vtctldata.DisableVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldata.DisableVtorcEmergencyReparentResponse, error) {
-	out := new(vtctldata.DisableVtorcEmergencyReparentResponse)
-	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/DisableVtorcEmergencyReparent", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *vtctldClient) EmergencyReparentShard(ctx context.Context, in *vtctldata.EmergencyReparentShardRequest, opts ...grpc.CallOption) (*vtctldata.EmergencyReparentShardResponse, error) {
 	out := new(vtctldata.EmergencyReparentShardResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/EmergencyReparentShard", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *vtctldClient) EnableVtorcEmergencyReparent(ctx context.Context, in *vtctldata.EnableVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldata.EnableVtorcEmergencyReparentResponse, error) {
-	out := new(vtctldata.EnableVtorcEmergencyReparentResponse)
-	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/EnableVtorcEmergencyReparent", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1437,6 +1417,15 @@ func (c *vtctldClient) SetShardTabletControl(ctx context.Context, in *vtctldata.
 	return out, nil
 }
 
+func (c *vtctldClient) SetVtorcEmergencyReparent(ctx context.Context, in *vtctldata.SetVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldata.SetVtorcEmergencyReparentResponse, error) {
+	out := new(vtctldata.SetVtorcEmergencyReparentResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetVtorcEmergencyReparent", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) SetWritable(ctx context.Context, in *vtctldata.SetWritableRequest, opts ...grpc.CallOption) (*vtctldata.SetWritableResponse, error) {
 	out := new(vtctldata.SetWritableResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetWritable", in, out, opts...)
@@ -1799,13 +1788,9 @@ type VtctldServer interface {
 	DeleteSrvVSchema(context.Context, *vtctldata.DeleteSrvVSchemaRequest) (*vtctldata.DeleteSrvVSchemaResponse, error)
 	// DeleteTablets deletes one or more tablets from the topology.
 	DeleteTablets(context.Context, *vtctldata.DeleteTabletsRequest) (*vtctldata.DeleteTabletsResponse, error)
-	// DisableVtorcEmergencyReparent disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
-	DisableVtorcEmergencyReparent(context.Context, *vtctldata.DisableVtorcEmergencyReparentRequest) (*vtctldata.DisableVtorcEmergencyReparentResponse, error)
 	// EmergencyReparentShard reparents the shard to the new primary. It assumes
 	// the old primary is dead or otherwise not responding.
 	EmergencyReparentShard(context.Context, *vtctldata.EmergencyReparentShardRequest) (*vtctldata.EmergencyReparentShardResponse, error)
-	// EnableVtorcEmergencyReparent enables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace.
-	EnableVtorcEmergencyReparent(context.Context, *vtctldata.EnableVtorcEmergencyReparentRequest) (*vtctldata.EnableVtorcEmergencyReparentResponse, error)
 	// ExecuteFetchAsApp executes a SQL query on the remote tablet as the App user.
 	ExecuteFetchAsApp(context.Context, *vtctldata.ExecuteFetchAsAppRequest) (*vtctldata.ExecuteFetchAsAppResponse, error)
 	// ExecuteFetchAsDBA executes a SQL query on the remote tablet as the DBA user.
@@ -1989,6 +1974,8 @@ type VtctldServer interface {
 	// Reshard. See the documentation on SetShardTabletControlRequest for more
 	// information about the different update modes.
 	SetShardTabletControl(context.Context, *vtctldata.SetShardTabletControlRequest) (*vtctldata.SetShardTabletControlResponse, error)
+	// SetVtorcEmergencyReparent enables or disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace or keyspace/shard.
+	SetVtorcEmergencyReparent(context.Context, *vtctldata.SetVtorcEmergencyReparentRequest) (*vtctldata.SetVtorcEmergencyReparentResponse, error)
 	// SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
 	SetWritable(context.Context, *vtctldata.SetWritableRequest) (*vtctldata.SetWritableResponse, error)
 	// ShardReplicationAdd adds an entry to a topodata.ShardReplication object.
@@ -2160,14 +2147,8 @@ func (UnimplementedVtctldServer) DeleteSrvVSchema(context.Context, *vtctldata.De
 func (UnimplementedVtctldServer) DeleteTablets(context.Context, *vtctldata.DeleteTabletsRequest) (*vtctldata.DeleteTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteTablets not implemented")
 }
-func (UnimplementedVtctldServer) DisableVtorcEmergencyReparent(context.Context, *vtctldata.DisableVtorcEmergencyReparentRequest) (*vtctldata.DisableVtorcEmergencyReparentResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DisableVtorcEmergencyReparent not implemented")
-}
 func (UnimplementedVtctldServer) EmergencyReparentShard(context.Context, *vtctldata.EmergencyReparentShardRequest) (*vtctldata.EmergencyReparentShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EmergencyReparentShard not implemented")
-}
-func (UnimplementedVtctldServer) EnableVtorcEmergencyReparent(context.Context, *vtctldata.EnableVtorcEmergencyReparentRequest) (*vtctldata.EnableVtorcEmergencyReparentResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method EnableVtorcEmergencyReparent not implemented")
 }
 func (UnimplementedVtctldServer) ExecuteFetchAsApp(context.Context, *vtctldata.ExecuteFetchAsAppRequest) (*vtctldata.ExecuteFetchAsAppResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteFetchAsApp not implemented")
@@ -2375,6 +2356,9 @@ func (UnimplementedVtctldServer) SetShardIsPrimaryServing(context.Context, *vtct
 }
 func (UnimplementedVtctldServer) SetShardTabletControl(context.Context, *vtctldata.SetShardTabletControlRequest) (*vtctldata.SetShardTabletControlResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetShardTabletControl not implemented")
+}
+func (UnimplementedVtctldServer) SetVtorcEmergencyReparent(context.Context, *vtctldata.SetVtorcEmergencyReparentRequest) (*vtctldata.SetVtorcEmergencyReparentResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetVtorcEmergencyReparent not implemented")
 }
 func (UnimplementedVtctldServer) SetWritable(context.Context, *vtctldata.SetWritableRequest) (*vtctldata.SetWritableResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetWritable not implemented")
@@ -2941,24 +2925,6 @@ func _Vtctld_DeleteTablets_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Vtctld_DisableVtorcEmergencyReparent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtctldata.DisableVtorcEmergencyReparentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VtctldServer).DisableVtorcEmergencyReparent(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtctlservice.Vtctld/DisableVtorcEmergencyReparent",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VtctldServer).DisableVtorcEmergencyReparent(ctx, req.(*vtctldata.DisableVtorcEmergencyReparentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Vtctld_EmergencyReparentShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.EmergencyReparentShardRequest)
 	if err := dec(in); err != nil {
@@ -2973,24 +2939,6 @@ func _Vtctld_EmergencyReparentShard_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).EmergencyReparentShard(ctx, req.(*vtctldata.EmergencyReparentShardRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Vtctld_EnableVtorcEmergencyReparent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(vtctldata.EnableVtorcEmergencyReparentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VtctldServer).EnableVtorcEmergencyReparent(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/vtctlservice.Vtctld/EnableVtorcEmergencyReparent",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VtctldServer).EnableVtorcEmergencyReparent(ctx, req.(*vtctldata.EnableVtorcEmergencyReparentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4240,6 +4188,24 @@ func _Vtctld_SetShardTabletControl_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_SetVtorcEmergencyReparent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SetVtorcEmergencyReparentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SetVtorcEmergencyReparent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SetVtorcEmergencyReparent",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SetVtorcEmergencyReparent(ctx, req.(*vtctldata.SetVtorcEmergencyReparentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_SetWritable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.SetWritableRequest)
 	if err := dec(in); err != nil {
@@ -4916,16 +4882,8 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_DeleteTablets_Handler,
 		},
 		{
-			MethodName: "DisableVtorcEmergencyReparent",
-			Handler:    _Vtctld_DisableVtorcEmergencyReparent_Handler,
-		},
-		{
 			MethodName: "EmergencyReparentShard",
 			Handler:    _Vtctld_EmergencyReparentShard_Handler,
-		},
-		{
-			MethodName: "EnableVtorcEmergencyReparent",
-			Handler:    _Vtctld_EnableVtorcEmergencyReparent_Handler,
 		},
 		{
 			MethodName: "ExecuteFetchAsApp",
@@ -5198,6 +5156,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetShardTabletControl",
 			Handler:    _Vtctld_SetShardTabletControl_Handler,
+		},
+		{
+			MethodName: "SetVtorcEmergencyReparent",
+			Handler:    _Vtctld_SetVtorcEmergencyReparent_Handler,
 		},
 		{
 			MethodName: "SetWritable",

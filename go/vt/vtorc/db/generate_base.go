@@ -312,6 +312,7 @@ CREATE TABLE vitess_shard (
 	shard varchar(128) NOT NULL,
 	primary_alias varchar(512) NOT NULL,
 	primary_timestamp varchar(512) NOT NULL,
+	disable_emergency_reparent tinyint NOT NULL,
 	PRIMARY KEY (keyspace, shard)
 )`,
 	`

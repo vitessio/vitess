@@ -169,6 +169,7 @@ func (m *Shard) CloneVT() *Shard {
 	r.PrimaryTermStartTime = m.PrimaryTermStartTime.CloneVT()
 	r.KeyRange = m.KeyRange.CloneVT()
 	r.IsPrimaryServing = m.IsPrimaryServing
+	r.VtorcConfig = m.VtorcConfig.CloneVT()
 	if rhs := m.SourceShards; rhs != nil {
 		tmpContainer := make([]*Shard_SourceShard, len(rhs))
 		for k, v := range rhs {
@@ -408,6 +409,23 @@ func (m *KeyspaceVtorcConfig) CloneVT() *KeyspaceVtorcConfig {
 }
 
 func (m *KeyspaceVtorcConfig) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
+func (m *ShardVtorcConfig) CloneVT() *ShardVtorcConfig {
+	if m == nil {
+		return (*ShardVtorcConfig)(nil)
+	}
+	r := new(ShardVtorcConfig)
+	r.DisableEmergencyReparent = m.DisableEmergencyReparent
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *ShardVtorcConfig) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -973,6 +991,16 @@ func (m *Shard) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.VtorcConfig != nil {
+		size, err := m.VtorcConfig.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x4a
 	}
 	if m.PrimaryTermStartTime != nil {
 		size, err := m.PrimaryTermStartTime.MarshalToSizedBufferVT(dAtA[:i])
@@ -1655,6 +1683,49 @@ func (m *KeyspaceVtorcConfig) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *ShardVtorcConfig) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ShardVtorcConfig) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *ShardVtorcConfig) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.DisableEmergencyReparent {
+		i--
+		if m.DisableEmergencyReparent {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *SrvKeyspace_KeyspacePartition) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
@@ -2197,6 +2268,10 @@ func (m *Shard) SizeVT() (n int) {
 		l = m.PrimaryTermStartTime.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.VtorcConfig != nil {
+		l = m.VtorcConfig.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -2422,6 +2497,19 @@ func (m *ThrottlerConfig) SizeVT() (n int) {
 }
 
 func (m *KeyspaceVtorcConfig) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.DisableEmergencyReparent {
+		n += 2
+	}
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *ShardVtorcConfig) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -3980,6 +4068,42 @@ func (m *Shard) UnmarshalVT(dAtA []byte) error {
 				m.PrimaryTermStartTime = &vttime.Time{}
 			}
 			if err := m.PrimaryTermStartTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field VtorcConfig", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.VtorcConfig == nil {
+				m.VtorcConfig = &ShardVtorcConfig{}
+			}
+			if err := m.VtorcConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -5573,6 +5697,77 @@ func (m *KeyspaceVtorcConfig) UnmarshalVT(dAtA []byte) error {
 		}
 		if fieldNum <= 0 {
 			return fmt.Errorf("proto: KeyspaceVtorcConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DisableEmergencyReparent", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.DisableEmergencyReparent = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ShardVtorcConfig) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ShardVtorcConfig: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ShardVtorcConfig: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

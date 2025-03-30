@@ -302,6 +302,13 @@ func isERSEnabled(analysisEntry *inst.ReplicationAnalysis) bool {
 		log.Infof("ERS is disabled on keyspace %s, skipping recovering %v", analysisEntry.AnalyzedKeyspace, analysisEntry.Analysis)
 		return false
 	}
+
+	// Return false if ERS is disabled on the shard.
+	if analysisEntry.AnalyzedShardEmergencyReparentDisabled {
+		log.Infof("ERS is disabled on keyspace/shard %s, skipping recovering %v", topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard), analysisEntry.Analysis)
+		return false
+	}
+
 	return true
 }
 

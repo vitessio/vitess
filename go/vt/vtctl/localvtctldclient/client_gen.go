@@ -246,19 +246,9 @@ func (client *localVtctldClient) DeleteTablets(ctx context.Context, in *vtctldat
 	return client.s.DeleteTablets(ctx, in)
 }
 
-// DisableVtorcEmergencyReparent is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) DisableVtorcEmergencyReparent(ctx context.Context, in *vtctldatapb.DisableVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldatapb.DisableVtorcEmergencyReparentResponse, error) {
-	return client.s.DisableVtorcEmergencyReparent(ctx, in)
-}
-
 // EmergencyReparentShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) EmergencyReparentShard(ctx context.Context, in *vtctldatapb.EmergencyReparentShardRequest, opts ...grpc.CallOption) (*vtctldatapb.EmergencyReparentShardResponse, error) {
 	return client.s.EmergencyReparentShard(ctx, in)
-}
-
-// EnableVtorcEmergencyReparent is part of the vtctlservicepb.VtctldClient interface.
-func (client *localVtctldClient) EnableVtorcEmergencyReparent(ctx context.Context, in *vtctldatapb.EnableVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldatapb.EnableVtorcEmergencyReparentResponse, error) {
-	return client.s.EnableVtorcEmergencyReparent(ctx, in)
 }
 
 // ExecuteFetchAsApp is part of the vtctlservicepb.VtctldClient interface.
@@ -650,6 +640,11 @@ func (client *localVtctldClient) SetShardIsPrimaryServing(ctx context.Context, i
 // SetShardTabletControl is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) SetShardTabletControl(ctx context.Context, in *vtctldatapb.SetShardTabletControlRequest, opts ...grpc.CallOption) (*vtctldatapb.SetShardTabletControlResponse, error) {
 	return client.s.SetShardTabletControl(ctx, in)
+}
+
+// SetVtorcEmergencyReparent is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SetVtorcEmergencyReparent(ctx context.Context, in *vtctldatapb.SetVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldatapb.SetVtorcEmergencyReparentResponse, error) {
+	return client.s.SetVtorcEmergencyReparent(ctx, in)
 }
 
 // SetWritable is part of the vtctlservicepb.VtctldClient interface.

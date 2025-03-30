@@ -93,6 +93,7 @@ type ReplicationAnalysis struct {
 	AnalyzedKeyspace                          string
 	AnalyzedShard                             string
 	AnalyzedKeyspaceEmergencyReparentDisabled bool
+	AnalyzedShardEmergencyReparentDisabled    bool
 	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
 	ShardPrimaryTermTimestamp                 string
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
