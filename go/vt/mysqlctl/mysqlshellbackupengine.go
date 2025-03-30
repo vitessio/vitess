@@ -59,7 +59,7 @@ var (
 	// use when checking if we need to create the directory on the local filesystem or not.
 	knownObjectStoreParams = []string{"s3BucketName", "osBucketName", "azureContainerName"}
 
-	MySQLShellPreCheckError = errors.New("MySQLShellPreCheckError")
+	ErrMySQLShellPreCheck = errors.New("ErrMySQLShellPreCheck")
 
 	// internal databases not backed up by MySQL Shell
 	internalDBs = []string{
@@ -398,11 +398,11 @@ func (be *MySQLShellBackupEngine) Name() string { return mysqlShellBackupEngineN
 
 func (be *MySQLShellBackupEngine) backupPreCheck(location string) error {
 	if mysqlShellBackupLocation == "" {
-		return fmt.Errorf("%w: no backup location set via --mysql-shell-backup-location", MySQLShellPreCheckError)
+		return fmt.Errorf("%w: no backup location set via --mysql-shell-backup-location", ErrMySQLShellPreCheck)
 	}
 
 	if mysqlShellFlags == "" || !strings.Contains(mysqlShellFlags, "--js") {
-		return fmt.Errorf("%w: at least the --js flag is required in the value of the flag --mysql-shell-flags", MySQLShellPreCheckError)
+		return fmt.Errorf("%w: at least the --js flag is required in the value of the flag --mysql-shell-flags", ErrMySQLShellPreCheck)
 	}
 
 	// make sure the targe directory exists if the target location for the backup is not an object store
@@ -427,25 +427,25 @@ func (be *MySQLShellBackupEngine) backupPreCheck(location string) error {
 
 func (be *MySQLShellBackupEngine) restorePreCheck(ctx context.Context, params RestoreParams) (shouldDeleteUsers bool, err error) {
 	if mysqlShellFlags == "" {
-		return shouldDeleteUsers, fmt.Errorf("%w: at least the --js flag is required in the value of the flag --mysql-shell-flags", MySQLShellPreCheckError)
+		return shouldDeleteUsers, fmt.Errorf("%w: at least the --js flag is required in the value of the flag --mysql-shell-flags", ErrMySQLShellPreCheck)
 	}
 
 	loadFlags := map[string]interface{}{}
 	err = json.Unmarshal([]byte(mysqlShellLoadFlags), &loadFlags)
 	if err != nil {
-		return false, fmt.Errorf("%w: unable to parse JSON of load flags", MySQLShellPreCheckError)
+		return false, fmt.Errorf("%w: unable to parse JSON of load flags", ErrMySQLShellPreCheck)
 	}
 
 	if val, ok := loadFlags["updateGtidSet"]; !ok || val != "replace" {
-		return false, fmt.Errorf("%w: mysql-shell needs to restore with updateGtidSet set to \"replace\" to work with Vitess", MySQLShellPreCheckError)
+		return false, fmt.Errorf("%w: mysql-shell needs to restore with updateGtidSet set to \"replace\" to work with Vitess", ErrMySQLShellPreCheck)
 	}
 
 	if val, ok := loadFlags["progressFile"]; !ok || val != "" {
-		return false, fmt.Errorf("%w: \"progressFile\" needs to be empty as vitess always starts a restore from scratch", MySQLShellPreCheckError)
+		return false, fmt.Errorf("%w: \"progressFile\" needs to be empty as vitess always starts a restore from scratch", ErrMySQLShellPreCheck)
 	}
 
 	if val, ok := loadFlags["skipBinlog"]; !ok || val != true {
-		return false, fmt.Errorf("%w: \"skipBinlog\" needs to set to true", MySQLShellPreCheckError)
+		return false, fmt.Errorf("%w: \"skipBinlog\" needs to set to true", ErrMySQLShellPreCheck)
 	}
 
 	if val, ok := loadFlags["loadUsers"]; ok && val == true {
@@ -455,17 +455,17 @@ func (be *MySQLShellBackupEngine) restorePreCheck(ctx context.Context, params Re
 	if mysqlShellSpeedUpRestore {
 		version, err := params.Mysqld.GetVersionString(ctx)
 		if err != nil {
-			return false, fmt.Errorf("%w: failed to fetch MySQL version: %v", MySQLShellPreCheckError, err)
+			return false, fmt.Errorf("%w: failed to fetch MySQL version: %v", ErrMySQLShellPreCheck, err)
 		}
 
 		capableOf := mysql.ServerVersionCapableOf(version)
 		capable, err := capableOf(capabilities.DisableRedoLogFlavorCapability)
 		if err != nil {
-			return false, fmt.Errorf("%w: error checking if server supports disabling redo log: %v", MySQLShellPreCheckError, err)
+			return false, fmt.Errorf("%w: error checking if server supports disabling redo log: %v", ErrMySQLShellPreCheck, err)
 		}
 
 		if !capable {
-			return false, fmt.Errorf("%w: MySQL version doesn't support disabling the redo log (must be >=8.0.21)", MySQLShellPreCheckError)
+			return false, fmt.Errorf("%w: MySQL version doesn't support disabling the redo log (must be >=8.0.21)", ErrMySQLShellPreCheck)
 		}
 	}
 

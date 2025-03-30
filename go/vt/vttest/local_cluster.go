@@ -384,10 +384,7 @@ func (db *LocalCluster) Setup() error {
 		return err
 	}
 
-	initializing := true
-	if db.PersistentMode && dirExist(db.mysql.TabletDir()) {
-		initializing = false
-	}
+	initializing := !(db.PersistentMode && dirExist(db.mysql.TabletDir()))
 
 	if initializing {
 		log.Infof("Initializing MySQL Manager (%T)...", db.mysql)

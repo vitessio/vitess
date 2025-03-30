@@ -38,19 +38,21 @@ func TestMysql8SetReplicationSourceCommand(t *testing.T) {
   SOURCE_USER = 'username',
   SOURCE_PASSWORD = 'password',
   SOURCE_CONNECT_RETRY = 1234,
+  GET_SOURCE_PUBLIC_KEY = 1,
   SOURCE_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor8{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 
-	var heartbeatInterval float64 = 5.4
+	var heartbeatInterval = 5.4
 	want = `CHANGE REPLICATION SOURCE TO
   SOURCE_HOST = 'localhost',
   SOURCE_PORT = 123,
   SOURCE_USER = 'username',
   SOURCE_PASSWORD = 'password',
   SOURCE_CONNECT_RETRY = 1234,
+  GET_SOURCE_PUBLIC_KEY = 1,
   SOURCE_HEARTBEAT_PERIOD = 5.4,
   SOURCE_AUTO_POSITION = 1`
 

@@ -1164,7 +1164,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 	}
 
 	for i, field := range fld {
-		field.Name = strings.Replace(field.Name, "'?'", "?", -1)
+		field.Name = strings.ReplaceAll(field.Name, "'?'", "?")
 		prepare.ColumnNames[i] = field.Name
 		if err := c.writeColumnDefinition(field); err != nil {
 			return err

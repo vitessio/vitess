@@ -111,6 +111,8 @@ func bindvarForType(field *querypb.Field) *querypb.BindVariable {
 		size := max(1, int(field.ColumnLength-field.Decimals))
 		scale := max(1, int(field.Decimals))
 		bv.Value = append(append(bytes.Repeat([]byte{'0'}, size), byte('.')), bytes.Repeat([]byte{'0'}, scale)...)
+	case querypb.Type_JSON:
+		bv.Value = []byte(`""`) // empty json object
 	default:
 		return sqltypes.NullBindVariable
 	}
@@ -164,7 +166,10 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 					nil,
 					jn.Cols,
 				)}
-				return callback(result)
+
+				if err := callback(result); err != nil {
+					return err
+				}
 			}
 		}
 		// This needs to be locking since it's not safe to just use
@@ -176,8 +181,8 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 		mu.Lock()
 		defer mu.Unlock()
 		if fieldsSent.CompareAndSwap(false, true) {
-			for k := range jn.Vars {
-				joinVars[k] = sqltypes.NullBindVariable
+			for k, v := range jn.Vars {
+				joinVars[k] = bindvarForType(lresult.Fields[v])
 			}
 			result := &sqltypes.Result{}
 			rresult, err := jn.Right.GetFields(ctx, vcursor, combineVars(bindVars, joinVars))
@@ -185,7 +190,9 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 				return err
 			}
 			result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
-			return callback(result)
+			if err := callback(result); err != nil {
+				return err
+			}
 		}
 		return nil
 	})

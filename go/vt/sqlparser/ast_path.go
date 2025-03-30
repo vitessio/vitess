@@ -561,6 +561,7 @@ const (
 	RefOfTableAndLockTypeTable
 	RefOfRenameTablePairFromTable
 	RefOfRenameTablePairToTable
+	VisitableInner
 )
 
 func (s ASTStep) DebugString() string {
@@ -1647,6 +1648,8 @@ func (s ASTStep) DebugString() string {
 		return "(*RenameTablePair).FromTable"
 	case RefOfRenameTablePairToTable:
 		return "(*RenameTablePair).ToTable"
+	case VisitableInner:
+		return "VisitableInner"
 	}
 	panic("unknown ASTStep")
 }
@@ -2769,6 +2772,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*TableName).Qualifier
 		case RefOfVindexParamKey:
 			node = node.(*VindexParam).Key
+		case VisitableInner:
+			node = node.(Visitable).VisitThis()
 		default:
 			return nil
 		}

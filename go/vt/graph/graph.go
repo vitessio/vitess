@@ -144,11 +144,12 @@ func (gr *Graph[C]) hasCyclesDfs(color map[C]int, vertex C) (bool, []C) {
 	// Go over all the edges.
 	for _, end := range gr.edges[vertex] {
 		// If we encounter a white vertex, we continue the dfs.
-		if color[end] == white {
+		switch color[end] {
+		case white:
 			if hasCycle, cycle := gr.hasCyclesDfs(color, end); hasCycle {
 				return true, append(result, cycle...)
 			}
-		} else if color[end] == grey {
+		case grey:
 			// We encountered a grey vertex, we have a cycle.
 			return true, append(result, end)
 		}

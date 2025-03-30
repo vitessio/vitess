@@ -112,6 +112,9 @@ func (e *Executor) newExecute(
 			}
 		}
 
+		// Enable parameterization if normalization is enabled and the query is not prepared statement.
+		parameterize := e.config.Normalize && !prepared
+
 		// Create a plan for the query.
 		// If we are retrying, it is likely that the routing rules have changed and hence we need to
 		// replan the query since the target keyspace of the resolved shards may have changed as a
@@ -119,7 +122,7 @@ func (e *Executor) newExecute(
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
 		// take full advatange of the cached plan.
-		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, e.config.Normalize, prepared, logStats)
+		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
 		execStart := e.logPlanningFinished(logStats, plan)
 
 		if err != nil {

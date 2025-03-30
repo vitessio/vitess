@@ -19,14 +19,14 @@ package plancontext
 import (
 	"io"
 
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -73,6 +73,8 @@ type PlanningContext struct {
 	constantCfg *evalengine.Config
 
 	PredTracker *predicates.Tracker
+
+	Conditions []engine.Condition
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -404,4 +406,8 @@ func (ctx *PlanningContext) IsConstantBool(expr sqlparser.Expr) *bool {
 		return nil
 	}
 	return &b
+}
+
+func (ctx *PlanningContext) CollectConditions(conditions []engine.Condition) {
+	ctx.Conditions = append(ctx.Conditions, conditions...)
 }

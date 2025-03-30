@@ -343,7 +343,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) rec
 		return recoverLockedSemiSyncPrimaryFunc
 	case inst.ClusterHasNoPrimary:
 		return electNewPrimaryFunc
-	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet:
+	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
 		return fixPrimaryFunc
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,

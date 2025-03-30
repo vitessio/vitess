@@ -43,6 +43,18 @@ type mockClientConn struct {
 	cancel context.CancelFunc
 }
 
+func TestSanitizeScheme(t *testing.T) {
+	t.Parallel()
+	// 'plain' cluster IDs that are already valid schemes are unchanged
+	assert.Equal(t, "local", sanitizeScheme("local"))
+	// underscores and other invalid characters are replaced with '-' to
+	// produce a valid scheme
+	assert.Equal(t, "local-test", sanitizeScheme("local_test"))
+	// schemes must start with a letter; if the cluster ID starts with a digit,
+	// we prepend an 'x' to make it valid.
+	assert.Equal(t, "x1cluster", sanitizeScheme("1cluster"))
+}
+
 func newMockClientConn(minExpectedCalls int) *mockClientConn {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &mockClientConn{

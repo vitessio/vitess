@@ -394,9 +394,15 @@ const Advanced: React.FC = () => {
                                             <Select
                                                 onChange={(t) => setTablet(t as vtadmin.Tablet)}
                                                 label="Tablet"
-                                                renderItem={(t: vtadmin.Tablet) =>
-                                                    `${formatAlias(t.tablet?.alias)} (${formatDisplayType(t)})`
-                                                }
+                                                renderItem={(t: vtadmin.Tablet) => (
+                                                    <div className="flex items-center">
+                                                        <span>{formatAlias(t.tablet?.alias)}</span>
+                                                        <span className="text-gray-500 text-sm mx-2">
+                                                            {t.tablet?.hostname || 'Unknown'}
+                                                        </span>
+                                                        <span>({formatDisplayType(t)})</span>
+                                                    </div>
+                                                )}
                                                 items={tabletsInCluster}
                                                 selectedItem={tablet}
                                                 placeholder="Tablet"
@@ -478,9 +484,15 @@ const Advanced: React.FC = () => {
                                                 onChange={(t) => setPlannedReparentTablet(t as vtadmin.Tablet)}
                                                 label="Tablet"
                                                 items={tabletsInCluster}
-                                                renderItem={(t: vtadmin.Tablet) =>
-                                                    `${formatAlias(t.tablet?.alias)} (${formatDisplayType(t)})`
-                                                }
+                                                renderItem={(t: vtadmin.Tablet) => (
+                                                    <div className="flex items-center">
+                                                        <span>{formatAlias(t.tablet?.alias)}</span>
+                                                        <span className="text-gray-500 text-sm mx-2">
+                                                            {t.tablet?.hostname || 'Unknown'}
+                                                        </span>
+                                                        <span>({formatDisplayType(t)})</span>
+                                                    </div>
+                                                )}
                                                 selectedItem={plannedReparentTablet}
                                                 placeholder="Tablet"
                                                 description="This tablet will be the new primary for this shard."
@@ -512,9 +524,15 @@ const Advanced: React.FC = () => {
                                                 onChange={(t) => setEmergencyReparentTablet(t as vtadmin.Tablet)}
                                                 label="Tablet"
                                                 items={tabletsInCluster}
-                                                renderItem={(t: vtadmin.Tablet) =>
-                                                    `${formatAlias(t.tablet?.alias)} (${formatDisplayType(t)})`
-                                                }
+                                                renderItem={(t: vtadmin.Tablet) => (
+                                                    <div className="flex items-center">
+                                                        <span>{formatAlias(t.tablet?.alias)}</span>
+                                                        <span className="text-gray-500 text-sm mx-2">
+                                                            {t.tablet?.hostname || 'Unknown'}
+                                                        </span>
+                                                        <span>({formatDisplayType(t)})</span>
+                                                    </div>
+                                                )}
                                                 selectedItem={emergencyReparentTablet}
                                                 placeholder="Tablet"
                                                 description="This tablet will be the new primary for this shard."

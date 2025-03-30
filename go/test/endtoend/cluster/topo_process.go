@@ -134,7 +134,7 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 				DialTimeout: 5 * time.Second,
 			})
 			if cerr != nil {
-				return err
+				return cerr
 			}
 			topo.Client = cli
 			return
@@ -389,7 +389,8 @@ func (topo *TopoProcess) removeTopoDirectories(Cell string) {
 func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err error) {
 	url := topo.VerifyURL + directory
 	payload := strings.NewReader(`{"dir":"true"}`)
-	if command == "mkdir" {
+	switch command {
+	case "mkdir":
 		if *topoFlavor == "etcd2" { // No need to create the empty prefix keys in v3
 			return nil
 		}
@@ -400,7 +401,7 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 			defer resp.Body.Close()
 		}
 		return err
-	} else if command == "rmdir" {
+	case "rmdir":
 		if *topoFlavor == "etcd2" {
 			if topo.Client == nil {
 				return fmt.Errorf("etcd client is not initialized")
@@ -423,7 +424,7 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 			defer resp.Body.Close()
 		}
 		return err
-	} else {
+	default:
 		return nil
 	}
 }

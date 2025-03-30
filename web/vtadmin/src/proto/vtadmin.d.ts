@@ -49022,6 +49022,9 @@ export namespace replicationdata {
 
         /** FullStatus semi_sync_blocked */
         semi_sync_blocked?: (boolean|null);
+
+        /** FullStatus tablet_type */
+        tablet_type?: (topodata.TabletType|null);
     }
 
     /** Represents a FullStatus. */
@@ -49104,6 +49107,9 @@ export namespace replicationdata {
 
         /** FullStatus semi_sync_blocked. */
         public semi_sync_blocked: boolean;
+
+        /** FullStatus tablet_type. */
+        public tablet_type: topodata.TabletType;
 
         /**
          * Creates a new FullStatus instance using the specified properties.
@@ -55156,6 +55162,9 @@ export namespace vtctldata {
 
         /** CancelSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** CancelSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a CancelSchemaMigrationRequest. */
@@ -55172,6 +55181,9 @@ export namespace vtctldata {
 
         /** CancelSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** CancelSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new CancelSchemaMigrationRequest instance using the specified properties.
@@ -56010,6 +56022,9 @@ export namespace vtctldata {
 
         /** CleanupSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** CleanupSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a CleanupSchemaMigrationRequest. */
@@ -56026,6 +56041,9 @@ export namespace vtctldata {
 
         /** CleanupSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** CleanupSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new CleanupSchemaMigrationRequest instance using the specified properties.
@@ -56210,6 +56228,9 @@ export namespace vtctldata {
 
         /** CompleteSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** CompleteSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a CompleteSchemaMigrationRequest. */
@@ -56226,6 +56247,9 @@ export namespace vtctldata {
 
         /** CompleteSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** CompleteSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new CompleteSchemaMigrationRequest instance using the specified properties.
@@ -59578,6 +59602,9 @@ export namespace vtctldata {
 
         /** ForceCutOverSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** ForceCutOverSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a ForceCutOverSchemaMigrationRequest. */
@@ -59594,6 +59621,9 @@ export namespace vtctldata {
 
         /** ForceCutOverSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** ForceCutOverSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new ForceCutOverSchemaMigrationRequest instance using the specified properties.
@@ -66392,6 +66422,9 @@ export namespace vtctldata {
 
         /** LaunchSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** LaunchSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a LaunchSchemaMigrationRequest. */
@@ -66408,6 +66441,9 @@ export namespace vtctldata {
 
         /** LaunchSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** LaunchSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new LaunchSchemaMigrationRequest instance using the specified properties.
@@ -72584,6 +72620,9 @@ export namespace vtctldata {
 
         /** RetrySchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** RetrySchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a RetrySchemaMigrationRequest. */
@@ -72600,6 +72639,9 @@ export namespace vtctldata {
 
         /** RetrySchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** RetrySchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new RetrySchemaMigrationRequest instance using the specified properties.

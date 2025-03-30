@@ -426,7 +426,7 @@ func displayVDiff2ShowSingleSummary(wr *wrangler.Wrangler, format, keyspace, wor
 		}
 		str = sb.String()
 		for {
-			str2 := strings.Replace(str, "\n\n", "\n", -1)
+			str2 := strings.ReplaceAll(str, "\n\n", "\n")
 			if str == str2 {
 				break
 			}

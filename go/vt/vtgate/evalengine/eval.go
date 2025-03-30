@@ -407,17 +407,18 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation, valu
 	case tt == sqltypes.Vector:
 		return newEvalVector(value.Raw()), nil
 	case sqltypes.IsText(tt):
-		if tt == sqltypes.HexNum {
+		switch tt {
+		case sqltypes.HexNum:
 			raw, err := parseHexNumber(value.Raw())
 			return newEvalBytesHex(raw), wrap(err)
-		} else if tt == sqltypes.HexVal {
+		case sqltypes.HexVal:
 			hex := value.Raw()
 			raw, err := parseHexLiteral(hex[2 : len(hex)-1])
 			return newEvalBytesHex(raw), wrap(err)
-		} else if tt == sqltypes.BitNum {
+		case sqltypes.BitNum:
 			raw, err := parseBitNum(value.Raw())
 			return newEvalBytesBit(raw), wrap(err)
-		} else {
+		default:
 			return newEvalText(value.Raw(), collation), nil
 		}
 	case sqltypes.IsBinary(tt):

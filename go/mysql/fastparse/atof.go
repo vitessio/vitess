@@ -124,10 +124,10 @@ func readFloat(s string) (mantissa uint64, exp int, neg, trunc bool, i int, ok b
 	if i >= len(s) {
 		return
 	}
-	switch {
-	case s[i] == '+':
+	switch s[i] {
+	case '+':
 		i++
-	case s[i] == '-':
+	case '-':
 		neg = true
 		i++
 	}
@@ -187,9 +187,10 @@ loop:
 			return
 		}
 		esign := 1
-		if s[i] == '+' {
+		switch s[i] {
+		case '+':
 			i++
-		} else if s[i] == '-' {
+		case '-':
 			i++
 			esign = -1
 		}

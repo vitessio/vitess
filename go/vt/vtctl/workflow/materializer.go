@@ -156,10 +156,7 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		// shard have equal key ranges. This can be done, for example, when doing
 		// shard by shard migrations -- migrating a single shard at a time between
 		// sharded source and sharded target keyspaces.
-		streamKeyRangesEqual := false
-		if len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange) {
-			streamKeyRangesEqual = true
-		}
+		streamKeyRangesEqual := len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange)
 
 		// Each tablet needs its own copy of the request as it will have a unique
 		// BinlogSource.

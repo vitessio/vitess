@@ -513,18 +513,14 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 	sm.checkMySQL()
 
 	// Wait for closeAll to get under way.
-	for {
-		if order.Load() >= 1 {
-			break
-		}
+	for order.Load() < 1 {
+
 		time.Sleep(10 * time.Millisecond)
 	}
 
 	// Wait to get out of transitioning state.
-	for {
-		if !sm.isTransitioning() {
-			break
-		}
+	for sm.isTransitioning() {
+
 		time.Sleep(10 * time.Millisecond)
 	}
 

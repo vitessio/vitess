@@ -45,12 +45,12 @@ func AllPromotionRules() []CandidatePromotionRule {
 	return []CandidatePromotionRule{Must, Prefer, Neutral, PreferNot, MustNot}
 }
 
-func (this *CandidatePromotionRule) BetterThan(other CandidatePromotionRule) bool {
+func (r *CandidatePromotionRule) BetterThan(other CandidatePromotionRule) bool {
 	otherOrder, ok := promotionRuleOrderMap[other]
 	if !ok {
 		return false
 	}
-	return promotionRuleOrderMap[*this] < otherOrder
+	return promotionRuleOrderMap[*r] < otherOrder
 }
 
 // Parse returns a CandidatePromotionRule by name.

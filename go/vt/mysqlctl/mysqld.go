@@ -1189,7 +1189,7 @@ func (mysqld *Mysqld) executeMysqlScript(ctx context.Context, connParams *mysql.
 // 'defer os.Remove()' statement.
 func (mysqld *Mysqld) defaultsExtraFile(connParams *mysql.ConnParams) (string, error) {
 	var contents string
-	connParams.Pass = strings.Replace(connParams.Pass, "#", "\\#", -1)
+	connParams.Pass = strings.ReplaceAll(connParams.Pass, "#", "\\#")
 	if connParams.UnixSocket == "" {
 		contents = fmt.Sprintf(`
 [client]

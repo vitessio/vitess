@@ -10,6 +10,7 @@ env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
+{{if .GoPrivate}}  GOPRIVATE: "{{.GoPrivate}}"{{end}}
 
 jobs:
   test:
@@ -73,6 +74,12 @@ jobs:
       uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
       with:
         go-version-file: go.mod
+
+{{if .GoPrivate}}
+    - name: Setup GitHub access token
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
+      run: git config --global url.https://${{`{{ secrets.GH_ACCESS_TOKEN }}`}}@github.com/.insteadOf https://github.com/
+{{end}}
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -138,12 +145,10 @@ jobs:
 
         sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
         
-        # Running on CNCF ARC Runners no longer needs this
-        # Leaving this in as a tombstone for now
-        # sudo service mysql stop
-        # sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
-        # sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        # sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
+        sudo service mysql stop
+        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         mkdir -p dist bin
         curl -s -L https://github.com/coreos/etcd/releases/download/v3.5.17/etcd-v3.5.17-linux-amd64.tar.gz | tar -zxC dist

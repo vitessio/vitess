@@ -19,6 +19,7 @@ package vtbench
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -179,7 +180,7 @@ func (b *Bench) createConns(ctx context.Context) error {
 }
 
 func (b *Bench) getQuery(i int) (string, map[string]*querypb.BindVariable) {
-	query := strings.Replace(b.Query, ":thread", fmt.Sprintf("%d", i), -1)
+	query := strings.ReplaceAll(b.Query, ":thread", strconv.Itoa(i))
 	bindVars := make(map[string]*querypb.BindVariable)
 	return query, bindVars
 }

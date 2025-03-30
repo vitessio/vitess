@@ -73,29 +73,29 @@ func (controller *UIController) Keyspace() string {
 
 // OnReadSuccess is no-op
 func (controller *UIController) OnReadSuccess(ctx context.Context) error {
-	controller.writer.Write(
-		[]byte(fmt.Sprintf("OnReadSuccess, sqls: %v\n", controller.sqls)))
+	fmt.Fprintf(controller.writer,
+		"OnReadSuccess, sqls: %v\n", controller.sqls)
 	return nil
 }
 
 // OnReadFail is no-op
 func (controller *UIController) OnReadFail(ctx context.Context, err error) error {
-	controller.writer.Write(
-		[]byte(fmt.Sprintf("OnReadFail, error: %v\n", err)))
+	fmt.Fprintf(controller.writer,
+		"OnReadFail, error: %v\n", err)
 	return err
 }
 
 // OnValidationSuccess is no-op
 func (controller *UIController) OnValidationSuccess(ctx context.Context) error {
-	controller.writer.Write(
-		[]byte(fmt.Sprintf("OnValidationSuccess, sqls: %v\n", controller.sqls)))
+	fmt.Fprintf(controller.writer,
+		"OnValidationSuccess, sqls: %v\n", controller.sqls)
 	return nil
 }
 
 // OnValidationFail is no-op
 func (controller *UIController) OnValidationFail(ctx context.Context, err error) error {
-	controller.writer.Write(
-		[]byte(fmt.Sprintf("OnValidationFail, error: %v\n", err)))
+	fmt.Fprintf(controller.writer,
+		"OnValidationFail, error: %v\n", err)
 	return err
 }
 
@@ -106,7 +106,7 @@ func (controller *UIController) OnExecutorComplete(ctx context.Context, result *
 		log.Errorf("Failed to serialize ExecuteResult: %v", err)
 		return err
 	}
-	controller.writer.Write([]byte(fmt.Sprintf("Executor succeeds: %s", string(data))))
+	fmt.Fprintf(controller.writer, "Executor succeeds: %s", string(data))
 	return nil
 }
 

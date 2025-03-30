@@ -721,12 +721,15 @@ func (a *application) rewriteVisitable(parent AST, node Visitable, replacer repl
 		}
 	}
 	if a.collectPaths {
-		panic("[BUG] paths are not supported on 'Visitable'")
+		a.cur.current.AddStep(uint16(VisitableInner))
 	}
 	if !a.rewriteAST(node, node.VisitThis(), func(newNode, parent AST) {
 		panic("[BUG] tried to replace 'VisitThis' on 'Visitable'")
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer

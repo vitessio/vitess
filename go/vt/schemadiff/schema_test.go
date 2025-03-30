@@ -1022,7 +1022,7 @@ func TestMassiveSchema(t *testing.T) {
 		"KEY workflow_idx (workflow(64)),\n",
 	} {
 		require.Contains(t, tableBase, s)
-		modifiedTable = strings.Replace(modifiedTable, s, "", -1)
+		modifiedTable = strings.ReplaceAll(modifiedTable, s, "")
 	}
 	require.NotEqual(t, tableBase, modifiedTable)
 
@@ -1049,11 +1049,11 @@ func TestMassiveSchema(t *testing.T) {
 		queries1 := make([]string, 0, numTables) // to be loaded into schema1
 		for i := 0; i < numTables; i++ {
 			tableName := fmt.Sprintf("tbl_%05d", i)
-			query := strings.Replace(tableBase, "placeholder", tableName, -1)
+			query := strings.ReplaceAll(tableBase, "placeholder", tableName)
 			queries0 = append(queries0, query)
 			if modifiedTableIndexes[i] {
 				// Some tables in schema1 are changed
-				query = strings.Replace(modifiedTable, "placeholder", tableName, -1)
+				query = strings.ReplaceAll(modifiedTable, "placeholder", tableName)
 				countModifiedTables++
 			}
 			queries1 = append(queries1, query)

@@ -100,18 +100,21 @@ export const Transactions = () => {
                         <div>{formatTransactionState(row)}</div>
                     </DataCell>
                     <DataCell>
-                        {row.participants?.map((participant) => {
-                            const shard = `${participant.keyspace}/${participant.shard}`;
-                            return (
-                                <ShardLink
-                                    clusterID={params.clusterID}
-                                    keyspace={participant.keyspace}
-                                    shard={participant.shard}
-                                >
-                                    {shard}
-                                </ShardLink>
-                            );
-                        })}
+                        {row.participants
+                            ?.map((participant) => {
+                                const shard = `${participant.keyspace}/${participant.shard}`;
+                                return (
+                                    <ShardLink
+                                        clusterID={params.clusterID}
+                                        keyspace={participant.keyspace}
+                                        shard={participant.shard}
+                                        key={shard}
+                                    >
+                                        {shard}
+                                    </ShardLink>
+                                );
+                            })
+                            .reduce((prev, curr) => [prev, ', ', curr])}
                     </DataCell>
                     <DataCell>
                         <div className="font-sans whitespace-nowrap">{formatDateTime(row.time_created)}</div>

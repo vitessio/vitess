@@ -1104,18 +1104,19 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 func (e *Executor) fetchOrCreatePlan(
 	ctx context.Context,
 	safeSession *econtext.SafeSession,
-	sql string,
+	queryString string,
 	bindVars map[string]*querypb.BindVariable,
 	parameterize bool,
 	preparedPlan bool,
 	logStats *logstats.LogStats,
+	isExecutePath bool, // this means we are trying to execute the query - this is not a PREPARE call
 ) (
 	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, err error) {
 	if e.VSchema() == nil {
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
-	query, comments := sqlparser.SplitMarginComments(sql)
+	query, comments := sqlparser.SplitMarginComments(queryString)
 	vcursor, _ = econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
 
 	var setVarComment string
@@ -1130,23 +1131,83 @@ func (e *Executor) fetchOrCreatePlan(
 	}
 
 	if plan == nil {
-		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey)
-		if err != nil {
-			return nil, nil, nil, err
+		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
+		if err != nil && preparedPlan && isExecutePath {
+			// The baseline plan failed to build, try to build an optimized plan
+			plan, err = e.tryOptimizedPlan(ctx, vcursor, bindVars, query, setVarComment, parameterize, planKey, plan, err)
+		}
+	}
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if shouldOptimizePlan(preparedPlan, isExecutePath, plan) {
+		vcursor.SetBindVars(bindVars)
+		optimizedPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
+		if err == nil {
+			if sp, ok := optimizedPlan.Instructions.(*engine.PlanSwitcher); ok {
+				sp.Baseline = plan.Instructions
+				optimizedPlan.Optimized.Store(true)
+				e.plans.Set(planKey.Hash(), optimizedPlan, 0, e.epoch.Load())
+				plan = optimizedPlan
+			}
 		}
 	}
 
+	// Apply query hints
+	e.applyQueryHints(vcursor, plan)
+
+	logStats.SQL = comments.Leading + plan.Original + comments.Trailing
+	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
+
+	return plan, vcursor, stmt, nil
+}
+
+func (e *Executor) tryOptimizedPlan(
+	ctx context.Context,
+	vcursor *econtext.VCursorImpl,
+	bindVars map[string]*querypb.BindVariable,
+	baseQuery string,
+	setVarComment string,
+	parameterize bool,
+	planKey engine.PlanKey,
+	fallbackPlan *engine.Plan,
+	prevErr error,
+) (*engine.Plan, error) {
+	vcursor.SetBindVars(bindVars)
+	sPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
+	if err == nil {
+		if sp, ok := sPlan.Instructions.(*engine.PlanSwitcher); ok {
+			sp.BaselineErr = prevErr
+			sPlan.Optimized.Store(true)
+			e.plans.Set(planKey.Hash(), sPlan, 0, e.epoch.Load())
+			return sPlan, nil
+		}
+	}
+	return fallbackPlan, prevErr
+}
+
+// shouldOptimizePlan checks if the plan should be optimized.
+// Conditions:
+// - preparedPlan and isExecutePath must be true (indicating this is an execution path, after PREPARE).
+// - plan.Optimized.Swap(true) must be false (ensuring the plan hasn’t been optimized yet).
+// - plan.Type must be either PlanJoinOp or PlanComplex (only these types can produce an optimized plan).
+// This ensures that we only attempt optimization when the query is executed and the plan type supports optimization.
+func shouldOptimizePlan(preparedPlan, isExecutePath bool, plan *engine.Plan) bool {
+	return preparedPlan &&
+		isExecutePath &&
+		plan.Optimized.CompareAndSwap(false, true) &&
+		(plan.Type == engine.PlanJoinOp || plan.Type == engine.PlanComplex)
+}
+
+// applyQueryHints applies query hints to the vcursor
+func (e *Executor) applyQueryHints(vcursor *econtext.VCursorImpl, plan *engine.Plan) {
 	qh := plan.QueryHints
 	vcursor.SetIgnoreMaxMemoryRows(qh.IgnoreMaxMemoryRows)
 	vcursor.SetConsolidator(qh.Consolidator)
 	vcursor.SetWorkloadName(qh.Workload)
 	vcursor.SetPriority(qh.Priority)
 	vcursor.SetExecQueryTimeout(qh.Timeout)
-
-	logStats.SQL = comments.Leading + plan.Original + comments.Trailing
-	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
-
-	return plan, vcursor, stmt, nil
 }
 
 func (e *Executor) getCachedOrBuildPlan(
@@ -1157,6 +1218,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	setVarComment string,
 	parameterize bool,
 	planKey engine.PlanKey,
+	ignoreCache bool,
 ) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
@@ -1212,7 +1274,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	}
 
 	planCachable := sqlparser.CachePlan(stmt) && vcursor.CachePlan()
-	if planCachable {
+	if planCachable && !ignoreCache {
 		if !preparedPlan {
 			// build Plan key
 			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
@@ -1514,7 +1576,7 @@ func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 }
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	plan, vcursor, _, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats)
+	plan, vcursor, _, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
@@ -1686,7 +1748,7 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *econtext.SafeSessio
 func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, error) {
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
-	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats)
+	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
 	return plan, err
 }
 

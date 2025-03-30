@@ -21,11 +21,11 @@ import (
 	_ "embed"
 	"flag"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -170,7 +170,7 @@ func generateRandomStrings(n, length int) []string {
 	for i := range result {
 		b := make([]byte, length)
 		for j := range b {
-			b[j] = charset[rand.Intn(len(charset))]
+			b[j] = charset[rand.IntN(len(charset))]
 		}
 		result[i] = string(b)
 	}

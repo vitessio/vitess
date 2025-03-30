@@ -126,10 +126,8 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)
-	useSequences := false
-	if len(sourceShards) == 1 && len(targetShards) > 1 {
-		useSequences = true
-	}
+	useSequences := len(sourceShards) == 1 && len(targetShards) > 1
+
 	expectVDiffQueries(tme.tmeDB)
 	tabletID := 10
 	for _, shard := range sourceShards {

@@ -181,10 +181,8 @@ func TestRandom(t *testing.T) {
 	endBy := time.Now().Add(1 * time.Second)
 
 	parser := NewTestParser()
-	for {
-		if time.Now().After(endBy) {
-			break
-		}
+	for !time.Now().After(endBy) {
+
 		// Given a random expression
 		randomExpr := g.Expression(ExprGeneratorConfig{})
 		inputQ := "select " + String(randomExpr) + " from t"

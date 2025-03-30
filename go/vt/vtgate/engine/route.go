@@ -196,7 +196,7 @@ func (route *Route) executeShards(
 		}
 	}
 
-	if len(route.OrderBy) != 0 {
+	if len(route.OrderBy) > 0 && len(rss) > 1 {
 		var err error
 		result, err = route.sort(result)
 		if err != nil {
@@ -274,7 +274,7 @@ func (route *Route) streamExecuteShards(
 		}
 	}
 
-	if len(route.OrderBy) == 0 {
+	if len(route.OrderBy) == 0 || len(rss) == 1 {
 		errs := vcursor.StreamExecuteMulti(ctx, route, route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, route.FetchLastInsertID, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
@@ -293,6 +293,21 @@ func (route *Route) streamExecuteShards(
 
 	// There is an order by. We have to merge-sort.
 	return route.mergeSort(ctx, vcursor, bindVars, wantfields, callback, rss, bvs)
+}
+
+// this is used to make mergeSort easy to test
+var createMergeSort = func(
+	prims []StreamExecutor,
+	orderBy evalengine.Comparison,
+	scatterErrorsAsWarnings bool,
+	fetchLastInsertID bool,
+) *MergeSort {
+	return &MergeSort{
+		Primitives:              prims,
+		OrderBy:                 orderBy,
+		ScatterErrorsAsWarnings: scatterErrorsAsWarnings,
+		FetchLastInsertID:       fetchLastInsertID,
+	}
 }
 
 func (route *Route) mergeSort(
@@ -314,13 +329,8 @@ func (route *Route) mergeSort(
 		})
 	}
 
-	ms := MergeSort{
-		Primitives:              prims,
-		OrderBy:                 route.OrderBy,
-		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
-		FetchLastInsertID:       route.FetchLastInsertID,
-	}
-	return vcursor.StreamExecutePrimitive(ctx, &ms, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	ms := createMergeSort(prims, route.OrderBy, route.ScatterErrorsAsWarnings, route.FetchLastInsertID)
+	return vcursor.StreamExecutePrimitive(ctx, ms, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
 }

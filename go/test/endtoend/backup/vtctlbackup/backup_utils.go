@@ -1030,9 +1030,10 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 	err = localCluster.VtctldClientProcess.ExecuteCommand("StartReplication", tablet.Alias)
 	require.NoError(t, err)
 
-	if tablet.Type == "replica" {
+	switch tablet.Type {
+	case "replica":
 		verifySemiSyncStatus(t, tablet, "ON")
-	} else if tablet.Type == "rdonly" {
+	case "rdonly":
 		verifySemiSyncStatus(t, tablet, "OFF")
 	}
 }
@@ -1153,7 +1154,7 @@ func GetReplicaGtidPurged(t *testing.T, replicaIndex int) string {
 }
 
 func ReconnectReplicaToPrimary(t *testing.T, replicaIndex int) {
-	query := fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='localhost', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", primary.MySQLPort)
+	query := fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='localhost', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", primary.MySQLPort)
 	replica := getReplica(t, replicaIndex)
 	_, err := replica.VttabletProcess.QueryTablet("stop replica", keyspaceName, true)
 	require.NoError(t, err)

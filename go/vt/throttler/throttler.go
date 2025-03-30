@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -78,7 +77,7 @@ type Throttler interface {
 	GetConfiguration() *throttlerdatapb.Configuration
 	UpdateConfiguration(configuration *throttlerdatapb.Configuration, copyZeroValues bool) error
 	ResetConfiguration()
-	MaxLag(tabletType topodatapb.TabletType) uint32
+	MaxLag(tabletType topodata.TabletType) uint32
 	Log() []Result
 }
 

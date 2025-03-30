@@ -42,64 +42,64 @@ type RowMap map[string]CellData
 // CellData is the result of a single (atomic) column in a single row
 type CellData sql.NullString
 
-func (this CellData) MarshalJSON() ([]byte, error) {
-	if this.Valid {
-		return json.Marshal(this.String)
+func (cd CellData) MarshalJSON() ([]byte, error) {
+	if cd.Valid {
+		return json.Marshal(cd.String)
 	} else {
 		return json.Marshal(nil)
 	}
 }
 
 // UnmarshalJSON reds this object from JSON
-func (this *CellData) UnmarshalJSON(b []byte) error {
+func (cd *CellData) UnmarshalJSON(b []byte) error {
 	var s string
 	if err := json.Unmarshal(b, &s); err != nil {
 		return err
 	}
-	(*this).String = s
-	(*this).Valid = true
+	(*cd).String = s
+	(*cd).Valid = true
 
 	return nil
 }
 
-func (this *CellData) NullString() *sql.NullString {
-	return (*sql.NullString)(this)
+func (cd *CellData) NullString() *sql.NullString {
+	return (*sql.NullString)(cd)
 }
 
 // RowData is the result of a single row, in positioned array format
 type RowData []CellData
 
 // MarshalJSON will marshal this map as JSON
-func (this *RowData) MarshalJSON() ([]byte, error) {
-	cells := make([](*CellData), len(*this))
-	for i, val := range *this {
+func (rd *RowData) MarshalJSON() ([]byte, error) {
+	cells := make([](*CellData), len(*rd))
+	for i, val := range *rd {
 		d := CellData(val)
 		cells[i] = &d
 	}
 	return json.Marshal(cells)
 }
 
-func (this *RowMap) GetString(key string) string {
-	return (*this)[key].String
+func (rm *RowMap) GetString(key string) string {
+	return (*rm)[key].String
 }
 
-func (this *RowMap) GetInt64(key string) int64 {
-	res, _ := strconv.ParseInt(this.GetString(key), 10, 64)
+func (rm *RowMap) GetInt64(key string) int64 {
+	res, _ := strconv.ParseInt(rm.GetString(key), 10, 64)
 	return res
 }
 
-func (this *RowMap) GetFloat64(key string) float64 {
-	res, _ := strconv.ParseFloat(this.GetString(key), 64)
+func (rm *RowMap) GetFloat64(key string) float64 {
+	res, _ := strconv.ParseFloat(rm.GetString(key), 64)
 	return res
 }
 
-func (this *RowMap) GetInt32(key string) int32 {
-	res, _ := strconv.ParseInt(this.GetString(key), 10, 32)
+func (rm *RowMap) GetInt32(key string) int32 {
+	res, _ := strconv.ParseInt(rm.GetString(key), 10, 32)
 	return int32(res)
 }
 
-func (this *RowMap) GetNullInt64(key string) sql.NullInt64 {
-	i, err := strconv.ParseInt(this.GetString(key), 10, 64)
+func (rm *RowMap) GetNullInt64(key string) sql.NullInt64 {
+	i, err := strconv.ParseInt(rm.GetString(key), 10, 64)
 	if err == nil {
 		return sql.NullInt64{Int64: i, Valid: true}
 	} else {
@@ -107,32 +107,32 @@ func (this *RowMap) GetNullInt64(key string) sql.NullInt64 {
 	}
 }
 
-func (this *RowMap) GetInt(key string) int {
-	res, _ := strconv.Atoi(this.GetString(key))
+func (rm *RowMap) GetInt(key string) int {
+	res, _ := strconv.Atoi(rm.GetString(key))
 	return res
 }
 
-func (this *RowMap) GetUint(key string) uint {
-	res, _ := strconv.ParseUint(this.GetString(key), 10, 0)
+func (rm *RowMap) GetUint(key string) uint {
+	res, _ := strconv.ParseUint(rm.GetString(key), 10, 0)
 	return uint(res)
 }
 
-func (this *RowMap) GetUint64(key string) uint64 {
-	res, _ := strconv.ParseUint(this.GetString(key), 10, 64)
+func (rm *RowMap) GetUint64(key string) uint64 {
+	res, _ := strconv.ParseUint(rm.GetString(key), 10, 64)
 	return res
 }
 
-func (this *RowMap) GetUint32(key string) uint32 {
-	res, _ := strconv.ParseUint(this.GetString(key), 10, 32)
+func (rm *RowMap) GetUint32(key string) uint32 {
+	res, _ := strconv.ParseUint(rm.GetString(key), 10, 32)
 	return uint32(res)
 }
 
-func (this *RowMap) GetBool(key string) bool {
-	return this.GetInt(key) != 0
+func (rm *RowMap) GetBool(key string) bool {
+	return rm.GetInt(key) != 0
 }
 
-func (this *RowMap) GetTime(key string) time.Time {
-	if t, err := time.Parse(DateTimeFormat, this.GetString(key)); err == nil {
+func (rm *RowMap) GetTime(key string) time.Time {
+	if t, err := time.Parse(DateTimeFormat, rm.GetString(key)); err == nil {
 		return t
 	}
 	return time.Time{}

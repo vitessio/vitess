@@ -79,9 +79,10 @@ func (r *rewriteGen) generateVisitableRewrite() {
 					),
 				),
 
-				// no path collection for Visitable
+				// path collection for Visitable
 				jen.If(jen.Id("a").Dot("collectPaths")).Block(
-					jen.Panic(jen.Lit("[BUG] paths are not supported on 'Visitable'")),
+					// 		a.cur.current.AddStep(uint16(RefOfValueSliceContainerASTImplementationElements))
+					jen.Id("a.cur.current.AddStep").Call(jen.Id("uint16(VisitableInner)")),
 				),
 
 				// rewrite internal fields
@@ -100,6 +101,12 @@ func (r *rewriteGen) generateVisitableRewrite() {
 				),
 
 				// POST
+
+				jen.If(jen.Id("a").Dot("collectPaths")).Block(
+					// 		a.cur.current.Pop()
+					jen.Id("a.cur.current.Pop").Call(),
+				),
+
 				jen.If(jen.Id("a").Dot("post").Op("!=").Nil()).Block(
 					jen.Id("a").Dot("cur").Dot("replacer").Op("=").Id("replacer"),
 					jen.Id("a").Dot("cur").Dot("parent").Op("=").Id("parent"),
