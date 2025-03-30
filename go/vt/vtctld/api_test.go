@@ -64,8 +64,8 @@ func TestAPI(t *testing.T) {
 
 	// Populate topo. Remove ServedTypes from shards to avoid ordering issues.
 	ts.CreateKeyspace(ctx, "ks1", ks1)
-	ts.CreateShard(ctx, "ks1", "-80")
-	ts.CreateShard(ctx, "ks1", "80-")
+	ts.CreateShard(ctx, "ks1", "-80", nil)
+	ts.CreateShard(ctx, "ks1", "80-", nil)
 
 	// SaveVSchema to test that creating a snapshot keyspace copies VSchema
 	vs := &vschemapb.Keyspace{

@@ -38,7 +38,7 @@ func TestCreateShard(t *testing.T) {
 	shard := "0"
 
 	// create shard in a non-existing keyspace
-	if err := ts.CreateShard(ctx, keyspace, shard); err == nil {
+	if err := ts.CreateShard(ctx, keyspace, shard, nil); err == nil {
 		t.Fatalf("CreateShard(invalid keyspace) didn't fail")
 	}
 
@@ -48,7 +48,7 @@ func TestCreateShard(t *testing.T) {
 	}
 
 	// create shard should now work
-	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
+	if err := ts.CreateShard(ctx, keyspace, shard, nil); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
 }
@@ -71,7 +71,7 @@ func TestCreateShardMultiUnsharded(t *testing.T) {
 
 	// create first shard in keyspace
 	shard0 := "0"
-	if err := ts.CreateShard(ctx, keyspace, shard0); err != nil {
+	if err := ts.CreateShard(ctx, keyspace, shard0, nil); err != nil {
 		t.Fatalf("CreateShard(shard0) failed: %v", err)
 	}
 	if si, err := ts.GetShard(ctx, keyspace, shard0); err != nil {
@@ -84,7 +84,7 @@ func TestCreateShardMultiUnsharded(t *testing.T) {
 
 	// create second shard in keyspace
 	shard1 := "1"
-	if err := ts.CreateShard(ctx, keyspace, shard1); err != nil {
+	if err := ts.CreateShard(ctx, keyspace, shard1, nil); err != nil {
 		t.Fatalf("CreateShard(shard1) failed: %v", err)
 	}
 	if si, err := ts.GetShard(ctx, keyspace, shard1); err != nil {
@@ -116,7 +116,7 @@ func TestGetOrCreateShard(t *testing.T) {
 			for j := 0; j < 100; j++ {
 				index := rand.IntN(10)
 				shard := fmt.Sprintf("%v", index)
-				si, err := ts.GetOrCreateShard(ctx, keyspace, shard)
+				si, err := ts.GetOrCreateShard(ctx, keyspace, shard, nil)
 				if err != nil {
 					t.Errorf("GetOrCreateShard(%v, %v) failed: %v", i, shard, err)
 				}
