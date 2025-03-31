@@ -23,16 +23,17 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cespare/xxhash/v2"
+
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 const (
@@ -342,23 +343,51 @@ func (lu *clCommon) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.
 
 // Create reserves the id by inserting it into the vindex table.
 func (lu *clCommon) Create(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
+	// Attempt to insert values into the lookup vindex table.
 	origErr := lu.lkp.createCustom(ctx, vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode, vtgatepb.CommitOrder_PRE)
 	if origErr == nil {
 		return nil
 	}
+
+	// If the transaction is already rolled back. We should not handle the case for duplicate error.
+	if strings.Contains(origErr.Error(), vterrors.TxRollbackOnPartialExec) {
+		return origErr
+	}
+
 	// Try and convert the error to a MySQL error
 	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(origErr).(*sqlerror.SQLError)
-	// If it is a MySQL error and its code is of duplicate entry, then we would like to continue
-	// Otherwise, we return the error
+
+	// If the error is NOT a duplicate entry error, return it immediately.
 	if !(isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERDupEntry) {
 		return origErr
 	}
+
+	// Map to track unique row hashes and their original index in `rowsColValues`.
+	rowHashIndex := make(map[uint64]int, len(rowsColValues))
 	for i, row := range rowsColValues {
+		rowKey := hashKeyXXH(row)
+		// If a row with the same hash exists, perform an explicit value check to avoid hash collisions.
+		if idx, exists := rowHashIndex[rowKey]; exists && sqltypes.RowEqual(row, rowsColValues[idx]) {
+			return origErr // Exact duplicate found, return the original error.
+		}
+		rowHashIndex[rowKey] = i
+
+		// Attempt to handle the duplicate entry.
 		if err := lu.handleDup(ctx, vcursor, row, ksids[i], origErr); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// hashKeyXXH generates a fast 64-bit hash for a row using xxHash.
+// This is optimized for performance and helps detect duplicates efficiently.
+func hashKeyXXH(row []sqltypes.Value) uint64 {
+	h := xxhash.New()
+	for _, col := range row {
+		_, _ = h.Write([]byte(col.String())) // Ignoring error as xxHash Write never fails
+	}
+	return h.Sum64()
 }
 
 func (lu *clCommon) handleDup(ctx context.Context, vcursor VCursor, values []sqltypes.Value, ksid []byte, dupError error) error {

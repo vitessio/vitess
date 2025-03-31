@@ -29,10 +29,13 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
@@ -3140,3 +3143,127 @@ func TestDeleteMultiTable(t *testing.T) {
 	// delete from `user` where (`user`.id) in ::dml_vals - 1 shard
 	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete `user` from `user` join music on `user`.col = music.col where music.user_id = 1", 18)
 }
+<<<<<<< HEAD
+=======
+
+// TestSessionRowsAffected test that rowsAffected is set correctly for each shard session.
+func TestSessionRowsAffected(t *testing.T) {
+	executor, _, sbc4060, _, ctx := createExecutorEnv(t)
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
+
+	// start the transaction
+	_, err := executorExecSession(ctx, executor, session, "begin", nil)
+	require.NoError(t, err)
+
+	// -20 - select query
+	_, err = executorExecSession(ctx, executor, session, "select * from user where id = 1", nil)
+	require.NoError(t, err)
+	require.Len(t, session.ShardSessions, 1)
+	require.False(t, session.ShardSessions[0].RowsAffected)
+
+	// -20 - update query (rows affected)
+	_, err = executorExecSession(ctx, executor, session, "update user set foo = 41 where id = 1", nil)
+	require.NoError(t, err)
+	require.True(t, session.ShardSessions[0].RowsAffected)
+
+	// e0- - select query
+	_, err = executorExecSession(ctx, executor, session, "select * from user where id = 7", nil)
+	require.NoError(t, err)
+	assert.Len(t, session.ShardSessions, 2)
+	require.False(t, session.ShardSessions[1].RowsAffected)
+
+	// c0-e0 - update query (rows affected)
+	_, err = executorExecSession(ctx, executor, session, "update user set foo = 42 where id = 5", nil)
+	require.NoError(t, err)
+	require.Len(t, session.ShardSessions, 3)
+	require.True(t, session.ShardSessions[2].RowsAffected)
+
+	// 40-60 - update query (no rows affected)
+	sbc4060.SetResults([]*sqltypes.Result{{RowsAffected: 0}})
+	_, err = executorExecSession(ctx, executor, session, "update user set foo = 42 where id = 3", nil)
+	require.NoError(t, err)
+	assert.Len(t, session.ShardSessions, 4)
+	require.False(t, session.ShardSessions[3].RowsAffected)
+
+	// 40-60 - select query
+	_, err = executorExecSession(ctx, executor, session, "select * from user where id = 3", nil)
+	require.NoError(t, err)
+	require.False(t, session.ShardSessions[3].RowsAffected)
+
+	// 40-60 - delete query (rows affected)
+	_, err = executorExecSession(ctx, executor, session, "delete from user where id = 3", nil)
+	require.NoError(t, err)
+	require.True(t, session.ShardSessions[0].RowsAffected)
+	require.False(t, session.ShardSessions[1].RowsAffected)
+	require.True(t, session.ShardSessions[2].RowsAffected)
+	require.True(t, session.ShardSessions[3].RowsAffected)
+
+	_, err = executorExecSession(ctx, executor, session, "commit", nil)
+	require.NoError(t, err)
+	require.Zero(t, session.ShardSessions)
+}
+
+func TestConsistentLookupInsert(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// Special setup
+	cell := "zone1"
+	ks := "TestExecutor"
+	hc := discovery.NewFakeHealthCheck(nil)
+	s := createSandbox(ks)
+	s.ShardSpec = "-80-"
+	s.VSchema = executorVSchema
+	serv := newSandboxForCells(ctx, []string{cell})
+	resolver := newTestResolver(ctx, hc, serv, cell)
+	sbc1 := hc.AddTestTablet(cell, "-80", 1, ks, "-80", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc2 := hc.AddTestTablet(cell, "80-", 1, ks, "80-", topodatapb.TabletType_PRIMARY, true, 1, nil)
+
+	executor := createExecutor(ctx, serv, cell, resolver)
+	defer executor.Close()
+
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
+
+	t.Run("transaction rollback due to partial execution error, no duplicate handling", func(t *testing.T) {
+		sbc1.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '10' for key 't1_lkp_idx.PRIMARY'")
+		sbc2.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
+		_, err := executorExecSession(ctx, executor, session, "insert into t1(id, unq_col) values (1, 10), (4, 10), (50, 4)", nil)
+		assert.ErrorContains(t, err,
+			"lookup.Create: transaction rolled back to reverse changes of partial DML execution: target: TestExecutor.-80.primary: "+
+				"Duplicate entry '10' for key 't1_lkp_idx.PRIMARY' (errno 1062) (sqlstate 23000)")
+
+		assert.EqualValues(t, 0, sbc1.ExecCount.Load())
+		assert.EqualValues(t, 1, sbc2.ExecCount.Load())
+
+		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1), (:unq_col_2, :keyspace_id_2)", 2)
+		testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 10), (4, 10), (50, 4)", 0)
+	})
+
+	sbc1.ResetCounter()
+	sbc2.ResetCounter()
+	session = econtext.NewAutocommitSession(session.Session)
+
+	t.Run("duplicate handling failing on same unique column value", func(t *testing.T) {
+		sbc1.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '10' for key 't1_lkp_idx.PRIMARY'")
+		sbc1.SetResults([]*sqltypes.Result{
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("keyspace_id", "varbinary")),
+			{RowsAffected: 1},
+		})
+		_, err := executorExecSession(ctx, executor, session, "insert into t1(id, unq_col) values (1, 10), (4, 10)", nil)
+		assert.ErrorContains(t, err,
+			"transaction rolled back to reverse changes of partial DML execution: lookup.Create: target: TestExecutor.-80.primary: "+
+				"Duplicate entry '10' for key 't1_lkp_idx.PRIMARY' (errno 1062) (sqlstate 23000)")
+
+		assert.EqualValues(t, 2, sbc1.ExecCount.Load())
+		assert.EqualValues(t, 0, sbc2.ExecCount.Load())
+
+		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1)", 1)
+		testQueryLog(t, executor, logChan, "VindexCreate", "SELECT", "select keyspace_id from t1_lkp_idx where unq_col = :unq_col for update", 1)
+		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col, :keyspace_id)", 1)
+		testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 10), (4, 10)", 0)
+	})
+}
+>>>>>>> 2d0306f37b (Fix: Ensure Consistent Lookup Vindex Handles Duplicate Rows in Single Query (#17974))
