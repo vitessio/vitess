@@ -208,6 +208,9 @@ var (
 
 func commandCreate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
+	if createOptions.VSchema != "" && createOptions.VSchemaFile != "" {
+		return fmt.Errorf("cannot specify both --vschema and --vschema-file")
+	}
 
 	if createOptions.VSchemaFile != "" {
 		vschema, err := os.ReadFile(createOptions.VSchemaFile)
@@ -411,7 +414,6 @@ func commandRemoveTables(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Tables %s has been successfully removed from VSchema '%s'.\n", strings.Join(removeTablesOptions.Tables, ", "), commonOptions.Name)
-
 	return nil
 }
 
@@ -446,7 +448,8 @@ func commandSetSequence(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Sequence table '%s' has been successfully set up in VSchema '%s'.\n", setReferenceOptions.Table, commonOptions.Name)
+	fmt.Printf("Column '%s' in table '%s' has been configured to use sequence from source '%s'. Use get to view VSchema.\n",
+		setSequenceOptions.Column, setSequenceOptions.Table, setSequenceOptions.Source)
 	return nil
 }
 
@@ -493,8 +496,8 @@ func init() {
 	AddVindex.Flags().StringSliceVar(&addVindexOptions.Params, "params", nil, "Key-value pairs for vindex parameters.")
 	VSchema.AddCommand(AddVindex)
 
-	RemoveVindex.Flags().StringVar(&removeVindexOptions.VindexName, "vindex", "", "The name of the vindex to remove.")
-	RemoveVindex.MarkFlagRequired("vindex")
+	RemoveVindex.Flags().StringVar(&removeVindexOptions.VindexName, "name", "", "The name of the vindex to remove.")
+	RemoveVindex.MarkFlagRequired("name")
 	VSchema.AddCommand(RemoveVindex)
 
 	AddLookupVindex.Flags().StringVar(&addLookupVindexOptions.VindexName, "name", "", "The name of the lookup vindex to add.")
@@ -504,13 +507,14 @@ func init() {
 	AddLookupVindex.Flags().StringVar(&addLookupVindexOptions.Table, "table", "", "The table name for the lookup vindex.")
 	AddLookupVindex.MarkFlagRequired("table")
 	AddLookupVindex.Flags().StringSliceVar(&addLookupVindexOptions.From, "from", nil, "The columns associated with the lookup vindex.")
+	AddLookupVindex.MarkFlagRequired("from")
 	AddLookupVindex.Flags().StringVar(&addLookupVindexOptions.Owner, "owner", "", "The owner table for the lookup vindex.")
 	AddLookupVindex.Flags().BoolVar(&addLookupVindexOptions.IgnoreNulls, "ignore-nulls", false, "Specifies whether to ignore null values.")
 	VSchema.AddCommand(AddLookupVindex)
 
 	AddTables.Flags().StringSliceVar(&addTablesOptions.Tables, "tables", nil, "The tables to add to the vschema.")
+	AddTables.MarkFlagRequired("tables")
 	AddTables.Flags().StringVar(&addTablesOptions.PrimaryVindexName, "primary-vindex", "", "The primary vindex for the tables.")
-	AddTables.MarkFlagRequired("primary-vindex")
 	AddTables.Flags().StringSliceVar(&addTablesOptions.Columns, "columns", nil, "The columns associated with the primary vindex.")
 	AddTables.Flags().BoolVar(&addTablesOptions.AddAll, "all", false, "Add all tables to the vschema.")
 	VSchema.AddCommand(AddTables)
@@ -524,6 +528,7 @@ func init() {
 	SetPrimaryVindex.Flags().StringVar(&setPrimaryVindexOptions.PrimaryVindexName, "primary-vindex", "", "The primary vindex to set.")
 	SetPrimaryVindex.MarkFlagRequired("primary-vindex")
 	SetPrimaryVindex.Flags().StringSliceVar(&setPrimaryVindexOptions.Columns, "columns", nil, "The columns associated with the primary vindex.")
+	SetPrimaryVindex.MarkFlagRequired("columns")
 	VSchema.AddCommand(SetPrimaryVindex)
 
 	SetSequence.Flags().StringVar(&setSequenceOptions.Table, "table", "", "The table name for the sequence.")

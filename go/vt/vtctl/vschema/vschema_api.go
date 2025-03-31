@@ -157,6 +157,11 @@ func (api *VSchemaAPI) Update(ctx context.Context, req *vtctldatapb.VSchemaUpdat
 					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tenant id column name not specified")
 				}
 				vsInfo.MultiTenantSpec.TenantIdColumnName = *req.TenantIdColumnName
+			default:
+				if vsInfo.MultiTenantSpec == nil {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "both tenant id column name and column type should be provided")
+				}
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "nothing to update since neither tenant id column name nor column type has been provided")
 			}
 		} else {
 			// If it's not multi-tenant but tenantIdColumnName and
@@ -207,6 +212,9 @@ func (api *VSchemaAPI) AddVindex(ctx context.Context, req *vtctldatapb.VSchemaAd
 		Type:   req.VindexType,
 		Params: req.Params,
 	}
+	if vsInfo.Vindexes == nil {
+		vsInfo.Vindexes = make(map[string]*vschemapb.Vindex, 1)
+	}
 	vsInfo.Vindexes[req.VindexName] = vindex
 	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
 		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
@@ -254,7 +262,7 @@ func (api *VSchemaAPI) AddLookupVindex(ctx context.Context, req *vtctldatapb.VSc
 	if len(req.FromColumns) == 0 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at least 1 column should be specified for lookup vindex")
 	}
-	if err := validateQualifiedTableType(ctx, api.ts, req.TableName, vindexes.TypeTable); err != nil {
+	if _, err := validateQualifiedTableType(ctx, api.ts, req.TableName, vindexes.TypeTable); err != nil {
 		return vterrors.Wrapf(err, "invalid lookup table")
 	}
 	params := map[string]string{
@@ -305,18 +313,15 @@ func (api *VSchemaAPI) AddTables(ctx context.Context, req *vtctldatapb.VSchemaAd
 	if err := ensureTablesDoNotExist(vsInfo, req.Tables); err != nil {
 		return err
 	}
+	if vsInfo.Tables == nil {
+		vsInfo.Tables = make(map[string]*vschemapb.Table, len(req.Tables))
+	}
 	for _, tableName := range req.Tables {
 		vsInfo.Tables[tableName] = &vschemapb.Table{}
 	}
 	if req.PrimaryVindexName != "" {
 		if _, ok := vsInfo.Vindexes[req.PrimaryVindexName]; !ok {
-			// Validate if we can create the vindex without any errors.
-			if _, err := vindexes.CreateVindex(req.PrimaryVindexName, req.PrimaryVindexName, nil); err != nil {
-				return vterrors.Wrapf(err, "failed to create vindex '%s'", req.PrimaryVindexName)
-			}
-			vsInfo.Vindexes[req.PrimaryVindexName] = &vschemapb.Vindex{
-				Type: req.PrimaryVindexName,
-			}
+			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "vindex '%s' not found in vschema '%s'", req.PrimaryVindexName, req.VSchemaName)
 		}
 		colVindex := &vschemapb.ColumnVindex{
 			Name:    req.PrimaryVindexName,
@@ -364,6 +369,9 @@ func (api *VSchemaAPI) SetPrimaryVindex(ctx context.Context, req *vtctldatapb.VS
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
 	}
+	if len(req.Columns) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at least 1 column should be specified for vindex")
+	}
 	if err := ensureTablesExist(vsInfo, req.Tables); err != nil {
 		return err
 	}
@@ -401,8 +409,12 @@ func (api *VSchemaAPI) SetSequence(ctx context.Context, req *vtctldatapb.VSchema
 	if req.Column == "" {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column name cannot be empty")
 	}
-	if err := validateQualifiedTableType(ctx, api.ts, req.SequenceSource, vindexes.TypeSequence); err != nil {
+	sourceKs, err := validateQualifiedTableType(ctx, api.ts, req.SequenceSource, vindexes.TypeSequence)
+	if err != nil {
 		return vterrors.Wrapf(err, "invalid sequence table source")
+	}
+	if sourceKs.Sharded {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "sequence table '%s' cannot be sharded", req.SequenceSource)
 	}
 	table.AutoIncrement = &vschemapb.AutoIncrement{
 		Column:   req.Column,
@@ -426,7 +438,7 @@ func (api *VSchemaAPI) SetReference(ctx context.Context, req *vtctldatapb.VSchem
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "table '%s' is already a reference table", req.TableName)
 	}
 	if req.Source != "" {
-		if err := validateQualifiedTableType(ctx, api.ts, req.Source, vindexes.TypeReference); err != nil {
+		if _, err := validateQualifiedTableType(ctx, api.ts, req.Source, vindexes.TypeReference); err != nil {
 			return vterrors.Wrapf(err, "invalid reference table source")
 		}
 	}
