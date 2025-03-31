@@ -61,7 +61,6 @@ var (
 )
 
 func init() {
-	// tablet stats
 	stats.NewGaugesFuncWithMultiLabels(
 		"TabletsWatchedByCell",
 		"Number of tablets watched by cell",
@@ -70,7 +69,7 @@ func init() {
 	)
 	stats.NewGaugesFuncWithMultiLabels(
 		"TabletsWatchedByShard",
-		"Number of tablets watched by keyspace/shard",
+		"Number of tablets watched and EmergencyReparentShard status by keyspace/shard",
 		[]string{"Keyspace", "Shard", "ErsDisabled"},
 		getTabletsWatchedByShardStats,
 	)
