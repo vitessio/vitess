@@ -60,6 +60,26 @@
     }
   },
   {
+    "comment": "simple drop procedure",
+    "query": "drop procedure p1",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "drop procedure p1",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "drop procedure p1"
+      },
+      "TablesUsed": [
+        "main.p1"
+      ]
+    }
+  },
+  {
     "comment": "simple create procedure with keyspace",
     "query": "create procedure main_2.p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end",
     "plan": {
@@ -76,6 +96,26 @@
       },
       "TablesUsed": [
         "main_2.p1"
+      ]
+    }
+  },
+  {
+    "comment": "simple drop procedure with keyspace",
+    "query": "drop procedure if exists user.p1",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "drop procedure if exists user.p1",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "drop procedure if exists p1"
+      },
+      "TablesUsed": [
+        "user.p1"
       ]
     }
   },
