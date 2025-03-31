@@ -33,7 +33,7 @@
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[Semi-sync monitor in vttablet](#semi-sync-monitor)**
   - **[Wrapped fatal transaction errors](#new-errors-fatal-tx)**
-  - **[Support for dynamic control of ERS by keyspace in VTOrc](#vtorc-dynamic-keyspace-ers)**
+  - **[Support dynamic control of ERS by keyspace/shard in VTOrc](#vtorc-dynamic-ers-disabled)**
 - **[Minor Changes](#minor-changes)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
   - **[VTTablet](#minor-changes-vttablet)**
@@ -338,11 +338,11 @@ This change was introduced by [#17669](https://github.com/vitessio/vitess/pull/1
 
 ---
 
-### <a id="vtorc-dynamic-keyspace-ers"/>Support for dynamic control of ERS by keyspace in VTOrc</a>
+### <a id="vtorc-dynamic-ers-disabled"/>Support dynamic control of ERS by keyspace/shard in VTOrc</a>
 
-**Note: disabling ERS-based recoveries introduces availability risks; please use with extreme caution!**
+**Note: disabling ERS-based recoveries introduces availability risks; please use with extreme caution! This feature is intended to be used manually in emergency situations. If you rely on this functionality often this may be an anti-pattern. If so, please open an issue with your use case.**
 
-The new `vtctldclient` RPC `SetVtorcEmergencyReparent` was introduced to allow VTOrc recoveries involving `EmergencyReparentShard` actions to be disabled on a per-keyspace or per-shard basis. Previous to this version, disabling ERS-based recoveries was only possible globally/per-instance. VTOrc will now consider this keyspace/shard-level setting that is refreshed from the topo on each recovery.
+The new `vtctldclient` RPC `SetVtorcEmergencyReparent` was introduced to allow VTOrc recoveries involving `EmergencyReparentShard` actions to be disabled on a per-keyspace or per-shard basis. Previous to this version, disabling ERS-based recoveries was only possible globally/per-VTOrc-instance. VTOrc will now consider this keyspace/shard-level setting that is refreshed from the topo on each recovery.
 
 To provide observability of keyspace/shards with ERS-based VTOrc recoveries disabled, the label `ErsDisabled` was added to the `TabletsWatchedByShard` metric. This metric label can be used to create alerting to ensure ERS-based recoveries are not disabled for an undesired period of time.
 
