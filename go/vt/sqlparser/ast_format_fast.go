@@ -524,6 +524,20 @@ func (node *CreateProcedure) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
+func (node *DropProcedure) FormatFast(buf *TrackedBuffer) {
+	exists := ""
+	if node.IfExists {
+		exists = "if exists "
+	}
+	buf.WriteString(DropStr)
+	buf.WriteByte(' ')
+	node.Comments.FormatFast(buf)
+	buf.WriteString("procedure ")
+	buf.WriteString(exists)
+	node.Name.FormatFast(buf)
+}
+
+// FormatFast formats the node.
 func (pp *ProcParameter) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString(pp.Mode.ToString())
 	buf.WriteByte(' ')

@@ -161,6 +161,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfDropDatabase(parent, node, replacer)
 	case *DropKey:
 		return a.rewriteRefOfDropKey(parent, node, replacer)
+	case *DropProcedure:
+		return a.rewriteRefOfDropProcedure(parent, node, replacer)
 	case *DropTable:
 		return a.rewriteRefOfDropTable(parent, node, replacer)
 	case *DropView:
@@ -3919,6 +3921,55 @@ func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replace
 	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*DropKey).Name = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfDropProcedure(parent SQLNode, node *DropProcedure, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfDropProcedureComments))
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropProcedure).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfDropProcedureName))
+	}
+	if !a.rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*DropProcedure).Name = newNode.(TableName)
 	}) {
 		return false
 	}
@@ -15065,6 +15116,8 @@ func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, rep
 		return a.rewriteRefOfCreateTable(parent, node, replacer)
 	case *CreateView:
 		return a.rewriteRefOfCreateView(parent, node, replacer)
+	case *DropProcedure:
+		return a.rewriteRefOfDropProcedure(parent, node, replacer)
 	case *DropTable:
 		return a.rewriteRefOfDropTable(parent, node, replacer)
 	case *DropView:
@@ -15513,6 +15566,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfDelete(parent, node, replacer)
 	case *DropDatabase:
 		return a.rewriteRefOfDropDatabase(parent, node, replacer)
+	case *DropProcedure:
+		return a.rewriteRefOfDropProcedure(parent, node, replacer)
 	case *DropTable:
 		return a.rewriteRefOfDropTable(parent, node, replacer)
 	case *DropView:

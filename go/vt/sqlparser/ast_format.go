@@ -381,6 +381,15 @@ func (node *CreateProcedure) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *DropProcedure) Format(buf *TrackedBuffer) {
+	exists := ""
+	if node.IfExists {
+		exists = "if exists "
+	}
+	buf.astPrintf(node, "%s %vprocedure %s%v", DropStr, node.Comments, exists, node.Name)
+}
+
+// Format formats the node.
 func (pp *ProcParameter) Format(buf *TrackedBuffer) {
 	buf.astPrintf(pp, "%s %v %v", pp.Mode.ToString(), pp.Name, pp.Type)
 }

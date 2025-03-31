@@ -1343,6 +1343,20 @@ func (cached *DropKey) CachedSize(alloc bool) int64 {
 	size += cached.Name.CachedSize(false)
 	return size
 }
+func (cached *DropProcedure) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
+	size += cached.Comments.CachedSize(true)
+	// field Name vitess.io/vitess/go/vt/sqlparser.TableName
+	size += cached.Name.CachedSize(false)
+	return size
+}
 func (cached *DropTable) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -160,6 +160,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfDropDatabase(in, f)
 	case *DropKey:
 		return VisitRefOfDropKey(in, f)
+	case *DropProcedure:
+		return VisitRefOfDropProcedure(in, f)
 	case *DropTable:
 		return VisitRefOfDropTable(in, f)
 	case *DropView:
@@ -1610,6 +1612,21 @@ func VisitRefOfDropKey(in *DropKey, f Visit) error {
 		return err
 	}
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfDropProcedure(in *DropProcedure, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -5213,6 +5230,8 @@ func VisitDDLStatement(in DDLStatement, f Visit) error {
 		return VisitRefOfCreateTable(in, f)
 	case *CreateView:
 		return VisitRefOfCreateView(in, f)
+	case *DropProcedure:
+		return VisitRefOfDropProcedure(in, f)
 	case *DropTable:
 		return VisitRefOfDropTable(in, f)
 	case *DropView:
@@ -5643,6 +5662,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfDelete(in, f)
 	case *DropDatabase:
 		return VisitRefOfDropDatabase(in, f)
+	case *DropProcedure:
+		return VisitRefOfDropProcedure(in, f)
 	case *DropTable:
 		return VisitRefOfDropTable(in, f)
 	case *DropView:

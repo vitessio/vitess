@@ -4375,6 +4375,10 @@ drop_statement:
   {
     $$ = &DropDatabase{Comments: Comments($2).Parsed(), DBName: $5, IfExists: $4}
   }
+| DROP comment_opt PROCEDURE exists_opt table_name
+  {
+    $$ = &DropProcedure{Comments: Comments($2).Parsed(), Name: $5, IfExists: $4}
+  }
 
 truncate_statement:
   TRUNCATE TABLE table_name

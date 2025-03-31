@@ -146,6 +146,8 @@ const (
 	RefOfDropDatabaseComments
 	RefOfDropDatabaseDBName
 	RefOfDropKeyName
+	RefOfDropProcedureComments
+	RefOfDropProcedureName
 	RefOfDropTableFromTables
 	RefOfDropTableComments
 	RefOfDropViewFromTables
@@ -850,6 +852,10 @@ func (s ASTStep) DebugString() string {
 		return "(*DropDatabase).DBName"
 	case RefOfDropKeyName:
 		return "(*DropKey).Name"
+	case RefOfDropProcedureComments:
+		return "(*DropProcedure).Comments"
+	case RefOfDropProcedureName:
+		return "(*DropProcedure).Name"
 	case RefOfDropTableFromTables:
 		return "(*DropTable).FromTables"
 	case RefOfDropTableComments:
@@ -2032,6 +2038,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*DropDatabase).DBName
 		case RefOfDropKeyName:
 			node = node.(*DropKey).Name
+		case RefOfDropProcedureComments:
+			node = node.(*DropProcedure).Comments
+		case RefOfDropProcedureName:
+			node = node.(*DropProcedure).Name
 		case RefOfDropTableFromTables:
 			node = node.(*DropTable).FromTables
 		case RefOfDropTableComments:

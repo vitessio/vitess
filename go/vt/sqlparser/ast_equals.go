@@ -440,6 +440,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfDropKey(a, b)
+	case *DropProcedure:
+		b, ok := inB.(*DropProcedure)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDropProcedure(a, b)
 	case *DropTable:
 		b, ok := inB.(*DropTable)
 		if !ok {
@@ -2639,6 +2645,19 @@ func (cmp *Comparator) RefOfDropKey(a, b *DropKey) bool {
 	}
 	return a.Type == b.Type &&
 		cmp.IdentifierCI(a.Name, b.Name)
+}
+
+// RefOfDropProcedure does deep equals between the two objects.
+func (cmp *Comparator) RefOfDropProcedure(a, b *DropProcedure) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IfExists == b.IfExists &&
+		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
+		cmp.TableName(a.Name, b.Name)
 }
 
 // RefOfDropTable does deep equals between the two objects.
@@ -6309,6 +6328,12 @@ func (cmp *Comparator) DDLStatement(inA, inB DDLStatement) bool {
 			return false
 		}
 		return cmp.RefOfCreateView(a, b)
+	case *DropProcedure:
+		b, ok := inB.(*DropProcedure)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDropProcedure(a, b)
 	case *DropTable:
 		b, ok := inB.(*DropTable)
 		if !ok {
@@ -7410,6 +7435,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfDropDatabase(a, b)
+	case *DropProcedure:
+		b, ok := inB.(*DropProcedure)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDropProcedure(a, b)
 	case *DropTable:
 		b, ok := inB.(*DropTable)
 		if !ok {

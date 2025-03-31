@@ -2224,6 +2224,10 @@ var (
 		input:  "drop view a,B,c",
 		output: "drop view a, B, c",
 	}, {
+		input: "drop procedure a",
+	}, {
+		input: "drop procedure if exists a",
+	}, {
 		input: "drop /*vt+ strategy=online */ view if exists v",
 	}, {
 		input: "drop table a",
