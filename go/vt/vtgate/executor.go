@@ -28,6 +28,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
 	"vitess.io/vitess/go/viperutil"
 
 	"github.com/spf13/pflag"
@@ -105,8 +106,7 @@ const (
 
 func init() {
 	registerTabletTypeFlag := func(fs *pflag.FlagSet) {
-
-		fs.Var(topodatapb.TabletType_PRIMARY, "default_tablet_type", "The default tablet type to set for queries, when one is not explicitly selected.")
+		fs.Var(topoproto.NewTabletTypeFlag(defaultTabletType.Default()), "default_tablet_type", "The default tablet type to set for queries, when one is not explicitly selected.")
 		viperutil.BindFlags(fs, defaultTabletType)
 	}
 

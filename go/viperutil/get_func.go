@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // GetFuncForType returns the default getter function for a given type T. A
@@ -46,132 +48,143 @@ func GetFuncForType[T any]() func(v *viper.Viper) func(key string) T {
 		f any
 	)
 
-	typ := reflect.TypeOf(t)
-	switch typ.Kind() {
-	case reflect.Bool:
-		f = func(v *viper.Viper) func(key string) bool {
-			return v.GetBool
-		}
-	case reflect.Int:
-		f = func(v *viper.Viper) func(key string) int {
-			return v.GetInt
-		}
-	case reflect.Int8:
-		f = getCastedInt[int8]()
-	case reflect.Int16:
-		f = getCastedInt[int16]()
-	case reflect.Int32:
-		f = func(v *viper.Viper) func(key string) int32 {
-			return v.GetInt32
-		}
-	case reflect.Int64:
-		switch typ {
-		case reflect.TypeOf(time.Duration(0)):
-			f = func(v *viper.Viper) func(key string) time.Duration {
-				return v.GetDuration
-			}
-		default:
-			f = func(v *viper.Viper) func(key string) int64 {
-				return v.GetInt64
+	switch any(t).(type) {
+	case topodatapb.TabletType:
+		f = func(v *viper.Viper) func(key string) topodatapb.TabletType {
+			return func(key string) topodatapb.TabletType {
+				return topodatapb.TabletType(v.GetInt32(key))
 			}
 		}
-	case reflect.Uint:
-		f = func(v *viper.Viper) func(key string) uint {
-			return v.GetUint
-		}
-	case reflect.Uint8:
-		f = getCastedUint[uint8]()
-	case reflect.Uint16:
-		f = getCastedUint[uint16]()
-	case reflect.Uint32:
-		f = func(v *viper.Viper) func(key string) uint32 {
-			return v.GetUint32
-		}
-	case reflect.Uint64:
-		f = func(v *viper.Viper) func(key string) uint64 {
-			return v.GetUint64
-		}
-	case reflect.Uintptr:
-		// Unupported, fallthrough to `if f == nil` check below switch.
-	case reflect.Float32:
-		f = func(v *viper.Viper) func(key string) float32 {
-			return func(key string) float32 {
-				return float32(v.GetFloat64(key))
+	}
+
+	if f == nil {
+		typ := reflect.TypeOf(t)
+		switch typ.Kind() {
+		case reflect.Bool:
+			f = func(v *viper.Viper) func(key string) bool {
+				return v.GetBool
 			}
-		}
-	case reflect.Float64:
-		f = func(v *viper.Viper) func(key string) float64 {
-			return v.GetFloat64
-		}
-	case reflect.Complex64:
-		f = getComplex[complex64](64)
-	case reflect.Complex128:
-		f = getComplex[complex128](128)
-	case reflect.Array:
-		// Even though the code would be extremely similar to slice types, we
-		// cannot support arrays because there's no way to write a function that
-		// returns, say, [N]int, for some value of N which we only know at
-		// runtime.
-		panic("GetFuncForType does not support array types")
-	case reflect.Chan:
-		panic("GetFuncForType does not support channel types")
-	case reflect.Func:
-		panic("GetFuncForType does not support function types")
-	case reflect.Interface:
-		panic("GetFuncForType does not support interface types (specify a specific implementation type instead)")
-	case reflect.Map:
-		switch typ.Key().Kind() {
-		case reflect.String:
-			switch val := typ.Elem(); val.Kind() {
-			case reflect.String:
-				f = func(v *viper.Viper) func(key string) map[string]string {
-					return v.GetStringMapString
+		case reflect.Int:
+			f = func(v *viper.Viper) func(key string) int {
+				return v.GetInt
+			}
+		case reflect.Int8:
+			f = getCastedInt[int8]()
+		case reflect.Int16:
+			f = getCastedInt[int16]()
+		case reflect.Int32:
+			f = func(v *viper.Viper) func(key string) int32 {
+				return v.GetInt32
+			}
+		case reflect.Int64:
+			switch typ {
+			case reflect.TypeOf(time.Duration(0)):
+				f = func(v *viper.Viper) func(key string) time.Duration {
+					return v.GetDuration
 				}
-			case reflect.Slice:
-				switch val.Elem().Kind() {
+			default:
+				f = func(v *viper.Viper) func(key string) int64 {
+					return v.GetInt64
+				}
+			}
+		case reflect.Uint:
+			f = func(v *viper.Viper) func(key string) uint {
+				return v.GetUint
+			}
+		case reflect.Uint8:
+			f = getCastedUint[uint8]()
+		case reflect.Uint16:
+			f = getCastedUint[uint16]()
+		case reflect.Uint32:
+			f = func(v *viper.Viper) func(key string) uint32 {
+				return v.GetUint32
+			}
+		case reflect.Uint64:
+			f = func(v *viper.Viper) func(key string) uint64 {
+				return v.GetUint64
+			}
+		case reflect.Uintptr:
+			// Unupported, fallthrough to `if f == nil` check below switch.
+		case reflect.Float32:
+			f = func(v *viper.Viper) func(key string) float32 {
+				return func(key string) float32 {
+					return float32(v.GetFloat64(key))
+				}
+			}
+		case reflect.Float64:
+			f = func(v *viper.Viper) func(key string) float64 {
+				return v.GetFloat64
+			}
+		case reflect.Complex64:
+			f = getComplex[complex64](64)
+		case reflect.Complex128:
+			f = getComplex[complex128](128)
+		case reflect.Array:
+			// Even though the code would be extremely similar to slice types, we
+			// cannot support arrays because there's no way to write a function that
+			// returns, say, [N]int, for some value of N which we only know at
+			// runtime.
+			panic("GetFuncForType does not support array types")
+		case reflect.Chan:
+			panic("GetFuncForType does not support channel types")
+		case reflect.Func:
+			panic("GetFuncForType does not support function types")
+		case reflect.Interface:
+			panic("GetFuncForType does not support interface types (specify a specific implementation type instead)")
+		case reflect.Map:
+			switch typ.Key().Kind() {
+			case reflect.String:
+				switch val := typ.Elem(); val.Kind() {
 				case reflect.String:
-					f = func(v *viper.Viper) func(key string) map[string][]string {
-						return v.GetStringMapStringSlice
+					f = func(v *viper.Viper) func(key string) map[string]string {
+						return v.GetStringMapString
+					}
+				case reflect.Slice:
+					switch val.Elem().Kind() {
+					case reflect.String:
+						f = func(v *viper.Viper) func(key string) map[string][]string {
+							return v.GetStringMapStringSlice
+						}
+					}
+				case reflect.Interface:
+					f = func(v *viper.Viper) func(key string) map[string]interface{} {
+						return v.GetStringMap
 					}
 				}
-			case reflect.Interface:
-				f = func(v *viper.Viper) func(key string) map[string]interface{} {
-					return v.GetStringMap
+			}
+		case reflect.Pointer:
+			switch typ.Elem().Kind() {
+			case reflect.Struct:
+				f = unmarshalFunc[T]()
+			}
+		case reflect.Slice:
+			switch typ.Elem().Kind() {
+			case reflect.Int:
+				f = func(v *viper.Viper) func(key string) []int {
+					return v.GetIntSlice
+				}
+			case reflect.String:
+				f = func(v *viper.Viper) func(key string) []string {
+					return v.GetStringSlice
 				}
 			}
-		}
-	case reflect.Pointer:
-		switch typ.Elem().Kind() {
-		case reflect.Struct:
-			f = unmarshalFunc[T]()
-		}
-	case reflect.Slice:
-		switch typ.Elem().Kind() {
-		case reflect.Int:
-			f = func(v *viper.Viper) func(key string) []int {
-				return v.GetIntSlice
-			}
 		case reflect.String:
-			f = func(v *viper.Viper) func(key string) []string {
-				return v.GetStringSlice
+			f = func(v *viper.Viper) func(key string) string {
+				return v.GetString
 			}
-		}
-	case reflect.String:
-		f = func(v *viper.Viper) func(key string) string {
-			return v.GetString
-		}
-	case reflect.Struct:
-		switch typ {
-		case reflect.TypeOf(time.Time{}):
-			f = func(v *viper.Viper) func(key string) time.Time {
-				return v.GetTime
-			}
-		default:
-			f2 := unmarshalFunc[*T]()
-			f = func(v *viper.Viper) func(key string) T {
-				getPointer := f2(v)
-				return func(key string) T {
-					return *(getPointer(key))
+		case reflect.Struct:
+			switch typ {
+			case reflect.TypeOf(time.Time{}):
+				f = func(v *viper.Viper) func(key string) time.Time {
+					return v.GetTime
+				}
+			default:
+				f2 := unmarshalFunc[*T]()
+				f = func(v *viper.Viper) func(key string) T {
+					getPointer := f2(v)
+					return func(key string) T {
+						return *(getPointer(key))
+					}
 				}
 			}
 		}
