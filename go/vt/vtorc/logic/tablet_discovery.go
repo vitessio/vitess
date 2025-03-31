@@ -88,7 +88,7 @@ func getTabletsWatchedByCellStats() map[string]int64 {
 // getTabletsWatchedByShardStats returns the number of tablets watched by keyspace/shard in stats format.
 func getTabletsWatchedByShardStats() map[string]int64 {
 	tabletsWatchedByShard := make(map[string]int64)
-	statsByKS, err := inst.ReadTabletStatsByKeyspaceShard()
+	statsByKS, err := inst.ReadKeyspaceShardStats()
 	if err != nil {
 		log.Errorf("Failed to read tablet counts by shard: %+v", err)
 	}

@@ -115,3 +115,65 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 		})
 	}
 }
+
+func TestReadKeyspaceShardStats(t *testing.T) {
+	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
+	defer func() {
+		db.ClearVTOrcDatabase()
+	}()
+
+	keyspaceInfo := &topo.KeyspaceInfo{
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+			DurabilityPolicy: policy.DurabilityNone,
+			VtorcConfig: &topodatapb.KeyspaceVtorcConfig{
+				DisableEmergencyReparent: true, // disable keyspace ERS
+			},
+		},
+	}
+	keyspaceInfo.SetKeyspaceName("test")
+	require.NoError(t, SaveKeyspace(keyspaceInfo))
+
+	var uid uint32
+	for _, shard := range []string{"-40", "40-80", "80-c0", "c0-"} {
+		for i := 0; i < 100; i++ {
+			require.NoError(t, SaveTablet(&topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell1",
+					Uid:  uid,
+				},
+				Keyspace: "test",
+				Shard:    shard,
+			}))
+			uid++
+		}
+	}
+	shardStats, err := ReadKeyspaceShardStats()
+	require.NoError(t, err)
+	require.Equal(t, []ShardStats{
+		{
+			Keyspace:                 "test",
+			Shard:                    "-40",
+			TabletCount:              100,
+			DisableEmergencyReparent: true,
+		},
+		{
+			Keyspace:                 "test",
+			Shard:                    "40-80",
+			TabletCount:              100,
+			DisableEmergencyReparent: true,
+		},
+		{
+			Keyspace:                 "test",
+			Shard:                    "80-c0",
+			TabletCount:              100,
+			DisableEmergencyReparent: true,
+		},
+		{
+			Keyspace:                 "test",
+			Shard:                    "c0-",
+			TabletCount:              100,
+			DisableEmergencyReparent: true,
+		},
+	}, shardStats)
+}

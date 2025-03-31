@@ -74,6 +74,53 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 	return primaryAlias, primaryTimestamp, nil
 }
 
+// ShardStats represents stats for a single shard watched by VTOrc.
+type ShardStats struct {
+	Keyspace                 string
+	Shard                    string
+	DisableEmergencyReparent bool
+	TabletCount              int64
+}
+
+// ReadKeyspaceShardStats returns stats such as # of tablets watched by keyspace/shard and ERS-disabled state.
+// The backend query uses an index by "keyspace, shard": ks_idx_vitess_tablet.
+func ReadKeyspaceShardStats() ([]ShardStats, error) {
+	shardStats := make([]ShardStats, 0)
+	query := `SELECT
+                vt.keyspace AS keyspace,
+                vt.shard AS shard,
+                vk.disable_emergency_reparent AS ksERSDisabled,
+                vs.disable_emergency_reparent AS shardERSDisabled,
+                COUNT() AS tablet_count
+        FROM
+                vitess_tablet vt
+        LEFT JOIN
+                vitess_keyspace vk
+        ON
+                vk.keyspace = vt.keyspace
+        LEFT JOIN
+                vitess_shard vs
+        ON
+                (vs.keyspace = vt.keyspace AND vs.shard = vt.shard)
+        GROUP BY
+                vt.keyspace,
+                vt.shard`
+	err := db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
+		ersEnabled := row.GetBool("ksERSDisabled")
+		if !ersEnabled {
+			ersEnabled = row.GetBool("shardERSDisabled")
+		}
+		shardStats = append(shardStats, ShardStats{
+			Keyspace:                 row.GetString("keyspace"),
+			Shard:                    row.GetString("shard"),
+			TabletCount:              row.GetInt64("tablet_count"),
+			DisableEmergencyReparent: ersEnabled,
+		})
+		return nil
+	})
+	return shardStats, err
+}
+
 // SaveShard saves the shard record against the shard name.
 func SaveShard(shard *topo.ShardInfo) error {
 	var disableEmergencyReparent int

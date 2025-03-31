@@ -1818,6 +1818,7 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	force := subFlags.Bool("force", false, "Proceeds even if the keyspace already exists")
 	allowEmptyVSchema := subFlags.Bool("allow_empty_vschema", false, "If set this will allow a new keyspace to have no vschema")
+	disableErs := subFlags.Bool("vtorc_disable_emergency_reparent", false, "Disables the use of EmergencyReparentShard in VTOrc recoveries")
 
 	keyspaceType := subFlags.String("keyspace_type", "", "Specifies the type of the keyspace")
 	baseKeyspace := subFlags.String("base_keyspace", "", "Specifies the base keyspace for a snapshot keyspace")
@@ -1872,6 +1873,9 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		SnapshotTime:     snapshotTime,
 		DurabilityPolicy: *durabilityPolicy,
 		SidecarDbName:    *sidecarDBName,
+		VtorcConfig: &topodatapb.KeyspaceVtorcConfig{
+			DisableEmergencyReparent: *disableErs,
+		},
 	}
 	err := wr.TopoServer().CreateKeyspace(ctx, keyspace, ki)
 	if *force && topo.IsErrType(err, topo.NodeExists) {

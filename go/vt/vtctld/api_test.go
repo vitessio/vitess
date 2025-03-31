@@ -275,7 +275,8 @@ func TestAPI(t *testing.T) {
 				},
 				"source_shards": [],
 				"tablet_controls": [],
-				"is_primary_serving": true
+				"is_primary_serving": true,
+				"vtorc_config": null
 			}`, http.StatusOK},
 		{"GET", "shards/ks1/-DEAD", "", "404 page not found", http.StatusNotFound},
 		{"POST", "shards/ks1/-80?action=TestShardAction", "", `{
