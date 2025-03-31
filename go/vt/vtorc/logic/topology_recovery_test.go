@@ -361,6 +361,16 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedKeyspaceEmergencyReparentDisabled: true,
 			},
 			wantRecoveryFunction: noRecoveryFunc,
+		}, {
+			name:       "DeadPrimary with global+keyspace ERS enabled and shard ERS disabled",
+			ersEnabled: true,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:                               inst.DeadPrimary,
+				AnalyzedKeyspace:                       keyspace,
+				AnalyzedShard:                          shard,
+				AnalyzedShardEmergencyReparentDisabled: true,
+			},
+			wantRecoveryFunction: noRecoveryFunc,
 		},
 	}
 

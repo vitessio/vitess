@@ -93,7 +93,7 @@ func ReadTabletCountsByCell() (map[string]int64, error) {
 	return tabletCounts, err
 }
 
-// ShardStats represents
+// ShardStats represents stats for a single shard watched by VTOrc.
 type ShardStats struct {
 	Keyspace                 string
 	Shard                    string
