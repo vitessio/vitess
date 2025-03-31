@@ -1064,8 +1064,8 @@ func (cached *CreateProcedure) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field Statement vitess.io/vitess/go/vt/sqlparser.CompoundStatement
-	if cc, ok := cached.Statement.(cachedObject); ok {
+	// field Body vitess.io/vitess/go/vt/sqlparser.CompoundStatement
+	if cc, ok := cached.Body.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

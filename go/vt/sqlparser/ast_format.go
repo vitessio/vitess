@@ -377,7 +377,7 @@ func (node *CreateProcedure) Format(buf *TrackedBuffer) {
 		prefix = ", "
 	}
 	buf.literal(") ")
-	buf.astPrintf(node, "%v", node.Statement)
+	buf.astPrintf(node, "%v", node.Body)
 }
 
 // Format formats the node.

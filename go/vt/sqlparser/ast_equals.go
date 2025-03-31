@@ -2451,7 +2451,7 @@ func (cmp *Comparator) RefOfCreateProcedure(a, b *CreateProcedure) bool {
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.RefOfDefiner(a.Definer, b.Definer) &&
 		cmp.SliceOfRefOfProcParameter(a.Params, b.Params) &&
-		cmp.CompoundStatement(a.Statement, b.Statement)
+		cmp.CompoundStatement(a.Body, b.Body)
 }
 
 // RefOfCreateTable does deep equals between the two objects.

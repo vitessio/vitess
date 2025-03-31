@@ -3176,10 +3176,10 @@ func (a *application) rewriteRefOfCreateProcedure(parent SQLNode, node *CreatePr
 	}
 	if a.collectPaths && len(node.Params) > 0 {
 		a.cur.current.Pop()
-		a.cur.current.AddStep(uint16(RefOfCreateProcedureStatement))
+		a.cur.current.AddStep(uint16(RefOfCreateProcedureBody))
 	}
-	if !a.rewriteCompoundStatement(node, node.Statement, func(newNode, parent SQLNode) {
-		parent.(*CreateProcedure).Statement = newNode.(CompoundStatement)
+	if !a.rewriteCompoundStatement(node, node.Body, func(newNode, parent SQLNode) {
+		parent.(*CreateProcedure).Body = newNode.(CompoundStatement)
 	}) {
 		return false
 	}

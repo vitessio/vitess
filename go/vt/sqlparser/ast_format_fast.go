@@ -520,7 +520,7 @@ func (node *CreateProcedure) FormatFast(buf *TrackedBuffer) {
 		prefix = ", "
 	}
 	buf.WriteString(") ")
-	node.Statement.FormatFast(buf)
+	node.Body.FormatFast(buf)
 }
 
 // FormatFast formats the node.

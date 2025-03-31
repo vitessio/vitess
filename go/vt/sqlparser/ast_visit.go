@@ -1384,7 +1384,7 @@ func VisitRefOfCreateProcedure(in *CreateProcedure, f Visit) error {
 			return err
 		}
 	}
-	if err := VisitCompoundStatement(in.Statement, f); err != nil {
+	if err := VisitCompoundStatement(in.Body, f); err != nil {
 		return err
 	}
 	return nil

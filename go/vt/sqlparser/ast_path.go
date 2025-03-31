@@ -114,7 +114,7 @@ const (
 	RefOfCreateProcedureComments
 	RefOfCreateProcedureDefiner
 	RefOfCreateProcedureParamsOffset
-	RefOfCreateProcedureStatement
+	RefOfCreateProcedureBody
 	RefOfCreateTableTable
 	RefOfCreateTableTableSpec
 	RefOfCreateTableOptLike
@@ -786,8 +786,8 @@ func (s ASTStep) DebugString() string {
 		return "(*CreateProcedure).Definer"
 	case RefOfCreateProcedureParamsOffset:
 		return "(*CreateProcedure).ParamsOffset"
-	case RefOfCreateProcedureStatement:
-		return "(*CreateProcedure).Statement"
+	case RefOfCreateProcedureBody:
+		return "(*CreateProcedure).Body"
 	case RefOfCreateTableTable:
 		return "(*CreateTable).Table"
 	case RefOfCreateTableTableSpec:
@@ -1962,8 +1962,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(*CreateProcedure).Params[idx]
-		case RefOfCreateProcedureStatement:
-			node = node.(*CreateProcedure).Statement
+		case RefOfCreateProcedureBody:
+			node = node.(*CreateProcedure).Body
 		case RefOfCreateTableTable:
 			node = node.(*CreateTable).Table
 		case RefOfCreateTableTableSpec:

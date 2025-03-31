@@ -191,17 +191,25 @@ func TestMain(m *testing.M) {
 		}
 		defer conn.Close()
 
-		for _, sql := range createProcSQL {
-			_, err = conn.ExecuteFetch(sql, 1000, true)
-			if err != nil {
-				log.Fatal(err.Error())
-				return 1
-			}
+		err = runCreateProcedures(conn)
+		if err != nil {
+			log.Fatal(err.Error())
+			return 1
 		}
 
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func runCreateProcedures(conn *mysql.Conn) error {
+	for _, sql := range createProcSQL {
+		_, err := conn.ExecuteFetch(sql, 1000, true)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func TestSelectIntoAndLoadFrom(t *testing.T) {

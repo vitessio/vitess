@@ -157,11 +157,12 @@ func buildCreateProcedurePlan(vschema plancontext.VSchema, cp *sqlparser.CreateP
 	if err != nil {
 		return nil, nil, err
 	}
-	// Clear out the qualifier from the table name.
-	cp.SetTable("", cp.Name.Name.String())
 	if keyspace.Sharded {
 		return nil, nil, vterrors.VT12001("CREATE PROCEDURE is not supported on sharded keyspaces")
 	}
+	// Clear out the qualifier from the table name.
+	cp.SetTable("", cp.Name.Name.String())
+	sqlparser.RemoveSpecificKeyspace(cp, keyspace.Name)
 	return destination, keyspace, nil
 }
 

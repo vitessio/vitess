@@ -536,7 +536,7 @@ type (
 		IfNotExists bool
 		Definer     *Definer
 		Params      []*ProcParameter
-		Statement   CompoundStatement
+		Body        CompoundStatement
 	}
 
 	// AlterTable represents a ALTER TABLE statement.

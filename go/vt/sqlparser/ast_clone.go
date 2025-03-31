@@ -1184,7 +1184,7 @@ func CloneRefOfCreateProcedure(n *CreateProcedure) *CreateProcedure {
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Definer = CloneRefOfDefiner(n.Definer)
 	out.Params = CloneSliceOfRefOfProcParameter(n.Params)
-	out.Statement = CloneCompoundStatement(n.Statement)
+	out.Body = CloneCompoundStatement(n.Body)
 	return &out
 }
 

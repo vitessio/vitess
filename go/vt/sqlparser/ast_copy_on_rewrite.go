@@ -1854,14 +1854,14 @@ func (c *cow) copyOnRewriteRefOfCreateProcedure(n *CreateProcedure, parent SQLNo
 				changedParams = true
 			}
 		}
-		_Statement, changedStatement := c.copyOnRewriteCompoundStatement(n.Statement, n)
-		if changedName || changedComments || changedDefiner || changedParams || changedStatement {
+		_Body, changedBody := c.copyOnRewriteCompoundStatement(n.Body, n)
+		if changedName || changedComments || changedDefiner || changedParams || changedBody {
 			res := *n
 			res.Name, _ = _Name.(TableName)
 			res.Comments, _ = _Comments.(*ParsedComments)
 			res.Definer, _ = _Definer.(*Definer)
 			res.Params = _Params
-			res.Statement, _ = _Statement.(CompoundStatement)
+			res.Body, _ = _Body.(CompoundStatement)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
