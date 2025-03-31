@@ -1517,17 +1517,17 @@ var (
 	}, {
 		input: "set @@transaction_isolation = 'read-committed'",
 	}, {
-		input:  "set tx_isolation = 'repeatable read'",
-		output: "set @@tx_isolation = 'repeatable read'",
+		input:  "set transaction_isolation = 'repeatable read'",
+		output: "set @@session.transaction_isolation = 'repeatable read'",
 	}, {
-		input:  "set tx_isolation = 'read committed'",
-		output: "set @@tx_isolation = 'read committed'",
+		input:  "set transaction_isolation = 'read committed'",
+		output: "set @@session.transaction_isolation = 'read committed'",
 	}, {
-		input:  "set tx_isolation = 'read uncommitted'",
-		output: "set @@tx_isolation = 'read uncommitted'",
+		input:  "set transaction_isolation = 'read uncommitted'",
+		output: "set @@session.transaction_isolation = 'read uncommitted'",
 	}, {
-		input:  "set tx_isolation = 'serializable'",
-		output: "set @@tx_isolation = 'serializable'",
+		input:  "set transaction_isolation = 'serializable'",
+		output: "set @@session.transaction_isolation = 'serializable'",
 	}, {
 		input:  "set sql_safe_updates = 0",
 		output: "set @@sql_safe_updates = 0",
