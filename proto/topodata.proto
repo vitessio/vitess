@@ -255,7 +255,7 @@ message Shard {
   // OBSOLETE cells (5)
   reserved 5;
 
-  // VtorcConfig is the vtorc config for the keyspace.
+  // VtorcConfig is the vtorc config for the shard.
   topodata.ShardVtorcConfig vtorc_config = 9;
 }
 

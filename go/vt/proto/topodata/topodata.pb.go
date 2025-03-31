@@ -563,7 +563,7 @@ type Shard struct {
 	// is_primary_serving sets whether this shard primary is serving traffic or not.
 	// The keyspace lock is always taken when changing this.
 	IsPrimaryServing bool `protobuf:"varint,7,opt,name=is_primary_serving,json=isPrimaryServing,proto3" json:"is_primary_serving,omitempty"`
-	// VtorcConfig is the vtorc config for the keyspace.
+	// VtorcConfig is the vtorc config for the shard.
 	VtorcConfig   *ShardVtorcConfig `protobuf:"bytes,9,opt,name=vtorc_config,json=vtorcConfig,proto3" json:"vtorc_config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

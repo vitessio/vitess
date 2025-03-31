@@ -3549,7 +3549,7 @@ type CreateShardRequest struct {
 	// IncludeParent creates the parent keyspace as an empty BASE keyspace, if it
 	// doesn't already exist.
 	IncludeParent bool `protobuf:"varint,4,opt,name=include_parent,json=includeParent,proto3" json:"include_parent,omitempty"`
-	// VtorcConfig is the vtorc config for the keyspace.
+	// VtorcConfig is the vtorc config for the shard.
 	VtorcConfig   *topodata.ShardVtorcConfig `protobuf:"bytes,5,opt,name=vtorc_config,json=vtorcConfig,proto3" json:"vtorc_config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
