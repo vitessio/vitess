@@ -302,9 +302,6 @@ CREATE TABLE vitess_keyspace (
 	PRIMARY KEY (keyspace)
 )`,
 	`
-CREATE INDEX disable_emergency_reparent_idx_vitess_keyspace ON vitess_keyspace (disable_emergency_reparent)
-	`,
-	`
 DROP TABLE IF EXISTS vitess_shard
 `,
 	`

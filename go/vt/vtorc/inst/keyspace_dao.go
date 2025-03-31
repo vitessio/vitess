@@ -66,24 +66,6 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 	return keyspace, nil
 }
 
-// ReadERSDisabledKeyspaces returns a slice containing the names of
-// keyspaces with EmergencyReparentShard disabled. This uses the
-// index: disable_emergency_reparent_idx_vitess_keyspace.
-func ReadERSDisabledKeyspaces() ([]string, error) {
-	keyspaces := make([]string, 0)
-	query := `SELECT
-			keyspace
-		FROM
-			vitess_keyspace
-		WHERE
-			disable_emergency_reparent = 1`
-	err := db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
-		keyspaces = append(keyspaces, row.GetString("keyspace"))
-		return nil
-	})
-	return keyspaces, err
-}
-
 // SaveKeyspace saves the keyspace record against the keyspace name.
 func SaveKeyspace(keyspace *topo.KeyspaceInfo) error {
 	var disableEmergencyReparent int
