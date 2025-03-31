@@ -29,6 +29,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/spf13/viper"
+
 	"vitess.io/vitess/go/viperutil"
 
 	"github.com/spf13/pflag"
@@ -77,6 +79,16 @@ var (
 		viperutil.Options[topodatapb.TabletType]{
 			FlagName: "default_tablet_type",
 			Default:  topodatapb.TabletType_PRIMARY,
+			GetFunc: func(v *viper.Viper) func(key string) topodatapb.TabletType {
+				return func(key string) topodatapb.TabletType {
+					val := v.GetInt32(key)
+					if val != 0 {
+						return topodatapb.TabletType(val)
+					}
+					tt, _ := topoproto.ParseTabletType(v.GetString(key))
+					return tt
+				}
+			},
 		},
 	)
 
