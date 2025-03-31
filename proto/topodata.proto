@@ -256,7 +256,7 @@ message Shard {
   reserved 5;
 
   // VtorcConfig is the vtorc config for the shard.
-  topodata.ShardVtorcConfig vtorc_config = 9;
+  ShardVtorcConfig vtorc_config = 9;
 }
 
 // A Keyspace contains data about a keyspace.

@@ -318,14 +318,14 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.ReplicationAnalysis) rec
 	switch analysisCode {
 	// primary
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
-		// If ERS is disabled globally or on the keyspace, skip recovery.
+		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
 			return noRecoveryFunc
 		}
 		return recoverDeadPrimaryFunc
 	case inst.PrimaryTabletDeleted:
-		// If ERS is disabled globally or on the keyspace, skip recovery.
+		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
 			return noRecoveryFunc
