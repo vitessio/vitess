@@ -19,6 +19,7 @@ package vschema
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"vitess.io/vitess/go/json2"
@@ -33,11 +34,13 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// VSchemaAPI performs CRUD operations on VSchema.
 type VSchemaAPI struct {
 	ts     *topo.Server
 	parser *sqlparser.Parser
 }
 
+// NewVSchemaAPI returns a new VSchemaAPI instance.
 func NewVSchemaAPI(ts *topo.Server, parser *sqlparser.Parser) *VSchemaAPI {
 	return &VSchemaAPI{
 		ts:     ts,
@@ -45,8 +48,9 @@ func NewVSchemaAPI(ts *topo.Server, parser *sqlparser.Parser) *VSchemaAPI {
 	}
 }
 
-// TODO(beingnoble03): Missing API comments.
-
+// Create creates a new keyspace. Either an initial vschema json is specified
+// in which case it starts off with that spec or it creates an empty vschema
+// which can be built iteratively.
 func (api *VSchemaAPI) Create(ctx context.Context, req *vtctldatapb.VSchemaCreateRequest) error {
 	topoKs := &topodatapb.Keyspace{}
 	err := api.ts.CreateKeyspace(ctx, req.VSchemaName, topoKs)
@@ -77,6 +81,8 @@ func (api *VSchemaAPI) Create(ctx context.Context, req *vtctldatapb.VSchemaCreat
 	return err
 }
 
+// Get retrieves the VSchema for a keyspace. Returns an error if the VSchema
+// is marked as draft and IncludeDrafts is false.
 func (api *VSchemaAPI) Get(ctx context.Context, req *vtctldatapb.VSchemaGetRequest) (*vschemapb.Keyspace, error) {
 	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
 	if err != nil {
@@ -88,6 +94,7 @@ func (api *VSchemaAPI) Get(ctx context.Context, req *vtctldatapb.VSchemaGetReque
 	return vsInfo.Keyspace, nil
 }
 
+// Update sets/updates the VSchema metadata.
 func (api *VSchemaAPI) Update(ctx context.Context, req *vtctldatapb.VSchemaUpdateRequest) error {
 	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
 	if err != nil {
@@ -167,6 +174,7 @@ func (api *VSchemaAPI) Update(ctx context.Context, req *vtctldatapb.VSchemaUpdat
 	return nil
 }
 
+// Publish publishes a VSchema marking it as non-draft.
 func (api *VSchemaAPI) Publish(ctx context.Context, req *vtctldatapb.VSchemaPublishRequest) error {
 	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
 	if err != nil {
@@ -205,6 +213,7 @@ func (api *VSchemaAPI) AddVindex(ctx context.Context, req *vtctldatapb.VSchemaAd
 	return nil
 }
 
+// RemoveVindex removes an existing vindex from the vschema.
 func (api *VSchemaAPI) RemoveVindex(ctx context.Context, req *vtctldatapb.VSchemaRemoveVindexRequest) error {
 	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
 	if err != nil {
@@ -215,7 +224,14 @@ func (api *VSchemaAPI) RemoveVindex(ctx context.Context, req *vtctldatapb.VSchem
 			req.VindexName, req.VSchemaName)
 	}
 	delete(vsInfo.Vindexes, req.VindexName)
-	// TODO: Should we remove all the column vindexes that were using the vindex?
+
+	// Remove all the column vindexes that were using the vindex.
+	for _, table := range vsInfo.Tables {
+		table.ColumnVindexes = slices.DeleteFunc(table.ColumnVindexes, func(colVindex *vschemapb.ColumnVindex) bool {
+			return colVindex.Name == req.VindexName
+		})
+	}
+
 	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
 		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
 			vsInfo, req.VSchemaName)
@@ -223,6 +239,7 @@ func (api *VSchemaAPI) RemoveVindex(ctx context.Context, req *vtctldatapb.VSchem
 	return nil
 }
 
+// AddLookupVindex adds a lookup vindex to the vschema.
 func (api *VSchemaAPI) AddLookupVindex(ctx context.Context, req *vtctldatapb.VSchemaAddLookupVindexRequest) error {
 	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
 	if err != nil {
@@ -272,28 +289,16 @@ func (api *VSchemaAPI) AddLookupVindex(ctx context.Context, req *vtctldatapb.VSc
 	return nil
 }
 
-func (api *VSchemaAPI) RemoveTables(ctx context.Context, req *vtctldatapb.VSchemaRemoveTablesRequest) error {
-	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
-	}
-	if err := ensureTablesExist(vsInfo, req.Tables); err != nil {
-		return err
-	}
-	for _, tableName := range req.Tables {
-		delete(vsInfo.Tables, tableName)
-	}
-	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
-		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
-			vsInfo, req.VSchemaName)
-	}
-	return nil
-}
-
+// AddTables adds one or more tables to the vschema, along with a designated
+// primary vindex and associated columns. If AddAll is true, it adds primary
+// vindex to each table, else adds it to the first table from Tables.
 func (api *VSchemaAPI) AddTables(ctx context.Context, req *vtctldatapb.VSchemaAddTablesRequest) error {
 	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
+	}
+	if len(req.Tables) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no tables found in the request")
 	}
 	if err := ensureTablesDoNotExist(vsInfo, req.Tables); err != nil {
 		return err
@@ -315,9 +320,13 @@ func (api *VSchemaAPI) AddTables(ctx context.Context, req *vtctldatapb.VSchemaAd
 			Name:    req.PrimaryVindexName,
 			Columns: req.Columns,
 		}
-		// TODO: Use addAll here.
-		for _, tableName := range req.Tables {
-			vsInfo.Tables[tableName].ColumnVindexes = []*vschemapb.ColumnVindex{colVindex}
+		if req.AddAll {
+			for _, tableName := range req.Tables {
+				vsInfo.Tables[tableName].ColumnVindexes = []*vschemapb.ColumnVindex{colVindex}
+			}
+		} else {
+			firstTableName := req.Tables[0]
+			vsInfo.Tables[firstTableName].ColumnVindexes = []*vschemapb.ColumnVindex{colVindex}
 		}
 	}
 	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
@@ -327,6 +336,27 @@ func (api *VSchemaAPI) AddTables(ctx context.Context, req *vtctldatapb.VSchemaAd
 	return nil
 }
 
+// RemoveTables removes one or more tables from the vschema.
+func (api *VSchemaAPI) RemoveTables(ctx context.Context, req *vtctldatapb.VSchemaRemoveTablesRequest) error {
+	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to retrieve vschema for '%s' keyspace", req.VSchemaName)
+	}
+	if err := ensureTablesExist(vsInfo, req.Tables); err != nil {
+		return err
+	}
+	for _, tableName := range req.Tables {
+		delete(vsInfo.Tables, tableName)
+	}
+	if err := api.ts.SaveVSchema(ctx, vsInfo); err != nil {
+		return vterrors.Wrapf(err, "failed to save updated vschema '%v' in the '%s' keyspace",
+			vsInfo, req.VSchemaName)
+	}
+	return nil
+}
+
+// SetPrimaryVindex sets or updates the primary vindex for one or more tables,
+// specifying the columns associated with the vindex.
 func (api *VSchemaAPI) SetPrimaryVindex(ctx context.Context, req *vtctldatapb.VSchemaSetPrimaryVindexRequest) error {
 	vsInfo, err := api.ts.GetVSchema(ctx, req.VSchemaName)
 	if err != nil {
