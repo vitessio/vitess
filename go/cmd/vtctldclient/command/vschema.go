@@ -30,11 +30,11 @@ import (
 
 var (
 	VSchema = &cobra.Command{
-		Use:                   "vschema --name <vschema_name> [command] [command-flags]",
+		Use:                   "VSchema --name <vschema_name> [command] [command-flags]",
 		Short:                 "Performs CRUD operations on VSchema.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.MinimumNArgs(2),
-		Aliases:               []string{"VSchema", "Vschema"},
+		Aliases:               []string{"vschema"},
 	}
 	Create = &cobra.Command{
 		Use:                   "create",

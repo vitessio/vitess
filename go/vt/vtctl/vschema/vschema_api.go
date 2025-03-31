@@ -40,6 +40,8 @@ type VSchemaAPI struct {
 	parser *sqlparser.Parser
 }
 
+var _ IVSchemaAPI = (*VSchemaAPI)(nil)
+
 // NewVSchemaAPI returns a new VSchemaAPI instance.
 func NewVSchemaAPI(ts *topo.Server, parser *sqlparser.Parser) *VSchemaAPI {
 	return &VSchemaAPI{
