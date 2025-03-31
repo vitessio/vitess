@@ -1075,9 +1075,13 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
-	// Make sure it still works when one of the keyspaces is in a bad state
+	// Make sure we get an error if one of the keyspaces is in a bad state
 	getSandbox(KsTestSharded).SrvKeyspaceMustFail++
 	query = "show vitess_shards"
+	_, err = executorExecSession(ctx, executor, session, query, nil)
+	require.ErrorContains(t, err, "keyspace TestExecutor fetch error")
+
+	// Running it again should pass
 	qr, err = executorExecSession(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 	// Just test for first & last.
@@ -1085,7 +1089,7 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Shards"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("TestMultiCol/-20"),
+			buildVarCharRow("TestExecutor/-20"),
 			buildVarCharRow("TestXBadVSchema/e0-"),
 		},
 	}
