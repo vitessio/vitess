@@ -2130,43 +2130,14 @@ message VDiffStopRequest {
 message VDiffStopResponse {
 }
 
-message VSchemaRemoveTablesRequest {
+message VSchemaCreateRequest {
   string v_schema_name = 1;
-  repeated string tables = 2;
+  bool sharded = 2;
+  bool draft = 3;
+  string v_schema_json = 4;
 }
 
-message VSchemaRemoveTablesResponse {  
-}
-
-message VSchemaSetSequenceRequest {
-  string v_schema_name = 1;
-  string table = 2;
-  string column = 3;
-  string sequence_source = 4;
-}
-
-message VSchemaSetSequenceResponse {
-}
-
-message VSchemaAddTablesRequest {
-  string v_schema_name = 1;
-  repeated string tables = 2;
-  string primary_vindex_name = 3;
-  repeated string columns = 4;
-  bool add_all = 5;
-}
-
-message VSchemaAddTablesResponse {  
-}
-
-message VSchemaSetPrimaryVindexRequest {
-  string v_schema_name = 1;
-  repeated string tables = 2;
-  string vindex_name = 3;
-  repeated string columns = 4;
-}
-
-message VSchemaSetPrimaryVindexResponse {  
+message VSchemaCreateResponse {
 }
 
 message VSchemaGetRequest {
@@ -2178,14 +2149,18 @@ message VSchemaGetResponse {
   vschema.Keyspace v_schema = 1;
 }
 
-message VSchemaCreateRequest {
+message VSchemaUpdateRequest {
   string v_schema_name = 1;
-  bool sharded = 2;
-  bool draft = 3;
-  string v_schema_json = 4;
+  optional bool sharded = 2;
+  optional string foreign_key_mode = 3;
+  optional bool draft = 4;
+
+  optional bool multi_tenant = 5;
+  optional string tenant_id_column_name = 6;
+  optional string tenant_id_column_type = 7;
 }
 
-message VSchemaCreateResponse {
+message VSchemaUpdateResponse {
 }
 
 message VSchemaPublishRequest {
@@ -2226,6 +2201,45 @@ message VSchemaAddLookupVindexRequest {
 message VSchemaAddLookupVindexResponse {
 }
 
+message VSchemaAddTablesRequest {
+  string v_schema_name = 1;
+  repeated string tables = 2;
+  string primary_vindex_name = 3;
+  repeated string columns = 4;
+  bool add_all = 5;
+}
+
+message VSchemaAddTablesResponse {  
+}
+
+message VSchemaRemoveTablesRequest {
+  string v_schema_name = 1;
+  repeated string tables = 2;
+}
+
+message VSchemaRemoveTablesResponse {  
+}
+
+message VSchemaSetPrimaryVindexRequest {
+  string v_schema_name = 1;
+  repeated string tables = 2;
+  string vindex_name = 3;
+  repeated string columns = 4;
+}
+
+message VSchemaSetPrimaryVindexResponse {  
+}
+
+message VSchemaSetSequenceRequest {
+  string v_schema_name = 1;
+  string table_name = 2;
+  string column = 3;
+  string sequence_source = 4;
+}
+
+message VSchemaSetSequenceResponse {
+}
+
 message VSchemaSetReferenceRequest {
   string v_schema_name = 1;
   string table_name = 2;
@@ -2233,20 +2247,6 @@ message VSchemaSetReferenceRequest {
 }
 
 message VSchemaSetReferenceResponse {
-}
-
-message VSchemaUpdateRequest {
-  string v_schema_name = 1;
-  optional bool sharded = 2;
-  optional string foreign_key_mode = 3;
-  optional bool draft = 4;
-
-  optional bool multi_tenant = 5;
-  optional string tenant_id_column_name = 6;
-  optional string tenant_id_column_type = 7;
-}
-
-message VSchemaUpdateResponse {
 }
 
 message WorkflowDeleteRequest {

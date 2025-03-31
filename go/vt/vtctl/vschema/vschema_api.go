@@ -315,6 +315,7 @@ func (api *VSchemaAPI) AddTables(ctx context.Context, req *vtctldatapb.VSchemaAd
 			Name:    req.PrimaryVindexName,
 			Columns: req.Columns,
 		}
+		// TODO: Use addAll here.
 		for _, tableName := range req.Tables {
 			vsInfo.Tables[tableName].ColumnVindexes = []*vschemapb.ColumnVindex{colVindex}
 		}
@@ -335,13 +336,7 @@ func (api *VSchemaAPI) SetPrimaryVindex(ctx context.Context, req *vtctldatapb.VS
 		return err
 	}
 	if _, ok := vsInfo.Vindexes[req.VindexName]; !ok {
-		// Validate if we can create the vindex without any errors.
-		if _, err := vindexes.CreateVindex(req.VindexName, req.VindexName, nil); err != nil {
-			return vterrors.Wrapf(err, "failed to create vindex '%s'", req.VindexName)
-		}
-		vsInfo.Vindexes[req.VindexName] = &vschemapb.Vindex{
-			Type: req.VindexName,
-		}
+		return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "vindex '%s' not found in vschema '%s'", req.VindexName, req.VSchemaName)
 	}
 	colVindex := &vschemapb.ColumnVindex{
 		Name:    req.VindexName,
@@ -364,7 +359,7 @@ func (api *VSchemaAPI) SetPrimaryVindex(ctx context.Context, req *vtctldatapb.VS
 
 // SetSequence sets up a table column to use a sequence from an unsharded source.
 func (api *VSchemaAPI) SetSequence(ctx context.Context, req *vtctldatapb.VSchemaSetSequenceRequest) error {
-	vsInfo, table, err := getVSchemaAndTable(ctx, api.ts, req.VSchemaName, req.Table)
+	vsInfo, table, err := getVSchemaAndTable(ctx, api.ts, req.VSchemaName, req.TableName)
 	if err != nil {
 		return err
 	}
