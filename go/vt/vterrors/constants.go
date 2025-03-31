@@ -27,23 +27,29 @@ const (
 // RxOp regex for operation not allowed error
 var RxOp = regexp.MustCompile("operation not allowed in state (NOT_SERVING|SHUTTING_DOWN)")
 
-// TxEngineClosed for transaction engine closed error
-const TxEngineClosed = "tx engine can't accept new connections in state %v"
+// Constants for error messages
+const (
+	// TxEngineClosed for transaction engine closed error
+	TxEngineClosed = "tx engine can't accept new connections in state %v"
 
-// WrongTablet for invalid tablet type error
-const WrongTablet = "wrong tablet type"
+	// PrimaryVindexNotSet is the error message to be used when there is no primary vindex found on a table
+	PrimaryVindexNotSet = "table '%s' does not have a primary vindex"
+
+	// WrongTablet for invalid tablet type error
+	WrongTablet = "wrong tablet type"
+
+	// TxKillerRollback purpose when acquire lock on connection for rolling back transaction.
+	TxKillerRollback = "in use: for tx killer rollback"
+
+	// RevertedPartialExec is the error message to be used when a partial DML execution failure is reverted using savepoint.
+	RevertedPartialExec = "reverted partial DML execution failure"
+
+	// TxRollbackOnPartialExec is the error message to be used when a transaction is rolled back to reverse changes of partial DML execution
+	TxRollbackOnPartialExec = "transaction rolled back to reverse changes of partial DML execution"
+)
 
 // RxWrongTablet regex for invalid tablet type error
 var RxWrongTablet = regexp.MustCompile("(wrong|invalid) tablet type")
-
-// Constants for error messages
-const (
-	// PrimaryVindexNotSet is the error message to be used when there is no primary vindex found on a table
-	PrimaryVindexNotSet = "table '%s' does not have a primary vindex"
-)
-
-// TxKillerRollback purpose when acquire lock on connection for rolling back transaction.
-const TxKillerRollback = "in use: for tx killer rollback"
 
 // TxClosed regex for connection closed
 var TxClosed = regexp.MustCompile("transaction ([a-z0-9:]+) (?:ended|not found|in use: for tx killer rollback)")

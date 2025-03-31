@@ -132,7 +132,12 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 
 		tables := []string{
 			"s_tbl", "num_vdx_tbl", "col_vdx_tbl", "user_tbl", "order_tbl", "oevent_tbl", "oextra_tbl",
+<<<<<<< HEAD
 			"auto_tbl", "oid_vdx_tbl", "unq_idx", "nonunq_idx", "u_tbl", "mixed_tbl", "lkp_map_idx", "j_tbl", "j_utbl",
+=======
+			"auto_tbl", "oid_vdx_tbl", "unq_idx", "nonunq_idx", "u_tbl", "mixed_tbl", "j_tbl", "j_utbl",
+			"t1", "t2",
+>>>>>>> 2d0306f37b (Fix: Ensure Consistent Lookup Vindex Handles Duplicate Rows in Single Query (#17974))
 		}
 		for _, table := range tables {
 			// TODO (@frouioui): following assertions produce different results between MySQL and Vitess

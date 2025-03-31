@@ -636,8 +636,15 @@ func (vc *vcursorImpl) Execute(ctx context.Context, method string, query string,
 		return nil, err
 	}
 
+<<<<<<< HEAD:go/vt/vtgate/vcursor_impl.go
 	qr, err := vc.executor.Execute(ctx, nil, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
 	vc.setRollbackOnPartialExecIfRequired(err != nil, rollbackOnError)
+=======
+	qr, err := vc.executor.Execute(ctx, nil, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars, false)
+	// If there is no error, it indicates at least one successful execution,
+	// meaning a rollback should be triggered if a failure occurs later.
+	vc.setRollbackOnPartialExecIfRequired(err == nil, rollbackOnError)
+>>>>>>> 2d0306f37b (Fix: Ensure Consistent Lookup Vindex Handles Duplicate Rows in Single Query (#17974)):go/vt/vtgate/executorcontext/vcursor_impl.go
 
 	return qr, err
 }
