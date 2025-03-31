@@ -42,7 +42,6 @@ vtgate \
   --enable_buffer \
   --mysql_auth_server_impl none \
   --pprof-http \
-  --default_tablet_type REPLICA \
   > $VTDATAROOT/tmp/vtgate.out 2>&1 &
 
 # Block waiting for vtgate to be listening

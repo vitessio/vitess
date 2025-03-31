@@ -834,6 +834,24 @@ func TestDynamicConfig(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("DefaultTabletType", func(t *testing.T) {
+		// Test initial config value
+		err := clusterInstance.VtgateProcess.WaitForConfig(`"default_tablet_type":1`)
+		require.NoError(t, err)
+		defer func() {
+			// Restore default back.
+			clusterInstance.VtgateProcess.Config.DefaultTabletType = "PRIMARY"
+			err = clusterInstance.VtgateProcess.RewriteConfiguration()
+			require.NoError(t, err)
+		}()
+		clusterInstance.VtgateProcess.Config.DefaultTabletType = "REPLICA"
+		err = clusterInstance.VtgateProcess.RewriteConfiguration()
+		require.NoError(t, err)
+		// Test final config value.
+		err = clusterInstance.VtgateProcess.WaitForConfig(`"default_tablet_type":"REPLICA"`)
+		require.NoError(t, err)
+	})
+
 	t.Run("DiscoveryHighReplicationLag", func(t *testing.T) {
 		// Test initial config value
 		err := clusterInstance.VtgateProcess.WaitForConfig(`"discovery_high_replication_lag":7200000000000`)
