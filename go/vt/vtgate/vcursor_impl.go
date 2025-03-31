@@ -637,7 +637,9 @@ func (vc *vcursorImpl) Execute(ctx context.Context, method string, query string,
 	}
 
 	qr, err := vc.executor.Execute(ctx, nil, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
-	vc.setRollbackOnPartialExecIfRequired(err != nil, rollbackOnError)
+	// If there is no error, it indicates at least one successful execution,
+	// meaning a rollback should be triggered if a failure occurs later.
+	vc.setRollbackOnPartialExecIfRequired(err == nil, rollbackOnError)
 
 	return qr, err
 }

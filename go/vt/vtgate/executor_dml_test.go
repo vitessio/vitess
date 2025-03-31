@@ -29,7 +29,9 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -3139,4 +3141,67 @@ func TestDeleteMultiTable(t *testing.T) {
 	// select Id, `name` from `user` where (`user`.id) in ::dml_vals for update - 1 shard
 	// delete from `user` where (`user`.id) in ::dml_vals - 1 shard
 	testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete `user` from `user` join music on `user`.col = music.col where music.user_id = 1", 18)
+}
+
+func TestConsistentLookupInsert(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	// Special setup
+	cell := "zone1"
+	ks := "TestExecutor"
+	hc := discovery.NewFakeHealthCheck(nil)
+	s := createSandbox(ks)
+	s.ShardSpec = "-80-"
+	s.VSchema = executorVSchema
+	serv := newSandboxForCells(ctx, []string{cell})
+	resolver := newTestResolver(ctx, hc, serv, cell)
+	sbc1 := hc.AddTestTablet(cell, "-80", 1, ks, "-80", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc2 := hc.AddTestTablet(cell, "80-", 1, ks, "80-", topodatapb.TabletType_PRIMARY, true, 1, nil)
+
+	executor := createExecutor(ctx, serv, cell, resolver)
+	defer executor.Close()
+
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	t.Run("transaction rollback due to partial execution error, no duplicate handling", func(t *testing.T) {
+		sbc1.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '10' for key 't1_lkp_idx.PRIMARY'")
+		sbc2.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
+		_, err := executorExecSession(ctx, executor, "insert into t1(id, unq_col) values (1, 10), (4, 10), (50, 4)", nil, session.Session)
+		assert.ErrorContains(t, err,
+			"lookup.Create: transaction rolled back to reverse changes of partial DML execution: target: TestExecutor.-80.primary: "+
+				"Duplicate entry '10' for key 't1_lkp_idx.PRIMARY' (errno 1062) (sqlstate 23000)")
+
+		assert.EqualValues(t, 0, sbc1.ExecCount.Load())
+		assert.EqualValues(t, 1, sbc2.ExecCount.Load())
+
+		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1), (:unq_col_2, :keyspace_id_2)", 2)
+		testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 10), (4, 10), (50, 4)", 0)
+	})
+
+	sbc1.ExecCount.Store(0)
+	sbc2.ExecCount.Store(0)
+	session = NewAutocommitSession(session.Session)
+
+	t.Run("duplicate handling failing on same unique column value", func(t *testing.T) {
+		sbc1.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '10' for key 't1_lkp_idx.PRIMARY'")
+		sbc1.SetResults([]*sqltypes.Result{
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("keyspace_id", "varbinary")),
+			{RowsAffected: 1},
+		})
+		_, err := executorExecSession(ctx, executor, "insert into t1(id, unq_col) values (1, 10), (4, 10)", nil, session.Session)
+		assert.ErrorContains(t, err,
+			"transaction rolled back to reverse changes of partial DML execution: lookup.Create: target: TestExecutor.-80.primary: "+
+				"Duplicate entry '10' for key 't1_lkp_idx.PRIMARY' (errno 1062) (sqlstate 23000)")
+
+		assert.EqualValues(t, 2, sbc1.ExecCount.Load())
+		assert.EqualValues(t, 0, sbc2.ExecCount.Load())
+
+		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col_0, :keyspace_id_0), (:unq_col_1, :keyspace_id_1)", 1)
+		testQueryLog(t, executor, logChan, "VindexCreate", "SELECT", "select keyspace_id from t1_lkp_idx where unq_col = :unq_col for update", 1)
+		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col, :keyspace_id)", 1)
+		testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 10), (4, 10)", 0)
+	})
 }
