@@ -21,7 +21,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -127,5 +129,28 @@ func TestIsTabletsInList(t *testing.T) {
 			out := IsTabletInList(testcase.tablet, testcase.allTablets)
 			assert.Equal(t, testcase.isInList, out)
 		})
+	}
+}
+
+func TestIsTabletWithinKeyRanges(t *testing.T) {
+	tablet := &topodatapb.Tablet{
+		Keyspace: "ks",
+		KeyRange: key.NewKeyRange([]byte{0x00}, []byte{0x40}),
+	}
+
+	{
+		// match
+		keyRanges := []*topodatapb.KeyRange{
+			key.NewKeyRange([]byte{0x00}, []byte{0x80}),
+		}
+		require.True(t, IsTabletWithinKeyRanges(tablet, keyRanges))
+	}
+	{
+		// no match
+		keyRanges := []*topodatapb.KeyRange{
+			key.NewKeyRange([]byte{0x80}, []byte{0x90}),
+		}
+		require.False(t, IsTabletWithinKeyRanges(tablet, keyRanges))
+
 	}
 }

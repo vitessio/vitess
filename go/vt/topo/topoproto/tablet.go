@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -294,4 +295,15 @@ func IsServingType(tabletType topodatapb.TabletType) bool {
 	default:
 		return false
 	}
+}
+
+// IsTabletWithinKeyRanges returns true if the provided tablet is within a slice of key.KeyRange.
+func IsTabletWithinKeyRanges(tablet *topodatapb.Tablet, keyRanges []*topodatapb.KeyRange) bool {
+       tabletKeyRange := tablet.GetKeyRange()
+       for _, keyRange := range keyRanges {
+               if key.KeyRangeContainsKeyRange(keyRange, tabletKeyRange) {
+                       return true
+               }
+       }
+       return false
 }

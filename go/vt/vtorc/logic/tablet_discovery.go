@@ -152,15 +152,8 @@ func shouldWatchTablet(tablet *topodatapb.Tablet) bool {
 	if !ok {
 		return false
 	}
-	// Get the tablet's key range, and check if
-	// it is part of the shard ranges we are watching.
-	kr := tablet.GetKeyRange()
-	for _, shardRange := range shardRanges {
-		if key.KeyRangeContainsKeyRange(shardRange, kr) {
-			return true
-		}
-	}
-	return false
+	// Check if tablet is part of the shard ranges we are watching.
+	return topoproto.IsTabletWithinKeyRanges(tablet, shardRanges)
 }
 
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
