@@ -114,6 +114,11 @@ var setVtorcEmergencyReparentOptions = struct {
 func commandSetVtorcEmergencyReparent(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
+	keyspaceShard := topoproto.KeyspaceShardString(ks, shard)
+	if !setVtorcEmergencyReparentOptions.Disable && !setVtorcEmergencyReparentOptions.Enable {
+		return fmt.Errorf("SetVtorcEmergencyReparent(%v) error: must set --enable or --disable flag", keyspaceShard)
+	}
+
 	ks := cmd.Flags().Arg(0)
 	shard := cmd.Flags().Arg(1)
 	_, err := client.SetVtorcEmergencyReparent(commandCtx, &vtctldatapb.SetVtorcEmergencyReparentRequest{
@@ -123,13 +128,13 @@ func commandSetVtorcEmergencyReparent(cmd *cobra.Command, args []string) error {
 	})
 
 	if err != nil {
-		return fmt.Errorf("SetVtorcEmergencyReparent(%v) error: %w; please check the topo", ks, err)
+		return fmt.Errorf("SetVtorcEmergencyReparent(%v) error: %w; please check the topo", keyspaceShard, err)
 	}
 
 	if shard == "" {
 		shard = "-"
 	}
-	fmt.Printf("Successfully updated keyspace/shard %v.\n", topoproto.KeyspaceShardString(ks, shard))
+	fmt.Printf("Successfully updated keyspace/shard %v.\n", keyspaceShard)
 
 	return nil
 }
