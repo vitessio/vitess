@@ -892,6 +892,9 @@ func TestSkipUserMetrics(t *testing.T) {
 
 	// Enable SkipUserMetrics and re-run tests
 	framework.Server.Config().SkipUserMetrics = true
+	defer func() {
+		framework.Server.Config().SkipUserMetrics = false
+	}()
 	vstart = framework.DebugVars()
 	runQueries()
 
