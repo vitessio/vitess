@@ -525,9 +525,6 @@ func (s *planTestSuite) TestWithDefaultKeyspaceFromFile() {
 }
 
 func (s *planTestSuite) TestSingleUnshardedKeyspace() {
-	reset := operators.EnableDebugPrinting()
-	defer reset()
-
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/unsharded_schema.json", false)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
