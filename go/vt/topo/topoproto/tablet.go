@@ -297,7 +297,7 @@ func IsServingType(tabletType topodatapb.TabletType) bool {
 	}
 }
 
-// IsTabletWithinKeyRanges returns true if the provided tablet is within a slice of key.KeyRange.
+// IsTabletWithinKeyRanges returns true if the provided tablet is within a slice of *topodatapb.KeyRange.
 func IsTabletWithinKeyRanges(tablet *topodatapb.Tablet, keyRanges []*topodatapb.KeyRange) bool {
 	tabletKeyRange := tablet.GetKeyRange()
 	for _, keyRange := range keyRanges {
@@ -309,7 +309,7 @@ func IsTabletWithinKeyRanges(tablet *topodatapb.Tablet, keyRanges []*topodatapb.
 }
 
 // IsTabletWithinKeyRangesString returns true if the provided tablet is within a provided string of
-// shard ranges. An error is returned if the shard range spec string cannot be parsed.
+// one or more shard ranges. An error is returned if the shard range spec string cannot be parsed.
 func IsTabletWithinKeyRangesString(tablet *topodatapb.Tablet, keyRangesString string) (bool, error) {
 	keyRanges, err := key.ParseShardingSpec(keyRangesString)
 	if err != nil {
