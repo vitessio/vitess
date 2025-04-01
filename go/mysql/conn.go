@@ -1343,7 +1343,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 		// firstPacket tells us that this is the start of a new query result.
 		// If we haven't sent a last packet yet, we should send the end result packet.
 		if firstPacket && !lastPacketSent {
-			if err := c.writeEndResult(more, 0, 0, handler.WarningCount(c)); err != nil {
+			if err := c.writeEndResult(true, 0, 0, handler.WarningCount(c)); err != nil {
 				log.Errorf("Error writing result to %s: %v", c, err)
 				return err
 			}

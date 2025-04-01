@@ -332,7 +332,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 	}
 
 	for idx, res := range queryResults {
-		if callbackErr := callback(res, idx < len(results)-1, true); callbackErr != nil {
+		if callbackErr := callback(res, idx < len(queryResults)-1, true); callbackErr != nil {
 			return callbackErr
 		}
 	}
