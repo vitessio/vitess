@@ -45,7 +45,7 @@ var (
 		Short:                 "Enable/disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace or keyspace/shard.",
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"setvtorcemergencyreparent"},
-		Args:                  cobra.ExactArgs(2),
+		Args:                  cobra.RangeArgs(1, 2),
 		RunE:                  commandSetVtorcEmergencyReparent,
 	}
 
