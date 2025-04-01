@@ -57,6 +57,67 @@
     }
   },
   {
+    "comment": "union distinct between two scatter selects",
+    "query": "select sum(case when tb.col = 1 then 1 else 2 end) from (select 1 as col from user where id = 14 union all select 2 from music where user_id = 12) tb",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select sum(case when tb.col = 1 then 1 else 2 end) from (select 1 as col from user where id = 14 union all select 2 from music where user_id = 12) tb",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum(0) AS sum(case when tb.col = 1 then 1 else 2 end)",
+        "Inputs": [
+          {
+            "OperatorType": "SimpleProjection",
+            "Columns": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 as col, case when 1 = 1 then 1 else 2 end from `user` where 1 != 1",
+                    "Query": "select 1 as col, case when 1 = 1 then 1 else 2 end from `user` where id = 14",
+                    "Table": "`user`",
+                    "Values": [
+                      "14"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 2, case when 2 = 1 then 1 else 2 end from music where 1 != 1",
+                    "Query": "select 2, case when 2 = 1 then 1 else 2 end from music where user_id = 12",
+                    "Table": "music",
+                    "Values": [
+                      "12"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "union all between two SelectEqualUnique",
     "query": "select id from user where id = 1 union all select id from user where id = 5",
     "plan": {
@@ -1297,7 +1358,7 @@
       "Original": "select * from (select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `COLUMN_NAME` = 'primary'",
       "Instructions": {
         "OperatorType": "Filter",
-        "Predicate": "COLUMN_NAME = 'primary'",
+        "Predicate": "`COLUMN_NAME` = 'primary'",
         "Inputs": [
           {
             "OperatorType": "Distinct",
@@ -1315,8 +1376,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
-                    "Query": "select distinct kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name /* VARCHAR */",
+                    "FieldQuery": "select kcu.`COLUMN_NAME` from information_schema.key_column_usage as kcu where 1 != 1",
+                    "Query": "select distinct kcu.`COLUMN_NAME` from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.`table_name` = :kcu_table_name /* VARCHAR */",
                     "SysTableTableName": "[kcu_table_name:'user_extra']",
                     "SysTableTableSchema": "['user']",
                     "Table": "information_schema.key_column_usage"
@@ -1328,8 +1389,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
-                    "Query": "select distinct kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name1 /* VARCHAR */",
+                    "FieldQuery": "select kcu.`COLUMN_NAME` from information_schema.key_column_usage as kcu where 1 != 1",
+                    "Query": "select distinct kcu.`COLUMN_NAME` from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.`table_name` = :kcu_table_name1 /* VARCHAR */",
                     "SysTableTableName": "[kcu_table_name1:'music']",
                     "SysTableTableSchema": "['user']",
                     "Table": "information_schema.key_column_usage"
@@ -1379,7 +1440,7 @@
       "Original": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
       "Instructions": {
         "OperatorType": "Filter",
-        "Predicate": "constraint_name = 'primary'",
+        "Predicate": "`constraint_name` = 'primary'",
         "Inputs": [
           {
             "OperatorType": "Distinct",
@@ -1408,8 +1469,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
-                    "Query": "select distinct CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name /* VARCHAR */",
+                    "FieldQuery": "select `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, `COLUMN_NAME`, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
+                    "Query": "select distinct `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, `COLUMN_NAME`, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.`table_name` = :kcu_table_name /* VARCHAR */",
                     "SysTableTableName": "[kcu_table_name:'user_extra']",
                     "SysTableTableSchema": "['user']",
                     "Table": "information_schema.key_column_usage"
@@ -1421,8 +1482,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
-                    "Query": "select distinct CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.table_name = :kcu_table_name1 /* VARCHAR */",
+                    "FieldQuery": "select `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, `COLUMN_NAME`, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1",
+                    "Query": "select distinct `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, `COLUMN_NAME`, ORDINAL_POSITION, POSITION_IN_UNIQUE_CONSTRAINT, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname /* VARCHAR */ and kcu.`table_name` = :kcu_table_name1 /* VARCHAR */",
                     "SysTableTableName": "[kcu_table_name1:'music']",
                     "SysTableTableSchema": "['user']",
                     "Table": "information_schema.key_column_usage"

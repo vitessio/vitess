@@ -115,6 +115,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidReplicatingReplicas: 0,
 				IsPrimary:                     1,
 				IsStalledDisk:                 1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
@@ -143,6 +144,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountSemiSyncReplicasEnabled:       2,
 				SemiSyncPrimaryClients:             0,
 				SemiSyncBlocked:                    1,
+				CurrentTabletType:                  int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
@@ -171,6 +173,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountSemiSyncReplicasEnabled:       1,
 				SemiSyncPrimaryClients:             1,
 				SemiSyncBlocked:                    1,
+				CurrentTabletType:                  int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
@@ -193,6 +196,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidReplicas:            4,
 				CountValidReplicatingReplicas: 0,
 				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
@@ -209,10 +213,11 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
-				DurabilityPolicy: policy.DurabilityNone,
-				LastCheckValid:   0,
-				CountReplicas:    0,
-				IsPrimary:        1,
+				DurabilityPolicy:  policy.DurabilityNone,
+				LastCheckValid:    0,
+				CountReplicas:     0,
+				IsPrimary:         1,
+				CurrentTabletType: int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
@@ -229,10 +234,11 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
-				DurabilityPolicy: policy.DurabilityNone,
-				LastCheckValid:   0,
-				CountReplicas:    3,
-				IsPrimary:        1,
+				DurabilityPolicy:  policy.DurabilityNone,
+				LastCheckValid:    0,
+				CountReplicas:     3,
+				IsPrimary:         1,
+				CurrentTabletType: int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
@@ -255,6 +261,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidReplicas:            2,
 				CountValidReplicatingReplicas: 0,
 				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
@@ -276,6 +283,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountReplicas:      4,
 				CountValidReplicas: 4,
 				IsPrimary:          0,
+				CurrentTabletType:  int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
@@ -298,6 +306,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidReplicas: 4,
 				IsPrimary:          1,
 				ReadOnly:           1,
+				CurrentTabletType:  int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
@@ -319,11 +328,36 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountReplicas:      4,
 				CountValidReplicas: 4,
 				IsPrimary:          1,
-				CurrentTabletType:  2,
+				CurrentTabletType:  int(topodatapb.TabletType_REPLICA),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
 			codeWanted:     PrimaryCurrentTypeMismatch,
+		}, {
+			name: "Unknown tablet type shouldn't run the mismatch recovery analysis",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy:              policy.DurabilityNone,
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_UNKNOWN),
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     NoProblem,
 		}, {
 			name: "PrimarySemiSyncMustNotBeSet",
 			info: []*test.InfoForRecoveryAnalysis{{
@@ -342,6 +376,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidReplicas:     4,
 				IsPrimary:              1,
 				SemiSyncPrimaryEnabled: 1,
+				CurrentTabletType:      int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
@@ -364,6 +399,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidReplicas:     4,
 				IsPrimary:              1,
 				SemiSyncPrimaryEnabled: 0,
+				CurrentTabletType:      int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
@@ -388,6 +424,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidOracleGTIDReplicas:  4,
 				CountLoggingReplicas:          2,
 				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -425,6 +462,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidOracleGTIDReplicas:  4,
 				CountLoggingReplicas:          2,
 				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -465,6 +503,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidOracleGTIDReplicas:  4,
 				CountLoggingReplicas:          2,
 				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -505,6 +544,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidOracleGTIDReplicas:  4,
 				CountLoggingReplicas:          2,
 				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -546,6 +586,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidOracleGTIDReplicas:  4,
 				CountLoggingReplicas:          2,
 				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -587,6 +628,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidOracleGTIDReplicas:  4,
 				CountLoggingReplicas:          2,
 				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -631,6 +673,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountLoggingReplicas:          2,
 				IsPrimary:                     1,
 				SemiSyncPrimaryEnabled:        1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -672,6 +715,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidOracleGTIDReplicas:  4,
 				CountLoggingReplicas:          2,
 				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -754,6 +798,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountLoggingReplicas:          2,
 				IsPrimary:                     1,
 				SemiSyncPrimaryEnabled:        1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -850,6 +895,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidOracleGTIDReplicas:  4,
 				CountLoggingReplicas:          2,
 				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
@@ -891,6 +937,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 				CountValidOracleGTIDReplicas:  4,
 				CountLoggingReplicas:          2,
 				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},

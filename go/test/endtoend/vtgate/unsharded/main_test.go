@@ -38,6 +38,7 @@ import (
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
+	vtParams        mysql.ConnParams
 	cell            = "zone1"
 	hostname        = "localhost"
 	KeyspaceName    = "customer"
@@ -56,7 +57,43 @@ CREATE TABLE t1 (
 CREATE TABLE allDefaults (
   id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(255)
-) ENGINE=Innodb;`
+) ENGINE=Innodb;
+
+CREATE PROCEDURE sp_insert()
+BEGIN
+	insert into allDefaults () values ();
+END;
+
+CREATE PROCEDURE sp_delete()
+BEGIN
+	delete from allDefaults;
+END;
+
+CREATE PROCEDURE sp_multi_dml()
+BEGIN
+	insert into allDefaults () values ();
+	delete from allDefaults;
+END;
+
+CREATE PROCEDURE sp_variable()
+BEGIN
+	insert into allDefaults () values ();
+	SELECT min(id) INTO @myvar FROM allDefaults;
+	DELETE FROM allDefaults WHERE id = @myvar;
+END;
+
+CREATE PROCEDURE sp_select()
+BEGIN
+	SELECT * FROM allDefaults;
+END;
+
+CREATE PROCEDURE sp_all()
+BEGIN
+	insert into allDefaults () values ();
+    select * from allDefaults;
+	delete from allDefaults;
+END;`
+
 	VSchema = `
 {
     "sharded": false,
@@ -98,41 +135,6 @@ CREATE TABLE allDefaults (
 `
 
 	createProcSQL = []string{`
-CREATE PROCEDURE sp_insert()
-BEGIN
-	insert into allDefaults () values ();
-END;
-`, `
-CREATE PROCEDURE sp_delete()
-BEGIN
-	delete from allDefaults;
-END;
-`, `
-CREATE PROCEDURE sp_multi_dml()
-BEGIN
-	insert into allDefaults () values ();
-	delete from allDefaults;
-END;
-`, `
-CREATE PROCEDURE sp_variable()
-BEGIN
-	insert into allDefaults () values ();
-	SELECT min(id) INTO @myvar FROM allDefaults;
-	DELETE FROM allDefaults WHERE id = @myvar;
-END;
-`, `
-CREATE PROCEDURE sp_select()
-BEGIN
-	SELECT * FROM allDefaults;
-END;
-`, `
-CREATE PROCEDURE sp_all()
-BEGIN
-	insert into allDefaults () values ();
-    select * from allDefaults;
-	delete from allDefaults;
-END;
-`, `
 CREATE PROCEDURE in_parameter(IN val int)
 BEGIN
 	insert into allDefaults(id) values(val);
@@ -177,8 +179,20 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
-		if err := primaryTablet.QueryTabletMultiple(createProcSQL, KeyspaceName, true); err != nil {
+		// Also check we can create procedures through the vtgate.
+		vtParams = mysql.ConnParams{
+			Host: "localhost",
+			Port: clusterInstance.VtgateMySQLPort,
+		}
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		if err != nil {
+			log.Fatal(err.Error())
+			return 1
+		}
+		defer conn.Close()
+
+		err = runCreateProcedures(conn)
+		if err != nil {
 			log.Fatal(err.Error())
 			return 1
 		}
@@ -188,14 +202,20 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+func runCreateProcedures(conn *mysql.Conn) error {
+	for _, sql := range createProcSQL {
+		_, err := conn.ExecuteFetch(sql, 1000, true)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func TestSelectIntoAndLoadFrom(t *testing.T) {
 	// Test is skipped because it requires secure-file-priv variable to be set to not NULL or empty.
 	t.Skip()
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -226,10 +246,6 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 
 func TestEmptyStatement(t *testing.T) {
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -242,10 +258,6 @@ func TestEmptyStatement(t *testing.T) {
 
 func TestTopoDownServingQuery(t *testing.T) {
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
@@ -261,10 +273,6 @@ func TestTopoDownServingQuery(t *testing.T) {
 
 func TestInsertAllDefaults(t *testing.T) {
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -275,10 +283,6 @@ func TestInsertAllDefaults(t *testing.T) {
 
 func TestDDLUnsharded(t *testing.T) {
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -341,10 +345,6 @@ func TestCallProcedure(t *testing.T) {
 
 func TestTempTable(t *testing.T) {
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn1, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
@@ -365,10 +365,6 @@ func TestTempTable(t *testing.T) {
 
 func TestReservedConnDML(t *testing.T) {
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -387,10 +383,6 @@ func TestReservedConnDML(t *testing.T) {
 
 func TestNumericPrecisionScale(t *testing.T) {
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -424,10 +416,6 @@ func TestNumericPrecisionScale(t *testing.T) {
 }
 
 func TestDeleteAlias(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -437,10 +425,6 @@ func TestDeleteAlias(t *testing.T) {
 }
 
 func TestFloatValueDefault(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

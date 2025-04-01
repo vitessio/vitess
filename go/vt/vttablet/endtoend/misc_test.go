@@ -32,6 +32,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
@@ -867,7 +868,8 @@ func TestShowTablesWithSizes(t *testing.T) {
 		assert.Equal(t, 6, len(row))
 
 		tableName := row[0].ToString()
-		if tableName == "show_tables_with_sizes_t1" {
+		switch tableName {
+		case "show_tables_with_sizes_t1":
 			// TABLE_TYPE
 			assert.Equal(t, "BASE TABLE", row[1].ToString())
 
@@ -890,7 +892,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
-		} else if tableName == "show_tables_with_sizes_v1" {
+		case "show_tables_with_sizes_v1":
 			// TABLE_TYPE
 			assert.Equal(t, "VIEW", row[1].ToString())
 
@@ -906,7 +908,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.True(t, row[5].IsNull())
 
 			actualTables = append(actualTables, tableName)
-		} else if tableName == "show_tables_with_sizes_employees" {
+		case "show_tables_with_sizes_employees":
 			// TABLE_TYPE
 			assert.Equal(t, "BASE TABLE", row[1].ToString())
 
@@ -929,7 +931,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
-		} else if tableName == "show_tables_with_sizes_fts" {
+		case "show_tables_with_sizes_fts":
 			// TABLE_TYPE
 			assert.Equal(t, "BASE TABLE", row[1].ToString())
 
@@ -1006,11 +1008,13 @@ func TestEngineReload(t *testing.T) {
 			`drop view if exists view_simple`,
 			`drop view if exists view_simple2`,
 			`drop table if exists tbl_simple`,
+			`drop table if exists tbl_nonpart`,
 			`drop table if exists tbl_part`,
 			`drop table if exists tbl_fts`,
 			`create table tbl_simple (id int primary key)`,
 			`create view view_simple as select * from tbl_simple`,
 			`create view view_simple2 as select * from tbl_simple`,
+			`create table tbl_nonpart (id INT NOT NULL, store_id INT)`,
 			`create table tbl_part (id INT NOT NULL, store_id INT) PARTITION BY HASH(store_id) PARTITIONS 4`,
 			`create table tbl_fts (id int primary key, name text, fulltext key name_fts (name))`,
 		}
@@ -1022,6 +1026,7 @@ func TestEngineReload(t *testing.T) {
 
 		expectedTables := []string{
 			"tbl_simple",
+			"tbl_nonpart",
 			"tbl_part",
 			"tbl_fts",
 			"view_simple",
@@ -1062,31 +1067,73 @@ func TestEngineReload(t *testing.T) {
 
 		expectedTables := []string{
 			"tbl_simple",
+			"tbl_nonpart",
 			"tbl_part",
 			"tbl_fts",
 			"view_simple",
 			"view_simple3",
 		}
-		err := engine.Reload(ctx)
-		require.NoError(t, err)
+		t.Run("reload without sizes", func(t *testing.T) {
+			err := engine.Reload(ctx)
+			require.NoError(t, err)
 
-		schema := engine.GetSchema()
-		require.NotEmpty(t, schema)
-		for _, expectTable := range expectedTables {
-			t.Run(expectTable, func(t *testing.T) {
-				tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
-				require.NotNil(t, tbl)
+			schema := engine.GetSchema()
+			require.NotEmpty(t, schema)
+			for _, expectTable := range expectedTables {
+				t.Run(expectTable, func(t *testing.T) {
+					tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
+					require.NotNil(t, tbl)
 
-				switch expectTable {
-				case "view_simple", "view_simple2", "view_simple3":
-					assert.Zero(t, tbl.FileSize)
-					assert.Zero(t, tbl.AllocatedSize)
-				default:
-					assert.Zero(t, tbl.FileSize)
-					assert.Zero(t, tbl.AllocatedSize)
-				}
-			})
-		}
+					switch expectTable {
+					case "view_simple", "view_simple2", "view_simple3":
+						assert.Zero(t, tbl.FileSize)
+						assert.Zero(t, tbl.AllocatedSize)
+					default:
+						assert.Zero(t, tbl.FileSize)
+						assert.Zero(t, tbl.AllocatedSize)
+					}
+				})
+			}
+		})
+		t.Run("reload with sizes", func(t *testing.T) {
+			err := engine.ReloadAtEx(ctx, replication.Position{}, true)
+			require.NoError(t, err)
+
+			schema := engine.GetSchema()
+			require.NotEmpty(t, schema)
+			var nonPartitionedSize uint64
+			var partitionedSize uint64
+			for _, expectTable := range expectedTables {
+				t.Run(expectTable, func(t *testing.T) {
+					tbl := engine.GetTable(sqlparser.NewIdentifierCS(expectTable))
+					require.NotNil(t, tbl)
+
+					switch expectTable {
+					case "view_simple", "view_simple2", "view_simple3":
+						assert.Zero(t, tbl.FileSize)
+						assert.Zero(t, tbl.AllocatedSize)
+					case "tbl_nonpart":
+						nonPartitionedSize = tbl.FileSize
+						assert.Positive(t, tbl.FileSize)
+						assert.Positive(t, tbl.AllocatedSize)
+					case "tbl_part":
+						partitionedSize = tbl.FileSize
+						assert.Positive(t, tbl.FileSize)
+						assert.Positive(t, tbl.AllocatedSize)
+					default:
+						assert.Positive(t, tbl.FileSize)
+						assert.Positive(t, tbl.AllocatedSize)
+					}
+				})
+			}
+			assert.Positive(t, nonPartitionedSize)
+			assert.Positive(t, partitionedSize)
+			// "tbl_part" has 4 partitions (each of which has about the same size as "tbl_nonpart")
+			// Technically partitionedSize should be 4*nonPartitionedSize, but we allow for some variance
+			assert.Greater(t, partitionedSize, nonPartitionedSize)
+			assert.Greater(t, partitionedSize, 3*nonPartitionedSize)
+			assert.Less(t, partitionedSize, 5*nonPartitionedSize)
+		})
 	})
 }
 

@@ -42,7 +42,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
@@ -414,6 +413,50 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, incl
 	return nil
 }
 
+func populateInnoDBStats(ctx context.Context, conn *connpool.Conn) (map[string]*Table, error) {
+	innodbTableSizesQuery := conn.BaseShowInnodbTableSizes()
+	if innodbTableSizesQuery == "" {
+		return nil, nil
+	}
+
+	innodbResults, err := conn.Exec(ctx, innodbTableSizesQuery, maxTableCount*maxPartitionsPerTable, false)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "in Engine.reload(), reading innodb tables")
+	}
+	innodbTablesStats := make(map[string]*Table, len(innodbResults.Rows))
+	for _, row := range innodbResults.Rows {
+		innodbTableName := row[0].ToString() // In the form of encoded `schema/table`
+		fileSize, _ := row[1].ToCastUint64()
+		allocatedSize, _ := row[2].ToCastUint64()
+
+		if _, ok := innodbTablesStats[innodbTableName]; !ok {
+			innodbTablesStats[innodbTableName] = &Table{}
+		}
+		// There could be multiple appearances of the same table in the result set:
+		// A table that has FULLTEXT indexes will appear once for the table itself,
+		// with total size of row data, and once for the aggregates size of all
+		// FULLTEXT indexes. We aggregate the sizes of all appearances of the same table.
+		table := innodbTablesStats[innodbTableName]
+		table.FileSize += fileSize
+		table.AllocatedSize += allocatedSize
+
+		if originalTableName, _, found := strings.Cut(innodbTableName, "#p#"); found {
+			// innodbTableName is encoded any special characters are turned into some @0-f0-f0-f value.
+			// Therefore this "#p#" here is a clear indication that we are looking at a partitioned table.
+			// We turn `my@002ddb/tbl_part#p#p0` into `my@002ddb/tbl_part`
+			// and aggregate the total partition sizes.
+			if _, ok := innodbTablesStats[originalTableName]; !ok {
+				innodbTablesStats[originalTableName] = &Table{}
+			}
+			originalTable := innodbTablesStats[originalTableName]
+			originalTable.FileSize += fileSize
+			originalTable.AllocatedSize += allocatedSize
+		}
+	}
+	// See testing in TestEngineReload
+	return innodbTablesStats, nil
+}
+
 // reload reloads the schema. It can also be used to initialize it.
 func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	start := time.Now()
@@ -445,51 +488,16 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	var innodbTablesStats map[string]*Table
 	if includeStats {
-		if innodbTableSizesQuery := conn.Conn.BaseShowInnodbTableSizes(); innodbTableSizesQuery != "" {
-			// Since the InnoDB table size query is available to us on this MySQL version, we should use it.
-			// We therefore don't want to query for table sizes in getTableData()
-			includeStats = false
-
-			innodbResults, err := conn.Conn.Exec(ctx, innodbTableSizesQuery, maxTableCount*maxPartitionsPerTable, false)
-			if err != nil {
-				return vterrors.Wrapf(err, "in Engine.reload(), reading innodb tables")
-			}
-			innodbTablesStats = make(map[string]*Table, len(innodbResults.Rows))
-			for _, row := range innodbResults.Rows {
-				innodbTableName := row[0].ToString() // In the form of encoded `schema/table`
-				fileSize, _ := row[1].ToCastUint64()
-				allocatedSize, _ := row[2].ToCastUint64()
-
-				if _, ok := innodbTablesStats[innodbTableName]; !ok {
-					innodbTablesStats[innodbTableName] = &Table{}
-				}
-				// There could be multiple appearances of the same table in the result set:
-				// A table that has FULLTEXT indexes will appear once for the table itself,
-				// with total size of row data, and once for the aggregates size of all
-				// FULLTEXT indexes. We aggregate the sizes of all appearances of the same table.
-				table := innodbTablesStats[innodbTableName]
-				table.FileSize += fileSize
-				table.AllocatedSize += allocatedSize
-
-				if originalTableName, _, found := strings.Cut(innodbTableName, "#p#"); found {
-					// innodbTableName is encoded any special characters are turned into some @0-f0-f0-f value.
-					// Therefore this "#p#" here is a clear indication that we are looking at a partitioned table.
-					// We turn `my@002ddb/tbl_part#p#p0` into `my@002ddb/tbl_part`
-					// and aggregate the total partition sizes.
-					if _, ok := innodbTablesStats[originalTableName]; !ok {
-						innodbTablesStats[originalTableName] = &Table{}
-						originalTable := innodbTablesStats[originalTableName]
-						originalTable.FileSize += fileSize
-						originalTable.AllocatedSize += allocatedSize
-					}
-				}
-			}
-			if err := se.updateTableIndexMetrics(ctx, conn.Conn); err != nil {
-				log.Errorf("Updating index/table statistics failed, error: %v", err)
-			}
-			// See testing in TestEngineReload
+		if innodbTablesStats, err = populateInnoDBStats(ctx, conn.Conn); err != nil {
+			return err
 		}
+		// Since the InnoDB table size query is available to us on this MySQL version, we should use it.
+		// We therefore don't want to query for table sizes in getTableData()
+		includeStats = false
 
+		if err := se.updateTableIndexMetrics(ctx, conn.Conn); err != nil {
+			log.Errorf("Updating index/table statistics failed, error: %v", err)
+		}
 	}
 	tableData, err := getTableData(ctx, conn.Conn, includeStats)
 	if err != nil {
@@ -590,10 +598,6 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		tableType := row[1].String()
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv())
 		if err != nil {
-			if isView := strings.Contains(tableType, tmutils.TableView); isView {
-				log.Warningf("Failed reading schema for the view: %s, error: %v", tableName, err)
-				continue
-			}
 			// Non recoverable error:
 			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
 			continue

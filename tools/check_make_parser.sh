@@ -20,7 +20,7 @@ fi
 
 mv $CUR $TMP
 output=$(go run ./goyacc -fo $CUR sql.y)
-expectedOutput=$'\nconflicts: 4 shift/reduce'
+expectedOutput=$'\nconflicts: 5 shift/reduce'
 
 if [[ "$output" != "$expectedOutput" ]]; then
     echo -e "Expected output from goyacc:$expectedOutput\ngot:$output"

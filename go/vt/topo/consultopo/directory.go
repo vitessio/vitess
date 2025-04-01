@@ -34,10 +34,7 @@ func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo
 		nodePath = "/"
 	}
 
-	isRoot := false
-	if dirPath == "" || dirPath == "/" {
-		isRoot = true
-	}
+	isRoot := dirPath == "" || dirPath == "/"
 
 	keys, _, err := s.kv.Keys(nodePath, "", nil)
 	if err != nil {

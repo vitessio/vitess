@@ -47,7 +47,7 @@ func Env(w http.ResponseWriter, r *http.Request) {
 
 	msg := &strings.Builder{}
 	for i, kv := range vars {
-		msg.WriteString(fmt.Sprintf("%s=%s", kv[0], kv[1]))
+		fmt.Fprintf(msg, "%s=%s", kv[0], kv[1])
 		if i < len(vars)-1 {
 			msg.WriteByte('\n')
 		}

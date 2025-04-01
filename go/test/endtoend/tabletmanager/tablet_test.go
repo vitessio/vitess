@@ -81,7 +81,7 @@ func TestResetReplicationParameters(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set a replication source on the tablet and start replication
-	err = tablet.VttabletProcess.QueryTabletMultiple([]string{"stop replica", "change replication source to source_host = 'localhost', source_port = 123", "start replica"}, keyspaceName, false)
+	err = tablet.VttabletProcess.QueryTabletMultiple([]string{"stop replica", "change replication source to source_host = 'localhost', source_port = 123, get_source_public_key = 1", "start replica"}, keyspaceName, false)
 	require.NoError(t, err)
 
 	// Check the replica status.

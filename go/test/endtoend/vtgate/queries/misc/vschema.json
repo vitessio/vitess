@@ -76,6 +76,14 @@
           "name": "hash"
         }
       ]
+    },
+    "all_types": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
     }
   }
 }

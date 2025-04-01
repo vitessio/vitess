@@ -71,7 +71,7 @@ func NewMeteredReadCloser(rc io.ReadCloser, fns ...func(int, time.Duration)) Met
 // and calls any registered callbacks with the amount of time spent and bytes
 // read in this Read call.
 func (trc *meteredReadCloser) Read(p []byte) (n int, err error) {
-	return trc.meter.measure(trc.ReadCloser.Read, p)
+	return trc.measure(trc.ReadCloser.Read, p)
 }
 
 // NewMeteredReader creates a MeteredReader which tracks the amount of time spent

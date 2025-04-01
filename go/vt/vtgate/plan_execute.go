@@ -112,6 +112,9 @@ func (e *Executor) newExecute(
 			}
 		}
 
+		// Enable parameterization if normalization is enabled and the query is not prepared statement.
+		parameterize := e.config.Normalize && !prepared
+
 		// Create a plan for the query.
 		// If we are retrying, it is likely that the routing rules have changed and hence we need to
 		// replan the query since the target keyspace of the resolved shards may have changed as a
@@ -119,7 +122,7 @@ func (e *Executor) newExecute(
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
 		// take full advatange of the cached plan.
-		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, e.config.Normalize, prepared, logStats)
+		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
 		execStart := e.logPlanningFinished(logStats, plan)
 
 		if err != nil {
@@ -384,7 +387,7 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, false, logStats)
 		// If no error, the revert is successful with the savepoint. Notify the reason as error to the client.
 		if err == nil {
-			errMsg.WriteString("reverted partial DML execution failure")
+			errMsg.WriteString(vterrors.RevertedPartialExec)
 			return vterrors.New(vtrpcpb.Code_ABORTED, errMsg.String())
 		}
 		// not able to rollback changes of the failed query, so have to abort the complete transaction.
@@ -392,7 +395,8 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 
 	// abort the transaction.
 	_ = e.txConn.Rollback(ctx, safeSession)
-	errMsg.WriteString("transaction rolled back to reverse changes of partial DML execution")
+
+	errMsg.WriteString(vterrors.TxRollbackOnPartialExec)
 	if err != nil {
 		return vterrors.Wrap(err, errMsg.String())
 	}

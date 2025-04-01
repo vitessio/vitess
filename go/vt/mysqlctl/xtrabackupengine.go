@@ -770,9 +770,9 @@ func findReplicationPosition(input, flavor string, logger logutil.Logger) (repli
 	}
 	position := match[1]
 	// Remove all spaces, tabs, and newlines.
-	position = strings.Replace(position, " ", "", -1)
-	position = strings.Replace(position, "\t", "", -1)
-	position = strings.Replace(position, "\n", "", -1)
+	position = strings.ReplaceAll(position, " ", "")
+	position = strings.ReplaceAll(position, "\t", "")
+	position = strings.ReplaceAll(position, "\n", "")
 	logger.Infof("Found position: %v", position)
 	if position == "" {
 		return replication.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "empty replication position from xtrabackup")

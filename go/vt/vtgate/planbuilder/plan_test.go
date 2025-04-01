@@ -524,6 +524,15 @@ func (s *planTestSuite) TestWithDefaultKeyspaceFromFile() {
 	s.testFile("call_cases.json", vw, false)
 }
 
+func (s *planTestSuite) TestSingleUnshardedKeyspace() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/unsharded_schema.json", false)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(s.T(), err)
+
+	s.testFile("unsharded_cases.json", vw, false)
+}
+
 func (s *planTestSuite) TestWithDefaultKeyspaceFromFileSharded() {
 	// We are testing this separately so we can set a default keyspace
 	env := vtenv.NewTestEnv()

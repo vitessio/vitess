@@ -107,8 +107,8 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 }
 
 func (e *evalBytes) Hash(h *vthash.Hasher) {
-	switch tt := e.SQLType(); {
-	case tt == sqltypes.VarBinary:
+	switch tt := e.SQLType(); tt {
+	case sqltypes.VarBinary:
 		h.Write16(hashPrefixBytes)
 		_, _ = h.Write(e.bytes)
 	default:

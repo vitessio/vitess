@@ -50,14 +50,14 @@ func TestGenerateFullQuery(t *testing.T) {
 	}{
 		{
 			name:  "No bind variables",
-			query: "select TABLE_NAME, CREATE_TIME from `tables`",
+			query: "select `TABLE_NAME`, CREATE_TIME from `tables`",
 		}, {
 			name:  "List bind variables",
 			query: "DELETE FROM %s.`tables` WHERE TABLE_SCHEMA = database() AND TABLE_NAME IN ::tableNames",
 			bv: map[string]*querypb.BindVariable{
 				"tableNames": tablesBV,
 			},
-			wantQuery: "delete from _vt.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('t1', 'lead')",
+			wantQuery: "delete from _vt.`tables` where TABLE_SCHEMA = database() and `TABLE_NAME` in ('t1', 'lead')",
 		}, {
 			name:  "Multiple bind variables",
 			query: "INSERT INTO %s.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), :table_name, :create_statement, :create_time)",
@@ -66,7 +66,7 @@ func TestGenerateFullQuery(t *testing.T) {
 				"create_statement": sqltypes.StringBindVariable("create table `lead`"),
 				"create_time":      sqltypes.Int64BindVariable(1),
 			},
-			wantQuery: "insert into _vt.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), 'lead', 'create table `lead`', 1)",
+			wantQuery: "insert into _vt.`tables`(TABLE_SCHEMA, `TABLE_NAME`, CREATE_STATEMENT, CREATE_TIME) values (database(), 'lead', 'create table `lead`', 1)",
 		}, {
 			name:    "parser error",
 			query:   "insert syntax error",
@@ -74,7 +74,7 @@ func TestGenerateFullQuery(t *testing.T) {
 		}, {
 			name:      "Multiple %v replacements",
 			query:     fetchTablesAndViews,
-			wantQuery: "select table_name, create_statement from _vt.`tables` where table_schema = database() union select table_name, create_statement from _vt.views where table_schema = database()",
+			wantQuery: "select `table_name`, create_statement from _vt.`tables` where table_schema = database() union select `table_name`, create_statement from _vt.views where table_schema = database()",
 		},
 	}
 	for _, tt := range tests {
@@ -177,7 +177,7 @@ func TestGetViewDefinition(t *testing.T) {
 	bv := map[string]*querypb.BindVariable{"viewNames": viewsBV}
 
 	// Success
-	query := "select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v1', 'lead')"
+	query := "select `table_name`, view_definition from information_schema.views where table_schema = database() and `table_name` in ('v1', 'lead')"
 	db.AddQuery(query, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar"),
 		"v1|create_view_v1",
@@ -382,7 +382,7 @@ func TestReloadTablesInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.`tables` where table_schema = database() and table_name in ('t1', 'lead')": {},
+				"delete from _vt.`tables` where table_schema = database() and `table_name` in ('t1', 'lead')": {},
 			},
 		}, {
 			name: "OnlyTablesToReload",
@@ -401,13 +401,13 @@ func TestReloadTablesInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.`tables` where table_schema = database() and table_name in ('t1', 'lead')": {},
+				"delete from _vt.`tables` where table_schema = database() and `table_name` in ('t1', 'lead')": {},
 				"show create table t1": sqltypes.MakeTestResult(showCreateTableFields,
 					"t1|create_table_t1"),
 				"show create table `lead`": sqltypes.MakeTestResult(showCreateTableFields,
 					"lead|create_table_lead"),
-				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":     {},
-				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
+				"insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":     {},
+				"insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
 			},
 		}, {
 			name: "ReloadAndDelete",
@@ -427,13 +427,13 @@ func TestReloadTablesInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.`tables` where table_schema = database() and table_name in ('t2', 'from', 't1', 'lead')": {},
+				"delete from _vt.`tables` where table_schema = database() and `table_name` in ('t2', 'from', 't1', 'lead')": {},
 				"show create table t1": sqltypes.MakeTestResult(showCreateTableFields,
 					"t1|create_table_t1"),
 				"show create table `lead`": sqltypes.MakeTestResult(showCreateTableFields,
 					"lead|create_table_lead"),
-				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":     {},
-				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
+				"insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":     {},
+				"insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
 			},
 		}, {
 			name: "ErrorInInsert",
@@ -448,12 +448,12 @@ func TestReloadTablesInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.`tables` where table_schema = database() and table_name in ('t1')": {},
+				"delete from _vt.`tables` where table_schema = database() and `table_name` in ('t1')": {},
 				"show create table t1": sqltypes.MakeTestResult(showCreateTableFields,
 					"t1|create_table_t1"),
 			},
 			queriesToReject: map[string]error{
-				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)": errors.New(errMessage),
+				"insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)": errors.New(errMessage),
 			},
 			expectedError: errMessage,
 		},
@@ -504,7 +504,7 @@ func TestReloadViewsInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.views where table_schema = database() and table_name in ('v1', 'lead')": {},
+				"delete from _vt.views where table_schema = database() and `table_name` in ('v1', 'lead')": {},
 			},
 		}, {
 			name: "OnlyViewsToReload",
@@ -523,8 +523,8 @@ func TestReloadViewsInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.views where table_schema = database() and table_name in ('v1', 'lead')": {},
-				"select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v1', 'lead')": sqltypes.MakeTestResult(
+				"delete from _vt.views where table_schema = database() and `table_name` in ('v1', 'lead')": {},
+				"select `table_name`, view_definition from information_schema.views where table_schema = database() and `table_name` in ('v1', 'lead')": sqltypes.MakeTestResult(
 					getViewDefinitionsFields,
 					"lead|select_lead",
 					"v1|select_v1"),
@@ -532,8 +532,8 @@ func TestReloadViewsInDB(t *testing.T) {
 					"v1|create_view_v1|utf8mb4|utf8mb4_0900_ai_ci"),
 				"show create table `lead`": sqltypes.MakeTestResult(showCreateTableFields,
 					"lead|create_view_lead|utf8mb4|utf8mb4_0900_ai_ci"),
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
+				"insert into _vt.views(table_schema, `table_name`, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
+				"insert into _vt.views(table_schema, `table_name`, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
 			},
 		}, {
 			name: "ReloadAndDelete",
@@ -553,8 +553,8 @@ func TestReloadViewsInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.views where table_schema = database() and table_name in ('v2', 'from', 'v1', 'lead')": {},
-				"select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v2', 'from', 'v1', 'lead')": sqltypes.MakeTestResult(
+				"delete from _vt.views where table_schema = database() and `table_name` in ('v2', 'from', 'v1', 'lead')": {},
+				"select `table_name`, view_definition from information_schema.views where table_schema = database() and `table_name` in ('v2', 'from', 'v1', 'lead')": sqltypes.MakeTestResult(
 					getViewDefinitionsFields,
 					"lead|select_lead",
 					"v1|select_v1"),
@@ -562,8 +562,8 @@ func TestReloadViewsInDB(t *testing.T) {
 					"v1|create_view_v1|utf8mb4|utf8mb4_0900_ai_ci"),
 				"show create table `lead`": sqltypes.MakeTestResult(showCreateTableFields,
 					"lead|create_view_lead|utf8mb4|utf8mb4_0900_ai_ci"),
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
+				"insert into _vt.views(table_schema, `table_name`, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
+				"insert into _vt.views(table_schema, `table_name`, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
 			},
 		}, {
 			name: "ErrorInInsert",
@@ -578,15 +578,15 @@ func TestReloadViewsInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.views where table_schema = database() and table_name in ('v1')": {},
-				"select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v1')": sqltypes.MakeTestResult(
+				"delete from _vt.views where table_schema = database() and `table_name` in ('v1')": {},
+				"select `table_name`, view_definition from information_schema.views where table_schema = database() and `table_name` in ('v1')": sqltypes.MakeTestResult(
 					getViewDefinitionsFields,
 					"v1|select_v1"),
 				"show create table v1": sqltypes.MakeTestResult(showCreateTableFields,
 					"v1|create_view_v1|utf8mb4|utf8mb4_0900_ai_ci"),
 			},
 			queriesToReject: map[string]error{
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')": errors.New(errMessage),
+				"insert into _vt.views(table_schema, `table_name`, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')": errors.New(errMessage),
 			},
 			expectedError: errMessage,
 		},
@@ -621,7 +621,7 @@ func TestReloadViewsInDB(t *testing.T) {
 func TestReloadDataInDB(t *testing.T) {
 	showCreateViewFields := sqltypes.MakeTestFields(" View | Create View | character_set_client | collation_connection", "varchar|varchar|varchar|varchar")
 	showCreateTableFields := sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar")
-	getViewDefinitionsFields := sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar")
+	getViewDefinitionsFields := sqltypes.MakeTestFields("`table_name`|view_definition", "varchar|varchar")
 	errMessage := "some error in MySQL"
 	testCases := []struct {
 		name            string
@@ -642,7 +642,7 @@ func TestReloadDataInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.views where table_schema = database() and table_name in ('v1', 'lead')": {},
+				"delete from _vt.views where table_schema = database() and `table_name` in ('v1', 'lead')": {},
 			},
 		}, {
 			name: "OnlyViewsToReload",
@@ -664,8 +664,8 @@ func TestReloadDataInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.views where table_schema = database() and table_name in ('v1', 'lead')": {},
-				"select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v1', 'lead')": sqltypes.MakeTestResult(
+				"delete from _vt.views where table_schema = database() and `table_name` in ('v1', 'lead')": {},
+				"select `table_name`, view_definition from information_schema.views where table_schema = database() and `table_name` in ('v1', 'lead')": sqltypes.MakeTestResult(
 					getViewDefinitionsFields,
 					"lead|select_lead",
 					"v1|select_v1"),
@@ -673,8 +673,8 @@ func TestReloadDataInDB(t *testing.T) {
 					"v1|create_view_v1|utf8mb4|utf8mb4_0900_ai_ci"),
 				"show create table `lead`": sqltypes.MakeTestResult(showCreateViewFields,
 					"lead|create_view_lead|utf8mb4|utf8mb4_0900_ai_ci"),
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
+				"insert into _vt.views(table_schema, `table_name`, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
+				"insert into _vt.views(table_schema, `table_name`, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
 			},
 		}, {
 			name: "ReloadAndDeleteViews",
@@ -700,8 +700,8 @@ func TestReloadDataInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.views where table_schema = database() and table_name in ('v2', 'from', 'v1', 'lead')": {},
-				"select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v2', 'from', 'v1', 'lead')": sqltypes.MakeTestResult(
+				"delete from _vt.views where table_schema = database() and `table_name` in ('v2', 'from', 'v1', 'lead')": {},
+				"select `table_name`, view_definition from information_schema.views where table_schema = database() and `table_name` in ('v2', 'from', 'v1', 'lead')": sqltypes.MakeTestResult(
 					getViewDefinitionsFields,
 					"lead|select_lead",
 					"v1|select_v1"),
@@ -709,8 +709,8 @@ func TestReloadDataInDB(t *testing.T) {
 					"v1|create_view_v1|utf8mb4|utf8mb4_0900_ai_ci"),
 				"show create table `lead`": sqltypes.MakeTestResult(showCreateViewFields,
 					"lead|create_view_lead|utf8mb4|utf8mb4_0900_ai_ci"),
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
+				"insert into _vt.views(table_schema, `table_name`, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
+				"insert into _vt.views(table_schema, `table_name`, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
 			},
 		}, {
 			name: "ErrorInInsertingViewData",
@@ -725,15 +725,15 @@ func TestReloadDataInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.views where table_schema = database() and table_name in ('v1')": {},
-				"select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v1')": sqltypes.MakeTestResult(
+				"delete from _vt.views where table_schema = database() and `table_name` in ('v1')": {},
+				"select `table_name`, view_definition from information_schema.views where table_schema = database() and `table_name` in ('v1')": sqltypes.MakeTestResult(
 					getViewDefinitionsFields,
 					"v1|select_v1"),
 				"show create table v1": sqltypes.MakeTestResult(showCreateViewFields,
 					"v1|create_view_v1|utf8mb4|utf8mb4_0900_ai_ci"),
 			},
 			queriesToReject: map[string]error{
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')": errors.New(errMessage),
+				"insert into _vt.views(table_schema, `table_name`, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')": errors.New(errMessage),
 			},
 			expectedError: errMessage,
 		}, {
@@ -746,7 +746,7 @@ func TestReloadDataInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.`tables` where table_schema = database() and table_name in ('t1', 'lead')": {},
+				"delete from _vt.`tables` where table_schema = database() and `table_name` in ('t1', 'lead')": {},
 			},
 		}, {
 			name: "OnlyTablesToReload",
@@ -768,13 +768,13 @@ func TestReloadDataInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.`tables` where table_schema = database() and table_name in ('t1', 'lead')": {},
+				"delete from _vt.`tables` where table_schema = database() and `table_name` in ('t1', 'lead')": {},
 				"show create table t1": sqltypes.MakeTestResult(showCreateTableFields,
 					"t1|create_table_t1"),
 				"show create table `lead`": sqltypes.MakeTestResult(showCreateTableFields,
 					"lead|create_table_lead"),
-				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":     {},
-				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
+				"insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":     {},
+				"insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
 			},
 		}, {
 			name: "ReloadAndDeleteTables",
@@ -800,13 +800,13 @@ func TestReloadDataInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.`tables` where table_schema = database() and table_name in ('t2', 'from', 't1', 'lead')": {},
+				"delete from _vt.`tables` where table_schema = database() and `table_name` in ('t2', 'from', 't1', 'lead')": {},
 				"show create table t1": sqltypes.MakeTestResult(showCreateTableFields,
 					"t1|create_table_t1"),
 				"show create table `lead`": sqltypes.MakeTestResult(showCreateTableFields,
 					"lead|create_table_lead"),
-				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":     {},
-				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
+				"insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":     {},
+				"insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 'lead', 'create_table_lead', 1234)": {},
 			},
 		}, {
 			name: "ErrorInInsertingTableData",
@@ -821,12 +821,12 @@ func TestReloadDataInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.`tables` where table_schema = database() and table_name in ('t1')": {},
+				"delete from _vt.`tables` where table_schema = database() and `table_name` in ('t1')": {},
 				"show create table t1": sqltypes.MakeTestResult(showCreateTableFields,
 					"t1|create_table_t1"),
 			},
 			queriesToReject: map[string]error{
-				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)": errors.New(errMessage),
+				"insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)": errors.New(errMessage),
 			},
 			expectedError: errMessage,
 		}, {
@@ -862,8 +862,8 @@ func TestReloadDataInDB(t *testing.T) {
 				"begin":    {},
 				"commit":   {},
 				"rollback": {},
-				"delete from _vt.views where table_schema = database() and table_name in ('v2', 'from', 'v1', 'lead')": {},
-				"select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v2', 'from', 'v1', 'lead')": sqltypes.MakeTestResult(
+				"delete from _vt.views where table_schema = database() and `table_name` in ('v2', 'from', 'v1', 'lead')": {},
+				"select `table_name`, view_definition from information_schema.views where table_schema = database() and `table_name` in ('v2', 'from', 'v1', 'lead')": sqltypes.MakeTestResult(
 					getViewDefinitionsFields,
 					"lead|select_lead",
 					"v1|select_v1"),
@@ -871,15 +871,15 @@ func TestReloadDataInDB(t *testing.T) {
 					"v1|create_view_v1|utf8mb4|utf8mb4_0900_ai_ci"),
 				"show create table `lead`": sqltypes.MakeTestResult(showCreateViewFields,
 					"lead|create_view_lead|utf8mb4|utf8mb4_0900_ai_ci"),
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
-				"insert into _vt.views(table_schema, table_name, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
-				"delete from _vt.`tables` where table_schema = database() and table_name in ('t2', 't1', 'where')":                                                  {},
+				"insert into _vt.views(table_schema, `table_name`, create_statement, view_definition) values (database(), 'v1', 'create_view_v1', 'select_v1')":       {},
+				"insert into _vt.views(table_schema, `table_name`, create_statement, view_definition) values (database(), 'lead', 'create_view_lead', 'select_lead')": {},
+				"delete from _vt.`tables` where table_schema = database() and `table_name` in ('t2', 't1', 'where')":                                                  {},
 				"show create table t1": sqltypes.MakeTestResult(showCreateTableFields,
 					"t1|create_table_t1"),
 				"show create table `where`": sqltypes.MakeTestResult(showCreateTableFields,
 					"where|create_table_where"),
-				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":       {},
-				"insert into _vt.`tables`(table_schema, table_name, create_statement, create_time) values (database(), 'where', 'create_table_where', 1234)": {},
+				"insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)":       {},
+				"insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 'where', 'create_table_where', 1234)": {},
 			},
 		},
 	}
@@ -919,11 +919,11 @@ func TestGetFetchViewQuery(t *testing.T) {
 		{
 			name:          "No views provided",
 			viewNames:     []string{},
-			expectedQuery: "select table_name, create_statement from _vt.views where table_schema = database()",
+			expectedQuery: "select `table_name`, create_statement from _vt.views where table_schema = database()",
 		}, {
 			name:          "Few views provided",
 			viewNames:     []string{"v1", "v2", "lead"},
-			expectedQuery: "select table_name, create_statement from _vt.views where table_schema = database() and table_name in ('v1', 'v2', 'lead')",
+			expectedQuery: "select `table_name`, create_statement from _vt.views where table_schema = database() and `table_name` in ('v1', 'v2', 'lead')",
 		},
 	}
 
@@ -946,11 +946,11 @@ func TestGetFetchTableQuery(t *testing.T) {
 		{
 			name:          "No tables provided",
 			tableNames:    []string{},
-			expectedQuery: "select table_name, create_statement from _vt.`tables` where table_schema = database()",
+			expectedQuery: "select `table_name`, create_statement from _vt.`tables` where table_schema = database()",
 		}, {
 			name:          "Few tables provided",
 			tableNames:    []string{"v1", "v2", "lead"},
-			expectedQuery: "select table_name, create_statement from _vt.`tables` where table_schema = database() and table_name in ('v1', 'v2', 'lead')",
+			expectedQuery: "select `table_name`, create_statement from _vt.`tables` where table_schema = database() and `table_name` in ('v1', 'v2', 'lead')",
 		},
 	}
 
@@ -973,11 +973,11 @@ func TestGetFetchTableAndViewsQuery(t *testing.T) {
 		{
 			name:          "No tables provided",
 			tableNames:    []string{},
-			expectedQuery: "select table_name, create_statement from _vt.`tables` where table_schema = database() union select table_name, create_statement from _vt.views where table_schema = database()",
+			expectedQuery: "select `table_name`, create_statement from _vt.`tables` where table_schema = database() union select `table_name`, create_statement from _vt.views where table_schema = database()",
 		}, {
 			name:          "Few tables provided",
 			tableNames:    []string{"t1", "t2", "v1", "v2", "lead"},
-			expectedQuery: "select table_name, create_statement from _vt.`tables` where table_schema = database() and table_name in ('t1', 't2', 'v1', 'v2', 'lead') union select table_name, create_statement from _vt.views where table_schema = database() and table_name in ('t1', 't2', 'v1', 'v2', 'lead')",
+			expectedQuery: "select `table_name`, create_statement from _vt.`tables` where table_schema = database() and `table_name` in ('t1', 't2', 'v1', 'v2', 'lead') union select `table_name`, create_statement from _vt.views where table_schema = database() and `table_name` in ('t1', 't2', 'v1', 'v2', 'lead')",
 		},
 	}
 
