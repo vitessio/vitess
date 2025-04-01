@@ -176,7 +176,7 @@ func init() {
 
 	Root.AddCommand(SetVtorcEmergencyReparent)
 	SetVtorcEmergencyReparent.Flags().BoolVarP(&setVtorcEmergencyReparentOptions.Disable, "disable", "d", false, "Disable the use of EmergencyReparentShard in recoveries.")
-	SetVtorcEmergencyReparent.Flags().BoolVarP(&setVtorcEmergencyReparentOptions.Enable, "Enable", "e", false, "Enable the use of EmergencyReparentShard in recoveries.")
+	SetVtorcEmergencyReparent.Flags().BoolVarP(&setVtorcEmergencyReparentOptions.Enable, "enable", "e", false, "Enable the use of EmergencyReparentShard in recoveries.")
 
 	WriteTopologyPath.Flags().StringVar(&writeTopologyPathOptions.cell, "cell", topo.GlobalCell, "Topology server cell to copy the file to.")
 	Root.AddCommand(WriteTopologyPath)
