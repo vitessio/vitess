@@ -1820,8 +1820,7 @@ func TestGetPlanPriority(t *testing.T) {
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
 
-	for _, aTestCase := range testCases {
-		testCase := aTestCase
+	for _, testCase := range testCases {
 
 		t.Run(testCase.name, func(t *testing.T) {
 			r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
