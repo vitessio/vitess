@@ -31,9 +31,6 @@ import (
 	"time"
 	"unsafe"
 
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/srvtopo"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/safehtml/template"
 	"github.com/stretchr/testify/assert"
@@ -41,6 +38,9 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -1075,9 +1075,13 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
-	// Make sure it still works when one of the keyspaces is in a bad state
+	// Make sure we get an error if one of the keyspaces is in a bad state
 	getSandbox(KsTestSharded).SrvKeyspaceMustFail++
 	query = "show vitess_shards"
+	_, err = executorExecSession(ctx, executor, session, query, nil)
+	require.ErrorContains(t, err, "keyspace TestExecutor fetch error")
+
+	// Running it again should pass
 	qr, err = executorExecSession(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 	// Just test for first & last.
@@ -1085,7 +1089,7 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Shards"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("TestMultiCol/-20"),
+			buildVarCharRow("TestExecutor/-20"),
 			buildVarCharRow("TestXBadVSchema/e0-"),
 		},
 	}
@@ -1667,7 +1671,7 @@ func getPlanCached(t *testing.T, ctx context.Context, e *Executor, session *econ
 	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 	session.GetOrCreateOptions().SkipQueryPlanCache = skipQueryPlanCache
 
-	plan, _, _, err := e.fetchOrCreatePlan(ctx, session, comments.Leading+sql+comments.Trailing, bindVars, e.config.Normalize, false, logStats)
+	plan, _, _, err := e.fetchOrCreatePlan(ctx, session, comments.Leading+sql+comments.Trailing, bindVars, e.config.Normalize, false, logStats, true)
 	require.NoError(t, err)
 
 	// Wait for cache to settle
@@ -1824,7 +1828,7 @@ func TestGetPlanPriority(t *testing.T) {
 
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 
-			plan, _, _, err := r.fetchOrCreatePlan(context.Background(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats)
+			plan, _, _, err := r.fetchOrCreatePlan(context.Background(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
@@ -2849,13 +2853,13 @@ func TestExecutorSettingsInTwoPC(t *testing.T) {
 			expectedQueries: [][]string{
 				{
 					"select '+08:00' from dual where @@time_zone != '+08:00'",
-					"set @@time_zone = '+08:00'",
-					"set @@time_zone = '+08:00'",
+					"set time_zone = '+08:00'",
+					"set time_zone = '+08:00'",
 					"insert into user_extra(user_id) values (1)",
 					"insert into user_extra(user_id) values (2)",
 				},
 				{
-					"set @@time_zone = '+08:00'",
+					"set time_zone = '+08:00'",
 					"insert into user_extra(user_id) values (3)",
 				},
 			},
@@ -3064,4 +3068,311 @@ func exec(executor *Executor, session *econtext.SafeSession, sql string) (*sqlty
 
 func makeComments(text string) sqlparser.MarginComments {
 	return sqlparser.MarginComments{Trailing: text}
+}
+
+// TestExecutorShowShards tests the show shards statement on executor.
+func TestExecutorShowShards(t *testing.T) {
+	localCell := "cell1"
+	tests := []struct {
+		name           string
+		filter         *sqlparser.ShowFilter
+		destTabletType topodatapb.TabletType
+		srvTopoServer  srvtopo.Server
+		want           *sqltypes.Result
+		wantErr        string
+	}{
+		{
+			name:           "No keyspaces",
+			srvTopoServer:  &fakesrvtopo.FakeSrvTopo{},
+			filter:         nil,
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows:   nil,
+			},
+		}, {
+			name: "No filtering",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks1": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter:         nil,
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows: []sqltypes.Row{
+					buildVarCharRow("ks1/-80"),
+					buildVarCharRow("ks1/80-"),
+					buildVarCharRow("ks2/-40"),
+					buildVarCharRow("ks2/40-80"),
+					buildVarCharRow("ks2/80-"),
+				},
+			},
+		},
+		{
+			name: "Keyspace filtering",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks1": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter: &sqlparser.ShowFilter{
+				Like: "ks1%",
+			},
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows: []sqltypes.Row{
+					buildVarCharRow("ks1/-80"),
+					buildVarCharRow("ks1/80-"),
+				},
+			},
+		}, {
+			name: "Shard filtering",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks1": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter: &sqlparser.ShowFilter{
+				Like: "%80-",
+			},
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows: []sqltypes.Row{
+					buildVarCharRow("ks1/80-"),
+					buildVarCharRow("ks2/80-"),
+				},
+			},
+		},
+		{
+			name: "Keyspace and Shard filtering",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks1": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter: &sqlparser.ShowFilter{
+				Like: "ks1/80-",
+			},
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows: []sqltypes.Row{
+					buildVarCharRow("ks1/80-"),
+				},
+			},
+		},
+		{
+			name: "No shards because of tablet type",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks1": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter: &sqlparser.ShowFilter{
+				Like: "ks1/80-",
+			},
+			destTabletType: topodatapb.TabletType_BACKUP,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+			},
+		},
+		{
+			name: "Error getting keyspace names",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesError: map[string]error{
+					localCell: errors.New("testing error getting keyspace names"),
+				},
+			},
+			filter:         nil,
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			wantErr:        "testing error getting keyspace names",
+		},
+		{
+			name: "Error getting keyspace ks1",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceError: map[string]map[string]error{
+					localCell: {
+						"ks1": errors.New("testing error getting keyspace ks1"),
+					},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter:         nil,
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			wantErr:        "testing error getting keyspace ks1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			e := &Executor{
+				resolver: NewResolver(srvtopo.NewResolver(tt.srvTopoServer, nil, localCell), nil, "", nil),
+			}
+			got, err := e.ShowShards(ctx, tt.filter, tt.destTabletType)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Truef(t, tt.want.Equal(got), "Results got - %v", got)
+		})
+	}
 }

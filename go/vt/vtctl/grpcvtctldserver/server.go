@@ -4742,6 +4742,11 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 		return resp, err
 	}
 
+	if len(shards) == 0 {
+		resp.Results = append(resp.Results, fmt.Sprintf("no shards found in keyspace %v", req.Keyspace))
+		return resp, err
+	}
+
 	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
 
 	var (
@@ -4752,6 +4757,7 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
+
 			shardResp, err := s.ValidateShard(ctx, &vtctldatapb.ValidateShardRequest{
 				Keyspace:    req.Keyspace,
 				Shard:       shard,
@@ -4771,6 +4777,7 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 	}
 
 	wg.Wait()
+
 	return resp, err
 }
 

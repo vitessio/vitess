@@ -304,7 +304,7 @@ func buildPostponeQuery(name sqlparser.IdentifierCS, minBackoff, maxBackoff time
 	//
 	// if the jittered backoff is less than min_backoff, just set it to :min_backoff
 	//
-	buf.WriteString(fmt.Sprintf("IF(%s < %%a, %%a, ", jitteredBackoff))
+	fmt.Fprintf(buf, "IF(%s < %%a, %%a, ", jitteredBackoff)
 	// jitteredBackoff < :min_backoff
 	args = append(args, ":min_backoff", ":jitter", ":min_backoff")
 	// if it is less, then use :min_backoff
@@ -317,7 +317,7 @@ func buildPostponeQuery(name sqlparser.IdentifierCS, minBackoff, maxBackoff time
 		args = append(args, ":min_backoff", ":jitter")
 	} else {
 		// make sure that it doesn't exceed max_backoff
-		buf.WriteString(fmt.Sprintf("IF(%s > %%a, %%a, %s)", jitteredBackoff, jitteredBackoff))
+		fmt.Fprintf(buf, "IF(%s > %%a, %%a, %s)", jitteredBackoff, jitteredBackoff)
 		// jitteredBackoff > :max_backoff
 		args = append(args, ":min_backoff", ":jitter", ":max_backoff")
 		// if it is greater, then use :max_backoff

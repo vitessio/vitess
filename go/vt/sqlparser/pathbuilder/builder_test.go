@@ -74,10 +74,10 @@ func TestASTPathBuilderAddStepOffset(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			apb := NewASTPathBuilder()
 			for idx, step := range tt.steps {
-				switch {
-				case tt.offsets[idx] == -1:
+				switch tt.offsets[idx] {
+				case -1:
 					apb.AddStep(step)
-				case tt.offsets[idx] == 0:
+				case 0:
 					apb.AddStepWithOffset(step)
 				default:
 					apb.ChangeOffset(tt.offsets[idx])
@@ -118,10 +118,10 @@ func TestASTPathBuilderPop(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			apb := NewASTPathBuilder()
 			for idx, step := range tt.steps {
-				switch {
-				case tt.offsets[idx] == -1:
+				switch tt.offsets[idx] {
+				case -1:
 					apb.AddStep(step)
-				case tt.offsets[idx] == 0:
+				case 0:
 					apb.AddStepWithOffset(step)
 				default:
 					apb.ChangeOffset(tt.offsets[idx])

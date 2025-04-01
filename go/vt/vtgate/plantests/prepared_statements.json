@@ -1,0 +1,515 @@
+[
+  {
+    "comment": "Can deferred optimize UNION",
+    "query": "select 1 from user where id = ? union select 1 from user_extra where user_id = ?",
+    "bindvars": [
+      "1",
+      "1"
+    ],
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1 from user where id = ? union select 1 from user_extra where user_id = ?",
+      "Instructions": {
+        "OperatorType": "PlanSwitcher",
+        "Inputs": [
+          {
+            "InputName": "Baseline",
+            "OperatorType": "Distinct",
+            "Collations": [
+              "0"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "TestExecutor",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from `user` where 1 != 1",
+                    "Query": "select distinct 1 from `user` where id = :v1",
+                    "Table": "`user`",
+                    "Values": [
+                      ":v1"
+                    ],
+                    "Vindex": "hash_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "TestExecutor",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra where 1 != 1",
+                    "Query": "select distinct 1 from user_extra where user_id = :v2",
+                    "Table": "user_extra",
+                    "Values": [
+                      ":v2"
+                    ],
+                    "Vindex": "hash_index"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "InputName": "Optimized",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "TestExecutor",
+              "Sharded": true
+            },
+            "Conditions": "v1=v2",
+            "FieldQuery": "select 1 from `user` where 1 != 1 union select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from `user` where id = :v1 union select 1 from user_extra where user_id = :v2",
+            "Table": "`user`, user_extra",
+            "Values": [
+              ":v1"
+            ],
+            "Vindex": "hash_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "TestExecutor.user",
+        "TestExecutor.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Unable to deferred optimize UNION",
+    "query": "select 1 from user where id = ? union select 1 from user_extra where user_id = ?",
+    "bindvars": [
+      "1",
+      "2"
+    ],
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1 from user where id = ? union select 1 from user_extra where user_id = ?",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "0"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "TestExecutor",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from `user` where 1 != 1",
+                "Query": "select distinct 1 from `user` where id = :v1",
+                "Table": "`user`",
+                "Values": [
+                  ":v1"
+                ],
+                "Vindex": "hash_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "TestExecutor",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select distinct 1 from user_extra where user_id = :v2",
+                "Table": "user_extra",
+                "Values": [
+                  ":v2"
+                ],
+                "Vindex": "hash_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "TestExecutor.user",
+        "TestExecutor.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "deferred optimize JOIN",
+    "query": "select 1 from user, user_extra where user.id = ? and user_extra.user_id = ?",
+    "bindvars": [
+      "1",
+      "1"
+    ],
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1 from user, user_extra where user.id = ? and user_extra.user_id = ?",
+      "Instructions": {
+        "OperatorType": "PlanSwitcher",
+        "Inputs": [
+          {
+            "InputName": "Baseline",
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "TestExecutor",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from `user` where 1 != 1",
+                "Query": "select 1 from `user` where `user`.id = :v1",
+                "Table": "`user`",
+                "Values": [
+                  ":v1"
+                ],
+                "Vindex": "hash_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "TestExecutor",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where user_extra.user_id = :v2",
+                "Table": "user_extra",
+                "Values": [
+                  ":v2"
+                ],
+                "Vindex": "hash_index"
+              }
+            ]
+          },
+          {
+            "InputName": "Optimized",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "TestExecutor",
+              "Sharded": true
+            },
+            "Conditions": "v1=v2",
+            "FieldQuery": "select 1 from `user`, user_extra where 1 != 1",
+            "Query": "select 1 from `user`, user_extra where `user`.id = :v1 and user_extra.user_id = :v2",
+            "Table": "`user`, user_extra",
+            "Values": [
+              ":v1"
+            ],
+            "Vindex": "hash_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "TestExecutor.user",
+        "TestExecutor.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Unable to deferred optimize JOIN",
+    "query": "select 1 from user, user_extra where user.id = ? and user_extra.user_id = ?",
+    "bindvars": [
+      "1",
+      "2"
+    ],
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select 1 from user, user_extra where user.id = ? and user_extra.user_id = ?",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "TestExecutor",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` where 1 != 1",
+            "Query": "select 1 from `user` where `user`.id = :v1",
+            "Table": "`user`",
+            "Values": [
+              ":v1"
+            ],
+            "Vindex": "hash_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "TestExecutor",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra where user_extra.user_id = :v2",
+            "Table": "user_extra",
+            "Values": [
+              ":v2"
+            ],
+            "Vindex": "hash_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "TestExecutor.user",
+        "TestExecutor.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "deferred optimize subquery",
+    "query": "select (select count(*) from user_extra where user_id = ?) from user where id = ?",
+    "bindvars": [
+      "1",
+      "1"
+    ],
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select (select count(*) from user_extra where user_id = ?) from user where id = ?",
+      "Instructions": {
+        "OperatorType": "PlanSwitcher",
+        "Inputs": [
+          {
+            "InputName": "Baseline",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "TestExecutor",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                "Query": "select count(*) from user_extra where user_id = :v1",
+                "Table": "user_extra",
+                "Values": [
+                  ":v1"
+                ],
+                "Vindex": "hash_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "TestExecutor",
+                  "Sharded": true
+                },
+                "FieldQuery": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra where user_id = :v1)` from `user` where 1 != 1",
+                "Query": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra where user_id = :v1)` from `user` where id = :v2",
+                "Table": "`user`",
+                "Values": [
+                  ":v2"
+                ],
+                "Vindex": "hash_index"
+              }
+            ]
+          },
+          {
+            "InputName": "Optimized",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "TestExecutor",
+              "Sharded": true
+            },
+            "Conditions": "v1=v2",
+            "FieldQuery": "select (select count(*) from user_extra where 1 != 1) from `user` where 1 != 1",
+            "Query": "select (select count(*) from user_extra where user_id = :v1) from `user` where id = :v2",
+            "Table": "`user`",
+            "Values": [
+              ":v2"
+            ],
+            "Vindex": "hash_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "TestExecutor.user",
+        "TestExecutor.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Unable to deferred optimize subquery",
+    "query": "select (select count(*) from user_extra where user_id = ?) from user where id = ?",
+    "bindvars": [
+      "1",
+      "2"
+    ],
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select (select count(*) from user_extra where user_id = ?) from user where id = ?",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "TestExecutor",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from user_extra where 1 != 1",
+            "Query": "select count(*) from user_extra where user_id = :v1",
+            "Table": "user_extra",
+            "Values": [
+              ":v1"
+            ],
+            "Vindex": "hash_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "TestExecutor",
+              "Sharded": true
+            },
+            "FieldQuery": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra where user_id = :v1)` from `user` where 1 != 1",
+            "Query": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra where user_id = :v1)` from `user` where id = :v2",
+            "Table": "`user`",
+            "Values": [
+              ":v2"
+            ],
+            "Vindex": "hash_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "TestExecutor.user",
+        "TestExecutor.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Unable to deferred optimize subquery",
+    "query": "select (select count(*) from user_extra where user_id = ?) from user where id = ?",
+    "bindvars": [
+      "1",
+      "2"
+    ],
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select (select count(*) from user_extra where user_id = ?) from user where id = ?",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "TestExecutor",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from user_extra where 1 != 1",
+            "Query": "select count(*) from user_extra where user_id = :v1",
+            "Table": "user_extra",
+            "Values": [
+              ":v1"
+            ],
+            "Vindex": "hash_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "TestExecutor",
+              "Sharded": true
+            },
+            "FieldQuery": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra where user_id = :v1)` from `user` where 1 != 1",
+            "Query": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra where user_id = :v1)` from `user` where id = :v2",
+            "Table": "`user`",
+            "Values": [
+              ":v2"
+            ],
+            "Vindex": "hash_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "TestExecutor.user",
+        "TestExecutor.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Baseline plan not available - correlated subquery",
+    "query": "select (select count(*) from user_extra where user_id = ? and foo = user.bar) from user where id = ?",
+    "bindvars": [
+      "1",
+      "1"
+    ],
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select (select count(*) from user_extra where user_id = ? and foo = user.bar) from user where id = ?",
+      "Instructions": {
+        "OperatorType": "PlanSwitcher",
+        "BaselineErr": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+        "Inputs": [
+          {
+            "InputName": "Optimized",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "TestExecutor",
+              "Sharded": true
+            },
+            "Conditions": "v1=v2",
+            "FieldQuery": "select (select count(*) from user_extra where 1 != 1) from `user` where 1 != 1",
+            "Query": "select (select count(*) from user_extra where user_id = :v1 and foo = `user`.bar) from `user` where id = :v2",
+            "Table": "`user`",
+            "Values": [
+              ":v2"
+            ],
+            "Vindex": "hash_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "TestExecutor.user",
+        "TestExecutor.user_extra"
+      ]
+    }
+  }
+]

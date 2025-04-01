@@ -48,6 +48,7 @@ type (
 		TablesUsed   []string                // TablesUsed enumerates the tables this query accesses.
 		QueryHints   sqlparser.QueryHints    // QueryHints stores any SET_VAR hints that influenced plan generation.
 		ParamsCount  uint16                  // ParamsCount is the total number of bind parameters (?) in the query.
+		Optimized    atomic.Bool             // Prepared queries need to be optimized before the first execution
 
 		ExecCount    uint64 // ExecCount is how many times this plan has been executed.
 		ExecTime     uint64 // ExecTime is the total accumulated execution time in nanoseconds.

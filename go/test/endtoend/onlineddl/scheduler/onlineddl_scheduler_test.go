@@ -18,10 +18,8 @@ package scheduler
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"math/rand/v2"
 	"os"
 	"path"
@@ -130,13 +128,9 @@ deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
 func parseTableName(t *testing.T, sql string) (tableName string) {
 	// ddlStatement could possibly be composed of multiple DDL statements
 	parser := sqlparser.NewTestParser()
-	tokenizer := parser.NewStringTokenizer(sql)
-	for {
-		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
-		if err != nil && errors.Is(err, io.EOF) {
-			break
-		}
-		require.NoErrorf(t, err, "parsing sql: [%v]", sql)
+	stmts, err := parser.ParseMultiple(sql)
+	require.NoError(t, err)
+	for _, stmt := range stmts {
 		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 		require.True(t, ok)
 		tableName = ddlStmt.GetTable().Name.String()

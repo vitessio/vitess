@@ -785,10 +785,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 					defer throttler.initMutex.Unlock()
 
 					// sparse
-					shouldBeLeader := false
-					if throttler.IsOpen() && throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
-						shouldBeLeader = true
-					}
+					shouldBeLeader := throttler.IsOpen() && throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY
 
 					isLeader := throttler.isLeader.Swap(shouldBeLeader)
 					transitionedIntoLeader := false
@@ -1084,7 +1081,7 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 	}
 	throttler.convergeMetricThresholds()
 
-	var clusterSettingsCopy config.MySQLConfigurationSettings = throttler.configSettings.MySQLStore
+	var clusterSettingsCopy = throttler.configSettings.MySQLStore
 	// config may dynamically change, but internal structure (config.Settings().MySQLStore.Clusters in our case)
 	// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 	collect := func() error {
