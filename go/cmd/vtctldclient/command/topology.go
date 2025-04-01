@@ -131,9 +131,6 @@ func commandSetVtorcEmergencyReparent(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("SetVtorcEmergencyReparent(%v) error: %w; please check the topo", keyspaceShard, err)
 	}
 
-	if shard == "" {
-		shard = "-"
-	}
 	fmt.Printf("Successfully updated keyspace/shard %v.\n", keyspaceShard)
 
 	return nil
