@@ -120,6 +120,9 @@ func commandSetVtorcEmergencyReparent(cmd *cobra.Command, args []string) error {
 	if !setVtorcEmergencyReparentOptions.Disable && !setVtorcEmergencyReparentOptions.Enable {
 		return fmt.Errorf("SetVtorcEmergencyReparent(%v) error: must set --enable or --disable flag", keyspaceShard)
 	}
+	if setVtorcEmergencyReparentOptions.Disable && setVtorcEmergencyReparentOptions.Enable {
+		return fmt.Errorf("SetVtorcEmergencyReparent(%v) error: --enable and --disable flags are mutually exclusive", keyspaceShard)
+	}
 
 	_, err := client.SetVtorcEmergencyReparent(commandCtx, &vtctldatapb.SetVtorcEmergencyReparentRequest{
 		Keyspace: ks,
