@@ -310,8 +310,8 @@ func IsTabletWithinKeyRanges(tablet *topodatapb.Tablet, keyRanges []*topodatapb.
 
 // IsTabletWithinKeyRangesString returns true if the provided tablet is within a provided string of
 // shard ranges. An error is returned if the shard range spec string cannot be parsed.
-func IsTabletWithinKeyRangesString(tablet *topodatapb.Tablet, keyRangesSpec string) (bool, error) {
-	keyRanges, err := key.ParseShardingSpec(keyRangesSpec)
+func IsTabletWithinKeyRangesString(tablet *topodatapb.Tablet, keyRangesString string) (bool, error) {
+	keyRanges, err := key.ParseShardingSpec(keyRangesString)
 	if err != nil {
 		return false, err
 	}
