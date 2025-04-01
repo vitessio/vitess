@@ -128,7 +128,7 @@ type (
 		resolver    *Resolver
 		scatterConn *ScatterConn
 		txConn      *TxConn
-		metrics     *Metrics
+		metrics     econtext.Metrics
 
 		mu           sync.Mutex
 		vschema      *vindexes.VSchema
@@ -1172,7 +1172,7 @@ func (e *Executor) fetchOrCreatePlan(
 }
 
 func (e *Executor) newVCursor(safeSession *econtext.SafeSession, comments sqlparser.MarginComments, logStats *logstats.LogStats) (*econtext.VCursorImpl, error) {
-	return econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig, nil)
+	return econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig, e.metrics)
 }
 
 func (e *Executor) tryOptimizedPlan(
@@ -1812,4 +1812,8 @@ func fkMode(foreignkey string) vschemapb.Keyspace_ForeignKeyMode {
 
 	}
 	return vschemapb.Keyspace_unspecified
+}
+
+func (m *Metrics) GetExecutionMetrics() *engine.Metrics {
+	return m.engineMetrics
 }
