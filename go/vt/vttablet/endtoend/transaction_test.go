@@ -846,3 +846,99 @@ func TestUnresolvedTransactionsOrdering(t *testing.T) {
 		assert.Equal(t, want[i].Participants, transaction.Participants)
 	}
 }
+
+// TestSkipUserMetrics tests the SkipUserMetrics flag in the config that disables user label in the metrics.
+func TestSkipUserMetrics(t *testing.T) {
+	client := framework.NewClient()
+	vstart := framework.DebugVars()
+	query := "select * from vitess_test"
+
+	// non-tx execute
+	_, err := client.Execute(query, nil)
+	require.NoError(t, err)
+
+	// tx execute
+	_, err = client.BeginExecute(query, nil, nil)
+	require.NoError(t, err)
+	err = client.Commit()
+	require.NoError(t, err)
+
+	expectedDiffs := []struct {
+		tag  string
+		diff int
+	}{{
+		tag:  "Transactions/TotalCount", // not dependent on user
+		diff: 1,
+	}, {
+		tag:  "Transactions/Histograms/commit/Count", // not dependent on user
+		diff: 1,
+	}, {
+		tag:  "TableACLAllowed/vitess_test.vitess_test.Select.dev", // dependent on user
+		diff: 2,
+	}, {
+		tag:  "TableACLAllowed/vitess_test.vitess_test.Select.UserLabelDisabled", // user metric enabled so this should be zero.
+		diff: 0,
+	}, {
+		tag:  "UserTableQueryCount/vitess_test.dev.Execute", // dependent on user
+		diff: 2,
+	}, {
+		tag:  "UserTableQueryCount/vitess_test.UserLabelDisabled.Execute", // user metric enabled so this should be zero.
+		diff: 0,
+	}, {
+		tag:  "UserTransactionCount/dev.commit", // dependent on user
+		diff: 1,
+	}}
+	vend := framework.DebugVars()
+	for _, expected := range expectedDiffs {
+		compareIntDiff(t, vend, expected.tag, vstart, expected.diff)
+	}
+
+	// skip user metrics
+	framework.Server.Config().SkipUserMetrics = true
+	vstart = vend
+
+	// non-tx execute
+	_, err = client.Execute(query, nil)
+	require.NoError(t, err)
+
+	// tx execute
+	_, err = client.BeginExecute(query, nil, nil)
+	require.NoError(t, err)
+	err = client.Commit()
+	require.NoError(t, err)
+
+	expectedDiffs = []struct {
+		tag  string
+		diff int
+	}{{
+		tag:  "Transactions/TotalCount", // not dependent on user
+		diff: 1,
+	}, {
+		tag:  "Transactions/Histograms/commit/Count", // not dependent on user
+		diff: 1,
+	}, {
+		tag:  "TableACLAllowed/vitess_test.vitess_test.Select.dev", // dependent on user - should be zero now
+		diff: 0,
+	}, {
+		tag:  "TableACLAllowed/vitess_test.vitess_test.Select.UserLabelDisabled", // user metric disabled so this should be non-zero.
+		diff: 2,
+	}, {
+		tag:  "UserTableQueryCount/vitess_test.dev.Execute", // dependent on user - should be zero now
+		diff: 0,
+	}, {
+		tag:  "UserTableQueryCount/vitess_test.UserLabelDisabled.Execute", // user metric disabled so this should be non-zero.
+		diff: 2,
+	}, {
+		tag:  "UserTransactionCount/dev.commit", // dependent on user
+		diff: 0,
+	}, {
+		tag:  "UserTransactionCount/UserLabelDisabled.commit", // no need to publish this as "Transactions" histogram already captures this.
+		diff: 0,
+	}}
+
+	vend = framework.DebugVars()
+	for _, expected := range expectedDiffs {
+		compareIntDiff(t, vend, expected.tag, vstart, expected.diff)
+	}
+
+}

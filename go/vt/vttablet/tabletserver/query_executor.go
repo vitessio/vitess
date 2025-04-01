@@ -73,7 +73,7 @@ const (
 	streamRowsSize    = 256
 	resetLastIDQuery  = "select last_insert_id(18446744073709547416)"
 	resetLastIDValue  = 18446744073709547416
-	userLabelDisabled = "LabelDisabled"
+	userLabelDisabled = "UserLabelDisabled"
 )
 
 var (
@@ -566,9 +566,9 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 
 func (qre *QueryExecutor) generateACLStatsKey(tableName string, authorized *tableacl.ACLResult, callerID *querypb.VTGateCallerID) []string {
 	if qre.tsv.Config().SkipUserMetrics {
-		return []string{tableName, authorized.GroupName, userLabelDisabled}
+		return []string{tableName, authorized.GroupName, qre.plan.PlanID.String(), userLabelDisabled}
 	}
-	return []string{tableName, authorized.GroupName, callerID.Username}
+	return []string{tableName, authorized.GroupName, qre.plan.PlanID.String(), callerID.Username}
 }
 
 func (qre *QueryExecutor) recordACLStats(key []string, aclState acl.ACLState) {
@@ -1300,12 +1300,14 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 }
 
 func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
+	var username string
 	if qre.tsv.config.SkipUserMetrics {
-		return
-	}
-	username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
-	if username == "" {
-		username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
+		username = userLabelDisabled
+	} else {
+		username = callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
+		if username == "" {
+			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
+		}
 	}
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)

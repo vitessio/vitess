@@ -287,7 +287,7 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 	}
 	duration := sc.txProps.EndTime.Sub(sc.txProps.StartTime)
 	sc.txProps.Stats.Add(reason.Name(), duration)
-	if sc.env.Config().SkipUserMetrics {
+	if !sc.env.Config().SkipUserMetrics {
 		sc.Stats().UserTransactionCount.Add([]string{username, reason.Name()}, 1)
 		sc.Stats().UserTransactionTimesNs.Add([]string{username, reason.Name()}, int64(duration))
 	}
@@ -306,12 +306,12 @@ func (sc *StatefulConnection) logReservedConn(reason string) {
 	}
 	sc.reservedProps.Stats.Record(reason, sc.reservedProps.StartTime)
 	if sc.env.Config().SkipUserMetrics {
+		sc.Stats().UserActiveReservedCount.Add(userLabelDisabled, -1)
+	} else {
 		username := sc.getUsername()
 		sc.Stats().UserActiveReservedCount.Add(username, -1)
 		sc.Stats().UserReservedCount.Add(username, 1)
 		sc.Stats().UserReservedTimesNs.Add(username, int64(time.Since(sc.reservedProps.StartTime)))
-	} else {
-		sc.Stats().UserActiveReservedCount.Add(userLabelDisabled, -1)
 	}
 }
 
