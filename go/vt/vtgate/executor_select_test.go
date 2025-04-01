@@ -126,7 +126,7 @@ func TestSelectDBA(t *testing.T) {
 		false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select count(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname /* VARCHAR */ and ist.table_name = :ist_table_name /* VARCHAR */",
+		Sql: "select count(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname /* VARCHAR */ and ist.`table_name` = :ist_table_name /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vtschemaname": sqltypes.StringBindVariable("performance_schema"),
 			"ist_table_name": sqltypes.StringBindVariable("foo"),
@@ -142,7 +142,7 @@ func TestSelectDBA(t *testing.T) {
 		false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select 1 from information_schema.table_constraints where constraint_schema = :__vtschemaname /* VARCHAR */ and table_name = :table_name /* VARCHAR */",
+		Sql: "select 1 from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */ and `table_name` = :table_name /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
 			"table_name":     sqltypes.StringBindVariable("user"),
@@ -158,7 +158,7 @@ func TestSelectDBA(t *testing.T) {
 		false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select 1 from information_schema.table_constraints where constraint_schema = :__vtschemaname /* VARCHAR */",
+		Sql: "select 1 from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
 		},
@@ -484,7 +484,7 @@ func TestGen4SelectDBA(t *testing.T) {
 		query, map[string]*querypb.BindVariable{},
 		false)
 	require.NoError(t, err)
-	expected := "select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_TYPE, `ENFORCED` from INFORMATION_SCHEMA.TABLE_CONSTRAINTS"
+	expected := "select `CONSTRAINT_CATALOG`, `CONSTRAINT_SCHEMA`, `CONSTRAINT_NAME`, TABLE_SCHEMA, `TABLE_NAME`, CONSTRAINT_TYPE, `ENFORCED` from INFORMATION_SCHEMA.TABLE_CONSTRAINTS"
 	wantQueries := []*querypb.BoundQuery{{Sql: expected, BindVariables: map[string]*querypb.BindVariable{}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
@@ -496,7 +496,7 @@ func TestGen4SelectDBA(t *testing.T) {
 		false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select count(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname /* VARCHAR */ and ist.table_name = :ist_table_name1 /* VARCHAR */",
+		Sql: "select count(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname /* VARCHAR */ and ist.`table_name` = :ist_table_name1 /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"ist_table_schema": sqltypes.StringBindVariable("performance_schema"),
 			"__vtschemaname":   sqltypes.StringBindVariable("performance_schema"),
@@ -514,7 +514,7 @@ func TestGen4SelectDBA(t *testing.T) {
 		false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select :vtg1 /* INT64 */ from information_schema.table_constraints where constraint_schema = :__vtschemaname /* VARCHAR */ and table_name = :table_name1 /* VARCHAR */",
+		Sql: "select :vtg1 /* INT64 */ from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */ and `table_name` = :table_name1 /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1":              sqltypes.Int64BindVariable(1),
 			"constraint_schema": sqltypes.StringBindVariable("vt_ks"),
@@ -530,7 +530,7 @@ func TestGen4SelectDBA(t *testing.T) {
 	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA", econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}), query, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select :vtg1 /* INT64 */ from information_schema.table_constraints where constraint_schema = :__vtschemaname /* VARCHAR */",
+		Sql: "select :vtg1 /* INT64 */ from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1":              sqltypes.Int64BindVariable(1),
 			"constraint_schema": sqltypes.StringBindVariable("vt_ks"),
@@ -546,7 +546,7 @@ func TestGen4SelectDBA(t *testing.T) {
 		query, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = t.table_schema and c.table_name = t.table_name order by t.table_schema asc, t.table_name asc, c.column_name asc",
+		Sql: "select t.table_schema, t.`table_name`, c.`column_name`, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = t.table_schema and c.`table_name` = t.`table_name` order by t.table_schema asc, t.`table_name` asc, c.`column_name` asc",
 		BindVariables: map[string]*querypb.BindVariable{
 			"t_table_schema":        sqltypes.StringBindVariable("TestExecutor"),
 			"__replacevtschemaname": sqltypes.Int64BindVariable(1),
@@ -3457,7 +3457,7 @@ func TestSelectFromInformationSchema(t *testing.T) {
 	session.TargetString = "TestExecutor"
 	_, err = exec(executor, session, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"},
+	assert.Equal(t, []string{"select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()"},
 		sbc1.StringQueries())
 
 	// `USE TestXBadSharding` and then query info_schema about TestExecutor - should target TestExecutor and not use the default keyspace
@@ -3465,7 +3465,7 @@ func TestSelectFromInformationSchema(t *testing.T) {
 	session.TargetString = "TestXBadSharding"
 	_, err = exec(executor, session, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'TestExecutor'")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname /* VARCHAR */"},
+	assert.Equal(t, []string{"select TABLE_CATALOG, TABLE_SCHEMA, `TABLE_NAME`, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname /* VARCHAR */"},
 		sbc1.StringQueries())
 }
 

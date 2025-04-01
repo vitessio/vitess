@@ -1510,10 +1510,10 @@ func TestEngineReload(t *testing.T) {
 				db.AddQuery("commit", &sqltypes.Result{})
 				db.AddQuery("rollback", &sqltypes.Result{})
 				// We are adding both the variants of the delete statements that we can see in the test, since the deleted tables are initially stored as a map, the order is not defined.
-				db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('t5', 't4', 'T2', 't2')", &sqltypes.Result{})
-				db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('t4', 't5', 'T2', 't2')", &sqltypes.Result{})
-				db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), 't2', 'create_table_t2', 123456790)", &sqltypes.Result{})
-				db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), 'T2', 'create_table_T2', 123456789)", &sqltypes.Result{})
+				db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and `TABLE_NAME` in ('t5', 't4', 'T2', 't2')", &sqltypes.Result{})
+				db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and `TABLE_NAME` in ('t4', 't5', 'T2', 't2')", &sqltypes.Result{})
+				db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, `TABLE_NAME`, CREATE_STATEMENT, CREATE_TIME) values (database(), 't2', 'create_table_t2', 123456790)", &sqltypes.Result{})
+				db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, `TABLE_NAME`, CREATE_STATEMENT, CREATE_TIME) values (database(), 'T2', 'create_table_T2', 123456789)", &sqltypes.Result{})
 			}
 
 			// Queries for reloading the views' information.
@@ -1524,22 +1524,22 @@ func TestEngineReload(t *testing.T) {
 							fmt.Sprintf("%v|create_table_%v|utf8mb4|utf8mb4_0900_ai_ci", tableName, tableName)))
 				}
 				// We are adding both the variants of the select statements that we can see in the test, since the deleted views are initially stored as a map, the order is not defined.
-				db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v4', 'v5', 'V2', 'v2')",
+				db.AddQuery("select `table_name`, view_definition from information_schema.views where table_schema = database() and `table_name` in ('v4', 'v5', 'V2', 'v2')",
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar"),
 						"v2|select_v2",
 						"V2|select_V2",
 					))
-				db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v5', 'v4', 'V2', 'v2')",
+				db.AddQuery("select `table_name`, view_definition from information_schema.views where table_schema = database() and `table_name` in ('v5', 'v4', 'V2', 'v2')",
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar"),
 						"v2|select_v2",
 						"V2|select_V2",
 					))
 
 				// We are adding both the variants of the delete statements that we can see in the test, since the deleted views are initially stored as a map, the order is not defined.
-				db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('v4', 'v5', 'V2', 'v2')", &sqltypes.Result{})
-				db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('v5', 'v4', 'V2', 'v2')", &sqltypes.Result{})
-				db.AddQuery("insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v2', 'create_table_v2', 'select_v2')", &sqltypes.Result{})
-				db.AddQuery("insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'V2', 'create_table_V2', 'select_V2')", &sqltypes.Result{})
+				db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and `TABLE_NAME` in ('v4', 'v5', 'V2', 'v2')", &sqltypes.Result{})
+				db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and `TABLE_NAME` in ('v5', 'v4', 'V2', 'v2')", &sqltypes.Result{})
+				db.AddQuery("insert into _vt.views(TABLE_SCHEMA, `TABLE_NAME`, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v2', 'create_table_v2', 'select_v2')", &sqltypes.Result{})
+				db.AddQuery("insert into _vt.views(TABLE_SCHEMA, `TABLE_NAME`, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'V2', 'create_table_V2', 'select_V2')", &sqltypes.Result{})
 			}
 
 			// adding query pattern for udfs

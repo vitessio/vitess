@@ -2853,13 +2853,13 @@ func TestExecutorSettingsInTwoPC(t *testing.T) {
 			expectedQueries: [][]string{
 				{
 					"select '+08:00' from dual where @@time_zone != '+08:00'",
-					"set @@time_zone = '+08:00'",
-					"set @@time_zone = '+08:00'",
+					"set time_zone = '+08:00'",
+					"set time_zone = '+08:00'",
 					"insert into user_extra(user_id) values (1)",
 					"insert into user_extra(user_id) values (2)",
 				},
 				{
-					"set @@time_zone = '+08:00'",
+					"set time_zone = '+08:00'",
 					"insert into user_extra(user_id) values (3)",
 				},
 			},
