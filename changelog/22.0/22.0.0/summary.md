@@ -335,6 +335,7 @@ to acknowledge that the transaction was automatically rolled back and cleared by
 
 This change was introduced by [#17669](https://github.com/vitessio/vitess/pull/17669).
 
+
 ---
 
 ## <a id="minor-changes"/>Minor Changes</a>
