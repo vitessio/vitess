@@ -165,7 +165,6 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 		"--bind-address", "127.0.0.1",
 		"--grpc_bind_address", "127.0.0.1",
-		"--mysql_multi_query_protocol",
 	}
 	// If no explicit mysql_server_version has been specified then we autodetect
 	// the MySQL version that will be used for the test and base the vtgate's

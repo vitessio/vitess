@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type TestingT interface {
@@ -213,6 +214,46 @@ func (mcmp *MySQLCompare) Exec(query string) *sqltypes.Result {
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
 	compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	return vtQr
+}
+
+// ExecMulti executes the given queries against both Vitess and MySQL and compares
+// the result sets. If there is a mismatch, the difference will be printed and the
+// test will fail. If the query produces an error in either Vitess or MySQL, the test
+// will be marked as failed.
+// The result sets of Vitess are returned to the caller.
+func (mcmp *MySQLCompare) ExecMulti(sql string) []*sqltypes.Result {
+	mcmp.t.Helper()
+	stmts, err := sqlparser.NewTestParser().SplitStatementToPieces(sql)
+	require.NoError(mcmp.t, err)
+	vtQr, vtMore, err := mcmp.VtConn.ExecuteFetchMulti(sql, 1000, true)
+	require.NoError(mcmp.t, err, "[Vitess Error] for sql: "+sql)
+
+	mysqlQr, mysqlMore, err := mcmp.MySQLConn.ExecuteFetchMulti(sql, 1000, true)
+	require.NoError(mcmp.t, err, "[MySQL Error] for sql: "+sql)
+	sql = stmts[0]
+	compareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	if vtMore != mysqlMore {
+		mcmp.AsT().Errorf("Vitess and MySQL have different More flags: %v vs %v", vtMore, mysqlMore)
+	}
+
+	results := []*sqltypes.Result{vtQr}
+	idx := 1
+	for vtMore {
+		sql = stmts[idx]
+		idx++
+		vtQr, vtMore, _, err = mcmp.VtConn.ReadQueryResult(1000, true)
+		require.NoError(mcmp.t, err, "[Vitess Error] for sql: "+sql)
+
+		mysqlQr, mysqlMore, _, err = mcmp.MySQLConn.ReadQueryResult(1000, true)
+		require.NoError(mcmp.t, err, "[MySQL Error] for sql: "+sql)
+		compareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+		if vtMore != mysqlMore {
+			mcmp.AsT().Errorf("Vitess and MySQL have different More flags: %v vs %v", vtMore, mysqlMore)
+		}
+		results = append(results, vtQr)
+	}
+
+	return results
 }
 
 // ExecVitessAndMySQLDifferentQueries executes Vitess and MySQL with the queries provided.
