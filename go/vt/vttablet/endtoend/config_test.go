@@ -279,6 +279,29 @@ func TestQueryTimeout(t *testing.T) {
 	compareIntDiff(t, vend, "Kills/Connections", vstart, 1)
 }
 
+// TestHeartbeatMetric validates the heartbeat metrics exists from the connection pool.
+func TestHeartbeatMetric(t *testing.T) {
+	tcases := []struct {
+		metricName string
+		exp        any
+	}{{
+		metricName: "HeartbeatWriteAppPoolCapacity",
+		exp:        2,
+	}, {
+		metricName: "HeartbeatWriteAllPrivsPoolCapacity",
+		exp:        2,
+	}}
+
+	metrics := framework.DebugVars()
+	for _, tcase := range tcases {
+		t.Run(tcase.metricName, func(t *testing.T) {
+			mValue, exists := metrics[tcase.metricName]
+			require.True(t, exists, "metric %s not found", tcase.metricName)
+			require.EqualValues(t, tcase.exp, mValue, "metric %s value is %d, want %d", tcase.metricName, mValue, tcase.exp)
+		})
+	}
+}
+
 func changeVar(t *testing.T, name, value string) (revert func()) {
 	t.Helper()
 
