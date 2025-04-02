@@ -219,8 +219,7 @@ func TestDryRunThrottler(t *testing.T) {
 		{Name: "Dry run does not throttle when txThrottlerStateImpl says it should not", txThrottlerStateShouldThrottle: false, throttlerDryRun: true, expectedResult: false},
 	}
 
-	for _, aTestCase := range testCases {
-		theTestCase := aTestCase
+	for _, theTestCase := range testCases {
 
 		t.Run(theTestCase.Name, func(t *testing.T) {
 			aTxThrottler := &txThrottler{
