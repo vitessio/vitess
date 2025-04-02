@@ -444,10 +444,10 @@ func tmclientExtraArgs(name string) []string {
 
 func tabletConnExtraArgs(name string) []string {
 	ca := "vttablet-server"
-	args := []string{"--tablet_grpc_cert", certDirectory + "/" + name + "-cert.pem",
-		"--tablet_grpc_key", certDirectory + "/" + name + "-key.pem",
-		"--tablet_grpc_ca", certDirectory + "/" + ca + "-cert.pem",
-		"--tablet_grpc_server_name", "vttablet server instance"}
+	args := []string{utils.GetFlagVariantForTests("--tablet-grpc-cert"), certDirectory + "/" + name + "-cert.pem",
+		utils.GetFlagVariantForTests("--tablet-grpc-key"), certDirectory + "/" + name + "-key.pem",
+		utils.GetFlagVariantForTests("--tablet-grpc-ca"), certDirectory + "/" + ca + "-cert.pem",
+		utils.GetFlagVariantForTests("--tablet-grpc-server-name"), "vttablet server instance"}
 	return args
 }
 

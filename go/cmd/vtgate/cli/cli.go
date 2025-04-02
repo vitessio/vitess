@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
@@ -53,7 +54,7 @@ var (
 
 ### Key Options
 ` +
-			"\n* `--srv_topo_cache_ttl`: There may be instances where you will need to increase the cached TTL from the default of 1 second to a higher number:\n" +
+			"\n* `--srv-topo-cache-ttl`: There may be instances where you will need to increase the cached TTL from the default of 1 second to a higher number:\n" +
 			`	* You may want to increase this option if you see that your topo leader goes down and keeps your queries waiting for a few seconds.`,
 		Example: `vtgate \
 	--topo-implementation etcd2 \
@@ -62,13 +63,13 @@ var (
 	--log_dir $VTDATAROOT/tmp \
 	--port 15001 \
 	--grpc-port 15991 \
-	--mysql_server_port 15306 \
+	--mysql-server-port 15306 \
 	--cell test \
 	--cells_to_watch test \
-	--tablet_types_to_wait PRIMARY,REPLICA \
+	--tablet-types-to-wait PRIMARY,REPLICA \
 	--service-map 'grpc-vtgateservice' \
 	--pid-file $VTDATAROOT/tmp/vtgate.pid \
-	--mysql_auth_server_impl none`,
+	--mysql-auth-server-impl none`,
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),
 		PreRunE: servenv.CobraPreRunE,
@@ -162,7 +163,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(tabletTypes) == 0 {
-		return fmt.Errorf("tablet_types_to_wait must contain at least one serving tablet type")
+		return fmt.Errorf("tablet-types-to-wait must contain at least one serving tablet type")
 	}
 
 	err := CheckCellFlags(ctx, resilientServer, cell, vtgate.CellsToWatch)
@@ -208,8 +209,8 @@ func init() {
 
 	acl.RegisterFlags(Main.Flags())
 	Main.Flags().StringVar(&cell, "cell", cell, "cell to use")
-	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet_types_to_wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
+	utils.SetFlagVar(Main.Flags(), (*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet-types-to-wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
 	Main.Flags().StringVar(&plannerName, "planner-version", plannerName, "Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right")
 
-	Main.MarkFlagRequired("tablet_types_to_wait")
+	Main.MarkFlagRequired("tablet-types-to-wait")
 }

@@ -223,7 +223,7 @@ func InitTabletMap(
 		return 0, fmt.Errorf("RebuildVSchemaGraph failed: %v", err)
 	}
 
-	// Register the tablet dialer for tablet server. main() forces the --tablet_protocol
+	// Register the tablet dialer for tablet server. main() forces the --tablet-protocol
 	// flag to this value.
 	tabletconn.RegisterDialer("internal", dialer)
 

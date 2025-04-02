@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -36,10 +37,10 @@ var (
 	UseXb = false
 	// XbArgs are the arguments for specifying xtrabackup.
 	XbArgs = []string{
-		"--backup_engine_implementation", "xtrabackup",
-		"--xtrabackup_stream_mode=xbstream",
-		"--xtrabackup_user=vt_dba",
-		"--xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
+		utils.GetFlagVariantForTests("--backup-engine-implementation"), "xtrabackup",
+		fmt.Sprintf("%s=xbstream", utils.GetFlagVariantForTests("--xtrabackup-stream-mode")),
+		fmt.Sprintf("%s=vt_dba", utils.GetFlagVariantForTests("--xtrabackup-user")),
+		utils.GetFlagVariantForTests("--xtrabackup-backup-flags"), fmt.Sprintf("--password=%s", dbPassword),
 	}
 )
 
@@ -73,10 +74,10 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 	}
 	replicaTabletArgs = append(replicaTabletArgs, "--disable_active_reparents",
 		"--enable_replication_reporter=false",
-		"--init_tablet_type", "replica",
-		"--init_keyspace", restoreKSName,
-		"--init_shard", shardName,
-		"--init_db_name_override", "vt_"+keyspaceName,
+		utils.GetFlagVariantForTests("--init-tablet-type"), "replica",
+		utils.GetFlagVariantForTests("--init-keyspace"), restoreKSName,
+		utils.GetFlagVariantForTests("--init-shard"), shardName,
+		utils.GetFlagVariantForTests("--init-db-name-override"), "vt_"+keyspaceName,
 	)
 	tablet.VttabletProcess.SupportsBackup = true
 	tablet.VttabletProcess.ExtraArgs = replicaTabletArgs

@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -179,7 +180,7 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--heartbeat_interval", "250ms",
+			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
 			"--migration_check_interval", "5s",
 			"--watch_replication_stream",
 		}
