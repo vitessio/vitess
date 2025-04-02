@@ -1065,7 +1065,7 @@ func TestReadingUnresolvedTransactions(t *testing.T) {
 			// We want to delay the commit on one of the shards to simulate slow commits on a shard.
 			twopcutil.WriteTestCommunicationFile(t, twopcutil.DebugDelayCommitShard, "80-")
 			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitShard)
-			twopcutil.WriteTestCommunicationFile(t, twopcutil.DebugDelayCommitTime, "5")
+			twopcutil.WriteTestCommunicationFile(t, twopcutil.DebugDelayCommitTime, "2")
 			defer twopcutil.DeleteFile(twopcutil.DebugDelayCommitTime)
 			// We will execute a commit in a go routine, because we know it will take some time to complete.
 			// While the commit is ongoing, we would like to check that we see the unresolved transaction.
