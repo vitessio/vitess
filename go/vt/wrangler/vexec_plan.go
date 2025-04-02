@@ -190,9 +190,10 @@ func (vx *vexec) addDefaultWheres(planner vexecPlanner, where *sqlparser.Where) 
 	var hasDBName, hasWorkflow bool
 	plannerParams := planner.params()
 	for _, col := range cols {
-		if col == plannerParams.dbNameColumn {
+		switch col {
+		case plannerParams.dbNameColumn:
 			hasDBName = true
-		} else if col == plannerParams.workflowColumn {
+		case plannerParams.workflowColumn:
 			hasWorkflow = true
 		}
 	}

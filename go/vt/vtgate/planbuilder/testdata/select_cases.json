@@ -3585,8 +3585,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id as found from `user` where 1 != 1",
-            "Query": "select id as found from `user`",
+            "FieldQuery": "select id as `found` from `user` where 1 != 1",
+            "Query": "select id as `found` from `user`",
             "Table": "`user`"
           },
           {
@@ -3771,7 +3771,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from dual where 1 != 1",
-        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME /* VARCHAR */ and `TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */)",
+        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.`TABLE_NAME` = :TABLES_TABLE_NAME /* VARCHAR */ and `TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */)",
         "SysTableTableName": "[TABLES_TABLE_NAME:'proc']",
         "SysTableTableSchema": "['mysql']",
         "Table": "dual"
@@ -6363,8 +6363,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select `tables`.table_name from (select table_name from unsharded where 1 != 1) as `tables` where 1 != 1",
-            "Query": "select `tables`.table_name from (select table_name from unsharded limit 1) as `tables`",
+            "FieldQuery": "select `tables`.`table_name` from (select `table_name` from unsharded where 1 != 1) as `tables` where 1 != 1",
+            "Query": "select `tables`.`table_name` from (select `table_name` from unsharded limit 1) as `tables`",
             "Table": "unsharded"
           },
           {
@@ -6374,8 +6374,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select c.column_name from `user` as c where 1 != 1",
-            "Query": "select c.column_name from `user` as c where c.table_name = :tables_table_name",
+            "FieldQuery": "select c.`column_name` from `user` as c where 1 != 1",
+            "Query": "select c.`column_name` from `user` as c where c.`table_name` = :tables_table_name",
             "Table": "`user`"
           }
         ]

@@ -149,7 +149,7 @@ func logReadTopologyInstanceError(tabletAlias string, hint string, err error) er
 	} else {
 		msg = fmt.Sprintf("ReadTopologyInstance(%+v) %+v: %+v",
 			tabletAlias,
-			strings.Replace(hint, "%", "%%", -1), // escape %
+			strings.ReplaceAll(hint, "%", "%%"), // escape %
 			err)
 	}
 	log.Error(msg)
@@ -516,11 +516,8 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	if primaryDataFound {
 		replicationDepth = primaryReplicationDepth + 1
 	}
-	isCoPrimary := false
-	if primaryHostname == instance.Hostname && primaryPort == instance.Port {
-		// co-primary calls for special case, in fear of the infinite loop
-		isCoPrimary = true
-	}
+	isCoPrimary := primaryHostname == instance.Hostname && primaryPort == instance.Port
+
 	instance.ReplicationDepth = replicationDepth
 	instance.IsCoPrimary = isCoPrimary
 	instance.AncestryUUID = ancestryUUID
@@ -827,10 +824,8 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		return "", nil, nil
 	}
 
-	insertIgnore := false
-	if !instanceWasActuallyFound {
-		insertIgnore = true
-	}
+	insertIgnore := !instanceWasActuallyFound
+
 	columns := []string{
 		"alias",
 		"hostname",

@@ -225,21 +225,7 @@ func (vw *VSchemaWrapper) SysVarSetEnabled() bool {
 }
 
 func (vw *VSchemaWrapper) TargetDestination(qualifier string) (key.ShardDestination, *vindexes.Keyspace, topodatapb.TabletType, error) {
-	var keyspaceName string
-	if vw.Keyspace != nil {
-		keyspaceName = vw.Keyspace.Name
-	}
-	if vw.Dest == nil && qualifier != "" {
-		keyspaceName = qualifier
-	}
-	if keyspaceName == "" {
-		return nil, nil, 0, vterrors.VT03007()
-	}
-	keyspace := vw.V.Keyspaces[keyspaceName]
-	if keyspace == nil {
-		return nil, nil, 0, vterrors.VT05003(keyspaceName)
-	}
-	return vw.Dest, keyspace.Keyspace, vw.TabletType_, nil
+	return vw.Vcursor.TargetDestination(qualifier)
 }
 
 func (vw *VSchemaWrapper) TabletType() topodatapb.TabletType {

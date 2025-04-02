@@ -255,7 +255,7 @@ func (tr *ShardedRouting) planBetweenOp(ctx *plancontext.PlanningContext, node *
 	if !ok {
 		return nil, false
 	}
-	var vdValue sqlparser.ValTuple = sqlparser.ValTuple([]sqlparser.Expr{node.From, node.To})
+	vdValue := sqlparser.ValTuple([]sqlparser.Expr{node.From, node.To})
 
 	opcode := func(vindex *vindexes.ColumnVindex) engine.Opcode {
 		if _, ok := vindex.Vindex.(vindexes.Sequential); ok {

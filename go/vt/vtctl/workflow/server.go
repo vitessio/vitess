@@ -1990,7 +1990,7 @@ func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 				return nil, err
 			}
 		case binlogdatapb.MigrationType_SHARDS:
-			if err := sw.dropTargetShards(ctx); err != nil {
+			if err := sw.removeTargetTables(ctx); err != nil {
 				return nil, err
 			}
 		}

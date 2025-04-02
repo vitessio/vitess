@@ -26,7 +26,7 @@ var (
 )
 
 func normalizeQuery(name string) string {
-	name = strings.Replace(name, "`", "", -1)
+	name = strings.ReplaceAll(name, "`", "")
 	name = spacesRegexp.ReplaceAllString(name, " ")
 	name = strings.TrimSpace(name)
 	return name

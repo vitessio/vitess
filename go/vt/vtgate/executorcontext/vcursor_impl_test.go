@@ -30,7 +30,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -58,7 +57,7 @@ func (f fakeVSchemaOperator) GetCurrentSrvVschema() *vschemapb.SrvVSchema {
 	panic("implement me")
 }
 
-func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksvs *topo.KeyspaceVSchemaInfo, srvvs *vschema.SrvVSchema) error {
+func (f fakeVSchemaOperator) UpdateVSchema(ctx context.Context, ksvs *topo.KeyspaceVSchemaInfo, srvvs *vschemapb.SrvVSchema) error {
 	panic("implement me")
 }
 

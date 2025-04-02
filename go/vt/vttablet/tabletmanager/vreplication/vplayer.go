@@ -134,11 +134,9 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	commitFunc := func() error {
 		return vr.dbClient.Commit()
 	}
-	batchMode := false
 	// We only do batching in the running/replicating phase.
-	if len(copyState) == 0 && vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
-		batchMode = true
-	}
+	batchMode := len(copyState) == 0 && vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0
+
 	if batchMode {
 		// relayLogMaxSize is effectively the limit used when not batching.
 		maxAllowedPacket := int64(vr.workflowConfig.RelayLogMaxSize)
@@ -235,10 +233,7 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 	if !mustUpdate {
 		return nil
 	}
-	dbForeignKeyChecksEnabled := true
-	if flags2&NoForeignKeyCheckFlagBitmask == NoForeignKeyCheckFlagBitmask {
-		dbForeignKeyChecksEnabled = false
-	}
+	dbForeignKeyChecksEnabled := !(flags2&NoForeignKeyCheckFlagBitmask == NoForeignKeyCheckFlagBitmask)
 
 	if vp.foreignKeyChecksStateInitialized /* already set earlier */ &&
 		dbForeignKeyChecksEnabled == vp.foreignKeyChecksEnabled /* no change in the state, no need to update */ {

@@ -30,11 +30,12 @@ func (pat *Pattern) Dump(w io.Writer) {
 	fmt.Fprintf(w, "Original Pattern:  \"%s\"\n", pat.pattern)
 	fmt.Fprintf(w, "   Min Match Length:  %d\n", pat.minMatchLen)
 	fmt.Fprintf(w, "   Match Start Type:  %v\n", pat.startType)
-	if pat.startType == startString {
+	switch pat.startType {
+	case startString:
 		fmt.Fprintf(w, "   Initial match string: \"%s\"\n", string(pat.literalText[pat.initialStringIdx:pat.initialStringIdx+pat.initialStringLen]))
-	} else if pat.startType == startSet {
+	case startSet:
 		fmt.Fprintf(w, "    Match First Chars: %s\n", pat.initialChars.String())
-	} else if pat.startType == startChar {
+	case startChar:
 		fmt.Fprintf(w, "    First char of Match: ")
 		if pat.initialChar > 0x20 {
 			fmt.Fprintf(w, "'%c'\n", pat.initialChar)
