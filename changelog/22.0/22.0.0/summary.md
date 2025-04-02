@@ -358,7 +358,6 @@ While the flag will continue to accept float values (interpreted as seconds) for
 
 - `--consolidator-query-waiter-cap` flag to set the maximum number of clients allowed to wait on the consolidator. The default value is set to 0 for unlimited wait. Users can adjust  this value based on the performance of VTTablet to avoid excessive memory usage and the risk of being OOMKilled, particularly in Kubernetes deployments.
 
-- `skip-user-metrics` flag if enabled, replaces the username label with "UserLabelDisabled" to prevent metric explosion in environments with many unique users. 
 ---
 
 #### <a id="reloading-vttablet-acl"/>ACL enforcement and reloading</a>
