@@ -27,6 +27,6 @@ type Metrics struct {
 
 func InitMetrics(exporter *servenv.Exporter) *Metrics {
 	return &Metrics{
-		optimizedQueryExec: exporter.NewCountersWithSingleLabel("OptimizedQueryExec", "Number of optimized query execution", "Operation"),
+		optimizedQueryExec: exporter.NewCountersWithSingleLabel("OptimizedQueryExecutions", "Counts optimized queries executed at VTGate by plan type.", "Plan"),
 	}
 }
