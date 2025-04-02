@@ -40,6 +40,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -55,7 +56,7 @@ var (
 var CommonTags []string
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&emitStats, "emit_stats", emitStats, "If set, emit stats to push-based monitoring and stats backends")
+	utils.SetFlagBoolVar(fs, &emitStats, "emit-stats", emitStats, "If set, emit stats to push-based monitoring and stats backends")
 	fs.DurationVar(&statsEmitPeriod, "stats_emit_period", statsEmitPeriod, "Interval between emitting stats to all registered backends")
 	fs.StringVar(&statsBackend, "stats_backend", statsBackend, "The name of the registered push-based monitoring/stats backend to use")
 	fs.StringVar(&combineDimensions, "stats_combine_dimensions", combineDimensions, `List of dimensions to be combined into a single "all" value in exported stats vars`)

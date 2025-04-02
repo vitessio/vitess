@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -63,8 +64,8 @@ var (
 			"To enable communication with a `vttablet`, the server must be configured to receive gRPC messages on a unix domain socket.",
 		Example: `mysqlctld \
 	--log_dir=${VTDATAROOT}/logs \
-	--tablet_uid=100 \
-	--mysql_port=17100 \
+	--tablet-uid=100 \
+	--mysql-port=17100 \
 	--socket_file=/path/to/socket_file`,
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),
@@ -91,9 +92,9 @@ func init() {
 
 	servenv.MoveFlagsToCobraCommand(Main)
 
-	Main.Flags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port")
-	Main.Flags().Uint32Var(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
-	Main.Flags().StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")
+	utils.SetFlagIntVar(Main.Flags(), &mysqlPort, "mysql-port", mysqlPort, "MySQL port")
+	utils.SetFlagUint32Var(Main.Flags(), &tabletUID, "tablet-uid", tabletUID, "Tablet UID")
+	utils.SetFlagStringVar(Main.Flags(), &mysqlSocket, "mysql-socket", mysqlSocket, "Path to the mysqld socket file")
 	Main.Flags().DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup")
 	Main.Flags().StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "Path to .sql file to run after mysqld initialization")
 	Main.Flags().DurationVar(&shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "How long to wait for mysqld shutdown")

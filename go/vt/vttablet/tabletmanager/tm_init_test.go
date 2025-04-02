@@ -107,12 +107,12 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	initKeyspace = ""
 	initShard = "0"
 	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
-	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
+	assert.Contains(t, err.Error(), "init-keyspace and init-shard must be specified")
 
 	initKeyspace = "test_keyspace"
 	initShard = ""
 	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
-	assert.Contains(t, err.Error(), "init_keyspace and init_shard must be specified")
+	assert.Contains(t, err.Error(), "init-keyspace and init-shard must be specified")
 
 	initShard = "x-y"
 	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
@@ -125,7 +125,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 
 	initTabletType = "primary"
 	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
-	assert.Contains(t, err.Error(), "invalid init_tablet_type PRIMARY")
+	assert.Contains(t, err.Error(), "invalid init-tablet-type PRIMARY")
 }
 
 func TestBuildTabletFromInputWithBuildTags(t *testing.T) {

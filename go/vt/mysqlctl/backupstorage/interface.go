@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/mysqlctl/errors"
+	"vitess.io/vitess/go/vt/utils"
 
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -41,7 +42,7 @@ var (
 )
 
 func registerBackupFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&BackupStorageImplementation, "backup_storage_implementation", "", "Which backup storage implementation to use for creating and restoring backups.")
+	utils.SetFlagStringVar(fs, &BackupStorageImplementation, "backup-storage-implementation", "", "Which backup storage implementation to use for creating and restoring backups.")
 }
 
 func init() {

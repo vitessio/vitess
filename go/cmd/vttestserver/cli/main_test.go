@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/tlstest"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 	"vitess.io/vitess/go/vt/vttest"
 
@@ -376,7 +377,7 @@ var clusterKeyspaces = []string{
 func startCluster(flags ...string) (cluster vttest.LocalCluster, err error) {
 	args := []string{"vttestserver"}
 	schemaDirArg := "--schema_dir=data/schema"
-	tabletHostname := "--tablet_hostname=localhost"
+	tabletHostname := fmt.Sprintf("%s=localhost", utils.GetFlagVariantForTests("--tablet-hostname"))
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
 	numShardsArg := "--num_shards=2,2"
 	vschemaDDLAuthorizedUsers := "--vschema_ddl_authorized_users=%"

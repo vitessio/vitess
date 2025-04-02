@@ -237,8 +237,8 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--db_dba_user", user,
 		"--db_dba_password", pass,
 		"--proto_topo", string(protoTopo),
-		"--mycnf_server_id", "1",
-		"--mycnf_socket_file", socket,
+		"--mycnf-server-id", "1",
+		"--mycnf-socket-file", socket,
 		"--normalize_queries",
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
@@ -253,9 +253,9 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	// that the default value is 1 minute, but we are keeping it low to make vttestserver perform faster.
 	// Less value might result in high pressure on topo but for testing purpose that should not be a concern.
 	if args.VtgateTabletRefreshInterval <= 0 {
-		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet_refresh_interval=%v", 10*time.Second))
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet-refresh-interval=%v", 10*time.Second))
 	} else {
-		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet_refresh_interval=%v", args.VtgateTabletRefreshInterval))
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet-refresh-interval=%v", args.VtgateTabletRefreshInterval))
 	}
 
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
@@ -274,7 +274,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, "--queryserver-config-transaction-timeout", fmt.Sprintf("%v", args.TransactionTimeout))
 	}
 	if args.TabletHostName != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--tablet_hostname", args.TabletHostName}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--tablet-hostname", args.TabletHostName}...)
 	}
 	if servenv.GRPCAuth() == "mtls" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc_auth_mode", servenv.GRPCAuth(), "--grpc_key", servenv.GRPCKey(), "--grpc_cert", servenv.GRPCCert(), "--grpc_ca", servenv.GRPCCertificateAuthority(), "--grpc_auth_mtls_allowed_substrings", servenv.ClientCertSubstrings()}...)
@@ -304,8 +304,8 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	}
 
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
-		"--mysql_auth_server_impl", "none",
-		"--mysql_server_port", fmt.Sprintf("%d", vtcomboMysqlPort),
+		"--mysql-auth-server-impl", "none",
+		"--mysql-server-port", fmt.Sprintf("%d", vtcomboMysqlPort),
 		"--mysql_server_bind_address", vtcomboMysqlBindAddress,
 	}...)
 
