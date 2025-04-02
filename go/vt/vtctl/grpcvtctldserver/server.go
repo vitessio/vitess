@@ -3992,7 +3992,7 @@ func (s *VtctldServer) SetVtorcEmergencyReparent(ctx context.Context, req *vtctl
 
 	defer unlock(&err)
 
-	if req.Shard != "" {
+	if req.Shard != "" && req.Shard != "-" {
 		_, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
 			if si.VtorcConfig != nil {
 				si.VtorcConfig.DisableEmergencyReparent = req.Disable
