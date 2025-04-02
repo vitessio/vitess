@@ -17,22 +17,16 @@ limitations under the License.
 package engine
 
 import (
-	"sync"
-
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 type Metrics struct {
 	optimizedQueryExec *stats.CountersWithSingleLabel
 }
 
-// TODO (fix it): This is a temporary solution to avoid multiple registry of metric counter in test.
-var defaultMetric = &Metrics{}
-var once sync.Once
-
-func InitializeMetrics() *Metrics {
-	once.Do(func() {
-		defaultMetric.optimizedQueryExec = stats.NewCountersWithSingleLabel("OptimizedQueryExecutions", "Counts optimized queries executed at VTGate by plan type.", "Plan")
-	})
-	return defaultMetric
+func InitMetrics(exporter *servenv.Exporter) *Metrics {
+	return &Metrics{
+		optimizedQueryExec: exporter.NewCountersWithSingleLabel("OptimizedQueryExec", "Number of optimized query execution", "Operation"),
+	}
 }

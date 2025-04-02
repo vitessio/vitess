@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 // TestPlanSwitcherMetrics tests that the PlanSwitcher increments the correct metric
@@ -30,7 +32,7 @@ func TestPlanSwitcherMetrics(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{
-		metrics: InitializeMetrics(),
+		metrics: InitMetrics(servenv.NewExporter("PlanTest", "")),
 	}
 	initial := vc.metrics.optimizedQueryExec.Counts()
 	_, err := p.TryExecute(context.Background(), vc, nil, false)

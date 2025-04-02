@@ -111,6 +111,7 @@ func init() {
 // the abilities of the underlying vttablets.
 type (
 	ExecutorConfig struct {
+		Name       string
 		Normalize  bool
 		StreamSize int
 		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
@@ -120,7 +121,8 @@ type (
 	}
 
 	Executor struct {
-		config ExecutorConfig
+		config   ExecutorConfig
+		exporter *servenv.Exporter
 
 		env         *vtenv.Environment
 		serv        srvtopo.Server
@@ -185,6 +187,7 @@ func NewExecutor(
 ) *Executor {
 	e := &Executor{
 		config:      eConfig,
+		exporter:    servenv.NewExporter(eConfig.Name, ""),
 		env:         env,
 		serv:        serv,
 		cell:        cell,
@@ -200,7 +203,7 @@ func NewExecutor(
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
 	e.metrics = &Metrics{
-		engineMetrics: engine.InitializeMetrics(),
+		engineMetrics: engine.InitMetrics(e.exporter),
 	}
 
 	// we subscribe to update from the VSchemaManager
