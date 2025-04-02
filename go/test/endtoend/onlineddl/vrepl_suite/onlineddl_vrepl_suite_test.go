@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/utils"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
@@ -88,7 +89,7 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--heartbeat_interval", "250ms",
+			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "5s",
 			"--watch_replication_stream",

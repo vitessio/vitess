@@ -40,7 +40,7 @@ import (
 // even when there are multiple vttablet failures. In this test we use the semi_sync policy
 // to allow multiple failures to happen and still be recoverable.
 // The test takes down the vttablets of the primary and a rdonly tablet and runs ERS with the
-// default values of remote_operation_timeout, lock-timeout flags and wait_replicas_timeout subflag.
+// default values of remote-operation-timeout, lock-timeout flags and wait_replicas_timeout subflag.
 func TestRecoverWithMultipleVttabletFailures(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)

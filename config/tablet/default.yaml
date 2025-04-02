@@ -1,10 +1,10 @@
 tabletID: zone-1234
 
 init:
-  dbName:            # init_db_name_override
-  keyspace:          # init_keyspace
-  shard:             # init_shard
-  tabletType:        # init_tablet_type
+  dbName:            # init-db-name-override
+  keyspace:          # init-keyspace
+  shard:             # init-shard
+  tabletType:        # init-tablet-type
   timeoutSeconds: 60 # init_timeout
 
 db:
@@ -87,7 +87,7 @@ gracePeriods:
 
 replicationTracker:
   mode: disable                    # enable_replication_reporter
-  heartbeatIntervalMilliseconds: 0 # heartbeat_enable, heartbeat_interval
+  heartbeatIntervalMilliseconds: 0 # heartbeat-enable, heartbeat-interval
 
 hotRowProtection:
   mode: disable|dryRun|enable # enable_hot_row_protection, enable_hot_row_protection_dry_run

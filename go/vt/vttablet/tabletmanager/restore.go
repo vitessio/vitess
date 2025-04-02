@@ -303,7 +303,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		return vterrors.Wrap(err, "Can't restore backup")
 	}
 
-	// If we had type BACKUP or RESTORE it's better to set our type to the init_tablet_type to make result of the restore
+	// If we had type BACKUP or RESTORE it's better to set our type to the init-tablet-type to make result of the restore
 	// similar to completely clean start from scratch.
 	if (originalType == topodatapb.TabletType_BACKUP || originalType == topodatapb.TabletType_RESTORE) && initTabletType != "" {
 		initType, err := topoproto.ParseTabletType(initTabletType)

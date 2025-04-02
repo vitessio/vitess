@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -42,7 +43,7 @@ var (
 // RegisterFlags registers the tabletconn flags on a given flagset. It is
 // exported for tests that need to inject a particular TabletProtocol.
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&tabletProtocol, "tablet_protocol", "grpc", "Protocol to use to make queryservice RPCs to vttablets.")
+	utils.SetFlagStringVar(fs, &tabletProtocol, "tablet-protocol", "grpc", "Protocol to use to make queryservice RPCs to vttablets.")
 }
 
 func init() {
