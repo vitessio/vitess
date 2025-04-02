@@ -161,7 +161,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--mysql_server_socket_path", vtgate.MySQLServerSocketPath,
 		"--cell", vtgate.Cell,
 		"--cells_to_watch", vtgate.CellsToWatch,
-		"--tablet-types-to-wait", vtgate.TabletTypesToWait,
+		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
 		"--service_map", vtgate.ServiceMap,
 		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 		"--bind-address", "127.0.0.1",
