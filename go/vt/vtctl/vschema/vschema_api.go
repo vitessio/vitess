@@ -60,7 +60,7 @@ func (api *VSchemaAPI) Create(ctx context.Context, req *vtctldatapb.VSchemaCreat
 		return vterrors.Wrapf(err, "unable to create keyspace '%s'", req.VSchemaName)
 	}
 
-	var vsks *vschemapb.Keyspace
+	vsks := &vschemapb.Keyspace{}
 	err = json2.UnmarshalPB([]byte(req.VSchemaJson), vsks)
 	if err != nil {
 		return vterrors.Wrapf(err, "unable to unmarshal vschema JSON")
@@ -278,6 +278,9 @@ func (api *VSchemaAPI) AddLookupVindex(ctx context.Context, req *vtctldatapb.VSc
 		Type:   req.LookupVindexType,
 		Params: params,
 		Owner:  req.Owner,
+	}
+	if vsInfo.Vindexes == nil {
+		vsInfo.Vindexes = make(map[string]*vschemapb.Vindex, 1)
 	}
 	vsInfo.Vindexes[req.VindexName] = vindex
 
