@@ -3,7 +3,7 @@ create table t1
     id1  bigint,
     id2  bigint,
     id   bigint,
-    name varchar,
+    name varchar(64),
     primary key (id1)
 ) Engine=InnoDB;
 
@@ -49,7 +49,7 @@ create table all_types
     smallint_unsigned  SMALLINT,
     mediumint_unsigned MEDIUMINT,
     int_unsigned       INT,
-    float_unsigned     FLOAT(10),
+    float_unsigned     FLOAT(10, 2),
     double_unsigned    DOUBLE(16, 2),
     decimal_unsigned   DECIMAL,
     t_date             DATE,
