@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path"
 	"strings"
@@ -31,7 +32,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -225,14 +225,14 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			time.Sleep(time.Duration(rand.Intn(100) * int(time.Nanosecond)))
+			time.Sleep(time.Duration(rand.IntN(100) * int(time.Nanosecond)))
 			tableName := fmt.Sprintf("%s%d", baseTableName, i)
 			_, err = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA ADD TABLE %s", tableName), -1, false)
 			if isVersionMismatchErr(err) {
 				preventedLostWrites.Store(true)
 			} else {
 				require.NoError(t, err)
-				time.Sleep(time.Duration(rand.Intn(75) * int(time.Nanosecond)))
+				time.Sleep(time.Duration(rand.IntN(75) * int(time.Nanosecond)))
 				_, err = mysqlConns[i].ExecuteFetch(fmt.Sprintf("ALTER VSCHEMA DROP TABLE %s", tableName), -1, false)
 				if isVersionMismatchErr(err) {
 					preventedLostWrites.Store(true)

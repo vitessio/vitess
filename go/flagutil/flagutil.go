@@ -78,7 +78,7 @@ func (value *StringListValue) Set(v string) error {
 func (value StringListValue) String() string {
 	parts := make([]string, len(value))
 	for i, v := range value {
-		parts[i] = strings.Replace(strings.Replace(v, "\\", "\\\\", -1), ",", `\,`, -1)
+		parts[i] = strings.ReplaceAll(strings.ReplaceAll(v, "\\", "\\\\"), ",", `\,`)
 	}
 	return strings.Join(parts, ",")
 }
@@ -124,7 +124,7 @@ func (value StringMapValue) Get() any {
 func (value StringMapValue) String() string {
 	parts := make([]string, 0)
 	for k, v := range value {
-		parts = append(parts, k+":"+strings.Replace(v, ",", `\,`, -1))
+		parts = append(parts, k+":"+strings.ReplaceAll(v, ",", `\,`))
 	}
 	// Generate the string deterministically.
 	sort.Strings(parts)
@@ -136,8 +136,8 @@ func (value StringMapValue) Type() string { return "StringMap" }
 
 // DualFormatStringListVar creates a flag which supports both dashes and underscores
 func DualFormatStringListVar(fs *pflag.FlagSet, p *[]string, name string, value []string, usage string) {
-	dashes := strings.Replace(name, "_", "-", -1)
-	underscores := strings.Replace(name, "-", "_", -1)
+	dashes := strings.ReplaceAll(name, "_", "-")
+	underscores := strings.ReplaceAll(name, "-", "_")
 
 	StringListVar(fs, p, underscores, value, usage)
 	if dashes != underscores {
@@ -147,8 +147,8 @@ func DualFormatStringListVar(fs *pflag.FlagSet, p *[]string, name string, value 
 
 // DualFormatStringVar creates a flag which supports both dashes and underscores
 func DualFormatStringVar(fs *pflag.FlagSet, p *string, name string, value string, usage string) {
-	dashes := strings.Replace(name, "_", "-", -1)
-	underscores := strings.Replace(name, "-", "_", -1)
+	dashes := strings.ReplaceAll(name, "_", "-")
+	underscores := strings.ReplaceAll(name, "-", "_")
 
 	fs.StringVar(p, underscores, value, usage)
 	if dashes != underscores {
@@ -158,8 +158,8 @@ func DualFormatStringVar(fs *pflag.FlagSet, p *string, name string, value string
 
 // DualFormatInt64Var creates a flag which supports both dashes and underscores
 func DualFormatInt64Var(fs *pflag.FlagSet, p *int64, name string, value int64, usage string) {
-	dashes := strings.Replace(name, "_", "-", -1)
-	underscores := strings.Replace(name, "-", "_", -1)
+	dashes := strings.ReplaceAll(name, "_", "-")
+	underscores := strings.ReplaceAll(name, "-", "_")
 
 	fs.Int64Var(p, underscores, value, usage)
 	if dashes != underscores {
@@ -169,8 +169,8 @@ func DualFormatInt64Var(fs *pflag.FlagSet, p *int64, name string, value int64, u
 
 // DualFormatIntVar creates a flag which supports both dashes and underscores
 func DualFormatIntVar(fs *pflag.FlagSet, p *int, name string, value int, usage string) {
-	dashes := strings.Replace(name, "_", "-", -1)
-	underscores := strings.Replace(name, "-", "_", -1)
+	dashes := strings.ReplaceAll(name, "_", "-")
+	underscores := strings.ReplaceAll(name, "-", "_")
 
 	fs.IntVar(p, underscores, value, usage)
 	if dashes != underscores {
@@ -180,8 +180,8 @@ func DualFormatIntVar(fs *pflag.FlagSet, p *int, name string, value int, usage s
 
 // DualFormatBoolVar creates a flag which supports both dashes and underscores
 func DualFormatBoolVar(fs *pflag.FlagSet, p *bool, name string, value bool, usage string) {
-	dashes := strings.Replace(name, "_", "-", -1)
-	underscores := strings.Replace(name, "-", "_", -1)
+	dashes := strings.ReplaceAll(name, "_", "-")
+	underscores := strings.ReplaceAll(name, "-", "_")
 
 	fs.BoolVar(p, underscores, value, usage)
 	if dashes != underscores {
@@ -191,8 +191,8 @@ func DualFormatBoolVar(fs *pflag.FlagSet, p *bool, name string, value bool, usag
 
 // DualFormatVar creates a flag which supports both dashes and underscores
 func DualFormatVar(fs *pflag.FlagSet, val pflag.Value, name string, usage string) {
-	dashes := strings.Replace(name, "_", "-", -1)
-	underscores := strings.Replace(name, "-", "_", -1)
+	dashes := strings.ReplaceAll(name, "_", "-")
+	underscores := strings.ReplaceAll(name, "-", "_")
 
 	fs.Var(val, underscores, usage)
 	if dashes != underscores {

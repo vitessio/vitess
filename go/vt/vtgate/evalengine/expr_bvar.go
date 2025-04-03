@@ -136,19 +136,20 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 	case sqltypes.IsDecimal(tt):
 		c.asm.PushBVar_d(bvar.Key)
 	case sqltypes.IsText(tt):
-		if tt == sqltypes.HexNum {
+		switch tt {
+		case sqltypes.HexNum:
 			c.asm.PushBVar_hexnum(bvar.Key)
 			typ.Type = sqltypes.VarBinary
 			typ.Flag |= flagHex
-		} else if tt == sqltypes.HexVal {
+		case sqltypes.HexVal:
 			c.asm.PushBVar_hexval(bvar.Key)
 			typ.Type = sqltypes.VarBinary
 			typ.Flag |= flagHex
-		} else if tt == sqltypes.BitNum {
+		case sqltypes.BitNum:
 			c.asm.PushBVar_bitnum(bvar.Key)
 			typ.Type = sqltypes.VarBinary
 			typ.Flag |= flagBit
-		} else {
+		default:
 			typ.Type = sqltypes.VarChar
 			c.asm.PushBVar_text(bvar.Key, typ.Col)
 		}

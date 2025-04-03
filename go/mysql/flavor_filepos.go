@@ -370,6 +370,22 @@ func (filePosFlavor) baseShowInnodbTableSizes() string {
 	return ""
 }
 
+func (filePosFlavor) baseShowPartitions() string {
+	return ""
+}
+
+func (filePosFlavor) baseShowTableRowCountClusteredIndex() string {
+	return ""
+}
+
+func (filePosFlavor) baseShowIndexSizes() string {
+	return ""
+}
+
+func (filePosFlavor) baseShowIndexCardinalities() string {
+	return ""
+}
+
 // supportsCapability is part of the Flavor interface.
 func (f *filePosFlavor) supportsCapability(capability capabilities.FlavorCapability) (bool, error) {
 	switch capability {

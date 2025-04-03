@@ -160,6 +160,29 @@ const (
 	RegexpStr        = "regexp"
 	NotRegexpStr     = "not regexp"
 
+	// ProcParameterMode
+	OutStr   = "out"
+	InoutStr = "inout"
+
+	// SignalConditionName
+	ClassOriginTypeStr       = "class_origin"
+	SubclassOriginTypeStr    = "subclass_origin"
+	MessageTextTypeStr       = "message_text"
+	MySQLErrNoTypeStr        = "mysql_errno"
+	ConstraintCatalogTypeStr = "constraint_catalog"
+	ConstraintSchemaTypeStr  = "constraint_schema"
+	ConstraintNameTypeStr    = "constraint_name"
+	CatalogNameTypeStr       = "catalog_name"
+	SchemaNameTypeStr        = "schema_name"
+	TableNameTypeStr         = "table_name"
+	ColumnNameTypeStr        = "column_name"
+	CursorNameTypeStr        = "cursor_name"
+
+	// HandlerAction
+	ContinueStr = "continue"
+	ExitStr     = "exit"
+	UndoStr     = "undo"
+
 	// IsExpr.Operator
 	IsNullStr     = "is null"
 	IsNotNullStr  = "is not null"
@@ -511,6 +534,7 @@ const (
 	AddAutoIncDDLAction
 	DropAutoIncDDLAction
 	RevertDDLAction
+	CreateProcedureAction
 )
 
 // Constants for scope of variables
@@ -536,6 +560,13 @@ const (
 	ForUpdateLock
 	ForUpdateLockNoWait
 	ForUpdateLockSkipLocked
+)
+
+// Constants for Enum Type - HandlerAction
+const (
+	ContinueAction HandlerAction = iota
+	ExitAction
+	UndoAction
 )
 
 // Constants for Enum Type - TrimType
@@ -775,6 +806,29 @@ const (
 	UpgradeAction
 )
 
+// Constant for Enum Type - ProcParameterMode
+const (
+	InMode ProcParameterMode = iota
+	OutMode
+	InoutMode
+)
+
+// Constant for Enum Type - SignalConditionName
+const (
+	ClassOriginType SignalConditionName = iota
+	SubclassOriginType
+	MessageTextType
+	MySQLErrNoType
+	ConstraintCatalogType
+	ConstraintSchemaType
+	ConstraintNameType
+	CatalogNameType
+	SchemaNameType
+	TableNameType
+	ColumnNameType
+	CursorNameType
+)
+
 // Constant for Enum Type - PartitionByType
 const (
 	HashType PartitionByType = iota
@@ -812,6 +866,7 @@ const (
 	IntoOutfile SelectIntoType = iota
 	IntoOutfileS3
 	IntoDumpfile
+	IntoVariables
 )
 
 // Constant for Enum Type - JtOnResponseType

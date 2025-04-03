@@ -158,7 +158,9 @@ func init() {
 
 func run(cmd *cobra.Command, args []string) error {
 	logger := logutil.NewConsoleLogger()
-	cmd.SetOutput(logutil.NewLoggerWriter(logger))
+	writer := logutil.NewLoggerWriter(logger)
+	cmd.SetOut(writer)
+	cmd.SetErr(writer)
 	_ = cmd.Flags().Set("logtostderr", "true")
 
 	servenv.Init()

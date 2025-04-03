@@ -198,12 +198,9 @@ func newBenchmarkCompressEnv(args benchmarkCompressArgs) benchmarkCompressEnv {
 }
 
 func shouldCleanup(u *url.URL) (bool, error) {
-	c := true
+	c := !isLocal(u)
 
 	// Don't cleanup local paths provided by the user.
-	if isLocal(u) {
-		c = false
-	}
 
 	// Use user-defined cleanup, if specified and valid.
 	if udCleanup := os.Getenv(envVarCleanup); udCleanup != "" {

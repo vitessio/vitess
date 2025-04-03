@@ -78,7 +78,7 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 		"STOP REPLICA",
 		resetCmd,
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
-		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", "localhost", newPrimary.MySQLPort),
+		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", "localhost", newPrimary.MySQLPort),
 		"START REPLICA",
 	}
 	err = oldPrimary.VttabletProcess.QueryTabletMultiple(changeSourceCommands, keyspaceUnshardedName, true)

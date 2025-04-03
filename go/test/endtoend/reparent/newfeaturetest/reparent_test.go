@@ -182,7 +182,7 @@ func TestERSWithWriteInPromoteReplica(t *testing.T) {
 }
 
 func TestBufferingWithMultipleDisruptions(t *testing.T) {
-	clusterInstance := utils.SetupShardedReparentCluster(t, policy.DurabilitySemiSync)
+	clusterInstance := utils.SetupShardedReparentCluster(t, policy.DurabilitySemiSync, nil)
 	defer utils.TeardownCluster(clusterInstance)
 
 	// Stop all VTOrc instances, so that they don't interfere with the test.

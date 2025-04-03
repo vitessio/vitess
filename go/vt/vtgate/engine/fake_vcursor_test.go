@@ -61,6 +61,10 @@ type noopVCursor struct {
 	inTx bool
 }
 
+func (t *noopVCursor) GetExecutionMetrics() *Metrics {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetExecQueryTimeout(timeout *int) {
 	panic("implement me")
 }
@@ -260,6 +264,10 @@ func (t *noopVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
 }
 
 func (t *noopVCursor) SetFoundRows(u uint64) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) SetInDMLExecution(inDMLExec bool) {
 	panic("implement me")
 }
 
@@ -463,6 +471,12 @@ type loggingVCursor struct {
 	onExecuteMultiShardFn  func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
 	onStreamExecuteMultiFn func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
 	onRecordMirrorStatsFn  func(time.Duration, time.Duration, error)
+
+	metrics *Metrics
+}
+
+func (f *loggingVCursor) GetExecutionMetrics() *Metrics {
+	return f.metrics
 }
 
 func (f *loggingVCursor) HasCreatedTempTable() {
@@ -513,6 +527,10 @@ func (f *loggingVCursor) GetSystemVariables(func(k string, v string)) {
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
 	panic("implement me")
+}
+
+func (f *loggingVCursor) SetInDMLExecution(inDMLExec bool) {
+	f.log = append(f.log, fmt.Sprintf("InDMLExecution set to %v", inDMLExec))
 }
 
 func (f *loggingVCursor) InTransactionAndIsDML() bool {

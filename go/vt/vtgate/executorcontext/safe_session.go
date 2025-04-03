@@ -227,6 +227,13 @@ func (session *SafeSession) SetFoundRows(value uint64) {
 	session.foundRowsHandled = true
 }
 
+// SetInDMLExecution set the `inDMLExecution` value.
+func (session *SafeSession) SetInDMLExecution(inDMLExec bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.GetOrCreateOptions().InDmlExecution = inDMLExec
+}
+
 // GetRollbackOnPartialExec returns the rollbackOnPartialExec value.
 func (session *SafeSession) GetRollbackOnPartialExec() string {
 	session.mu.Lock()
@@ -388,6 +395,18 @@ func (session *SafeSession) GetCommitOrder() vtgatepb.CommitOrder {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.commitOrder
+}
+
+func (session *SafeSession) SetErrorUntilRollback(enable bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.ErrorUntilRollback = enable
+}
+
+func (session *SafeSession) IsErrorUntilRollback() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.Session.GetErrorUntilRollback()
 }
 
 // GetLogger returns executor logger.

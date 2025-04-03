@@ -44,6 +44,7 @@ CREATE TABLE database_instance (
 	alias varchar(256) NOT NULL,
 	hostname varchar(128) NOT NULL,
 	port smallint NOT NULL,
+	tablet_type smallint(5) NOT NULL,
 	last_checked timestamp not null default (''),
 	last_seen timestamp NULL DEFAULT NULL,
 	server_id int NOT NULL,

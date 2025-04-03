@@ -554,7 +554,11 @@ func (etc *earlyTableCollector) createTable(
 		return nil, err
 	}
 
-	mr, err := etc.si.FindMirrorRule(t)
+	tblName := t
+	if tbl != nil && tbl.Keyspace != nil {
+		tblName = tbl.GetTableName()
+	}
+	mr, err := etc.si.FindMirrorRule(tblName)
 	if err != nil {
 		// Mirroring is best effort. If we get an error while mirroring, keep going
 		// as if mirroring was disabled. We don't want to interrupt production work

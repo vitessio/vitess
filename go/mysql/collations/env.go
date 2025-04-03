@@ -102,7 +102,7 @@ func fetchCacheEnvironment(version collver) *Environment {
 func NewEnvironment(serverVersion string) *Environment {
 	// 8.0 is the oldest fully supported version, so use that as the default.
 	// All newer MySQL versions including 9 are so far compatible as well.
-	var version collver = collverMySQL8
+	var version = collverMySQL8
 	serverVersion = strings.TrimSpace(strings.ToLower(serverVersion))
 	switch {
 	case strings.Contains(serverVersion, "mariadb"):

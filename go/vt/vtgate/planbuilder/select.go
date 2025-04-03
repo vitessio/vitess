@@ -219,7 +219,7 @@ func newBuildSelectPlan(
 		return nil, nil, ctx.SemTable.NotUnshardedErr
 	}
 
-	op, err := createSelectOperator(ctx, selStmt, reservedVars)
+	op, err := createSelectOperator(ctx, selStmt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -232,7 +232,7 @@ func newBuildSelectPlan(
 	return plan, operators.TablesUsed(op), nil
 }
 
-func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars) (operators.Operator, error) {
+func createSelectOperator(ctx *plancontext.PlanningContext, selStmt sqlparser.SelectStatement) (operators.Operator, error) {
 	err := queryRewrite(ctx, selStmt)
 	if err != nil {
 		return nil, err

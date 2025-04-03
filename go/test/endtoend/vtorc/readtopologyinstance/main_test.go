@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 
 	vtutils "vitess.io/vitess/go/vt/utils"
@@ -86,6 +87,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	require.NotNil(t, primaryInstance)
 	assert.Equal(t, utils.Hostname, primaryInstance.Hostname)
 	assert.Equal(t, primary.MySQLPort, primaryInstance.Port)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, primaryInstance.TabletType)
 	assert.Contains(t, primaryInstance.InstanceAlias, "zone1")
 	assert.NotEqual(t, 0, primaryInstance.ServerID)
 	assert.Greater(t, len(primaryInstance.ServerUUID), 10)
@@ -137,6 +139,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	require.NotNil(t, replicaInstance)
 	assert.Equal(t, utils.Hostname, replicaInstance.Hostname)
 	assert.Equal(t, replica.MySQLPort, replicaInstance.Port)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, replicaInstance.TabletType)
 	assert.Contains(t, replicaInstance.InstanceAlias, "zone1")
 	assert.NotEqual(t, 0, replicaInstance.ServerID)
 	assert.Greater(t, len(replicaInstance.ServerUUID), 10)

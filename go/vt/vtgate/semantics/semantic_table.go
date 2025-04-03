@@ -122,6 +122,10 @@ type (
 		// MySQL engine to handle errors appropriately.
 		NotUnshardedErr error
 
+		// If there are constructs in this query that we know we only support if we can push them down
+		// unbroken to mysql, this field will contain an error that is produced when we fail to do so.
+		NotSingleShardErr error
+
 		// Recursive contains dependencies from the expression to the actual tables
 		// in the query (excluding derived tables). For columns in derived tables,
 		// this map holds the accumulated dependencies for the column expression.
@@ -133,8 +137,7 @@ type (
 		// DMLTargets contains the TableSet of each table getting modified by the update/delete statement.
 		DMLTargets TableSet
 
-		// ColumnEqualities is used for transitive closures (e.g., if a == b and b == c, then a == c).
-		ColumnEqualities map[columnName][]sqlparser.Expr
+		ExprEqualities *TransitiveClosures
 
 		// ExpandedColumns is a map of all the added columns for a given table.
 		// The columns were added because of the use of `*` in the query
@@ -156,11 +159,6 @@ type (
 		parentForeignKeysInvolved map[TableSet][]vindexes.ParentFKInfo
 		childFkToUpdExprs         map[string]sqlparser.UpdateExprs
 		collEnv                   *collations.Environment
-	}
-
-	columnName struct {
-		Table      TableSet
-		ColumnName string
 	}
 
 	// SchemaInformation is used to provide table information from Vschema.
@@ -571,11 +569,11 @@ func (st *SemTable) Cloned(from, to sqlparser.SQLNode) {
 // EmptySemTable creates a new empty SemTable
 func EmptySemTable() *SemTable {
 	return &SemTable{
-		Recursive:        map[sqlparser.Expr]TableSet{},
-		Direct:           map[sqlparser.Expr]TableSet{},
-		ColumnEqualities: map[columnName][]sqlparser.Expr{},
-		columns:          map[*sqlparser.Union][]sqlparser.SelectExpr{},
-		ExprTypes:        make(map[sqlparser.Expr]evalengine.Type),
+		Recursive:      map[sqlparser.Expr]TableSet{},
+		Direct:         map[sqlparser.Expr]TableSet{},
+		ExprEqualities: NewTransitiveClosures(),
+		columns:        map[*sqlparser.Union][]sqlparser.SelectExpr{},
+		ExprTypes:      make(map[sqlparser.Expr]evalengine.Type),
 	}
 }
 
@@ -628,45 +626,6 @@ func (st *SemTable) RecursiveDeps(expr sqlparser.Expr) TableSet {
 // DirectDeps return the table dependencies of the expression.
 func (st *SemTable) DirectDeps(expr sqlparser.Expr) TableSet {
 	return st.Direct.dependencies(expr)
-}
-
-// AddColumnEquality adds a relation of the given colName to the ColumnEqualities map
-func (st *SemTable) AddColumnEquality(colName *sqlparser.ColName, expr sqlparser.Expr) {
-	ts := st.Direct.dependencies(colName)
-	columnName := columnName{
-		Table:      ts,
-		ColumnName: colName.Name.String(),
-	}
-	elem := st.ColumnEqualities[columnName]
-	elem = append(elem, expr)
-	st.ColumnEqualities[columnName] = elem
-}
-
-// GetExprAndEqualities returns a slice containing the given expression, and it's known equalities if any
-func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
-	result := []sqlparser.Expr{expr}
-	switch expr := expr.(type) {
-	case *sqlparser.ColName:
-		table := st.DirectDeps(expr)
-		k := columnName{Table: table, ColumnName: expr.Name.String()}
-		result = append(result, st.ColumnEqualities[k]...)
-	}
-	return result
-}
-
-// ForEachExprEquality returns a slice containing the given expression, and it's known equalities if any
-func (st *SemTable) ForEachExprEquality(in sqlparser.Expr, forEach func(sqlparser.Expr) error) error {
-	switch expr := in.(type) {
-	case *sqlparser.ColName:
-		table := st.DirectDeps(expr)
-		k := columnName{Table: table, ColumnName: expr.Name.String()}
-		for _, expr := range st.ColumnEqualities[k] {
-			if err := forEach(expr); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // TableInfoForExpr returns the table info of the table that this expression depends on.
@@ -1039,6 +998,14 @@ func (st *SemTable) ShouldFetchLastInsertID() bool {
 		return false
 	}
 	return st.QuerySignature.LastInsertIDArg
+}
+
+func (st *SemTable) AddExprEquality(a, b sqlparser.Expr) {
+	st.ExprEqualities.Add(a, b, st.EqualsExprWithDeps)
+}
+
+func (st *SemTable) ForeachExprEquality(e sqlparser.Expr, f func(expr sqlparser.Expr) error) error {
+	return st.ExprEqualities.Foreach(e, st.EqualsExprWithDeps, f)
 }
 
 // mirrorInfo looks through all tables with mirror rules defined, and returns a

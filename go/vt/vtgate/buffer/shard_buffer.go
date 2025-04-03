@@ -501,10 +501,8 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 	var msg string
 
 	// heuristically determine the reason why vtgate is currently buffering
-	moveTablesSwitched := false
-	if keyspaceEvent.MoveTablesState.State == discovery.MoveTablesSwitched {
-		moveTablesSwitched = true
-	}
+	moveTablesSwitched := keyspaceEvent.MoveTablesState.State == discovery.MoveTablesSwitched
+
 	switch {
 	case moveTablesSwitched:
 		reason = stopMoveTablesSwitchingTraffic

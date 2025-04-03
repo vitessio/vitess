@@ -464,6 +464,16 @@ func (e *UnknownColumnCollationCharsetError) Error() string {
 	return fmt.Sprintf("unable to determine charset for column %s with collation %q", sqlescape.EscapeID(e.Column), e.Collation)
 }
 
+type MismatchedColumnCharsetCollationError struct {
+	Column    string
+	Charset   string
+	Collation string
+}
+
+func (e *MismatchedColumnCharsetCollationError) Error() string {
+	return fmt.Sprintf("charset %q and collation %q do not match for column %s", e.Charset, e.Collation, sqlescape.EscapeID(e.Column))
+}
+
 type SubsequentDiffRejectedError struct {
 	Table string
 	Diffs []EntityDiff

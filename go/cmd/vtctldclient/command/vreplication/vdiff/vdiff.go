@@ -603,7 +603,7 @@ func displayShowSingleSummary(out io.Writer, format, keyspace, workflowName, uui
 		}
 		output = sb.String()
 		for {
-			str := strings.Replace(output, "\n\n", "\n", -1)
+			str := strings.ReplaceAll(output, "\n\n", "\n")
 			if output == str {
 				break
 			}

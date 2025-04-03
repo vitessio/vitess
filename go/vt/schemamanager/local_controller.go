@@ -200,7 +200,7 @@ func (controller *LocalController) writeToLogDir(ctx context.Context, result *Ex
 	}
 	defer logFile.Close()
 
-	logFile.WriteString(fmt.Sprintf("-- new file: %s\n", controller.sqlPath))
+	fmt.Fprintf(logFile, "-- new file: %s\n", controller.sqlPath)
 	for _, sql := range result.Sqls {
 		logFile.WriteString(sql)
 		logFile.WriteString(";\n")
@@ -213,10 +213,10 @@ func (controller *LocalController) writeToLogDir(ctx context.Context, result *Ex
 			rowsAffected += result.RowsAffected
 		}
 	}
-	logFile.WriteString(fmt.Sprintf("-- Rows returned: %d\n", rowsReturned))
-	logFile.WriteString(fmt.Sprintf("-- Rows affected: %d\n", rowsAffected))
+	fmt.Fprintf(logFile, "-- Rows returned: %d\n", rowsReturned)
+	fmt.Fprintf(logFile, "-- Rows affected: %d\n", rowsAffected)
 	logFile.WriteString("-- \n")
-	logFile.WriteString(fmt.Sprintf("-- ran in %fs\n", result.TotalTimeSpent.Seconds()))
+	fmt.Fprintf(logFile, "-- ran in %fs\n", result.TotalTimeSpent.Seconds())
 	logFile.WriteString("-- Execution succeeded\n")
 	return nil
 }

@@ -155,7 +155,7 @@ func (cnf *Mycnf) lookupInt(key string) (int, error) {
 func normKey(bkey []byte) string {
 	// FIXME(msolomon) People are careless about hyphen vs underscore - we should normalize.
 	// But you have to normalize to hyphen, or mysqld_safe can fail.
-	return string(bytes.Replace(bytes.TrimSpace(bkey), []byte("_"), []byte("-"), -1))
+	return string(bytes.ReplaceAll(bytes.TrimSpace(bkey), []byte("_"), []byte("-")))
 }
 
 // ReadMycnf will read an existing my.cnf from disk, and update the passed in Mycnf object

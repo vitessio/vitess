@@ -18,6 +18,7 @@ package vterrors
 
 import (
 	"fmt"
+	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -103,6 +104,7 @@ var (
 	VT09029 = errorWithState("VT09029", vtrpcpb.Code_FAILED_PRECONDITION, CTERecursiveRequiresSingleReference, "In recursive query block of Recursive Common Table Expression %s, the recursive table must be referenced only once, and not in any subquery", "")
 	VT09030 = errorWithState("VT09030", vtrpcpb.Code_FAILED_PRECONDITION, CTEMaxRecursionDepth, "Recursive query aborted after 1000 iterations.", "")
 	VT09031 = errorWithoutState("VT09031", vtrpcpb.Code_FAILED_PRECONDITION, "Primary demotion is stalled", "")
+	VT09032 = errorWithoutState("VT09032", vtrpcpb.Code_FAILED_PRECONDITION, "previous transaction failed. Issue a ROLLBACK to resolve the failure.", "This error occurs after a VT15001 error was sent to the client. Later queries in the same session will continue to fail until the client sends a ROLLBACK.")
 
 	VT10001 = errorWithoutState("VT10001", vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed", "Foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/.")
 	VT10002 = errorWithoutState("VT10002", vtrpcpb.Code_ABORTED, "atomic distributed transaction not allowed: %s", "The distributed transaction cannot be committed. A rollback decision is taken.")
@@ -119,6 +121,8 @@ var (
 	VT14003 = errorWithoutState("VT14003", vtrpcpb.Code_UNAVAILABLE, "no connection for tablet %v", "No connection for the given tablet.")
 	VT14004 = errorWithoutState("VT14004", vtrpcpb.Code_UNAVAILABLE, "cannot find keyspace for: %s", "The specified keyspace could not be found.")
 	VT14005 = errorWithoutState("VT14005", vtrpcpb.Code_UNAVAILABLE, "cannot lookup sidecar database for keyspace: %s", "Failed to read sidecar database identifier.")
+
+	VT15001 = errorWithNoCode("VT15001", "transaction error, issue ROLLBACK and retry the transaction: %s", "Transaction must be rolled back by the application and re-tried.")
 
 	// Errors is a list of errors that must match all the variables
 	// defined above to enable auto-documentation of error codes.
@@ -195,6 +199,7 @@ var (
 		VT09029,
 		VT09030,
 		VT09031,
+		VT09032,
 		VT10001,
 		VT10002,
 		VT12001,
@@ -206,6 +211,10 @@ var (
 		VT14003,
 		VT14004,
 		VT14005,
+	}
+
+	ErrorsWithNoCode = []func(code vtrpcpb.Code, args ...any) *VitessError{
+		VT15001,
 	}
 )
 
@@ -226,6 +235,7 @@ func (o *VitessError) Cause() error {
 
 var _ error = (*VitessError)(nil)
 
+// errorWithoutState is an error that does not have any state, e.g. the state will be unknown
 func errorWithoutState(id string, code vtrpcpb.Code, short, long string) func(args ...any) *VitessError {
 	return func(args ...any) *VitessError {
 		s := short
@@ -257,4 +267,31 @@ func errorWithState(id string, code vtrpcpb.Code, state State, short, long strin
 			State:       state,
 		}
 	}
+}
+
+// ErrorWithNoCode refers to error code that do not have a predefined error code.
+type ErrorWithNoCode func(code vtrpcpb.Code, args ...any) *VitessError
+
+// errorWithNoCode creates a VitessError where the error code is set by the user when creating the error
+// instead of having a static error code that is declared in this file.
+func errorWithNoCode(id string, short, long string) func(code vtrpcpb.Code, args ...any) *VitessError {
+	return func(code vtrpcpb.Code, args ...any) *VitessError {
+		s := short
+		if len(args) != 0 {
+			s = fmt.Sprintf(s, args...)
+		}
+
+		return &VitessError{
+			Err:         New(code, id+": "+s),
+			Description: long,
+			ID:          id,
+		}
+	}
+}
+
+func IsError(err error, code string) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), code)
 }

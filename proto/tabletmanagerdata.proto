@@ -571,6 +571,9 @@ message BackupRequest {
   bool upgrade_safe = 4;
   // BackupEngine specifies if we want to use a particular backup engine for this backup request
   optional string backup_engine = 5;
+  // MysqlShutdownTimeout is the timeout in seconds to wait for MySQL to shutdown
+  // before taking the backup. If not set, the default value is used.
+  vttime.Duration mysql_shutdown_timeout = 6;
 }
 
 message BackupResponse {

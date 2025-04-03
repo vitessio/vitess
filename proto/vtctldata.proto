@@ -461,6 +461,11 @@ message BackupRequest {
   bool upgrade_safe = 5;
   // BackupEngine specifies if we want to use a particular backup engine for this backup request
   optional string backup_engine = 6;
+
+  // MysqlShutdownTimeout is the duration to wait for mysqld to shutdown before
+  // starting the backup. This is available so we can override this for upgrade safe
+  // backups which might take longer to shut down.
+  vttime.Duration mysql_shutdown_timeout = 7;
 }
 
 message BackupResponse {
@@ -486,11 +491,18 @@ message BackupShardRequest {
   // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
   // then the backup becomes incremental and applies as of given position.
   string incremental_from_pos = 6;
+  // MysqlShutdownTimeout is the duration to wait for mysqld to shutdown before
+  // starting the backup. This is available so we can override this for upgrade safe
+  // backups which might take longer to shut down.
+  vttime.Duration mysql_shutdown_timeout = 7;
 }
 
 message CancelSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller. This is needed when strict table ACLs are enforced on the tablets.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message CancelSchemaMigrationResponse {
@@ -541,6 +553,9 @@ message CheckThrottlerResponse {
 message CleanupSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message CleanupSchemaMigrationResponse {
@@ -550,6 +565,9 @@ message CleanupSchemaMigrationResponse {
 message CompleteSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message CompleteSchemaMigrationResponse {
@@ -822,6 +840,9 @@ message FindAllShardsInKeyspaceResponse {
 message ForceCutOverSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message ForceCutOverSchemaMigrationResponse {
@@ -1225,6 +1246,9 @@ message InitShardPrimaryResponse {
 message LaunchSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message LaunchSchemaMigrationResponse {
@@ -1672,6 +1696,9 @@ message RestoreFromBackupResponse {
 message RetrySchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message RetrySchemaMigrationResponse {

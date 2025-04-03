@@ -56,7 +56,7 @@ func SetBinlogRowImageOptions(mode string, partialJSON bool, cnfDir string) erro
 		if err != nil {
 			return err
 		}
-		_, err = f.WriteString(fmt.Sprintf("\nbinlog_row_image=%s\n", mode))
+		_, err = fmt.Fprintf(f, "\nbinlog_row_image=%s\n", mode)
 		if err != nil {
 			return err
 		}

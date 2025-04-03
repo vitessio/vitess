@@ -134,7 +134,6 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 	}
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
-		"--disable_active_reparents",
 	}
 	// Initialize Cluster
 	shard0.Vttablets = tablets
@@ -813,7 +812,6 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
-		"--disable_active_reparents",
 	}
 
 	// Initialize Cluster
@@ -888,7 +886,6 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 	}()
 	clusterInfo.ClusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
-		"--disable_active_reparents",
 	}
 
 	// Initialize Cluster
@@ -1224,7 +1221,9 @@ func WaitForDrainedTabletInVTOrc(t *testing.T, vtorcInstance *cluster.VTOrcProce
 				continue
 			}
 			found := strings.Count(res, fmt.Sprintf(`"tablet_type": "%d"`, topodatapb.TabletType_DRAINED))
-			if found == count {
+			// There are two tables that store the tablet type, the database_instance and vitess_tablet table.
+			// Both of them should agree in the stable state.
+			if found == count*2 {
 				return
 			}
 		}

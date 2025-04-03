@@ -18,14 +18,19 @@ package vtgate
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/utils"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -725,4 +730,192 @@ func createVtgateEnv(t testing.TB) (*VTGate, *sandboxconn.SandboxConn, context.C
 	vtg := newVTGate(executor, executor.resolver, vsm, nil, executor.scatterConn.gateway)
 
 	return vtg, sbc, ctx
+}
+
+func TestRebuildTopoGraphs(t *testing.T) {
+	cell := "cell1"
+	tests := []struct {
+		name      string
+		keyspaces []string
+		setupFunc func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error
+		wantErr   string
+		checkFunc func(t *testing.T, ctx context.Context, ts *topo.Server, factory *memorytopo.Factory)
+	}{
+		{
+			name:      "Rebuild one srving keyspace only",
+			keyspaces: []string{"ks1"},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				// Initially we'll create the keyspace record and the srving vschema that has the keyspace.
+				_, err := ts.GetOrCreateShard(ctx, "ks1", "-")
+				if err != nil {
+					return err
+				}
+				err = ts.UpdateSrvVSchema(ctx, cell, &vschemapb.SrvVSchema{
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"ks1": {
+							// We mark the keyspace as sharded to know if the srving vschema is rebuilt.
+							// If it is rebuilt, the keyspace will be marked as unsharded.
+							Sharded: true,
+						},
+					},
+				})
+				return err
+			},
+			checkFunc: func(t *testing.T, ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) {
+				// We expect the srving keyspace to be created.
+				// However, the srving vschema shouldn't be rebuilt, because it exists for that keyspace.
+				_, err := ts.GetSrvKeyspace(ctx, cell, "ks1")
+				require.NoError(t, err)
+				srvVSchema, err := ts.GetSrvVSchema(ctx, cell)
+				require.NoError(t, err)
+				require.Len(t, srvVSchema.Keyspaces, 1)
+				require.Contains(t, srvVSchema.Keyspaces, "ks1")
+				require.True(t, srvVSchema.Keyspaces["ks1"].Sharded)
+			},
+		},
+		{
+			name:      "Error in reading srving keyspace",
+			keyspaces: []string{"ks1"},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				// Add an error for reading the srving keyspace file
+				factory.AddOperationError(memorytopo.Get, ".*/"+topo.SrvKeyspaceFile, errors.New("simulated topo error"))
+				return nil
+			},
+			wantErr: "vtgate Init: failed to read SrvKeyspace: simulated topo error",
+		},
+		{
+			name:      "Error in writing srving keyspace",
+			keyspaces: []string{"ks1"},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				// Add an error for writing the srving keyspace file
+				_, err := ts.GetOrCreateShard(ctx, "ks1", "-")
+				if err != nil {
+					return err
+				}
+				factory.AddOperationError(memorytopo.Update, ".*/"+topo.SrvKeyspaceFile, errors.New("simulated topo error"))
+				return nil
+			},
+			wantErr: "vtgate Init: failed to RebuildKeyspace: writing serving data failed: simulated topo error",
+		},
+		{
+			name:      "Rebuild srving vschema only",
+			keyspaces: []string{"ks1"},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				// Initially we'll create the keyspace record and the srving keyspace.
+				_, err := ts.GetOrCreateShard(ctx, "ks1", "-")
+				if err != nil {
+					return err
+				}
+				err = ts.UpdateSrvKeyspace(ctx, cell, "ks1", &topodatapb.SrvKeyspace{
+					ThrottlerConfig: &topodatapb.ThrottlerConfig{
+						// We set this field to know if the srving vschema is rebuilt.
+						// If it is rebuilt, then this field will be cleared.
+						CustomQuery: "custom query test",
+					},
+				})
+				return err
+			},
+			checkFunc: func(t *testing.T, ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) {
+				// We expect the srving keyspace to not be updated.
+				// However, the srving vschema should be built.
+				srvKs, err := ts.GetSrvKeyspace(ctx, cell, "ks1")
+				require.NoError(t, err)
+				require.Equal(t, "custom query test", srvKs.ThrottlerConfig.CustomQuery)
+				srvVSchema, err := ts.GetSrvVSchema(ctx, cell)
+				require.NoError(t, err)
+				require.Len(t, srvVSchema.Keyspaces, 1)
+				require.Contains(t, srvVSchema.Keyspaces, "ks1")
+				require.False(t, srvVSchema.Keyspaces["ks1"].Sharded)
+			},
+		},
+		{
+			name:      "Multiple keyspaces, one requiring rebuilding srving keyspace and vschema",
+			keyspaces: []string{"ks1", "ks2"},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				// Initially we'll create the keyspace record and the srving keyspace for the first keyspace.
+				_, err := ts.GetOrCreateShard(ctx, "ks1", "-")
+				if err != nil {
+					return err
+				}
+				err = ts.UpdateSrvKeyspace(ctx, cell, "ks1", &topodatapb.SrvKeyspace{
+					ThrottlerConfig: &topodatapb.ThrottlerConfig{
+						// We set this field to know if the srving vschema is rebuilt.
+						// If it is rebuilt, then this field will be cleared.
+						CustomQuery: "custom query test",
+					},
+				})
+				if err != nil {
+					return err
+				}
+				// Next we'll create the keyspace record and the srving vschema that has the second keyspace.
+				_, err = ts.GetOrCreateShard(ctx, "ks2", "-")
+				if err != nil {
+					return err
+				}
+				err = ts.UpdateSrvVSchema(ctx, cell, &vschemapb.SrvVSchema{
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"ks2": {
+							// We mark the keyspace as sharded to know if the srving vschema is rebuilt.
+							// If it is rebuilt, the keyspace will be marked as unsharded.
+							Sharded: true,
+						},
+					},
+				})
+				return err
+			},
+			checkFunc: func(t *testing.T, ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) {
+				// We expect the srving keyspace to not be updated for ks1, but built for ks2.
+				// However, the srving vschema should be built again.
+				srvKs, err := ts.GetSrvKeyspace(ctx, cell, "ks1")
+				require.NoError(t, err)
+				require.Equal(t, "custom query test", srvKs.ThrottlerConfig.CustomQuery)
+				_, err = ts.GetSrvKeyspace(ctx, cell, "ks2")
+				require.NoError(t, err)
+				srvVSchema, err := ts.GetSrvVSchema(ctx, cell)
+				require.NoError(t, err)
+				require.Len(t, srvVSchema.Keyspaces, 2)
+				require.Contains(t, srvVSchema.Keyspaces, "ks1")
+				require.Contains(t, srvVSchema.Keyspaces, "ks2")
+				require.False(t, srvVSchema.Keyspaces["ks1"].Sharded)
+				require.False(t, srvVSchema.Keyspaces["ks2"].Sharded)
+			},
+		},
+		{
+			name:      "Error in reading srving vschema",
+			keyspaces: []string{},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				// Add an error for reading the srving vschema file
+				factory.AddOperationError(memorytopo.Get, topo.SrvVSchemaFile, errors.New("simulated topo error"))
+				return nil
+			},
+			wantErr: "vtgate Init: failed to read SrvVSchema: simulated topo error",
+		},
+		{
+			name:      "Error in updating srving vschema",
+			keyspaces: []string{},
+			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
+				// Add an error for writing the srving vschema file
+				factory.AddOperationError(memorytopo.Update, topo.SrvVSchemaFile, errors.New("simulated topo error"))
+				return nil
+			},
+			wantErr: "vtgate Init: failed to RebuildSrvVSchema: simulated topo error",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
+			err := tt.setupFunc(ctx, ts, factory)
+			require.NoError(t, err)
+
+			err = rebuildTopoGraphs(ctx, ts, cell, tt.keyspaces)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			tt.checkFunc(t, ctx, ts, factory)
+		})
+	}
 }

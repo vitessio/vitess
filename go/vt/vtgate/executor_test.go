@@ -31,9 +31,6 @@ import (
 	"time"
 	"unsafe"
 
-	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/srvtopo"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/safehtml/template"
 	"github.com/stretchr/testify/assert"
@@ -41,6 +38,9 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -132,7 +132,7 @@ func TestPlanKey(t *testing.T) {
 		t.Run(fmt.Sprintf("%d#%s", i, tc.targetString), func(t *testing.T) {
 			ss := econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString})
 			resolver := &fakeResolver{resolveShards: tc.resolvedShard}
-			vc, _ := econtext.NewVCursorImpl(ss, makeComments(""), e, nil, e.vm, e.VSchema(), resolver, nil, nullResultsObserver{}, cfg)
+			vc, _ := econtext.NewVCursorImpl(ss, makeComments(""), e, nil, e.vm, e.VSchema(), resolver, nil, nullResultsObserver{}, cfg, nil)
 			key := buildPlanKey(ctx, vc, "SELECT 1", tc.setVarComment)
 			require.Equal(t, tc.expectedPlanPrefixKey, key.DebugString(), "test case %d", i)
 		})
@@ -1075,9 +1075,13 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
-	// Make sure it still works when one of the keyspaces is in a bad state
+	// Make sure we get an error if one of the keyspaces is in a bad state
 	getSandbox(KsTestSharded).SrvKeyspaceMustFail++
 	query = "show vitess_shards"
+	_, err = executorExecSession(ctx, executor, session, query, nil)
+	require.ErrorContains(t, err, "keyspace TestExecutor fetch error")
+
+	// Running it again should pass
 	qr, err = executorExecSession(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 	// Just test for first & last.
@@ -1085,7 +1089,7 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Shards"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("TestMultiCol/-20"),
+			buildVarCharRow("TestExecutor/-20"),
 			buildVarCharRow("TestXBadVSchema/e0-"),
 		},
 	}
@@ -1612,8 +1616,9 @@ var pv = querypb.ExecuteOptions_Gen4
 
 func TestGetPlanUnnormalized(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnv(t)
-	emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
-	unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+
+	emptyvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), nil)
+	unshardedvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), nil)
 
 	query1 := "select * from music_user_map where id = 1"
 	plan1, logStats := getPlanCached(t, ctx, r, emptyvc.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1667,7 +1672,7 @@ func getPlanCached(t *testing.T, ctx context.Context, e *Executor, session *econ
 	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 	session.GetOrCreateOptions().SkipQueryPlanCache = skipQueryPlanCache
 
-	plan, _, _, err := e.fetchOrCreatePlan(ctx, session, comments.Leading+sql+comments.Trailing, bindVars, e.config.Normalize, false, logStats)
+	plan, _, _, err := e.fetchOrCreatePlan(ctx, session, comments.Leading+sql+comments.Trailing, bindVars, e.config.Normalize, false, logStats, true)
 	require.NoError(t, err)
 
 	// Wait for cache to settle
@@ -1679,7 +1684,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	t.Run("Cache", func(t *testing.T) {
 		r, _, _, _, ctx := createExecutorEnv(t)
 
-		emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		emptyvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), nil)
 		query1 := "select * from music_user_map where id = 1"
 
 		_, logStats1 := getPlanCached(t, ctx, r, emptyvc.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true)
@@ -1698,7 +1703,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	t.Run("Skip Cache", func(t *testing.T) {
 		r, _, _, _, ctx := createExecutorEnv(t)
 
-		unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		unshardedvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), nil)
 
 		// Skip cache using directive
 		query1 := "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
@@ -1711,12 +1716,12 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 		assertCacheSize(t, r.plans, 1)
 
 		// the target string will be resolved and become part of the plan cache key, which adds a new entry
-		ksIDVc1, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		ksIDVc1, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), nil)
 		getPlanCached(t, ctx, r, ksIDVc1.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 
 		// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
-		ksIDVc2, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		ksIDVc2, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), nil)
 		getPlanCached(t, ctx, r, ksIDVc2.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 	})
@@ -1725,7 +1730,7 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 func TestGetPlanCacheNormalized(t *testing.T) {
 	t.Run("Cache", func(t *testing.T) {
 		r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
-		emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		emptyvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), nil)
 
 		query1 := "select * from music_user_map where id = 1"
 		_, logStats1 := getPlanCached(t, ctx, r, emptyvc.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, true /* skipQueryPlanCache */)
@@ -1741,7 +1746,7 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	t.Run("Skip Cache", func(t *testing.T) {
 		// Skip cache using directive
 		r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
-		unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		unshardedvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), nil)
 
 		query1 := "insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)"
 		getPlanCached(t, ctx, r, unshardedvc.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
@@ -1752,12 +1757,12 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 		assertCacheSize(t, r.plans, 1)
 
 		// the target string will be resolved and become part of the plan cache key, which adds a new entry
-		ksIDVc1, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		ksIDVc1, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[deadbeef]"}), makeComments(""), nil)
 		getPlanCached(t, ctx, r, ksIDVc1.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 
 		// the target string will be resolved and become part of the plan cache key, as it's an unsharded ks, it will be the same entry as above
-		ksIDVc2, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+		ksIDVc2, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "[beefdead]"}), makeComments(""), nil)
 		getPlanCached(t, ctx, r, ksIDVc2.SafeSession, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false)
 		assertCacheSize(t, r.plans, 2)
 	})
@@ -1766,8 +1771,8 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
-	emptyvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
-	unshardedvc, _ := econtext.NewVCursorImpl(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), r, nil, r.vm, r.VSchema(), r.resolver.resolver, nil, nullResultsObserver{}, r.vConfig)
+	emptyvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown"}), makeComments(""), nil)
+	unshardedvc, _ := r.newVCursor(econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded + "@unknown"}), makeComments(""), nil)
 
 	query1 := "select * from music_user_map where id = 1" // 163 -- 80
 	query2 := "select * from music_user_map where id = 2"
@@ -1824,7 +1829,7 @@ func TestGetPlanPriority(t *testing.T) {
 
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 
-			plan, _, _, err := r.fetchOrCreatePlan(context.Background(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats)
+			plan, _, _, err := r.fetchOrCreatePlan(context.Background(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
@@ -2849,13 +2854,13 @@ func TestExecutorSettingsInTwoPC(t *testing.T) {
 			expectedQueries: [][]string{
 				{
 					"select '+08:00' from dual where @@time_zone != '+08:00'",
-					"set @@time_zone = '+08:00'",
-					"set @@time_zone = '+08:00'",
+					"set time_zone = '+08:00'",
+					"set time_zone = '+08:00'",
 					"insert into user_extra(user_id) values (1)",
 					"insert into user_extra(user_id) values (2)",
 				},
 				{
-					"set @@time_zone = '+08:00'",
+					"set time_zone = '+08:00'",
 					"insert into user_extra(user_id) values (3)",
 				},
 			},
@@ -3064,4 +3069,311 @@ func exec(executor *Executor, session *econtext.SafeSession, sql string) (*sqlty
 
 func makeComments(text string) sqlparser.MarginComments {
 	return sqlparser.MarginComments{Trailing: text}
+}
+
+// TestExecutorShowShards tests the show shards statement on executor.
+func TestExecutorShowShards(t *testing.T) {
+	localCell := "cell1"
+	tests := []struct {
+		name           string
+		filter         *sqlparser.ShowFilter
+		destTabletType topodatapb.TabletType
+		srvTopoServer  srvtopo.Server
+		want           *sqltypes.Result
+		wantErr        string
+	}{
+		{
+			name:           "No keyspaces",
+			srvTopoServer:  &fakesrvtopo.FakeSrvTopo{},
+			filter:         nil,
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows:   nil,
+			},
+		}, {
+			name: "No filtering",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks1": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter:         nil,
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows: []sqltypes.Row{
+					buildVarCharRow("ks1/-80"),
+					buildVarCharRow("ks1/80-"),
+					buildVarCharRow("ks2/-40"),
+					buildVarCharRow("ks2/40-80"),
+					buildVarCharRow("ks2/80-"),
+				},
+			},
+		},
+		{
+			name: "Keyspace filtering",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks1": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter: &sqlparser.ShowFilter{
+				Like: "ks1%",
+			},
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows: []sqltypes.Row{
+					buildVarCharRow("ks1/-80"),
+					buildVarCharRow("ks1/80-"),
+				},
+			},
+		}, {
+			name: "Shard filtering",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks1": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter: &sqlparser.ShowFilter{
+				Like: "%80-",
+			},
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows: []sqltypes.Row{
+					buildVarCharRow("ks1/80-"),
+					buildVarCharRow("ks2/80-"),
+				},
+			},
+		},
+		{
+			name: "Keyspace and Shard filtering",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks1": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter: &sqlparser.ShowFilter{
+				Like: "ks1/80-",
+			},
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+				Rows: []sqltypes.Row{
+					buildVarCharRow("ks1/80-"),
+				},
+			},
+		},
+		{
+			name: "No shards because of tablet type",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks1": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter: &sqlparser.ShowFilter{
+				Like: "ks1/80-",
+			},
+			destTabletType: topodatapb.TabletType_BACKUP,
+			want: &sqltypes.Result{
+				Fields: buildVarCharFields("Shards"),
+			},
+		},
+		{
+			name: "Error getting keyspace names",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesError: map[string]error{
+					localCell: errors.New("testing error getting keyspace names"),
+				},
+			},
+			filter:         nil,
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			wantErr:        "testing error getting keyspace names",
+		},
+		{
+			name: "Error getting keyspace ks1",
+			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
+				SrvKeyspaceNamesOutput: map[string][]string{
+					localCell: {"ks1", "ks2"},
+				},
+				SrvKeyspaceError: map[string]map[string]error{
+					localCell: {
+						"ks1": errors.New("testing error getting keyspace ks1"),
+					},
+				},
+				SrvKeyspaceOutput: map[string]map[string]*topodatapb.SrvKeyspace{
+					localCell: {
+						"ks2": {
+							Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+								{
+									ServedType: topodatapb.TabletType_PRIMARY,
+									ShardReferences: []*topodatapb.ShardReference{
+										{Name: "-40"},
+										{Name: "40-80"},
+										{Name: "80-"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			filter:         nil,
+			destTabletType: topodatapb.TabletType_PRIMARY,
+			wantErr:        "testing error getting keyspace ks1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			e := &Executor{
+				resolver: NewResolver(srvtopo.NewResolver(tt.srvTopoServer, nil, localCell), nil, "", nil),
+			}
+			got, err := e.ShowShards(ctx, tt.filter, tt.destTabletType)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Truef(t, tt.want.Equal(got), "Results got - %v", got)
+		})
+	}
 }

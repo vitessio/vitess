@@ -2340,14 +2340,14 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	defer tsv.StopService()
 	defer db.Close()
 
-	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	state, _, err := tsv.ReserveExecute(ctx, &target, nil, "set sql_mode = ''", nil, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.NotEqual(t, int64(0), state.ReservedID, "reservedID should not be zero")
 	expected := []string{
-		"set @@sql_mode = ''",
+		"set sql_mode = ''",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")
 	for _, exp := range expected {
@@ -2364,7 +2364,7 @@ func TestReserveExecute_WithTx(t *testing.T) {
 	defer tsv.StopService()
 	defer db.Close()
 
-	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	beginState, err := tsv.Begin(ctx, &target, &querypb.ExecuteOptions{})
@@ -2377,7 +2377,7 @@ func TestReserveExecute_WithTx(t *testing.T) {
 	defer tsv.Release(ctx, &target, beginState.TransactionID, reserveState.ReservedID)
 	assert.Equal(t, beginState.TransactionID, reserveState.ReservedID, "reservedID should be equal to transactionID")
 	expected := []string{
-		"set @@sql_mode = ''",
+		"set sql_mode = ''",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")
 	for _, exp := range expected {
@@ -2470,7 +2470,7 @@ func TestReserveStats(t *testing.T) {
 	defer tsv.StopService()
 	defer db.Close()
 
-	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	callerID := &querypb.VTGateCallerID{

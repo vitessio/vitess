@@ -308,7 +308,8 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 		tt = fieldSQLType(str.Type, tt)
 	}
 
-	if tt == sqltypes.Int64 {
+	switch tt {
+	case sqltypes.Int64:
 		for i, str := range strs {
 			offset := len(strs) - i
 			skip := c.compileNullCheckOffset(str, offset)
@@ -322,10 +323,10 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 		}
 
 		c.asm.Fn_FIELD_i(len(call.Arguments))
-	} else if tt == sqltypes.VarChar {
+	case sqltypes.VarChar:
 		collation := colldata.Lookup(col.Collation)
 		c.asm.Fn_FIELD_b(len(call.Arguments), collation)
-	} else if tt == sqltypes.Decimal {
+	case sqltypes.Decimal:
 		for i, str := range strs {
 			offset := len(strs) - i
 			skip := c.compileNullCheckOffset(str, offset)
@@ -339,7 +340,7 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 		}
 
 		c.asm.Fn_FIELD_d(len(call.Arguments))
-	} else {
+	default:
 		for i, str := range strs {
 			offset := len(strs) - i
 			skip := c.compileNullCheckOffset(str, offset)

@@ -54,7 +54,7 @@ func TestMultiTimingsDot(t *testing.T) {
 	mtm := NewMultiTimings("maptimings2", "help", []string{"label"})
 	mtm.Add([]string{"value.dot"}, 500*time.Microsecond)
 	safe := safeLabel("value.dot")
-	safeJSON := strings.Replace(safe, "\\", "\\\\", -1)
+	safeJSON := strings.ReplaceAll(safe, "\\", "\\\\")
 	want := `{"TotalCount":1,"TotalTime":500000,"Histograms":{"` + safeJSON + `":{"500000":1,"1000000":0,"5000000":0,"10000000":0,"50000000":0,"100000000":0,"500000000":0,"1000000000":0,"5000000000":0,"10000000000":0,"inf":0,"Count":1,"Time":500000}}}`
 	if got := mtm.String(); got != want {
 		t.Errorf("got %s, want %s", got, want)

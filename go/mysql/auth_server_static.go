@@ -70,6 +70,7 @@ type AuthServerStaticEntry struct {
 	// MysqlNativePassword's format looks like "*6C8989366EAF75BB670AD8EA7A7FC1176A95CEF4", it store a hashing value.
 	// Use MysqlNativePassword in auth config, maybe more secure. After all, it is cryptographic storage.
 	MysqlNativePassword string
+	CachingSha2Password string
 	Password            string
 	UserData            string
 	SourceHost          string
@@ -189,7 +190,7 @@ func (a *AuthServerStatic) UserEntryWithHash(conn *Conn, salt []byte, user strin
 
 	for _, entry := range entries {
 		if entry.MysqlNativePassword != "" {
-			hash, err := DecodeMysqlNativePasswordHex(entry.MysqlNativePassword)
+			hash, err := DecodePasswordHex(entry.MysqlNativePassword)
 			if err != nil {
 				return &StaticUserData{entry.UserData, entry.Groups}, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
 			}
@@ -221,11 +222,24 @@ func (a *AuthServerStatic) UserEntryWithCacheHash(conn *Conn, salt []byte, user 
 	}
 
 	for _, entry := range entries {
-		computedAuthResponse := ScrambleCachingSha2Password(salt, []byte(entry.Password))
+		if entry.CachingSha2Password != "" {
+			hash, err := DecodePasswordHex(entry.CachingSha2Password)
+			if err != nil {
+				return &StaticUserData{entry.UserData, entry.Groups}, AuthAccepted, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)
+			}
 
-		// Validate the password.
-		if MatchSourceHost(remoteAddr, entry.SourceHost) && subtle.ConstantTimeCompare(authResponse, computedAuthResponse) == 1 {
-			return &StaticUserData{entry.UserData, entry.Groups}, AuthAccepted, nil
+			isPass := VerifyHashedCachingSha2Password(authResponse, salt, hash)
+			if MatchSourceHost(remoteAddr, entry.SourceHost) && isPass {
+				return &StaticUserData{entry.UserData, entry.Groups}, AuthAccepted, nil
+			}
+
+		} else {
+			computedAuthResponse := ScrambleCachingSha2Password(salt, []byte(entry.Password))
+
+			// Validate the password.
+			if MatchSourceHost(remoteAddr, entry.SourceHost) && subtle.ConstantTimeCompare(authResponse, computedAuthResponse) == 1 {
+				return &StaticUserData{entry.UserData, entry.Groups}, AuthAccepted, nil
+			}
 		}
 	}
 	return &StaticUserData{}, AuthRejected, sqlerror.NewSQLErrorf(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "Access denied for user '%v'", user)

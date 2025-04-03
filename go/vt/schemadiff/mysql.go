@@ -54,6 +54,15 @@ var charsetTypes = map[string]bool{
 	"set":        true,
 }
 
+type blobStorageLength = int64
+
+const (
+	TinyBlogStorageLength   = 255
+	BlobStorageLength       = 65535
+	MediumBlobStorageLength = 16777215
+	LongBlobStorageLength   = 4294967295
+)
+
 var blobStorageExponent = map[string]int{
 	"tinyblob":   8,
 	"tinytext":   8,

@@ -889,7 +889,6 @@ func (hc *HealthCheckImpl) TabletConnection(ctx context.Context, alias *topodata
 	thc := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
 	hc.mu.Unlock()
 	if thc == nil || thc.Conn == nil {
-		// TODO: test that throws this error
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
 	}
 	return thc.Connection(ctx), nil

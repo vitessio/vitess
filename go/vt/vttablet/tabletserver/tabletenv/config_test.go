@@ -494,4 +494,12 @@ func TestVerifyUnmanagedTabletConfig(t *testing.T) {
 	config.DB.App.Password = "testPassword"
 	err = config.verifyUnmanagedTabletConfig()
 	assert.Nil(t, err)
+
+	dbconfigs.SetDbCredentialsFilePath("./data/db_credentials.json")
+	defer dbconfigs.SetDbCredentialsFilePath("")
+	config.DB.App.Password = ""
+
+	err = config.verifyUnmanagedTabletConfig()
+	assert.Nil(t, err)
+	assert.Equal(t, "testPassword", config.DB.App.Password)
 }

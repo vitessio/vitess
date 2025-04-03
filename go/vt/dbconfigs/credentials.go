@@ -133,6 +133,12 @@ func GetCredentialsServer() CredentialsServer {
 	return cs
 }
 
+// SetDbCredentialsFilePath sets the value of the `--db-credentials-file` flag.
+// This should be used only for testing.
+func SetDbCredentialsFilePath(path string) {
+	dbCredentialsFile = path
+}
+
 // FileCredentialsServer is a simple implementation of CredentialsServer using
 // a json file. Protected by mu.
 type FileCredentialsServer struct {

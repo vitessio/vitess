@@ -197,7 +197,7 @@ func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.Fi
 
 }
 
-func TestStaticPasswords(t *testing.T) {
+func TestStaticMysqlNativePasswords(t *testing.T) {
 	_ = utils.LeakCheckContext(t)
 	jsonConfig := `
 {
@@ -254,10 +254,74 @@ func TestStaticPasswords(t *testing.T) {
 
 			if c.success {
 				require.NoError(t, err, "authentication should have succeeded: %v", err)
-
 			} else {
 				require.Error(t, err, "authentication should have failed")
+			}
+		})
+	}
+}
 
+func TestStaticCachingSha2Passwords(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
+	jsonConfig := `
+{
+	"user01": [{ "Password": "user01" }],
+	"user02": [{
+		"CachingSha2Password": "*d2a47945c740b8ddc53f575733003b68961290d5224a4aedfdb57c8726bb3979"
+	}],
+	"user03": [{
+		"CachingSha2Password": "*0c5cfbb1ce7cae7dcab30b0cfeae014ffe060d93f4221fe6d7e25b27862290bc",
+		"Password": "invalid"
+	}],
+	"user04": [
+		{ "CachingSha2Password": "*f69686990e0cf15788dab923bf49ea34c8ee6d715f0861802a410651018459b7" },
+		{ "Password": "password2" }
+	]
+}`
+
+	tests := []struct {
+		user     string
+		password string
+		success  bool
+	}{
+		{"user01", "user01", true},
+		{"user01", "password", false},
+		{"user01", "", false},
+		{"user02", "user02", true},
+		{"user02", "password", false},
+		{"user02", "", false},
+		{"user03", "user03", true},
+		{"user03", "password", false},
+		{"user03", "invalid", false},
+		{"user03", "", false},
+		{"user04", "password1", true},
+		{"user04", "password2", true},
+		{"user04", "", false},
+		{"userXX", "", false},
+		{"userXX", "", false},
+		{"", "", false},
+		{"", "password", false},
+	}
+
+	auth := NewAuthServerStatic("", jsonConfig, 0)
+	defer auth.close()
+	ip := net.ParseIP("127.0.0.1")
+	addr := &net.IPAddr{IP: ip, Zone: ""}
+
+	for _, c := range tests {
+		t.Run(fmt.Sprintf("%s-%s", c.user, c.password), func(t *testing.T) {
+			salt, err := newSalt()
+			require.NoError(t, err, "error generating salt: %v", err)
+
+			scrambled := ScrambleCachingSha2Password(salt, []byte(c.password))
+			_, status, err := auth.UserEntryWithCacheHash(nil, salt, c.user, scrambled, addr)
+
+			if c.success {
+				require.Equal(t, AuthAccepted, status)
+				require.NoError(t, err)
+			} else {
+				require.Equal(t, AuthRejected, status)
+				require.Error(t, err)
 			}
 		})
 	}

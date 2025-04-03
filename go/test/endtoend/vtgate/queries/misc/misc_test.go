@@ -512,6 +512,87 @@ func TestAliasesInOuterJoinQueries(t *testing.T) {
 	}
 }
 
+func TestJoinTypes(t *testing.T) {
+	columns := []string{
+		"id",
+		"msg",
+		"keyspace_id",
+		"tinyint_unsigned",
+		"bool_signed",
+		"smallint_unsigned",
+		"mediumint_unsigned",
+		"int_unsigned",
+		"float_unsigned",
+		"double_unsigned",
+		"decimal_unsigned",
+		"t_date",
+		"t_datetime",
+		"t_datetime_micros",
+		"t_time",
+		"t_timestamp",
+		"c8",
+		"c16",
+		"c24",
+		"c32",
+		"c40",
+		"c48",
+		"c56",
+		"c63",
+		"c64",
+		"json_col",
+		"text_col",
+		"data",
+		"tinyint_min",
+		"tinyint_max",
+		"tinyint_pos",
+		"tinyint_neg",
+		"smallint_min",
+		"smallint_max",
+		"smallint_pos",
+		"smallint_neg",
+		"medint_min",
+		"medint_max",
+		"medint_pos",
+		"medint_neg",
+		"int_min",
+		"int_max",
+		"int_pos",
+		"int_neg",
+		"bigint_min",
+		"bigint_max",
+		"bigint_pos",
+		"bigint_neg",
+	}
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert data into the 2 tables
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
+	mcmp.Exec("insert into all_types(id) values (1)")
+
+	for _, mode := range []string{"oltp", "olap"} {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+			// No result from the RHS, but the RHS uses LHS's values in a few places
+			// There used to be instances where the query sent to vttablet looked like this:
+			//
+			// "select tbl.unq_col + tbl.id + :t1_id1 /* INT64 */ as col from tbl where 1 != 1"
+			// {"t1_id1": {"type": "NULL_TYPE", "value": ""}, "t1_id2": {"type": "NULL_TYPE", "value": ""}, "tbl_id": {"type": "INT64", "value": 90}}
+			//
+			// Because we were hardcoding the join vars to NULL when sending the RHS field query iff there were no results from the RHS
+			// leading to DECIMAL/FLOAT64 types returned by MySQL as we are doing "tbl.unq_col + null + null"
+
+			for _, column := range columns {
+				query := fmt.Sprintf("select t1.id1 as t0, tbl.%s+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90", column)
+				mcmp.Run(column, func(mcmp *utils.MySQLCompare) {
+					mcmp.ExecWithColumnCompare(query)
+				})
+			}
+		})
+	}
+}
+
 func TestAlterTableWithView(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -588,6 +669,21 @@ func TestStraightJoin(t *testing.T) {
 	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col", 100, false)
 	require.NoError(t, err)
 	require.Contains(t, fmt.Sprintf("%v", res.Rows), "t1_tbl")
+}
+
+func TestFailingOuterJoinInOLAP(t *testing.T) {
+	// This query was returning different results in MySQL and Vitess
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert data into the 2 tables
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (5, 42)")
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,2,3), (2,5,3)")
+
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+
+	// This query was
+	mcmp.Exec("select t1.id1 from t1 left join tbl on t1.id2 = tbl.nonunq_col")
 }
 
 func TestColumnAliases(t *testing.T) {

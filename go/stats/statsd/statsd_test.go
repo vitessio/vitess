@@ -20,7 +20,7 @@ func getBackend(t *testing.T) (StatsBackend, *net.UDPConn) {
 	udpAddr, _ := net.ResolveUDPAddr("udp", addr)
 	server, _ := net.ListenUDP("udp", udpAddr)
 	bufferLength := 9
-	client, _ := statsd.New(addr, statsd.WithMaxMessagesPerPayload(bufferLength), statsd.WithNamespace("test"))
+	client, _ := statsd.New(addr, statsd.WithMaxMessagesPerPayload(bufferLength), statsd.WithNamespace("test"), statsd.WithoutOriginDetection())
 	var sb StatsBackend
 	sb.namespace = "foo"
 	sb.sampleRate = 1

@@ -373,6 +373,9 @@ message ExecuteOptions {
   // This is to circumvent a bug where setting last_insert_id(x) to zero is not signaled by mysql
   // https://bugs.mysql.com/bug.php?id=116939
   bool fetch_last_insert_id = 18;
+
+  // in_dml_execution indicates that the query is being executed as part of a DML execution.
+  bool in_dml_execution = 19;
 }
 
 // Field describes a single column returned by a query

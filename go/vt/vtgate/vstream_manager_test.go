@@ -449,19 +449,20 @@ func TestVStreamsMetricsErrors(t *testing.T) {
 	}
 	ch := make(chan *binlogdatapb.VStreamResponse)
 	done := make(chan struct{})
+	var err error
 	go func() {
-		err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
+		err = vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 			ch <- &binlogdatapb.VStreamResponse{Events: events}
 			return nil
 		})
-
-		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			require.ErrorContains(t, err, wantErr)
-		}
 		close(done)
 	}()
 	<-ch
 	<-done
+
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		require.ErrorContains(t, err, wantErr)
+	}
 
 	expectedLabels1 := "TestVStream.-20.PRIMARY"
 	expectedLabels2 := "TestVStream.20-40.PRIMARY"

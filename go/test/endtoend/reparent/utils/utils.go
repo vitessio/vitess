@@ -43,13 +43,14 @@ import (
 )
 
 var (
-	KeyspaceName = "ks"
-	dbName       = "vt_" + KeyspaceName
-	username     = "vt_dba"
-	Hostname     = "localhost"
-	insertVal    = 1
-	insertSQL    = "insert into vt_insert_test(id, msg) values (%d, 'test %d')"
-	sqlSchema    = `
+	KeyspaceName            = "ks"
+	dbName                  = "vt_" + KeyspaceName
+	username                = "vt_dba"
+	Hostname                = "localhost"
+	insertVal               = 1
+	insertSQL               = "insert into vt_insert_test(id, msg) values (%d, 'test %d')"
+	insertSQLMultipleValues = "insert into vt_insert_test(id, msg) values (%d, 'test %d'), (%d, 'test %d'), (%d, 'test %d'), (%d, 'test %d')"
+	sqlSchema               = `
 	create table vt_insert_test (
 	id bigint,
 	msg varchar(64),
@@ -76,7 +77,7 @@ func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalPro
 }
 
 // SetupShardedReparentCluster is used to setup a sharded cluster for testing
-func SetupShardedReparentCluster(t *testing.T, durability string) *cluster.LocalProcessCluster {
+func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletFlags []string) *cluster.LocalProcessCluster {
 	clusterInstance := cluster.NewCluster(cell1, Hostname)
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -88,6 +89,11 @@ func SetupShardedReparentCluster(t *testing.T, durability string) *cluster.Local
 		"--health_check_interval", "1s",
 		"--track_schema_versions=true",
 		"--queryserver_enable_online_ddl=false")
+
+	if len(extraVttabletFlags) > 0 {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, extraVttabletFlags...)
+	}
+
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 		"--enable_buffer",
 		// Long timeout in case failover is slow.
@@ -115,6 +121,11 @@ func SetupShardedReparentCluster(t *testing.T, durability string) *cluster.Local
 // GetInsertQuery returns a built insert query to insert a row.
 func GetInsertQuery(idx int) string {
 	return fmt.Sprintf(insertSQL, idx, idx)
+}
+
+// GetInsertMultipleValuesQuery returns a built insert query to insert multiple rows at once.
+func GetInsertMultipleValuesQuery(idx1, idx2, idx3, idx4 int) string {
+	return fmt.Sprintf(insertSQLMultipleValues, idx1, idx1, idx2, idx2, idx3, idx3, idx4, idx4)
 }
 
 // GetSelectionQuery returns a built selection query read the data.

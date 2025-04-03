@@ -30,7 +30,8 @@ type Table struct {
 func (t *Table) AppendNext(w []Elem, src []byte) (res []Elem, n int) {
 	ce, sz := t.Index.lookup(src)
 	tp := ce.ctype()
-	if tp == ceNormal {
+	switch tp {
+	case ceNormal:
 		if ce == 0 {
 			r, _ := utf8.DecodeRune(src)
 			const (
@@ -51,14 +52,14 @@ func (t *Table) AppendNext(w []Elem, src []byte) (res []Elem, n int) {
 			ce = makeImplicitCE(implicitPrimary(r))
 		}
 		w = append(w, ce)
-	} else if tp == ceExpansionIndex {
+	case ceExpansionIndex:
 		w = t.appendExpansion(w, ce)
-	} else if tp == ceContractionIndex {
+	case ceContractionIndex:
 		n := 0
 		src = src[sz:]
 		w, n = t.matchContraction(w, ce, src)
 		sz += n
-	} else if tp == ceDecompose {
+	case ceDecompose:
 		// Decompose using NFKD and replace tertiary weights.
 		t1, t2 := splitDecompose(ce)
 		i := len(w)

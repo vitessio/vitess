@@ -697,7 +697,7 @@ func TestColumns_FindColumn(t *testing.T) {
 	}
 }
 
-func TestSplitStatements(t *testing.T) {
+func TestParseMultipleIgnoreEmpty(t *testing.T) {
 	testcases := []struct {
 		input   string
 		stmts   int
@@ -706,6 +706,9 @@ func TestSplitStatements(t *testing.T) {
 		{
 			input: "select * from table1; \t; \n; \n\t\t ;select * from table1;",
 			stmts: 2,
+		}, {
+			input: "select 1; ; ; select 2; /* Comment only */; /* Comment */; select 3;;;; /* Comment */",
+			stmts: 3,
 		}, {
 			input: "select * from table1",
 			stmts: 1,
@@ -757,84 +760,13 @@ func TestSplitStatements(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
-			statements, err := parser.SplitStatements(tcase.input)
+			statements, err := parser.ParseMultipleIgnoreEmpty(tcase.input)
 			if tcase.wantErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tcase.stmts, len(statements))
 			}
-		})
-	}
-}
-
-func TestSplitStatementToPieces(t *testing.T) {
-	testcases := []struct {
-		input  string
-		output string
-	}{{
-		input:  "select * from table1; \t; \n; \n\t\t ;select * from table1;",
-		output: "select * from table1;select * from table1",
-	}, {
-		input: "select * from table",
-	}, {
-		input:  "select * from table;",
-		output: "select * from table",
-	}, {
-		input:  "select * from table;   ",
-		output: "select * from table",
-	}, {
-		input:  "select * from table1; select * from table2;",
-		output: "select * from table1; select * from table2",
-	}, {
-		input:  "select * from /* comment ; */ table;",
-		output: "select * from /* comment ; */ table",
-	}, {
-		input:  "select * from table where semi = ';';",
-		output: "select * from table where semi = ';'",
-	}, {
-		input:  "select * from table1;--comment;\nselect * from table2;",
-		output: "select * from table1;--comment;\nselect * from table2",
-	}, {
-		input: "CREATE TABLE `total_data` (`id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id', " +
-			"`region` varchar(32) NOT NULL COMMENT 'region name, like zh; th; kepler'," +
-			"`data_size` bigint NOT NULL DEFAULT '0' COMMENT 'data size;'," +
-			"`createtime` datetime NOT NULL DEFAULT NOW() COMMENT 'create time;'," +
-			"`comment` varchar(100) NOT NULL DEFAULT '' COMMENT 'comment'," +
-			"PRIMARY KEY (`id`))",
-	}, {
-		input:  "create table t1 (id int primary key); create table t2 (id int primary key);",
-		output: "create table t1 (id int primary key); create table t2 (id int primary key)",
-	}, {
-		input:  ";;; create table t1 (id int primary key);;; ;create table t2 (id int primary key);",
-		output: " create table t1 (id int primary key);create table t2 (id int primary key)",
-	}, {
-		// The input doesn't have to be valid SQL statements!
-		input:  ";create table t1 ;create table t2 (id;",
-		output: "create table t1 ;create table t2 (id",
-	}, {
-		// Ignore quoted semicolon
-		input:  ";create table t1 ';';;;create table t2 (id;",
-		output: "create table t1 ';';create table t2 (id",
-	}, {
-		// Ignore quoted semicolon
-		input:  "stop replica; start replica",
-		output: "stop replica; start replica",
-	},
-	}
-
-	parser := NewTestParser()
-	for _, tcase := range testcases {
-		t.Run(tcase.input, func(t *testing.T) {
-			if tcase.output == "" {
-				tcase.output = tcase.input
-			}
-
-			stmtPieces, err := parser.SplitStatementToPieces(tcase.input)
-			require.NoError(t, err)
-
-			out := strings.Join(stmtPieces, ";")
-			require.Equal(t, tcase.output, out)
 		})
 	}
 }

@@ -36,6 +36,176 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
+// TestReconcileExtraRows tests reconcileExtraRows() by providing different types of source and target slices and validating
+// that the matching rows are correctly identified and removed.
+func TestReconcileExtraRows(t *testing.T) {
+	vdenv := newTestVDiffEnv(t)
+	defer vdenv.close()
+	UUID := uuid.New()
+	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		vdiffTestCols,
+		vdiffTestColTypes,
+	),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
+	)
+
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	ct := vdenv.newController(t, controllerQR)
+	wd, err := newWorkflowDiffer(ct, vdiffenv.opts, collations.MySQL8())
+	require.NoError(t, err)
+
+	dr := &DiffReport{
+		TableName:            "t1",
+		ExtraRowsSourceDiffs: []*RowDiff{},
+		ExtraRowsTargetDiffs: []*RowDiff{},
+		MismatchedRowsDiffs:  nil,
+	}
+
+	type testCase struct {
+		name             string
+		maxExtras        int64
+		extraDiffsSource []*RowDiff
+		extraDiffsTarget []*RowDiff
+
+		wantExtraSource []*RowDiff
+		wantExtraTarget []*RowDiff
+
+		wantProcessedCount  int64
+		wantMatchingCount   int64
+		wantMismatchedCount int64
+	}
+
+	testCases := []testCase{
+		{
+			name: "no extra rows, same order",
+			extraDiffsSource: []*RowDiff{
+				{Row: map[string]string{"1": "c1"}},
+				{Row: map[string]string{"2": "c2"}},
+			},
+			extraDiffsTarget: []*RowDiff{
+				{Row: map[string]string{"1": "c1"}},
+				{Row: map[string]string{"2": "c2"}},
+			},
+			wantExtraSource: []*RowDiff{},
+			wantExtraTarget: []*RowDiff{},
+		},
+		{
+			name: "no extra rows, different order",
+			extraDiffsSource: []*RowDiff{
+				{Row: map[string]string{"1": "c1"}},
+				{Row: map[string]string{"2": "c2"}},
+			},
+			extraDiffsTarget: []*RowDiff{
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"1": "c1"}},
+			},
+			wantExtraSource: []*RowDiff{},
+			wantExtraTarget: []*RowDiff{},
+		},
+		{
+			name: "extra rows, same count of extras on both",
+			extraDiffsSource: []*RowDiff{
+				{Row: map[string]string{"1": "c1"}},
+				{Row: map[string]string{"3a": "c3a"}},
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"3b": "c3b"}},
+			},
+			extraDiffsTarget: []*RowDiff{
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"4a": "c4a"}},
+				{Row: map[string]string{"4b": "c4b"}},
+				{Row: map[string]string{"1": "c1"}},
+			},
+			wantExtraSource: []*RowDiff{
+				{Row: map[string]string{"3a": "c3a"}},
+				{Row: map[string]string{"3b": "c3b"}},
+			},
+			wantExtraTarget: []*RowDiff{
+				{Row: map[string]string{"4a": "c4a"}},
+				{Row: map[string]string{"4b": "c4b"}},
+			},
+		},
+		{
+			name: "extra rows, less extras on target",
+			extraDiffsSource: []*RowDiff{
+				{Row: map[string]string{"3a": "c3a"}},
+				{Row: map[string]string{"1": "c1"}},
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"3b": "c3b"}},
+			},
+			extraDiffsTarget: []*RowDiff{
+				{Row: map[string]string{"4a": "c4a"}},
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"1": "c1"}},
+			},
+			wantExtraSource: []*RowDiff{
+				{Row: map[string]string{"3a": "c3a"}},
+				{Row: map[string]string{"3b": "c3b"}},
+			},
+			wantExtraTarget: []*RowDiff{
+				{Row: map[string]string{"4a": "c4a"}},
+			},
+		},
+		{
+			name: "extra rows, no matching rows",
+			extraDiffsSource: []*RowDiff{
+				{Row: map[string]string{"1": "c1"}},
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"3a": "c3a"}},
+				{Row: map[string]string{"3b": "c3b"}},
+			},
+			extraDiffsTarget: []*RowDiff{
+				{Row: map[string]string{"4a": "c4a"}},
+				{Row: map[string]string{"5": "c5"}},
+				{Row: map[string]string{"6": "c6"}},
+			},
+			wantExtraSource: []*RowDiff{
+				{Row: map[string]string{"1": "c1"}},
+				{Row: map[string]string{"2": "c2"}},
+				{Row: map[string]string{"3a": "c3a"}},
+				{Row: map[string]string{"3b": "c3b"}},
+			},
+			wantExtraTarget: []*RowDiff{
+				{Row: map[string]string{"4a": "c4a"}},
+				{Row: map[string]string{"5": "c5"}},
+				{Row: map[string]string{"6": "c6"}},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			maxExtras := int64(10)
+			if tc.maxExtras != 0 {
+				maxExtras = tc.maxExtras
+			}
+
+			dr.ExtraRowsSourceDiffs = tc.extraDiffsSource
+			dr.ExtraRowsTargetDiffs = tc.extraDiffsTarget
+			dr.ExtraRowsSource = int64(len(tc.extraDiffsSource))
+			dr.ExtraRowsTarget = int64(len(tc.extraDiffsTarget))
+			origExtraRowsSource := dr.ExtraRowsSource
+
+			dr.MatchingRows = 0
+			dr.MismatchedRows = dr.ExtraRowsSource
+			dr.ProcessedRows = 0
+
+			require.NoError(t, wd.doReconcileExtraRows(dr, maxExtras, maxExtras))
+
+			// check counts
+			require.Equal(t, dr.MatchingRows, origExtraRowsSource-dr.ExtraRowsSource)
+			require.Equal(t, dr.ProcessedRows, dr.MatchingRows)
+			require.Equal(t, dr.MismatchedRows, origExtraRowsSource-dr.MatchingRows)
+			require.Equal(t, dr.ExtraRowsSource, int64(len(tc.wantExtraSource)))
+			require.Equal(t, dr.ExtraRowsTarget, int64(len(tc.wantExtraTarget)))
+
+			// check actual extra rows
+			require.EqualValues(t, dr.ExtraRowsSourceDiffs, tc.wantExtraSource)
+			require.EqualValues(t, dr.ExtraRowsTargetDiffs, tc.wantExtraTarget)
+		})
+	}
+}
+
 func TestBuildPlanSuccess(t *testing.T) {
 	vdenv := newTestVDiffEnv(t)
 	defer vdenv.close()

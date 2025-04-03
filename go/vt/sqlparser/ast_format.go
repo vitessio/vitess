@@ -361,6 +361,151 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *CreateProcedure) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "create %v", node.Comments)
+	if node.Definer != nil {
+		buf.astPrintf(node, "definer = %v ", node.Definer)
+	}
+	buf.literal("procedure ")
+	if node.IfNotExists {
+		buf.literal("if not exists ")
+	}
+	buf.astPrintf(node, "%v (", node.Name)
+	prefix := ""
+	for _, param := range node.Params {
+		buf.astPrintf(node, "%s%v", prefix, param)
+		prefix = ", "
+	}
+	buf.literal(") ")
+	buf.astPrintf(node, "%v", node.Body)
+}
+
+// Format formats the node.
+func (node *DropProcedure) Format(buf *TrackedBuffer) {
+	exists := ""
+	if node.IfExists {
+		exists = "if exists "
+	}
+	buf.astPrintf(node, "%s %vprocedure %s%v", DropStr, node.Comments, exists, node.Name)
+}
+
+// Format formats the node.
+func (pp *ProcParameter) Format(buf *TrackedBuffer) {
+	buf.astPrintf(pp, "%s %v %v", pp.Mode.ToString(), pp.Name, pp.Type)
+}
+
+// Format formats the node.
+func (s *SingleStatement) Format(buf *TrackedBuffer) {
+	buf.astPrintf(s, "%v;", s.Statement)
+}
+
+// Format formats the node.
+func (bes *BeginEndStatement) Format(buf *TrackedBuffer) {
+	buf.astPrintf(bes, "begin%v end;", bes.Statements)
+}
+
+// Format formats the node.
+func (cs *CompoundStatements) Format(buf *TrackedBuffer) {
+	if cs == nil {
+		return
+	}
+	for _, stmt := range cs.Statements {
+		buf.astPrintf(cs, " %v", stmt)
+	}
+}
+
+// Format formats the node.
+func (is *IfStatement) Format(buf *TrackedBuffer) {
+	buf.astPrintf(is, "if %v then%v", is.SearchCondition, is.ThenStatements)
+
+	for _, elifBlock := range is.ElseIfBlocks {
+		buf.astPrintf(is, " %v", elifBlock)
+	}
+	if is.ElseStatements != nil {
+		buf.astPrintf(is, " else%v", is.ElseStatements)
+	}
+	buf.literal(" end if;")
+}
+
+// Format formats the node.
+func (eib *ElseIfBlock) Format(buf *TrackedBuffer) {
+	buf.astPrintf(eib, "elseif %v then%v", eib.SearchCondition, eib.ThenStatements)
+}
+
+// Format formats the node.
+func (dv *DeclareVar) Format(buf *TrackedBuffer) {
+	buf.literal("declare")
+	prefix := " "
+	for _, varName := range dv.VarNames {
+		buf.astPrintf(dv, "%s%v", prefix, varName)
+		prefix = ", "
+	}
+	buf.astPrintf(dv, " %v;", dv.Type)
+}
+
+// Format formats the node.
+func (dh *DeclareHandler) Format(buf *TrackedBuffer) {
+	buf.astPrintf(dh, "declare %s handler for", dh.Action.ToString())
+	prefix := " "
+	for _, condition := range dh.Conditions {
+		buf.astPrintf(dh, "%s%v", prefix, condition)
+		prefix = ", "
+	}
+	buf.astPrintf(dh, " %v", dh.Statement)
+}
+
+// Format formats the node.
+func (dc *DeclareCondition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(dc, "declare %v condition for %v;", dc.Name, dc.Condition)
+}
+
+// Format formats the node.
+func (s *Signal) Format(buf *TrackedBuffer) {
+	buf.astPrintf(s, "signal %v", s.Condition)
+	prefix := " set "
+	for _, sv := range s.SetValues {
+		buf.astPrintf(s, "%s%v", prefix, sv)
+		prefix = ", "
+	}
+	buf.literal(";")
+}
+
+// Format formats the node.
+func (s *SignalSet) Format(buf *TrackedBuffer) {
+	buf.astPrintf(s, "%s = %v", s.ConditionName.ToString(), s.Value)
+}
+
+// Format formats the node.
+func (hcss *HandlerConditionSQLState) Format(buf *TrackedBuffer) {
+	buf.astPrintf(hcss, "sqlstate %v", hcss.SQLStateValue)
+}
+
+// Format formats the node.
+func (hcn *HandlerConditionNamed) Format(buf *TrackedBuffer) {
+	buf.astPrintf(hcn, "%v", hcn.Name)
+}
+
+// Format formats the node.
+func (hcec *HandlerConditionErrorCode) Format(buf *TrackedBuffer) {
+	buf.astPrintf(hcec, "%d", hcec.ErrorCode)
+}
+
+// Format formats the node.
+func (hcse *HandlerConditionSQLException) Format(buf *TrackedBuffer) {
+	buf.literal("sqlexception")
+}
+
+// Format formats the node.
+func (hcsw *HandlerConditionSQLWarning) Format(buf *TrackedBuffer) {
+	buf.literal("sqlwarning")
+}
+
+// Format formats the node.
+func (hcnf *HandlerConditionNotFound) Format(buf *TrackedBuffer) {
+	buf.literal("not found")
+}
+
+// Format formats the node.
 func (node *RevertMigration) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "revert %vvitess_migration '%#s'", node.Comments, node.UUID)
 }
@@ -794,9 +939,10 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		if ct.Options.As != nil {
 			buf.astPrintf(ct, " %s (%v)", keywordStrings[AS], ct.Options.As)
 
-			if ct.Options.Storage == VirtualStorage {
+			switch ct.Options.Storage {
+			case VirtualStorage:
 				buf.astPrintf(ct, " %s", keywordStrings[VIRTUAL])
-			} else if ct.Options.Storage == StoredStorage {
+			case StoredStorage:
 				buf.astPrintf(ct, " %s", keywordStrings[STORED])
 			}
 			if ct.Options.Null != nil {
@@ -1343,9 +1489,10 @@ func (node *NotExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%l %s", node.Left, node.Operator.ToString())
-	if node.Modifier == All {
+	switch node.Modifier {
+	case All:
 		buf.literal(" all")
-	} else if node.Modifier == Any {
+	case Any:
 		buf.literal(" any")
 	}
 	buf.astPrintf(node, " %r", node.Right)
@@ -2206,6 +2353,15 @@ func (node *ShowOther) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *SelectInto) Format(buf *TrackedBuffer) {
 	if node == nil {
+		return
+	}
+	if node.Type == IntoVariables {
+		buf.literal(" into")
+		prefix := " "
+		for _, intoVar := range node.VarList {
+			buf.astPrintf(node, "%s%v", prefix, intoVar)
+			prefix = ", "
+		}
 		return
 	}
 	buf.astPrintf(node, "%s%#s", node.Type.ToString(), node.FileName)
