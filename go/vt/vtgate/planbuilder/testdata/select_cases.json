@@ -5368,7 +5368,6 @@
     "comment": "Over clause in a equal unique query going to a single shard",
     "query": "SELECT Sum(id) OVER ( PARTITION BY name  ) from user where id = 5",
     "plan": {
-      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT Sum(id) OVER ( PARTITION BY name  ) from user where id = 5",
       "Instructions": {
