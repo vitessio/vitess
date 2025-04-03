@@ -858,34 +858,14 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 	if err != nil {
 		return err
 	}
-	if mysqld.capabilities.hasInitializeInServer() {
-		log.Infof("Installing data dir with mysqld --initialize-insecure")
-		args := []string{
-			"--defaults-file=" + cnf.Path,
-			"--basedir=" + mysqlBaseDir,
-			"--initialize-insecure", // Use empty 'root'@'localhost' password.
-		}
-		if _, _, err = execCmd(mysqldPath, args, nil, mysqlRoot, nil); err != nil {
-			log.Errorf("mysqld --initialize-insecure failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
-			return err
-		}
-		return nil
-	}
-
-	log.Infof("Installing data dir with mysql_install_db")
+	log.Infof("Installing data dir with mysqld --initialize-insecure")
 	args := []string{
 		"--defaults-file=" + cnf.Path,
 		"--basedir=" + mysqlBaseDir,
+		"--initialize-insecure", // Use empty 'root'@'localhost' password.
 	}
-	if mysqld.capabilities.hasMaria104InstallDb() {
-		args = append(args, "--auth-root-authentication-method=normal")
-	}
-	cmdPath, err := binaryPath(mysqlRoot, "mysql_install_db")
-	if err != nil {
-		return err
-	}
-	if _, _, err = execCmd(cmdPath, args, nil, mysqlRoot, nil); err != nil {
-		log.Errorf("mysql_install_db failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
+	if _, _, err = execCmd(mysqldPath, args, nil, mysqlRoot, nil); err != nil {
+		log.Errorf("mysqld --initialize-insecure failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}
 	return nil
@@ -939,12 +919,6 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	switch f {
 	case FlavorPercona, FlavorMySQL:
 		switch mysqld.capabilities.version.Major {
-		case 5:
-			if mysqld.capabilities.version.Minor == 7 {
-				versionConfig = config.MycnfMySQL57
-			} else {
-				log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
-			}
 		case 8:
 			if mysqld.capabilities.version.Minor >= 4 {
 				versionConfig = config.MycnfMySQL84
@@ -957,12 +931,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 		}
 	case FlavorMariaDB:
-		switch mysqld.capabilities.version.Major {
-		case 10:
-			versionConfig = config.MycnfMariaDB10
-		default:
-			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
-		}
+		log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 	}
 
 	myTemplateSource.WriteString(versionConfig)
