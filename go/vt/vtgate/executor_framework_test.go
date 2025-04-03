@@ -28,8 +28,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
-
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
@@ -45,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -245,6 +244,7 @@ func createCustomExecutor(t testing.TB, vschema string, mysqlVersion string) (ex
 
 func createExecutorConfig() ExecutorConfig {
 	return ExecutorConfig{
+		Name:         "TestExecutor",
 		StreamSize:   10,
 		AllowScatter: true,
 	}
@@ -252,6 +252,7 @@ func createExecutorConfig() ExecutorConfig {
 
 func createExecutorConfigWithNormalizer() ExecutorConfig {
 	return ExecutorConfig{
+		Name:         "TestExecutor",
 		StreamSize:   10,
 		AllowScatter: true,
 		Normalize:    true,

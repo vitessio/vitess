@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path"
 	"regexp"
@@ -57,8 +58,8 @@ func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...
 		}
 		sqls = append(sqls, split...)
 	}
-	mysqlParam, _, _, closer, error := NewMySQLWithMysqld(cluster.GetAndReservePort(), cluster.Hostname, dbName, sqls...)
-	return mysqlParam, closer, error
+	mysqlParam, _, _, closer, err := NewMySQLWithMysqld(cluster.GetAndReservePort(), cluster.Hostname, dbName, sqls...)
+	return mysqlParam, closer, err
 }
 
 // CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
@@ -79,7 +80,8 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 }
 
 func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) (mysql.ConnParams, *mysqlctl.Mysqld, *mysqlctl.Mycnf, func(), error) {
-	mysqlDir, err := createMySQLDir()
+	uid := rand.Uint32()
+	mysqlDir, err := createMySQLDir(uid)
 	if err != nil {
 		return mysql.ConnParams{}, nil, nil, nil, err
 	}
@@ -89,7 +91,7 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 	}
 
 	mysqlPort := port
-	mysqld, mycnf, err := CreateMysqldAndMycnf(0, "", mysqlPort)
+	mysqld, mycnf, err := CreateMysqldAndMycnf(uid, "", mysqlPort)
 	if err != nil {
 		return mysql.ConnParams{}, nil, nil, nil, err
 	}
@@ -116,8 +118,8 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 	}, nil
 }
 
-func createMySQLDir() (string, error) {
-	mysqlDir := mysqlctl.TabletDir(0)
+func createMySQLDir(portNo uint32) (string, error) {
+	mysqlDir := mysqlctl.TabletDir(portNo)
 	err := os.Mkdir(mysqlDir, 0700)
 	if err != nil {
 		return "", err

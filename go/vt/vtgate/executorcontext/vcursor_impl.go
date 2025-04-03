@@ -28,8 +28,6 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
 
-	"vitess.io/vitess/go/vt/sysvars"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -47,6 +45,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo"
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -146,6 +145,10 @@ type (
 		) ([]*srvtopo.ResolvedShard, [][][]sqltypes.Value, error)
 	}
 
+	Metrics interface {
+		GetExecutionMetrics() *engine.Metrics
+	}
+
 	// VCursorImpl implements the VCursor functionality used by dependent
 	// packages to call back into VTGate.
 	VCursorImpl struct {
@@ -159,6 +162,7 @@ type (
 		resolver       Resolver
 		topoServer     *topo.Server
 		logStats       *logstats.LogStats
+		metrics        Metrics
 
 		// fkChecksState stores the state of foreign key checks variable.
 		// This state is meant to be the final fk checks state after consulting the
@@ -202,6 +206,7 @@ func NewVCursorImpl(
 	serv srvtopo.Server,
 	observer ResultsObserver,
 	cfg VCursorConfig,
+	metrics Metrics,
 ) (*VCursorImpl, error) {
 	keyspace, tabletType, destination, err := ParseDestinationTarget(safeSession.TargetString, cfg.DefaultTabletType, vschema)
 	if err != nil {
@@ -227,12 +232,13 @@ func NewVCursorImpl(
 		marginComments: marginComments,
 		executor:       executor,
 		logStats:       logStats,
-		resolver:       resolver,
-		vschema:        vschema,
-		vm:             vm,
-		topoServer:     ts,
+		metrics:        metrics,
 
-		observer: observer,
+		resolver:   resolver,
+		vschema:    vschema,
+		vm:         vm,
+		topoServer: ts,
+		observer:   observer,
 	}, nil
 }
 
@@ -263,16 +269,18 @@ func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 	clonedCtx := callerid.NewContext(ctx, callerId, immediateCallerId)
 
 	v := &VCursorImpl{
-		config:              vc.config,
-		SafeSession:         NewAutocommitSession(vc.SafeSession.Session),
-		keyspace:            vc.keyspace,
-		tabletType:          vc.tabletType,
-		destination:         vc.destination,
-		marginComments:      vc.marginComments,
-		executor:            vc.executor,
-		resolver:            vc.resolver,
-		topoServer:          vc.topoServer,
-		logStats:            &logstats.LogStats{Ctx: clonedCtx},
+		config:         vc.config,
+		SafeSession:    NewAutocommitSession(vc.SafeSession.Session),
+		keyspace:       vc.keyspace,
+		tabletType:     vc.tabletType,
+		destination:    vc.destination,
+		marginComments: vc.marginComments,
+		executor:       vc.executor,
+		resolver:       vc.resolver,
+		topoServer:     vc.topoServer,
+		logStats:       &logstats.LogStats{Ctx: clonedCtx},
+		metrics:        vc.metrics,
+
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
 		vschema:             vc.vschema,
 		vm:                  vc.vm,
@@ -304,6 +312,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		resolver:       vc.resolver,
 		topoServer:     vc.topoServer,
 		logStats:       &logstats.LogStats{Ctx: clonedCtx},
+		metrics:        vc.metrics,
 
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
 		vschema:             vc.vschema,
@@ -329,12 +338,19 @@ func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {
 		marginComments: vc.marginComments,
 		executor:       vc.executor,
 		logStats:       vc.logStats,
-		resolver:       vc.resolver,
-		vschema:        vc.vschema,
-		vm:             vc.vm,
-		topoServer:     vc.topoServer,
-		observer:       vc.observer,
+		metrics:        vc.metrics,
+
+		resolver:   vc.resolver,
+		vschema:    vc.vschema,
+		vm:         vc.vm,
+		topoServer: vc.topoServer,
+		observer:   vc.observer,
 	}
+}
+
+// GetExecutionMetrics provides the execution metrics object.
+func (vc *VCursorImpl) GetExecutionMetrics() *engine.Metrics {
+	return vc.metrics.GetExecutionMetrics()
 }
 
 // HasSystemVariables returns whether the session has set system variables or not
