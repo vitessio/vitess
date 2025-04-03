@@ -393,8 +393,8 @@ func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 	return nil
 }
 
-// ClearResidualFiles clears the residual files for a given keyspace in a cell.
-func (ts *Server) ClearResidualFiles(ctx context.Context, cell string, keyspace string) error {
+// DeleteOrphanedKeyspaceFiles clears the residual files for a given keyspace in a cell.
+func (ts *Server) DeleteOrphanedKeyspaceFiles(ctx context.Context, cell string, keyspace string) error {
 	conn, err := ts.ConnForCell(ctx, cell)
 	if err != nil {
 		return err

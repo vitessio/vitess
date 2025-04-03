@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
-func TestClearResidualFiles(t *testing.T) {
+func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 	cell := "zone-1"
 	cell2 := "zone-2"
 	keyspace := "ks"
@@ -163,7 +163,7 @@ func TestClearResidualFiles(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ts, mtf := memorytopo.NewServerAndFactory(ctx, cell, cell2)
 			tt.setup(t, ts, mtf)
-			err := ts.ClearResidualFiles(ctx, cell, keyspace)
+			err := ts.DeleteOrphanedKeyspaceFiles(ctx, cell, keyspace)
 			require.NoError(t, err)
 			tt.verify(t, ts, mtf)
 		})

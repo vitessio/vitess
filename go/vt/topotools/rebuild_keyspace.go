@@ -40,7 +40,7 @@ func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, k
 		}
 		// If the keyspace doesn't exist, we should delete the serving keyspace records.
 		// This is to ensure that the serving graph is consistent with the topo.
-		if err = clearResidualRecords(ctx, ts, keyspace, cells); err != nil {
+		if err = deleteOrphanedFiles(ctx, ts, keyspace, cells); err != nil {
 			return err
 		}
 	}
@@ -53,10 +53,10 @@ func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, k
 	return RebuildKeyspaceLocked(ctx, log, ts, keyspace, cells, allowPartial)
 }
 
-// clearResidualRecords clears the residual records for a keyspace that has already been deleted.
-func clearResidualRecords(ctx context.Context, ts *topo.Server, keyspace string, cells []string) error {
+// deleteOrphanedFiles clears the residual records for a keyspace that has already been deleted.
+func deleteOrphanedFiles(ctx context.Context, ts *topo.Server, keyspace string, cells []string) error {
 	for _, cell := range cells {
-		if err := ts.ClearResidualFiles(ctx, cell, keyspace); err != nil {
+		if err := ts.DeleteOrphanedKeyspaceFiles(ctx, cell, keyspace); err != nil {
 			return err
 		}
 	}
