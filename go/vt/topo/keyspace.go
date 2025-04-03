@@ -405,7 +405,7 @@ func (ts *Server) ClearResidualFiles(ctx context.Context, cell string, keyspace 
 		dir := dirsToClear[len(dirsToClear)-1]
 		dirsToClear = dirsToClear[0 : len(dirsToClear)-1]
 
-		children, err := conn.ListDir(ctx, dir, false)
+		children, err := conn.ListDir(ctx, dir, true)
 		if err != nil {
 			if IsErrType(err, NoNode) {
 				continue
@@ -414,11 +414,12 @@ func (ts *Server) ClearResidualFiles(ctx context.Context, cell string, keyspace 
 		}
 
 		for _, child := range children {
+			childPath := path.Join(dir, child.Name)
 			if child.Type == TypeDirectory {
-				dirsToClear = append(dirsToClear, child.Name)
+				dirsToClear = append(dirsToClear, childPath)
 				continue
 			}
-			err = conn.Delete(ctx, child.Name, nil)
+			err = conn.Delete(ctx, childPath, nil)
 			if err != nil {
 				return err
 			}
