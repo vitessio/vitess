@@ -27,10 +27,11 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
-func TestServer_ClearResidualFiles(t *testing.T) {
+func TestClearResidualFiles(t *testing.T) {
 	cell := "zone-1"
 	cell2 := "zone-2"
 	keyspace := "ks"
+	keyspace2 := "ks2"
 	ctx := context.Background()
 	tests := []struct {
 		name   string
@@ -78,6 +79,29 @@ func TestServer_ClearResidualFiles(t *testing.T) {
 				keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 				require.NoError(t, err)
 				require.Len(t, keyspaces, 0)
+			},
+		}, {
+			name: "Ensure we don't delete extra files",
+			setup: func(t *testing.T, ts *topo.Server, mtf *memorytopo.Factory) {
+				err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, "0", func(sr *topodatapb.ShardReplication) error {
+					sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{TabletAlias: &topodatapb.TabletAlias{Cell: cell, Uid: 0}})
+					return nil
+				})
+				require.NoError(t, err)
+				err = ts.CreateKeyspace(ctx, keyspace2, &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL})
+				require.NoError(t, err)
+				err = ts.UpdateShardReplicationFields(ctx, cell, keyspace2, "0", func(sr *topodatapb.ShardReplication) error {
+					sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{TabletAlias: &topodatapb.TabletAlias{Cell: cell, Uid: 0}})
+					return nil
+				})
+				require.NoError(t, err)
+			},
+			verify: func(t *testing.T, ts *topo.Server, mtf *memorytopo.Factory) {
+				// Verify that we don't delete the files for the other keyspace.
+				_, err := ts.GetKeyspace(ctx, keyspace2)
+				require.NoError(t, err)
+				_, err = ts.GetShardReplication(ctx, cell, keyspace2, "0")
+				require.NoError(t, err)
 			},
 		}, {
 			name: "Multiple residual file to delete",
