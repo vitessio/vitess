@@ -909,15 +909,10 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	myTemplateSource.WriteString("[mysqld]\n")
 	myTemplateSource.WriteString(config.MycnfDefault)
 
+	var versionConfig string
 	// database flavor + version specific file.
 	// {flavor}{major}{minor}.cnf
-	f := FlavorMariaDB
 	if mysqld.capabilities.isMySQLLike() {
-		f = FlavorMySQL
-	}
-	var versionConfig string
-	switch f {
-	case FlavorPercona, FlavorMySQL:
 		switch mysqld.capabilities.version.Major {
 		case 8:
 			if mysqld.capabilities.version.Minor >= 4 {
@@ -930,7 +925,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 		default:
 			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 		}
-	case FlavorMariaDB:
+	} else {
 		log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 	}
 

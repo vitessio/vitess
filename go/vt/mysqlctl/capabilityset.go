@@ -52,6 +52,3 @@ func (c *capabilitySet) hasMySQLUpgradeInServer() bool {
 func (c *capabilitySet) isMySQLLike() bool {
 	return c.flavor == FlavorMySQL || c.flavor == FlavorPercona
 }
-func (c *capabilitySet) isMariaDB() bool {
-	return c.flavor == FlavorMariaDB
-}
