@@ -121,6 +121,10 @@ type (
 		// MySQL engine to handle errors appropriately.
 		NotUnshardedErr error
 
+		// If there are constructs in this query that we know we only support if we can push them down
+		// unbroken to mysql, this field will contain an error that is produced when we fail to do so.
+		NotSingleShardErr error
+
 		// Recursive contains dependencies from the expression to the actual tables
 		// in the query (excluding derived tables). For columns in derived tables,
 		// this map holds the accumulated dependencies for the column expression.

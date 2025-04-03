@@ -5854,6 +5854,33 @@
     }
   },
   {
+    "comment": "Over clause in a equal unique query going to a single shard",
+    "query": "SELECT Sum(id) OVER ( PARTITION BY name  ) from user where id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT Sum(id) OVER ( PARTITION BY name  ) from user where id = 5",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select sum(id) over ( partition by `name`) from `user` where 1 != 1",
+        "Query": "select sum(id) over ( partition by `name`) from `user` where id = 5",
+        "Table": "`user`",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "join with derived table with alias and join condition - merge into route",
     "query": "select 1 from user join (select id as uid from user) as t where t.uid = user.id",
     "plan": {

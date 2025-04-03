@@ -44,6 +44,7 @@ type analyzer struct {
 	inProjection int
 
 	notSingleRouteErr       error
+	notSingleShardErr       error
 	unshardedErr            error
 	warning                 string
 	canShortcut             bool
@@ -144,6 +145,7 @@ func (a *analyzer) newSemTable(
 			Collation:                 coll,
 			ExprTypes:                 map[sqlparser.Expr]evalengine.Type{},
 			NotSingleRouteErr:         a.notSingleRouteErr,
+			NotSingleShardErr:         a.notSingleShardErr,
 			NotUnshardedErr:           a.unshardedErr,
 			Recursive:                 ExprDependencies{},
 			Direct:                    ExprDependencies{},
@@ -177,6 +179,7 @@ func (a *analyzer) newSemTable(
 		DMLTargets:                a.binder.targets,
 		NotSingleRouteErr:         a.notSingleRouteErr,
 		NotUnshardedErr:           a.unshardedErr,
+		NotSingleShardErr:         a.notSingleShardErr,
 		Warning:                   a.warning,
 		Comments:                  comments,
 		ColumnEqualities:          map[columnName][]sqlparser.Expr{},
@@ -198,6 +201,8 @@ func (a *analyzer) setError(err error) {
 		a.notSingleRouteErr = err.Inner
 	case ShardedError:
 		a.unshardedErr = err.Inner
+	case NotSingleShardError:
+		a.notSingleShardErr = err.Inner
 	default:
 		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
 			a.notSingleRouteErr = err
@@ -477,26 +482,37 @@ func (a *analyzer) getError() error {
 	return a.err
 }
 
-// NotSingleRouteErr is used to mark an error as something that should only be returned
-// if the planner fails to merge everything down to a single route
-type NotSingleRouteErr struct {
-	Inner error
-}
+type (
+	// NotSingleRouteErr is used to mark an error as something that should only be returned
+	// if the planner fails to merge everything down to a single route
+	NotSingleRouteErr struct {
+		Inner error
+	}
+	// ShardedError is used to mark an error as something that should only be returned
+	// if the query is not unsharded
+	ShardedError struct {
+		Inner error
+	}
+	// NotSingleShardError is used to mark an error as something that should only be returned
+	// if the query fails to be planned into a single shard query
+	NotSingleShardError struct {
+		Inner error
+	}
+)
 
 func (p NotSingleRouteErr) Error() string {
 	return p.Inner.Error()
 }
-
-// ShardedError is used to mark an error as something that should only be returned
-// if the query is not unsharded
-type ShardedError struct {
-	Inner error
-}
-
-func (p ShardedError) Unwrap() error {
-	return p.Inner
-}
+func (p NotSingleRouteErr) Unwrap() error { return p.Inner }
 
 func (p ShardedError) Error() string {
 	return p.Inner.Error()
 }
+func (p ShardedError) Unwrap() error {
+	return p.Inner
+}
+
+func (p NotSingleShardError) Error() string {
+	return p.Inner.Error()
+}
+func (p NotSingleShardError) Unwrap() error { return p.Inner }
