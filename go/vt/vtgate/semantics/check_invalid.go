@@ -53,7 +53,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return ShardedError{Inner: &UnsupportedConstruct{errString: "REPLACE INTO with sharded keyspace"}}
 		}
 	case *sqlparser.OverClause:
-		return ShardedError{Inner: &UnsupportedConstruct{errString: "OVER CLAUSE with sharded keyspace"}}
+		return NotSingleShardError{Inner: &UnsupportedConstruct{errString: "OVER CLAUSE with sharded keyspace"}}
 	}
 
 	return nil

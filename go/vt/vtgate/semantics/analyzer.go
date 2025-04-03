@@ -44,6 +44,7 @@ type analyzer struct {
 	inProjection int
 
 	projErr                 error
+	notSingleShardErr       error
 	unshardedErr            error
 	warning                 string
 	singleUnshardedKeyspace bool
@@ -143,6 +144,7 @@ func (a *analyzer) newSemTable(
 			Collation:                 coll,
 			ExprTypes:                 map[sqlparser.Expr]evalengine.Type{},
 			NotSingleRouteErr:         a.projErr,
+			NotSingleShardErr:         a.notSingleShardErr,
 			NotUnshardedErr:           a.unshardedErr,
 			Recursive:                 ExprDependencies{},
 			Direct:                    ExprDependencies{},
@@ -176,6 +178,7 @@ func (a *analyzer) newSemTable(
 		DMLTargets:                a.binder.targets,
 		NotSingleRouteErr:         a.projErr,
 		NotUnshardedErr:           a.unshardedErr,
+		NotSingleShardErr:         a.notSingleShardErr,
 		Warning:                   a.warning,
 		Comments:                  comments,
 		ColumnEqualities:          map[columnName][]sqlparser.Expr{},
@@ -197,6 +200,8 @@ func (a *analyzer) setError(err error) {
 		a.projErr = err.Inner
 	case ShardedError:
 		a.unshardedErr = err.Inner
+	case NotSingleShardError:
+		a.notSingleShardErr = err.Inner
 	default:
 		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
 			a.projErr = err
@@ -486,10 +491,20 @@ type ShardedError struct {
 	Inner error
 }
 
+func (p ShardedError) Error() string {
+	return p.Inner.Error()
+}
 func (p ShardedError) Unwrap() error {
 	return p.Inner
 }
 
-func (p ShardedError) Error() string {
+// NotSingleShardError is used to mark an error as something that should only be returned
+// if the query fails to be planned into a single shard query
+type NotSingleShardError struct {
+	Inner error
+}
+
+func (p NotSingleShardError) Error() string {
 	return p.Inner.Error()
 }
+func (p NotSingleShardError) Unwrap() error { return p.Inner }
