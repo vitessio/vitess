@@ -15,7 +15,7 @@ jobs:
 
   build:
     name: Unit Test (Race)
-    runs-on: oracle-16cpu-64gb-x86-64
+    runs-on: gh-hosted-runners-16cores-1-24.04
     steps:
     - name: Skip CI
       run: |
