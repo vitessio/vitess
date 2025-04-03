@@ -228,6 +228,31 @@ service VTAdmin {
     // VExplain provides information on how Vitess plans to execute a
     // particular query.
     rpc VExplain(VExplainRequest) returns (VExplainResponse) {};
+
+    // VSchemaPublish publishes a VSchema marking it as non-draft.
+    rpc VSchemaPublish(VSchemaPublishRequest) returns (vtctldata.VSchemaPublishResponse) {};
+    // VSchemaAddVindex adds a vindex in vschema. It doesn't expect it to be a lookup
+    // vindex, so owner is not set/required.
+    rpc VSchemaAddVindex(VSchemaAddVindexRequest) returns (vtctldata.VSchemaAddVindexResponse) {};
+    // VSchemaRemoveVindex removes an existing vindex from the vschema.
+    rpc VSchemaRemoveVindex(VSchemaRemoveVindexRequest) returns (vtctldata.VSchemaRemoveVindexResponse) {};
+    // VSchemaAddLookupVindex adds a lookup vindex to the vschema.
+    rpc VSchemaAddLookupVindex(VSchemaAddLookupVindexRequest) returns (vtctldata.VSchemaAddLookupVindexResponse) {};
+    // VSchemaAddTables adds one or more tables to the vschema, along with a 
+    // designated primary vindex and associated columns.
+    rpc VSchemaAddTables(VSchemaAddTablesRequest) returns (vtctldata.VSchemaAddTablesResponse) {};
+    // VSchemaRemoveTables removes one or more tables from the vschema.
+    rpc VSchemaRemoveTables(VSchemaRemoveTablesRequest) returns (vtctldata.VSchemaRemoveTablesResponse) {};
+    // VSchemaSetPrimaryVindex sets or updates the primary vindex for one or
+    // more tables, specifying the columns associated with the vindex.
+    rpc VSchemaSetPrimaryVindex(VSchemaSetPrimaryVindexRequest) returns (vtctldata.VSchemaSetPrimaryVindexResponse) {};
+    // VSchemaSetSequence sets up a table column to use a sequence from an
+    // unsharded source.
+    rpc VSchemaSetSequence(VSchemaSetSequenceRequest) returns (vtctldata.VSchemaSetSequenceResponse) {};
+    // VSchemaSetReference sets up a reference table, which points to a source
+    // table in another vschema.
+    rpc VSchemaSetReference(VSchemaSetReferenceRequest) returns (vtctldata.VSchemaSetReferenceResponse) {};
+
     // WorkflowDelete deletes a vreplication workflow.
     rpc WorkflowDelete(WorkflowDeleteRequest) returns (vtctldata.WorkflowDeleteResponse) {};
     // WorkflowSwitchTraffic switches traffic for a VReplication workflow.
@@ -1109,4 +1134,49 @@ message VExplainRequest {
 
 message VExplainResponse {
     string response = 1;
+}
+
+message VSchemaPublishRequest {
+    string cluster_id = 1;
+    vtctldata.VSchemaPublishRequest request = 2;
+}
+
+message VSchemaAddVindexRequest {
+    string cluster_id = 1;
+    vtctldata.VSchemaAddVindexRequest request = 2;
+}
+
+message VSchemaRemoveVindexRequest {
+    string cluster_id = 1;
+    vtctldata.VSchemaRemoveVindexRequest request = 2;
+}
+
+message VSchemaAddLookupVindexRequest {
+    string cluster_id = 1;
+    vtctldata.VSchemaAddLookupVindexRequest request = 2;
+}
+
+message VSchemaAddTablesRequest {
+    string cluster_id = 1;
+    vtctldata.VSchemaAddTablesRequest request = 2;
+}
+
+message VSchemaRemoveTablesRequest {
+    string cluster_id = 1;
+    vtctldata.VSchemaRemoveTablesRequest request = 2;
+}
+
+message VSchemaSetPrimaryVindexRequest {
+    string cluster_id = 1;
+    vtctldata.VSchemaSetPrimaryVindexRequest request = 2;
+}
+
+message VSchemaSetSequenceRequest {
+    string cluster_id = 1;
+    vtctldata.VSchemaSetSequenceRequest request = 2;
+}
+
+message VSchemaSetReferenceRequest {
+    string cluster_id = 1;
+    vtctldata.VSchemaSetReferenceRequest request = 2;
 }

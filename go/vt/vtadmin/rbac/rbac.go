@@ -94,6 +94,10 @@ const (
 	ManageTabletReplicationAction        Action = "manage_tablet_replication" // Start/Stop Replication
 	ManageTabletWritabilityAction        Action = "manage_tablet_writability" // SetRead{Only,Write}
 	RefreshTabletReplicationSourceAction Action = "refresh_tablet_replication_source"
+
+	/* vschema-specific actions */
+
+	VSchemaUpdateAction Action = "update"
 )
 
 // Resource is an enum representing all resources managed by vtadmin.

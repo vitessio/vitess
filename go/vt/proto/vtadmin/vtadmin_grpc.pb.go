@@ -218,6 +218,29 @@ type VTAdminClient interface {
 	// VExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VExplain(ctx context.Context, in *VExplainRequest, opts ...grpc.CallOption) (*VExplainResponse, error)
+	// VSchemaPublish publishes a VSchema marking it as non-draft.
+	VSchemaPublish(ctx context.Context, in *VSchemaPublishRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaPublishResponse, error)
+	// VSchemaAddVindex adds a vindex in vschema. It doesn't expect it to be a lookup
+	// vindex, so owner is not set/required.
+	VSchemaAddVindex(ctx context.Context, in *VSchemaAddVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaAddVindexResponse, error)
+	// VSchemaRemoveVindex removes an existing vindex from the vschema.
+	VSchemaRemoveVindex(ctx context.Context, in *VSchemaRemoveVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaRemoveVindexResponse, error)
+	// VSchemaAddLookupVindex adds a lookup vindex to the vschema.
+	VSchemaAddLookupVindex(ctx context.Context, in *VSchemaAddLookupVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaAddLookupVindexResponse, error)
+	// VSchemaAddTables adds one or more tables to the vschema, along with a
+	// designated primary vindex and associated columns.
+	VSchemaAddTables(ctx context.Context, in *VSchemaAddTablesRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaAddTablesResponse, error)
+	// VSchemaRemoveTables removes one or more tables from the vschema.
+	VSchemaRemoveTables(ctx context.Context, in *VSchemaRemoveTablesRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaRemoveTablesResponse, error)
+	// VSchemaSetPrimaryVindex sets or updates the primary vindex for one or
+	// more tables, specifying the columns associated with the vindex.
+	VSchemaSetPrimaryVindex(ctx context.Context, in *VSchemaSetPrimaryVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetPrimaryVindexResponse, error)
+	// VSchemaSetSequence sets up a table column to use a sequence from an
+	// unsharded source.
+	VSchemaSetSequence(ctx context.Context, in *VSchemaSetSequenceRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetSequenceResponse, error)
+	// VSchemaSetReference sets up a reference table, which points to a source
+	// table in another vschema.
+	VSchemaSetReference(ctx context.Context, in *VSchemaSetReferenceRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetReferenceResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(ctx context.Context, in *WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
 	// WorkflowSwitchTraffic switches traffic for a VReplication workflow.
@@ -871,6 +894,87 @@ func (c *vTAdminClient) VExplain(ctx context.Context, in *VExplainRequest, opts 
 	return out, nil
 }
 
+func (c *vTAdminClient) VSchemaPublish(ctx context.Context, in *VSchemaPublishRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaPublishResponse, error) {
+	out := new(vtctldata.VSchemaPublishResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VSchemaPublish", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) VSchemaAddVindex(ctx context.Context, in *VSchemaAddVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaAddVindexResponse, error) {
+	out := new(vtctldata.VSchemaAddVindexResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VSchemaAddVindex", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) VSchemaRemoveVindex(ctx context.Context, in *VSchemaRemoveVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaRemoveVindexResponse, error) {
+	out := new(vtctldata.VSchemaRemoveVindexResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VSchemaRemoveVindex", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) VSchemaAddLookupVindex(ctx context.Context, in *VSchemaAddLookupVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaAddLookupVindexResponse, error) {
+	out := new(vtctldata.VSchemaAddLookupVindexResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VSchemaAddLookupVindex", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) VSchemaAddTables(ctx context.Context, in *VSchemaAddTablesRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaAddTablesResponse, error) {
+	out := new(vtctldata.VSchemaAddTablesResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VSchemaAddTables", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) VSchemaRemoveTables(ctx context.Context, in *VSchemaRemoveTablesRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaRemoveTablesResponse, error) {
+	out := new(vtctldata.VSchemaRemoveTablesResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VSchemaRemoveTables", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) VSchemaSetPrimaryVindex(ctx context.Context, in *VSchemaSetPrimaryVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetPrimaryVindexResponse, error) {
+	out := new(vtctldata.VSchemaSetPrimaryVindexResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VSchemaSetPrimaryVindex", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) VSchemaSetSequence(ctx context.Context, in *VSchemaSetSequenceRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetSequenceResponse, error) {
+	out := new(vtctldata.VSchemaSetSequenceResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VSchemaSetSequence", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) VSchemaSetReference(ctx context.Context, in *VSchemaSetReferenceRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetReferenceResponse, error) {
+	out := new(vtctldata.VSchemaSetReferenceResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VSchemaSetReference", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) WorkflowDelete(ctx context.Context, in *WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error) {
 	out := new(vtctldata.WorkflowDeleteResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/WorkflowDelete", in, out, opts...)
@@ -1088,6 +1192,29 @@ type VTAdminServer interface {
 	// VExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VExplain(context.Context, *VExplainRequest) (*VExplainResponse, error)
+	// VSchemaPublish publishes a VSchema marking it as non-draft.
+	VSchemaPublish(context.Context, *VSchemaPublishRequest) (*vtctldata.VSchemaPublishResponse, error)
+	// VSchemaAddVindex adds a vindex in vschema. It doesn't expect it to be a lookup
+	// vindex, so owner is not set/required.
+	VSchemaAddVindex(context.Context, *VSchemaAddVindexRequest) (*vtctldata.VSchemaAddVindexResponse, error)
+	// VSchemaRemoveVindex removes an existing vindex from the vschema.
+	VSchemaRemoveVindex(context.Context, *VSchemaRemoveVindexRequest) (*vtctldata.VSchemaRemoveVindexResponse, error)
+	// VSchemaAddLookupVindex adds a lookup vindex to the vschema.
+	VSchemaAddLookupVindex(context.Context, *VSchemaAddLookupVindexRequest) (*vtctldata.VSchemaAddLookupVindexResponse, error)
+	// VSchemaAddTables adds one or more tables to the vschema, along with a
+	// designated primary vindex and associated columns.
+	VSchemaAddTables(context.Context, *VSchemaAddTablesRequest) (*vtctldata.VSchemaAddTablesResponse, error)
+	// VSchemaRemoveTables removes one or more tables from the vschema.
+	VSchemaRemoveTables(context.Context, *VSchemaRemoveTablesRequest) (*vtctldata.VSchemaRemoveTablesResponse, error)
+	// VSchemaSetPrimaryVindex sets or updates the primary vindex for one or
+	// more tables, specifying the columns associated with the vindex.
+	VSchemaSetPrimaryVindex(context.Context, *VSchemaSetPrimaryVindexRequest) (*vtctldata.VSchemaSetPrimaryVindexResponse, error)
+	// VSchemaSetSequence sets up a table column to use a sequence from an
+	// unsharded source.
+	VSchemaSetSequence(context.Context, *VSchemaSetSequenceRequest) (*vtctldata.VSchemaSetSequenceResponse, error)
+	// VSchemaSetReference sets up a reference table, which points to a source
+	// table in another vschema.
+	VSchemaSetReference(context.Context, *VSchemaSetReferenceRequest) (*vtctldata.VSchemaSetReferenceResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(context.Context, *WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
 	// WorkflowSwitchTraffic switches traffic for a VReplication workflow.
@@ -1311,6 +1438,33 @@ func (UnimplementedVTAdminServer) VTExplain(context.Context, *VTExplainRequest) 
 }
 func (UnimplementedVTAdminServer) VExplain(context.Context, *VExplainRequest) (*VExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VExplain not implemented")
+}
+func (UnimplementedVTAdminServer) VSchemaPublish(context.Context, *VSchemaPublishRequest) (*vtctldata.VSchemaPublishResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaPublish not implemented")
+}
+func (UnimplementedVTAdminServer) VSchemaAddVindex(context.Context, *VSchemaAddVindexRequest) (*vtctldata.VSchemaAddVindexResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaAddVindex not implemented")
+}
+func (UnimplementedVTAdminServer) VSchemaRemoveVindex(context.Context, *VSchemaRemoveVindexRequest) (*vtctldata.VSchemaRemoveVindexResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaRemoveVindex not implemented")
+}
+func (UnimplementedVTAdminServer) VSchemaAddLookupVindex(context.Context, *VSchemaAddLookupVindexRequest) (*vtctldata.VSchemaAddLookupVindexResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaAddLookupVindex not implemented")
+}
+func (UnimplementedVTAdminServer) VSchemaAddTables(context.Context, *VSchemaAddTablesRequest) (*vtctldata.VSchemaAddTablesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaAddTables not implemented")
+}
+func (UnimplementedVTAdminServer) VSchemaRemoveTables(context.Context, *VSchemaRemoveTablesRequest) (*vtctldata.VSchemaRemoveTablesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaRemoveTables not implemented")
+}
+func (UnimplementedVTAdminServer) VSchemaSetPrimaryVindex(context.Context, *VSchemaSetPrimaryVindexRequest) (*vtctldata.VSchemaSetPrimaryVindexResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaSetPrimaryVindex not implemented")
+}
+func (UnimplementedVTAdminServer) VSchemaSetSequence(context.Context, *VSchemaSetSequenceRequest) (*vtctldata.VSchemaSetSequenceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaSetSequence not implemented")
+}
+func (UnimplementedVTAdminServer) VSchemaSetReference(context.Context, *VSchemaSetReferenceRequest) (*vtctldata.VSchemaSetReferenceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaSetReference not implemented")
 }
 func (UnimplementedVTAdminServer) WorkflowDelete(context.Context, *WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowDelete not implemented")
@@ -2609,6 +2763,168 @@ func _VTAdmin_VExplain_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_VSchemaPublish_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VSchemaPublishRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VSchemaPublish(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VSchemaPublish",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VSchemaPublish(ctx, req.(*VSchemaPublishRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_VSchemaAddVindex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VSchemaAddVindexRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VSchemaAddVindex(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VSchemaAddVindex",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VSchemaAddVindex(ctx, req.(*VSchemaAddVindexRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_VSchemaRemoveVindex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VSchemaRemoveVindexRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VSchemaRemoveVindex(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VSchemaRemoveVindex",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VSchemaRemoveVindex(ctx, req.(*VSchemaRemoveVindexRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_VSchemaAddLookupVindex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VSchemaAddLookupVindexRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VSchemaAddLookupVindex(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VSchemaAddLookupVindex",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VSchemaAddLookupVindex(ctx, req.(*VSchemaAddLookupVindexRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_VSchemaAddTables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VSchemaAddTablesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VSchemaAddTables(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VSchemaAddTables",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VSchemaAddTables(ctx, req.(*VSchemaAddTablesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_VSchemaRemoveTables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VSchemaRemoveTablesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VSchemaRemoveTables(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VSchemaRemoveTables",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VSchemaRemoveTables(ctx, req.(*VSchemaRemoveTablesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_VSchemaSetPrimaryVindex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VSchemaSetPrimaryVindexRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VSchemaSetPrimaryVindex(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VSchemaSetPrimaryVindex",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VSchemaSetPrimaryVindex(ctx, req.(*VSchemaSetPrimaryVindexRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_VSchemaSetSequence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VSchemaSetSequenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VSchemaSetSequence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VSchemaSetSequence",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VSchemaSetSequence(ctx, req.(*VSchemaSetSequenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_VSchemaSetReference_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VSchemaSetReferenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).VSchemaSetReference(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/VSchemaSetReference",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).VSchemaSetReference(ctx, req.(*VSchemaSetReferenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_WorkflowDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(WorkflowDeleteRequest)
 	if err := dec(in); err != nil {
@@ -2935,6 +3251,42 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VExplain",
 			Handler:    _VTAdmin_VExplain_Handler,
+		},
+		{
+			MethodName: "VSchemaPublish",
+			Handler:    _VTAdmin_VSchemaPublish_Handler,
+		},
+		{
+			MethodName: "VSchemaAddVindex",
+			Handler:    _VTAdmin_VSchemaAddVindex_Handler,
+		},
+		{
+			MethodName: "VSchemaRemoveVindex",
+			Handler:    _VTAdmin_VSchemaRemoveVindex_Handler,
+		},
+		{
+			MethodName: "VSchemaAddLookupVindex",
+			Handler:    _VTAdmin_VSchemaAddLookupVindex_Handler,
+		},
+		{
+			MethodName: "VSchemaAddTables",
+			Handler:    _VTAdmin_VSchemaAddTables_Handler,
+		},
+		{
+			MethodName: "VSchemaRemoveTables",
+			Handler:    _VTAdmin_VSchemaRemoveTables_Handler,
+		},
+		{
+			MethodName: "VSchemaSetPrimaryVindex",
+			Handler:    _VTAdmin_VSchemaSetPrimaryVindex_Handler,
+		},
+		{
+			MethodName: "VSchemaSetSequence",
+			Handler:    _VTAdmin_VSchemaSetSequence_Handler,
+		},
+		{
+			MethodName: "VSchemaSetReference",
+			Handler:    _VTAdmin_VSchemaSetReference_Handler,
 		},
 		{
 			MethodName: "WorkflowDelete",

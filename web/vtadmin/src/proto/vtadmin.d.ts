@@ -1018,6 +1018,132 @@ export namespace vtadmin {
         public vExplain(request: vtadmin.IVExplainRequest): Promise<vtadmin.VExplainResponse>;
 
         /**
+         * Calls VSchemaPublish.
+         * @param request VSchemaPublishRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VSchemaPublishResponse
+         */
+        public vSchemaPublish(request: vtadmin.IVSchemaPublishRequest, callback: vtadmin.VTAdmin.VSchemaPublishCallback): void;
+
+        /**
+         * Calls VSchemaPublish.
+         * @param request VSchemaPublishRequest message or plain object
+         * @returns Promise
+         */
+        public vSchemaPublish(request: vtadmin.IVSchemaPublishRequest): Promise<vtctldata.VSchemaPublishResponse>;
+
+        /**
+         * Calls VSchemaAddVindex.
+         * @param request VSchemaAddVindexRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VSchemaAddVindexResponse
+         */
+        public vSchemaAddVindex(request: vtadmin.IVSchemaAddVindexRequest, callback: vtadmin.VTAdmin.VSchemaAddVindexCallback): void;
+
+        /**
+         * Calls VSchemaAddVindex.
+         * @param request VSchemaAddVindexRequest message or plain object
+         * @returns Promise
+         */
+        public vSchemaAddVindex(request: vtadmin.IVSchemaAddVindexRequest): Promise<vtctldata.VSchemaAddVindexResponse>;
+
+        /**
+         * Calls VSchemaRemoveVindex.
+         * @param request VSchemaRemoveVindexRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VSchemaRemoveVindexResponse
+         */
+        public vSchemaRemoveVindex(request: vtadmin.IVSchemaRemoveVindexRequest, callback: vtadmin.VTAdmin.VSchemaRemoveVindexCallback): void;
+
+        /**
+         * Calls VSchemaRemoveVindex.
+         * @param request VSchemaRemoveVindexRequest message or plain object
+         * @returns Promise
+         */
+        public vSchemaRemoveVindex(request: vtadmin.IVSchemaRemoveVindexRequest): Promise<vtctldata.VSchemaRemoveVindexResponse>;
+
+        /**
+         * Calls VSchemaAddLookupVindex.
+         * @param request VSchemaAddLookupVindexRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VSchemaAddLookupVindexResponse
+         */
+        public vSchemaAddLookupVindex(request: vtadmin.IVSchemaAddLookupVindexRequest, callback: vtadmin.VTAdmin.VSchemaAddLookupVindexCallback): void;
+
+        /**
+         * Calls VSchemaAddLookupVindex.
+         * @param request VSchemaAddLookupVindexRequest message or plain object
+         * @returns Promise
+         */
+        public vSchemaAddLookupVindex(request: vtadmin.IVSchemaAddLookupVindexRequest): Promise<vtctldata.VSchemaAddLookupVindexResponse>;
+
+        /**
+         * Calls VSchemaAddTables.
+         * @param request VSchemaAddTablesRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VSchemaAddTablesResponse
+         */
+        public vSchemaAddTables(request: vtadmin.IVSchemaAddTablesRequest, callback: vtadmin.VTAdmin.VSchemaAddTablesCallback): void;
+
+        /**
+         * Calls VSchemaAddTables.
+         * @param request VSchemaAddTablesRequest message or plain object
+         * @returns Promise
+         */
+        public vSchemaAddTables(request: vtadmin.IVSchemaAddTablesRequest): Promise<vtctldata.VSchemaAddTablesResponse>;
+
+        /**
+         * Calls VSchemaRemoveTables.
+         * @param request VSchemaRemoveTablesRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VSchemaRemoveTablesResponse
+         */
+        public vSchemaRemoveTables(request: vtadmin.IVSchemaRemoveTablesRequest, callback: vtadmin.VTAdmin.VSchemaRemoveTablesCallback): void;
+
+        /**
+         * Calls VSchemaRemoveTables.
+         * @param request VSchemaRemoveTablesRequest message or plain object
+         * @returns Promise
+         */
+        public vSchemaRemoveTables(request: vtadmin.IVSchemaRemoveTablesRequest): Promise<vtctldata.VSchemaRemoveTablesResponse>;
+
+        /**
+         * Calls VSchemaSetPrimaryVindex.
+         * @param request VSchemaSetPrimaryVindexRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VSchemaSetPrimaryVindexResponse
+         */
+        public vSchemaSetPrimaryVindex(request: vtadmin.IVSchemaSetPrimaryVindexRequest, callback: vtadmin.VTAdmin.VSchemaSetPrimaryVindexCallback): void;
+
+        /**
+         * Calls VSchemaSetPrimaryVindex.
+         * @param request VSchemaSetPrimaryVindexRequest message or plain object
+         * @returns Promise
+         */
+        public vSchemaSetPrimaryVindex(request: vtadmin.IVSchemaSetPrimaryVindexRequest): Promise<vtctldata.VSchemaSetPrimaryVindexResponse>;
+
+        /**
+         * Calls VSchemaSetSequence.
+         * @param request VSchemaSetSequenceRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VSchemaSetSequenceResponse
+         */
+        public vSchemaSetSequence(request: vtadmin.IVSchemaSetSequenceRequest, callback: vtadmin.VTAdmin.VSchemaSetSequenceCallback): void;
+
+        /**
+         * Calls VSchemaSetSequence.
+         * @param request VSchemaSetSequenceRequest message or plain object
+         * @returns Promise
+         */
+        public vSchemaSetSequence(request: vtadmin.IVSchemaSetSequenceRequest): Promise<vtctldata.VSchemaSetSequenceResponse>;
+
+        /**
+         * Calls VSchemaSetReference.
+         * @param request VSchemaSetReferenceRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VSchemaSetReferenceResponse
+         */
+        public vSchemaSetReference(request: vtadmin.IVSchemaSetReferenceRequest, callback: vtadmin.VTAdmin.VSchemaSetReferenceCallback): void;
+
+        /**
+         * Calls VSchemaSetReference.
+         * @param request VSchemaSetReferenceRequest message or plain object
+         * @returns Promise
+         */
+        public vSchemaSetReference(request: vtadmin.IVSchemaSetReferenceRequest): Promise<vtctldata.VSchemaSetReferenceResponse>;
+
+        /**
          * Calls WorkflowDelete.
          * @param request WorkflowDeleteRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and WorkflowDeleteResponse
@@ -1544,6 +1670,69 @@ export namespace vtadmin {
          * @param [response] VExplainResponse
          */
         type VExplainCallback = (error: (Error|null), response?: vtadmin.VExplainResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vSchemaPublish}.
+         * @param error Error, if any
+         * @param [response] VSchemaPublishResponse
+         */
+        type VSchemaPublishCallback = (error: (Error|null), response?: vtctldata.VSchemaPublishResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vSchemaAddVindex}.
+         * @param error Error, if any
+         * @param [response] VSchemaAddVindexResponse
+         */
+        type VSchemaAddVindexCallback = (error: (Error|null), response?: vtctldata.VSchemaAddVindexResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vSchemaRemoveVindex}.
+         * @param error Error, if any
+         * @param [response] VSchemaRemoveVindexResponse
+         */
+        type VSchemaRemoveVindexCallback = (error: (Error|null), response?: vtctldata.VSchemaRemoveVindexResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vSchemaAddLookupVindex}.
+         * @param error Error, if any
+         * @param [response] VSchemaAddLookupVindexResponse
+         */
+        type VSchemaAddLookupVindexCallback = (error: (Error|null), response?: vtctldata.VSchemaAddLookupVindexResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vSchemaAddTables}.
+         * @param error Error, if any
+         * @param [response] VSchemaAddTablesResponse
+         */
+        type VSchemaAddTablesCallback = (error: (Error|null), response?: vtctldata.VSchemaAddTablesResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vSchemaRemoveTables}.
+         * @param error Error, if any
+         * @param [response] VSchemaRemoveTablesResponse
+         */
+        type VSchemaRemoveTablesCallback = (error: (Error|null), response?: vtctldata.VSchemaRemoveTablesResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vSchemaSetPrimaryVindex}.
+         * @param error Error, if any
+         * @param [response] VSchemaSetPrimaryVindexResponse
+         */
+        type VSchemaSetPrimaryVindexCallback = (error: (Error|null), response?: vtctldata.VSchemaSetPrimaryVindexResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vSchemaSetSequence}.
+         * @param error Error, if any
+         * @param [response] VSchemaSetSequenceResponse
+         */
+        type VSchemaSetSequenceCallback = (error: (Error|null), response?: vtctldata.VSchemaSetSequenceResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vSchemaSetReference}.
+         * @param error Error, if any
+         * @param [response] VSchemaSetReferenceResponse
+         */
+        type VSchemaSetReferenceCallback = (error: (Error|null), response?: vtctldata.VSchemaSetReferenceResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#workflowDelete}.
@@ -15603,6 +15792,933 @@ export namespace vtadmin {
 
         /**
          * Gets the default type url for VExplainResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VSchemaPublishRequest. */
+    interface IVSchemaPublishRequest {
+
+        /** VSchemaPublishRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** VSchemaPublishRequest request */
+        request?: (vtctldata.IVSchemaPublishRequest|null);
+    }
+
+    /** Represents a VSchemaPublishRequest. */
+    class VSchemaPublishRequest implements IVSchemaPublishRequest {
+
+        /**
+         * Constructs a new VSchemaPublishRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVSchemaPublishRequest);
+
+        /** VSchemaPublishRequest cluster_id. */
+        public cluster_id: string;
+
+        /** VSchemaPublishRequest request. */
+        public request?: (vtctldata.IVSchemaPublishRequest|null);
+
+        /**
+         * Creates a new VSchemaPublishRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VSchemaPublishRequest instance
+         */
+        public static create(properties?: vtadmin.IVSchemaPublishRequest): vtadmin.VSchemaPublishRequest;
+
+        /**
+         * Encodes the specified VSchemaPublishRequest message. Does not implicitly {@link vtadmin.VSchemaPublishRequest.verify|verify} messages.
+         * @param message VSchemaPublishRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVSchemaPublishRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VSchemaPublishRequest message, length delimited. Does not implicitly {@link vtadmin.VSchemaPublishRequest.verify|verify} messages.
+         * @param message VSchemaPublishRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVSchemaPublishRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VSchemaPublishRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VSchemaPublishRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VSchemaPublishRequest;
+
+        /**
+         * Decodes a VSchemaPublishRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VSchemaPublishRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VSchemaPublishRequest;
+
+        /**
+         * Verifies a VSchemaPublishRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VSchemaPublishRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VSchemaPublishRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VSchemaPublishRequest;
+
+        /**
+         * Creates a plain object from a VSchemaPublishRequest message. Also converts values to other types if specified.
+         * @param message VSchemaPublishRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VSchemaPublishRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VSchemaPublishRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VSchemaPublishRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VSchemaAddVindexRequest. */
+    interface IVSchemaAddVindexRequest {
+
+        /** VSchemaAddVindexRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** VSchemaAddVindexRequest request */
+        request?: (vtctldata.IVSchemaAddVindexRequest|null);
+    }
+
+    /** Represents a VSchemaAddVindexRequest. */
+    class VSchemaAddVindexRequest implements IVSchemaAddVindexRequest {
+
+        /**
+         * Constructs a new VSchemaAddVindexRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVSchemaAddVindexRequest);
+
+        /** VSchemaAddVindexRequest cluster_id. */
+        public cluster_id: string;
+
+        /** VSchemaAddVindexRequest request. */
+        public request?: (vtctldata.IVSchemaAddVindexRequest|null);
+
+        /**
+         * Creates a new VSchemaAddVindexRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VSchemaAddVindexRequest instance
+         */
+        public static create(properties?: vtadmin.IVSchemaAddVindexRequest): vtadmin.VSchemaAddVindexRequest;
+
+        /**
+         * Encodes the specified VSchemaAddVindexRequest message. Does not implicitly {@link vtadmin.VSchemaAddVindexRequest.verify|verify} messages.
+         * @param message VSchemaAddVindexRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVSchemaAddVindexRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VSchemaAddVindexRequest message, length delimited. Does not implicitly {@link vtadmin.VSchemaAddVindexRequest.verify|verify} messages.
+         * @param message VSchemaAddVindexRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVSchemaAddVindexRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VSchemaAddVindexRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VSchemaAddVindexRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VSchemaAddVindexRequest;
+
+        /**
+         * Decodes a VSchemaAddVindexRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VSchemaAddVindexRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VSchemaAddVindexRequest;
+
+        /**
+         * Verifies a VSchemaAddVindexRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VSchemaAddVindexRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VSchemaAddVindexRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VSchemaAddVindexRequest;
+
+        /**
+         * Creates a plain object from a VSchemaAddVindexRequest message. Also converts values to other types if specified.
+         * @param message VSchemaAddVindexRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VSchemaAddVindexRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VSchemaAddVindexRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VSchemaAddVindexRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VSchemaRemoveVindexRequest. */
+    interface IVSchemaRemoveVindexRequest {
+
+        /** VSchemaRemoveVindexRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** VSchemaRemoveVindexRequest request */
+        request?: (vtctldata.IVSchemaRemoveVindexRequest|null);
+    }
+
+    /** Represents a VSchemaRemoveVindexRequest. */
+    class VSchemaRemoveVindexRequest implements IVSchemaRemoveVindexRequest {
+
+        /**
+         * Constructs a new VSchemaRemoveVindexRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVSchemaRemoveVindexRequest);
+
+        /** VSchemaRemoveVindexRequest cluster_id. */
+        public cluster_id: string;
+
+        /** VSchemaRemoveVindexRequest request. */
+        public request?: (vtctldata.IVSchemaRemoveVindexRequest|null);
+
+        /**
+         * Creates a new VSchemaRemoveVindexRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VSchemaRemoveVindexRequest instance
+         */
+        public static create(properties?: vtadmin.IVSchemaRemoveVindexRequest): vtadmin.VSchemaRemoveVindexRequest;
+
+        /**
+         * Encodes the specified VSchemaRemoveVindexRequest message. Does not implicitly {@link vtadmin.VSchemaRemoveVindexRequest.verify|verify} messages.
+         * @param message VSchemaRemoveVindexRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVSchemaRemoveVindexRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VSchemaRemoveVindexRequest message, length delimited. Does not implicitly {@link vtadmin.VSchemaRemoveVindexRequest.verify|verify} messages.
+         * @param message VSchemaRemoveVindexRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVSchemaRemoveVindexRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VSchemaRemoveVindexRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VSchemaRemoveVindexRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VSchemaRemoveVindexRequest;
+
+        /**
+         * Decodes a VSchemaRemoveVindexRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VSchemaRemoveVindexRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VSchemaRemoveVindexRequest;
+
+        /**
+         * Verifies a VSchemaRemoveVindexRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VSchemaRemoveVindexRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VSchemaRemoveVindexRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VSchemaRemoveVindexRequest;
+
+        /**
+         * Creates a plain object from a VSchemaRemoveVindexRequest message. Also converts values to other types if specified.
+         * @param message VSchemaRemoveVindexRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VSchemaRemoveVindexRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VSchemaRemoveVindexRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VSchemaRemoveVindexRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VSchemaAddLookupVindexRequest. */
+    interface IVSchemaAddLookupVindexRequest {
+
+        /** VSchemaAddLookupVindexRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** VSchemaAddLookupVindexRequest request */
+        request?: (vtctldata.IVSchemaAddLookupVindexRequest|null);
+    }
+
+    /** Represents a VSchemaAddLookupVindexRequest. */
+    class VSchemaAddLookupVindexRequest implements IVSchemaAddLookupVindexRequest {
+
+        /**
+         * Constructs a new VSchemaAddLookupVindexRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVSchemaAddLookupVindexRequest);
+
+        /** VSchemaAddLookupVindexRequest cluster_id. */
+        public cluster_id: string;
+
+        /** VSchemaAddLookupVindexRequest request. */
+        public request?: (vtctldata.IVSchemaAddLookupVindexRequest|null);
+
+        /**
+         * Creates a new VSchemaAddLookupVindexRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VSchemaAddLookupVindexRequest instance
+         */
+        public static create(properties?: vtadmin.IVSchemaAddLookupVindexRequest): vtadmin.VSchemaAddLookupVindexRequest;
+
+        /**
+         * Encodes the specified VSchemaAddLookupVindexRequest message. Does not implicitly {@link vtadmin.VSchemaAddLookupVindexRequest.verify|verify} messages.
+         * @param message VSchemaAddLookupVindexRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVSchemaAddLookupVindexRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VSchemaAddLookupVindexRequest message, length delimited. Does not implicitly {@link vtadmin.VSchemaAddLookupVindexRequest.verify|verify} messages.
+         * @param message VSchemaAddLookupVindexRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVSchemaAddLookupVindexRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VSchemaAddLookupVindexRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VSchemaAddLookupVindexRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VSchemaAddLookupVindexRequest;
+
+        /**
+         * Decodes a VSchemaAddLookupVindexRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VSchemaAddLookupVindexRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VSchemaAddLookupVindexRequest;
+
+        /**
+         * Verifies a VSchemaAddLookupVindexRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VSchemaAddLookupVindexRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VSchemaAddLookupVindexRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VSchemaAddLookupVindexRequest;
+
+        /**
+         * Creates a plain object from a VSchemaAddLookupVindexRequest message. Also converts values to other types if specified.
+         * @param message VSchemaAddLookupVindexRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VSchemaAddLookupVindexRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VSchemaAddLookupVindexRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VSchemaAddLookupVindexRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VSchemaAddTablesRequest. */
+    interface IVSchemaAddTablesRequest {
+
+        /** VSchemaAddTablesRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** VSchemaAddTablesRequest request */
+        request?: (vtctldata.IVSchemaAddTablesRequest|null);
+    }
+
+    /** Represents a VSchemaAddTablesRequest. */
+    class VSchemaAddTablesRequest implements IVSchemaAddTablesRequest {
+
+        /**
+         * Constructs a new VSchemaAddTablesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVSchemaAddTablesRequest);
+
+        /** VSchemaAddTablesRequest cluster_id. */
+        public cluster_id: string;
+
+        /** VSchemaAddTablesRequest request. */
+        public request?: (vtctldata.IVSchemaAddTablesRequest|null);
+
+        /**
+         * Creates a new VSchemaAddTablesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VSchemaAddTablesRequest instance
+         */
+        public static create(properties?: vtadmin.IVSchemaAddTablesRequest): vtadmin.VSchemaAddTablesRequest;
+
+        /**
+         * Encodes the specified VSchemaAddTablesRequest message. Does not implicitly {@link vtadmin.VSchemaAddTablesRequest.verify|verify} messages.
+         * @param message VSchemaAddTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVSchemaAddTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VSchemaAddTablesRequest message, length delimited. Does not implicitly {@link vtadmin.VSchemaAddTablesRequest.verify|verify} messages.
+         * @param message VSchemaAddTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVSchemaAddTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VSchemaAddTablesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VSchemaAddTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VSchemaAddTablesRequest;
+
+        /**
+         * Decodes a VSchemaAddTablesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VSchemaAddTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VSchemaAddTablesRequest;
+
+        /**
+         * Verifies a VSchemaAddTablesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VSchemaAddTablesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VSchemaAddTablesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VSchemaAddTablesRequest;
+
+        /**
+         * Creates a plain object from a VSchemaAddTablesRequest message. Also converts values to other types if specified.
+         * @param message VSchemaAddTablesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VSchemaAddTablesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VSchemaAddTablesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VSchemaAddTablesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VSchemaRemoveTablesRequest. */
+    interface IVSchemaRemoveTablesRequest {
+
+        /** VSchemaRemoveTablesRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** VSchemaRemoveTablesRequest request */
+        request?: (vtctldata.IVSchemaRemoveTablesRequest|null);
+    }
+
+    /** Represents a VSchemaRemoveTablesRequest. */
+    class VSchemaRemoveTablesRequest implements IVSchemaRemoveTablesRequest {
+
+        /**
+         * Constructs a new VSchemaRemoveTablesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVSchemaRemoveTablesRequest);
+
+        /** VSchemaRemoveTablesRequest cluster_id. */
+        public cluster_id: string;
+
+        /** VSchemaRemoveTablesRequest request. */
+        public request?: (vtctldata.IVSchemaRemoveTablesRequest|null);
+
+        /**
+         * Creates a new VSchemaRemoveTablesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VSchemaRemoveTablesRequest instance
+         */
+        public static create(properties?: vtadmin.IVSchemaRemoveTablesRequest): vtadmin.VSchemaRemoveTablesRequest;
+
+        /**
+         * Encodes the specified VSchemaRemoveTablesRequest message. Does not implicitly {@link vtadmin.VSchemaRemoveTablesRequest.verify|verify} messages.
+         * @param message VSchemaRemoveTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVSchemaRemoveTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VSchemaRemoveTablesRequest message, length delimited. Does not implicitly {@link vtadmin.VSchemaRemoveTablesRequest.verify|verify} messages.
+         * @param message VSchemaRemoveTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVSchemaRemoveTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VSchemaRemoveTablesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VSchemaRemoveTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VSchemaRemoveTablesRequest;
+
+        /**
+         * Decodes a VSchemaRemoveTablesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VSchemaRemoveTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VSchemaRemoveTablesRequest;
+
+        /**
+         * Verifies a VSchemaRemoveTablesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VSchemaRemoveTablesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VSchemaRemoveTablesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VSchemaRemoveTablesRequest;
+
+        /**
+         * Creates a plain object from a VSchemaRemoveTablesRequest message. Also converts values to other types if specified.
+         * @param message VSchemaRemoveTablesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VSchemaRemoveTablesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VSchemaRemoveTablesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VSchemaRemoveTablesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VSchemaSetPrimaryVindexRequest. */
+    interface IVSchemaSetPrimaryVindexRequest {
+
+        /** VSchemaSetPrimaryVindexRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** VSchemaSetPrimaryVindexRequest request */
+        request?: (vtctldata.IVSchemaSetPrimaryVindexRequest|null);
+    }
+
+    /** Represents a VSchemaSetPrimaryVindexRequest. */
+    class VSchemaSetPrimaryVindexRequest implements IVSchemaSetPrimaryVindexRequest {
+
+        /**
+         * Constructs a new VSchemaSetPrimaryVindexRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVSchemaSetPrimaryVindexRequest);
+
+        /** VSchemaSetPrimaryVindexRequest cluster_id. */
+        public cluster_id: string;
+
+        /** VSchemaSetPrimaryVindexRequest request. */
+        public request?: (vtctldata.IVSchemaSetPrimaryVindexRequest|null);
+
+        /**
+         * Creates a new VSchemaSetPrimaryVindexRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VSchemaSetPrimaryVindexRequest instance
+         */
+        public static create(properties?: vtadmin.IVSchemaSetPrimaryVindexRequest): vtadmin.VSchemaSetPrimaryVindexRequest;
+
+        /**
+         * Encodes the specified VSchemaSetPrimaryVindexRequest message. Does not implicitly {@link vtadmin.VSchemaSetPrimaryVindexRequest.verify|verify} messages.
+         * @param message VSchemaSetPrimaryVindexRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVSchemaSetPrimaryVindexRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VSchemaSetPrimaryVindexRequest message, length delimited. Does not implicitly {@link vtadmin.VSchemaSetPrimaryVindexRequest.verify|verify} messages.
+         * @param message VSchemaSetPrimaryVindexRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVSchemaSetPrimaryVindexRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VSchemaSetPrimaryVindexRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VSchemaSetPrimaryVindexRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VSchemaSetPrimaryVindexRequest;
+
+        /**
+         * Decodes a VSchemaSetPrimaryVindexRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VSchemaSetPrimaryVindexRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VSchemaSetPrimaryVindexRequest;
+
+        /**
+         * Verifies a VSchemaSetPrimaryVindexRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VSchemaSetPrimaryVindexRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VSchemaSetPrimaryVindexRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VSchemaSetPrimaryVindexRequest;
+
+        /**
+         * Creates a plain object from a VSchemaSetPrimaryVindexRequest message. Also converts values to other types if specified.
+         * @param message VSchemaSetPrimaryVindexRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VSchemaSetPrimaryVindexRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VSchemaSetPrimaryVindexRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VSchemaSetPrimaryVindexRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VSchemaSetSequenceRequest. */
+    interface IVSchemaSetSequenceRequest {
+
+        /** VSchemaSetSequenceRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** VSchemaSetSequenceRequest request */
+        request?: (vtctldata.IVSchemaSetSequenceRequest|null);
+    }
+
+    /** Represents a VSchemaSetSequenceRequest. */
+    class VSchemaSetSequenceRequest implements IVSchemaSetSequenceRequest {
+
+        /**
+         * Constructs a new VSchemaSetSequenceRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVSchemaSetSequenceRequest);
+
+        /** VSchemaSetSequenceRequest cluster_id. */
+        public cluster_id: string;
+
+        /** VSchemaSetSequenceRequest request. */
+        public request?: (vtctldata.IVSchemaSetSequenceRequest|null);
+
+        /**
+         * Creates a new VSchemaSetSequenceRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VSchemaSetSequenceRequest instance
+         */
+        public static create(properties?: vtadmin.IVSchemaSetSequenceRequest): vtadmin.VSchemaSetSequenceRequest;
+
+        /**
+         * Encodes the specified VSchemaSetSequenceRequest message. Does not implicitly {@link vtadmin.VSchemaSetSequenceRequest.verify|verify} messages.
+         * @param message VSchemaSetSequenceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVSchemaSetSequenceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VSchemaSetSequenceRequest message, length delimited. Does not implicitly {@link vtadmin.VSchemaSetSequenceRequest.verify|verify} messages.
+         * @param message VSchemaSetSequenceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVSchemaSetSequenceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VSchemaSetSequenceRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VSchemaSetSequenceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VSchemaSetSequenceRequest;
+
+        /**
+         * Decodes a VSchemaSetSequenceRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VSchemaSetSequenceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VSchemaSetSequenceRequest;
+
+        /**
+         * Verifies a VSchemaSetSequenceRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VSchemaSetSequenceRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VSchemaSetSequenceRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VSchemaSetSequenceRequest;
+
+        /**
+         * Creates a plain object from a VSchemaSetSequenceRequest message. Also converts values to other types if specified.
+         * @param message VSchemaSetSequenceRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VSchemaSetSequenceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VSchemaSetSequenceRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VSchemaSetSequenceRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VSchemaSetReferenceRequest. */
+    interface IVSchemaSetReferenceRequest {
+
+        /** VSchemaSetReferenceRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** VSchemaSetReferenceRequest request */
+        request?: (vtctldata.IVSchemaSetReferenceRequest|null);
+    }
+
+    /** Represents a VSchemaSetReferenceRequest. */
+    class VSchemaSetReferenceRequest implements IVSchemaSetReferenceRequest {
+
+        /**
+         * Constructs a new VSchemaSetReferenceRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVSchemaSetReferenceRequest);
+
+        /** VSchemaSetReferenceRequest cluster_id. */
+        public cluster_id: string;
+
+        /** VSchemaSetReferenceRequest request. */
+        public request?: (vtctldata.IVSchemaSetReferenceRequest|null);
+
+        /**
+         * Creates a new VSchemaSetReferenceRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VSchemaSetReferenceRequest instance
+         */
+        public static create(properties?: vtadmin.IVSchemaSetReferenceRequest): vtadmin.VSchemaSetReferenceRequest;
+
+        /**
+         * Encodes the specified VSchemaSetReferenceRequest message. Does not implicitly {@link vtadmin.VSchemaSetReferenceRequest.verify|verify} messages.
+         * @param message VSchemaSetReferenceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVSchemaSetReferenceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VSchemaSetReferenceRequest message, length delimited. Does not implicitly {@link vtadmin.VSchemaSetReferenceRequest.verify|verify} messages.
+         * @param message VSchemaSetReferenceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVSchemaSetReferenceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VSchemaSetReferenceRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VSchemaSetReferenceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VSchemaSetReferenceRequest;
+
+        /**
+         * Decodes a VSchemaSetReferenceRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VSchemaSetReferenceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VSchemaSetReferenceRequest;
+
+        /**
+         * Verifies a VSchemaSetReferenceRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VSchemaSetReferenceRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VSchemaSetReferenceRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VSchemaSetReferenceRequest;
+
+        /**
+         * Creates a plain object from a VSchemaSetReferenceRequest message. Also converts values to other types if specified.
+         * @param message VSchemaSetReferenceRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VSchemaSetReferenceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VSchemaSetReferenceRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VSchemaSetReferenceRequest
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
