@@ -308,7 +308,7 @@ func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scop
 	if current.inHavingAggr {
 		// when inside an aggregation, we'll search the FROM clause before the SELECT expressions
 		deps, err := b.resolveColumn(colName, current.parent, allowMulti, true)
-		if deps.direct.NotEmpty() || (err != nil && !errors.Is(err, ColumnNotFoundError{})) {
+		if deps.direct.NotEmpty() || (err != nil && !errors.As(err, &ColumnNotFoundError{})) {
 			return deps, err
 		}
 	}
@@ -344,7 +344,7 @@ func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scop
 
 	if !current.inHavingAggr && sel.GroupBy == nil {
 		// if we are not inside an aggregation, and there is no GROUP BY, we consider the FROM clause before failing
-		if deps.direct.NotEmpty() || (err != nil && !errors.Is(err, ColumnNotFoundError{})) {
+		if deps.direct.NotEmpty() || (err != nil && !errors.As(err, &ColumnNotFoundError{})) {
 			return deps, err
 		}
 	}
@@ -419,7 +419,7 @@ func (b *binder) resolveColInGroupBy(
 		return dependency{}, err
 	}
 	if dependencies.empty() {
-		if errors.Is(firstErr, ColumnNotFoundError{}) {
+		if errors.As(firstErr, &ColumnNotFoundError{}) {
 			return dependency{}, &ColumnNotFoundClauseError{Column: colName.Name.String(), Clause: "group statement"}
 		}
 		return deps, firstErr
