@@ -34,7 +34,34 @@
         }
       ]
     },
+    "t2": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "hash"
+        }
+      ]
+    },
     "tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "column": "unq_col",
+          "name": "unq_vdx"
+        },
+        {
+          "columns": [
+            "nonunq_col",
+            "id"
+          ],
+          "name": "nonunq_vdx"
+        }
+      ]
+    },
+    "tbl2": {
       "column_vindexes": [
         {
           "column": "id",

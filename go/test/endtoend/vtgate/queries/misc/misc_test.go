@@ -40,7 +40,7 @@ func start(t testing.TB) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		tables := []string{"t1", "tbl", "unq_idx", "nonunq_idx", "tbl_enum_set", "uks.unsharded", "all_types"}
+		tables := []string{"t1", "t2", "tbl", "tbl2", "unq_idx", "nonunq_idx", "tbl_enum_set", "uks.unsharded", "all_types"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -1030,30 +1030,30 @@ func TestBlockJoin(t *testing.T) {
 	defer closer()
 
 	for i := 1; i <= 1000; i++ {
-		mcmp.Exec(fmt.Sprintf("insert into t1(id1, id2, id, name) values (%d, %d, %d, \"%d\")", i, 2*i, i, i))
-		mcmp.Exec(fmt.Sprintf("insert into tbl(id, unq_col, nonunq_col) values (%d, %d, %d)", i, 2*i, 3*i))
+		mcmp.Exec(fmt.Sprintf("insert into t2(id1, id2, id, name) values (%d, %d, %d, \"%d\")", i, 2*i, i, i))
+		mcmp.Exec(fmt.Sprintf("insert into tbl2(id, unq_col, nonunq_col, name) values (%d, %d, %d, \"%d\")", i, 2*i, 3*i, i))
 	}
 
 	for _, mode := range []string{"oltp", "olap"} {
 		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
 
-			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1, t1.id2 from t1 join tbl where t1.id1 = tbl.id")
-			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1 from t1 join tbl where t1.id2 = tbl.id")
-			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1 from t1 join tbl where t1.id2 = tbl.id order by t1.id1")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id1, t2.id2 from t2 join tbl2 where t2.id1 = tbl2.id")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id1 from t2 join tbl2 where t2.id2 = tbl2.id")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id1 from t2 join tbl2 where t2.id2 = tbl2.id order by t2.id1")
 
-			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1+t1.id2 as mas from t1 join tbl where t1.id2 = tbl.id order by mas")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id1+t2.id2 as mas from t2 join tbl2 where t2.id2 = tbl2.id order by mas")
 
-			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1, tbl.nonunq_col from t1 join tbl where t1.id2 = tbl.id")
-			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1+t1.id2 as mas, tbl.unq_col, t1.id2 from t1 join tbl where t1.id2 = tbl.id and tbl.id > 50 order by mas")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id1, tbl2.nonunq_col from t2 join tbl2 where t2.id2 = tbl2.id")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id1+t2.id2 as mas, tbl2.unq_col, t2.id2 from t2 join tbl2 where t2.id2 = tbl2.id and tbl2.id > 50 order by mas")
 
-			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t1.id), abs(t1.id+t3.id) from tbl t3 join t1 on lower(t3.name) = lower(t1.name) where lower(t3.name) = '5' and abs(t1.id) > 1")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t2.id), abs(t2.id+t3.id) from tbl2 t3 join t2 on lower(t3.name) = lower(t2.name) where lower(t3.name) = '5' and abs(t2.id) > 1")
 
 			mcmp.SetAllowAnyFieldSize(true)
-			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id2 from t1 join tbl where t1.id2 = tbl.id and t1.id2 = 500")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id2 from t2 join tbl2 where t2.id2 = tbl2.id and t2.id2 = 500")
 			mcmp.SetAllowAnyFieldSize(false)
 
-			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t1.id1), abs(t1.id1+t3.id) from tbl t3 join t1 on t3.unq_col = t1.id2")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t2.id1), abs(t2.id1+t3.id) from tbl2 t3 join t2 on t3.unq_col = t2.id2")
 		})
 	}
 }
