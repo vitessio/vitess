@@ -54,7 +54,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.OverClause:
 		if !a.singleUnshardedKeyspace {
-			return ShardedError{Inner: &UnsupportedConstruct{errString: "OVER CLAUSE with sharded keyspace"}}
+			return NotSingleShardError{Inner: &UnsupportedConstruct{errString: "OVER CLAUSE with sharded keyspace"}}
 		}
 	}
 
