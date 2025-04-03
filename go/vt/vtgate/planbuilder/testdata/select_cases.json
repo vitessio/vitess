@@ -1122,14 +1122,14 @@
   },
   {
     "comment": "Block join with complex expressions",
-    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(u.id), abs(ue.id), abs(ue.user_id+u.id) from user u join user_extra ue on u.name = ue.email",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(s.oid), abs(se.colx), abs(se.colx+s.oid) from sales s join sales_extra se on s.col1 = se.cola",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(u.id), abs(ue.id), abs(ue.user_id+u.id) from user u join user_extra ue on u.name = ue.email",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(s.oid), abs(se.colx), abs(se.colx+s.oid) from sales s join sales_extra se on s.col1 = se.cola",
       "Instructions": {
         "OperatorType": "SimpleProjection",
-        "Columns": "0,2,1",
+        "Columns": "2,0,1",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -1143,57 +1143,28 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select abs(ue.id), ue.user_id, ue.email from user_extra as ue where 1 != 1",
-                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(ue.id), ue.user_id, ue.email from user_extra as ue",
-                "Table": "user_extra"
+                "FieldQuery": "select abs(s.oid), s.oid, s.col1 from sales as s where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(s.oid), s.oid, s.col1 from sales as s",
+                "Table": "sales"
               },
               {
-                "OperatorType": "VindexLookup",
-                "Variant": "MultiEqual",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "Values": [
-                  "values:2"
-                ],
-                "Vindex": "name_user_map",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "IN",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
-                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-                    "Table": "name_user_vdx",
-                    "Values": [
-                      "::name"
-                    ],
-                    "Vindex": "user_index"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "ByDestination",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select abs(u.id), abs(`values`.ue_user_id + u.id) as `abs(ue.user_id + u.id)`, `values`.x_x as `abs(ue.id)` from (values ::values) as `values`(x_x, ue_user_id, ue_email), `user` as u where 1 != 1",
-                    "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(u.id), abs(`values`.ue_user_id + u.id) as `abs(ue.user_id + u.id)`, `values`.x_x as `abs(ue.id)` from (values ::values) as `values`(x_x, ue_user_id, ue_email), `user` as u where u.`name` = `values`.ue_email",
-                    "Table": "`user`"
-                  }
-                ]
+                "FieldQuery": "select abs(se.colx), abs(se.colx + `values`.s_oid) as `abs(se.colx + s.oid)`, `values`.x_x as `abs(s.oid)` from (values ::values) as `values`(x_x, s_oid, s_col1), sales_extra as se where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(se.colx), abs(se.colx + `values`.s_oid) as `abs(se.colx + s.oid)`, `values`.x_x as `abs(s.oid)` from (values ::values) as `values`(x_x, s_oid, s_col1), sales_extra as se where `values`.s_col1 = se.cola",
+                "Table": "sales_extra"
               }
             ]
           }
         ]
       },
       "TablesUsed": [
-        "user.user",
-        "user.user_extra"
+        "user.sales",
+        "user.sales_extra"
       ]
     }
   },
