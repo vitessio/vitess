@@ -591,7 +591,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> charset_or_character_set charset_or_character_set_or_names isolation_level
 %type <updateExpr> update_expression
 %type <str> for_from from_or_on
-%type <str> default_opt
+%type <str> default_opt value_or_values
 %type <ignore> ignore_opt
 %type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
@@ -8273,7 +8273,7 @@ optionally_opt:
 // Because the rules are together, the parser can keep shifting
 // the tokens until it disambiguates a as sql_id and select as keyword.
 insert_data:
-  VALUES val_tuple_list row_alias_opt
+  value_or_values val_tuple_list row_alias_opt
   {
     $$ = &Insert{Rows: $2, RowAlias: $3}
   }
@@ -8281,11 +8281,11 @@ insert_data:
   {
     $$ = &Insert{Rows: $1}
   }
-| openb ins_column_list closeb VALUES val_tuple_list row_alias_opt
+| openb ins_column_list closeb value_or_values val_tuple_list row_alias_opt
   {
     $$ = &Insert{Columns: $2, Rows: $5, RowAlias: $6}
   }
-| openb closeb VALUES val_tuple_list row_alias_opt
+| openb closeb value_or_values val_tuple_list row_alias_opt
   {
     $$ = &Insert{Columns: []IdentifierCI{}, Rows: $4, RowAlias: $5}
   }
@@ -8293,6 +8293,10 @@ insert_data:
   {
     $$ = &Insert{Columns: $2, Rows: $4}
   }
+
+value_or_values:
+  VALUE
+| VALUES
 
 ins_column_list:
   sql_id
@@ -9194,6 +9198,7 @@ non_reserved_keyword:
 | USER
 | USER_RESOURCES
 | VALIDATION
+| VALUE
 | VAR_POP %prec FUNCTION_CALL_NON_KEYWORD
 | VAR_SAMP %prec FUNCTION_CALL_NON_KEYWORD
 | VARBINARY
