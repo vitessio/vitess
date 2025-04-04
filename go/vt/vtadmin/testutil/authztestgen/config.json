@@ -84,8 +84,8 @@
                     "field": "GetSrvVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetSrvVSchemaResponse\nError error}",
                     "value": "\"zone1\": {\nResponse: &vtctldatapb.GetSrvVSchemaResponse{\nSrvVSchema: &vschemapb.SrvVSchema{\nKeyspaces: map[string]*vschemapb.Keyspace{\n\"test\": {\nSharded: true,\nVindexes: map[string]*vschemapb.Vindex{\n\"id\": {\nType: \"hash\",\n},\n},\nTables: map[string]*vschemapb.Table{\n\"t1\": {\nColumnVindexes: []*vschemapb.ColumnVindex{\n{\nName: \"id\",\nColumn: \"id\",\n},\n},\n},\n},\n},\n},\n},\n},\n},",
-                    "comment": "this structure exists primarily to support the VTExplain test cases; for GetSrvVSchema(s) itself, an empty but non-nil map is sufficient"
-                },
+                    "comment": "this structure exists primarily to support the VExplain test cases; for GetSrvVSchema(s) itself, an empty but non-nil map is sufficient"
+                },         
                 {
                     "field": "GetVSchemaResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.GetVSchemaResponse\nError error}",
@@ -2012,16 +2012,16 @@
             ]
         },
         {
-            "method": "VTExplain",
+            "method": "VExplain",
             "rules": [
                 {
-                    "resource": "VTExplain",
+                    "resource": "VExplain",
                     "actions": ["get"],
                     "subjects": ["user:allowed"],
                     "clusters": ["*"]
                 }
             ],
-            "request": "&vtadminpb.VTExplainRequest{\nCluster: \"test\",\nKeyspace: \"test\",\nSql: \"select id from t1;\",}",
+            "request": "&vtadminpb.VExplainRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\nSql: \"vexplain all select * from customers\",}",
             "serialize_cases": true,
             "cases": [
                 {
