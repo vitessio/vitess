@@ -14414,7 +14414,7 @@ func TestValidateKeyspaceErrors(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create the keyspace and shard record
-	_, err = ts.GetOrCreateShard(ctx, ks, shard)
+	_, err = ts.GetOrCreateShard(ctx, ks, shard, nil)
 	require.NoError(t, err)
 
 	// verify ValidateKeyspace finds all the issues without hanging
