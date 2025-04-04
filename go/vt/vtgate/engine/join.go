@@ -166,7 +166,10 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 					nil,
 					jn.Cols,
 				)}
-				return callback(result)
+
+				if err := callback(result); err != nil {
+					return err
+				}
 			}
 		}
 		// This needs to be locking since it's not safe to just use
