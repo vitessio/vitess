@@ -17,6 +17,13 @@ func NewTestEnv() *Environment {
 	}
 }
 
+func New84TestEnv() *Environment {
+	return &Environment{
+		Environment: vtenv.New84TestEnv(),
+		DefaultColl: collations.MySQL8().DefaultConnectionCharset(),
+	}
+}
+
 func NewEnv(env *vtenv.Environment, defaultColl collations.ID) *Environment {
 	return &Environment{
 		Environment: env,
