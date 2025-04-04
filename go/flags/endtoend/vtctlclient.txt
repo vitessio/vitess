@@ -1,5 +1,5 @@
 Usage of vtctlclient:
-      --action_timeout duration                                     timeout for the total command (default 1h0m0s)
+      --action-timeout duration                                     timeout for the total command (default 1h0m0s)
       --alsologtostderr                                             log to standard error as well as files
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling   Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
@@ -43,9 +43,9 @@ Usage of vtctlclient:
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
       --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging
-      --vtctl_client_protocol string                                Protocol to use to talk to the vtctl server. (default "grpc")
-      --vtctld_grpc_ca string                                       the server ca to use to validate servers when connecting
-      --vtctld_grpc_cert string                                     the cert to use to connect
-      --vtctld_grpc_crl string                                      the server crl to use to validate server certificates when connecting
-      --vtctld_grpc_key string                                      the key to use to connect
-      --vtctld_grpc_server_name string                              the server name to use to validate server certificate
+      --vtctl-client-protocol string                                Protocol to use to talk to the vtctl server. (default "grpc")
+      --vtctld-grpc-ca string                                       the server ca to use to validate servers when connecting
+      --vtctld-grpc-cert string                                     the cert to use to connect
+      --vtctld-grpc-crl string                                      the server crl to use to validate server certificates when connecting
+      --vtctld-grpc-key string                                      the key to use to connect
+      --vtctld-grpc-server-name string                              the server name to use to validate server certificate

@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -89,7 +90,7 @@ func SetupShardedReparentCluster(t *testing.T, durability string) *cluster.Local
 		"--track_schema_versions=true",
 		"--queryserver_enable_online_ddl=false")
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-		"--enable_buffer",
+		utils.GetFlagVariantForTests("--enable-buffer"),
 		// Long timeout in case failover is slow.
 		"--buffer_window", "10m",
 		"--buffer_max_failover_duration", "10m",
@@ -356,7 +357,7 @@ func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, 
 		"PlannedReparentShard",
 		fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
 	if actionTimeout != "" {
-		args = append(args, "--action_timeout", actionTimeout)
+		args = append(args, utils.GetFlagVariantForTests("--action-timeout"), actionTimeout)
 	}
 	if waitTimeout != "" {
 		args = append(args, "--wait-replicas-timeout", waitTimeout)
@@ -381,7 +382,7 @@ func Ers(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, to
 func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet, preventCrossCellPromotion bool) (string, error) {
 	var args []string
 	if timeout != "" {
-		args = append(args, "--action_timeout", timeout)
+		args = append(args, utils.GetFlagVariantForTests("--action-timeout"), timeout)
 	}
 	args = append(args, "EmergencyReparentShard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName))
 	if tab != nil {

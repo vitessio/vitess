@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.VtgateProcess.RewriteConfiguration(); err != nil {
 			return 1
 		}
-		if err := clusterInstance.VtgateProcess.WaitForConfig(`"transaction_mode":"TWOPC"`); err != nil {
+		if err := clusterInstance.VtgateProcess.WaitForConfig(`"transaction-mode":"TWOPC"`); err != nil {
 			return 1
 		}
 		vtParams = clusterInstance.GetVTParams(keyspaceName)

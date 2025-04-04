@@ -115,26 +115,26 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set client_found_rows = 2",
 		err: "variable 'client_found_rows' can't be set to the value: 2 is not a boolean",
 	}, {
-		in:  "set transaction_mode = 'unspecified'",
+		in:  "set transaction-mode = 'unspecified'",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
 	}, {
-		in:  "set transaction_mode = 'single'",
+		in:  "set transaction-mode = 'single'",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_SINGLE},
 	}, {
-		in:  "set transaction_mode = 'multi'",
+		in:  "set transaction-mode = 'multi'",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_MULTI},
 	}, {
-		in:  "set transaction_mode = 'twopc'",
+		in:  "set transaction-mode = 'twopc'",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
 	}, {
-		in:  "set transaction_mode = twopc",
+		in:  "set transaction-mode = twopc",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
 	}, {
-		in:  "set transaction_mode = 'aa'",
-		err: "invalid transaction_mode: aa",
+		in:  "set transaction-mode = 'aa'",
+		err: "invalid transaction-mode: aa",
 	}, {
-		in:  "set transaction_mode = 1",
-		err: "incorrect argument type to variable 'transaction_mode': INT64",
+		in:  "set transaction-mode = 1",
+		err: "incorrect argument type to variable 'transaction-mode': INT64",
 	}, {
 		in:  "set workload = 'unspecified'",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_UNSPECIFIED}},
@@ -160,7 +160,7 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set transaction_isolation = 'read-committed'",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
-		in:  "set transaction_mode = 'twopc', autocommit=1",
+		in:  "set transaction-mode = 'twopc', autocommit=1",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
 	}, {
 		in:  "set sql_select_limit = 5",
@@ -238,22 +238,22 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set session transaction read write",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
-		in:  "set @@enable_system_settings = on",
+		in:  "set @@enable-system-settings = on",
 		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
 	}, {
-		in:  "set @@enable_system_settings = off",
+		in:  "set @@enable-system-settings = off",
 		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
 	}, {
-		in:  "set @@enable_system_settings = 1",
+		in:  "set @@enable-system-settings = 1",
 		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
 	}, {
-		in:  "set @@enable_system_settings = 0",
+		in:  "set @@enable-system-settings = 0",
 		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
 	}, {
-		in:  "set @@enable_system_settings = true",
+		in:  "set @@enable-system-settings = true",
 		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: true},
 	}, {
-		in:  "set @@enable_system_settings = false",
+		in:  "set @@enable-system-settings = false",
 		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
 	}, {
 		in:  "set @@socket = '/tmp/change.sock'",

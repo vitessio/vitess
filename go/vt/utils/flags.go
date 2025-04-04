@@ -24,6 +24,7 @@ import (
 
 	"github.com/spf13/pflag"
 	// "vitess.io/vitess/go/vt/log"
+	// "vitess.io/vitess/go/vt/log"
 )
 
 /*
@@ -107,6 +108,34 @@ func SetFlagVar(fs *pflag.FlagSet, value pflag.Value, name, usage string) {
 	}
 	fs.Var(value, dashed, usage)
 	fs.Var(value, underscored, "")
+	_ = fs.MarkHidden(underscored)
+	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
+}
+
+// SetFlagStringWithViperVar registers a string flag with both dash and underscore variants
+// This is designed to work with viper-managed flags
+func SetFlagStringWithViperVar(fs *pflag.FlagSet, name string, def string, usage string) {
+	underscored, dashed := flagVariants(name)
+	if name == underscored {
+		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
+	}
+
+	fs.String(dashed, def, usage)
+	fs.String(underscored, def, "")
+	_ = fs.MarkHidden(underscored)
+	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
+}
+
+// SetFlagBoolWithViperVar registers a boolean flag with both dash and underscore variants
+// This is designed to work with viper-managed flags
+func SetFlagBoolWithViperVar(fs *pflag.FlagSet, name string, def bool, usage string) {
+	underscored, dashed := flagVariants(name)
+	if name == underscored {
+		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
+	}
+
+	fs.Bool(dashed, def, usage)
+	fs.Bool(underscored, def, "")
 	_ = fs.MarkHidden(underscored)
 	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
 }

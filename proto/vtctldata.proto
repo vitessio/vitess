@@ -37,7 +37,7 @@ import "vttime.proto";
 // timeouts are in nanoseconds.
 message ExecuteVtctlCommandRequest {
   repeated string args = 1;
-  int64 action_timeout = 2;
+  int64 action-timeout = 2;
 }
 
 // ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.

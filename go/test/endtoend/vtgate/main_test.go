@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -90,7 +91,7 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--vschema_ddl_authorized_users", "%")
+			vtutils.GetFlagVariantForTests("--vschema-ddl-authorized-users"), "%")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {

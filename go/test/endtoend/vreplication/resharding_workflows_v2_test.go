@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -171,7 +172,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	if action != workflowActionComplete && tabletTypes != "" {
 		args = append(args, "--tablet-types", tabletTypes)
 	}
-	args = append(args, "--action_timeout=10m") // At this point something is up so fail the test
+	args = append(args, fmt.Sprintf("%s=10m", utils.GetFlagVariantForTests("--action-timeout"))) // At this point something is up so fail the test
 	t.Logf("Executing workflow command: vtctldclient %s", strings.Join(args, " "))
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
 	lastOutput = output

@@ -101,7 +101,7 @@ func TestTransactionModes(t *testing.T) {
 	defer conn.Close()
 
 	// set transaction mode to SINGLE.
-	utils.Exec(t, conn, "set transaction_mode = 'single'")
+	utils.Exec(t, conn, "set transaction-mode = 'single'")
 
 	// Insert targeted to multiple tables should fail as Transaction mode is SINGLE
 	utils.Exec(t, conn, "begin")
@@ -113,7 +113,7 @@ func TestTransactionModes(t *testing.T) {
 	utils.Exec(t, conn, "rollback")
 
 	// set transaction mode to TWOPC.
-	utils.Exec(t, conn, "set transaction_mode = 'twopc'")
+	utils.Exec(t, conn, "set transaction-mode = 'twopc'")
 
 	// Insert targeted to multiple db should PASS with TWOPC trx mode
 	utils.Exec(t, conn, "begin")

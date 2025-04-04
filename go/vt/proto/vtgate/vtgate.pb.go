@@ -47,7 +47,7 @@ const (
 type TransactionMode int32
 
 const (
-	// UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction_mode'.
+	// UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction-mode'.
 	TransactionMode_UNSPECIFIED TransactionMode = 0
 	// SINGLE disallows distributed transactions.
 	TransactionMode_SINGLE TransactionMode = 1
@@ -183,8 +183,8 @@ type Session struct {
 	TargetString string `protobuf:"bytes,5,opt,name=target_string,json=targetString,proto3" json:"target_string,omitempty"`
 	// options is used only for V3.
 	Options *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
-	// transaction_mode specifies the current transaction mode.
-	TransactionMode TransactionMode `protobuf:"varint,7,opt,name=transaction_mode,json=transactionMode,proto3,enum=vtgate.TransactionMode" json:"transaction_mode,omitempty"`
+	// transaction-mode specifies the current transaction mode.
+	TransactionMode TransactionMode `protobuf:"varint,7,opt,name=transaction-mode,json=transactionMode,proto3,enum=vtgate.TransactionMode" json:"transaction-mode,omitempty"`
 	// warnings contains non-fatal warnings from the previous query
 	Warnings []*query.QueryWarning `protobuf:"bytes,8,rep,name=warnings,proto3" json:"warnings,omitempty"`
 	// pre_sessions contains sessions that have to be committed first.
@@ -217,8 +217,8 @@ type Session struct {
 	DDLStrategy string `protobuf:"bytes,21,opt,name=DDLStrategy,proto3" json:"DDLStrategy,omitempty"`
 	// Session UUID
 	SessionUUID string `protobuf:"bytes,22,opt,name=SessionUUID,proto3" json:"SessionUUID,omitempty"`
-	// enable_system_settings defines if we can use reserved connections.
-	EnableSystemSettings bool             `protobuf:"varint,23,opt,name=enable_system_settings,json=enableSystemSettings,proto3" json:"enable_system_settings,omitempty"`
+	// enable-system-settings defines if we can use reserved connections.
+	EnableSystemSettings bool             `protobuf:"varint,23,opt,name=enable-system-settings,json=enableSystemSettings,proto3" json:"enable-system-settings,omitempty"`
 	AdvisoryLock         map[string]int64 `protobuf:"bytes,24,rep,name=advisory_lock,json=advisoryLock,proto3" json:"advisory_lock,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	// query_timeout is the maximum amount of time a query is permitted to run
 	QueryTimeout     int64                   `protobuf:"varint,25,opt,name=query_timeout,json=queryTimeout,proto3" json:"query_timeout,omitempty"`
@@ -1967,7 +1967,7 @@ var file_vtgate_proto_goTypes = []any{
 var file_vtgate_proto_depIdxs = []int32{
 	20, // 0: vtgate.Session.shard_sessions:type_name -> vtgate.Session.ShardSession
 	25, // 1: vtgate.Session.options:type_name -> query.ExecuteOptions
-	0,  // 2: vtgate.Session.transaction_mode:type_name -> vtgate.TransactionMode
+	0,  // 2: vtgate.Session.transaction-mode:type_name -> vtgate.TransactionMode
 	26, // 3: vtgate.Session.warnings:type_name -> query.QueryWarning
 	20, // 4: vtgate.Session.pre_sessions:type_name -> vtgate.Session.ShardSession
 	20, // 5: vtgate.Session.post_sessions:type_name -> vtgate.Session.ShardSession
