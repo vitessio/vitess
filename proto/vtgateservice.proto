@@ -35,6 +35,9 @@ service Vitess {
   // API group: v3
   rpc Execute(vtgate.ExecuteRequest) returns (vtgate.ExecuteResponse) {};
 
+  // ExecuteMulti executes multiple queries on the right shards.
+  rpc ExecuteMulti(vtgate.ExecuteMultiRequest) returns (vtgate.ExecuteMultiResponse) {};
+
   // ExecuteBatch tries to route the list of queries on the right shards.
   // It depends on the query and bind variables to provide enough
   // information in conjunction with the vindexes to route the query.
@@ -47,6 +50,9 @@ service Vitess {
   // Use this method if the query returns a large number of rows.
   // API group: v3
   rpc StreamExecute(vtgate.StreamExecuteRequest) returns (stream vtgate.StreamExecuteResponse) {};
+
+  // StreamExecuteMulti executes multiple streaming queries.
+  rpc StreamExecuteMulti(vtgate.StreamExecuteMultiRequest) returns (stream vtgate.StreamExecuteMultiResponse) {};
 
   // VStream streams binlog events from the requested sources.
   rpc VStream(vtgate.VStreamRequest) returns (stream vtgate.VStreamResponse) {};

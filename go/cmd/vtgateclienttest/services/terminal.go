@@ -74,6 +74,14 @@ func (c *terminalClient) Prepare(ctx context.Context, session *vtgatepb.Session,
 	return session, nil, 0, errTerminal
 }
 
+func (c *terminalClient) ExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
+	return session, nil, errTerminal
+}
+
+func (c *terminalClient) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
+	return session, errTerminal
+}
+
 func (c *terminalClient) CloseSession(ctx context.Context, session *vtgatepb.Session) error {
 	return errTerminal
 }

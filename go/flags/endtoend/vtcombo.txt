@@ -230,6 +230,7 @@ Flags:
       --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
       --mysql_default_workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
+      --mysql_multi_query_protocol                                       If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.
       --mysql_port int                                                   mysql port (default 3306)
       --mysql_server_bind_address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)

@@ -177,6 +177,34 @@ message ReadAfterWrite {
   bool session_track_gtids = 3;
 }
 
+// ExecuteMultiRequest is the payload to ExecuteMulti.
+message ExecuteMultiRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // sql contains the set of queries to execute.
+  string sql = 2;
+
+  // session carries the session state.
+  Session session = 3;
+}
+
+// ExecuteMultiResponse is the returned value from ExecuteMulti.
+message ExecuteMultiResponse {
+  // error contains an application level error if necessary. Note the
+  // session may have changed, even when an error is returned (for
+  // instance if a database integrity error happened).
+  vtrpc.RPCError error = 1;
+
+  // session is the updated session information.
+  Session session = 2;
+
+  // results contain the query results. There can be some results even if the
+  // error is set.
+  repeated query.QueryResult results = 3;
+}
+
 // ExecuteRequest is the payload to Execute.
 message ExecuteRequest {
   // caller_id identifies the caller. This is the effective caller ID,
@@ -280,6 +308,34 @@ message StreamExecuteResponse {
 
   // session is the updated session information.
   Session session = 2;
+}
+
+// StreamExecuteMultiRequest is the payload to StreamExecuteMulti.
+message StreamExecuteMultiRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // sql contains the set of queries to execute.
+  string sql = 2;
+
+  // session carries the session state.
+  Session session = 3;
+}
+
+// StreamExecuteMultiResponse is the returned value from StreamExecuteMulti.
+message StreamExecuteMultiResponse {
+  // result contains the result set or an error if one occurred while executing the query.
+  query.ResultWithError result = 1;
+
+  // more_results is set to true if there are more results to follow after this one has concluded.
+  bool more_results = 2;
+
+  // new_result signifies a new result has started with this packet.
+  bool new_result = 3;
+
+  // session is the updated session information.
+  Session session = 4;
 }
 
 // ResolveTransactionRequest is the payload to ResolveTransaction.

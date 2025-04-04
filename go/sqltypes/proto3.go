@@ -146,27 +146,35 @@ func CustomProto3ToResult(fields []*querypb.Field, qr *querypb.QueryResult) *Res
 }
 
 // ResultsToProto3 converts []Result to proto3.
-func ResultsToProto3(qr []Result) []*querypb.QueryResult {
+func ResultsToProto3(qr []*Result) []*querypb.QueryResult {
 	if len(qr) == 0 {
 		return nil
 	}
 	result := make([]*querypb.QueryResult, len(qr))
 	for i, q := range qr {
-		result[i] = ResultToProto3(&q)
+		result[i] = ResultToProto3(q)
 	}
 	return result
 }
 
 // Proto3ToResults converts proto3 results to []Result.
-func Proto3ToResults(qr []*querypb.QueryResult) []Result {
+func Proto3ToResults(qr []*querypb.QueryResult) []*Result {
 	if len(qr) == 0 {
 		return nil
 	}
-	result := make([]Result, len(qr))
+	result := make([]*Result, len(qr))
 	for i, q := range qr {
-		result[i] = *Proto3ToResult(q)
+		result[i] = Proto3ToResult(q)
 	}
 	return result
+}
+
+// QueryResponseToProto3 converts QueryResponse to proto3.
+func QueryResponseToProto3(qr QueryResponse) *querypb.ResultWithError {
+	return &querypb.ResultWithError{
+		Result: ResultToProto3(qr.QueryResult),
+		Error:  vterrors.ToVTRPC(qr.QueryError),
+	}
 }
 
 // QueryResponsesToProto3 converts []QueryResponse to proto3.
@@ -176,10 +184,7 @@ func QueryResponsesToProto3(qr []QueryResponse) []*querypb.ResultWithError {
 	}
 	result := make([]*querypb.ResultWithError, len(qr))
 	for i, q := range qr {
-		result[i] = &querypb.ResultWithError{
-			Result: ResultToProto3(q.QueryResult),
-			Error:  vterrors.ToVTRPC(q.QueryError),
-		}
+		result[i] = QueryResponseToProto3(q)
 	}
 	return result
 }

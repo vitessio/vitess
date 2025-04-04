@@ -561,6 +561,15 @@
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
+		"vtgate_queries_multi_query": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/multi_query"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
+			"Tags": ["upgrade_downgrade_query_serving_queries"]
+		},
 		"vtgate_queries_timeout": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/timeout"],

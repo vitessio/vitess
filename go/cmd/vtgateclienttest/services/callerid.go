@@ -29,6 +29,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
@@ -103,4 +104,41 @@ func (c *callerIDClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservi
 		return session, err
 	}
 	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
+}
+
+// ExecuteMulti is part of the VTGateService interface
+func (c *callerIDClient) ExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
+	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(sqlString)
+	if err != nil {
+		return session, nil, err
+	}
+	var result *sqltypes.Result
+	for _, query := range queries {
+		session, result, err = c.Execute(ctx, mysqlCtx, session, query, nil, false)
+		if err != nil {
+			return session, qrs, err
+		}
+		qrs = append(qrs, result)
+	}
+	return session, qrs, nil
+}
+
+// StreamExecuteMulti is part of the VTGateService interface
+func (c *callerIDClient) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
+	queries, err := sqlparser.NewTestParser().SplitStatementToPieces(sqlString)
+	if err != nil {
+		return session, err
+	}
+	for idx, query := range queries {
+		firstPacket := true
+		session, err = c.StreamExecute(ctx, mysqlCtx, session, query, nil, func(result *sqltypes.Result) error {
+			err = callback(sqltypes.QueryResponse{QueryResult: result}, idx < len(queries)-1, firstPacket)
+			firstPacket = false
+			return err
+		})
+		if err != nil {
+			return session, err
+		}
+	}
+	return session, nil
 }

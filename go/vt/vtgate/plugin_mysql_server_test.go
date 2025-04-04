@@ -58,6 +58,25 @@ func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes
 	return callback(&sqltypes.Result{Fields: []*querypb.Field{}, Rows: [][]sqltypes.Value{}})
 }
 
+func (th *testHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	qries, err := th.Env().Parser().SplitStatementToPieces(sql)
+	if err != nil {
+		return err
+	}
+	for i, query := range qries {
+		firstPacket := true
+		err = th.ComQuery(c, query, func(result *sqltypes.Result) error {
+			err = callback(sqltypes.QueryResponse{QueryResult: result}, i < len(qries)-1, firstPacket)
+			firstPacket = false
+			return err
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (th *testHandler) ComPrepare(*mysql.Conn, string) ([]*querypb.Field, uint16, error) {
 	return nil, 0, nil
 }

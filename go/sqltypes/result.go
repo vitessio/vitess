@@ -211,12 +211,12 @@ func (result *Result) Equal(other *Result) bool {
 
 // ResultsEqual compares two arrays of Result.
 // reflect.DeepEqual shouldn't be used because of the protos.
-func ResultsEqual(r1, r2 []Result) bool {
+func ResultsEqual(r1, r2 []*Result) bool {
 	if len(r1) != len(r2) {
 		return false
 	}
 	for i, r := range r1 {
-		if !r.Equal(&r2[i]) {
+		if !r.Equal(r2[i]) {
 			return false
 		}
 	}
