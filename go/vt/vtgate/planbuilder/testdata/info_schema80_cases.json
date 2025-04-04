@@ -1249,8 +1249,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select variable, value from sys.sys_config where 1 != 1",
-        "Query": "select variable, value from sys.sys_config",
+        "FieldQuery": "select variable, `value` from sys.sys_config where 1 != 1",
+        "Query": "select variable, `value` from sys.sys_config",
         "Table": "sys.sys_config"
       }
     }

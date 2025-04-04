@@ -2418,8 +2418,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "with recursive literal_cte as (select 1 as id, 100 as value, 1 as manager_id from dual where 1 != 1 union all select id + 1, value * 2, id from literal_cte where 1 != 1) select l.id, l.value, l.manager_id from literal_cte as l where 1 != 1",
-            "Query": "with recursive literal_cte as (select 1 as id, 100 as value, 1 as manager_id from dual union all select id + 1, value * 2, id from literal_cte where id < 5) select l.id, l.value, l.manager_id from literal_cte as l",
+            "FieldQuery": "with recursive literal_cte as (select 1 as id, 100 as `value`, 1 as manager_id from dual where 1 != 1 union all select id + 1, `value` * 2, id from literal_cte where 1 != 1) select l.id, l.`value`, l.manager_id from literal_cte as l where 1 != 1",
+            "Query": "with recursive literal_cte as (select 1 as id, 100 as `value`, 1 as manager_id from dual union all select id + 1, `value` * 2, id from literal_cte where id < 5) select l.id, l.`value`, l.manager_id from literal_cte as l",
             "Table": "dual"
           },
           {
