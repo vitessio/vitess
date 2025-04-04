@@ -19,7 +19,6 @@ package logic
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -32,7 +31,6 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -103,35 +101,14 @@ func RegisterFlags(fs *pflag.FlagSet) {
 
 // initializeShardsToWatch parses the --clusters_to_watch flag-value
 // into a map of keyspace/shards.
-func initializeShardsToWatch() error {
-	shardsToWatch = make(map[string][]*topodatapb.KeyRange)
+func initializeShardsToWatch() (err error) {
 	if len(clustersToWatch) == 0 {
 		return nil
 	}
 
-	for _, ks := range clustersToWatch {
-		if strings.Contains(ks, "/") && !strings.HasSuffix(ks, "/") {
-			// Validate keyspace/shard parses.
-			k, s, err := topoproto.ParseKeyspaceShard(ks)
-			if err != nil {
-				log.Errorf("Could not parse keyspace/shard %q: %+v", ks, err)
-				continue
-			}
-			if !key.IsValidKeyRange(s) {
-				return fmt.Errorf("invalid key range %q while parsing clusters to watch", s)
-			}
-			// Parse the shard name into key range value.
-			keyRanges, err := key.ParseShardingSpec(s)
-			if err != nil {
-				return fmt.Errorf("could not parse shard name %q: %+v", s, err)
-			}
-			shardsToWatch[k] = append(shardsToWatch[k], keyRanges...)
-		} else {
-			// Remove trailing slash if exists.
-			ks = strings.TrimSuffix(ks, "/")
-			// We store the entire range of key range if nothing is specified.
-			shardsToWatch[ks] = []*topodatapb.KeyRange{key.NewCompleteKeyRange()}
-		}
+	shardsToWatch, err = config.ParseClustersToWatch(clustersToWatch)
+	if err != nil {
+		return err
 	}
 
 	if len(shardsToWatch) == 0 {
@@ -140,13 +117,13 @@ func initializeShardsToWatch() error {
 	return nil
 }
 
-// shouldWatchTablet checks if the given tablet is part of the watch list.
-func shouldWatchTablet(tablet *topodatapb.Tablet) bool {
+// IsIncluded checks if the given tablet is part of the watch list.
+func (s shardsToWatchMap) IsIncluded(tablet *topodatapb.Tablet) bool {
 	// If we are watching all keyspaces, then we want to watch this tablet too.
-	if len(shardsToWatch) == 0 {
+	if len(s) == 0 {
 		return true
 	}
-	shardRanges, ok := shardsToWatch[tablet.GetKeyspace()]
+	shardRanges, ok := s[tablet.GetKeyspace()]
 	// If we don't have the keyspace in our map, then this tablet
 	// doesn't need to be watched.
 	if !ok {

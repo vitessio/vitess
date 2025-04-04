@@ -17,12 +17,17 @@
 package config
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var configurationLoaded = make(chan bool)
@@ -411,4 +416,41 @@ func MarkConfigurationLoaded() {
 // the configuration file has been read off disk.
 func WaitForConfigurationToBeLoaded() {
 	<-configurationLoaded
+}
+
+// ParseClustersToWatch parses a []string of keyspace/shards to watch
+// into a map of keyspaces with one or more key ranges to watch.
+func ParseClustersToWatch(clustersToWatch []string) (map[string][]*topodatapb.KeyRange, error) {
+	keyRangesByKS := make(map[string][]*topodatapb.KeyRange)
+	for _, ks := range clustersToWatch {
+		if strings.Contains(ks, "/") && !strings.HasSuffix(ks, "/") {
+			// Validate keyspace/shard parses.
+			k, s, err := topoproto.ParseKeyspaceShard(ks)
+			if err != nil {
+				log.Errorf("Could not parse keyspace/shard %q: %+v", ks, err)
+				continue
+			}
+			if !key.IsValidKeyRange(s) {
+				return keyRangesByKS, fmt.Errorf("invalid key range %q while parsing clusters to watch", s)
+			}
+			// Parse the shard name into key range value.
+			keyRanges, err := key.ParseShardingSpec(s)
+			if err != nil {
+				return keyRangesByKS, fmt.Errorf("could not parse shard name %q: %+v", s, err)
+			}
+			keyRangesByKS[k] = append(shardsToWatch[k], keyRanges...)
+		} else {
+			// Remove trailing slash if exists.
+			ks = strings.TrimSuffix(ks, "/")
+			// We store the entire range of key range if nothing is specified.
+			keyRangesByKS[ks] = []*topodatapb.KeyRange{key.NewCompleteKeyRange()}
+		}
+	}
+	return keyRangesByKS, nil
+}
+
+// ParseClustersToWatchString parses a string of keyspace/shards to watch
+// into a map of keyspaces with one or more key ranges to watch.
+func ParseClustersToWatchString(clustersToWatch string) (map[string][]*topodatapb.KeyRange, error) {
+	return ParseClustersToWatch(strings.Split(clustersToWatch, ","))
 }
