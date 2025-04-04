@@ -39,7 +39,7 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 		verify func(t *testing.T, ts *topo.Server, mtf *memorytopo.Factory)
 	}{
 		{
-			name: "No residual files to delete",
+			name: "No orphaned files to delete",
 			setup: func(t *testing.T, ts *topo.Server, mtf *memorytopo.Factory) {
 				// We don't create anything that needs to be cleared.
 			},
@@ -48,7 +48,7 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 				require.EqualValues(t, 1, mtf.GetCallStats().Counts()["ListDir"])
 			},
 		}, {
-			name: "Single residual file to delete",
+			name: "Single orphaned file to delete",
 			setup: func(t *testing.T, ts *topo.Server, mtf *memorytopo.Factory) {
 				err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, "0", func(sr *topodatapb.ShardReplication) error {
 					sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{TabletAlias: &topodatapb.TabletAlias{Cell: cell, Uid: 0}})
@@ -104,7 +104,7 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 				require.NoError(t, err)
 			},
 		}, {
-			name: "Multiple residual file to delete",
+			name: "Multiple orphaned files to delete",
 			setup: func(t *testing.T, ts *topo.Server, mtf *memorytopo.Factory) {
 				err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, "0", func(sr *topodatapb.ShardReplication) error {
 					sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{TabletAlias: &topodatapb.TabletAlias{Cell: cell, Uid: 0}})
@@ -151,7 +151,7 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 				keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 				require.NoError(t, err)
 				require.Len(t, keyspaces, 0)
-				// Since we only clear residual files for one cell, we should still see
+				// Since we only clear orphaned files for one cell, we should still see
 				// they srvKeyspace in the other cell.
 				keyspaces, err = ts.GetSrvKeyspaceNames(ctx, cell2)
 				require.NoError(t, err)
