@@ -5078,7 +5078,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 
 	var (
 		wg      sync.WaitGroup
-		results = make(chan string, len(aliases))
+		results = make(chan string, 4*len(aliases)+1)
 	)
 
 	for _, alias := range aliases {
