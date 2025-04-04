@@ -214,85 +214,163 @@ func TestRecoveryRegistration(t *testing.T) {
 }
 
 func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
+	keyspace := "ks1"
+	shard := "-"
 	tests := []struct {
 		name                         string
 		ersEnabled                   bool
 		convertTabletWithErrantGTIDs bool
-		analysisCode                 inst.AnalysisCode
+		analysisEntry                *inst.ReplicationAnalysis
 		wantRecoveryFunction         recoveryFunction
 	}{
 		{
-			name:                 "DeadPrimary with ERS enabled",
-			ersEnabled:           true,
-			analysisCode:         inst.DeadPrimary,
+			name:       "DeadPrimary with ERS enabled",
+			ersEnabled: true,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.DeadPrimary,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 		}, {
-			name:                 "DeadPrimary with ERS disabled",
-			ersEnabled:           false,
-			analysisCode:         inst.DeadPrimary,
+			name:       "DeadPrimary with ERS disabled",
+			ersEnabled: false,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.DeadPrimary,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
-			name:                 "StalledDiskPrimary with ERS enabled",
-			ersEnabled:           true,
-			analysisCode:         inst.PrimaryDiskStalled,
+			name:       "StalledDiskPrimary with ERS enabled",
+			ersEnabled: true,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.PrimaryDiskStalled,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 		}, {
-			name:                 "StalledDiskPrimary with ERS disabled",
-			ersEnabled:           false,
-			analysisCode:         inst.PrimaryDiskStalled,
+			name:       "StalledDiskPrimary with ERS disabled",
+			ersEnabled: false,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.PrimaryDiskStalled,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
-			name:                 "PrimarySemiSyncBlocked with ERS enabled",
-			ersEnabled:           true,
-			analysisCode:         inst.PrimarySemiSyncBlocked,
+			name:       "PrimarySemiSyncBlocked with ERS enabled",
+			ersEnabled: true,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.PrimarySemiSyncBlocked,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 		}, {
-			name:                 "PrimarySemiSyncBlocked with ERS disabled",
-			ersEnabled:           false,
-			analysisCode:         inst.PrimarySemiSyncBlocked,
+			name:       "PrimarySemiSyncBlocked with ERS disabled",
+			ersEnabled: false,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.PrimarySemiSyncBlocked,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
-			name:                 "PrimaryTabletDeleted with ERS enabled",
-			ersEnabled:           true,
-			analysisCode:         inst.PrimaryTabletDeleted,
+			name:       "PrimaryTabletDeleted with ERS enabled",
+			ersEnabled: true,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.PrimaryTabletDeleted,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
 			wantRecoveryFunction: recoverPrimaryTabletDeletedFunc,
 		}, {
-			name:                 "PrimaryTabletDeleted with ERS disabled",
-			ersEnabled:           false,
-			analysisCode:         inst.PrimaryTabletDeleted,
+			name:       "PrimaryTabletDeleted with ERS disabled",
+			ersEnabled: false,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.PrimaryTabletDeleted,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
-			name:                 "PrimaryHasPrimary",
-			ersEnabled:           false,
-			analysisCode:         inst.PrimaryHasPrimary,
+			name:       "PrimaryHasPrimary",
+			ersEnabled: false,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.PrimaryHasPrimary,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
 			wantRecoveryFunction: recoverPrimaryHasPrimaryFunc,
 		}, {
-			name:                 "ClusterHasNoPrimary",
-			ersEnabled:           false,
-			analysisCode:         inst.ClusterHasNoPrimary,
+			name:       "ClusterHasNoPrimary",
+			ersEnabled: false,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.ClusterHasNoPrimary,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
 			wantRecoveryFunction: electNewPrimaryFunc,
 		}, {
-			name:                 "ReplicationStopped",
-			ersEnabled:           false,
-			analysisCode:         inst.ReplicationStopped,
+			name:       "ReplicationStopped",
+			ersEnabled: false,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.ReplicationStopped,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
 			wantRecoveryFunction: fixReplicaFunc,
 		}, {
-			name:                 "PrimarySemiSyncMustBeSet",
-			ersEnabled:           false,
-			analysisCode:         inst.PrimarySemiSyncMustBeSet,
+			name:       "PrimarySemiSyncMustBeSet",
+			ersEnabled: false,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.PrimarySemiSyncMustBeSet,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
 			wantRecoveryFunction: fixPrimaryFunc,
 		}, {
 			name:                         "ErrantGTIDDetected",
 			ersEnabled:                   false,
 			convertTabletWithErrantGTIDs: true,
-			analysisCode:                 inst.ErrantGTIDDetected,
-			wantRecoveryFunction:         recoverErrantGTIDDetectedFunc,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.ErrantGTIDDetected,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
+			wantRecoveryFunction: recoverErrantGTIDDetectedFunc,
 		}, {
 			name:                         "ErrantGTIDDetected with --change-tablets-with-errant-gtid-to-drained false",
 			ersEnabled:                   false,
 			convertTabletWithErrantGTIDs: false,
-			analysisCode:                 inst.ErrantGTIDDetected,
-			wantRecoveryFunction:         noRecoveryFunc,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.ErrantGTIDDetected,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
+			wantRecoveryFunction: noRecoveryFunc,
+		}, {
+			name:       "DeadPrimary with global ERS enabled and keyspace ERS disabled",
+			ersEnabled: true,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:         inst.DeadPrimary,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+				AnalyzedKeyspaceEmergencyReparentDisabled: true,
+			},
+			wantRecoveryFunction: noRecoveryFunc,
+		}, {
+			name:       "DeadPrimary with global+keyspace ERS enabled and shard ERS disabled",
+			ersEnabled: true,
+			analysisEntry: &inst.ReplicationAnalysis{
+				Analysis:                               inst.DeadPrimary,
+				AnalyzedKeyspace:                       keyspace,
+				AnalyzedShard:                          shard,
+				AnalyzedShardEmergencyReparentDisabled: true,
+			},
+			wantRecoveryFunction: noRecoveryFunc,
 		},
 	}
 
@@ -306,7 +384,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			config.SetConvertTabletWithErrantGTIDs(tt.convertTabletWithErrantGTIDs)
 			defer config.SetConvertTabletWithErrantGTIDs(convertErrantVal)
 
-			gotFunc := getCheckAndRecoverFunctionCode(tt.analysisCode, "")
+			gotFunc := getCheckAndRecoverFunctionCode(tt.analysisEntry)
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
 		})
 	}

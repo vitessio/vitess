@@ -919,6 +919,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	span.Annotate("force", req.Force)
 	span.Annotate("allow_empty_vschema", req.AllowEmptyVSchema)
 	span.Annotate("durability_policy", req.DurabilityPolicy)
+	span.Annotate("vtorc_config", req.VtorcConfig)
 
 	switch req.Type {
 	case topodatapb.KeyspaceType_NORMAL:
@@ -945,6 +946,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 		SnapshotTime:     req.SnapshotTime,
 		DurabilityPolicy: req.DurabilityPolicy,
 		SidecarDbName:    req.SidecarDbName,
+		VtorcConfig:      req.VtorcConfig,
 	}
 
 	err = s.ts.CreateKeyspace(ctx, req.Name, ki)
@@ -1030,6 +1032,7 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 	span.Annotate("shard", req.ShardName)
 	span.Annotate("force", req.Force)
 	span.Annotate("include_parent", req.IncludeParent)
+	span.Annotate("vtorc_config", req.VtorcConfig)
 
 	if req.IncludeParent {
 		log.Infof("Creating empty keyspace for %s", req.Keyspace)
@@ -1045,7 +1048,7 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 
 	shardExists := false
 
-	if err = s.ts.CreateShard(ctx, req.Keyspace, req.ShardName); err != nil {
+	if err = s.ts.CreateShard(ctx, req.Keyspace, req.ShardName, req.VtorcConfig); err != nil {
 		if req.Force && topo.IsErrType(err, topo.NodeExists) {
 			log.Infof("shard %v/%v already exists; ignoring error because Force = true", req.Keyspace, req.ShardName)
 			shardExists = true
@@ -3968,6 +3971,61 @@ func (s *VtctldServer) SetShardTabletControl(ctx context.Context, req *vtctldata
 	return &vtctldatapb.SetShardTabletControlResponse{
 		Shard: si.Shard,
 	}, nil
+}
+
+// SetVtorcEmergencyReparent enable/disables the use of EmergencyReparentShard in VTOrc recoveries for a given keyspace or keyspace/shard.
+func (s *VtctldServer) SetVtorcEmergencyReparent(ctx context.Context, req *vtctldatapb.SetVtorcEmergencyReparentRequest) (resp *vtctldatapb.SetVtorcEmergencyReparentResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetVtorcEmergencyReparent")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("disable", req.Disable)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetVtorcEmergencyReparent")
+	if lockErr != nil {
+		err = lockErr
+		return nil, err
+	}
+
+	defer unlock(&err)
+
+	if req.Shard != "" && req.Shard != "-" {
+		_, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
+			if si.VtorcConfig != nil {
+				si.VtorcConfig.DisableEmergencyReparent = req.Disable
+			} else if req.Disable {
+				si.VtorcConfig = &topodatapb.ShardVtorcConfig{
+					DisableEmergencyReparent: req.Disable,
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+		if err != nil {
+			return nil, err
+		}
+
+		if ki.VtorcConfig != nil {
+			ki.VtorcConfig.DisableEmergencyReparent = req.Disable
+		} else if req.Disable {
+			ki.VtorcConfig = &topodatapb.KeyspaceVtorcConfig{
+				DisableEmergencyReparent: req.Disable,
+			}
+		}
+
+		if err = s.ts.UpdateKeyspace(ctx, ki); err != nil {
+			return nil, err
+		}
+	}
+
+	return &vtctldatapb.SetVtorcEmergencyReparentResponse{}, nil
 }
 
 // SetWritable is part of the vtctldservicepb.VtctldServer interface.

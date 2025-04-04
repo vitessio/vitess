@@ -619,6 +619,8 @@ message CreateKeyspaceRequest {
   // SidecarDBName is the name of the sidecar database that
   // each vttablet in the keyspace will use.
   string sidecar_db_name = 11;
+  // VtorcConfig is the vtorc config for the keyspace.
+  topodata.KeyspaceVtorcConfig vtorc_config = 12;
 }
 
 message CreateKeyspaceResponse {
@@ -637,6 +639,8 @@ message CreateShardRequest {
   // IncludeParent creates the parent keyspace as an empty BASE keyspace, if it
   // doesn't already exist.
   bool include_parent = 4;
+  // VtorcConfig is the vtorc config for the shard.
+  topodata.ShardVtorcConfig vtorc_config = 5;
 }
 
 message CreateShardResponse {
@@ -2246,4 +2250,13 @@ message WorkflowMirrorTrafficResponse {
   string summary = 1;
   string start_state = 2;
   string current_state = 3;
+}
+
+message SetVtorcEmergencyReparentRequest {
+  string keyspace = 1;
+  string shard = 2;
+  bool disable = 3;
+}
+
+message SetVtorcEmergencyReparentResponse {
 }
