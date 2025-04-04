@@ -128,7 +128,7 @@ func TestConcatenate_NoErrors(t *testing.T) {
 				if tc.expectedError == "" {
 					require.NoError(t, err)
 					utils.MustMatch(t, tc.expectedResult.Fields, qr.Fields, "fields")
-					require.NoError(t, sqltypes.RowsEquals(tc.expectedResult.Rows, qr.Rows))
+					require.NoError(t, sqltypes.RowsEquals(tc.expectedResult.Rows, qr.Rows, false))
 				} else {
 					require.Error(t, err)
 					require.Contains(t, err.Error(), tc.expectedError)

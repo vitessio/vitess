@@ -898,6 +898,80 @@
     }
   },
   {
+    "comment": "Not using block joins when aggregating",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ count(*) from user join user_extra on user.foo = user_extra.bar group by user.bar, user_extra.baz",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ count(*) from user join user_extra on user.foo = user_extra.bar group by user.bar, user_extra.baz",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "GroupBy": "(1|2), (3|4)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "count(*) * count(*) as count(*)",
+              ":2 as bar",
+              ":4 as weight_string(`user`.bar)",
+              ":3 as baz",
+              ":5 as weight_string(user_extra.baz)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(2|4) ASC, (3|5) ASC",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:0,R:0,L:1,R:1,L:3,R:2",
+                    "JoinVars": {
+                      "user_foo": 2
+                    },
+                    "TableName": "`user`_user_extra",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), `user`.bar, `user`.foo, weight_string(`user`.bar) from `user` where 1 != 1 group by `user`.bar, `user`.foo, weight_string(`user`.bar)",
+                        "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ count(*), `user`.bar, `user`.foo, weight_string(`user`.bar) from `user` group by `user`.bar, `user`.foo, weight_string(`user`.bar)",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), user_extra.baz, weight_string(user_extra.baz) from user_extra where 1 != 1 group by user_extra.baz, weight_string(user_extra.baz)",
+                        "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ count(*), user_extra.baz, weight_string(user_extra.baz) from user_extra where user_extra.bar = :user_foo group by user_extra.baz, weight_string(user_extra.baz)",
+                        "Table": "user_extra"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "scatter aggregate multiple group by columns inverse order",
     "query": "select a, b, count(*) from user group by b, a",
     "plan": {

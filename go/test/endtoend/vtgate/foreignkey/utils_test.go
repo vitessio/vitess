@@ -273,7 +273,7 @@ func validateReplication(t *testing.T) {
 // compareResultRows compares the rows of the two results provided.
 func compareResultRows(resOne *sqltypes.Result, resTwo *sqltypes.Result) bool {
 	return slices.EqualFunc(resOne.Rows, resTwo.Rows, func(a, b sqltypes.Row) bool {
-		return sqltypes.RowEqual(a, b)
+		return sqltypes.RowEqual(a, b, false)
 	})
 }
 

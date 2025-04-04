@@ -1,7 +1,16 @@
 create table t1
 (
-    id1 bigint,
-    id2 bigint,
+    id1  bigint,
+    id2  bigint,
+    primary key (id1)
+) Engine=InnoDB;
+
+create table t2
+(
+    id1  bigint,
+    id2  bigint,
+    id   bigint,
+    name varchar(64),
     primary key (id1)
 ) Engine=InnoDB;
 
@@ -25,6 +34,16 @@ create table tbl
     id         bigint,
     unq_col    bigint,
     nonunq_col bigint not null,
+    primary key (id),
+    unique (unq_col)
+) Engine = InnoDB;
+
+create table tbl2
+(
+    id         bigint,
+    unq_col    bigint,
+    nonunq_col bigint not null,
+    name       varchar(64),
     primary key (id),
     unique (unq_col)
 ) Engine = InnoDB;

@@ -127,13 +127,16 @@ func (e *RowMismatchError) Error() string {
 	return fmt.Sprintf("results differ: %v\n\twant: %v\n\tgot:  %v", e.err, e.want, e.got)
 }
 
-func RowEqual(want, got Row) bool {
+func RowEqual(want, got Row, ignoreTypes bool) bool {
 	return slices.EqualFunc(want, got, func(a, b Value) bool {
+		if ignoreTypes {
+			return a.EqualIgnoreType(b)
+		}
 		return a.Equal(b)
 	})
 }
 
-func RowsEquals(want, got []Row) error {
+func RowsEquals(want, got []Row, ignoreTypes bool) error {
 	if len(want) != len(got) {
 		return &RowMismatchError{
 			err:  fmt.Errorf("expected %d rows in result, got %d", len(want), len(got)),
@@ -149,7 +152,7 @@ func RowsEquals(want, got []Row) error {
 			if matched[i] {
 				continue
 			}
-			if RowEqual(aa, bb) {
+			if RowEqual(aa, bb, ignoreTypes) {
 				matched[i] = true
 				ok = true
 				break
@@ -176,5 +179,5 @@ func RowsEqualsStr(wantStr string, got []Row) error {
 	if err != nil {
 		return fmt.Errorf("malformed row assertion: %w", err)
 	}
-	return RowsEquals(want, got)
+	return RowsEquals(want, got, false)
 }

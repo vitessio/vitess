@@ -109,7 +109,7 @@ func TestGenerateQuery(t *testing.T) {
 			bindVars: map[string]*querypb.BindVariable{
 				"a": createRowTupleBV(),
 			},
-			output: "select 1 from (values row('a', 1), row('b', 2)) as dt",
+			output: "select 1 from (values row(cast('a' as char), cast(1 as signed)), row(cast('b' as char), cast(2 as signed))) as dt",
 		}, {
 			desc:  "list bind var for non-list",
 			query: "select * from a where id = :vals",

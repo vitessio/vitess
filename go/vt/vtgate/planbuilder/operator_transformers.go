@@ -63,8 +63,6 @@ func recursiveTransform(ctx *plancontext.PlanningContext, op operators.Operator)
 		return transformSubQuery(ctx, op)
 	case *operators.Filter:
 		return transformFilter(ctx, op)
-	case *operators.Horizon:
-		panic("should have been solved in the operator")
 	case *operators.Projection:
 		return transformProjection(ctx, op)
 	case *operators.Limit:
@@ -93,9 +91,32 @@ func recursiveTransform(ctx *plancontext.PlanningContext, op operators.Operator)
 		return transformRecurseCTE(ctx, op)
 	case *operators.PercentBasedMirror:
 		return transformPercentBasedMirror(ctx, op)
+	case *operators.BlockJoin:
+		return transformBlockJoin(ctx, op)
+	case *operators.BlockBuild:
+		panic("should have been pushed under a route")
+	case *operators.Horizon:
+		panic("should have been solved in the operator")
 	}
 
 	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToPrimitive)", op))
+}
+
+func transformBlockJoin(ctx *plancontext.PlanningContext, op *operators.BlockJoin) (engine.Primitive, error) {
+	lhs, err := transformToPrimitive(ctx, op.LHS)
+	if err != nil {
+		return nil, err
+	}
+	rhs, err := transformToPrimitive(ctx, op.RHS)
+	if err != nil {
+		return nil, err
+	}
+
+	return &engine.BlockJoin{
+		Left:        lhs,
+		Right:       rhs,
+		BindVarName: op.Destination,
+	}, nil
 }
 
 func transformPercentBasedMirror(ctx *plancontext.PlanningContext, op *operators.PercentBasedMirror) (engine.Primitive, error) {
@@ -186,7 +207,7 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 		return nil, vterrors.VT13001(fmt.Sprintf("Incorrect type encountered: %T (transformInsertionSelection)", op.Insert))
 	}
 
-	stmt, dmlOp, err := operators.ToSQL(ctx, rb.Source)
+	stmt, dmlOp, err := operators.ToAST(ctx, rb.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -595,7 +616,7 @@ func getHints(cmt *sqlparser.ParsedComments) *queryHints {
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (engine.Primitive, error) {
 	ctx.CollectConditions(op.Conditions)
 
-	stmt, dmlOp, err := operators.ToSQL(ctx, op.Source)
+	stmt, dmlOp, err := operators.ToAST(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}

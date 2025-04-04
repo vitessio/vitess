@@ -1121,6 +1121,54 @@
     "skip_e2e": true
   },
   {
+    "comment": "Block join with complex expressions",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(s.oid), abs(se.colx), abs(se.colx+s.oid) from sales s join sales_extra se on s.col1 = se.cola",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(s.oid), abs(se.colx), abs(se.colx+s.oid) from sales s join sales_extra se on s.col1 = se.cola",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": "2,0,1",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Block",
+            "BindVarName": "values",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select abs(s.oid), s.oid, s.col1 from sales as s where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(s.oid), s.oid, s.col1 from sales as s",
+                "Table": "sales"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select abs(se.colx), abs(se.colx + `values`.s_oid) as `abs(se.colx + s.oid)`, `values`.x_x as `abs(s.oid)` from (values ::values) as `values`(x_x, s_oid, s_col1), sales_extra as se where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ abs(se.colx), abs(se.colx + `values`.s_oid) as `abs(se.colx + s.oid)`, `values`.x_x as `abs(s.oid)` from (values ::values) as `values`(x_x, s_oid, s_col1), sales_extra as se where `values`.s_col1 = se.cola",
+                "Table": "sales_extra"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.sales",
+        "user.sales_extra"
+      ]
+    }
+  },
+  {
     "comment": "syntax error",
     "query": "the quick brown fox",
     "plan": "syntax error at position 4 near 'the'",

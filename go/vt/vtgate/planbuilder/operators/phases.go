@@ -34,6 +34,7 @@ type (
 const (
 	physicalTransform Phase = iota
 	initialPlanning
+	rewriteApplyJoin
 	pullDistinctFromUnion
 	delegateAggregation
 	recursiveCTEHorizons
@@ -50,6 +51,8 @@ func (p Phase) String() string {
 		return "physicalTransform"
 	case initialPlanning:
 		return "initial horizon planning optimization"
+	case rewriteApplyJoin:
+		return "rewrite ApplyJoin to BlockJoin"
 	case pullDistinctFromUnion:
 		return "pull distinct from UNION"
 	case delegateAggregation:
@@ -69,8 +72,11 @@ func (p Phase) String() string {
 	}
 }
 
-func (p Phase) shouldRun(s semantics.QuerySignature) bool {
+func (p Phase) shouldRun(ctx *plancontext.PlanningContext) bool {
+	s := ctx.SemTable.QuerySignature
 	switch p {
+	case rewriteApplyJoin:
+		return p.shouldUseBlockJoins(ctx)
 	case pullDistinctFromUnion:
 		return s.Union
 	case delegateAggregation:
@@ -85,9 +91,43 @@ func (p Phase) shouldRun(s semantics.QuerySignature) bool {
 		return s.SubQueries
 	case dmlWithInput:
 		return s.DML
+
 	default:
 		return true
 	}
+}
+
+// shouldUseBlockJoins returns true if the query should be rewritten to use BlockJoin.
+// This is only done for two table queries with no aggregation,
+// and the tables are not info_schema tables or derived tables
+func (p Phase) shouldUseBlockJoins(ctx *plancontext.PlanningContext) bool {
+	if ctx.Statement == nil {
+		return false
+	}
+
+	// Below are cases unsupported by block join:
+
+	// No DMLs
+	_, isSel := ctx.Statement.(sqlparser.SelectStatement)
+	if !isSel {
+		return false
+	}
+
+	// we only use block-joins for two normal table queries with no aggregation
+	stepOne := !ctx.SemTable.QuerySignature.Aggregation && len(ctx.SemTable.Tables) == 2
+	if !stepOne {
+		return false
+	}
+
+	// no information schema and non-normal tables
+	for _, tableInfo := range ctx.SemTable.Tables {
+		rt, isNormalTable := tableInfo.(*semantics.RealTable)
+		if !isNormalTable || rt.IsInfSchema() {
+			return false
+		}
+	}
+
+	return ctx.VSchema.AreBlockJoinsEnabled() || ctx.IsCommentDirectiveSet(sqlparser.DirectiveAllowBlockJoin)
 }
 
 func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
@@ -106,8 +146,78 @@ func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
 		return settleSubqueries(ctx, op)
 	case dmlWithInput:
 		return findDMLAboveRoute(ctx, op)
+	case rewriteApplyJoin:
+		return rewriteApplyToBlock(ctx, op)
+
 	default:
 		return op
+	}
+}
+
+// rewriteApplyToBlock rewrites ApplyJoin to BlockJoin.
+func rewriteApplyToBlock(ctx *plancontext.PlanningContext, op Operator) Operator {
+	done := false
+	// Traverse the operator tree to convert ApplyJoin to BlockJoin.
+	// Then add a BlockBuild node to the RHS of the new BlockJoin,
+	// and usually a filter containing the join predicates is placed there.
+	visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+		if done {
+			return op, NoRewrite
+		}
+		aj, ok := op.(*ApplyJoin)
+		if !ok {
+			return op, NoRewrite
+		}
+
+		bj := newBlockJoin(ctx, aj.LHS, aj.RHS, aj.JoinType)
+		if bj == nil {
+			return op, NoRewrite
+		}
+
+		for _, column := range aj.JoinColumns.columns {
+			if column.JoinPredicateID == nil {
+				bj.AddColumn(ctx, true, false, aeWrap(column.Original))
+				continue
+			}
+			jc, _ := breakBlockJoinExpressionInLHS(ctx, column.Original, TableID(bj.LHS), bj.Destination)
+			ctx.PredTracker.Set(*column.JoinPredicateID, jc.RHS)
+			for _, lhsExpr := range jc.LHS {
+				ctx.AddBlockJoinColumn(bj.Destination, lhsExpr.RightHandVersion)
+			}
+		}
+
+		for _, pred := range aj.JoinPredicates.columns {
+			if pred.JoinPredicateID == nil {
+				panic(vterrors.VT13001("missing join predicate ID"))
+			}
+			jc := bj.addJoinPredicate(ctx, pred.Original, false)
+			ctx.PredTracker.Set(*pred.JoinPredicateID, jc.RHS)
+		}
+		done = true
+		return bj, Rewrote("rewrote ApplyJoin to BlockJoin")
+	}
+
+	return TopDown(op, TableID, visit, stopAtRoute)
+}
+
+const valuesName = "values"
+
+func newBlockJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinType sqlparser.JoinType) *BlockJoin {
+	if !joinType.IsInner() {
+		return nil
+	}
+
+	lhsID := TableID(lhs)
+	destination := ctx.ReservedVars.ReserveVariable(valuesName)
+	ctx.AddBlockJoinTable(lhsID, destination)
+	v := &BlockBuild{
+		unaryOperator: newUnaryOp(rhs),
+		Name:          destination,
+		TableID:       lhsID,
+	}
+	return &BlockJoin{
+		binaryOperator: newBinaryOp(lhs, v),
+		Destination:    destination,
 	}
 }
 
@@ -124,7 +234,7 @@ func (p *phaser) next(ctx *plancontext.PlanningContext) Phase {
 
 		p.current++
 
-		if curr.shouldRun(ctx.SemTable.QuerySignature) {
+		if curr.shouldRun(ctx) {
 			return curr
 		}
 	}
