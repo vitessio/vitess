@@ -14,9 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package servenv
+package engine
 
-// DO NOT EDIT
-// THIS FILE IS AUTO-GENERATED DURING NEW RELEASES BY THE VITESS-RELEASER
+import (
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/servenv"
+)
 
-const versionName = "23.0.0-SNAPSHOT"
+type Metrics struct {
+	optimizedQueryExec *stats.CountersWithSingleLabel
+}
+
+func InitMetrics(exporter *servenv.Exporter) *Metrics {
+	return &Metrics{
+		optimizedQueryExec: exporter.NewCountersWithSingleLabel("OptimizedQueryExecutions", "Counts optimized queries executed at VTGate by plan type.", "Plan"),
+	}
+}

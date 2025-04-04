@@ -450,6 +450,11 @@ func TestSpecializedPlan(t *testing.T) {
 	dbo := Connect(t, "interpolateParams=false")
 	defer dbo.Close()
 
+	oMap := getVarValue[map[string]any](t, "OptimizedQueryExecutions", clusterInstance.VtgateProcess.GetVars)
+	initExecCount := getVarValue[float64](t, "Passthrough", func() map[string]any {
+		return oMap
+	})
+
 	queries := []struct {
 		query string
 		args  []any
@@ -475,6 +480,11 @@ func TestSpecializedPlan(t *testing.T) {
 		}
 		require.NoError(t, stmt.Close())
 	}
+	oMap = getVarValue[map[string]any](t, "OptimizedQueryExecutions", clusterInstance.VtgateProcess.GetVars)
+	finalExecCount := getVarValue[float64](t, "Passthrough", func() map[string]any {
+		return oMap
+	})
+	require.EqualValues(t, 15, finalExecCount-initExecCount)
 
 	// Validate specialized plan.
 	p := getPlanWhenReady(t, queries[0].query, 100*time.Millisecond, clusterInstance.VtgateProcess.ReadQueryPlans)
@@ -518,4 +528,21 @@ func getPlanWhenReady(t *testing.T, sql string, timeout time.Duration, plansFunc
 			time.Sleep(200 * time.Millisecond)
 		}
 	}
+}
+
+func getVarValue[T any](t *testing.T, key string, varFunc func() map[string]any) T {
+	t.Helper()
+
+	vars := varFunc()
+	require.NotNil(t, vars)
+
+	value, exists := vars[key]
+	if !exists {
+		return *new(T)
+	}
+	castValue, ok := value.(T)
+	if !ok {
+		t.Errorf("unexpected type, want: %T, got %T", new(T), value)
+	}
+	return castValue
 }

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"slices"
 	"sort"
 	"strings"
@@ -14396,6 +14397,117 @@ func TestValidateKeyspace(t *testing.T) {
 			}
 		})
 	}
+}
+
+// This test validates the bug described in https://github.com/vitessio/vitess/issues/18113.
+func TestValidateKeyspaceErrors(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cell := "zone-1"
+	ks := "ks"
+	shard := "-"
+	// Setup the topo server and the vtctld server.
+	ts := memorytopo.NewServer(ctx, cell)
+	tmc := &testutil.TabletManagerClient{}
+	vtctldServer := NewTestVtctldServer(ts, tmc)
+	conn, err := ts.ConnForCell(ctx, cell)
+	require.NoError(t, err)
+
+	// Create the keyspace and shard record
+	_, err = ts.GetOrCreateShard(ctx, ks, shard)
+	require.NoError(t, err)
+
+	// verify ValidateKeyspace finds all the issues without hanging
+	resp := validateKeyspace(t, vtctldServer, ctx, ks)
+	// We expect two results -
+	// 1. no primary for shard ks/-
+	// 2. no primary in shard record ks/-
+	require.Len(t, resp.GetResultsByShard()[shard].Results, 2)
+
+	// Next we test the worst case for ValidateKeyspace wherein everything creates
+	// issues to ensure we never block on writing to the results field.
+
+	// We first create all tablets. We intentionally create a mismatch in the tablet alias
+	// file name and the tablet alias actually stored so that we see the error in Validate.
+	numTablets := 10
+	tablets := make([]*topodatapb.Tablet, numTablets)
+	for i := 0; i < numTablets; i++ {
+		typ := topodatapb.TabletType_REPLICA
+		if i == 0 {
+			typ = topodatapb.TabletType_PRIMARY
+		}
+		tablets[i] = &topodatapb.Tablet{
+			Keyspace: ks,
+			Shard:    shard,
+			Type:     typ,
+			Alias: &topodatapb.TabletAlias{
+				Cell: cell,
+				Uid:  uint32(100 + i),
+			},
+		}
+		err = ts.CreateTablet(ctx, tablets[i])
+		require.NoError(t, err)
+
+		// We're explicitly messing up the record, so we can't use
+		// the UpdateTablet function as it doesn't not allow this.
+		tabletPath := path.Join(topo.TabletsPath, topoproto.TabletAliasString(tablets[i].Alias), topo.TabletFile)
+		tablets[i].Alias.Uid += 100
+		data, err := tablets[i].MarshalVT()
+		require.NoError(t, err)
+		_, err = conn.Update(ctx, tabletPath, data, nil)
+		require.NoError(t, err)
+		// Reset the values for later use.
+		tablets[i].Alias.Uid -= 100
+	}
+
+	// verify ValidateKeyspace finds all the issues without hanging
+	resp = validateKeyspace(t, vtctldServer, ctx, ks)
+	// This time we expect the following results -
+	// 1. primary mismatch for shard ks/-: found zone-1-0000000100, expected <nil>
+	// 2. no primary in shard record ks/-
+	// 3. topo.Validate for all numTablets tablets.
+	// 4. tabletmanager ping for all numTablets tablets with a general error.
+	require.Len(t, resp.GetResultsByShard()[shard].Results, 2*numTablets+2, strings.Join(resp.GetResultsByShard()[shard].Results, ","))
+
+	// We now fix the shard record so that we can get even more errors.
+	_, err = ts.UpdateShardFields(ctx, ks, shard, func(info *topo.ShardInfo) error {
+		info.PrimaryAlias = tablets[0].Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	tmc.GetReplicasResults = map[string]struct {
+		Replicas []string
+		Error    error
+	}{
+		"zone-1-0000000200": {
+			// We return numTablets-1 values for the replica tablets.
+			Replicas: make([]string, numTablets-1),
+		},
+	}
+
+	// verify ValidateKeyspace finds all the issues without hanging
+	resp = validateKeyspace(t, vtctldServer, ctx, ks)
+	// This time we expect the following results results -
+	// 1. topo.Validate for all numTablets tablets.
+	// 2. Failure in resolving the hostname for all numTablets tablets.
+	// 3. Replicas not being in the replication graph (since we couldn't get their hostnames). This is for all the replicas -> numTablets - 1
+	// 4. Resolving hostname again for all the replicas -> numTablets - 1
+	// 5. tabletmanager ping for all numTablets tablets with a general error.
+	require.Len(t, resp.GetResultsByShard()[shard].Results, 5*numTablets-2, strings.Join(resp.GetResultsByShard()[shard].Results, ","))
+}
+
+// validateKeyspace is a helper function for testing.
+func validateKeyspace(t *testing.T, vtctldServer *VtctldServer, ctx context.Context, ks string) *vtctldatapb.ValidateKeyspaceResponse {
+	t.Helper()
+	resp, err := vtctldServer.ValidateKeyspace(ctx, &vtctldatapb.ValidateKeyspaceRequest{
+		Keyspace:    ks,
+		PingTablets: true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.NotNil(t, resp.GetResultsByShard())
+	return resp
 }
 
 func TestValidateShard(t *testing.T) {
