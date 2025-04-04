@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
@@ -59,7 +60,7 @@ func TestMain(m *testing.M) {
 
 		clusterInstance.VtGatePlannerVersion = querypb.ExecuteOptions_Gen4
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--enable_system_settings=true",
+			fmt.Sprintf("%s=true", utils.GetFlagVariantForTests("--enable-system-settings")),
 			utils.GetFlagVariantForTests("--mysql-server-version")+"=8.0.16-7",
 		)
 		// Start vtgate

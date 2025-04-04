@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 // HealthChecker is a callback that impements a service-specific health check
@@ -244,9 +245,9 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
 		"--planner-version", args.PlannerVersion,
-		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
-		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
-		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
+		fmt.Sprintf("%s=%t", utils.GetFlagVariantForTests("--enable-online-ddl"), args.EnableOnlineDDL),
+		fmt.Sprintf("%s=%t", utils.GetFlagVariantForTests("--enable-direct-ddl"), args.EnableDirectDDL),
+		fmt.Sprintf("%s=%t", utils.GetFlagVariantForTests("--enable-system-settings"), args.EnableSystemSettings),
 		fmt.Sprintf("--no_scatter=%t", args.NoScatter),
 	}...)
 
@@ -269,7 +270,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-persistence-dir", path.Join(args.DataDir, "vschema_data")}...)
 	}
 	if args.TransactionMode != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction_mode", args.TransactionMode}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction-mode", args.TransactionMode}...)
 	}
 	if args.TransactionTimeout != 0 {
 		vt.ExtraArgs = append(vt.ExtraArgs, "--queryserver-config-transaction-timeout", fmt.Sprintf("%v", args.TransactionTimeout))
@@ -281,7 +282,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc-auth-mode", servenv.GRPCAuth(), "--grpc-key", servenv.GRPCKey(), "--grpc-cert", servenv.GRPCCert(), "--grpc-ca", servenv.GRPCCertificateAuthority(), "--grpc-auth-mtls-allowed-substrings", servenv.ClientCertSubstrings()}...)
 	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-ddl-authorized-users", args.VSchemaDDLAuthorizedUsers}...)
 	}
 	vt.ExtraArgs = append(vt.ExtraArgs, "--mysql-server-version", servenv.MySQLServerVersion())
 	if socket != "" {
@@ -312,7 +313,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 
 	if args.ExternalTopoImplementation != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
-			"--external_topo_server",
+			"--external-topo-server",
 			"--topo-implementation", args.ExternalTopoImplementation,
 			"--topo-global-server-address", args.ExternalTopoGlobalServerAddress,
 			"--topo-global-root", args.ExternalTopoGlobalRoot,

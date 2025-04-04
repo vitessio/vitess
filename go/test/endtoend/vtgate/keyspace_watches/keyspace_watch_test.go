@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -141,7 +142,7 @@ func TestRoutingWithKeyspacesToWatch(t *testing.T) {
 func TestVSchemaDDLWithKeyspacesToWatch(t *testing.T) {
 
 	extraVTGateArgs := []string{
-		"--vschema_ddl_authorized_users", "%",
+		utils.GetFlagVariantForTests("--vschema-ddl-authorized-users"), "%",
 	}
 	clusterInstance, exitCode := createCluster(extraVTGateArgs)
 	defer clusterInstance.Teardown()

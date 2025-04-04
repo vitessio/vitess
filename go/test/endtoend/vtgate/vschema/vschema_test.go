@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate"
 )
 
@@ -78,7 +79,7 @@ func TestMain(m *testing.M) {
 			timeNow := time.Now().Unix()
 			configFile = path.Join(os.TempDir(), fmt.Sprintf("vtgate-config-%d.json", timeNow))
 			err := writeConfig(configFile, map[string]string{
-				"vschema_ddl_authorized_users": "%",
+				vtutils.GetFlagVariantForTests("vschema-ddl-authorized-users"): "%",
 			})
 			if err != nil {
 				return 1, err
@@ -87,7 +88,7 @@ func TestMain(m *testing.M) {
 
 			clusterInstance.VtGateExtraArgs = []string{fmt.Sprintf("--config-file=%s", configFile), "--schema_change_signal=false"}
 		} else {
-			clusterInstance.VtGateExtraArgs = []string{"--vschema_ddl_authorized_users=%", "--schema_change_signal=false"}
+			clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--vschema-ddl-authorized-users") + "=%", "--schema_change_signal=false"}
 		}
 
 		// Start keyspace
@@ -172,13 +173,13 @@ func TestVSchema(t *testing.T) {
 		// Don't allow any users to modify the vschema via the SQL API
 		// in order to test that behavior.
 		writeConfig(configFile, map[string]string{
-			"vschema_ddl_authorized_users": "",
+			vtutils.GetFlagVariantForTests("vschema-ddl-authorized-users"): "",
 		})
 		// Allow anyone to modify the vschema via the SQL API again when
 		// the test completes.
 		defer func() {
 			writeConfig(configFile, map[string]string{
-				"vschema_ddl_authorized_users": "%",
+				vtutils.GetFlagVariantForTests("vschema-ddl-authorized-users"): "%",
 			})
 		}()
 		require.EventuallyWithT(t, func(t *assert.CollectT) {

@@ -1,4 +1,4 @@
-# !/bin/bash
+#!/bin/bash
 
 underscore_count=0
 dash_count=0

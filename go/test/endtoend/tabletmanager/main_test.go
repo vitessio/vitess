@@ -94,7 +94,7 @@ func TestMain(m *testing.M) {
 
 		// List of users authorized to execute vschema ddl operations
 		clusterInstance.VtGateExtraArgs = []string{
-			"--vschema_ddl_authorized_users=%",
+			utils.GetFlagVariantForTests("--vschema-ddl-authorized-users") + "=%",
 			"--enable-views",
 			"--discovery_low_replication_lag", tabletUnhealthyThreshold.String(),
 		}

@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/utils"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -69,7 +70,7 @@ type VtgateProcess struct {
 }
 
 type VTGateConfiguration struct {
-	TransactionMode                   string `json:"transaction_mode,omitempty"`
+	TransactionMode                   string `json:"transaction-mode,omitempty"`
 	DiscoveryLowReplicationLag        string `json:"discovery_low_replication_lag,omitempty"`
 	DiscoveryHighReplicationLag       string `json:"discovery_high_replication_lag,omitempty"`
 	DiscoveryMinServingVttablets      string `json:"discovery_min_number_serving_vttablets,omitempty"`
@@ -154,7 +155,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--topo_global_root", vtgate.TopoGlobalRoot,
 		"--config-file", vtgate.ConfigFile,
 		"--log_dir", vtgate.LogDir,
-		"--log_queries_to_file", vtgate.FileToLogQueries,
+		"--log-queries-to-file", vtgate.FileToLogQueries,
 		"--port", fmt.Sprintf("%d", vtgate.Port),
 		"--grpc_port", fmt.Sprintf("%d", vtgate.GrpcPort),
 		"--mysql_server_port", fmt.Sprintf("%d", vtgate.MySQLServerPort),
@@ -209,7 +210,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
-		args = append(args, "--enable_system_settings")
+		args = append(args, utils.GetFlagVariantForTests("--enable-system-settings"))
 	}
 	vtgate.proc = exec.Command(
 		vtgate.Binary,

@@ -204,18 +204,18 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().StringVar(&config.SnapshotFile, "snapshot_file", "",
 		"A MySQL DB snapshot file")
 
-	cmd.Flags().BoolVar(&config.EnableSystemSettings, "enable_system_settings", true, "This will enable the system settings to be changed per session at the database connection level")
+	utils.SetFlagBoolVar(cmd.Flags(), &config.EnableSystemSettings, "enable-system-settings", true, "This will enable the system settings to be changed per session at the database connection level")
 
-	cmd.Flags().StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
+	utils.SetFlagStringVar(cmd.Flags(), &config.TransactionMode, "transaction-mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
 	cmd.Flags().DurationVar(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 30*time.Second, "query server transaction timeout, a transaction will be killed if it takes longer than this value")
 
 	utils.SetFlagStringVar(cmd.Flags(), &config.TabletHostName, "tablet-hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
 
-	cmd.Flags().StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
+	utils.SetFlagStringVar(cmd.Flags(), &config.VSchemaDDLAuthorizedUsers, "vschema-ddl-authorized-users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
 
 	cmd.Flags().StringVar(&config.ForeignKeyMode, "foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
-	cmd.Flags().BoolVar(&config.EnableOnlineDDL, "enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
-	cmd.Flags().BoolVar(&config.EnableDirectDDL, "enable_direct_ddl", true, "Allow users to submit direct DDL statements")
+	utils.SetFlagBoolVar(cmd.Flags(), &config.EnableOnlineDDL, "enable-online-ddl", true, "Allow users to submit, review and control Online DDL")
+	utils.SetFlagBoolVar(cmd.Flags(), &config.EnableDirectDDL, "enable-direct-ddl", true, "Allow users to submit direct DDL statements")
 
 	// flags for using an actual topo implementation for vtcombo instead of in-memory topo. useful for test setup where an external topo server is shared across multiple vtcombo processes or other components
 	cmd.Flags().StringVar(&config.ExternalTopoImplementation, "external_topo_implementation", "", "the topology implementation to use for vtcombo process")

@@ -899,7 +899,7 @@ func (vc *VCursorImpl) ExecuteKeyspaceID(ctx context.Context, keyspace string, k
 		BindVariables: bindVars,
 	}}
 
-	// This applies only when VTGate works in SINGLE transaction_mode.
+	// This applies only when VTGate works in SINGLE transaction-mode.
 	// This function is only called from consistent_lookup vindex when the lookup row getting inserting finds a duplicate.
 	// In such scenario, original row needs to be locked to check if it already exists or no other transaction is working on it or does not write to it.
 	// This creates a transaction but that transaction is for locking purpose only and should not cause multi-db transaction error.

@@ -65,7 +65,7 @@ func TestDynamicConfig(t *testing.T) {
 	}()
 	err := clusterInstance.VtgateProcess.RewriteConfiguration()
 	require.NoError(t, err)
-	err = clusterInstance.VtgateProcess.WaitForConfig(`"transaction_mode":"SINGLE"`)
+	err = clusterInstance.VtgateProcess.WaitForConfig(`"transaction-mode":"SINGLE"`)
 	require.NoError(t, err)
 
 	// After the config changes verify running a distributed transaction fails.

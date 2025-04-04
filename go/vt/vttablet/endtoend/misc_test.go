@@ -40,6 +40,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -703,8 +704,8 @@ func TestSelectBooleanSystemVariables(t *testing.T) {
 	tcs := []testCase{
 		newTestCase("autocommit", querypb.Type_INT64, true),
 		newTestCase("autocommit", querypb.Type_INT64, false),
-		newTestCase("enable_system_settings", querypb.Type_INT64, true),
-		newTestCase("enable_system_settings", querypb.Type_INT64, false),
+		newTestCase(vtutils.GetFlagVariantForTests("enable-system-settings"), querypb.Type_INT64, true),
+		newTestCase(vtutils.GetFlagVariantForTests("enable-system-settings"), querypb.Type_INT64, false),
 	}
 
 	for _, tc := range tcs {

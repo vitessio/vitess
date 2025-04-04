@@ -597,8 +597,8 @@ func TestRewrites(in *testing.T) {
 		expected:       "SELECT :__vtversion_comment as `@@version_comment`",
 		versionComment: true,
 	}, {
-		in:                          "SELECT @@enable_system_settings",
-		expected:                    "SELECT :__vtenable_system_settings as `@@enable_system_settings`",
+		in:                          "SELECT @@enable-system-settings",
+		expected:                    "SELECT :__vtenable_system_settings as `@@enable-system-settings`",
 		sessionEnableSystemSettings: true,
 	}, {
 		in:       "SELECT last_insert_id()",
@@ -691,8 +691,8 @@ func TestRewrites(in *testing.T) {
 		expected:       "SELECT :__vtsql_select_limit as `@@sql_select_limit`",
 		sqlSelectLimit: true,
 	}, {
-		in:              "SELECT @@transaction_mode",
-		expected:        "SELECT :__vttransaction_mode as `@@transaction_mode`",
+		in:              "SELECT @@transaction-mode",
+		expected:        "SELECT :__vttransaction_mode as `@@transaction-mode`",
 		transactionMode: true,
 	}, {
 		in:       "SELECT @@workload",

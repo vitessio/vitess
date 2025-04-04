@@ -71,7 +71,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 
 		//Backup Arguments are not optional
 		"--backup-storage-implementation": vtbackup.BackupStorageImplementation,
-		"--file_backup_storage_root":      vtbackup.FileBackupStorageRoot,
+		"--file-backup-storage-root":      vtbackup.FileBackupStorageRoot,
 	}
 
 	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtbackup.TopoImplementation)
@@ -81,6 +81,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	utils.SetFlagVariantsForTests(flags, "--init-keyspace", vtbackup.Keyspace)
 	utils.SetFlagVariantsForTests(flags, "--init-shard", vtbackup.Shard)
 	utils.SetFlagVariantsForTests(flags, "--backup-storage-implementation", vtbackup.BackupStorageImplementation)
+	utils.SetFlagVariantsForTests(flags, "file-backup-storage-root", vtbackup.FileBackupStorageRoot)
 
 	vtbackup.proc = exec.Command(vtbackup.Binary)
 	for k, v := range flags {
