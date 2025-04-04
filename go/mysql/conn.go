@@ -1327,11 +1327,11 @@ func (c *Conn) handleComQueryMulti(handler Handler, data []byte) (kontinue bool)
 // the StreamExecuteMulti and ExecuteMulti RPC calls to push the splitting of statements
 // down to Vtgate.
 func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
-	// lastPacketSent signifies whether we have sent the last packet to the client
+	// needsEndPacket signifies whether we have need to send the last packet to the client
 	// for a given query. This is used to determine whether we should send an
 	// end packet after the query is done or not. Initially we don't need to send an end packet
-	// so we initialize this value to true.
-	lastPacketSent := true
+	// so we initialize this value to false.
+	needsEndPacket := false
 	var res = execSuccess
 
 	err := handler.ComQueryMulti(c, query, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
@@ -1342,7 +1342,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 
 		// firstPacket tells us that this is the start of a new query result.
 		// If we haven't sent a last packet yet, we should send the end result packet.
-		if firstPacket && !lastPacketSent {
+		if firstPacket && needsEndPacket {
 			if err := c.writeEndResult(true, 0, 0, handler.WarningCount(c)); err != nil {
 				log.Errorf("Error writing result to %s: %v", c, err)
 				return err
@@ -1362,9 +1362,9 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 
 		if firstPacket {
 			// The first packet signifies the start of a new query result.
-			// So we reset the lastPacketSent variable to signify we haven't sent the last
+			// So we reset the needsEndPacket variable to signify we haven't sent the last
 			// packet for this query.
-			lastPacketSent = false
+			needsEndPacket = true
 			if len(qr.QueryResult.Fields) == 0 {
 
 				// A successful callback with no fields means that this was a
@@ -1381,7 +1381,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 					info:             "",
 					sessionStateData: qr.QueryResult.SessionStateChanges,
 				}
-				lastPacketSent = true
+				needsEndPacket = false
 				return c.writeOKPacket(&ok)
 			}
 
@@ -1406,7 +1406,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	}
 
 	// If we haven't sent the final packet for the last query, we should send that too.
-	if !lastPacketSent {
+	if needsEndPacket {
 		if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
 			log.Errorf("Error writing result to %s: %v", c, err)
 			return connErr
