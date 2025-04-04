@@ -2940,7 +2940,7 @@
           "Sharded": false
         },
         "FieldQuery": "select t.table_schema from information_schema.`tables` as t where 1 != 1",
-        "Query": "select t.table_schema from information_schema.`tables` as t where t.table_schema in (select c.column_name from information_schema.`columns` as c)",
+        "Query": "select t.table_schema from information_schema.`tables` as t where t.table_schema in (select c.`column_name` from information_schema.`columns` as c)",
         "Table": "information_schema.`tables`"
       }
     },

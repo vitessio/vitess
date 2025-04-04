@@ -31,6 +31,19 @@ import (
 
 // RebuildKeyspace rebuilds the serving graph data while locking out other changes.
 func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, keyspace string, cells []string, allowPartial bool) (err error) {
+	_, err = ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		// If we get an error trying to get the keyspace and it's not a
+		// no node, error, we should fail.
+		if !topo.IsErrType(err, topo.NoNode) {
+			return err
+		}
+		// If the keyspace doesn't exist, we should delete the serving keyspace records.
+		// This is to ensure that the serving graph is consistent with the topo.
+		if err = deleteOrphanedFiles(ctx, ts, keyspace, cells); err != nil {
+			return err
+		}
+	}
 	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "RebuildKeyspace")
 	if lockErr != nil {
 		return lockErr
@@ -38,6 +51,16 @@ func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, k
 	defer unlock(&err)
 
 	return RebuildKeyspaceLocked(ctx, log, ts, keyspace, cells, allowPartial)
+}
+
+// deleteOrphanedFiles clears the residual records for a keyspace that has already been deleted.
+func deleteOrphanedFiles(ctx context.Context, ts *topo.Server, keyspace string, cells []string) error {
+	for _, cell := range cells {
+		if err := ts.DeleteOrphanedKeyspaceFiles(ctx, cell, keyspace); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RebuildKeyspaceLocked should only be used with an action lock on the keyspace

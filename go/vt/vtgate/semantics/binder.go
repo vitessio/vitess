@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"errors"
 	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -303,22 +304,11 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 	return dependency{}, ShardedError{ColumnNotFoundError{Column: colName, Table: tableName}}
 }
 
-func isColumnNotFound(err error) bool {
-	switch err := err.(type) {
-	case ColumnNotFoundError:
-		return true
-	case ShardedError:
-		return isColumnNotFound(err.Inner)
-	default:
-		return false
-	}
-}
-
 func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
 	if current.inHavingAggr {
 		// when inside an aggregation, we'll search the FROM clause before the SELECT expressions
 		deps, err := b.resolveColumn(colName, current.parent, allowMulti, true)
-		if deps.direct.NotEmpty() || (err != nil && !isColumnNotFound(err)) {
+		if deps.direct.NotEmpty() || (err != nil && !errors.As(err, &ColumnNotFoundError{})) {
 			return deps, err
 		}
 	}
@@ -354,7 +344,7 @@ func (b *binder) resolveColumnInHaving(colName *sqlparser.ColName, current *scop
 
 	if !current.inHavingAggr && sel.GroupBy == nil {
 		// if we are not inside an aggregation, and there is no GROUP BY, we consider the FROM clause before failing
-		if deps.direct.NotEmpty() || (err != nil && !isColumnNotFound(err)) {
+		if deps.direct.NotEmpty() || (err != nil && !errors.As(err, &ColumnNotFoundError{})) {
 			return deps, err
 		}
 	}
@@ -429,7 +419,7 @@ func (b *binder) resolveColInGroupBy(
 		return dependency{}, err
 	}
 	if dependencies.empty() {
-		if isColumnNotFound(firstErr) {
+		if errors.As(firstErr, &ColumnNotFoundError{}) {
 			return dependency{}, &ColumnNotFoundClauseError{Column: colName.Name.String(), Clause: "group statement"}
 		}
 		return deps, firstErr

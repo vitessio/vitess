@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
@@ -730,7 +729,8 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	}
 }
 
-// TestOpenFailedDueToLoadTableErr tests that schema engine load should not fail instead should log the failures.
+// TestOpenFailedDueToLoadTableErr tests that schema engine load should fail for test_table and
+// No field query is expected to be executed for view i.e. test_view.
 func TestOpenFailedDueToLoadTableErr(t *testing.T) {
 	tl := syslogger.NewTestLogger()
 	defer tl.Close()
@@ -747,58 +747,11 @@ func TestOpenFailedDueToLoadTableErr(t *testing.T) {
 	// this will cause NewTable error, as it expects zero rows.
 	db.MockQueriesForTable("test_table", sqltypes.MakeTestResult(sqltypes.MakeTestFields("foo", "varchar"), ""))
 
-	// adding column query for table_view
-	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "test_view"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), ""))
-	// rejecting the impossible query
-	db.AddRejectedQuery("SELECT * FROM `fakesqldb`.`test_view` WHERE 1 != 1", sqlerror.NewSQLErrorFromError(errors.New("The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)")))
-
 	AddFakeInnoDBReadRowsResult(db, 0)
 	se := newEngine(1*time.Second, 1*time.Second, 0, db, nil)
 	err := se.Open()
 	// failed load should return an error because of test_table
 	assert.ErrorContains(t, err, "Row count exceeded")
-
-	logs := tl.GetAllLogs()
-	logOutput := strings.Join(logs, ":::")
-	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the view: test_view")
-	assert.Contains(t, logOutput, "The user specified as a definer ('root'@'%') does not exist (errno 1449) (sqlstate HY000)")
-}
-
-// TestOpenNoErrorDueToInvalidViews tests that schema engine load does not fail instead should log the failures for the views
-func TestOpenNoErrorDueToInvalidViews(t *testing.T) {
-	tl := syslogger.NewTestLogger()
-	defer tl.Close()
-	db := fakesqldb.New(t)
-	defer db.Close()
-	schematest.AddDefaultQueries(db)
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
-		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesWithSizesRow("foo_view", true, "VIEW"),
-			mysql.BaseShowTablesWithSizesRow("bar_view", true, "VIEW"),
-		},
-	})
-
-	// adding column query for table_view
-	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "foo_view"),
-		&sqltypes.Result{})
-	db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, "bar_view"),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), "col1", "col2"))
-	// rejecting the impossible query
-	db.AddRejectedQuery("SELECT `col1`, `col2` FROM `fakesqldb`.`bar_view` WHERE 1 != 1", sqlerror.NewSQLError(sqlerror.ERWrongFieldWithGroup, sqlerror.SSClientError, "random error for table bar_view"))
-
-	AddFakeInnoDBReadRowsResult(db, 0)
-	se := newEngine(1*time.Second, 1*time.Second, 0, db, nil)
-	err := se.Open()
-	require.NoError(t, err)
-
-	logs := tl.GetAllLogs()
-	logOutput := strings.Join(logs, ":::")
-	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the view: foo_view")
-	assert.Contains(t, logOutput, "unable to get columns for table fakesqldb.foo_view")
-	assert.Contains(t, logOutput, "WARNING:Failed reading schema for the view: bar_view")
-	assert.Contains(t, logOutput, "random error for table bar_view")
 }
 
 func TestExportVars(t *testing.T) {
@@ -1557,10 +1510,10 @@ func TestEngineReload(t *testing.T) {
 				db.AddQuery("commit", &sqltypes.Result{})
 				db.AddQuery("rollback", &sqltypes.Result{})
 				// We are adding both the variants of the delete statements that we can see in the test, since the deleted tables are initially stored as a map, the order is not defined.
-				db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('t5', 't4', 'T2', 't2')", &sqltypes.Result{})
-				db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and TABLE_NAME in ('t4', 't5', 'T2', 't2')", &sqltypes.Result{})
-				db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), 't2', 'create_table_t2', 123456790)", &sqltypes.Result{})
-				db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, CREATE_TIME) values (database(), 'T2', 'create_table_T2', 123456789)", &sqltypes.Result{})
+				db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and `TABLE_NAME` in ('t5', 't4', 'T2', 't2')", &sqltypes.Result{})
+				db.AddQuery("delete from _vt.`tables` where TABLE_SCHEMA = database() and `TABLE_NAME` in ('t4', 't5', 'T2', 't2')", &sqltypes.Result{})
+				db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, `TABLE_NAME`, CREATE_STATEMENT, CREATE_TIME) values (database(), 't2', 'create_table_t2', 123456790)", &sqltypes.Result{})
+				db.AddQuery("insert into _vt.`tables`(TABLE_SCHEMA, `TABLE_NAME`, CREATE_STATEMENT, CREATE_TIME) values (database(), 'T2', 'create_table_T2', 123456789)", &sqltypes.Result{})
 			}
 
 			// Queries for reloading the views' information.
@@ -1571,22 +1524,22 @@ func TestEngineReload(t *testing.T) {
 							fmt.Sprintf("%v|create_table_%v|utf8mb4|utf8mb4_0900_ai_ci", tableName, tableName)))
 				}
 				// We are adding both the variants of the select statements that we can see in the test, since the deleted views are initially stored as a map, the order is not defined.
-				db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v4', 'v5', 'V2', 'v2')",
+				db.AddQuery("select `table_name`, view_definition from information_schema.views where table_schema = database() and `table_name` in ('v4', 'v5', 'V2', 'v2')",
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar"),
 						"v2|select_v2",
 						"V2|select_V2",
 					))
-				db.AddQuery("select table_name, view_definition from information_schema.views where table_schema = database() and table_name in ('v5', 'v4', 'V2', 'v2')",
+				db.AddQuery("select `table_name`, view_definition from information_schema.views where table_schema = database() and `table_name` in ('v5', 'v4', 'V2', 'v2')",
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar"),
 						"v2|select_v2",
 						"V2|select_V2",
 					))
 
 				// We are adding both the variants of the delete statements that we can see in the test, since the deleted views are initially stored as a map, the order is not defined.
-				db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('v4', 'v5', 'V2', 'v2')", &sqltypes.Result{})
-				db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and TABLE_NAME in ('v5', 'v4', 'V2', 'v2')", &sqltypes.Result{})
-				db.AddQuery("insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v2', 'create_table_v2', 'select_v2')", &sqltypes.Result{})
-				db.AddQuery("insert into _vt.views(TABLE_SCHEMA, TABLE_NAME, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'V2', 'create_table_V2', 'select_V2')", &sqltypes.Result{})
+				db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and `TABLE_NAME` in ('v4', 'v5', 'V2', 'v2')", &sqltypes.Result{})
+				db.AddQuery("delete from _vt.views where TABLE_SCHEMA = database() and `TABLE_NAME` in ('v5', 'v4', 'V2', 'v2')", &sqltypes.Result{})
+				db.AddQuery("insert into _vt.views(TABLE_SCHEMA, `TABLE_NAME`, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'v2', 'create_table_v2', 'select_v2')", &sqltypes.Result{})
+				db.AddQuery("insert into _vt.views(TABLE_SCHEMA, `TABLE_NAME`, CREATE_STATEMENT, VIEW_DEFINITION) values (database(), 'V2', 'create_table_V2', 'select_V2')", &sqltypes.Result{})
 			}
 
 			// adding query pattern for udfs

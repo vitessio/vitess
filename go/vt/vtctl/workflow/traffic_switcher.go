@@ -36,10 +36,13 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -1253,47 +1256,148 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 }
 
 func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
-	err := ts.ForAllTargets(func(target *MigrationTarget) error {
-		ts.Logger().Infof("ForAllTargets: %+v", target)
-		for _, tableName := range ts.Tables() {
+	switch ts.MigrationType() {
+	case binlogdatapb.MigrationType_TABLES:
+		err := ts.ForAllTargets(func(target *MigrationTarget) error {
+			ts.Logger().Infof("ForAllTargets: %+v", target)
+			for _, tableName := range ts.Tables() {
+				primaryDbName, err := sqlescape.EnsureEscaped(target.GetPrimary().DbName())
+				if err != nil {
+					return err
+				}
+				tableName, err := sqlescape.EnsureEscaped(tableName)
+				if err != nil {
+					return err
+				}
+				query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
+				ts.Logger().Infof("%s: Dropping table %s.%s\n",
+					topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
+				res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+					Query:                   []byte(query),
+					MaxRows:                 1,
+					ReloadSchema:            true,
+					DisableForeignKeyChecks: true,
+				})
+				ts.Logger().Infof("Removed target table with result: %+v", res)
+				if err != nil {
+					if IsTableDidNotExistError(err) {
+						// The table was already gone, so we can ignore the error.
+						ts.Logger().Warningf("%s: Table %s did not exist when attempting to remove it", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName)
+					} else {
+						ts.Logger().Errorf("%s: Error removing table %s: %v", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName, err)
+						return err
+					}
+				}
+				ts.Logger().Infof("%s: Removed table %s.%s\n",
+					topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
+
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		// Remove the tables from the vschema.
+		return ts.dropParticipatingTablesFromKeyspace(ctx, ts.TargetKeyspaceName())
+
+	case binlogdatapb.MigrationType_SHARDS:
+		// For reshard streams, do the following:
+		// * get the schema definition from one of the source primaries to
+		//   determine which tables to drop.
+		// * drop the tables on each of the target shard's primaries
+		// * do not remove the tables from the vschema
+		oneSource := ts.SourceShards()[0].PrimaryAlias
+
+		// Get the schema definition from the target primary. We only want to drop tables
+		// that match the vreplication filters.
+		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: ts.Tables(), ExcludeTables: nil, IncludeViews: false}
+		sd, err := schematools.GetSchema(ctx, ts.TopoServer(), ts.ws.tmc, oneSource, req)
+		if err != nil {
+			return err
+		}
+
+		err = ts.ForAllTargets(func(target *MigrationTarget) error {
 			primaryDbName, err := sqlescape.EnsureEscaped(target.GetPrimary().DbName())
 			if err != nil {
 				return err
 			}
-			tableName, err := sqlescape.EnsureEscaped(tableName)
-			if err != nil {
-				return err
-			}
-			query := fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
-			ts.Logger().Infof("%s: Dropping table %s.%s\n",
-				topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
-			res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-				Query:                   []byte(query),
-				MaxRows:                 1,
-				ReloadSchema:            true,
-				DisableForeignKeyChecks: true,
-			})
-			ts.Logger().Infof("Removed target table with result: %+v", res)
-			if err != nil {
-				if IsTableDidNotExistError(err) {
-					// The table was already gone, so we can ignore the error.
-					ts.Logger().Warningf("%s: Table %s did not exist when attempting to remove it", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName)
-				} else {
-					ts.Logger().Errorf("%s: Error removing table %s: %v", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName, err)
+
+			for _, td := range sd.TableDefinitions {
+				if schema.IsInternalOperationTableName(td.Name) {
+					continue
+				}
+
+				tableName, err := sqlescape.EnsureEscaped(td.Name)
+				if err != nil {
 					return err
 				}
-			}
-			ts.Logger().Infof("%s: Removed table %s.%s\n",
-				topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
 
+				var query string
+
+				if td.Type == tmutils.TableView {
+					query = fmt.Sprintf("drop view %s.%s", primaryDbName, tableName)
+					ts.Logger().Infof("%s: Dropping view %s.%s\n",
+						topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
+
+					res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+						Query:                   []byte(query),
+						MaxRows:                 1,
+						ReloadSchema:            true,
+						DisableForeignKeyChecks: true,
+					})
+
+					ts.Logger().Infof("Removed target view with result: %+v", res)
+					if err != nil {
+						if IsTableDidNotExistError(err) {
+							// The view was already gone, so we can ignore the error.
+							ts.Logger().Warningf("%s: view %s did not exist when attempting to remove it", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName)
+						} else {
+							ts.Logger().Errorf("%s: Error removing view %s: %v", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName, err)
+							return err
+						}
+					}
+					ts.Logger().Infof("%s: Removed view %s.%s\n",
+						topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
+
+				} else {
+					query = fmt.Sprintf("drop table %s.%s", primaryDbName, tableName)
+					ts.Logger().Infof("%s: Dropping table %s.%s\n",
+						topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
+
+					res, err := ts.ws.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+						Query:                   []byte(query),
+						MaxRows:                 1,
+						ReloadSchema:            true,
+						DisableForeignKeyChecks: true,
+					})
+
+					ts.Logger().Infof("Removed target table with result: %+v", res)
+					if err != nil {
+						if IsTableDidNotExistError(err) {
+							// The table was already gone, so we can ignore the error.
+							ts.Logger().Warningf("%s: Table %s did not exist when attempting to remove it", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName)
+						} else {
+							ts.Logger().Errorf("%s: Error removing table %s: %v", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), tableName, err)
+							return err
+						}
+					}
+					ts.Logger().Infof("%s: Removed table %s.%s\n",
+						topoproto.TabletAliasString(target.GetPrimary().GetAlias()), target.GetPrimary().DbName(), tableName)
+				}
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			return err
 		}
-		return nil
-	})
-	if err != nil {
-		return err
+	default:
+		return fmt.Errorf("unknown migration type: %v", ts.MigrationType())
 	}
 
-	return ts.dropParticipatingTablesFromKeyspace(ctx, ts.TargetKeyspaceName())
+	return nil
 }
 
 func (ts *trafficSwitcher) dropTargetShards(ctx context.Context) error {

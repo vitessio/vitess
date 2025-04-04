@@ -179,7 +179,7 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 	}
 	sc.dbConn.Recycle()
 	sc.dbConn = nil
-	sc.logReservedConn()
+	sc.logReservedConn(reason)
 }
 
 // Renew the existing connection with new connection id.
@@ -260,7 +260,11 @@ func (sc *StatefulConnection) Taint(ctx context.Context, stats *servenv.TimingsW
 		Stats:           stats,
 	}
 	sc.dbConn.Taint()
-	sc.Stats().UserActiveReservedCount.Add(sc.getUsername(), 1)
+	if sc.env.Config().SkipUserMetrics {
+		sc.Stats().UserActiveReservedCount.Add(userLabelDisabled, 1)
+	} else {
+		sc.Stats().UserActiveReservedCount.Add(sc.getUsername(), 1)
+	}
 	return nil
 }
 
@@ -282,9 +286,11 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 		username = callerid.GetUsername(sc.txProps.ImmediateCaller)
 	}
 	duration := sc.txProps.EndTime.Sub(sc.txProps.StartTime)
-	sc.Stats().UserTransactionCount.Add([]string{username, reason.Name()}, 1)
-	sc.Stats().UserTransactionTimesNs.Add([]string{username, reason.Name()}, int64(duration))
 	sc.txProps.Stats.Add(reason.Name(), duration)
+	if !sc.env.Config().SkipUserMetrics {
+		sc.Stats().UserTransactionCount.Add([]string{username, reason.Name()}, 1)
+		sc.Stats().UserTransactionTimesNs.Add([]string{username, reason.Name()}, int64(duration))
+	}
 	tabletenv.TxLogger.Send(sc)
 }
 
@@ -294,15 +300,19 @@ func (sc *StatefulConnection) SetTimeout(timeout time.Duration) {
 }
 
 // logReservedConn logs reserved connection related stats.
-func (sc *StatefulConnection) logReservedConn() {
+func (sc *StatefulConnection) logReservedConn(reason string) {
 	if sc.reservedProps == nil {
 		return // Nothing to log as this connection is not reserved.
 	}
-	duration := time.Since(sc.reservedProps.StartTime)
-	username := sc.getUsername()
-	sc.Stats().UserActiveReservedCount.Add(username, -1)
-	sc.Stats().UserReservedCount.Add(username, 1)
-	sc.Stats().UserReservedTimesNs.Add(username, int64(duration))
+	sc.reservedProps.Stats.Record(reason, sc.reservedProps.StartTime)
+	if sc.env.Config().SkipUserMetrics {
+		sc.Stats().UserActiveReservedCount.Add(userLabelDisabled, -1)
+	} else {
+		username := sc.getUsername()
+		sc.Stats().UserActiveReservedCount.Add(username, -1)
+		sc.Stats().UserReservedCount.Add(username, 1)
+		sc.Stats().UserReservedTimesNs.Add(username, int64(time.Since(sc.reservedProps.StartTime)))
+	}
 }
 
 func (sc *StatefulConnection) getUsername() string {

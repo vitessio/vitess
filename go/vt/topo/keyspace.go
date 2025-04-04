@@ -393,6 +393,41 @@ func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 	return nil
 }
 
+// DeleteOrphanedKeyspaceFiles clears the residual files for a given keyspace in a cell.
+func (ts *Server) DeleteOrphanedKeyspaceFiles(ctx context.Context, cell string, keyspace string) error {
+	conn, err := ts.ConnForCell(ctx, cell)
+	if err != nil {
+		return err
+	}
+
+	dirsToClear := []string{path.Join(KeyspacesPath, keyspace)}
+	for len(dirsToClear) > 0 {
+		dir := dirsToClear[len(dirsToClear)-1]
+		dirsToClear = dirsToClear[0 : len(dirsToClear)-1]
+
+		children, err := conn.ListDir(ctx, dir, true)
+		if err != nil {
+			if IsErrType(err, NoNode) {
+				continue
+			}
+			return err
+		}
+
+		for _, child := range children {
+			childPath := path.Join(dir, child.Name)
+			if child.Type == TypeDirectory {
+				dirsToClear = append(dirsToClear, childPath)
+				continue
+			}
+			err = conn.Delete(ctx, childPath, nil)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // GetKeyspaces returns the list of keyspaces in the topology.
 func (ts *Server) GetKeyspaces(ctx context.Context) ([]string, error) {
 	if ctx.Err() != nil {

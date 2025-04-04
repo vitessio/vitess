@@ -57,7 +57,10 @@ func registerReshardCommands(root *cobra.Command) {
 	reshard.AddCommand(reverseTrafficCommand)
 
 	reshard.AddCommand(common.GetCompleteCommand(opts))
-	reshard.AddCommand(common.GetCancelCommand(opts))
+
+	cancel := common.GetCancelCommand(opts)
+	cancel.Flags().BoolVar(&common.CancelOptions.KeepData, "keep-data", false, "Keep the partially copied table data from the Reshard workflow in the target shards.")
+	reshard.AddCommand(cancel)
 }
 
 func init() {

@@ -70,17 +70,8 @@ func TestLoadView(t *testing.T) {
 	want := &Table{
 		Name: sqlparser.NewIdentifierCS("test_table"),
 		Type: View,
-		Fields: []*querypb.Field{{
-			Name: "pk",
-			Type: sqltypes.Int32,
-		}, {
-			Name: "name",
-			Type: sqltypes.Int32,
-		}, {
-			Name: "addr",
-			Type: sqltypes.Int32,
-		}},
 	}
+	// empty fields
 	assert.Equal(t, want, table)
 }
 
