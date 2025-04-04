@@ -1158,9 +1158,7 @@ func (x *StreamExecuteMultiRequest) GetSession() *Session {
 // StreamExecuteMultiResponse is the returned value from StreamExecuteMulti.
 type StreamExecuteMultiResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// result contains the result data.
-	// The first value contains only Fields information.
-	// The next values contain the actual rows, a few values per result.
+	// result contains the result set or an error if one occurred while executing the query.
 	Result *query.ResultWithError `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	// more_results is set to true if there are more results to follow after this one has concluded.
 	MoreResults bool `protobuf:"varint,2,opt,name=more_results,json=moreResults,proto3" json:"more_results,omitempty"`

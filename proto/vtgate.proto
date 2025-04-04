@@ -325,9 +325,7 @@ message StreamExecuteMultiRequest {
 
 // StreamExecuteMultiResponse is the returned value from StreamExecuteMulti.
 message StreamExecuteMultiResponse {
-  // result contains the result data.
-  // The first value contains only Fields information.
-  // The next values contain the actual rows, a few values per result.
+  // result contains the result set or an error if one occurred while executing the query.
   query.ResultWithError result = 1;
 
   // more_results is set to true if there are more results to follow after this one has concluded.
