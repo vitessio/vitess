@@ -74,6 +74,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vtctl/vschema"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -92,9 +93,10 @@ const (
 // VtctldServer implements the Vtctld RPC service protocol.
 type VtctldServer struct {
 	vtctlservicepb.UnimplementedVtctldServer
-	ts  *topo.Server
-	tmc tmclient.TabletManagerClient
-	ws  *workflow.Server
+	ts   *topo.Server
+	tmc  tmclient.TabletManagerClient
+	ws   *workflow.Server
+	vapi *vschema.VSchemaAPI
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
@@ -102,9 +104,10 @@ func NewVtctldServer(env *vtenv.Environment, ts *topo.Server) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
 
 	return &VtctldServer{
-		ts:  ts,
-		tmc: tmc,
-		ws:  workflow.NewServer(env, ts, tmc),
+		ts:   ts,
+		tmc:  tmc,
+		ws:   workflow.NewServer(env, ts, tmc),
+		vapi: vschema.NewVSchemaAPI(ts, env.Parser()),
 	}
 }
 
@@ -5543,6 +5546,191 @@ func (s *VtctldServer) WorkflowDelete(ctx context.Context, req *vtctldatapb.Work
 
 	resp, err = s.ws.WorkflowDelete(ctx, req)
 	return resp, err
+}
+
+// VSchemaCreate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaCreate(ctx context.Context, req *vtctldatapb.VSchemaCreateRequest) (resp *vtctldatapb.VSchemaCreateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaCreate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+	span.Annotate("sharded", req.Sharded)
+	span.Annotate("draft", req.Draft)
+
+	err = s.vapi.Create(ctx, req)
+	return &vtctldatapb.VSchemaCreateResponse{}, err
+}
+
+// VSchemaGet is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaGet(ctx context.Context, req *vtctldatapb.VSchemaGetRequest) (resp *vtctldatapb.VSchemaGetResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaGet")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+	span.Annotate("include_drafts", req.IncludeDrafts)
+
+	vschema, err := s.vapi.Get(ctx, req)
+
+	resp = &vtctldatapb.VSchemaGetResponse{
+		VSchema: vschema,
+	}
+	return resp, err
+}
+
+// VSchemaUpdate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaUpdate(ctx context.Context, req *vtctldatapb.VSchemaUpdateRequest) (resp *vtctldatapb.VSchemaUpdateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaUpdate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+
+	err = s.vapi.Update(ctx, req)
+	return &vtctldatapb.VSchemaUpdateResponse{}, err
+}
+
+// VSchemaPublish is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaPublish(ctx context.Context, req *vtctldatapb.VSchemaPublishRequest) (resp *vtctldatapb.VSchemaPublishResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaPublish")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+
+	err = s.vapi.Publish(ctx, req)
+	return &vtctldatapb.VSchemaPublishResponse{}, err
+}
+
+// VSchemaAddVindex is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaAddVindex(ctx context.Context, req *vtctldatapb.VSchemaAddVindexRequest) (resp *vtctldatapb.VSchemaAddVindexResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaAddVindex")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+	span.Annotate("vindex_name", req.VindexName)
+	span.Annotate("vindex_type", req.VindexType)
+
+	err = s.vapi.AddVindex(ctx, req)
+	return &vtctldatapb.VSchemaAddVindexResponse{}, err
+}
+
+// VSchemaRemoveVindex is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaRemoveVindex(ctx context.Context, req *vtctldatapb.VSchemaRemoveVindexRequest) (resp *vtctldatapb.VSchemaRemoveVindexResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaRemoveVindex")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+	span.Annotate("vindex_name", req.VindexName)
+
+	err = s.vapi.RemoveVindex(ctx, req)
+	return &vtctldatapb.VSchemaRemoveVindexResponse{}, err
+}
+
+// VSchemaAddLookupVindex is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaAddLookupVindex(ctx context.Context, req *vtctldatapb.VSchemaAddLookupVindexRequest) (resp *vtctldatapb.VSchemaAddLookupVindexResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaAddLookupVindex")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+	span.Annotate("vindex_name", req.VindexName)
+	span.Annotate("lookup_vindex_type", req.LookupVindexType)
+	span.Annotate("table_name", req.TableName)
+	span.Annotate("owner", req.Owner)
+	span.Annotate("from_columns", req.FromColumns)
+	span.Annotate("ignore_nulls", req.IgnoreNulls)
+
+	err = s.vapi.AddLookupVindex(ctx, req)
+	return &vtctldatapb.VSchemaAddLookupVindexResponse{}, err
+}
+
+// VSchemaAddTables is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaAddTables(ctx context.Context, req *vtctldatapb.VSchemaAddTablesRequest) (resp *vtctldatapb.VSchemaAddTablesResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaAddTables")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+	span.Annotate("tables", req.Tables)
+	span.Annotate("primary_vindex_name", req.PrimaryVindexName)
+	span.Annotate("columns", req.Columns)
+	span.Annotate("add_all", req.AddAll)
+
+	err = s.vapi.AddTables(ctx, req)
+	return &vtctldatapb.VSchemaAddTablesResponse{}, err
+}
+
+// VSchemaRemoveTables is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaRemoveTables(ctx context.Context, req *vtctldatapb.VSchemaRemoveTablesRequest) (resp *vtctldatapb.VSchemaRemoveTablesResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaRemoveTables")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+	span.Annotate("tables", req.Tables)
+
+	err = s.vapi.RemoveTables(ctx, req)
+	return &vtctldatapb.VSchemaRemoveTablesResponse{}, err
+}
+
+// VSchemaSetPrimaryVindex is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaSetPrimaryVindex(ctx context.Context, req *vtctldatapb.VSchemaSetPrimaryVindexRequest) (resp *vtctldatapb.VSchemaSetPrimaryVindexResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaSetPrimaryVindex")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+	span.Annotate("vindex_name", req.VindexName)
+	span.Annotate("tables", req.Tables)
+	span.Annotate("columns", req.Columns)
+
+	err = s.vapi.SetPrimaryVindex(ctx, req)
+	return &vtctldatapb.VSchemaSetPrimaryVindexResponse{}, err
+}
+
+// VSchemaSetSequence is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaSetSequence(ctx context.Context, req *vtctldatapb.VSchemaSetSequenceRequest) (resp *vtctldatapb.VSchemaSetSequenceResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaSetSequence")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+	span.Annotate("table", req.TableName)
+	span.Annotate("sequence_source", req.SequenceSource)
+	span.Annotate("column", req.Column)
+
+	err = s.vapi.SetSequence(ctx, req)
+	return &vtctldatapb.VSchemaSetSequenceResponse{}, err
+}
+
+// VSchemaSetReference is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VSchemaSetReference(ctx context.Context, req *vtctldatapb.VSchemaSetReferenceRequest) (resp *vtctldatapb.VSchemaSetReferenceResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VSchemaSetReference")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("vschema_name", req.VSchemaName)
+	span.Annotate("table_name", req.TableName)
+	span.Annotate("source", req.Source)
+
+	err = s.vapi.SetReference(ctx, req)
+	return &vtctldatapb.VSchemaSetReferenceResponse{}, err
 }
 
 // WorkflowStatus is part of the vtctlservicepb.VtctldServer interface.

@@ -428,6 +428,15 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/transaction/{cluster_id}/{dtid}/conclude", httpAPI.Adapt(vtadminhttp.ConcludeTransaction)).Name("API.ConcludeTransaction")
 	router.HandleFunc("/transaction/{cluster_id}/{dtid}/info", httpAPI.Adapt(vtadminhttp.GetTransactionInfo)).Name("API.GetTransactionInfo")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
+	router.HandleFunc("/vschema/{cluster_id}/publish", httpAPI.Adapt(vtadminhttp.VSchemaPublish)).Name("API.VSchemaPublish")
+	router.HandleFunc("/vschema/{cluster_id}/add_vindex", httpAPI.Adapt(vtadminhttp.VSchemaAddVindex)).Name("API.VSchemaAddVindex")
+	router.HandleFunc("/vschema/{cluster_id}/remove_vindex", httpAPI.Adapt(vtadminhttp.VSchemaRemoveVindex)).Name("API.VSchemaRemoveVindex")
+	router.HandleFunc("/vschema/{cluster_id}/add_lookup_vindex", httpAPI.Adapt(vtadminhttp.VSchemaAddLookupVindex)).Name("API.VSchemaAddLookupVindex")
+	router.HandleFunc("/vschema/{cluster_id}/add_tables", httpAPI.Adapt(vtadminhttp.VSchemaAddTables)).Name("API.VSchemaAddTables")
+	router.HandleFunc("/vschema/{cluster_id}/remove_tables", httpAPI.Adapt(vtadminhttp.VSchemaRemoveTables)).Name("API.VSchemaRemoveTables")
+	router.HandleFunc("/vschema/{cluster_id}/set_primary_vindex", httpAPI.Adapt(vtadminhttp.VSchemaSetPrimaryVindex)).Name("API.VSchemaSetPrimaryVindex")
+	router.HandleFunc("/vschema/{cluster_id}/set_sequence", httpAPI.Adapt(vtadminhttp.VSchemaSetSequence)).Name("API.VSchemaSetSequence")
+	router.HandleFunc("/vschema/{cluster_id}/set_reference", httpAPI.Adapt(vtadminhttp.VSchemaSetReference)).Name("API.VSchemaSetReference")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vdiff/{cluster_id}/", httpAPI.Adapt(vtadminhttp.VDiffCreate)).Name("API.VDiffCreate").Methods("POST")
 	router.HandleFunc("/vdiff/{cluster_id}/show", httpAPI.Adapt(vtadminhttp.VDiffShow)).Name("API.VDiffShow")
@@ -2840,6 +2849,177 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	return &vtadminpb.VTExplainResponse{
 		Response: response,
 	}, nil
+}
+
+// VSchemaPublish is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VSchemaPublish(ctx context.Context, req *vtadminpb.VSchemaPublishRequest) (*vtctldatapb.VSchemaPublishResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VSchemaPublish")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.VSchemaResource, rbac.VSchemaUpdateAction) {
+		return nil, fmt.Errorf("%w: cannot modify vschema in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.VSchemaPublish(ctx, req.Request)
+}
+
+// VSchemaAddVindex is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VSchemaAddVindex(ctx context.Context, req *vtadminpb.VSchemaAddVindexRequest) (*vtctldatapb.VSchemaAddVindexResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VSchemaAddVindex")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.VSchemaResource, rbac.VSchemaUpdateAction) {
+		return nil, fmt.Errorf("%w: cannot modify vschema in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.VSchemaAddVindex(ctx, req.Request)
+}
+
+// VSchemaRemoveVindex is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VSchemaRemoveVindex(ctx context.Context, req *vtadminpb.VSchemaRemoveVindexRequest) (*vtctldatapb.VSchemaRemoveVindexResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VSchemaRemoveVindex")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.VSchemaResource, rbac.VSchemaUpdateAction) {
+		return nil, fmt.Errorf("%w: cannot modify vschema in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.VSchemaRemoveVindex(ctx, req.Request)
+}
+
+// VSchemaAddLookupVindex is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VSchemaAddLookupVindex(ctx context.Context, req *vtadminpb.VSchemaAddLookupVindexRequest) (*vtctldatapb.VSchemaAddLookupVindexResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VSchemaAddLookupVindex")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.VSchemaResource, rbac.VSchemaUpdateAction) {
+		return nil, fmt.Errorf("%w: cannot modify vschema in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.VSchemaAddLookupVindex(ctx, req.Request)
+}
+
+// VSchemaAddTables is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VSchemaAddTables(ctx context.Context, req *vtadminpb.VSchemaAddTablesRequest) (*vtctldatapb.VSchemaAddTablesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VSchemaAddTables")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.VSchemaResource, rbac.VSchemaUpdateAction) {
+		return nil, fmt.Errorf("%w: cannot modify vschema in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.VSchemaAddTables(ctx, req.Request)
+}
+
+// VSchemaRemoveTables is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VSchemaRemoveTables(ctx context.Context, req *vtadminpb.VSchemaRemoveTablesRequest) (*vtctldatapb.VSchemaRemoveTablesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VSchemaRemoveTables")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.VSchemaResource, rbac.VSchemaUpdateAction) {
+		return nil, fmt.Errorf("%w: cannot modify vschema in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.VSchemaRemoveTables(ctx, req.Request)
+}
+
+// VSchemaSetPrimaryVindex is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VSchemaSetPrimaryVindex(ctx context.Context, req *vtadminpb.VSchemaSetPrimaryVindexRequest) (*vtctldatapb.VSchemaSetPrimaryVindexResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VSchemaSetPrimaryVindex")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.VSchemaResource, rbac.VSchemaUpdateAction) {
+		return nil, fmt.Errorf("%w: cannot modify vschema in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.VSchemaSetPrimaryVindex(ctx, req.Request)
+}
+
+// VSchemaSetSequence is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VSchemaSetSequence(ctx context.Context, req *vtadminpb.VSchemaSetSequenceRequest) (*vtctldatapb.VSchemaSetSequenceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VSchemaSetSequence")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.VSchemaResource, rbac.VSchemaUpdateAction) {
+		return nil, fmt.Errorf("%w: cannot modify vschema in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.VSchemaSetSequence(ctx, req.Request)
+}
+
+// VSchemaSetReference is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VSchemaSetReference(ctx context.Context, req *vtadminpb.VSchemaSetReferenceRequest) (*vtctldatapb.VSchemaSetReferenceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VSchemaSetReference")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.VSchemaResource, rbac.VSchemaUpdateAction) {
+		return nil, fmt.Errorf("%w: cannot modify vschema in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Vtctld.VSchemaSetReference(ctx, req.Request)
 }
 
 // WorkflowDelete is part of the vtadminpb.VTAdminServer interface.

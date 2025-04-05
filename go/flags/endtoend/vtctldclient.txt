@@ -103,6 +103,7 @@ Available Commands:
   UpdateCellsAlias            Updates the content of a CellsAlias with the provided parameters, creating the CellsAlias if it does not exist.
   UpdateThrottlerConfig       Update the tablet throttler configuration for all tablets in the given keyspace (across all cells)
   VDiff                       Perform commands related to diffing tables involved in a VReplication workflow between the source and target.
+  VSchema                     Performs CRUD operations on VSchema.
   Validate                    Validates that all nodes reachable from the global replication graph, as well as all tablets in discoverable cells, are consistent.
   ValidateKeyspace            Validates that all nodes reachable from the specified keyspace are consistent.
   ValidatePermissionsKeyspace Validates that the permissions on the primary of the first shard match those of all of the other tablets in the keyspace.

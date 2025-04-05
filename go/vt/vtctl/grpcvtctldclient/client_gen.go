@@ -1055,6 +1055,114 @@ func (client *gRPCVtctldClient) VDiffStop(ctx context.Context, in *vtctldatapb.V
 	return client.c.VDiffStop(ctx, in, opts...)
 }
 
+// VSchemaAddLookupVindex is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaAddLookupVindex(ctx context.Context, in *vtctldatapb.VSchemaAddLookupVindexRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaAddLookupVindexResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaAddLookupVindex(ctx, in, opts...)
+}
+
+// VSchemaAddTables is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaAddTables(ctx context.Context, in *vtctldatapb.VSchemaAddTablesRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaAddTablesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaAddTables(ctx, in, opts...)
+}
+
+// VSchemaAddVindex is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaAddVindex(ctx context.Context, in *vtctldatapb.VSchemaAddVindexRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaAddVindexResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaAddVindex(ctx, in, opts...)
+}
+
+// VSchemaCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaCreate(ctx context.Context, in *vtctldatapb.VSchemaCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaCreateResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaCreate(ctx, in, opts...)
+}
+
+// VSchemaGet is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaGet(ctx context.Context, in *vtctldatapb.VSchemaGetRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaGetResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaGet(ctx, in, opts...)
+}
+
+// VSchemaPublish is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaPublish(ctx context.Context, in *vtctldatapb.VSchemaPublishRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaPublishResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaPublish(ctx, in, opts...)
+}
+
+// VSchemaRemoveTables is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaRemoveTables(ctx context.Context, in *vtctldatapb.VSchemaRemoveTablesRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaRemoveTablesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaRemoveTables(ctx, in, opts...)
+}
+
+// VSchemaRemoveVindex is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaRemoveVindex(ctx context.Context, in *vtctldatapb.VSchemaRemoveVindexRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaRemoveVindexResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaRemoveVindex(ctx, in, opts...)
+}
+
+// VSchemaSetPrimaryVindex is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaSetPrimaryVindex(ctx context.Context, in *vtctldatapb.VSchemaSetPrimaryVindexRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaSetPrimaryVindexResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaSetPrimaryVindex(ctx, in, opts...)
+}
+
+// VSchemaSetReference is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaSetReference(ctx context.Context, in *vtctldatapb.VSchemaSetReferenceRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaSetReferenceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaSetReference(ctx, in, opts...)
+}
+
+// VSchemaSetSequence is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaSetSequence(ctx context.Context, in *vtctldatapb.VSchemaSetSequenceRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaSetSequenceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaSetSequence(ctx, in, opts...)
+}
+
+// VSchemaUpdate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VSchemaUpdate(ctx context.Context, in *vtctldatapb.VSchemaUpdateRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaUpdateResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VSchemaUpdate(ctx, in, opts...)
+}
+
 // Validate is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) Validate(ctx context.Context, in *vtctldatapb.ValidateRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateResponse, error) {
 	if client.c == nil {

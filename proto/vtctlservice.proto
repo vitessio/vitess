@@ -371,6 +371,24 @@ service Vtctld {
   rpc VDiffResume(vtctldata.VDiffResumeRequest) returns (vtctldata.VDiffResumeResponse) {};
   rpc VDiffShow(vtctldata.VDiffShowRequest) returns (vtctldata.VDiffShowResponse) {};
   rpc VDiffStop(vtctldata.VDiffStopRequest) returns (vtctldata.VDiffStopResponse) {};
+
+  rpc VSchemaCreate(vtctldata.VSchemaCreateRequest) returns (vtctldata.VSchemaCreateResponse) {};
+  rpc VSchemaGet(vtctldata.VSchemaGetRequest) returns (vtctldata.VSchemaGetResponse) {};
+  rpc VSchemaUpdate(vtctldata.VSchemaUpdateRequest) returns (vtctldata.VSchemaUpdateResponse) {};
+  rpc VSchemaPublish(vtctldata.VSchemaPublishRequest) returns (vtctldata.VSchemaPublishResponse) {};
+
+  rpc VSchemaAddVindex(vtctldata.VSchemaAddVindexRequest) returns (vtctldata.VSchemaAddVindexResponse) {};
+  rpc VSchemaRemoveVindex(vtctldata.VSchemaRemoveVindexRequest) returns (vtctldata.VSchemaRemoveVindexResponse) {};
+  rpc VSchemaAddLookupVindex(vtctldata.VSchemaAddLookupVindexRequest) returns (vtctldata.VSchemaAddLookupVindexResponse) {};
+
+  rpc VSchemaAddTables(vtctldata.VSchemaAddTablesRequest) returns (vtctldata.VSchemaAddTablesResponse) {};
+  rpc VSchemaRemoveTables(vtctldata.VSchemaRemoveTablesRequest) returns (vtctldata.VSchemaRemoveTablesResponse) {};
+  rpc VSchemaSetPrimaryVindex(vtctldata.VSchemaSetPrimaryVindexRequest) returns (vtctldata.VSchemaSetPrimaryVindexResponse) {};
+  rpc VSchemaSetSequence(vtctldata.VSchemaSetSequenceRequest) returns (vtctldata.VSchemaSetSequenceResponse) {};
+  // VSchemaSetReference sets up a reference table, which points to a source
+  // table in another vschema.
+  rpc VSchemaSetReference(vtctldata.VSchemaSetReferenceRequest) returns (vtctldata.VSchemaSetReferenceResponse) {};
+
   // WorkflowDelete deletes a vreplication workflow.
   rpc WorkflowDelete(vtctldata.WorkflowDeleteRequest) returns (vtctldata.WorkflowDeleteResponse) {};
   rpc WorkflowStatus(vtctldata.WorkflowStatusRequest) returns (vtctldata.WorkflowStatusResponse) {};
