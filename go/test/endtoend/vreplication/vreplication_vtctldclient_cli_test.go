@@ -126,6 +126,97 @@ func TestVtctldclientCLI(t *testing.T) {
 
 		splitShard(t, targetKeyspaceName, reshardWorkflowName, sourceShard, newShards, tablets)
 	})
+
+	t.Run("Reshard Cancel", func(t *testing.T) {
+		cell := vc.Cells["zone1"]
+		targetKeyspace := cell.Keyspaces[targetKeyspaceName]
+		sourceShard := "80-"
+		newShards := "80-c0,c0-"
+		require.NoError(t, vc.AddShards(t, []*Cell{cell}, targetKeyspace, newShards, 1, 0, 600, nil))
+		reshardWorkflowName := "reshard"
+
+		tablets := map[string]*cluster.VttabletProcess{
+			"80-c0": targetKeyspace.Shards["80-c0"].Tablets["zone1-600"].Vttablet,
+			"c0-":   targetKeyspace.Shards["c0-"].Tablets["zone1-700"].Vttablet,
+		}
+
+		sourceReplicaTab = vc.Cells["zone1"].Keyspaces[targetKeyspaceName].Shards["80-"].Tablets["zone1-301"].Vttablet
+		require.NotNil(t, sourceReplicaTab)
+		sourceTab = vc.Cells["zone1"].Keyspaces[targetKeyspaceName].Shards["80-"].Tablets["zone1-300"].Vttablet
+		require.NotNil(t, sourceTab)
+
+		targetTab1 = tablets["80-c0"]
+		require.NotNil(t, targetTab1)
+		targetTab2 = tablets["c0-"]
+		require.NotNil(t, targetTab2)
+		targetReplicaTab1 = vc.Cells["zone1"].Keyspaces[targetKeyspaceName].Shards["80-c0"].Tablets["zone1-601"].Vttablet
+		require.NotNil(t, targetReplicaTab1)
+
+		overrides := map[string]string{
+			"vreplication_copy_phase_duration":     "10h11m12s",
+			"vreplication_experimental_flags":      "7",
+			"vreplication-parallel-insert-workers": "4",
+			"vreplication_net_read_timeout":        "6000",
+			"relay_log_max_items":                  "10000",
+		}
+		createFlags := []string{"--auto-start=false", "--defer-secondary-keys=false",
+			"--on-ddl", "STOP", "--tablet-types", "primary,rdonly", "--tablet-types-in-preference-order=true",
+			"--all-cells", "--format=json",
+			"--config-overrides", mapToCSV(overrides),
+		}
+
+		rs := newReshard(vc, &reshardWorkflow{
+			workflowInfo: &workflowInfo{
+				vc:             vc,
+				workflowName:   reshardWorkflowName,
+				targetKeyspace: targetKeyspaceName,
+			},
+			sourceShards: sourceShard,
+			targetShards: newShards,
+			createFlags:  createFlags,
+		}, workflowFlavorVtctld)
+
+		rs.Create()
+
+		resp := getReshardResponse(rs)
+		require.NotNil(vc.t, resp)
+		require.NotNil(vc.t, resp.ShardStreams)
+		require.Equal(vc.t, len(resp.ShardStreams), 2)
+		keyspace := "customer"
+		for _, shard := range []string{"80-c0", "c0-"} {
+			streams := resp.ShardStreams[fmt.Sprintf("%s/%s", keyspace, shard)]
+			require.Equal(vc.t, 1, len(streams.Streams))
+			require.Equal(vc.t, binlogdatapb.VReplicationWorkflowState_Stopped.String(), streams.Streams[0].Status)
+		}
+
+		rs.Start()
+		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, reshardWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+
+		res, err := targetTab1.QueryTablet("show tables", keyspace, true)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.Rows)
+
+		res, err = targetTab2.QueryTablet("show tables", keyspace, true)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.NotEmpty(t, res.Rows)
+
+		rs.Cancel()
+
+		workflowNames := workflowList(keyspace)
+		require.Empty(t, workflowNames)
+
+		res, err = targetTab1.QueryTablet("show tables", keyspace, true)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.Empty(t, res.Rows)
+
+		res, err = targetTab2.QueryTablet("show tables", keyspace, true)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.Empty(t, res.Rows)
+	})
 }
 
 // Tests several create flags and some complete flags and validates that some of them are set correctly for the workflow.
