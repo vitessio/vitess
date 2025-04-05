@@ -93,7 +93,7 @@ vttablet \
 	--init_shard $shard \
 	--init_tablet_type $tablet_type \
 	--port $port \
-	--grpc_port $grpc_port \
+	--grpc-port $grpc_port \
 	--service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream'` + "\n\n`$alias` needs to be of the form: `<cell>-id`, and the cell should match one of the local cells that was created in the topology. The id can be left padded with zeroes: `cell-100` and `cell-000000100` are synonymous.",
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),

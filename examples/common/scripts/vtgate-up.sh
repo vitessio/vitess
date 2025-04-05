@@ -26,6 +26,7 @@ mysql_server_socket_path="/tmp/mysql.sock"
 
 echo "Starting vtgate..."
 # shellcheck disable=SC2086
+#TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 vtgate \
   $TOPOLOGY_FLAGS \
   --log_dir $VTDATAROOT/tmp \
