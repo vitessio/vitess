@@ -96,10 +96,10 @@ func Fuzz(data []byte) int {
 	grpcclient.RegisterFlags(fs)
 
 	err = fs.Parse([]string{
-		"--grpc_auth_static_client_creds",
+		"--grpc-auth-static-client-creds",
 		f.Name(),
 	})
-	require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", f.Name())
+	require.NoError(t, err, "failed to set `--grpc-auth-static-client-creds=%s`", f.Name())
 	client, err := dial(ctx, listener.Addr().String())
 	if err != nil {
 		fmt.Println("dial failed")

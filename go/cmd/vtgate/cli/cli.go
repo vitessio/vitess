@@ -61,7 +61,7 @@ var (
 	--topo-global-root /vitess/global \
 	--log_dir $VTDATAROOT/tmp \
 	--port 15001 \
-	--grpc_port 15991 \
+	--grpc-port 15991 \
 	--mysql_server_port 15306 \
 	--cell test \
 	--cells_to_watch test \
