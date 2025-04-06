@@ -181,7 +181,7 @@ func CheckCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []c
 
 // CheckPostponeMigration attempts to postpone an existing migration, and expects success by counting affected rows
 func CheckPostponeMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectPotponePossible bool) {
-	query, err := sqlparser.ParseAndBind("alter vitess_migration %a postpone",
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a postpone complete",
 		sqltypes.StringBindVariable(uuid),
 	)
 	require.NoError(t, err)
@@ -224,7 +224,7 @@ func CheckCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expect
 // CheckPostponeAllMigrations postpones all pending migrations and expect number of affected rows
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckPostponeAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
-	completeQuery := "alter vitess_migration postpone all"
+	completeQuery := "alter vitess_migration postpone complete all"
 	r := VtgateExecQuery(t, vtParams, completeQuery, "")
 
 	if expectCount >= 0 {
