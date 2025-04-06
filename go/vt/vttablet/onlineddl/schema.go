@@ -204,6 +204,12 @@ const (
 			migration_uuid=%a
 			AND postpone_completion != 0
 	`
+	sqlPostponeCompletion = `UPDATE _vt.schema_migrations
+			SET postpone_completion=1
+		WHERE
+			migration_uuid=%a
+			AND postpone_completion != 1
+	`
 	sqlUpdateTablet = `UPDATE _vt.schema_migrations
 			SET tablet=%a
 		WHERE
