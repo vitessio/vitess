@@ -960,6 +960,8 @@ const (
 	LaunchAllMigrationType
 	CompleteMigrationType
 	CompleteAllMigrationType
+	PostponeMigrationType
+	PostponeAllMigrationType
 	CancelMigrationType
 	CancelAllMigrationType
 	CleanupMigrationType

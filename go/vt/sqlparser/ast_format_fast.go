@@ -456,6 +456,10 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 		alterType = "complete"
 	case CompleteAllMigrationType:
 		alterType = "complete all"
+	case PostponeMigrationType:
+		alterType = "postpone"
+	case PostponeAllMigrationType:
+		alterType = "postpone all"
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:

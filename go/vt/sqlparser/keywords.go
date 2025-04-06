@@ -518,6 +518,7 @@ var keywords = []keyword{
 	{"pointn", ST_PointN},
 	{"polygon", POLYGON},
 	{"position", POSITION},
+	{"postpone", POSTPONE},
 	{"preceding", PRECEDING},
 	{"precision", UNUSED},
 	{"prepare", PREPARE},
