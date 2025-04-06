@@ -255,7 +255,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 
 	numCopyEvents := 3 /*t1,t2,t3*/ * (numInitialRows + 1 /*FieldEvent*/ + 1 /*LastPKEvent*/ + 1 /*TestEvent: Copy Start*/ + 2 /*begin,commit*/ + 3 /* LastPK Completed*/)
 	numCopyEvents += 2                                    /* GTID + Event after all copy is done */
-	numCatchupEvents := 3 * 5                             /* 2 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT */
+	numCatchupEvents := 4 * 5                             /* 3 t1, 1 t2 : BEGIN+FIELD+ROW+GTID+COMMIT */
 	numFastForwardEvents := 5                             /*t1:FIELD+ROW*/
 	numMisc := 1                                          /* t2 insert during t1 catchup that comes in t2 copy */
 	numReplicateEvents := 2*5 /* insert into t1/t2 */ + 6 /* begin/field/2 inserts/gtid/commit */
@@ -398,6 +398,21 @@ func initTables(t *testing.T, tables []string) {
 			}
 		}
 	}
+	callbacks["LASTPK.*t2.*complete"] = func() {
+		ctx := context.Background()
+		idx := 1
+		id := numInitialRows + 100
+		table := "t1"
+		query1 := fmt.Sprintf(insertQuery, table, idx, idx, id, id*idx*10)
+		queries := []string{
+			"begin",
+			query1,
+			"commit",
+		}
+		env.Mysqld.ExecuteSuperQueryList(ctx, queries)
+		log.Infof("Position after insert into t1 and t2 after t2 complete: %s", primaryPosition(t))
+
+	}
 	positions["afterInitialInsert"] = primaryPosition(t)
 }
 
@@ -527,6 +542,11 @@ var expectedEvents = []string{
 	"type:COMMIT",
 	"type:BEGIN",
 	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2\"} completed:true}",
+	"type:COMMIT",
+	"type:BEGIN",
+	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 column_type:\"int(11)\"} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 column_type:\"int(11)\"} enum_set_string_values:true}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:3 lengths:4 values:\"1101100\"}}}",
+	"type:GTID",
 	"type:COMMIT",
 	fmt.Sprintf("type:OTHER gtid:\"%s t3\"", copyPhaseStart),
 	"type:BEGIN",
