@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/vterrors"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
@@ -84,6 +85,8 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 	}
 	p.lowestUncommittedSequence.Store(noUncommittedSequence)
 
+	useBatchCommits := (vp.vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0)
+
 	p.newDBClient = func() (*vdbClient, error) {
 		dbClient, err := dbClientGen()
 		if err != nil {
@@ -94,8 +97,11 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 		if err != nil {
 			return nil, err
 		}
-		// vdbClient.maxBatchSize = vp.vr.dbClient.maxBatchSize
-		vdbClient.maxBatchSize = 0
+		if useBatchCommits {
+			vdbClient.maxBatchSize = vp.vr.dbClient.maxBatchSize
+		} else {
+			vdbClient.maxBatchSize = 0
+		}
 
 		return vdbClient, nil
 	}
@@ -106,12 +112,14 @@ func newParallelProducer(ctx context.Context, dbClientGen dbClientGenerator, vp 
 			return nil, err
 		}
 		w.queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-			// REMOVE for batched commit
-			// if !w.dbClient.InTransaction { // Should be sent down the wire immediately
-			// 	return w.dbClient.Execute(sql)
-			// }
-			// return nil, w.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
-			return w.dbClient.Execute(sql)
+			if useBatchCommits {
+				if !w.dbClient.InTransaction { // Should be sent down the wire immediately
+					return w.dbClient.Execute(sql)
+				}
+				return nil, w.dbClient.AddQueryToTrxBatch(sql) // Should become part of the trx batch
+			} else {
+				return w.dbClient.Execute(sql)
+			}
 		}
 		w.commitFunc = func() error {
 			// REMOVE for batched commit
