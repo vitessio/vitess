@@ -622,7 +622,7 @@ func testScheduler(t *testing.T) {
 			}
 		})
 		t.Run("postpone", func(t *testing.T) {
-			onlineddl.CheckPostponeMigration(t, &vtParams, shards, t1uuid, true)
+			onlineddl.CheckPostponeCompleteMigration(t, &vtParams, shards, t1uuid, true)
 		})
 		t.Run("check postpone_completion set", func(t *testing.T) {
 			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
