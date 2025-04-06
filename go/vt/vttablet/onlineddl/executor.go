@@ -4125,8 +4125,8 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqlty
 	return result, nil
 }
 
-// PostponeMigration set the postpone_completion flag for a given migration, assuming it was clear in the first place
-func (e *Executor) PostponeMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+// PostponeCompleteMigration set the postpone_completion flag for a given migration, assuming it was clear in the first place
+func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
@@ -4149,13 +4149,13 @@ func (e *Executor) PostponeMigration(ctx context.Context, uuid string) (result *
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("PostponeMigration: migration %s marked as unpostponed", uuid)
+	log.Infof("PostponeCompleteMigration: migration %s marked as unpostponed", uuid)
 	return rs, nil
 }
 
-// PostponePendingMigrations sets postpone_completion for all pending migrations (that are expected to run or are running)
+// PostponeCompletePendingMigrations sets postpone_completion for all pending migrations (that are expected to run or are running)
 // for this keyspace
-func (e *Executor) PostponePendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
@@ -4164,18 +4164,18 @@ func (e *Executor) PostponePendingMigrations(ctx context.Context) (result *sqlty
 	if err != nil {
 		return result, err
 	}
-	log.Infof("PostponePendingMigrations: iterating %v migrations %s", len(uuids))
+	log.Infof("PostponeCompletePendingMigrations: iterating %v migrations %s", len(uuids))
 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
-		log.Infof("PostponePendingMigrations: completing %s", uuid)
-		res, err := e.PostponeMigration(ctx, uuid)
+		log.Infof("PostponeCompletePendingMigrations: completing %s", uuid)
+		res, err := e.PostponeCompleteMigration(ctx, uuid)
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Infof("PostponePendingMigrations: done iterating %v migrations %s", len(uuids))
+	log.Infof("PostponeCompletePendingMigrations: done iterating %v migrations %s", len(uuids))
 	return result, nil
 }
 
