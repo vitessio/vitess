@@ -326,10 +326,10 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 		alterType = "complete"
 	case CompleteAllMigrationType:
 		alterType = "complete all"
-	case PostponeMigrationType:
-		alterType = "postpone"
-	case PostponeAllMigrationType:
-		alterType = "postpone all"
+	case PostponeCompleteMigrationType:
+		alterType = "postpone complete"
+	case PostponeCompleteAllMigrationType:
+		alterType = "postpone complete all"
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:

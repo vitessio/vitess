@@ -3728,17 +3728,17 @@ alter_statement:
       Type: CompleteAllMigrationType,
     }
   }
-| ALTER comment_opt VITESS_MIGRATION STRING POSTPONE
+| ALTER comment_opt VITESS_MIGRATION STRING POSTPONE COMPLETE
   {
     $$ = &AlterMigration{
-      Type: PostponeMigrationType,
+      Type: PostponeCompleteMigrationType,
       UUID: string($4),
     }
   }
-| ALTER comment_opt VITESS_MIGRATION POSTPONE ALL
+| ALTER comment_opt VITESS_MIGRATION POSTPONE COMPLETE ALL
   {
     $$ = &AlterMigration{
-      Type: PostponeAllMigrationType,
+      Type: PostponeCompleteAllMigrationType,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING CANCEL
