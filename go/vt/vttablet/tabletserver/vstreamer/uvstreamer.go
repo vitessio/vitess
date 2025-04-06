@@ -112,7 +112,11 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 			ev.Keyspace = vse.keyspace
 			ev.Shard = vse.shard
 		}
-		return send(evs)
+		err := send(evs)
+		if err != nil {
+			log.Infof("uvstreamer replicate send() returned with err %v", err)
+		}
+		return err
 	}
 	uvs := &uvstreamer{
 		ctx:          ctx,
@@ -327,17 +331,20 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	}
 	err := uvs.send(evs2)
 	if err != nil && err != io.EOF {
+		log.Infof("uvstreamer catchup/fastforward send() returning with send error %v", err)
 		return err
 	}
 	for _, ev := range evs2 {
 		if ev.Type == binlogdatapb.VEventType_GTID {
 			uvs.pos, _ = replication.DecodePosition(ev.Gtid)
 			if !uvs.stopPos.IsZero() && uvs.pos.AtLeast(uvs.stopPos) {
+				log.Infof("Reached stop position %v, returning io.EOF", uvs.stopPos)
 				err = io.EOF
 			}
 		}
 	}
 	if err != nil {
+		log.Infof("uvstreamer catchup/fastforward returning with EOF error %v", err)
 		uvs.vse.errorCounts.Add("Send", 1)
 	}
 	return err
