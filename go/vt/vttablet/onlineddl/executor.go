@@ -4131,9 +4131,9 @@ func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	if !schema.IsOnlineDDLUUID(uuid) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in COMPLETE: %s", uuid)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in POSTPONE COMPLETE: %s", uuid)
 	}
-	log.Infof("CompleteMigration: request to complete migration %s", uuid)
+	log.Infof("PostponeCompleteMigration: request to postpone complete migration %s", uuid)
 
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -4149,7 +4149,7 @@ func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("PostponeCompleteMigration: migration %s marked as unpostponed", uuid)
+	log.Infof("PostponeCompleteMigration: migration %s marked as postponed", uuid)
 	return rs, nil
 }
 
@@ -4168,7 +4168,7 @@ func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context) (resul
 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
-		log.Infof("PostponeCompletePendingMigrations: completing %s", uuid)
+		log.Infof("PostponeCompletePendingMigrations: postpone completion of %s", uuid)
 		res, err := e.PostponeCompleteMigration(ctx, uuid)
 		if err != nil {
 			return result, err
