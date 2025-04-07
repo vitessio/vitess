@@ -50,7 +50,28 @@ type tablePlan struct {
 	aggregates []*engine.AggregateParams
 }
 
+func (ci *compareColInfo) String() string {
+	return fmt.Sprintf("compareColInfo{colIndex:%d, colName:%q, isPK:%v}", ci.colIndex, ci.colName, ci.isPK)
+}
+
+func (tp tablePlan) String() string {
+	return fmt.Sprintf(
+		"tablePlan(%s) {sourceQuery:%q, targetQuery:%q, compareCols:%+v, comparePKs:%+v, pkCols:%v, selectPks:%v, table:%v, orderBy:%v, aggregates:%d}",
+		tp.table.Name,
+		tp.sourceQuery,
+		tp.targetQuery,
+		tp.compareCols,
+		tp.comparePKs,
+		tp.pkCols,
+		tp.selectPks,
+		tp.table,
+		tp.orderBy,
+		len(tp.aggregates),
+	)
+}
+
 func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
+	log.Infof("buildTablePlan for %v, sourceQuery %s", td.table.Name, td.sourceQuery)
 	tp := &tablePlan{table: td.table}
 	statement, err := sqlparser.Parse(td.sourceQuery)
 	if err != nil {
@@ -145,6 +166,7 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("tablePlan after findPKs: %v", tp)
 	// Remove in_keyrange. It's not understood by mysql.
 	sourceSelect.Where = sel.Where //removeKeyrange(sel.Where)
 	// The source should also perform the group by.
@@ -200,5 +222,32 @@ func (tp *tablePlan) findPKs(targetSelect *sqlparser.Select) error {
 		})
 	}
 	tp.orderBy = orderby
+
+	// The code below handles the case where a table has no PKs.
+	if len(tp.pkCols) == 0 {
+		log.Warningf("No PK columns found in table %v, using compareCols", tp.table.Name)
+		for _, col := range tp.compareCols {
+			tp.pkCols = append(tp.pkCols, col.colIndex)
+		}
+	}
+	if len(tp.comparePKs) == 0 {
+		log.Warningf("No comparePKs found in table %v, using compareCols", tp.table.Name)
+		for _, col := range tp.compareCols {
+			tp.comparePKs = append(tp.comparePKs, col)
+		}
+	}
+	if len(tp.orderBy) == 0 {
+		log.Warningf("No orderby found in table %v, using compareCols", tp.table.Name)
+		for _, col := range tp.compareCols {
+			tp.orderBy = append(tp.orderBy, &sqlparser.Order{
+				Expr:      &sqlparser.ColName{Name: sqlparser.NewIdentifierCI(col.colName)},
+				Direction: sqlparser.AscOrder,
+			})
+		}
+	}
+	log.Infof("tp.orderby columns for table %v", tp.table.Name)
+	for i, col := range tp.orderBy {
+		log.Infof("orderBy[%d]: %v", i, col.Expr)
+	}
 	return nil
 }

@@ -49,6 +49,7 @@ create table ` + "`Lead-1`(`Lead`" + ` binary(16), name varbinary(16), date1 dat
 create table _vt_PURGE_4f9194b43b2011eb8a0104ed332e05c2_20221210194431(id int, val varbinary(128), primary key(id), key(val));
 create table db_order_test (c_uuid varchar(64) not null default '', created_at datetime not null, dstuff varchar(128), dtstuff text, dbstuff blob, cstuff char(32), primary key (c_uuid,created_at), key (dstuff)) CHARSET=utf8mb4;
 create table datze (id int, dt1 datetime not null default current_timestamp, dt2 datetime not null, ts1 timestamp default current_timestamp, primary key (id), key (dt1));
+create table customer_nopk(id int, name varchar(128)) CHARSET=utf8;
 `
 
 	// These should always be ignored in vreplication
@@ -81,7 +82,8 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
 	"Lead": {},
 	"Lead-1": {},
 	"db_order_test": {},
-	"datze": {}
+	"datze": {},
+	"customer_nopk": {}
   }
 }
 `
@@ -150,6 +152,14 @@ create table datze (id int, dt1 datetime not null default current_timestamp, dt2
       ]
     },
     "datze": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+	"customer_nopk": {
       "column_vindexes": [
         {
           "column": "id",

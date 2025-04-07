@@ -33,3 +33,20 @@ insert into datze(id, dt2, ts1) values (4, '2022-03-27 03:00:00', current_timest
 insert into datze(id, dt2, ts1) values (5, '2022-03-27 03:15:00', current_timestamp);
 insert into datze(id, dt2, ts1) values (6, current_timestamp, current_timestamp);
 
+insert into customer_nopk(id, name) values(1, 'abc');
+insert into customer_nopk(id, name) values(2, 'def');
+insert into customer_nopk(id, name) values(3, 'ghi');
+insert into customer_nopk(id, name) values(4, 'jkl');
+insert into customer_nopk(id, name) values(5, 'mno');
+insert into customer_nopk(id, name) values(6, 'pqr');
+insert into customer_nopk(id, name) values(7, 'stu');
+insert into customer_nopk(id, name) values(8, 'vwx');
+insert into customer_nopk(id, name) values(9, 'yz');
+insert into customer_nopk(id, name) values(10, 'abc');
+insert into customer_nopk(id, name) values(11, 'def');
+insert into customer_nopk(id, name) values(12, 'ghi');
+insert into customer_nopk(id, name) values(13, 'jkl');
+insert into customer_nopk(id, name) values(14, 'mno');
+insert into customer_nopk(id, name) values(15, 'pqr');
+
+

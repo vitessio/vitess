@@ -98,7 +98,7 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 				if !completedAtMin.IsZero() {
 					ca := info.CompletedAt
 					completedAt, _ := time.Parse(vdiff2.TimestampFormat, ca)
-					if !completedAt.After(completedAtMin) {
+					if completedAt.Before(completedAtMin) {
 						continue
 					}
 				}
