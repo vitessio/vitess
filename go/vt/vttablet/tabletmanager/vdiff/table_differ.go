@@ -433,6 +433,7 @@ func (td *tableDiffer) setupRowSorters() {
 	for shard, source := range td.wd.ct.sources {
 		sources[shard] = source.shardStreamer
 	}
+	log.Infof("Setting up row sorters for %d sources, with pk %+v, for workflow %s", len(sources), td.tablePlan.comparePKs, td.wd.ct.workflow)
 	td.sourcePrimitive = newMergeSorter(sources, td.tablePlan.comparePKs)
 
 	// create a merge sorter for the target

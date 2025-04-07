@@ -62,7 +62,7 @@ var testCases = []*testCase{
 		sourceShards:      "0",
 		targetShards:      "-80,80-",
 		tabletBaseID:      200,
-		tables:            "customer,Lead,Lead-1",
+		tables:            "customer,customer_nopk,Lead,Lead-1",
 		autoRetryError:    true,
 		retryInsert:       `insert into customer(cid, name, typ) values(91234, 'Testy McTester', 'soho')`,
 		resume:            true,
@@ -187,7 +187,8 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		updateTableStats(t, tab, tc.tables) // need to do this in order to test progress reports
 	}
 
-	vdiff(t, tc.targetKs, tc.workflow, allCellNames, true, true, nil)
+	// vdiff v1 fails for tables without pks. Since it is not supported anymore, let's just not test with v1.
+	vdiff(t, tc.targetKs, tc.workflow, allCellNames, false, true, nil)
 
 	if tc.autoRetryError {
 		testAutoRetryError(t, tc, allCellNames)
