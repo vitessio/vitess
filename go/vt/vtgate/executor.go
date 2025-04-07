@@ -1149,7 +1149,7 @@ func (e *Executor) fetchOrCreatePlan(
 		}
 	}
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, stmt, err
 	}
 
 	if shouldOptimizePlan(preparedPlan, isExecutePath, plan) {
@@ -1591,11 +1591,17 @@ func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 }
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	plan, vcursor, _, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
+	plan, vcursor, stmt, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
 	if err != nil {
+		if stmt != nil {
+			flds, paramCount, success := buildNullFieldTypes(stmt)
+			if success {
+				return flds, paramCount, nil
+			}
+		}
 		logStats.Error = err
 		return nil, 0, err
 	}
@@ -1620,6 +1626,25 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), errCount)
 
 	return qr.Fields, plan.ParamsCount, err
+}
+
+func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bool) {
+	sel, ok := stmt.(sqlparser.SelectStatement)
+	if !ok {
+		return nil, countArguments(stmt), true
+	}
+	var fields []*querypb.Field
+	for _, expr := range sel.GetColumns() {
+		if ae, ok := expr.(*sqlparser.AliasedExpr); ok {
+			fields = append(fields, &querypb.Field{
+				Name: ae.ColumnName(),
+				Type: querypb.Type_NULL_TYPE,
+			})
+			continue
+		}
+		return nil, 0, false
+	}
+	return fields, countArguments(stmt), true
 }
 
 func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
