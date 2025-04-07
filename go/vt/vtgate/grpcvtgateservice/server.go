@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -270,6 +271,9 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 				Events: events,
 			})
 		})
+	if vtgErr != nil {
+		log.Infof("VStream grpc error: %v", vtgErr)
+	}
 	return vterrors.ToGRPC(vtgErr)
 }
 
