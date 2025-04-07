@@ -119,7 +119,7 @@ $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
 |    `CommitUnresolved`     |                  N/A                  |             Counter for failure after Prepare.              | [#16939](https://github.com/vitessio/vitess/pull/16939) |
 
 
-The work done [#17727](https://github.com/vitessio/vitess/pull/17727) introduces new metrics for queries. Via this work we have deprecated several vtgate metrics, please see the [Deprecated Metrics](#deprecated-metrics) section. Here is an example on how to use them: 
+The work done in [#17727](https://github.com/vitessio/vitess/pull/17727) introduces new metrics for queries. Via this work we have deprecated several vtgate metrics, please see the [Deprecated Metrics](#deprecated-metrics) section. Here is an example on how to use them:
 ```
 Query: select t1.a, t2.b from t1 join t2 on t1.id = t2.id
 Shards: 2
@@ -130,8 +130,6 @@ Metrics Published:
 2. QueryRoutes – {select, scatter, primary}, 2
 3. QueryExecutionsByTable – {select, t1}, 1 and {select, t2}, 1
 ```
-
----
 
 #### <a id="new-vttablet-metrics"/>VTTablet
 
@@ -170,8 +168,6 @@ The following fields can be dynamically changed -
 
 To upgrade to the newer version of the configuration file, first switch to using the flags in your current deployment before upgrading. Then you can switch to using the configuration file in the newer release.
 
----
-
 #### <a id="vtgate-config-file-changes"/>VTGate</a>
 
 The Viper configuration keys for the following flags has been changed to match their flag names. Previously they had a discovery prefix instead of it being part of the name.
@@ -198,8 +194,6 @@ This is useful in scenarios where the disk is stalled and the primary vttablet i
 
 To opt into this feature, `--enable-primary-disk-stalled-recovery` flag has to be specified on VTOrc, and `--disk-write-dir` flag has to be specified on the vttablets.
 `--disk-write-interval` and `--disk-write-timeout` flags can be used to configure the polling interval and timeout respectively.
-
----
 
 #### <a id="key-range-vtorc"/>KeyRanges in `--clusters_to_watch`</a>
 VTOrc now supports specifying keyranges in the `--clusters_to_watch` flag. This means that there is no need to restart a VTOrc instance with a different flag value when you reshard a keyspace.
@@ -234,8 +228,6 @@ VTGate also advertises MySQL version `8.0.40` by default instead of `8.0.30` if 
 >
 > This is the last time this will be needed in the `8.0.x` series, as starting with MySQL `8.0.35` it is possible to upgrade and downgrade between `8.0.x` versions without needing to run `innodb_fast_shutdown=0`.
 
----
-
 #### <a id="debian-bookworm"/>Docker `vitess/lite` images with Debian Bookworm</a>
 
 The base system now uses Debian Bookworm instead of Debian Bullseye for the `vitess/lite` images. This change was brought by [#17552](https://github.com/vitessio/vitess/pull/17552).
@@ -250,16 +242,12 @@ In [#7345](https://github.com/vitessio/vitess/pull/17345) we added support for [
 
 If you are using MySQL 8.0 or later and using JSON columns, you can now enable this MySQL feature across your Vitess cluster(s) to lower the disk space needed for binary logs and improve the CPU and memory usage in both `mysqld` (standard intrashard MySQL replication) and `vttablet` ([VReplication](https://vitess.io/docs/reference/vreplication/vreplication/)) without losing any capabilities or features.
 
----
-
 #### <a id="last-insert-id"/>`LAST_INSERT_ID(x)`</a>
 
 In [#17408](https://github.com/vitessio/vitess/pull/17408) and [#17409](https://github.com/vitessio/vitess/pull/17409), we added the ability to use `LAST_INSERT_ID(x)` in Vitess directly at vtgate. This improvement allows certain queries—like `SELECT last_insert_id(123);` or `SELECT last_insert_id(count(*)) ...`—to be handled without relying on MySQL for the final value.
 
 **Limitations**:
 - When using `LAST_INSERT_ID(x)` in ordered queries (e.g., `SELECT last_insert_id(col) FROM table ORDER BY foo`), MySQL sets the session’s last-insert-id value according to the *last row returned*. Vitess does not guarantee the same behavior.
-
----
 
 #### <a id="max-idle-connections"/>Maximum Idle Connections in the Pool</a>
 
@@ -271,8 +259,6 @@ You can control idle connection retention for the query server’s query pool, s
 •	--queryserver-config-txpool-max-idle-count: Defines the maximum number of idle connections retained in the transaction pool.
 
 This feature ensures that, during traffic spikes, idle connections are available for faster responses, while minimizing overhead in low-traffic periods by limiting the number of idle connections retained. It helps strike a balance between performance, efficiency, and cost.
-
----
 
 #### <a id="query-logs"/>Filtering Query logs on Error</a>
 
@@ -286,6 +272,8 @@ The `querylog-mode` setting can be configured to `error` to log only queries tha
 Prepared statements now benefit from Deferred Optimization, enabling parameter-aware query plans. 
 Initially, a baseline plan is created at prepare-time, and on first execution, a more efficient parameter-optimized plan is generated. 
 Subsequent executions dynamically switch between these plans based on input values, improving query performance while ensuring correctness.
+
+---
 
 ### <a id="rpc-changes"/>RPC Changes</a>
 
@@ -357,8 +345,6 @@ While the flag will continue to accept float values (interpreted as seconds) for
 **float inputs are deprecated** and will be removed in a future release.
 
 - `--consolidator-query-waiter-cap` flag to set the maximum number of clients allowed to wait on the consolidator. The default value is set to 0 for unlimited wait. Users can adjust  this value based on the performance of VTTablet to avoid excessive memory usage and the risk of being OOMKilled, particularly in Kubernetes deployments.
-
----
 
 #### <a id="reloading-vttablet-acl"/>ACL enforcement and reloading</a>
 
