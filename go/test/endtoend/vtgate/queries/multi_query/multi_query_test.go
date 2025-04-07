@@ -26,24 +26,63 @@ import (
 // TestMultiQuery tests the new way of handling queries in vtgate
 // that runs multiple queries together.
 func TestMultiQuery(t *testing.T) {
-	mcmp, closer := start(t)
-	defer closer()
-
-	validSqlQueries := []string{
-		"select * from t1",         // Single route query
-		"select * from t1 join t2", // Join query
-		"select * from t1 join t2 on t1.id1 = t2.id5 where t1.id1 = 4",                                                                     // Join query that can be pushed down
-		"select * from t1; select * from t2; select * from t1 join t2;",                                                                    // Multiple select queries
-		"select * from t1; insert into t2(id5, id6, id7) values (40, 43, 46); select * from t2; delete from t2; select * from t1 join t2;", // Multiple queries with dml in between
+	testcases := []struct {
+		name        string
+		sql         string
+		errExpected bool
+	}{
+		{
+			name:        "single route query",
+			sql:         "select * from t1",
+			errExpected: false,
+		},
+		{
+			name:        "join query",
+			sql:         "select * from t1 join t2",
+			errExpected: false,
+		},
+		{
+			name:        "join query that can be pushed down",
+			sql:         "select * from t1 join t2 on t1.id1 = t2.id5 where t1.id1 = 4",
+			errExpected: false,
+		},
+		{
+			name:        "multiple select queries",
+			sql:         "select * from t1; select * from t2; select * from t1 join t2;",
+			errExpected: false,
+		},
+		{
+			name:        "multiple queries with dml in between",
+			sql:         "select * from t1; insert into t2(id5, id6, id7) values (40, 43, 46); select * from t2; delete from t2; select * from t1 join t2;",
+			errExpected: false,
+		},
+		{
+			name:        "parsing error in single query",
+			sql:         "unexpected query;",
+			errExpected: true,
+		},
+		{
+			name:        "parsing error in multiple queries",
+			sql:         "select * from t1; select * from t2; unexpected query; select * from t1 join t2;",
+			errExpected: true,
+		},
 	}
 
 	for _, workload := range []string{"oltp", "olap"} {
-		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
-			utils.Exec(t, mcmp.VtConn, fmt.Sprintf(`set workload = %s`, workload))
-			defer utils.Exec(t, mcmp.VtConn, `set workload = oltp`)
+		t.Run(workload, func(t *testing.T) {
+			for _, tt := range testcases {
+				t.Run(tt.name, func(t *testing.T) {
+					mcmp, closer := start(t)
+					defer closer()
+					utils.Exec(t, mcmp.VtConn, fmt.Sprintf(`set workload = %s`, workload))
+					defer utils.Exec(t, mcmp.VtConn, `set workload = oltp`)
 
-			for _, query := range validSqlQueries {
-				mcmp.ExecMulti(query)
+					if !tt.errExpected {
+						mcmp.ExecMulti(tt.sql)
+						return
+					}
+					mcmp.ExecMultiAllowError(tt.sql)
+				})
 			}
 		})
 	}

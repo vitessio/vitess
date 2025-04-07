@@ -308,7 +308,17 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		session, err = vh.vtg.StreamExecuteMulti(ctx, vh, session, sql, callback)
+		if c.Capabilities&mysql.CapabilityClientMultiStatements != 0 {
+			session, err = vh.vtg.StreamExecuteMulti(ctx, vh, session, sql, callback)
+		} else {
+			firstPacket := true
+			session, err = vh.vtg.StreamExecute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+				defer func() {
+					firstPacket = false
+				}()
+				return callback(sqltypes.QueryResponse{QueryResult: result}, false, firstPacket)
+			})
+		}
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}

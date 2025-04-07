@@ -256,6 +256,41 @@ func (mcmp *MySQLCompare) ExecMulti(sql string) []*sqltypes.Result {
 	return results
 }
 
+// ExecMultiAllowError executes the given queries against both Vitess and MySQL and compares
+// the result sets and errors.
+func (mcmp *MySQLCompare) ExecMultiAllowError(sql string) {
+	mcmp.t.Helper()
+	stmts, err := sqlparser.NewTestParser().SplitStatementToPieces(sql)
+	require.NoError(mcmp.t, err)
+	vtQr, vtMore, vtErr := mcmp.VtConn.ExecuteFetchMulti(sql, 1000, true)
+
+	mysqlQr, mysqlMore, mysqlErr := mcmp.MySQLConn.ExecuteFetchMulti(sql, 1000, true)
+	sql = stmts[0]
+	compareVitessAndMySQLErrors(mcmp.t, vtErr, mysqlErr)
+	if vtErr == nil && mysqlErr == nil {
+		compareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	}
+	if vtMore != mysqlMore {
+		mcmp.AsT().Errorf("Vitess and MySQL have different More flags: %v vs %v", vtMore, mysqlMore)
+	}
+
+	idx := 1
+	for vtMore {
+		sql = stmts[idx]
+		idx++
+		vtQr, vtMore, _, vtErr = mcmp.VtConn.ReadQueryResult(1000, true)
+
+		mysqlQr, mysqlMore, _, mysqlErr = mcmp.MySQLConn.ReadQueryResult(1000, true)
+		compareVitessAndMySQLErrors(mcmp.t, vtErr, mysqlErr)
+		if vtErr == nil && mysqlErr == nil {
+			compareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+		}
+		if vtMore != mysqlMore {
+			mcmp.AsT().Errorf("Vitess and MySQL have different More flags: %v vs %v", vtMore, mysqlMore)
+		}
+	}
+}
+
 // ExecVitessAndMySQLDifferentQueries executes Vitess and MySQL with the queries provided.
 func (mcmp *MySQLCompare) ExecVitessAndMySQLDifferentQueries(vtQ, mQ string) *sqltypes.Result {
 	mcmp.t.Helper()
