@@ -69,7 +69,7 @@ func NewVschemaWrapper(
 		Collation:         env.CollationEnv().DefaultConnectionCharset(),
 		DefaultTabletType: topodatapb.TabletType_PRIMARY,
 		SetVarEnabled:     true,
-	})
+	}, nil)
 	if err != nil {
 		return nil, err
 	}

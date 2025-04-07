@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/slice"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -83,6 +82,7 @@ func (s *PlanSwitcher) TryExecute(
 	wantfields bool,
 ) (*sqltypes.Result, error) {
 	if s.metCondition(bindVars) {
+		s.addOptimizedExecStats(vcursor)
 		return s.Optimized.TryExecute(ctx, vcursor, bindVars, wantfields)
 	}
 	if s.Baseline == nil {
@@ -99,6 +99,7 @@ func (s *PlanSwitcher) TryStreamExecute(
 	callback func(*sqltypes.Result) error,
 ) error {
 	if s.metCondition(bindVars) {
+		s.addOptimizedExecStats(vcursor)
 		return s.Optimized.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
 	}
 	if s.Baseline == nil {
@@ -150,6 +151,11 @@ func (s *PlanSwitcher) metCondition(bindVars map[string]*querypb.BindVariable) b
 		}
 	}
 	return true
+}
+
+func (s *PlanSwitcher) addOptimizedExecStats(vcursor VCursor) {
+	planType := getPlanType(s.Optimized)
+	vcursor.GetExecutionMetrics().optimizedQueryExec.Add(planType.String(), 1)
 }
 
 var _ Primitive = (*PlanSwitcher)(nil)
