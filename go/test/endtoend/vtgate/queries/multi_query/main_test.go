@@ -58,7 +58,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--mysql_multi_query_protocol")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--mysql-server-multi-query-protocol")
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{

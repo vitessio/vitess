@@ -75,7 +75,7 @@ var (
 )
 
 func registerConnFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&mysqlMultiQuery, "mysql_multi_query_protocol", mysqlMultiQuery, "If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.")
+	fs.BoolVar(&mysqlMultiQuery, "mysql-server-multi-query-protocol", mysqlMultiQuery, "If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.")
 }
 
 func init() {
