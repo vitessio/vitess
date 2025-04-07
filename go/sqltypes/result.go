@@ -64,6 +64,15 @@ type ResultStream interface {
 	Recv() (*Result, error)
 }
 
+// MultiResultStream is an interface for receiving multiple Results. It is used for
+// RPC interfaces that send multiple responses.
+type MultiResultStream interface {
+	// Recv returns the next result on the stream.
+	// It will return io.EOF if the stream ended.
+	// The boolean tells if a new result has started.
+	Recv() (res *Result, newRes bool, err error)
+}
+
 // Repair fixes the type info in the rows
 // to conform to the supplied field types.
 func (result *Result) Repair(fields []*querypb.Field) {
