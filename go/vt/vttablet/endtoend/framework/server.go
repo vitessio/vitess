@@ -129,6 +129,9 @@ func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnP
 	config.EnableViews = true
 	config.QueryCacheDoorkeeper = false
 	config.SchemaReloadInterval = 5 * time.Second
+	config.ReplicationTracker.Mode = tabletenv.Heartbeat
+	config.ReplicationTracker.HeartbeatOnDemand = 1 * time.Second
+	config.ReplicationTracker.HeartbeatInterval = 1 * time.Second
 	gotBytes, _ := yaml2.Marshal(config)
 	log.Infof("Config:\n%s", gotBytes)
 	return StartCustomServer(ctx, connParams, connAppDebugParams, dbName, config)
