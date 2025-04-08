@@ -123,6 +123,7 @@ Flags:
       --min_number_serving_vttablets int                                 The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving. (default 2)
       --mysql-server-drain-onterm                                        If set, the server waits for --onterm_timeout for already connected clients to complete their in flight work
       --mysql-server-keepalive-period duration                           TCP period between keep-alives
+      --mysql-server-multi-query-protocol                                If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.
       --mysql-server-pool-conn-read-buffers                              If set, the server will pool incoming connection read buffers
       --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
@@ -143,7 +144,6 @@ Flags:
       --mysql_ldap_auth_config_file string                               JSON File from which to read LDAP server config.
       --mysql_ldap_auth_config_string string                             JSON representation of LDAP server config.
       --mysql_ldap_auth_method string                                    client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
-      --mysql-server-multi-query-protocol                                If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.
       --mysql_server_bind_address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
       --mysql_server_port int                                            If set, also listen for MySQL binary protocol connections on this port. (default -1)
