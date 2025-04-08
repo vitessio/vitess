@@ -212,7 +212,7 @@ func (mcmp *MySQLCompare) Exec(query string) *sqltypes.Result {
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
-	compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	CompareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	return vtQr
 }
 
@@ -231,7 +231,7 @@ func (mcmp *MySQLCompare) ExecMulti(sql string) []*sqltypes.Result {
 	mysqlQr, mysqlMore, err := mcmp.MySQLConn.ExecuteFetchMulti(sql, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for sql: "+sql)
 	sql = stmts[0]
-	compareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	CompareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	if vtMore != mysqlMore {
 		mcmp.AsT().Errorf("Vitess and MySQL have different More flags: %v vs %v", vtMore, mysqlMore)
 	}
@@ -246,7 +246,7 @@ func (mcmp *MySQLCompare) ExecMulti(sql string) []*sqltypes.Result {
 
 		mysqlQr, mysqlMore, _, err = mcmp.MySQLConn.ReadQueryResult(1000, true)
 		require.NoError(mcmp.t, err, "[MySQL Error] for sql: "+sql)
-		compareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+		CompareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 		if vtMore != mysqlMore {
 			mcmp.AsT().Errorf("Vitess and MySQL have different More flags: %v vs %v", vtMore, mysqlMore)
 		}
@@ -268,7 +268,7 @@ func (mcmp *MySQLCompare) ExecMultiAllowError(sql string) {
 	sql = stmts[0]
 	compareVitessAndMySQLErrors(mcmp.t, vtErr, mysqlErr)
 	if vtErr == nil && mysqlErr == nil {
-		compareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+		CompareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	}
 	if vtMore != mysqlMore {
 		mcmp.AsT().Errorf("Vitess and MySQL have different More flags: %v vs %v", vtMore, mysqlMore)
@@ -283,7 +283,7 @@ func (mcmp *MySQLCompare) ExecMultiAllowError(sql string) {
 		mysqlQr, mysqlMore, _, mysqlErr = mcmp.MySQLConn.ReadQueryResult(1000, true)
 		compareVitessAndMySQLErrors(mcmp.t, vtErr, mysqlErr)
 		if vtErr == nil && mysqlErr == nil {
-			compareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+			CompareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 		}
 		if vtMore != mysqlMore {
 			mcmp.AsT().Errorf("Vitess and MySQL have different More flags: %v vs %v", vtMore, mysqlMore)
@@ -299,7 +299,7 @@ func (mcmp *MySQLCompare) ExecVitessAndMySQLDifferentQueries(vtQ, mQ string) *sq
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(mQ, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+mQ)
-	compareVitessAndMySQLResults(mcmp.t, vtQ, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	CompareVitessAndMySQLResults(mcmp.t, vtQ, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	return vtQr
 }
 
@@ -311,7 +311,7 @@ func (mcmp *MySQLCompare) ExecAssert(query string) *sqltypes.Result {
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
 	assert.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
-	compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	CompareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	return vtQr
 }
 
@@ -338,7 +338,7 @@ func (mcmp *MySQLCompare) ExecWithColumnCompare(query string) *sqltypes.Result {
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
-	compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{CompareColumnNames: true})
+	CompareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{CompareColumnNames: true})
 	return vtQr
 }
 
@@ -359,7 +359,7 @@ func (mcmp *MySQLCompare) ExecAllowAndCompareError(query string, opts CompareOpt
 	// Since we allow errors, we don't want to compare results if one of the client failed.
 	// Vitess and MySQL should always be agreeing whether the query returns an error or not.
 	if vtErr == nil && mysqlErr == nil {
-		vtErr = compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, opts)
+		vtErr = CompareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, opts)
 	}
 	return vtQr, vtErr
 }
@@ -397,7 +397,7 @@ func (mcmp *MySQLCompare) ExecAllowError(query string) (*sqltypes.Result, error)
 	// Since we allow errors, we don't want to compare results if one of the client failed.
 	// Vitess and MySQL should always be agreeing whether the query returns an error or not.
 	if mysqlErr == nil {
-		vtErr = compareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+		vtErr = CompareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	}
 	return vtQr, vtErr
 }

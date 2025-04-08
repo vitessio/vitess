@@ -177,7 +177,7 @@ type CompareOptions struct {
 	IgnoreRowsAffected bool
 }
 
-func compareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, opts CompareOptions) error {
+func CompareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, opts CompareOptions) error {
 	t.Helper()
 
 	if vtQr == nil && mysqlQr == nil {
