@@ -530,6 +530,21 @@ func TestStraightJoin(t *testing.T) {
 	require.Contains(t, fmt.Sprintf("%v", res.Rows), "t1_tbl")
 }
 
+func TestFailingOuterJoinInOLAP(t *testing.T) {
+	// This query was returning different results in MySQL and Vitess
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert data into the 2 tables
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (5, 42)")
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,2,3), (2,5,3)")
+
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+
+	// This query was
+	mcmp.Exec("select t1.id1 from t1 left join tbl on t1.id2 = tbl.nonunq_col")
+}
+
 func TestColumnAliases(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
