@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,23 +54,24 @@ var (
 	// This is populated by parsing `--clusters_to_watch` flag.
 	shardsToWatch map[string][]*topodatapb.KeyRange
 
-	// tablet stats
-	statsTabletsWatchedByCell = stats.NewGaugesFuncWithMultiLabels(
+	// ErrNoPrimaryTablet is a fixed error message.
+	ErrNoPrimaryTablet = errors.New("no primary tablet found")
+)
+
+func init() {
+	stats.NewGaugesFuncWithMultiLabels(
 		"TabletsWatchedByCell",
 		"Number of tablets watched by cell",
 		[]string{"Cell"},
 		getTabletsWatchedByCellStats,
 	)
-	statsTabletsWatchedByShard = stats.NewGaugesFuncWithMultiLabels(
+	stats.NewGaugesFuncWithMultiLabels(
 		"TabletsWatchedByShard",
-		"Number of tablets watched by keyspace/shard",
-		[]string{"Keyspace", "Shard"},
+		"Number of tablets watched and EmergencyReparentShard status by keyspace/shard",
+		[]string{"Keyspace", "Shard", "ErsDisabled"},
 		getTabletsWatchedByShardStats,
 	)
-
-	// ErrNoPrimaryTablet is a fixed error message.
-	ErrNoPrimaryTablet = errors.New("no primary tablet found")
-)
+}
 
 // getTabletsWatchedByCellStats returns the number of tablets watched by cell in stats format.
 func getTabletsWatchedByCellStats() map[string]int64 {
@@ -83,14 +85,13 @@ func getTabletsWatchedByCellStats() map[string]int64 {
 // getTabletsWatchedByShardStats returns the number of tablets watched by keyspace/shard in stats format.
 func getTabletsWatchedByShardStats() map[string]int64 {
 	tabletsWatchedByShard := make(map[string]int64)
-	tabletCountsByKS, err := inst.ReadTabletCountsByKeyspaceShard()
+	statsByKS, err := inst.ReadKeyspaceShardStats()
 	if err != nil {
 		log.Errorf("Failed to read tablet counts by shard: %+v", err)
 	}
-	for keyspace, countsByShard := range tabletCountsByKS {
-		for shard, tabletCount := range countsByShard {
-			tabletsWatchedByShard[keyspace+"."+shard] = tabletCount
-		}
+	for _, s := range statsByKS {
+		labels := s.Keyspace + "." + s.Shard + "." + strconv.FormatBool(s.DisableEmergencyReparent)
+		tabletsWatchedByShard[labels] = s.TabletCount
 	}
 	return tabletsWatchedByShard
 }

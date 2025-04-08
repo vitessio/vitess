@@ -61,10 +61,10 @@ func TestHandlePathKeyspace(t *testing.T) {
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "test_keyspace", "10-20"); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "10-20", nil); err != nil {
 		t.Fatalf("CreateShard error: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "test_keyspace", "20-30"); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "20-30", nil); err != nil {
 		t.Fatalf("CreateShard error: %v", err)
 	}
 
@@ -113,7 +113,7 @@ func TestHandlePathShard(t *testing.T) {
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
 		t.Fatalf("CreateKeyspace error: %v", err)
 	}
-	if err := ts.CreateShard(ctx, "test_keyspace", "-80"); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "-80", nil); err != nil {
 		t.Fatalf("CreateShard error: %v", err)
 	}
 	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "-80", func(si *topo.ShardInfo) error {

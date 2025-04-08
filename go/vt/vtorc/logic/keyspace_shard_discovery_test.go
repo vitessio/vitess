@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
+	vtorcconfig "vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
@@ -38,17 +39,21 @@ var (
 	keyspaceDurabilityNone = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 		DurabilityPolicy: policy.DurabilityNone,
+		VtorcConfig:      vtorcconfig.DefaultKeyspaceTopoConfig,
 	}
 	keyspaceDurabilitySemiSync = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 		DurabilityPolicy: policy.DurabilitySemiSync,
+		VtorcConfig:      vtorcconfig.DefaultKeyspaceTopoConfig,
 	}
 	keyspaceDurabilityTest = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 		DurabilityPolicy: policy.DurabilityTest,
+		VtorcConfig:      vtorcconfig.DefaultKeyspaceTopoConfig,
 	}
 	keyspaceSnapshot = &topodatapb.Keyspace{
 		KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+		VtorcConfig:  vtorcconfig.DefaultKeyspaceTopoConfig,
 	}
 )
 
@@ -77,7 +82,7 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 		err := ts.CreateKeyspace(ctx, keyspaceNames[i], keyspace)
 		require.NoError(t, err)
 		for idx, shardName := range []string{"-80", "80-"} {
-			err = ts.CreateShard(ctx, keyspaceNames[i], shardName)
+			err = ts.CreateShard(ctx, keyspaceNames[i], shardName, nil)
 			require.NoError(t, err)
 			_, err = ts.UpdateShardFields(ctx, keyspaceNames[i], shardName, func(si *topo.ShardInfo) error {
 				si.PrimaryAlias = &topodatapb.TabletAlias{
@@ -150,24 +155,34 @@ func TestRefreshKeyspace(t *testing.T) {
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilitySemiSync,
 			},
-			keyspaceWanted: nil,
-			err:            "",
+			keyspaceWanted: &topodatapb.Keyspace{
+				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: policy.DurabilitySemiSync,
+				VtorcConfig:      vtorcconfig.DefaultKeyspaceTopoConfig,
+			},
+			err: "",
 		}, {
 			name:         "Success with keyspaceType and no durability",
 			keyspaceName: "ks2",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
 			},
-			keyspaceWanted: nil,
-			err:            "",
+			keyspaceWanted: &topodatapb.Keyspace{
+				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+				VtorcConfig:  vtorcconfig.DefaultKeyspaceTopoConfig,
+			},
+			err: "",
 		}, {
 			name:         "Success with snapshot keyspaceType",
 			keyspaceName: "ks3",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
 			},
-			keyspaceWanted: nil,
-			err:            "",
+			keyspaceWanted: &topodatapb.Keyspace{
+				KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+				VtorcConfig:  vtorcconfig.DefaultKeyspaceTopoConfig,
+			},
+			err: "",
 		}, {
 			name:         "Success with fields that are not stored",
 			keyspaceName: "ks4",
@@ -179,6 +194,7 @@ func TestRefreshKeyspace(t *testing.T) {
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
+				VtorcConfig:      vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 			err: "",
 		}, {
@@ -281,7 +297,7 @@ func TestRefreshShard(t *testing.T) {
 
 			ts = memorytopo.NewServer(ctx, "zone1")
 			if tt.shard != nil {
-				_, err := ts.GetOrCreateShard(context.Background(), tt.keyspaceName, tt.shardName)
+				_, err := ts.GetOrCreateShard(context.Background(), tt.keyspaceName, tt.shardName, nil)
 				require.NoError(t, err)
 				_, err = ts.UpdateShardFields(context.Background(), tt.keyspaceName, tt.shardName, func(info *topo.ShardInfo) error {
 					info.PrimaryAlias = tt.shard.PrimaryAlias
@@ -328,7 +344,7 @@ func TestRefreshAllShards(t *testing.T) {
 	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", keyspaceDurabilityNone))
 	shards := []string{"-40", "40-80", "80-c0", "c0-"}
 	for _, shard := range shards {
-		require.NoError(t, ts.CreateShard(ctx, "ks1", shard))
+		require.NoError(t, ts.CreateShard(ctx, "ks1", shard, nil))
 	}
 
 	// test shard refresh

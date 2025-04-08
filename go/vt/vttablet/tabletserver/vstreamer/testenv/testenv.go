@@ -108,7 +108,7 @@ func Init(ctx context.Context) (*Env, error) {
 	if err := te.TopoServ.CreateKeyspace(ctx, te.KeyspaceName, &topodatapb.Keyspace{}); err != nil {
 		return nil, err
 	}
-	if err := te.TopoServ.CreateShard(ctx, te.KeyspaceName, te.ShardName); err != nil {
+	if err := te.TopoServ.CreateShard(ctx, te.KeyspaceName, te.ShardName, nil); err != nil {
 		panic(err)
 	}
 	counts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")

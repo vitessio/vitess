@@ -41,7 +41,7 @@ func (l *topoLayout) initTopo(t *testing.T, ts *topo.Server) {
 
 	for keyspace, shards := range l.shards {
 		for _, shard := range shards {
-			if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
+			if err := ts.CreateShard(ctx, keyspace, shard, nil); err != nil {
 				t.Fatalf("CreateShard(%v, %v) failed: %v", keyspace, shard, err)
 			}
 		}

@@ -5750,9 +5750,9 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 	}
 	testutil.AddKeyspace(ctx, t, ts, ks)
 
-	si1, err := ts.GetOrCreateShard(ctx, ks.Name, "-80")
+	si1, err := ts.GetOrCreateShard(ctx, ks.Name, "-80", nil)
 	require.NoError(t, err)
-	si2, err := ts.GetOrCreateShard(ctx, ks.Name, "80-")
+	si2, err := ts.GetOrCreateShard(ctx, ks.Name, "80-", nil)
 	require.NoError(t, err)
 
 	resp, err := vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{Keyspace: ks.Name})
@@ -14354,7 +14354,7 @@ func TestValidateKeyspace(t *testing.T) {
 				})
 				require.NoError(t, err)
 				if !tt.noShard {
-					err = ts.CreateShard(ctx, tt.keyspaceName, "0")
+					err = ts.CreateShard(ctx, tt.keyspaceName, "0", nil)
 					require.NoError(t, err)
 					if !tt.noPrimary {
 						alias := &topodatapb.TabletAlias{
@@ -14414,7 +14414,7 @@ func TestValidateKeyspaceErrors(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create the keyspace and shard record
-	_, err = ts.GetOrCreateShard(ctx, ks, shard)
+	_, err = ts.GetOrCreateShard(ctx, ks, shard, nil)
 	require.NoError(t, err)
 
 	// verify ValidateKeyspace finds all the issues without hanging

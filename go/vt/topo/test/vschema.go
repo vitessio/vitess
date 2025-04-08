@@ -35,7 +35,7 @@ func checkVSchema(t *testing.T, ctx context.Context, ts *topo.Server) {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
-	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0"); err != nil {
+	if err := ts.CreateShard(ctx, "test_keyspace", "b0-c0", nil); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
 

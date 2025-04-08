@@ -91,7 +91,7 @@ func TestServerFindAllShardsInKeyspace(t *testing.T) {
 			require.NoError(t, err)
 
 			for _, s := range shards {
-				require.NoError(t, ts.CreateShard(ctx, keyspace, s))
+				require.NoError(t, ts.CreateShard(ctx, keyspace, s, nil))
 			}
 
 			// Verify that we return a complete list of shards and that each
@@ -171,7 +171,7 @@ func TestServerGetServingShards(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, tt.shards, len(shardNames))
 				for _, shardName := range shardNames {
-					err = ts.CreateShard(ctx, keyspace, shardName)
+					err = ts.CreateShard(ctx, keyspace, shardName, nil)
 					require.NoError(t, err)
 				}
 				// A shard lock typically becomes a key in the topo like this:

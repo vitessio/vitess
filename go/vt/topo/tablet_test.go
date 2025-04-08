@@ -363,7 +363,7 @@ func TestServerGetTabletsByCell(t *testing.T) {
 					require.NoError(t, ts.CreateKeyspace(ctx, kss.Keyspace, &topodatapb.Keyspace{}))
 					createdKeyspaces[kss.Keyspace] = true
 				}
-				require.NoError(t, ts.CreateShard(ctx, kss.Keyspace, kss.Shard))
+				require.NoError(t, ts.CreateShard(ctx, kss.Keyspace, kss.Shard, nil))
 			}
 
 			var uid uint32 = 1
@@ -426,7 +426,7 @@ func TestServerGetTabletsByCellPartialResults(t *testing.T) {
 	// Create an ephemeral keyspace and generate shard records within
 	// the keyspace to fetch later.
 	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
-	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+	require.NoError(t, ts.CreateShard(ctx, keyspace, shard, nil))
 
 	tablets := make([]*topo.TabletInfo, 3)
 
@@ -515,7 +515,7 @@ func checkTabletListEqual(t *testing.T, expected, tabletMap []*topo.TabletInfo) 
 func setupFunc(t *testing.T, ctx context.Context, ts *topo.Server) {
 	for _, ks := range kss {
 		for _, shard := range shards {
-			_, err := ts.GetOrCreateShard(ctx, ks, shard)
+			_, err := ts.GetOrCreateShard(ctx, ks, shard, nil)
 			require.NoError(t, err)
 		}
 	}

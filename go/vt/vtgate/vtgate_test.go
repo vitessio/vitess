@@ -746,7 +746,7 @@ func TestRebuildTopoGraphs(t *testing.T) {
 			keyspaces: []string{"ks1"},
 			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
 				// Initially we'll create the keyspace record and the srving vschema that has the keyspace.
-				_, err := ts.GetOrCreateShard(ctx, "ks1", "-")
+				_, err := ts.GetOrCreateShard(ctx, "ks1", "-", nil)
 				if err != nil {
 					return err
 				}
@@ -788,7 +788,7 @@ func TestRebuildTopoGraphs(t *testing.T) {
 			keyspaces: []string{"ks1"},
 			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
 				// Add an error for writing the srving keyspace file
-				_, err := ts.GetOrCreateShard(ctx, "ks1", "-")
+				_, err := ts.GetOrCreateShard(ctx, "ks1", "-", nil)
 				if err != nil {
 					return err
 				}
@@ -802,7 +802,7 @@ func TestRebuildTopoGraphs(t *testing.T) {
 			keyspaces: []string{"ks1"},
 			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
 				// Initially we'll create the keyspace record and the srving keyspace.
-				_, err := ts.GetOrCreateShard(ctx, "ks1", "-")
+				_, err := ts.GetOrCreateShard(ctx, "ks1", "-", nil)
 				if err != nil {
 					return err
 				}
@@ -833,7 +833,7 @@ func TestRebuildTopoGraphs(t *testing.T) {
 			keyspaces: []string{"ks1", "ks2"},
 			setupFunc: func(ctx context.Context, ts *topo.Server, factory *memorytopo.Factory) error {
 				// Initially we'll create the keyspace record and the srving keyspace for the first keyspace.
-				_, err := ts.GetOrCreateShard(ctx, "ks1", "-")
+				_, err := ts.GetOrCreateShard(ctx, "ks1", "-", nil)
 				if err != nil {
 					return err
 				}
@@ -848,7 +848,7 @@ func TestRebuildTopoGraphs(t *testing.T) {
 					return err
 				}
 				// Next we'll create the keyspace record and the srving vschema that has the second keyspace.
-				_, err = ts.GetOrCreateShard(ctx, "ks2", "-")
+				_, err = ts.GetOrCreateShard(ctx, "ks2", "-", nil)
 				if err != nil {
 					return err
 				}

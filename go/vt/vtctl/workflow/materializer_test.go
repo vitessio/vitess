@@ -3242,11 +3242,11 @@ func TestValidateEmptyTables(t *testing.T) {
 	err := ts.CreateKeyspace(ctx, ks, &topodatapb.Keyspace{})
 	require.NoError(t, err)
 
-	err = ts.CreateShard(ctx, ks, shard1)
+	err = ts.CreateShard(ctx, ks, shard1, nil)
 	require.NoError(t, err)
-	err = ts.CreateShard(ctx, ks, shard2)
+	err = ts.CreateShard(ctx, ks, shard2, nil)
 	require.NoError(t, err)
-	err = ts.CreateShard(ctx, ks, shard3)
+	err = ts.CreateShard(ctx, ks, shard3, nil)
 	require.NoError(t, err)
 
 	tablet1 := &topodatapb.Tablet{

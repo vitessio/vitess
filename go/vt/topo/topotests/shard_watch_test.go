@@ -83,7 +83,7 @@ func TestWatchShard(t *testing.T) {
 	}
 
 	// Create initial value
-	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
+	if err := ts.CreateShard(ctx, keyspace, shard, nil); err != nil {
 		t.Fatalf("Create(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
 	}
 
@@ -226,7 +226,7 @@ func TestWatchShardCancel(t *testing.T) {
 	}
 
 	// Create initial value
-	if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
+	if err := ts.CreateShard(ctx, keyspace, shard, nil); err != nil {
 		t.Fatalf("Create(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
 	}
 	wanted := &topodatapb.Shard{
