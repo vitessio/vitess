@@ -241,9 +241,10 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	// Tablet configuration and init.
 	// Send mycnf as nil because vtcombo won't do backups and restores.
 	//
-	// Also force the `--tablet_manager_protocol` and `--tablet_protocol` flags
+	// Also force the `--tablet-manager-protocol` and `--tablet_protocol` flags
 	// to be the "internal" protocol that InitTabletMap registers.
-	cmd.Flags().Set("tablet_manager_protocol", "internal")
+
+	cmd.Flags().Set("tablet-manager-protocol", "internal")
 	cmd.Flags().Set("tablet_protocol", "internal")
 	uid, err := vtcombo.InitTabletMap(env, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, startMysql, srvTopoCounts)
 	if err != nil {

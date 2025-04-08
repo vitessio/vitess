@@ -173,6 +173,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	// mysql server version on that.
 	msvflag := false
 	for _, f := range vtgate.ExtraArgs {
+		// TODO: Replace flag with dashed version in v25
 		if strings.Contains(f, "mysql_server_version") {
 			msvflag = true
 			break
@@ -201,6 +202,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 			return err
 		}
 		mysqlvers := fmt.Sprintf("%d.%d.%d-vitess", vers.Major, vers.Minor, vers.Patch)
+		// TODO: Replace flag with dashed version in v25
 		args = append(args, "--mysql_server_version", mysqlvers)
 	}
 	if vtgate.PlannerVersion > 0 {

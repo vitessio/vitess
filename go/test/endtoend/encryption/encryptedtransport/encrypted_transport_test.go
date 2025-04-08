@@ -435,10 +435,10 @@ func serverExtraArguments(name string, ca string) []string {
 
 func tmclientExtraArgs(name string) []string {
 	ca := "vttablet-server"
-	var args = []string{"--tablet_manager_grpc_cert", certDirectory + "/" + name + "-cert.pem",
-		"--tablet_manager_grpc_key", certDirectory + "/" + name + "-key.pem",
-		"--tablet_manager_grpc_ca", certDirectory + "/" + ca + "-cert.pem",
-		"--tablet_manager_grpc_server_name", "vttablet server instance"}
+	var args = []string{"--tablet-manager-grpc-cert", certDirectory + "/" + name + "-cert.pem",
+		"--tablet-manager-grpc-key", certDirectory + "/" + name + "-key.pem",
+		"--tablet-manager-grpc-ca", certDirectory + "/" + ca + "-cert.pem",
+		"--tablet-manager-grpc-server-name", "vttablet server instance"}
 	return args
 }
 

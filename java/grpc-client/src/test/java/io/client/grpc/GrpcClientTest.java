@@ -57,7 +57,7 @@ public class GrpcClientTest extends RpcClientTest {
                 "--logtostderr",
                 "--grpc-port",
                 Integer.toString(port),
-                "--service_map",
+                "--service-map",
                 "grpc-vtgateservice"))
             .inheritIO()
             .start();
