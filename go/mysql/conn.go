@@ -1332,9 +1332,11 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	// end packet after the query is done or not. Initially we don't need to send an end packet
 	// so we initialize this value to false.
 	needsEndPacket := false
+	callbackCalled := false
 	var res = execSuccess
 
 	err := handler.ComQueryMulti(c, query, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		callbackCalled = true
 		flag := c.StatusFlags
 		if more {
 			flag |= ServerMoreResultsExists
@@ -1392,6 +1394,21 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 
 		return c.writeRows(qr.QueryResult)
 	})
+
+	// If callback was not called, we expect an error.
+	// It is possible that we don't get a callback if some condition checks
+	// fail before the query starts execution. In this case, we need to write some
+	// error back.
+	if !callbackCalled {
+		// This is just a failsafe. Should never happen.
+		if err == nil || err == io.EOF {
+			err = sqlerror.NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+		}
+		if !c.writeErrorPacketFromErrorAndLog(err) {
+			return connErr
+		}
+		return execErr
+	}
 
 	if res != execSuccess {
 		// We failed during the stream itself.
