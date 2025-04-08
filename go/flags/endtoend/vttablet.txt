@@ -1,4 +1,4 @@
-[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag namesThe VTTablet server _controls_ a running MySQL server. VTTablet supports two primary types of deployments:
+The VTTablet server _controls_ a running MySQL server. VTTablet supports two primary types of deployments:
 
 * Managed MySQL (most common)
 * External MySQL

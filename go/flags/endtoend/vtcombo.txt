@@ -1,4 +1,4 @@
-[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag namesvtcombo is a single binary containing several vitess components.
+vtcombo is a single binary containing several vitess components.
 
 In particular, it contains:
 - A topology server based on an in-memory map.
