@@ -27,6 +27,7 @@
     - [LAST_INSERT_ID(x)](#last-insert-id)
     - [Maximum Idle Connections in the Pool](#max-idle-connections)
     - [Filtering Query logs on Error](#query-logs)
+    - [MultiQuery RPC in vtgate](#multiquery)
   - **[Optimization](#optimization)**
     - [Prepared Statement](#prepared-statement)
   - **[RPC Changes](#rpc-changes)**
@@ -277,6 +278,14 @@ This feature ensures that, during traffic spikes, idle connections are available
 #### <a id="query-logs"/>Filtering Query logs on Error</a>
 
 The `querylog-mode` setting can be configured to `error` to log only queries that result in errors. This option is supported in both VTGate and VTTablet.
+
+---
+
+#### <a id="multiquery"/>MultiQuery RPC in vtgate</a>
+
+New RPCs in vtgate have been added that allow users to pass multiple queries in a single sql string. It behaves the same way MySQL does where-in multiple result sets for the queries are returned in the same order as the queries were passed until an error is encountered. The new RPCs are `ExecuteMulti` and `StreamExecuteMulti`. 
+
+A new flag `--mysql-server-multi-query-protocol` has also been added that makes the server use this new implementation. This flag is set to `false` by default, so the old implementation is used by default. The new implementation is more efficient and allows for better performance when executing multiple queries in a single RPC call.
 
 ---
 
