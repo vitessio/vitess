@@ -42,7 +42,7 @@ func TestMariadbSetReplicationSourceCommand(t *testing.T) {
 	got := conn.SetReplicationSourceCommand(params, host, port, 0, connectRetry)
 	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 
-	var heartbeatInterval float64 = 5.4
+	var heartbeatInterval = 5.4
 	want = `CHANGE MASTER TO
   MASTER_HOST = 'localhost',
   MASTER_PORT = 123,

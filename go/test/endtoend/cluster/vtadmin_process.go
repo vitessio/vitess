@@ -37,9 +37,12 @@ import (
 // VtAdminProcess is a test struct for running
 // vtorc as a separate process for testing
 type VtAdminProcess struct {
-	Binary         string
-	Port           int
-	LogDir         string
+	Binary string
+	Port   int
+	LogDir string
+	// ClusterID is the cluster identifier used when passing the --cluster
+	// flag to vtadmin. If unset, defaults to "local".
+	ClusterID      string
 	ExtraArgs      []string
 	VtGateGrpcPort int
 	VtGateWebPort  int
@@ -92,6 +95,11 @@ func (vp *VtAdminProcess) Setup() (err error) {
 		return err
 	}
 
+	// Only allow override if explicitly set by tests; default cluster ID is "local".
+	clusterID := "local"
+	if vp.ClusterID != "" {
+		clusterID = vp.ClusterID
+	}
 	vp.proc = exec.Command(
 		vp.Binary,
 		"--addr", vp.Address(),
@@ -103,7 +111,10 @@ func (vp *VtAdminProcess) Setup() (err error) {
 		"--alsologtostderr",
 		"--rbac",
 		"--rbac-config", rbacFile,
-		"--cluster", fmt.Sprintf(`id=local,name=local,discovery=staticfile,discovery-staticfile-path=%s,tablet-fqdn-tmpl=http://{{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }},schema-cache-default-expiration=1m`, discoveryFile),
+		"--cluster", fmt.Sprintf(`id=%s,name=%s,discovery=staticfile,discovery-staticfile-path=%s,tablet-fqdn-tmpl=http://{{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }},schema-cache-default-expiration=1m`,
+			clusterID,
+			clusterID,
+			discoveryFile),
 	)
 
 	if *isCoverage {

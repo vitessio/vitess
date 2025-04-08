@@ -571,7 +571,7 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *Result, now time.Time,
 	}
 	// Store the record in the result.
 	r.LagRecordBefore = lagRecordBefore
-	if lagRecordBefore.time == lagRecordNow.time {
+	if lagRecordBefore.time.Equal(lagRecordNow.time) {
 		// No lag record for this replica in the time span
 		// [last rate change, current lag record).
 		// Without it we won't be able to guess the replication rate.

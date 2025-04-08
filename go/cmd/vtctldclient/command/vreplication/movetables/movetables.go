@@ -64,11 +64,6 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().StringVar(&createOptions.ShardedAutoIncrementHandlingStr, "sharded-auto-increment-handling", vtctldatapb.ShardedAutoIncrementHandling_REMOVE.String(),
 		fmt.Sprintf("If moving the table(s) to a sharded keyspace, remove any MySQL auto_increment clauses when copying the schema to the target as sharded keyspaces should rely on either user/application generated values or Vitess sequences to ensure uniqueness. If REPLACE is specified then they are automatically replaced by Vitess sequence definitions. (options are: %s)",
 			shardedAutoIncHandlingStrOptions))
-	// This flag was deprecated in v21 so can be removed in v22+.
-	create.Flags().StringVar(&createOptions.ShardedAutoIncrementHandlingStr, "remove-sharded-auto-increment", vtctldatapb.ShardedAutoIncrementHandling_REMOVE.String(),
-		fmt.Sprintf("If moving the table(s) to a sharded keyspace, remove any MySQL auto_increment clauses when copying the schema to the target as sharded keyspaces should rely on either user/application generated values or Vitess sequences to ensure uniqueness. If REPLACE is specified then they are automatically replaced by Vitess sequence definitions. (options are: %s)",
-			shardedAutoIncHandlingStrOptions))
-	create.Flags().MarkDeprecated("remove-sharded-auto-increment", "please use --sharded-auto-increment-handling instead.")
 	base.AddCommand(create)
 
 	opts := &common.SubCommandsOpts{

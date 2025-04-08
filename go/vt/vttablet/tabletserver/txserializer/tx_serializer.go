@@ -352,9 +352,9 @@ func (txs *TxSerializer) ServeHTTP(response http.ResponseWriter, request *http.R
 		response.Write([]byte("empty\n"))
 		return
 	}
-	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
+	fmt.Fprintf(response, "Length: %d\n", len(items))
 	for _, v := range items {
-		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Count, v.Query)))
+		fmt.Fprintf(response, "%v: %s\n", v.Count, v.Query)
 	}
 }
 

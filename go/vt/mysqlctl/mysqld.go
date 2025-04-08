@@ -133,9 +133,6 @@ func init() {
 	for _, cmd := range []string{"vtctld", "vtctldclient"} {
 		servenv.OnParseFor(cmd, registerReparentFlags)
 	}
-	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver"} {
-		servenv.OnParseFor(cmd, registerDeprecatedReparentFlags)
-	}
 	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerPoolFlags)
 	}
@@ -150,11 +147,6 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 
 func registerReparentFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&DisableActiveReparents, "disable_active_reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
-}
-
-func registerDeprecatedReparentFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&DisableActiveReparents, "disable_active_reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
-	fs.MarkDeprecated("disable_active_reparents", "Use --unmanaged flag instead for unmanaged tablets.")
 }
 
 func registerPoolFlags(fs *pflag.FlagSet) {
@@ -1197,7 +1189,7 @@ func (mysqld *Mysqld) executeMysqlScript(ctx context.Context, connParams *mysql.
 // 'defer os.Remove()' statement.
 func (mysqld *Mysqld) defaultsExtraFile(connParams *mysql.ConnParams) (string, error) {
 	var contents string
-	connParams.Pass = strings.Replace(connParams.Pass, "#", "\\#", -1)
+	connParams.Pass = strings.ReplaceAll(connParams.Pass, "#", "\\#")
 	if connParams.UnixSocket == "" {
 		contents = fmt.Sprintf(`
 [client]

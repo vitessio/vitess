@@ -149,6 +149,8 @@ type (
 		RecordMirrorStats(time.Duration, time.Duration, error)
 
 		SetLastInsertID(uint64)
+
+		GetExecutionMetrics() *Metrics
 	}
 
 	// SessionActions gives primitives ability to interact with the session state
@@ -184,6 +186,7 @@ type (
 		SetPriority(string)
 		SetExecQueryTimeout(timeout *int)
 		SetFoundRows(uint64)
+		SetInDMLExecution(inDMLExec bool)
 
 		SetDDLStrategy(string)
 		GetDDLStrategy() string

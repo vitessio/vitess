@@ -723,7 +723,7 @@ func TestScanLinesToLogger(t *testing.T) {
 	go scanLinesToLogger("test", reader, logger, wg.Done)
 
 	for i := range 100 {
-		_, err := writer.Write([]byte(fmt.Sprintf("foobar %d\n", i)))
+		_, err := fmt.Fprintf(writer, "foobar %d\n", i)
 		require.NoError(t, err)
 	}
 

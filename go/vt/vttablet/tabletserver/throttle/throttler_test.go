@@ -1648,7 +1648,7 @@ func TestDormant(t *testing.T) {
 			select {
 			case <-ctx.Done():
 				require.FailNow(t, "context expired before testing completed")
-			case <-time.After(throttler.dormantPeriod):
+			case <-time.After(throttler.dormantPeriod + 2*recentCheckRateLimiterInterval):
 				assert.True(t, throttler.isDormant())
 			}
 		}()

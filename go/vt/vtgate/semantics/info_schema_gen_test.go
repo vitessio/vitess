@@ -86,9 +86,9 @@ func TestGenerateInfoSchemaMap(t *testing.T) {
 				}
 			}
 			//  createCol(name string, typ int, collation string, def string, invisible bool, size, scale int32, notNullable bool)
-			b.WriteString(fmt.Sprintf("cols = append(cols, createCol(\"%s\", %d, \"%s\", \"%s\", %d, %d, %t, \"%s\"))\n", r.Field, int(i2), collationName, r.Default, size, scale, r.Null == "NO", values))
+			fmt.Fprintf(b, "cols = append(cols, createCol(\"%s\", %d, \"%s\", \"%s\", %d, %d, %t, \"%s\"))\n", r.Field, int(i2), collationName, r.Default, size, scale, r.Null == "NO", values)
 		}
-		b.WriteString(fmt.Sprintf("infSchema[\"%s\"] = cols\n", tbl))
+		fmt.Fprintf(b, "infSchema[\"%s\"] = cols\n", tbl)
 	}
 
 	fmt.Println(b.String())

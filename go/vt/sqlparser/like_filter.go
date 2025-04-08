@@ -31,8 +31,8 @@ func replacer(s string) string {
 		return s[2:]
 	}
 
-	result := strings.Replace(s, "%", ".*", -1)
-	result = strings.Replace(result, "_", ".", -1)
+	result := strings.ReplaceAll(s, "%", ".*")
+	result = strings.ReplaceAll(result, "_", ".")
 
 	return result
 }

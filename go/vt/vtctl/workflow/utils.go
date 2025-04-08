@@ -635,12 +635,12 @@ func getRenameFileName(tableName string) string {
 
 func parseTabletTypes(tabletTypes []topodatapb.TabletType) (hasReplica, hasRdonly, hasPrimary bool, err error) {
 	for _, tabletType := range tabletTypes {
-		switch {
-		case tabletType == topodatapb.TabletType_REPLICA:
+		switch tabletType {
+		case topodatapb.TabletType_REPLICA:
 			hasReplica = true
-		case tabletType == topodatapb.TabletType_RDONLY:
+		case topodatapb.TabletType_RDONLY:
 			hasRdonly = true
-		case tabletType == topodatapb.TabletType_PRIMARY:
+		case topodatapb.TabletType_PRIMARY:
 			hasPrimary = true
 		default:
 			return false, false, false, fmt.Errorf("invalid tablet type passed %s", tabletType)

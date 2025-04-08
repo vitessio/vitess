@@ -273,7 +273,7 @@ func saveRowsAnalysis(r Result, allRows map[string]int, totalRows *int, incremen
 
 func hashCodeForRow(val []Value) string {
 	h := sha256.New()
-	h.Write([]byte(fmt.Sprintf("%v", val)))
+	fmt.Fprintf(h, "%v", val)
 
 	return fmt.Sprintf("%x", h.Sum(nil))
 }

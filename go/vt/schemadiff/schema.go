@@ -114,7 +114,7 @@ func NewSchemaFromQueries(env *Environment, queries []string) (*Schema, error) {
 // NewSchemaFromSQL creates a valid and normalized schema based on a SQL blob that contains
 // CREATE statements for various objects (tables, views)
 func NewSchemaFromSQL(env *Environment, sql string) (*Schema, error) {
-	statements, err := env.Parser().SplitStatements(sql)
+	statements, err := env.Parser().ParseMultipleIgnoreEmpty(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -762,7 +762,7 @@ func (s *Schema) apply(diffs []EntityDiff, hints *DiffHints) error {
 			if _, ok := s.named[name]; ok {
 				return &ApplyDuplicateEntityError{Entity: name}
 			}
-			s.tables = append(s.tables, &CreateTableEntity{CreateTable: diff.createTable})
+			s.tables = append(s.tables, &CreateTableEntity{CreateTable: diff.createTable, Env: s.env})
 			_, s.named[name] = diff.Entities()
 		case *CreateViewEntityDiff:
 			// We expect the view to not exist

@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -134,7 +135,7 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 		<-ch
 	})
 	// Add a fake query that makes the semi-sync monitor believe that the tablet is blocked on semi-sync ACKs.
-	fakeDb.AddQuery("select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1"))
+	fakeDb.AddQuery("select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_value", "varchar"), "1"))
 
 	// Verify that in the beginning the tablet is serving.
 	require.True(t, tm.QueryServiceControl.IsServing())
@@ -159,7 +160,7 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	require.False(t, fakeMysqlDaemon.SuperReadOnly.Load())
 
 	// Now we unblock the semi-sync monitor.
-	fakeDb.AddQuery("select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|0"))
+	fakeDb.AddQuery("select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Variable_value", "varchar"), "0"))
 	close(ch)
 
 	// This should unblock the demote primary operation eventually.
@@ -168,4 +169,34 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond)
 	// We should have also seen the super-read only query.
 	require.True(t, fakeMysqlDaemon.SuperReadOnly.Load())
+}
+
+// TestUndoDemotePrimaryStateChange tests that UndoDemotePrimary
+// if able to change the state of the tablet to Primary if there
+// is a mismatch with the tablet record.
+func TestUndoDemotePrimaryStateChange(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	ti, err := ts.UpdateTabletFields(ctx, tm.Tablet().Alias, func(tablet *topodatapb.Tablet) error {
+		tablet.Type = topodatapb.TabletType_PRIMARY
+		tablet.PrimaryTermStartTime = protoutil.TimeToProto(time.Now())
+		return nil
+	})
+	require.NoError(t, err)
+
+	// Check that the tablet is initially a replica.
+	require.EqualValues(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+	// Verify that the tablet record says the tablet should be a primary
+	require.EqualValues(t, topodatapb.TabletType_PRIMARY, ti.Type)
+
+	err = tm.UndoDemotePrimary(ctx, false)
+	require.NoError(t, err)
+	require.EqualValues(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	require.EqualValues(t, ti.PrimaryTermStartTime, tm.Tablet().PrimaryTermStartTime)
+	require.True(t, tm.QueryServiceControl.IsServing())
+	isReadOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
+	require.NoError(t, err)
+	require.False(t, isReadOnly)
 }

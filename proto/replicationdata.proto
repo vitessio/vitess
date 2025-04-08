@@ -21,6 +21,8 @@ option go_package = "vitess.io/vitess/go/vt/proto/replicationdata";
 
 package replicationdata;
 
+import "topodata.proto";
+
 // Status is the replication status for MySQL/MariaDB/File-based. Returned by a
 // flavor-specific command and parsed into a Position and fields.
 message Status {
@@ -107,4 +109,5 @@ message FullStatus {
   replicationdata.Configuration replication_configuration = 22;
   bool disk_stalled = 23;
   bool semi_sync_blocked = 24;
+  topodata.TabletType tablet_type = 25;
 }

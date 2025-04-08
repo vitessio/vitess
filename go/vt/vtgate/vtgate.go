@@ -50,7 +50,9 @@ import (
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
@@ -291,6 +293,27 @@ func Init(
 	tabletTypesToWait []topodatapb.TabletType,
 	pv plancontext.PlannerVersion,
 ) *VTGate {
+	ts, err := serv.GetTopoServer()
+	if err != nil {
+		log.Fatalf("Unable to get Topo server: %v", err)
+	}
+
+	// We need to get the keyspaces and rebuild the keyspace graphs
+	// before we make the topo-server read-only incase we are filtering by
+	// keyspaces.
+	var keyspaces []string
+	if discovery.FilteringKeyspaces() {
+		keyspaces = discovery.KeyspacesToWatch
+	} else {
+		keyspaces, err = ts.GetSrvKeyspaceNames(ctx, cell)
+		if err != nil {
+			log.Fatalf("Unable to get all keyspaces: %v", err)
+		}
+	}
+	// executor sets a watch on SrvVSchema, so let's rebuild these before creating it
+	if err := rebuildTopoGraphs(ctx, ts, cell, keyspaces); err != nil {
+		log.Fatalf("rebuildTopoGraphs failed: %v", err)
+	}
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
@@ -326,10 +349,6 @@ func Init(
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
 
-	ts, err := serv.GetTopoServer()
-	if err != nil {
-		log.Fatalf("Unable to get Topo server: %v", err)
-	}
 	// Create a global cache to use for lookups of the sidecar database
 	// identifier in use by each keyspace.
 	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
@@ -373,8 +392,6 @@ func Init(
 		st.RegisterSignalReceiver(executor.vm.Rebuild)
 	}
 
-	// TODO: call serv.WatchSrvVSchema here
-
 	vtgateInst := newVTGate(executor, resolver, vsm, tc, gw)
 	_ = stats.NewRates("QPSByOperation", stats.CounterForDimension(vtgateInst.timings, "Operation"), 15, 1*time.Minute)
 	_ = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(vtgateInst.timings, "Keyspace"), 15, 1*time.Minute)
@@ -411,6 +428,46 @@ func Init(
 
 	initAPI(gw.hc)
 	return vtgateInst
+}
+
+func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string, keyspaces []string) error {
+	for _, ks := range keyspaces {
+		_, err := topoServer.GetSrvKeyspace(ctx, cell, ks)
+		switch {
+		case err == nil:
+		case topo.IsErrType(err, topo.NoNode):
+			log.Infof("Rebuilding Serving Keyspace %v", ks)
+			if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), topoServer, ks, []string{cell}, false); err != nil {
+				return vterrors.Wrap(err, "vtgate Init: failed to RebuildKeyspace")
+			}
+		default:
+			return vterrors.Wrap(err, "vtgate Init: failed to read SrvKeyspace")
+		}
+	}
+
+	srvVSchema, err := topoServer.GetSrvVSchema(ctx, cell)
+	switch {
+	case err == nil:
+		for _, ks := range keyspaces {
+			if _, exists := srvVSchema.GetKeyspaces()[ks]; !exists {
+				log.Infof("Rebuilding Serving Vschema")
+				if err := topoServer.RebuildSrvVSchema(ctx, []string{cell}); err != nil {
+					return vterrors.Wrap(err, "vtgate Init: failed to RebuildSrvVSchema")
+				}
+				// we only need to rebuild the SrvVSchema once, because it is per-cell, not per-keyspace
+				break
+			}
+		}
+	case topo.IsErrType(err, topo.NoNode):
+		log.Infof("Rebuilding Serving Vschema")
+		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
+		if err := topoServer.RebuildSrvVSchema(ctx, []string{cell}); err != nil {
+			return vterrors.Wrap(err, "vtgate Init: failed to RebuildSrvVSchema")
+		}
+	default:
+		return vterrors.Wrap(err, "vtgate Init: failed to read SrvVSchema")
+	}
+	return nil
 }
 
 func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {

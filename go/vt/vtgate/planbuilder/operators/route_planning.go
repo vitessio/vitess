@@ -60,9 +60,8 @@ func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (Operator, *ApplyR
 }
 
 func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (result Operator, changed *ApplyResult) {
-
-	switch {
-	case ctx.PlannerVersion == querypb.ExecuteOptions_Gen4Left2Right:
+	switch ctx.PlannerVersion {
+	case querypb.ExecuteOptions_Gen4Left2Right:
 		result = leftToRightSolve(ctx, op)
 	default:
 		result = greedySolve(ctx, op)
@@ -378,14 +377,12 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a Operator, exp sqlparse
 	// can be solved by any table in our routeTree. If an equality expression can be solved,
 	// we check if the equality expression and our table share the same vindex, if they do:
 	// the method will return the associated vindexes.SingleColumn.
-	for _, expr := range ctx.SemTable.GetExprAndEqualities(exp) {
+	_ = ctx.SemTable.ForeachExprEquality(exp, func(expr sqlparser.Expr) error {
 		col, isCol := expr.(*sqlparser.ColName)
 		if !isCol {
-			continue
+			return nil
 		}
-
 		deps := ctx.SemTable.RecursiveDeps(expr)
-
 		_ = Visit(a, func(rel Operator) error {
 			to, isTableOp := rel.(tableIDIntroducer)
 			if !isTableOp {
@@ -412,9 +409,10 @@ func findColumnVindex(ctx *plancontext.PlanningContext, a Operator, exp sqlparse
 			return nil
 		})
 		if singCol != nil {
-			return singCol
+			return io.EOF
 		}
-	}
+		return nil
+	})
 
 	return singCol
 }
@@ -466,60 +464,84 @@ func canMergeOnFilters(ctx *plancontext.PlanningContext, a, b *Route, joinPredic
 	return false
 }
 
-func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) bool {
+func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) (bool, []engine.Condition) {
 	if len(a) != len(b) {
-		return false
+		return false, nil
 	}
 
 	// TODO: check SemTable's columnEqualities for better plan
-
+	var conditions []engine.Condition
 	for i, aExpr := range a {
 		bExpr := b[i]
-		if !gen4ValEqual(ctx, aExpr, bExpr) {
-			return false
+		equal, c := gen4ValEqual(ctx, aExpr, bExpr)
+		if !equal {
+			return false, nil
+		}
+		if c != nil {
+			conditions = append(conditions, *c)
 		}
 	}
-	return true
+	return true, conditions
 }
 
-func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
+func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) (bool, *engine.Condition) {
 	switch a := a.(type) {
 	case *sqlparser.ColName:
 		if b, ok := b.(*sqlparser.ColName); ok {
 			if !a.Name.Equal(b.Name) {
-				return false
+				return false, nil
 			}
 
-			return ctx.SemTable.DirectDeps(a) == ctx.SemTable.DirectDeps(b)
+			return ctx.SemTable.DirectDeps(a) == ctx.SemTable.DirectDeps(b), nil
 		}
 	case *sqlparser.Argument:
 		b, ok := b.(*sqlparser.Argument)
 		if !ok {
-			return false
+			return false, nil
 		}
-		return a.Name == b.Name
+		if a.Name == b.Name {
+			return true, nil
+		}
+
+		bindVars := ctx.VSchema.GetBindVars()
+		if bindVars == nil {
+			return false, nil
+		}
+
+		aVal, ok := bindVars[a.Name]
+		if !ok {
+			return false, nil
+		}
+		bVal, ok := bindVars[b.Name]
+		if !ok {
+			return false, nil
+		}
+
+		return aVal.Type == bVal.Type && bytes.Equal(aVal.Value, bVal.Value),
+			&engine.Condition{A: a.Name, B: b.Name}
+
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)
 		if !ok {
-			return false
+			return false, nil
 		}
 		switch a.Type {
 		case sqlparser.StrVal:
 			switch b.Type {
 			case sqlparser.StrVal:
-				return a.Val == b.Val
+				return a.Val == b.Val, nil
 			case sqlparser.HexVal:
-				return hexEqual(b, a)
+				return hexEqual(b, a), nil
 			}
 		case sqlparser.HexVal:
-			return hexEqual(a, b)
+			return hexEqual(a, b), nil
 		case sqlparser.IntVal:
 			if b.Type == (sqlparser.IntVal) {
-				return a.Val == b.Val
+				return a.Val == b.Val, nil
 			}
 		}
 	}
-	return false
+	return false, nil
 }
 
 func hexEqual(a, b *sqlparser.Literal) bool {

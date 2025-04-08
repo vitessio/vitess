@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -71,6 +72,93 @@ func TestEmptyErrorAndComments(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, testcase.output, String(res))
 			}
+		})
+	}
+}
+
+func TestSplitStatementToPieces(t *testing.T) {
+	testcases := []struct {
+		input     string
+		output    string
+		lenWanted int
+	}{{
+		input:  "select * from table1; \t; \n; \n\t\t ;select * from table1;",
+		output: "select * from table1;select * from table1",
+	}, {
+		input: "select * from table",
+	}, {
+		input:  "select * from table;",
+		output: "select * from table",
+	}, {
+		input:  "select * from table1;   ",
+		output: "select * from table1",
+	}, {
+		input:  "select * from table1; select * from table2;",
+		output: "select * from table1; select * from table2",
+	}, {
+		input:  "select * from /* comment ; */ table1;",
+		output: "select * from /* comment ; */ table1",
+	}, {
+		input:  "select * from table where semi = ';';",
+		output: "select * from table where semi = ';'",
+	}, {
+		input:  "select * from table1;--comment;\nselect * from table2;",
+		output: "select * from table1;--comment;\nselect * from table2",
+	}, {
+		input: "CREATE TABLE `total_data` (`id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'id', " +
+			"`region` varchar(32) NOT NULL COMMENT 'region name, like zh; th; kepler'," +
+			"`data_size` bigint NOT NULL DEFAULT '0' COMMENT 'data size;'," +
+			"`createtime` datetime NOT NULL DEFAULT NOW() COMMENT 'create time;'," +
+			"`comment` varchar(100) NOT NULL DEFAULT '' COMMENT 'comment'," +
+			"PRIMARY KEY (`id`))",
+	}, {
+		input:  "create table t1 (id int primary key); create table t2 (id int primary key);",
+		output: "create table t1 (id int primary key); create table t2 (id int primary key)",
+	}, {
+		input:  ";;; create table t1 (id int primary key);;; ;create table t2 (id int primary key);",
+		output: " create table t1 (id int primary key);create table t2 (id int primary key)",
+	}, {
+		// The input doesn't have to be valid SQL statements!
+		input:  ";create table t1 ;create table t2 (id;",
+		output: "create table t1 ;create table t2 (id",
+	}, {
+		// Ignore quoted semicolon
+		input:  ";create table t1 ';';;;create table t2 (id;",
+		output: "create table t1 ';';create table t2 (id",
+	}, {
+		// Ignore quoted semicolon
+		input:  "stop replica; start replica",
+		output: "stop replica; start replica",
+	}, {
+		// Test that we don't split on semicolons inside create procedure calls.
+		input:     "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end",
+		lenWanted: 1,
+	}, {
+		// Test that we don't split on semicolons inside create procedure calls.
+		input:     "select * from t1;create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;select * from t2",
+		lenWanted: 3,
+	},
+		{
+			// Create procedure with comments.
+			input:     "select * from t1; /* comment1 */ create /* comment2 */ procedure /* comment3 */ p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;select * from t2",
+			lenWanted: 3,
+		},
+	}
+
+	parser := NewTestParser()
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.output == "" {
+				tcase.output = tcase.input
+			}
+
+			stmtPieces, err := parser.SplitStatementToPieces(tcase.input)
+			require.NoError(t, err)
+			if tcase.lenWanted != 0 {
+				require.Equal(t, tcase.lenWanted, len(stmtPieces))
+			}
+			out := strings.Join(stmtPieces, ";")
+			require.Equal(t, tcase.output, out)
 		})
 	}
 }
