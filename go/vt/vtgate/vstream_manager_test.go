@@ -504,10 +504,17 @@ func TestVStreamRetriableErrors(t *testing.T) {
 			ignoreTablet: false,
 		},
 		{
-			name:         "should not retry",
+			name:         "invalid argument",
 			code:         vtrpcpb.Code_INVALID_ARGUMENT,
 			msg:          "final error",
 			shouldRetry:  false,
+			ignoreTablet: false,
+		},
+		{
+			name:         "query interrupted",
+			code:         vtrpcpb.Code_UNKNOWN,
+			msg:          "vttablet: rpc error: code = Unknown desc = Query execution was interrupted, maximum statement execution time exceeded (errno 3024) (sqlstate HY000)",
+			shouldRetry:  true,
 			ignoreTablet: false,
 		},
 	}
@@ -1012,7 +1019,7 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Variable names are maintained like in OneToMany, but order is different.1
+	// Variable names are maintained like in OneToMany, but order is different.
 	ks := "TestVStream"
 	cell := "aa"
 	_ = createSandbox(ks)

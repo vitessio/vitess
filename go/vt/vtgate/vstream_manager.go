@@ -28,6 +28,7 @@ import (
 
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -820,20 +821,35 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 // An error should be retried if it is expected to be transient.
 // A tablet should be ignored upon retry if it's likely another tablet will not
 // produce the same error.
-func (vs *vstream) shouldRetry(err error) (bool, bool) {
+func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
 	errCode := vterrors.Code(err)
-
+	// In this context, where we will run the tablet picker again on retry, these
+	// codes indicate that it's worth a retry as the error is likely a transient
+	// one with a tablet or within the shard.
 	if errCode == vtrpcpb.Code_FAILED_PRECONDITION || errCode == vtrpcpb.Code_UNAVAILABLE {
 		return true, false
 	}
-
-	// If there is a GTIDSet Mismatch on the tablet, omit it from the candidate
-	// list in the TabletPicker on retry.
-	if errCode == vtrpcpb.Code_INVALID_ARGUMENT && strings.Contains(err.Error(), "GTIDSet Mismatch") {
-		return true, true
+	// This typically indicates that the user provided invalid arguments for the
+	// VStream so we should not retry.
+	if errCode == vtrpcpb.Code_INVALID_ARGUMENT {
+		// But if there is a GTIDSet Mismatch on the tablet, omit that tablet from
+		// the candidate list in the TabletPicker and retry. The argument was invalid
+		// *for that specific *tablet* but it's not generally invalid.
+		if strings.Contains(err.Error(), "GTIDSet Mismatch") {
+			return true, true
+		}
+		return false, false
+	}
+	// Internal errors such as not having all journaling partipants require a new
+	// VStream.
+	if errCode == vtrpcpb.Code_INTERNAL {
+		return false, false
 	}
 
-	return false, false
+	// For anything else, if this is an ephemeral SQL error -- such as a
+	// MAX_EXECUTION_TIME SQL error during the copy phase -- or any other
+	// type of non-SQL error, then retry.
+	return sqlerror.IsEphemeralError(err), false
 }
 
 // sendAll sends a group of events together while holding the lock.
