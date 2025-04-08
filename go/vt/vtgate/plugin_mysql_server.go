@@ -278,7 +278,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 	ctx, cancel := context.WithCancel(context.Background())
 	c.UpdateCancelCtx(cancel)
 
-	span, ctx, err := startSpan(ctx, sql, "vtgateHandler.ComQuery")
+	span, ctx, err := startSpan(ctx, sql, "vtgateHandler.ComQueryMulti")
 	if err != nil {
 		return vterrors.Wrap(err, "failed to extract span")
 	}
@@ -341,13 +341,12 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 		queryResults = append(queryResults, sqltypes.QueryResponse{QueryResult: result, QueryError: sqlerror.NewSQLErrorFromError(err)})
 	}
 
+	fillInTxStatusFlags(c, session)
 	for idx, res := range queryResults {
 		if callbackErr := callback(res, idx < len(queryResults)-1, true); callbackErr != nil {
 			return callbackErr
 		}
 	}
-
-	fillInTxStatusFlags(c, session)
 	return nil
 }
 

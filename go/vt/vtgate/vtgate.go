@@ -716,7 +716,7 @@ func (vtg *VTGate) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservic
 			// because of the query itself. We should return the error in the packet and stop
 			// processing any more queries.
 			if firstPacket {
-				return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, more, true)
+				return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
 			}
 			return session, err
 		}
