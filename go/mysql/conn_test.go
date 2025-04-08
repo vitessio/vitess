@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
@@ -837,6 +838,40 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 	}
 }
 
+func TestEmptyQuery(t *testing.T) {
+	origMysqlMultiQuery := mysqlMultiQuery
+	defer func() {
+		mysqlMultiQuery = origMysqlMultiQuery
+	}()
+	for _, b := range []bool{true, false} {
+		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
+			mysqlMultiQuery = b
+			listener, sConn, cConn := createSocketPair(t)
+			sConn.Capabilities |= CapabilityClientMultiStatements
+			defer func() {
+				listener.Close()
+				sConn.Close()
+				cConn.Close()
+			}()
+
+			err := cConn.WriteComQuery("")
+			require.NoError(t, err)
+
+			// this handler will return results according to the query. In case the query contains "error" it will return an error
+			// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+			handler := &testRun{err: sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")}
+			res := sConn.handleNextCommand(handler)
+			// The queries run will be an empty query; Even with the empty error, the connection should be fine
+			require.True(t, res, "we should not break the connection in case of no errors")
+			// Read the result and assert that we indeed see the error for empty query.
+			data, more, _, err := cConn.ReadQueryResult(100, true)
+			require.EqualError(t, err, "Query was empty (errno 1065) (sqlstate 42000)")
+			require.False(t, more)
+			require.Nil(t, data)
+		})
+	}
+}
+
 func TestMultiStatement(t *testing.T) {
 	origMysqlMultiQuery := mysqlMultiQuery
 	defer func() {
@@ -1167,6 +1202,9 @@ func (t testRun) ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.Qu
 	queries, err := t.Env().Parser().SplitStatementToPieces(sql)
 	if err != nil {
 		return err
+	}
+	if len(queries) == 0 {
+		return sqlerror.NewSQLErrorFromError(sqlparser.ErrEmpty)
 	}
 	for i, query := range queries {
 		firstPacket := true
