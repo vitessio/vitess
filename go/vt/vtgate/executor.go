@@ -1597,6 +1597,9 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 
 	if err != nil {
 		if stmt != nil {
+			// Attempt to build NULL field types for the statement in case planning fails,
+			// allowing the client to proceed with preparing the statement even without a valid execution plan.
+			// Hoping that an optimized plan can be built later when parameter values are available.
 			flds, paramCount, success := buildNullFieldTypes(stmt)
 			if success {
 				return flds, paramCount, nil
@@ -1628,6 +1631,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 	return qr.Fields, plan.ParamsCount, err
 }
 
+// buildNullFieldTypes builds a list of NULL field types for the given statement.
 func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bool) {
 	sel, ok := stmt.(sqlparser.SelectStatement)
 	if !ok {
@@ -1635,6 +1639,7 @@ func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bo
 	}
 	var fields []*querypb.Field
 	for _, expr := range sel.GetColumns() {
+		// *sqlparser.StarExpr is not supported in this context.
 		if ae, ok := expr.(*sqlparser.AliasedExpr); ok {
 			fields = append(fields, &querypb.Field{
 				Name: ae.ColumnName(),
