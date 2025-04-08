@@ -9,7 +9,18 @@
       "params": {
         "table": "num_vdx_tbl",
         "from": "num",
-        "to": "keyspace_id"
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "s_tbl"
+    },
+    "col_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "col_vdx_tbl",
+        "from": "col,id",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
       },
       "owner": "s_tbl"
     },
@@ -63,6 +74,10 @@
         {
           "column": "num",
           "name": "num_vdx"
+        },
+        {
+          "columns": ["col", "id"],
+          "name": "col_vdx"
         }
       ]
     },
@@ -70,6 +85,14 @@
       "column_vindexes": [
         {
           "column": "num",
+          "name": "hash"
+        }
+      ]
+    },
+    "col_vdx_tbl": {
+      "column_vindexes": [
+        {
+          "column": "col",
           "name": "hash"
         }
       ]
