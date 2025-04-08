@@ -231,6 +231,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	}
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--db_charset", charset,
 		"--db_app_user", user,
 		"--db_app_password", pass,
@@ -282,18 +283,18 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if args.VSchemaDDLAuthorizedUsers != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
 	}
-	vt.ExtraArgs = append(vt.ExtraArgs, "--mysql_server_version", servenv.MySQLServerVersion())
+	vt.ExtraArgs = append(vt.ExtraArgs, "--mysql-server-version", servenv.MySQLServerVersion())
 	if socket != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
-			"--db_socket", socket,
+			"--db-socket", socket,
 		}...)
 	} else {
 		hostname, p := mysql.Address()
 		port := fmt.Sprintf("%d", p)
 
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
-			"--db_host", hostname,
-			"--db_port", port,
+			"--db-host", hostname,
+			"--db-port", port,
 		}...)
 	}
 

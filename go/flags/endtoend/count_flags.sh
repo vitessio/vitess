@@ -7,7 +7,7 @@ for file in *.txt; do
     reading_flags=0
 
     while IFS= read -r line; do
-        if [[ "$line" == "Flags:" ]]; then
+        if [[ "$line" == "Flags:" || "$line" == "Usage of vtctlclient:" ]]; then
             reading_flags=1
             continue
         fi
@@ -28,4 +28,5 @@ done
 echo "-------------------------------------"
 echo "Total Flags with underscores (_): $underscore_count"
 echo "Total Flags with dashes (-): $dash_count"
+
 

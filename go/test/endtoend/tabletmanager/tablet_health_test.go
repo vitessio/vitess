@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 // TabletReshuffle test if a vttablet can be pointed at an existing mysql
@@ -64,7 +65,8 @@ func TestTabletReshuffle(t *testing.T) {
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
 		"--mycnf_server_id", fmt.Sprintf("%d", rTablet.TabletUID),
-		"--db_socket", fmt.Sprintf("%s/mysql.sock", primaryTablet.VttabletProcess.Directory),
+		vtutils.GetFlagVariantForTests("--db-socket"), fmt.Sprintf("%s/mysql.sock", primaryTablet.VttabletProcess.Directory),
+		"--disable_active_reparents",
 		"--enable_replication_reporter=false",
 	}
 	defer func() { clusterInstance.VtTabletExtraArgs = []string{} }()

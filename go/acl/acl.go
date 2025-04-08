@@ -23,7 +23,7 @@ limitations under the License.
 // own policy as a package that calls RegisterPolicy(), and compile it into all
 // Vitess binaries that you use.
 //
-// By default (when no security_policy is specified), everyone is allowed to do
+// By default (when no security-policy is specified), everyone is allowed to do
 // anything.
 //
 // For convenience, there are two other built-in policies that also do NOT do
@@ -43,6 +43,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 // This is a list of predefined roles. Applications are free
@@ -70,7 +71,7 @@ type Policy interface {
 }
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&securityPolicy, "security_policy", securityPolicy, "the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)")
+	utils.SetFlagStringVar(fs, &securityPolicy, "security-policy", securityPolicy, "the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)")
 }
 
 // RegisterPolicy registers a security policy. This function must be called
@@ -94,7 +95,7 @@ func savePolicy() {
 		currentPolicy = policy
 		return
 	}
-	log.Warningf("security_policy %q not found; using fallback policy (deny-all)", securityPolicy)
+	log.Warningf("security-policy %q not found; using fallback policy (deny-all)", securityPolicy)
 	currentPolicy = denyAllPolicy{}
 }
 
