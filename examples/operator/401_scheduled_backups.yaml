@@ -45,14 +45,14 @@ spec:
             keyspace: "customer"
             shard: "-"
   images:
-    vtctld: vitess/lite:v20.0.6
-    vtadmin: vitess/vtadmin:v20.0.6
-    vtgate: vitess/lite:v20.0.6
-    vttablet: vitess/lite:v20.0.6
-    vtbackup: vitess/lite:v20.0.6
-    vtorc: vitess/lite:v20.0.6
+    vtctld: vitess/lite:v20.0.7
+    vtadmin: vitess/vtadmin:v20.0.7
+    vtgate: vitess/lite:v20.0.7
+    vttablet: vitess/lite:v20.0.7
+    vtbackup: vitess/lite:v20.0.7
+    vtorc: vitess/lite:v20.0.7
     mysqld:
-      mysql80Compatible: vitess/lite:v20.0.6
+      mysql80Compatible: vitess/lite:v20.0.7
     mysqldExporter: prom/mysqld-exporter:v0.11.0
   cells:
   - name: zone1
