@@ -86,7 +86,7 @@ func TestDeleteWithLimit(t *testing.T) {
 	mcmp.Exec("insert into order_tbl(region_id, oid, cust_no) values (1,1,4), (1,2,2), (2,3,5), (2,4,55)")
 
 	// check rows
-	mcmp.AssertMatches(`select id, num from s_tbl order by id`,
+	mcmp.AssertMatches(`select id, col from s_tbl order by id`,
 		`[[INT64(1) INT64(10)] [INT64(2) INT64(10)] [INT64(3) INT64(10)] [INT64(4) INT64(20)] [INT64(5) INT64(5)] [INT64(6) INT64(15)] [INT64(7) INT64(17)] [INT64(8) INT64(80)]]`)
 	mcmp.AssertMatches(`select region_id, oid, cust_no from order_tbl order by oid`,
 		`[[INT64(1) INT64(1) INT64(4)] [INT64(1) INT64(2) INT64(2)] [INT64(2) INT64(3) INT64(5)] [INT64(2) INT64(4) INT64(55)]]`)
