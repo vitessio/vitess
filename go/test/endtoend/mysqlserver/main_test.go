@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -112,7 +113,7 @@ func TestMain(m *testing.M) {
 			"--mysql_server_query_timeout", "1s",
 			"--mysql_auth_server_impl", "static",
 			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
-			"--mysql_server_version", "8.0.16-7",
+			utils.GetFlagVariantForTests("--mysql-server-version"), "8.0.16-7",
 			"--warn_sharded_only=true",
 		}
 

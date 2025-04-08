@@ -64,7 +64,7 @@ public class GrpcClientStaticAuthTest extends RpcClientTest {
         vtRoot + "/bin/vtgateclienttest",
         "--logtostderr",
         "--grpc-port", Integer.toString(port),
-        "--service_map", "grpc-vtgateservice",
+        "--service-map", "grpc-vtgateservice",
         "--grpc-auth-mode", "static",
         "--grpc-auth-static-password-file", staticAuthFile.getPath()
     )).inheritIO().start();

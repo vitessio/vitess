@@ -66,8 +66,8 @@ var (
 	--cell test \
 	--cells_to_watch test \
 	--tablet_types_to_wait PRIMARY,REPLICA \
-	--service_map 'grpc-vtgateservice' \
-	--pid_file $VTDATAROOT/tmp/vtgate.pid \
+	--service-map 'grpc-vtgateservice' \
+	--pid-file $VTDATAROOT/tmp/vtgate.pid \
 	--mysql_auth_server_impl none`,
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),
