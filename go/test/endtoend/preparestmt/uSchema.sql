@@ -8,7 +8,7 @@ create table vt_prepare_stmt_test
     smallint_unsigned  SMALLINT,
     mediumint_unsigned MEDIUMINT,
     int_unsigned       INT,
-    float_unsigned     FLOAT(10),
+    float_unsigned     FLOAT(10, 2),
     double_unsigned    DOUBLE(16, 2),
     decimal_unsigned   DECIMAL,
     t_date             DATE,
