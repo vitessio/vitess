@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 // MysqlctldProcess is a generic handle for a running mysqlctld command .
@@ -53,8 +52,8 @@ type MysqlctldProcess struct {
 func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 	args := []string{
 		"--log_dir", mysqlctld.LogDirectory,
-		utils.GetFlagVariantForTests("--tablet-uid"), fmt.Sprintf("%d", mysqlctld.TabletUID),
-		utils.GetFlagVariantForTests("--mysql-port"), fmt.Sprintf("%d", mysqlctld.MySQLPort),
+		"--tablet-uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
+		"--mysql-port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
 		"--init_db_sql_file", mysqlctld.InitDBFile,
 	}
 	if mysqlctld.SocketFile != "" {
@@ -75,8 +74,8 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	_ = createDirectory(mysqlctld.LogDirectory, 0700)
 	args := []string{
 		"--log_dir", mysqlctld.LogDirectory,
-		utils.GetFlagVariantForTests("--tablet-uid"), fmt.Sprintf("%d", mysqlctld.TabletUID),
-		utils.GetFlagVariantForTests("--mysql-port"), fmt.Sprintf("%d", mysqlctld.MySQLPort),
+		"--tablet-uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
+		"--mysql-port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
 	}
 	if mysqlctld.SocketFile != "" {
 		args = append(args, "--socket_file", mysqlctld.SocketFile)
@@ -161,7 +160,7 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 	mysqlctld.exitSignalReceived = true
 	tmpProcess := exec.Command(
 		"mysqlctl",
-		utils.GetFlagVariantForTests("--tablet-uid"), fmt.Sprintf("%d", mysqlctld.TabletUID),
+		"--tablet-uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
 	)
 	tmpProcess.Args = append(tmpProcess.Args, mysqlctld.ExtraArgs...)
 	tmpProcess.Args = append(tmpProcess.Args, "shutdown")
