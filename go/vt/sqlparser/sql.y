@@ -197,7 +197,7 @@ func tryCastStatement(v interface{}) Statement {
 
 // Replication Tokens
 %token <bytes> REPLICA REPLICAS SOURCE STOP RESET FILTER LOG MASTER
-%token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT SOURCE_AUTO_POSITION
+%token <bytes> SOURCE_HOST SOURCE_SSL SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT SOURCE_AUTO_POSITION
 %token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 %token <bytes> IO_THREAD SQL_THREAD
 
@@ -4371,6 +4371,10 @@ replication_option:
 | SOURCE_PASSWORD '=' STRING
   {
     $$ = &ReplicationOption{Name: string($1), Value: string($3)}
+  }
+| SOURCE_SSL '=' INTEGRAL
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
   }
 | SOURCE_PORT '=' INTEGRAL
   {
@@ -11438,6 +11442,7 @@ non_reserved_keyword:
 | SOURCE
 | SOURCE_CONNECT_RETRY
 | SOURCE_HOST
+| SOURCE_SSL
 | SOURCE_PASSWORD
 | SOURCE_PORT
 | SOURCE_AUTO_POSITION

@@ -572,6 +572,7 @@ var keywords = map[string]int{
 	"source_auto_position":          SOURCE_AUTO_POSITION,
 	"source_connect_retry":          SOURCE_CONNECT_RETRY,
 	"source_host":                   SOURCE_HOST,
+	"source_ssl":                    SOURCE_SSL,
 	"source_password":               SOURCE_PASSWORD,
 	"source_port":                   SOURCE_PORT,
 	"source_retry_count":            SOURCE_RETRY_COUNT,

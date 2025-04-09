@@ -164,6 +164,10 @@ var (
 			output: "change replication source to source_host = Host",
 		},
 		{
+			input:  "change replication source to SOURCE_HOST = 'Host', SOURCE_SSL = 1",
+			output: "change replication source to source_host = Host, source_ssl = 1",
+		},
+		{
 			input:  "change replication source to SOURCE_HOST = 'Host', SOURCE_AUTO_POSITION=0",
 			output: "change replication source to source_host = Host, source_auto_position = 0",
 		},
@@ -4269,75 +4273,75 @@ var (
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by hash ('values')",
+			input:  "alter table t partition by hash ('values')",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by hash (col)",
+			input:  "alter table t partition by hash (col)",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by linear hash (col)",
+			input:  "alter table t partition by linear hash (col)",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by KEY (col)",
+			input:  "alter table t partition by KEY (col)",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by KEY ALGORITHM = 7 (col)",
+			input:  "alter table t partition by KEY ALGORITHM = 7 (col)",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by linear KEY ALGORITHM = 7 (col)",
+			input:  "alter table t partition by linear KEY ALGORITHM = 7 (col)",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by RANGE (col)",
+			input:  "alter table t partition by RANGE (col)",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by RANGE (i + j)",
+			input:  "alter table t partition by RANGE (i + j)",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by RANGE (month(i))",
+			input:  "alter table t partition by RANGE (month(i))",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by RANGE (concat(i))",
+			input:  "alter table t partition by RANGE (concat(i))",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by RANGE COLUMNS (c1, c2, c3)",
+			input:  "alter table t partition by RANGE COLUMNS (c1, c2, c3)",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by LIST (col)",
+			input:  "alter table t partition by LIST (col)",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by LIST (i + j)",
+			input:  "alter table t partition by LIST (i + j)",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by LIST (month(i))",
+			input:  "alter table t partition by LIST (month(i))",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by LIST (concat(i))",
+			input:  "alter table t partition by LIST (concat(i))",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by LIST COLUMNS (c1, c2, c3)",
+			input:  "alter table t partition by LIST COLUMNS (c1, c2, c3)",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by linear hash (a) partitions 20",
+			input:  "alter table t partition by linear hash (a) partitions 20",
 			output: "alter table t",
 		},
 		{
-			input: "alter table t partition by linear hash (a) partitions 10 subpartition by linear hash (b) subpartitions 20",
+			input:  "alter table t partition by linear hash (a) partitions 10 subpartition by linear hash (b) subpartitions 20",
 			output: "alter table t",
 		},
 
