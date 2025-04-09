@@ -54,8 +54,9 @@ type MysqlctlProcess struct {
 // InitDb executes mysqlctl command to add cell info
 func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	args := []string{"--log_dir", mysqlctl.LogDirectory,
-		"--tablet-uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
-		"--mysql-port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
+		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
 		"init",
 	}
 	if mysqlctl.MajorVersion < 18 {
@@ -98,9 +99,10 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--log_dir", mysqlctl.LogDirectory,
-		"--tablet-uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
-		"--mysql-port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
+		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
+		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
 	)
 	if *isCoverage {
 		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-start.out")}...)
@@ -227,8 +229,9 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--log_dir", mysqlctl.LogDirectory,
-		"--tablet-uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
+		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 	)
 	if *isCoverage {
 		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-stop.out")}...)
