@@ -24,6 +24,11 @@ Block Joins can be enabled by setting the `--allow-block-joins` vtgate flag, or 
 More information about this feature can be found in its [RFC #16508](https://github.com/vitessio/vitess/issues/16508) and
 on the Pull Request implementing it [#17641](https://github.com/vitessio/vitess/pull/17641).
 
+_Compatibility notice_
+
+This join implementation may change the result column types returned by certain queries.
+For example, some columns previously typed as INT may now be returned as BIGINT.
+Testing with common MySQL drivers and ORM libraries suggests this change is unlikely to cause issues, but users should verify compatibility in their applications before committing to this new experimental join type.
 ---
 
 
