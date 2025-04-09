@@ -32,8 +32,8 @@ var ReinitConfig = &cobra.Command{
 		"This could be helpful to revert configuration changes, or to pick up changes made to the bundled config in newer Vitess versions.",
 	Example: `mysqlctl \
 	--alsologtostderr \
-	--tablet_uid 101 \
-	--mysql_port 12345 \
+	--tablet-uid 101 \
+	--mysql-port 12345 \
 	reinit_config`,
 	Args: cobra.NoArgs,
 	RunE: commandReinitConfig,

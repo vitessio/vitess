@@ -33,6 +33,7 @@ import (
 	"google.golang.org/api/option"
 
 	"vitess.io/vitess/go/vt/mysqlctl/errors"
+	"vitess.io/vitess/go/vt/utils"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -48,8 +49,8 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&bucket, "gcs_backup_storage_bucket", "", "Google Cloud Storage bucket to use for backups.")
-	fs.StringVar(&root, "gcs_backup_storage_root", "", "Root prefix for all backup-related object names.")
+	utils.SetFlagStringVar(fs, &bucket, "gcs-backup-storage-bucket", "", "Google Cloud Storage bucket to use for backups.")
+	utils.SetFlagStringVar(fs, &root, "gcs-backup-storage-root", "", "Root prefix for all backup-related object names.")
 }
 
 func init() {
@@ -271,7 +272,7 @@ func (bs *GCSBackupStorage) client(ctx context.Context) (*storage.Client, error)
 
 // objName joins path parts into an object name.
 // Unlike path.Join, it doesn't collapse ".." or strip trailing slashes.
-// It also adds the value of the --gcs_backup_storage_root flag if set.
+// It also adds the value of the --gcs-backup-storage-root flag if set.
 func objName(parts ...string) string {
 	if root != "" {
 		return root + "/" + strings.Join(parts, "/")

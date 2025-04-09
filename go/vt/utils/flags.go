@@ -81,12 +81,20 @@ func SetFlagDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def ti
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).DurationVar)
 }
 
+func SetFlagUint32Var(fs *pflag.FlagSet, p *uint32, name string, def uint32, usage string) {
+	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).Uint32Var)
+}
+
 func SetFlagUint64Var(fs *pflag.FlagSet, p *uint64, name string, def uint64, usage string) {
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).Uint64Var)
 }
 
 func SetFlagStringSliceVar(fs *pflag.FlagSet, p *[]string, name string, def []string, usage string) {
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).StringSliceVar)
+}
+
+func SetFlagUintVar(fs *pflag.FlagSet, p *uint, name string, def uint, usage string) {
+	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).UintVar)
 }
 
 // SetFlagVar registers a flag (that implements the pflag.Value interface)

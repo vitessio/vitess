@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -113,7 +114,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, []string{"--tablet_refresh_interval", tabletRefreshInterval.String()}...)
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, []string{utils.GetFlagVariantForTests("--tablet-refresh-interval"), tabletRefreshInterval.String()}...)
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

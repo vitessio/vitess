@@ -50,23 +50,23 @@ Usage:
 Flags:
       --allow_first_backup                                          Allow this job to take the first backup of an existing shard.
       --alsologtostderr                                             log to standard error as well as files
-      --azblob_backup_account_key_file string                       Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
-      --azblob_backup_account_name string                           Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
-      --azblob_backup_buffer_size int                               The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service. (default 104857600)
-      --azblob_backup_container_name string                         Azure Blob Container Name.
-      --azblob_backup_parallelism int                               Azure Blob operation parallelism (requires extra memory when increased -- a multiple of azblob_backup_buffer_size). (default 1)
-      --azblob_backup_storage_root string                           Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').
-      --backup_engine_implementation string                         Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
-      --backup_storage_block_size int                               if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
-      --backup_storage_compress                                     if set, the backup files will be compressed. (default true)
-      --backup_storage_implementation string                        Which backup storage implementation to use for creating and restoring backups.
-      --backup_storage_number_blocks int                            if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
+      --azblob-backup-account-key-file string                       Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
+      --azblob-backup-account-name string                           Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
+      --azblob-backup-buffer-size int                               The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service. (default 104857600)
+      --azblob-backup-container-name string                         Azure Blob Container Name.
+      --azblob-backup-parallelism int                               Azure Blob operation parallelism (requires extra memory when increased -- a multiple of azblob-backup-buffer-size). (default 1)
+      --azblob-backup-storage-root string                           Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').
+      --backup-engine-implementation string                         Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
+      --backup-storage-block-size int                               if backup-storage-compress is true, backup-storage-block-size sets the byte size for each block while compressing (default is 250000). (default 250000)
+      --backup-storage-compress                                     if set, the backup files will be compressed. (default true)
+      --backup-storage-implementation string                        Which backup storage implementation to use for creating and restoring backups.
+      --backup-storage-number-blocks int                            if backup-storage-compress is true, backup-storage-number-blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --bind-address string                                         Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --builtinbackup-file-read-buffer-size uint                    read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                   write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string               the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
-      --builtinbackup_mysqld_timeout duration                       how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
-      --builtinbackup_progress duration                             how often to send progress updates when backing up large files. (default 5s)
+      --builtinbackup-mysqld-timeout duration                       how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
+      --builtinbackup-progress duration                             how often to send progress updates when backing up large files. (default 5s)
       --ceph_backup_storage_config string                           Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
       --compression-engine-name string                              compressor engine used for compression. (default "pargzip")
       --compression-level int                                       what level to pass to the compressor. (default 1)
@@ -77,7 +77,7 @@ Flags:
       --config-path strings                                         Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
-      --consul_auth_static_file string                              JSON File to read the topos/tokens from.
+      --consul-auth-static-file string                              JSON File to read the topos/tokens from.
       --db-allprivs-password string                                 db allprivs password
       --db-allprivs-use-ssl                                         Set this flag to false to make the allprivs connection to not use ssl (default true)
       --db-allprivs-user string                                     db allprivs user userKey (default "vt_allprivs")
@@ -127,13 +127,13 @@ Flags:
       --db-tls-min-version string                                   Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
       --detach                                                      detached mode - run backups detached from the terminal
       --disable-redo-log                                            Disable InnoDB redo log during replication-from-primary phase of backup.
-      --emit_stats                                                  If set, emit stats to push-based monitoring and stats backends
+      --emit-stats                                                  If set, emit stats to push-based monitoring and stats backends
       --external-compressor string                                  command with arguments to use when compressing a backup.
       --external-compressor-extension string                        extension to use when using an external compressor.
       --external-decompressor string                                command with arguments to use when decompressing a backup.
       --file_backup_storage_root string                             Root directory for the file backup storage.
-      --gcs_backup_storage_bucket string                            Google Cloud Storage bucket to use for backups.
-      --gcs_backup_storage_root string                              Root prefix for all backup-related object names.
+      --gcs-backup-storage-bucket string                            Google Cloud Storage bucket to use for backups.
+      --gcs-backup-storage-root string                              Root prefix for all backup-related object names.
       --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc-compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
@@ -146,10 +146,10 @@ Flags:
       --grpc-prometheus                                             Enable gRPC monitoring with Prometheus.
   -h, --help                                                        help for vtbackup
       --incremental_from_pos string                                 Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.
-      --init_db_name_override string                                (init parameter) override the name of the db used by vttablet
+      --init-db-name-override string                                (init parameter) override the name of the db used by vttablet
+      --init-keyspace string                                        (init parameter) keyspace to use for this tablet
+      --init-shard string                                           (init parameter) shard to use for this tablet
       --init_db_sql_file string                                     path to .sql file to run after mysql_install_db
-      --init_keyspace string                                        (init parameter) keyspace to use for this tablet
-      --init_shard string                                           (init parameter) shard to use for this tablet
       --initial_backup                                              Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).
       --keep-alive-timeout duration                                 Wait until timeout elapses after a successful backup before shutting down.
       --keep-logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
@@ -164,24 +164,25 @@ Flags:
       --min_backup_interval duration                                Only take a new backup if it's been at least this long since the most recent backup.
       --min_retention_count int                                     Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made (default 1)
       --min_retention_time duration                                 Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.
+      --mycnf-bin-log-path string                                   mysql binlog path
+      --mycnf-data-dir string                                       data directory for mysql
+      --mycnf-error-log-path string                                 mysql error log path
       --mycnf-file string                                           path to my.cnf, if reading all config params from there
-      --mycnf_bin_log_path string                                   mysql binlog path
-      --mycnf_data_dir string                                       data directory for mysql
-      --mycnf_error_log_path string                                 mysql error log path
-      --mycnf_general_log_path string                               mysql general log path
-      --mycnf_innodb_data_home_dir string                           Innodb data home directory
-      --mycnf_innodb_log_group_home_dir string                      Innodb log group home directory
-      --mycnf_master_info_file string                               mysql master.info file
-      --mycnf_mysql_port int                                        port mysql is listening on
-      --mycnf_pid_file string                                       mysql pid file
-      --mycnf_relay_log_index_path string                           mysql relay log index path
-      --mycnf_relay_log_info_path string                            mysql relay log info path
-      --mycnf_relay_log_path string                                 mysql relay log path
-      --mycnf_secure_file_priv string                               mysql path for loading secure files
-      --mycnf_server_id int                                         mysql server id of the server (if specified, mycnf-file will be ignored)
-      --mycnf_slow_log_path string                                  mysql slow query log path
-      --mycnf_socket_file string                                    mysql socket file
-      --mycnf_tmp_dir string                                        mysql tmp directory
+      --mycnf-general-log-path string                               mysql general log path
+      --mycnf-innodb-data-home-dir string                           Innodb data home directory
+      --mycnf-innodb-log-group-home-dir string                      Innodb log group home directory
+      --mycnf-master-info-file string                               mysql master.info file
+      --mycnf-mysql-port int                                        port mysql is listening on
+      --mycnf-pid-file string                                       mysql pid file
+      --mycnf-relay-log-index-path string                           mysql relay log index path
+      --mycnf-relay-log-info-path string                            mysql relay log info path
+      --mycnf-relay-log-path string                                 mysql relay log path
+      --mycnf-secure-file-priv string                               mysql path for loading secure files
+      --mycnf-server-id int                                         mysql server id of the server (if specified, mycnf-file will be ignored)
+      --mycnf-slow-log-path string                                  mysql slow query log path
+      --mycnf-socket-file string                                    mysql socket file
+      --mycnf-tmp-dir string                                        mysql tmp directory
+      --mysql-port int                                              MySQL port (default 3306)
       --mysql-server-version string                                 MySQL server version to advertise. (default "8.0.40-Vitess")
       --mysql-shell-backup-location string                          location where the backup will be stored
       --mysql-shell-dump-flags string                               flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
@@ -190,26 +191,25 @@ Flags:
       --mysql-shell-should-drain                                    decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                 speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql-shutdown-timeout duration                             how long to wait for mysqld shutdown (default 5m0s)
-      --mysql_port int                                              mysql port (default 3306)
-      --mysql_socket string                                         path to the mysql socket
+      --mysql-socket string                                         Path to the mysqld socket file
       --mysql_timeout duration                                      how long to wait for mysqld startup (default 5m0s)
       --opentsdb_uri string                                         URI of opentsdb /api/put method
       --port int                                                    port for the server
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints
       --purge-logs-interval duration                                how often try to remove old logs (default 1h0m0s)
-      --remote_operation_timeout duration                           time to wait for a remote operation (default 15s)
+      --remote-operation-timeout duration                           time to wait for a remote operation (default 15s)
       --restart_before_backup                                       Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.
-      --s3_backup_aws_endpoint string                               endpoint of the S3 backend (region must be provided).
-      --s3_backup_aws_min_partsize int                              Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size. (default 5242880)
-      --s3_backup_aws_region string                                 AWS region to use. (default "us-east-1")
-      --s3_backup_aws_retries int                                   AWS request retries. (default -1)
-      --s3_backup_force_path_style                                  force the s3 path style.
-      --s3_backup_log_level string                                  determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors. (default "LogOff")
-      --s3_backup_server_side_encryption string                     server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).
-      --s3_backup_storage_bucket string                             S3 bucket to use for backups.
-      --s3_backup_storage_root string                               root prefix for all backup-related object names.
-      --s3_backup_tls_skip_verify_cert                              skip the 'certificate is valid' check for SSL connections.
+      --s3-backup-aws-endpoint string                               endpoint of the S3 backend (region must be provided).
+      --s3-backup-aws-min-partsize int                              Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size. (default 5242880)
+      --s3-backup-aws-region string                                 AWS region to use. (default "us-east-1")
+      --s3-backup-aws-retries int                                   AWS request retries. (default -1)
+      --s3-backup-force-path-style                                  force the s3 path style.
+      --s3-backup-log-level string                                  determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors. (default "LogOff")
+      --s3-backup-server-side-encryption string                     server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).
+      --s3-backup-storage-bucket string                             S3 bucket to use for backups.
+      --s3-backup-storage-root string                               root prefix for all backup-related object names.
+      --s3-backup-tls-skip-verify-cert                              skip the 'certificate is valid' check for SSL connections.
       --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --sql-max-length-errors int                                   truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                       truncate queries in debug UIs to the given length (default 512) (default 512)
@@ -250,10 +250,10 @@ Flags:
   -v, --version                                                     print binary version
       --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging
       --xbstream_restore_flags string                               Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
-      --xtrabackup_backup_flags string                              Flags to pass to backup command. These should be space separated and will be added to the end of the command
-      --xtrabackup_prepare_flags string                             Flags to pass to prepare command. These should be space separated and will be added to the end of the command
-      --xtrabackup_root_path string                                 Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
-      --xtrabackup_stream_mode string                               Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0 (default "tar")
-      --xtrabackup_stripe_block_size uint                           Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe (default 102400)
-      --xtrabackup_stripes uint                                     If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression
-      --xtrabackup_user string                                      User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.
+      --xtrabackup-backup-flags string                              Flags to pass to backup command. These should be space separated and will be added to the end of the command
+      --xtrabackup-prepare-flags string                             Flags to pass to prepare command. These should be space separated and will be added to the end of the command
+      --xtrabackup-root-path string                                 Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
+      --xtrabackup-stream-mode string                               Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0 (default "tar")
+      --xtrabackup-stripe-block-size uint                           Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe (default 102400)
+      --xtrabackup-stripes uint                                     If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression
+      --xtrabackup-user string                                      User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.

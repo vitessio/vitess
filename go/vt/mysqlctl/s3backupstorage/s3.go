@@ -51,6 +51,7 @@ import (
 	"github.com/spf13/pflag"
 
 	errorsbackup "vitess.io/vitess/go/vt/mysqlctl/errors"
+	"vitess.io/vitess/go/vt/utils"
 
 	"vitess.io/vitess/go/vt/log"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -100,16 +101,17 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&region, "s3_backup_aws_region", "us-east-1", "AWS region to use.")
-	fs.IntVar(&retryCount, "s3_backup_aws_retries", -1, "AWS request retries.")
-	fs.StringVar(&endpoint, "s3_backup_aws_endpoint", "", "endpoint of the S3 backend (region must be provided).")
-	fs.StringVar(&bucket, "s3_backup_storage_bucket", "", "S3 bucket to use for backups.")
-	fs.StringVar(&root, "s3_backup_storage_root", "", "root prefix for all backup-related object names.")
-	fs.BoolVar(&forcePath, "s3_backup_force_path_style", false, "force the s3 path style.")
-	fs.BoolVar(&tlsSkipVerifyCert, "s3_backup_tls_skip_verify_cert", false, "skip the 'certificate is valid' check for SSL connections.")
-	fs.StringVar(&requiredLogLevel, "s3_backup_log_level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors.")
-	fs.StringVar(&sse, "s3_backup_server_side_encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).")
-	fs.Int64Var(&minPartSize, "s3_backup_aws_min_partsize", manager.MinUploadPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
+
+	utils.SetFlagStringVar(fs, &region, "s3-backup-aws-region", "us-east-1", "AWS region to use.")
+	utils.SetFlagIntVar(fs, &retryCount, "s3-backup-aws-retries", -1, "AWS request retries.")
+	utils.SetFlagStringVar(fs, &endpoint, "s3-backup-aws-endpoint", "", "endpoint of the S3 backend (region must be provided).")
+	utils.SetFlagStringVar(fs, &bucket, "s3-backup-storage-bucket", "", "S3 bucket to use for backups.")
+	utils.SetFlagStringVar(fs, &root, "s3-backup-storage-root", "", "root prefix for all backup-related object names.")
+	utils.SetFlagBoolVar(fs, &forcePath, "s3-backup-force-path-style", false, "force the s3 path style.")
+	utils.SetFlagBoolVar(fs, &tlsSkipVerifyCert, "s3-backup-tls-skip-verify-cert", false, "skip the 'certificate is valid' check for SSL connections.")
+	utils.SetFlagStringVar(fs, &requiredLogLevel, "s3-backup-log-level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors.")
+	utils.SetFlagStringVar(fs, &sse, "s3-backup-server-side-encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).")
+	utils.SetFlagInt64Var(fs, &minPartSize, "s3-backup-aws-min-partsize", manager.MinUploadPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
 }
 
 func init() {
@@ -550,7 +552,7 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 		bs._client = s3.NewFromConfig(cfg, options...)
 
 		if len(bucket) == 0 {
-			return nil, fmt.Errorf("--s3_backup_storage_bucket required")
+			return nil, fmt.Errorf("--s3-backup-storage-bucket required")
 		}
 
 		if _, err := bs._client.HeadBucket(context.Background(), &s3.HeadBucketInput{Bucket: &bucket}); err != nil {
