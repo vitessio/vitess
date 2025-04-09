@@ -119,9 +119,7 @@ func TestDeferredOptimization(t *testing.T) {
 
 	resolver := newTestResolver(ctx, nil, nil, "")
 	executor := Executor{
-		config: ExecutorConfig{
-			AllowScatter: true,
-		},
+		config:      createExecutorConfig(),
 		env:         env,
 		resolver:    resolver,
 		vschema:     vindexes.BuildVSchema(result, parser),

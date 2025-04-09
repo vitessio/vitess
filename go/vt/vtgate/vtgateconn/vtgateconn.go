@@ -131,6 +131,13 @@ func (sn *VTGateSession) ExecuteBatch(ctx context.Context, query []string, bindV
 	return res, errs
 }
 
+// ExecuteMulti performs a VTGate ExecuteMulti.
+func (sn *VTGateSession) ExecuteMulti(ctx context.Context, query string) ([]*sqltypes.Result, error) {
+	session, res, err := sn.impl.ExecuteMulti(ctx, sn.session, query)
+	sn.session = session
+	return res, err
+}
+
 // StreamExecute executes a streaming query on vtgate.
 // It returns a ResultStream and an error. First check the
 // error. Then you can pull values from the ResultStream until io.EOF,
@@ -138,6 +145,19 @@ func (sn *VTGateSession) ExecuteBatch(ctx context.Context, query []string, bindV
 func (sn *VTGateSession) StreamExecute(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable) (sqltypes.ResultStream, error) {
 	// passing in the function that will update the session when received on the stream.
 	return sn.impl.StreamExecute(ctx, sn.session, query, bindVars, func(response *vtgatepb.StreamExecuteResponse) {
+		if response.Session != nil {
+			sn.session = response.Session
+		}
+	})
+}
+
+// StreamExecuteMulti executes a set of streaming queries on vtgate.
+// It returns a MultiResultStream and an error. First check the
+// error. Then you can pull values from the MultiResultStream until io.EOF,
+// or another error. The boolean field tells you when a new result starts.
+func (sn *VTGateSession) StreamExecuteMulti(ctx context.Context, query string) (sqltypes.MultiResultStream, error) {
+	// passing in the function that will update the session when received on the stream.
+	return sn.impl.StreamExecuteMulti(ctx, sn.session, query, func(response *vtgatepb.StreamExecuteMultiResponse) {
 		if response.Session != nil {
 			sn.session = response.Session
 		}
@@ -166,6 +186,12 @@ type Impl interface {
 
 	// StreamExecute executes a streaming query on vtgate.
 	StreamExecute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable, processResponse func(*vtgatepb.StreamExecuteResponse)) (sqltypes.ResultStream, error)
+
+	// ExecuteMulti executes multiple non-streaming queries.
+	ExecuteMulti(ctx context.Context, session *vtgatepb.Session, sqlString string) (*vtgatepb.Session, []*sqltypes.Result, error)
+
+	// StreamExecuteMulti executes multiple streaming queries.
+	StreamExecuteMulti(ctx context.Context, session *vtgatepb.Session, sqlString string, processResponse func(response *vtgatepb.StreamExecuteMultiResponse)) (sqltypes.MultiResultStream, error)
 
 	// Prepare returns the fields information for the query as part of supporting prepare statements.
 	Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error)

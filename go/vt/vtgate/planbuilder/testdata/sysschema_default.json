@@ -36,8 +36,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where 1 != 1",
-        "Query": "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = t.table_schema and c.table_name = t.table_name order by t.table_schema asc, t.table_name asc, c.column_name asc",
+        "FieldQuery": "select t.table_schema, t.`table_name`, c.`column_name`, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where 1 != 1",
+        "Query": "select t.table_schema, t.`table_name`, c.`column_name`, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = t.table_schema and c.`table_name` = t.`table_name` order by t.table_schema asc, t.`table_name` asc, c.`column_name` asc",
         "SysTableTableSchema": "['user']",
         "Table": "information_schema.`columns`, information_schema.`tables`"
       }
@@ -57,8 +57,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select (select 1 from information_schema.schemata where 1 != 1) as `(select 1 from information_schema.schemata where schema_name = 'MyDatabase' limit 1)` from dual where 1 != 1",
-        "Query": "select (select 1 from information_schema.schemata where schema_name = :__vtschemaname /* VARCHAR */ limit 1) as `(select 1 from information_schema.schemata where schema_name = 'MyDatabase' limit 1)` from dual",
+        "FieldQuery": "select (select 1 from information_schema.schemata where 1 != 1) as `(select 1 from information_schema.schemata where ``schema_name`` = 'MyDatabase' limit 1)` from dual where 1 != 1",
+        "Query": "select (select 1 from information_schema.schemata where `schema_name` = :__vtschemaname /* VARCHAR */ limit 1) as `(select 1 from information_schema.schemata where ``schema_name`` = 'MyDatabase' limit 1)` from dual",
         "SysTableTableSchema": "['MyDatabase']",
         "Table": "dual"
       },
@@ -82,7 +82,7 @@
           "Sharded": false
         },
         "FieldQuery": "select `1` from (select 1 from information_schema.schemata where 1 != 1) as x where 1 != 1",
-        "Query": "select `1` from (select 1 from information_schema.schemata where schema_name = :__vtschemaname /* VARCHAR */ limit 1) as x",
+        "Query": "select `1` from (select 1 from information_schema.schemata where `schema_name` = :__vtschemaname /* VARCHAR */ limit 1) as x",
         "SysTableTableSchema": "['MyDatabase']",
         "Table": "information_schema.schemata"
       }

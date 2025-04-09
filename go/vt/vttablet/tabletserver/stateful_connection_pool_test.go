@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 )
 
@@ -96,24 +97,25 @@ func TestStatefulPoolShutdownNonTx(t *testing.T) {
 	pool := newActivePool()
 	params := dbconfigs.New(db.ConnParams())
 	pool.Open(params, params, params)
+	rcStats := servenv.NewExporter("TestStatefulPoolShutdownNonTx", "").NewTimings("rconn", "test1", "test2")
 
 	// conn1 non-tx, not in use.
 	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
-	conn1.Taint(ctx, nil)
+	conn1.Taint(ctx, rcStats)
 	conn1.Unlock()
 
 	// conn2 tx, not in use.
 	conn2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
-	conn2.Taint(ctx, nil)
+	conn2.Taint(ctx, rcStats)
 	conn2.txProps = &tx.Properties{}
 	conn2.Unlock()
 
 	// conn3 non-tx, in use.
 	conn3, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
-	conn3.Taint(ctx, nil)
+	conn3.Taint(ctx, rcStats)
 
 	// After ShutdownNonTx, conn1 should be closed, but not conn3.
 	pool.ShutdownNonTx()

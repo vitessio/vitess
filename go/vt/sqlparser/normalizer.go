@@ -648,14 +648,22 @@ func (nz *normalizer) rewriteNotExpr(cursor *Cursor, node *NotExpr) {
 
 // rewriteVariable handles the rewriting of variable expressions to bind variables.
 func (nz *normalizer) rewriteVariable(cursor *Cursor, node *Variable) {
-	// Do not rewrite variables on the left side of SET assignments.
+	// Only rewrite scope for variables on the left side of SET assignments.
 	if v, isSet := cursor.Parent().(*SetExpr); isSet && v.Var == node {
+		if node.Scope == NoScope {
+			// We rewrite the NoScope to session scope for SET statements
+			// that we plan. Previously we used to do this during parsing itself,
+			// but we needed to change that to allow for set statements in a
+			// create procedure statement that sometimes set locally defined variables
+			// that aren't in the session scope.
+			node.Scope = SessionScope
+		}
 		return
 	}
 	switch node.Scope {
 	case VariableScope:
 		nz.udvRewrite(cursor, node)
-	case SessionScope, NextTxScope:
+	case SessionScope, NextTxScope, NoScope:
 		nz.sysVarRewrite(cursor, node)
 	}
 }

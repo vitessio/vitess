@@ -132,6 +132,7 @@ func init() {
 // the abilities of the underlying vttablets.
 type (
 	ExecutorConfig struct {
+		Name       string
 		Normalize  bool
 		StreamSize int
 		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
@@ -141,7 +142,8 @@ type (
 	}
 
 	Executor struct {
-		config ExecutorConfig
+		config   ExecutorConfig
+		exporter *servenv.Exporter
 
 		env         *vtenv.Environment
 		serv        srvtopo.Server
@@ -149,6 +151,7 @@ type (
 		resolver    *Resolver
 		scatterConn *ScatterConn
 		txConn      *TxConn
+		metrics     econtext.Metrics
 
 		mu           sync.Mutex
 		vschema      *vindexes.VSchema
@@ -167,6 +170,10 @@ type (
 
 		vConfig   econtext.VCursorConfig
 		ddlConfig dynamicconfig.DDL
+	}
+
+	Metrics struct {
+		engineMetrics *engine.Metrics
 	}
 )
 
@@ -201,6 +208,7 @@ func NewExecutor(
 ) *Executor {
 	e := &Executor{
 		config:      eConfig,
+		exporter:    servenv.NewExporter(eConfig.Name, ""),
 		env:         env,
 		serv:        serv,
 		cell:        cell,
@@ -215,6 +223,9 @@ func NewExecutor(
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
+	e.metrics = &Metrics{
+		engineMetrics: engine.InitMetrics(e.exporter),
+	}
 
 	// we subscribe to update from the VSchemaManager
 	e.vm = &VSchemaManager{
@@ -870,10 +881,10 @@ func (e *Executor) ShowShards(ctx context.Context, filter *sqlparser.ShowFilter,
 		}
 
 		_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, destTabletType)
-		if err != nil {
-			// There might be a misconfigured keyspace or no shards in the keyspace.
-			// Skip any errors and move on.
-			continue
+		if err != nil && vterrors.Code(err) != vtrpcpb.Code_INVALID_ARGUMENT {
+			// We only ignore invalid argument errors, as they mean the keyspace
+			// doesn't have any shards for the given tablet type.
+			return nil, err
 		}
 
 		for _, shard := range shards {
@@ -1138,7 +1149,7 @@ func (e *Executor) fetchOrCreatePlan(
 	}
 
 	query, comments := sqlparser.SplitMarginComments(queryString)
-	vcursor, _ = econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
+	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
 	var setVarComment string
 	if e.vConfig.SetVarEnabled {
@@ -1182,6 +1193,10 @@ func (e *Executor) fetchOrCreatePlan(
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
 	return plan, vcursor, stmt, nil
+}
+
+func (e *Executor) newVCursor(safeSession *econtext.SafeSession, comments sqlparser.MarginComments, logStats *logstats.LogStats) (*econtext.VCursorImpl, error) {
+	return econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig, e.metrics)
 }
 
 func (e *Executor) tryOptimizedPlan(
@@ -1821,4 +1836,8 @@ func fkMode(foreignkey string) vschemapb.Keyspace_ForeignKeyMode {
 
 	}
 	return vschemapb.Keyspace_unspecified
+}
+
+func (m *Metrics) GetExecutionMetrics() *engine.Metrics {
+	return m.engineMetrics
 }

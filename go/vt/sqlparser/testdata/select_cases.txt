@@ -284,7 +284,7 @@ INPUT
 select concat(@a, table_name), @a, table_name from information_schema.tables where table_schema = 'test' order by table_name;
 END
 OUTPUT
-select concat(@a, table_name), @a, table_name from information_schema.`tables` where table_schema = 'test' order by table_name asc
+select concat(@a, `table_name`), @a, `table_name` from information_schema.`tables` where table_schema = 'test' order by `table_name` asc
 END
 INPUT
 select "a" as col1, "c" as col2;
@@ -337,8 +337,8 @@ END
 INPUT
 select 3 into @v1;
 END
-ERROR
-syntax error at position 18 near 'v1'
+OUTPUT
+select 3 from dual into @v1
 END
 INPUT
 select /lib64/ user, host, db, info from information_schema.processlist where state = 'User lock' and info = 'select get_lock('ee_16407_5', 60)';
@@ -613,8 +613,8 @@ END
 INPUT
 select col1 from test limit 1 into tmp;
 END
-ERROR
-syntax error at position 39 near 'tmp'
+OUTPUT
+select col1 from test limit 1 into tmp
 END
 INPUT
 select substring_index(null,null,null);
@@ -685,8 +685,8 @@ END
 INPUT
 select j from v2 where j = 1 into k;
 END
-ERROR
-syntax error at position 36 near 'k'
+OUTPUT
+select j from v2 where j = 1 into k
 END
 INPUT
 select substring('hello', -18446744073709551615, -18446744073709551615);
@@ -914,7 +914,7 @@ INPUT
 select a.CONSTRAINT_SCHEMA, b.TABLE_NAME, CONSTRAINT_TYPE, b.CONSTRAINT_NAME, UNIQUE_CONSTRAINT_SCHEMA, UNIQUE_CONSTRAINT_NAME, MATCH_OPTION, UPDATE_RULE, DELETE_RULE, b.REFERENCED_TABLE_NAME from information_schema.TABLE_CONSTRAINTS a, information_schema.REFERENTIAL_CONSTRAINTS b where a.CONSTRAINT_SCHEMA COLLATE UTF8_GENERAL_CI = 'test' and a.CONSTRAINT_SCHEMA COLLATE UTF8_GENERAL_CI = b.CONSTRAINT_SCHEMA and a.CONSTRAINT_NAME = b.CONSTRAINT_NAME;
 END
 OUTPUT
-select a.CONSTRAINT_SCHEMA, b.TABLE_NAME, CONSTRAINT_TYPE, b.CONSTRAINT_NAME, UNIQUE_CONSTRAINT_SCHEMA, UNIQUE_CONSTRAINT_NAME, MATCH_OPTION, UPDATE_RULE, DELETE_RULE, b.REFERENCED_TABLE_NAME from information_schema.TABLE_CONSTRAINTS as a, information_schema.REFERENTIAL_CONSTRAINTS as b where a.CONSTRAINT_SCHEMA collate UTF8_GENERAL_CI = 'test' and a.CONSTRAINT_SCHEMA collate UTF8_GENERAL_CI = b.CONSTRAINT_SCHEMA and a.CONSTRAINT_NAME = b.CONSTRAINT_NAME
+select a.`CONSTRAINT_SCHEMA`, b.`TABLE_NAME`, CONSTRAINT_TYPE, b.`CONSTRAINT_NAME`, UNIQUE_CONSTRAINT_SCHEMA, UNIQUE_CONSTRAINT_NAME, MATCH_OPTION, UPDATE_RULE, DELETE_RULE, b.REFERENCED_TABLE_NAME from information_schema.TABLE_CONSTRAINTS as a, information_schema.REFERENTIAL_CONSTRAINTS as b where a.`CONSTRAINT_SCHEMA` collate UTF8_GENERAL_CI = 'test' and a.`CONSTRAINT_SCHEMA` collate UTF8_GENERAL_CI = b.`CONSTRAINT_SCHEMA` and a.`CONSTRAINT_NAME` = b.`CONSTRAINT_NAME`
 END
 INPUT
 select * from t2 order by a,b;
@@ -1058,7 +1058,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` like 't%' order by `table_name` asc
 END
 INPUT
 select t1.col1 from t1 where t1.col2 in (select t2.col2 from t2 group by t2.col1, t2.col2 having col_t1 <= 10) group by col_t1 having col_t1 <= 20;
@@ -1076,7 +1076,7 @@ INPUT
 select * from `information_schema`.`REFERENTIAL_CONSTRAINTS` where `CONSTRAINT_SCHEMA` = NULL;
 END
 OUTPUT
-select * from information_schema.REFERENTIAL_CONSTRAINTS where CONSTRAINT_SCHEMA = null
+select * from information_schema.REFERENTIAL_CONSTRAINTS where `CONSTRAINT_SCHEMA` = null
 END
 INPUT
 select truncate(52.64,1),truncate(52.64,2),truncate(52.64,-1),truncate(52.64,-2), truncate(-52.64,1),truncate(-52.64,-1);
@@ -1117,8 +1117,8 @@ END
 INPUT
 select 141427 + datediff(curdate(),'1970-01-01') into @my_uuid_synthetic;
 END
-ERROR
-syntax error at position 73 near 'my_uuid_synthetic'
+OUTPUT
+select 141427 + datediff(curdate(), '1970-01-01') from dual into @my_uuid_synthetic
 END
 INPUT
 select makedate(1997,0);
@@ -1220,7 +1220,7 @@ INPUT
 select SUBPARTITION_METHOD FROM information_schema.partitions WHERE table_schema="test" AND table_name="t1";
 END
 OUTPUT
-select SUBPARTITION_METHOD from information_schema.`partitions` where table_schema = 'test' and table_name = 't1'
+select SUBPARTITION_METHOD from information_schema.`partitions` where table_schema = 'test' and `table_name` = 't1'
 END
 INPUT
 select grp,group_concat(a,null) from t1 group by grp;
@@ -1274,7 +1274,7 @@ INPUT
 select TABLE_NAME from information_schema.views where table_schema='test' order by TABLE_NAME;
 END
 OUTPUT
-select TABLE_NAME from information_schema.views where table_schema = 'test' order by TABLE_NAME asc
+select `TABLE_NAME` from information_schema.views where table_schema = 'test' order by `TABLE_NAME` asc
 END
 INPUT
 select c from t2 where a = 2 and b = 'val-2' group by c;
@@ -1310,7 +1310,7 @@ INPUT
 select value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value having COUNT(bug_id) IN (0,2);
 END
 OUTPUT
-select value, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value having count(bug_id) in (0, 2)
+select `value`, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.`value` = t1.component where program = 'AAAAA' group by `value` having count(bug_id) in (0, 2)
 END
 INPUT
 select * from t1 where s1 < 'K' and s1 = 'Y';
@@ -1454,7 +1454,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` = 'tm' order by `table_name` asc
 END
 INPUT
 select strcmp(_koi8r'a', _koi8r'A');
@@ -1484,7 +1484,7 @@ INPUT
 select data_type, character_octet_length, character_maximum_length from information_schema.columns where table_name='t1';
 END
 OUTPUT
-select data_type, character_octet_length, character_maximum_length from information_schema.`columns` where table_name = 't1'
+select data_type, character_octet_length, character_maximum_length from information_schema.`columns` where `table_name` = 't1'
 END
 INPUT
 select ST_asbinary(g) from t1;
@@ -1604,7 +1604,7 @@ INPUT
 select table_schema, table_name, table_comment from information_schema.tables where table_schema like 'mysqltest_%' and table_name like 't_bug44738_%' order by table_name;
 END
 OUTPUT
-select table_schema, table_name, table_comment from information_schema.`tables` where table_schema like 'mysqltest_%' and table_name like 't_bug44738_%' order by table_name asc
+select table_schema, `table_name`, table_comment from information_schema.`tables` where table_schema like 'mysqltest_%' and `table_name` like 't_bug44738_%' order by `table_name` asc
 END
 INPUT
 select 12 mod 0 as 'NULL';
@@ -1760,7 +1760,7 @@ INPUT
 select * from information_schema.STATISTICS where TABLE_SCHEMA = "mysqltest" order by table_name, index_name;
 END
 OUTPUT
-select * from information_schema.STATISTICS where TABLE_SCHEMA = 'mysqltest' order by table_name asc, index_name asc
+select * from information_schema.STATISTICS where TABLE_SCHEMA = 'mysqltest' order by `table_name` asc, index_name asc
 END
 INPUT
 select convert(char(0xff,0x8f) using utf8mb4);
@@ -2156,7 +2156,7 @@ INPUT
 select statistics.TABLE_NAME, statistics.COLUMN_NAME, statistics.TABLE_CATALOG, statistics.TABLE_SCHEMA, statistics.NON_UNIQUE, statistics.INDEX_SCHEMA, statistics.INDEX_NAME, statistics.SEQ_IN_INDEX, statistics.COLLATION, statistics.SUB_PART, statistics.PACKED, statistics.NULLABLE, statistics.INDEX_TYPE, statistics.COMMENT, columns.TABLE_CATALOG, columns.TABLE_SCHEMA, columns.COLUMN_DEFAULT, columns.IS_NULLABLE, columns.DATA_TYPE, columns.CHARACTER_MAXIMUM_LENGTH, columns.CHARACTER_OCTET_LENGTH, columns.NUMERIC_PRECISION, columns.NUMERIC_SCALE, columns.CHARACTER_SET_NAME, columns.COLLATION_NAME, columns.COLUMN_TYPE, columns.COLUMN_KEY, columns.EXTRA, columns.PRIVILEGES, columns.COLUMN_COMMENT from information_schema.statistics join information_schema.columns using(table_name,column_name) where table_name='user';
 END
 OUTPUT
-select statistics.TABLE_NAME, statistics.COLUMN_NAME, statistics.TABLE_CATALOG, statistics.TABLE_SCHEMA, statistics.NON_UNIQUE, statistics.INDEX_SCHEMA, statistics.INDEX_NAME, statistics.SEQ_IN_INDEX, statistics.`COLLATION`, statistics.SUB_PART, statistics.PACKED, statistics.NULLABLE, statistics.INDEX_TYPE, statistics.`COMMENT`, `columns`.TABLE_CATALOG, `columns`.TABLE_SCHEMA, `columns`.COLUMN_DEFAULT, `columns`.IS_NULLABLE, `columns`.DATA_TYPE, `columns`.CHARACTER_MAXIMUM_LENGTH, `columns`.CHARACTER_OCTET_LENGTH, `columns`.NUMERIC_PRECISION, `columns`.NUMERIC_SCALE, `columns`.CHARACTER_SET_NAME, `columns`.COLLATION_NAME, `columns`.COLUMN_TYPE, `columns`.COLUMN_KEY, `columns`.EXTRA, `columns`.`PRIVILEGES`, `columns`.COLUMN_COMMENT from information_schema.statistics join information_schema.`columns` using (table_name, column_name) where table_name = 'user'
+select statistics.`TABLE_NAME`, statistics.`COLUMN_NAME`, statistics.TABLE_CATALOG, statistics.TABLE_SCHEMA, statistics.NON_UNIQUE, statistics.INDEX_SCHEMA, statistics.INDEX_NAME, statistics.SEQ_IN_INDEX, statistics.`COLLATION`, statistics.SUB_PART, statistics.PACKED, statistics.NULLABLE, statistics.INDEX_TYPE, statistics.`COMMENT`, `columns`.TABLE_CATALOG, `columns`.TABLE_SCHEMA, `columns`.COLUMN_DEFAULT, `columns`.IS_NULLABLE, `columns`.DATA_TYPE, `columns`.CHARACTER_MAXIMUM_LENGTH, `columns`.CHARACTER_OCTET_LENGTH, `columns`.NUMERIC_PRECISION, `columns`.NUMERIC_SCALE, `columns`.CHARACTER_SET_NAME, `columns`.COLLATION_NAME, `columns`.COLUMN_TYPE, `columns`.COLUMN_KEY, `columns`.EXTRA, `columns`.`PRIVILEGES`, `columns`.COLUMN_COMMENT from information_schema.statistics join information_schema.`columns` using (`table_name`, `column_name`) where `table_name` = 'user'
 END
 INPUT
 select c from t1 where c='cccc';
@@ -2426,7 +2426,7 @@ INPUT
 select * from information_schema.partitions where table_schema="test" and table_name="t3";
 END
 OUTPUT
-select * from information_schema.`partitions` where table_schema = 'test' and table_name = 't3'
+select * from information_schema.`partitions` where table_schema = 'test' and `table_name` = 't3'
 END
 INPUT
 select id from t2;
@@ -2557,8 +2557,8 @@ END
 INPUT
 select max_data_length into @changed_max_data_length from information_schema.tables where table_name='t1';
 END
-ERROR
-syntax error at position 53 near 'changed_max_data_length'
+OUTPUT
+select max_data_length from information_schema.`tables` where `table_name` = 't1' into @changed_max_data_length
 END
 INPUT
 select 1 and min(a) is null from t1;
@@ -2744,7 +2744,7 @@ INPUT
 select * from information_schema.partitions where table_schema="test" and table_name="t1";
 END
 OUTPUT
-select * from information_schema.`partitions` where table_schema = 'test' and table_name = 't1'
+select * from information_schema.`partitions` where table_schema = 'test' and `table_name` = 't1'
 END
 INPUT
 select * from t1 join (t2, t3) using (b);
@@ -2906,7 +2906,7 @@ INPUT
 select * from information_schema.TABLE_CONSTRAINTS where TABLE_NAME= "vo";
 END
 OUTPUT
-select * from information_schema.TABLE_CONSTRAINTS where TABLE_NAME = 'vo'
+select * from information_schema.TABLE_CONSTRAINTS where `TABLE_NAME` = 'vo'
 END
 INPUT
 select distinct a1 from t1 where a2 = 'b';
@@ -3026,7 +3026,7 @@ INPUT
 select * from information_schema.views where table_name='v1' or table_name='v2';
 END
 OUTPUT
-select * from information_schema.views where table_name = 'v1' or table_name = 'v2'
+select * from information_schema.views where `table_name` = 'v1' or `table_name` = 'v2'
 END
 INPUT
 select count(*) from t3 where id3;
@@ -3086,13 +3086,13 @@ INPUT
 select * from information_schema.TABLE_CONSTRAINTS where TABLE_SCHEMA= "test" order by constraint_name;
 END
 OUTPUT
-select * from information_schema.TABLE_CONSTRAINTS where TABLE_SCHEMA = 'test' order by constraint_name asc
+select * from information_schema.TABLE_CONSTRAINTS where TABLE_SCHEMA = 'test' order by `constraint_name` asc
 END
 INPUT
 select * from `information_schema`.`VIEWS` where `TABLE_NAME` = NULL;
 END
 OUTPUT
-select * from information_schema.VIEWS where TABLE_NAME = null
+select * from information_schema.VIEWS where `TABLE_NAME` = null
 END
 INPUT
 select locate(_utf8 0xD091, _utf8 0xD0B0D0B1D0B2);
@@ -3332,7 +3332,7 @@ INPUT
 select column_name, NUMERIC_PRECISION, NUMERIC_SCALE from information_schema.columns where table_name='t1' order by column_name;
 END
 OUTPUT
-select column_name, NUMERIC_PRECISION, NUMERIC_SCALE from information_schema.`columns` where table_name = 't1' order by column_name asc
+select `column_name`, NUMERIC_PRECISION, NUMERIC_SCALE from information_schema.`columns` where `table_name` = 't1' order by `column_name` asc
 END
 INPUT
 select "xyz" as name union select "abc" as name order by name desc;
@@ -3386,7 +3386,7 @@ INPUT
 select 1 as f1 from information_schema.tables where "COLUMN_PRIVILEGES"= (select cast(table_name as char) from information_schema.tables where table_schema != 'performance_schema' order by table_name limit 1) limit 1;
 END
 OUTPUT
-select 1 as f1 from information_schema.`tables` where 'COLUMN_PRIVILEGES' = (select cast(table_name as char) from information_schema.`tables` where table_schema != 'performance_schema' order by table_name asc limit 1) limit 1
+select 1 as f1 from information_schema.`tables` where 'COLUMN_PRIVILEGES' = (select cast(`table_name` as char) from information_schema.`tables` where table_schema != 'performance_schema' order by `table_name` asc limit 1) limit 1
 END
 INPUT
 select date_sub("1998-01-01 00:00:00",INTERVAL "1:1" HOUR_MINUTE);
@@ -3440,7 +3440,7 @@ INPUT
 select column_name from information_schema.columns where table_schema='test' and table_name='t1';
 END
 OUTPUT
-select column_name from information_schema.`columns` where table_schema = 'test' and table_name = 't1'
+select `column_name` from information_schema.`columns` where table_schema = 'test' and `table_name` = 't1'
 END
 INPUT
 select a1,a2,b,min(c) from t1 where (ord(a1) > 97) and (ord(a2) + ord(a1) > 194) and (b = 'c') group by a1,a2,b;
@@ -3920,7 +3920,7 @@ INPUT
 select row_number() over (), value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value having COUNT(bug_id) IN (0,2);
 END
 OUTPUT
-select row_number() over (), value, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value having count(bug_id) in (0, 2)
+select row_number() over (), `value`, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.`value` = t1.component where program = 'AAAAA' group by `value` having count(bug_id) in (0, 2)
 END
 INPUT
 select * from t1 where lower(a)='aaa';
@@ -3938,7 +3938,7 @@ INPUT
 select table_name,column_name from information_schema.COLUMNS where table_schema like "test%" order by table_name, column_name;
 END
 OUTPUT
-select table_name, column_name from information_schema.`COLUMNS` where table_schema like 'test%' order by table_name asc, column_name asc
+select `table_name`, `column_name` from information_schema.`COLUMNS` where table_schema like 'test%' order by `table_name` asc, `column_name` asc
 END
 INPUT
 select * from v0;
@@ -4189,8 +4189,8 @@ END
 INPUT
 select @@session.time_zone into @save_tz;
 END
-ERROR
-syntax error at position 41 near 'save_tz'
+OUTPUT
+select @@time_zone from dual into @save_tz
 END
 INPUT
 select count(*), min(7), max(7) from t1m, t1i;
@@ -4292,7 +4292,7 @@ INPUT
 select max(value) from t1 AS m LEFT JOIN t2 AS c1 ON m.c1id = c1.id AND c1.active = 'Yes' LEFT JOIN t3 AS c2 ON m.c2id = c2.id AND c2.active = 'Yes' WHERE m.pid=1 AND (c1.id IS NOT NULL OR c2.id IS NOT NULL);
 END
 OUTPUT
-select max(value) from t1 as m left join t2 as c1 on m.c1id = c1.id and c1.active = 'Yes' left join t3 as c2 on m.c2id = c2.id and c2.active = 'Yes' where m.pid = 1 and (c1.id is not null or c2.id is not null)
+select max(`value`) from t1 as m left join t2 as c1 on m.c1id = c1.id and c1.active = 'Yes' left join t3 as c2 on m.c2id = c2.id and c2.active = 'Yes' where m.pid = 1 and (c1.id is not null or c2.id is not null)
 END
 INPUT
 select * from t1 where a in (select a from t11) order by 1, 2, 3 limit 1;
@@ -4496,7 +4496,7 @@ INPUT
 select TABLE_NAME,TABLE_TYPE,ENGINE from information_schema.tables where table_schema='information_schema' order by table_name collate utf8_general_ci limit 2;
 END
 OUTPUT
-select TABLE_NAME, TABLE_TYPE, `ENGINE` from information_schema.`tables` where table_schema = 'information_schema' order by table_name collate utf8_general_ci asc limit 2
+select `TABLE_NAME`, TABLE_TYPE, `ENGINE` from information_schema.`tables` where table_schema = 'information_schema' order by `table_name` collate utf8_general_ci asc limit 2
 END
 INPUT
 select grp,group_concat(a order by a,d+c-ascii(c)-a) from t1 group by grp;
@@ -4556,7 +4556,7 @@ INPUT
 select TABLE_SCHEMA,TABLE_NAME FROM information_schema.TABLES where TABLE_SCHEMA ='mysqltest_LC2';
 END
 OUTPUT
-select TABLE_SCHEMA, TABLE_NAME from information_schema.`TABLES` where TABLE_SCHEMA = 'mysqltest_LC2'
+select TABLE_SCHEMA, `TABLE_NAME` from information_schema.`TABLES` where TABLE_SCHEMA = 'mysqltest_LC2'
 END
 INPUT
 select hex(weight_string(0x010203));
@@ -4837,8 +4837,8 @@ END
 INPUT
 select count(distinct x.id_aams) into not_installed from (select * from (select t1.id_aams, t2.* from t1 left join t2 on t2.code_id = vlt_code_id and t1.id_aams = t2.id_game where t1.id_aams = 1715000360 order by t2.id desc ) as g group by g.id_aams having g.id is null ) as x;
 END
-ERROR
-syntax error at position 52 near 'not_installed'
+OUTPUT
+select count(distinct x.id_aams) from (select * from (select t1.id_aams, t2.* from t1 left join t2 on t2.code_id = vlt_code_id and t1.id_aams = t2.id_game where t1.id_aams = 1715000360 order by t2.id desc) as g group by g.id_aams having g.id is null) as x into not_installed
 END
 INPUT
 select "... and something more ...";
@@ -5017,8 +5017,8 @@ END
 INPUT
 select concat('0',mid(@my_uuid,16,3),mid(@my_uuid,10,4),left(@my_uuid,8)) into @my_uuidate;
 END
-ERROR
-syntax error at position 91 near 'my_uuidate'
+OUTPUT
+select concat('0', substr(@my_uuid, 16, 3), substr(@my_uuid, 10, 4), left(@my_uuid, 8)) from dual into @my_uuidate
 END
 INPUT
 select locate('he','hello',null),locate('he',null,2),locate(null,'hello',2);
@@ -5138,7 +5138,7 @@ INPUT
 select column_name, column_default from columns where table_schema='test' and table_name='t1';
 END
 OUTPUT
-select column_name, column_default from `columns` where table_schema = 'test' and table_name = 't1'
+select `column_name`, column_default from `columns` where table_schema = 'test' and `table_name` = 't1'
 END
 INPUT
 select trim(trailing 'foo' from 'foo');
@@ -5155,8 +5155,8 @@ END
 INPUT
 select max_data_length into @orig_max_data_length from information_schema.tables where table_name='t1';
 END
-ERROR
-syntax error at position 50 near 'orig_max_data_length'
+OUTPUT
+select max_data_length from information_schema.`tables` where `table_name` = 't1' into @orig_max_data_length
 END
 INPUT
 select hex(substr(_utf16 0x00e400e50068,-3));
@@ -5546,7 +5546,7 @@ INPUT
 select table_name, table_type, auto_increment, table_comment from information_schema.tables where table_schema='test' and table_name='t2';
 END
 OUTPUT
-select table_name, table_type, `auto_increment`, table_comment from information_schema.`tables` where table_schema = 'test' and table_name = 't2'
+select `table_name`, table_type, `auto_increment`, table_comment from information_schema.`tables` where table_schema = 'test' and `table_name` = 't2'
 END
 INPUT
 select vq1.b,dt.b from v1 vq1, lateral (select vq1.b) dt;
@@ -5803,8 +5803,8 @@ END
 INPUT
 select ST_GeomFromText("POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))") into @a;
 END
-ERROR
-syntax error at position 73 near 'a'
+OUTPUT
+select st_geometryfromtext('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))') from dual into @a
 END
 INPUT
 select 'a' union select concat('a', -concat('3',4));
@@ -5840,7 +5840,7 @@ INPUT
 select column_type from information_schema.columns where table_schema="information_schema" and table_name="COLUMNS" and (column_name="character_set_name" or column_name="collation_name");
 END
 OUTPUT
-select column_type from information_schema.`columns` where table_schema = 'information_schema' and table_name = 'COLUMNS' and (column_name = 'character_set_name' or column_name = 'collation_name')
+select column_type from information_schema.`columns` where table_schema = 'information_schema' and `table_name` = 'COLUMNS' and (`column_name` = 'character_set_name' or `column_name` = 'collation_name')
 END
 INPUT
 select concat(a, if(b>10, _utf8'x', _utf8'y')) from t1;
@@ -6332,7 +6332,7 @@ INPUT
 select * from information_schema.key_column_usage where TABLE_SCHEMA= "test" order by constraint_name;
 END
 OUTPUT
-select * from information_schema.key_column_usage where TABLE_SCHEMA = 'test' order by constraint_name asc
+select * from information_schema.key_column_usage where TABLE_SCHEMA = 'test' order by `constraint_name` asc
 END
 INPUT
 select ST_Length(ST_MLineFromWKB(0x0000000005000000020000000002000000035FB317E5EF3AB327E3A4B378469B67320000000000000000C0240000000000003FF05FD8ADAB9F560000000000000000000000000200000003000000000000000000000000000000000000000000000000BFF08B439581062540240000000000004341C37937E08000)) as length;
@@ -6446,7 +6446,7 @@ INPUT
 select count(*) from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA='' AND TABLE_NAME='nonexisting';
 END
 OUTPUT
-select count(*) from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = '' and TABLE_NAME = 'nonexisting'
+select count(*) from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = '' and `TABLE_NAME` = 'nonexisting'
 END
 INPUT
 select t1.*, a from t1;
@@ -6506,7 +6506,7 @@ INPUT
 select host,db,user,table_name from mysql.tables_priv where user like 'mysqltest_%' order by host,db,user,table_name;
 END
 OUTPUT
-select host, db, `user`, table_name from mysql.tables_priv where `user` like 'mysqltest_%' order by host asc, db asc, `user` asc, table_name asc
+select host, db, `user`, `table_name` from mysql.tables_priv where `user` like 'mysqltest_%' order by host asc, db asc, `user` asc, `table_name` asc
 END
 INPUT
 select * from t1 where a=18446744073709551615;
@@ -6686,7 +6686,7 @@ INPUT
 select column_name as 'Field',column_type as 'Type',is_nullable as 'Null',column_key as 'Key',column_default as 'Default',extra as 'Extra' from information_schema.columns where table_schema='mysqltest_db1' and table_name='t_no_priv';
 END
 OUTPUT
-select column_name as Field, column_type as Type, is_nullable as `Null`, column_key as `Key`, column_default as `Default`, extra as Extra from information_schema.`columns` where table_schema = 'mysqltest_db1' and table_name = 't_no_priv'
+select `column_name` as Field, column_type as Type, is_nullable as `Null`, column_key as `Key`, column_default as `Default`, extra as Extra from information_schema.`columns` where table_schema = 'mysqltest_db1' and `table_name` = 't_no_priv'
 END
 INPUT
 select id+0 as a,max(id),concat(facility) as b from t1 group by a order by b desc,a;
@@ -6866,7 +6866,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'l' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'l' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` like 't%' and index_name = 'l' order by `table_name` asc
 END
 INPUT
 select (round(-9223372036854775808, -4));
@@ -6896,7 +6896,7 @@ INPUT
 select table_type from information_schema.tables where table_schema="mysql" and table_name="user";
 END
 OUTPUT
-select table_type from information_schema.`tables` where table_schema = 'mysql' and table_name = 'user'
+select table_type from information_schema.`tables` where table_schema = 'mysql' and `table_name` = 'user'
 END
 INPUT
 select min(a), max(a) from t1;
@@ -7322,7 +7322,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'w' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'w' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` like 't%' and index_name = 'w' order by `table_name` asc
 END
 INPUT
 select /*1*/ user, host, db, command, state, info from information_schema.processlist where (user='event_scheduler') order by info;
@@ -7418,7 +7418,7 @@ INPUT
 select COLUMN_NAME,COLUMN_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE from information_schema.columns where table_name= 't1';
 END
 OUTPUT
-select COLUMN_NAME, COLUMN_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE from information_schema.`columns` where table_name = 't1'
+select `COLUMN_NAME`, COLUMN_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE from information_schema.`columns` where `table_name` = 't1'
 END
 INPUT
 select * from `information_schema`.`key_column_usage` where `TABLE_SCHEMA` = NULL;
@@ -7472,7 +7472,7 @@ INPUT
 select * from information_schema.views where TABLE_SCHEMA != 'sys' and TABLE_NAME rlike "v[0-4]{1}$" order by table_name;
 END
 OUTPUT
-select * from information_schema.views where TABLE_SCHEMA != 'sys' and TABLE_NAME regexp 'v[0-4]{1}$' order by table_name asc
+select * from information_schema.views where TABLE_SCHEMA != 'sys' and `TABLE_NAME` regexp 'v[0-4]{1}$' order by `table_name` asc
 END
 INPUT
 select group_concat(distinct a) from t1;
@@ -7501,8 +7501,8 @@ END
 INPUT
 select ST_GeomFromText('linestring(7 6, 15 4)') into @l;
 END
-ERROR
-syntax error at position 56 near 'l'
+OUTPUT
+select st_geometryfromtext('linestring(7 6, 15 4)') from dual into @l
 END
 INPUT
 select concat("max=",connection) 'p1';
@@ -7526,7 +7526,7 @@ INPUT
 select table_schema, table_name, column_name from information_schema.columns where table_schema not in ('performance_schema', 'sys', 'mysql') and data_type = 'longtext' order by table_name, column_name;
 END
 OUTPUT
-select table_schema, table_name, column_name from information_schema.`columns` where table_schema not in ('performance_schema', 'sys', 'mysql') and data_type = 'longtext' order by table_name asc, column_name asc
+select table_schema, `table_name`, `column_name` from information_schema.`columns` where table_schema not in ('performance_schema', 'sys', 'mysql') and data_type = 'longtext' order by `table_name` asc, `column_name` asc
 END
 INPUT
 select * from t1 ignore key (key1) where text1='teststring' or text1 like 'teststring_%' ORDER BY text1;
@@ -7820,7 +7820,7 @@ INPUT
 select schema_name from information_schema.schemata order by schema_name;
 END
 OUTPUT
-select schema_name from information_schema.schemata order by schema_name asc
+select `schema_name` from information_schema.schemata order by `schema_name` asc
 END
 INPUT
 select std(s1/s2) from bug22555 where i=3;
@@ -8054,7 +8054,7 @@ INPUT
 select column_name,data_type,CHARACTER_OCTET_LENGTH, CHARACTER_MAXIMUM_LENGTH from information_schema.columns where table_name='t1' order by column_name;
 END
 OUTPUT
-select column_name, data_type, CHARACTER_OCTET_LENGTH, CHARACTER_MAXIMUM_LENGTH from information_schema.`columns` where table_name = 't1' order by column_name asc
+select `column_name`, data_type, CHARACTER_OCTET_LENGTH, CHARACTER_MAXIMUM_LENGTH from information_schema.`columns` where `table_name` = 't1' order by `column_name` asc
 END
 INPUT
 select group_concat(c1 order by c1) from t1 group by c1 collate utf8_hungarian_ci;
@@ -8174,7 +8174,7 @@ INPUT
 select constraint_name from information_schema.table_constraints where table_schema='test' order by constraint_name;
 END
 OUTPUT
-select constraint_name from information_schema.table_constraints where table_schema = 'test' order by constraint_name asc
+select `constraint_name` from information_schema.table_constraints where table_schema = 'test' order by `constraint_name` asc
 END
 INPUT
 select * from information_schema.partitions where table_schema="test";
@@ -8228,7 +8228,7 @@ INPUT
 select count(*) from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA='mysql' AND TABLE_NAME='';
 END
 OUTPUT
-select count(*) from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'mysql' and TABLE_NAME = ''
+select count(*) from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'mysql' and `TABLE_NAME` = ''
 END
 INPUT
 select min(a3) from t1 where a2 = 2;
@@ -8432,7 +8432,7 @@ INPUT
 select * from information_schema.COLUMNS where table_name="t1" and column_name= "a" order by table_name;
 END
 OUTPUT
-select * from information_schema.`COLUMNS` where table_name = 't1' and column_name = 'a' order by table_name asc
+select * from information_schema.`COLUMNS` where `table_name` = 't1' and `column_name` = 'a' order by `table_name` asc
 END
 INPUT
 select rpad('hello', 4294967295, '1');
@@ -8600,7 +8600,7 @@ INPUT
 select * from information_schema.TABLE_CONSTRAINTS where TABLE_SCHEMA= "test" order by TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_NAME;
 END
 OUTPUT
-select * from information_schema.TABLE_CONSTRAINTS where TABLE_SCHEMA = 'test' order by TABLE_SCHEMA asc, TABLE_NAME asc, CONSTRAINT_NAME asc
+select * from information_schema.TABLE_CONSTRAINTS where TABLE_SCHEMA = 'test' order by TABLE_SCHEMA asc, `TABLE_NAME` asc, `CONSTRAINT_NAME` asc
 END
 INPUT
 select distinct least(1,count(distinct a)) from t1 group by a;
@@ -8648,7 +8648,7 @@ INPUT
 select * from information_schema.views where table_schema != 'sys' order by table_name;
 END
 OUTPUT
-select * from information_schema.views where table_schema != 'sys' order by table_name asc
+select * from information_schema.views where table_schema != 'sys' order by `table_name` asc
 END
 INPUT
 select * from t2 left outer join t1 using (n);
@@ -8924,7 +8924,7 @@ INPUT
 select column_name from information_schema.columns where table_schema='test' order by column_name;
 END
 OUTPUT
-select column_name from information_schema.`columns` where table_schema = 'test' order by column_name asc
+select `column_name` from information_schema.`columns` where table_schema = 'test' order by `column_name` asc
 END
 INPUT
 select t1.name, t2.name, t2.id,t3.id from t2 right join t1 on (t1.id = t2.owner) left join t1 as t3 on t3.id=t2.owner;
@@ -9248,7 +9248,7 @@ INPUT
 select count(*) from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA='mysql' AND TABLE_NAME='nonexisting';
 END
 OUTPUT
-select count(*) from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'mysql' and TABLE_NAME = 'nonexisting'
+select count(*) from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'mysql' and `TABLE_NAME` = 'nonexisting'
 END
 INPUT
 select (12%0) <=> null as '1';
@@ -9289,8 +9289,8 @@ END
 INPUT
 select sysdate() into @b;
 END
-ERROR
-syntax error at position 25 near 'b'
+OUTPUT
+select sysdate() from dual into @b
 END
 INPUT
 select inet_ntoa(null),inet_aton(null);
@@ -9326,7 +9326,7 @@ INPUT
 select host,db,user,table_name from mysql.tables_priv where user = 'mysqltest_1' order by host,db,user,table_name;
 END
 OUTPUT
-select host, db, `user`, table_name from mysql.tables_priv where `user` = 'mysqltest_1' order by host asc, db asc, `user` asc, table_name asc
+select host, db, `user`, `table_name` from mysql.tables_priv where `user` = 'mysqltest_1' order by host asc, db asc, `user` asc, `table_name` asc
 END
 INPUT
 select * from v1a join (t3 natural join t4) on a = y;
@@ -9716,7 +9716,7 @@ INPUT
 select a.ROUTINE_NAME from information_schema.ROUTINES a, information_schema.SCHEMATA b where a.ROUTINE_SCHEMA = b.SCHEMA_NAME AND b.SCHEMA_NAME='test' ORDER BY a.ROUTINE_NAME;
 END
 OUTPUT
-select a.ROUTINE_NAME from information_schema.ROUTINES as a, information_schema.SCHEMATA as b where a.ROUTINE_SCHEMA = b.SCHEMA_NAME and b.SCHEMA_NAME = 'test' order by a.ROUTINE_NAME asc
+select a.ROUTINE_NAME from information_schema.ROUTINES as a, information_schema.SCHEMATA as b where a.ROUTINE_SCHEMA = b.`SCHEMA_NAME` and b.`SCHEMA_NAME` = 'test' order by a.ROUTINE_NAME asc
 END
 INPUT
 select date_format(concat('19980131',131415),'%H|%I|%k|%l|%i|%p|%r|%S|%T| %M|%W|%D|%Y|%y|%a|%b|%j|%m|%d|%h|%s|%w');
@@ -9800,7 +9800,7 @@ INPUT
 select table_name, auto_increment from information_schema.tables where table_schema = 'test' and table_name in ('t1', 't2');
 END
 OUTPUT
-select table_name, `auto_increment` from information_schema.`tables` where table_schema = 'test' and table_name in ('t1', 't2')
+select `table_name`, `auto_increment` from information_schema.`tables` where table_schema = 'test' and `table_name` in ('t1', 't2')
 END
 INPUT
 select * from t1 where uncompress(a) is null;
@@ -10106,7 +10106,7 @@ INPUT
 select UNIQUE_CONSTRAINT_NAME from information_schema.referential_constraints where constraint_schema = schema();
 END
 OUTPUT
-select UNIQUE_CONSTRAINT_NAME from information_schema.referential_constraints where constraint_schema = schema()
+select UNIQUE_CONSTRAINT_NAME from information_schema.referential_constraints where `constraint_schema` = schema()
 END
 INPUT
 select 1e8 sum(distinct df) from t1;
@@ -10178,7 +10178,7 @@ INPUT
 select t1.*, t2.*, t1.value<=>t2.value from t1, t2 where t1.id=t2.id and t1.id=1;
 END
 OUTPUT
-select t1.*, t2.*, t1.value <=> t2.value from t1, t2 where t1.id = t2.id and t1.id = 1
+select t1.*, t2.*, t1.`value` <=> t2.`value` from t1, t2 where t1.id = t2.id and t1.id = 1
 END
 INPUT
 select left('hello',null),left(null,1),left(null,null);
@@ -10250,7 +10250,7 @@ INPUT
 select column_name as 'Field',column_type as 'Type',is_nullable as 'Null',column_key as 'Key',column_default as 'Default',extra as 'Extra' from information_schema.columns where table_schema='mysqltest_db1' and table_name='t_column_priv_only';
 END
 OUTPUT
-select column_name as Field, column_type as Type, is_nullable as `Null`, column_key as `Key`, column_default as `Default`, extra as Extra from information_schema.`columns` where table_schema = 'mysqltest_db1' and table_name = 't_column_priv_only'
+select `column_name` as Field, column_type as Type, is_nullable as `Null`, column_key as `Key`, column_default as `Default`, extra as Extra from information_schema.`columns` where table_schema = 'mysqltest_db1' and `table_name` = 't_column_priv_only'
 END
 INPUT
 select dayname("1962-03-03"),dayname("1962-03-03")+0;
@@ -10382,7 +10382,7 @@ INPUT
 select * from `information_schema`.`COLUMNS` where `TABLE_NAME` = NULL;
 END
 OUTPUT
-select * from information_schema.`COLUMNS` where TABLE_NAME = null
+select * from information_schema.`COLUMNS` where `TABLE_NAME` = null
 END
 INPUT
 select f1 from t1 where cast("2006-1-1" as date) between f1 and cast('zzz' as date);
@@ -10556,13 +10556,13 @@ INPUT
 select table_name, data_type, column_type from information_schema.columns where column_name = 'numeric_precision' and table_schema = 'information_schema';
 END
 OUTPUT
-select table_name, data_type, column_type from information_schema.`columns` where column_name = 'numeric_precision' and table_schema = 'information_schema'
+select `table_name`, data_type, column_type from information_schema.`columns` where `column_name` = 'numeric_precision' and table_schema = 'information_schema'
 END
 INPUT
 select * from `information_schema`.`TABLE_CONSTRAINTS` where `TABLE_NAME` = NULL;
 END
 OUTPUT
-select * from information_schema.TABLE_CONSTRAINTS where TABLE_NAME = null
+select * from information_schema.TABLE_CONSTRAINTS where `TABLE_NAME` = null
 END
 INPUT
 select md5(name) from bug20536;
@@ -10634,7 +10634,7 @@ INPUT
 select value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value;
 END
 OUTPUT
-select value, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value
+select `value`, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.`value` = t1.component where program = 'AAAAA' group by `value`
 END
 INPUT
 select sql_big_result c,count(t) from t1 group by c order by c limit 10;
@@ -10657,8 +10657,8 @@ END
 INPUT
 select uuid() into @my_uuid;
 END
-ERROR
-syntax error at position 28 near 'my_uuid'
+OUTPUT
+select uuid() from dual into @my_uuid
 END
 INPUT
 select NULLIF(NULL,NULL), NULLIF(NULL,1), NULLIF(NULL,1.0), NULLIF(NULL,"test");
@@ -10898,7 +10898,7 @@ INPUT
 select column_name, privileges from columns where table_name='user' and column_name like '%o%' order by column_name;
 END
 OUTPUT
-select column_name, `privileges` from `columns` where table_name = 'user' and column_name like '%o%' order by column_name asc
+select `column_name`, `privileges` from `columns` where `table_name` = 'user' and `column_name` like '%o%' order by `column_name` asc
 END
 INPUT
 select case when 1<0 then "TRUE" else "FALSE" END;
@@ -10963,8 +10963,8 @@ END
 INPUT
 select i from v1 where i = 1 into k;
 END
-ERROR
-syntax error at position 36 near 'k'
+OUTPUT
+select i from v1 where i = 1 into k
 END
 INPUT
 select a, t1.*, b from t1;
@@ -10982,7 +10982,7 @@ INPUT
 select schema_name from information_schema.schemata ORDER BY schema_name;
 END
 OUTPUT
-select schema_name from information_schema.schemata order by schema_name asc
+select `schema_name` from information_schema.schemata order by `schema_name` asc
 END
 INPUT
 select id, avg(value1), std(value1), variance(value1) from t1 group by id;
@@ -11084,7 +11084,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'w' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'w' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` = 'tm' and index_name = 'w' order by `table_name` asc
 END
 INPUT
 select * from t3 order by b,a limit 3;
@@ -11426,7 +11426,7 @@ INPUT
 select * from t1 where id <=> value or value<=>id;
 END
 OUTPUT
-select * from t1 where id <=> value or value <=> id
+select * from t1 where id <=> `value` or `value` <=> id
 END
 INPUT
 select a1,a2,b, max(c) from t1 where (c > 'f123') group by a1,a2,b;
@@ -11522,7 +11522,7 @@ INPUT
 select TABLE_NAME from information_schema.tables where table_schema='test' order by TABLE_NAME;
 END
 OUTPUT
-select TABLE_NAME from information_schema.`tables` where table_schema = 'test' order by TABLE_NAME asc
+select `TABLE_NAME` from information_schema.`tables` where table_schema = 'test' order by `TABLE_NAME` asc
 END
 INPUT
 select * from ((t3 natural join (t1 natural join t2)) natural join t4) natural join t5;
@@ -11780,7 +11780,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'q' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'q' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` = 'tm' and index_name = 'q' order by `table_name` asc
 END
 INPUT
 select ST_DISTANCE(ST_GeomFromText('linestring(0 0, 3 6, 6 3, 0 0)'), ST_GeomFromText('polygon((2 2, 3 4, 4 3, 2 2))'));
@@ -11804,7 +11804,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'p' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'p' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` like 't%' and index_name = 'p' order by `table_name` asc
 END
 INPUT
 select last_day('2000-02-05') as a, from_days(to_days("960101")) as b;
@@ -11822,7 +11822,7 @@ INPUT
 select count(*) from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA='' AND TABLE_NAME='';
 END
 OUTPUT
-select count(*) from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = '' and TABLE_NAME = ''
+select count(*) from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = '' and `TABLE_NAME` = ''
 END
 INPUT
 select insert('hello', 4294967297, 1, 'hi');
@@ -12320,7 +12320,7 @@ INPUT
 select table_name, column_name, data_type from information_schema.columns where table_schema = 'test' and table_name in ('t1', 't2');
 END
 OUTPUT
-select table_name, column_name, data_type from information_schema.`columns` where table_schema = 'test' and table_name in ('t1', 't2')
+select `table_name`, `column_name`, data_type from information_schema.`columns` where table_schema = 'test' and `table_name` in ('t1', 't2')
 END
 INPUT
 select substring_index('aaaaaaaaa1','aa',3);
@@ -12332,7 +12332,7 @@ INPUT
 select * from information_schema.views where table_schema != 'sys' order by table_schema, table_name;
 END
 OUTPUT
-select * from information_schema.views where table_schema != 'sys' order by table_schema asc, table_name asc
+select * from information_schema.views where table_schema != 'sys' order by table_schema asc, `table_name` asc
 END
 INPUT
 select straight_join from t1,t2 force index (primary) where t1.a=t2.a;
@@ -12464,7 +12464,7 @@ INPUT
 select db, table_name, table_priv from mysql.tables_priv where user='mysqluser10' and host='localhost';
 END
 OUTPUT
-select db, table_name, table_priv from mysql.tables_priv where `user` = 'mysqluser10' and host = 'localhost'
+select db, `table_name`, table_priv from mysql.tables_priv where `user` = 'mysqluser10' and host = 'localhost'
 END
 INPUT
 select std(o1/o2) from bug22555;
@@ -12518,7 +12518,7 @@ INPUT
 select table_name from tables where table_name='user';
 END
 OUTPUT
-select table_name from `tables` where table_name = 'user'
+select `table_name` from `tables` where `table_name` = 'user'
 END
 INPUT
 select rpad('abcd',7,'ab'),lpad('abcd',7,'ab');
@@ -12769,8 +12769,8 @@ END
 INPUT
 select @@sql_mode into @full_mode;
 END
-ERROR
-syntax error at position 34 near 'full_mode'
+OUTPUT
+select @@sql_mode from dual into @full_mode
 END
 INPUT
 select @a, @b;
@@ -12800,7 +12800,7 @@ INPUT
 select table_name, column_name, privileges from information_schema.columns where table_schema = 'mysqltest' and table_name = 'v1' order by table_name, column_name;
 END
 OUTPUT
-select table_name, column_name, `privileges` from information_schema.`columns` where table_schema = 'mysqltest' and table_name = 'v1' order by table_name asc, column_name asc
+select `table_name`, `column_name`, `privileges` from information_schema.`columns` where table_schema = 'mysqltest' and `table_name` = 'v1' order by `table_name` asc, `column_name` asc
 END
 INPUT
 select * from t1 order by a,b;
@@ -12962,7 +12962,7 @@ INPUT
 select table_name from information_schema.tables where table_schema = 'test' and table_name not in (select table_name from information_schema.columns where table_schema = 'test' and column_name = 'f3') order by table_name;
 END
 OUTPUT
-select table_name from information_schema.`tables` where table_schema = 'test' and table_name not in (select table_name from information_schema.`columns` where table_schema = 'test' and column_name = 'f3') order by table_name asc
+select `table_name` from information_schema.`tables` where table_schema = 'test' and `table_name` not in (select `table_name` from information_schema.`columns` where table_schema = 'test' and `column_name` = 'f3') order by `table_name` asc
 END
 INPUT
 select (select t2.* as 'x' from t2) from t1;
@@ -13100,7 +13100,7 @@ INPUT
 select c,table_name from v1 inner join information_schema.TABLES v2 on (v1.c=v2.table_name) where v1.c rlike "t[1-5]{1}$" order by c;
 END
 OUTPUT
-select c, table_name from v1 join information_schema.`TABLES` as v2 on v1.c = v2.table_name where v1.c regexp 't[1-5]{1}$' order by c asc
+select c, `table_name` from v1 join information_schema.`TABLES` as v2 on v1.c = v2.`table_name` where v1.c regexp 't[1-5]{1}$' order by c asc
 END
 INPUT
 select * from t1 natural join t2 where t1.b > 0;
@@ -13178,7 +13178,7 @@ INPUT
 select * from `information_schema`.`PARTITIONS` where `TABLE_NAME` = NULL;
 END
 OUTPUT
-select * from information_schema.`PARTITIONS` where TABLE_NAME = null
+select * from information_schema.`PARTITIONS` where `TABLE_NAME` = null
 END
 INPUT
 select * from (t1 cross join t2) join (t3 cross join t4) on (a < y and t2.b < t3.c);
@@ -13352,7 +13352,7 @@ INPUT
 select db, table_name, table_priv from mysql.tables_priv where user='mysqluser1' and host='localhost';
 END
 OUTPUT
-select db, table_name, table_priv from mysql.tables_priv where `user` = 'mysqluser1' and host = 'localhost'
+select db, `table_name`, table_priv from mysql.tables_priv where `user` = 'mysqluser1' and host = 'localhost'
 END
 INPUT
 select a1,a2,b,min(c),max(c) from t1 where (c > 'b1') group by a1,a2,b;
@@ -13448,7 +13448,7 @@ INPUT
 select table_name from information_schema.TABLES where table_schema = "mysqltest" and table_name rlike "t[1-5]{1}$" order by table_name;
 END
 OUTPUT
-select table_name from information_schema.`TABLES` where table_schema = 'mysqltest' and table_name regexp 't[1-5]{1}$' order by table_name asc
+select `table_name` from information_schema.`TABLES` where table_schema = 'mysqltest' and `table_name` regexp 't[1-5]{1}$' order by `table_name` asc
 END
 INPUT
 select count(*) from T1;
@@ -13526,7 +13526,7 @@ INPUT
 select CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH from information_schema.columns where table_schema='test' and table_name = 't1';
 END
 OUTPUT
-select CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH from information_schema.`columns` where table_schema = 'test' and table_name = 't1'
+select CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH from information_schema.`columns` where table_schema = 'test' and `table_name` = 't1'
 END
 INPUT
 select st_touches(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'));
@@ -13658,7 +13658,7 @@ INPUT
 select AUTO_INCREMENT from information_schema.tables where table_name = 't1';
 END
 OUTPUT
-select `AUTO_INCREMENT` from information_schema.`tables` where table_name = 't1'
+select `AUTO_INCREMENT` from information_schema.`tables` where `table_name` = 't1'
 END
 INPUT
 select * from mysql.slow_log where sql_text NOT LIKE '%slow_log%';
@@ -13760,7 +13760,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'v' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'v' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` = 'tm' and index_name = 'v' order by `table_name` asc
 END
 INPUT
 select v;
@@ -13970,7 +13970,7 @@ INPUT
 select * from information_schema.tables where table_name = NULL;
 END
 OUTPUT
-select * from information_schema.`tables` where table_name = null
+select * from information_schema.`tables` where `table_name` = null
 END
 INPUT
 select max(7) from t1i;
@@ -14048,7 +14048,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name ='tm' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` = 'tm' order by `table_name` asc
 END
 INPUT
 select count(*) from t1 where id1 > 90;
@@ -14096,7 +14096,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'v' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'v' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` like 't%' and index_name = 'v' order by `table_name` asc
 END
 INPUT
 select timestamp("2001-13-01", "01:01:01.000001");
@@ -14132,7 +14132,7 @@ INPUT
 select TABLE_ROWS from information_schema.tables where table_schema="information_schema" and table_name="COLUMNS";
 END
 OUTPUT
-select TABLE_ROWS from information_schema.`tables` where table_schema = 'information_schema' and table_name = 'COLUMNS'
+select TABLE_ROWS from information_schema.`tables` where table_schema = 'information_schema' and `table_name` = 'COLUMNS'
 END
 INPUT
 select hex(ujis), hex(ucs2), hex(ujis2), name from t1;
@@ -14348,7 +14348,7 @@ INPUT
 select table_schema, table_name, table_comment from information_schema.tables where table_schema = 'test' and table_name like 't_bug44738_%';
 END
 OUTPUT
-select table_schema, table_name, table_comment from information_schema.`tables` where table_schema = 'test' and table_name like 't_bug44738_%'
+select table_schema, `table_name`, table_comment from information_schema.`tables` where table_schema = 'test' and `table_name` like 't_bug44738_%'
 END
 INPUT
 select count(*) from t3 where id3 > 90;
@@ -14510,7 +14510,7 @@ INPUT
 select * from information_schema.SCHEMATA where schema_name > 'm' ORDER BY SCHEMA_NAME;
 END
 OUTPUT
-select * from information_schema.SCHEMATA where schema_name > 'm' order by SCHEMA_NAME asc
+select * from information_schema.SCHEMATA where `schema_name` > 'm' order by `SCHEMA_NAME` asc
 END
 INPUT
 select cast(ltrim(' 20.06 ') as decimal(19,2));
@@ -14882,7 +14882,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'l' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'l' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` = 'tm' and index_name = 'l' order by `table_name` asc
 END
 INPUT
 select log(2,-1);
@@ -14971,8 +14971,8 @@ END
 INPUT
 select ST_GeomFromText('linestring(5 5, 15 4)') into @l;
 END
-ERROR
-syntax error at position 56 near 'l'
+OUTPUT
+select st_geometryfromtext('linestring(5 5, 15 4)') from dual into @l
 END
 INPUT
 select a1,a2,b,min(c),max(c) from t1 where a1 >= 'c' or a2 < 'b' group by a1,a2,b;
@@ -15614,19 +15614,19 @@ INPUT
 select Host,Db,User,Table_name,Column_name,Column_priv from mysql.columns_priv order by Column_name;
 END
 OUTPUT
-select Host, Db, `User`, Table_name, Column_name, Column_priv from mysql.columns_priv order by Column_name asc
+select Host, Db, `User`, `Table_name`, `Column_name`, Column_priv from mysql.columns_priv order by `Column_name` asc
 END
 INPUT
 select COLUMN_NAME from information_schema.columns where table_schema='test' order by COLUMN_NAME;
 END
 OUTPUT
-select COLUMN_NAME from information_schema.`columns` where table_schema = 'test' order by COLUMN_NAME asc
+select `COLUMN_NAME` from information_schema.`columns` where table_schema = 'test' order by `COLUMN_NAME` asc
 END
 INPUT
 select @@GLOBAL.relay_log_info_repository into @save_relay_log_info_repository;
 END
-ERROR
-syntax error at position 79 near 'save_relay_log_info_repository'
+OUTPUT
+select @@global.relay_log_info_repository from dual into @save_relay_log_info_repository
 END
 INPUT
 select SUBSTR('abcdefg',-1,-1) FROM DUAL;
@@ -15649,8 +15649,8 @@ END
 INPUT
 select floor(conv(@my_uuidate,16,10)/@my_uuid_one_day) into @my_uuid_date;
 END
-ERROR
-syntax error at position 74 near 'my_uuid_date'
+OUTPUT
+select floor(conv(@my_uuidate, 16, 10) / @my_uuid_one_day) from dual into @my_uuid_date
 END
 INPUT
 select a1,max(c),min(c) from t3 where (a2 = 'a') and (b = 'b') group by a1;
@@ -15860,7 +15860,7 @@ INPUT
 select table_name, column_name, privileges from information_schema.columns where table_schema = 'mysqltest' and table_name = 't1' order by table_name, column_name;
 END
 OUTPUT
-select table_name, column_name, `privileges` from information_schema.`columns` where table_schema = 'mysqltest' and table_name = 't1' order by table_name asc, column_name asc
+select `table_name`, `column_name`, `privileges` from information_schema.`columns` where table_schema = 'mysqltest' and `table_name` = 't1' order by `table_name` asc, `column_name` asc
 END
 INPUT
 select hex(ujis), hex(ucs2), hex(ujis2), name from t1 where ujis<>ujis2 order by ujis;
@@ -15961,8 +15961,8 @@ END
 INPUT
 select index_length into @paked_keys_size from information_schema.tables where table_name='t1';
 END
-ERROR
-syntax error at position 42 near 'paked_keys_size'
+OUTPUT
+select index_length from information_schema.`tables` where `table_name` = 't1' into @paked_keys_size
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_croatian_ci;
@@ -16033,8 +16033,8 @@ END
 INPUT
 select CONNECTION_ID() into @thread_id;
 END
-ERROR
-syntax error at position 39 near 'thread_id'
+OUTPUT
+select CONNECTION_ID() from dual into @thread_id
 END
 INPUT
 select * from information_schema.CHARACTER_SETS where CHARACTER_SET_NAME like 'latin1%' order by character_set_name;
@@ -16070,7 +16070,7 @@ INPUT
 select referenced_table_schema, referenced_table_name from information_schema.key_column_usage where constraint_schema = 'db-1' and table_schema != 'PERFORMANCE_SCHEMA' order by referenced_table_schema, referenced_table_name;
 END
 OUTPUT
-select referenced_table_schema, referenced_table_name from information_schema.key_column_usage where constraint_schema = 'db-1' and table_schema != 'PERFORMANCE_SCHEMA' order by referenced_table_schema asc, referenced_table_name asc
+select referenced_table_schema, referenced_table_name from information_schema.key_column_usage where `constraint_schema` = 'db-1' and table_schema != 'PERFORMANCE_SCHEMA' order by referenced_table_schema asc, referenced_table_name asc
 END
 INPUT
 select min(a1) from t1;
@@ -16112,7 +16112,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'q' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'q' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` like 't%' and index_name = 'q' order by `table_name` asc
 END
 INPUT
 select export_set(5, name, upper(name)) from bug20536;
@@ -16220,7 +16220,7 @@ INPUT
 select * from information_schema.partitions where table_schema="test" and table_name="t4";
 END
 OUTPUT
-select * from information_schema.`partitions` where table_schema = 'test' and table_name = 't4'
+select * from information_schema.`partitions` where table_schema = 'test' and `table_name` = 't4'
 END
 INPUT
 select hex(group_concat(a)) from t1;
@@ -16406,7 +16406,7 @@ INPUT
 select * from information_schema.schemata where schema_name = NULL;
 END
 OUTPUT
-select * from information_schema.schemata where schema_name = null
+select * from information_schema.schemata where `schema_name` = null
 END
 INPUT
 select rpad('a',4,'1'),rpad('a',4,'12'),rpad('abcd',3,'12'), rpad(11, 10 , 22), rpad("ab", 10, 22);
@@ -16471,14 +16471,14 @@ END
 INPUT
 select i from t1 where i = 1 into k;
 END
-ERROR
-syntax error at position 36 near 'k'
+OUTPUT
+select i from t1 where i = 1 into k
 END
 INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'p' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' and index_name = 'p' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` = 'tm' and index_name = 'p' order by `table_name` asc
 END
 INPUT
 select concat('*',v,'*',c,'*',t,'*') as qq from t1 where v='a' order by length(concat('*',v,'*',c,'*',t,'*'));
@@ -16502,7 +16502,7 @@ INPUT
 select column_default from information_schema.columns where table_name= 't1';
 END
 OUTPUT
-select column_default from information_schema.`columns` where table_name = 't1'
+select column_default from information_schema.`columns` where `table_name` = 't1'
 END
 INPUT
 select * from t1 where a like "abc%";
@@ -16556,7 +16556,7 @@ INPUT
 select * from information_schema.key_column_usage where TABLE_NAME= "vo";
 END
 OUTPUT
-select * from information_schema.key_column_usage where TABLE_NAME = 'vo'
+select * from information_schema.key_column_usage where `TABLE_NAME` = 'vo'
 END
 INPUT
 select * from t1 where a='a' order by binary a;
@@ -16952,7 +16952,7 @@ INPUT
 select table_name, column_name, data_type from information_schema.columns where table_schema not in ('performance_schema', 'sys') and data_type = 'datetime' and table_name COLLATE utf8_general_ci not like 'innodb_%' order by table_name, column_name;
 END
 OUTPUT
-select table_name, column_name, data_type from information_schema.`columns` where table_schema not in ('performance_schema', 'sys') and data_type = 'datetime' and table_name collate utf8_general_ci not like 'innodb_%' order by table_name asc, column_name asc
+select `table_name`, `column_name`, data_type from information_schema.`columns` where table_schema not in ('performance_schema', 'sys') and data_type = 'datetime' and `table_name` collate utf8_general_ci not like 'innodb_%' order by `table_name` asc, `column_name` asc
 END
 INPUT
 select hex(@utf81:= CONVERT(@ujis1 USING utf8));
@@ -17180,7 +17180,7 @@ INPUT
 select value,description,bug_id from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA";
 END
 OUTPUT
-select value, description, bug_id from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA'
+select `value`, description, bug_id from t2 left join t1 on t2.program = t1.product and t2.`value` = t1.component where program = 'AAAAA'
 END
 INPUT
 select "foo" = "foo " collate latin1_test;
@@ -17210,7 +17210,7 @@ INPUT
 select table_name from information_schema.views where table_schema='test' order by table_name;
 END
 OUTPUT
-select table_name from information_schema.views where table_schema = 'test' order by table_name asc
+select `table_name` from information_schema.views where table_schema = 'test' order by `table_name` asc
 END
 INPUT
 select row('A','b','c') = row('a' COLLATE latin1_bin,'b','c');
@@ -17462,7 +17462,7 @@ INPUT
 select table_type from information_schema.tables where table_name="v1";
 END
 OUTPUT
-select table_type from information_schema.`tables` where table_name = 'v1'
+select table_type from information_schema.`tables` where `table_name` = 'v1'
 END
 INPUT
 select _latin1'a' regexp _latin1'A' collate latin1_bin;
@@ -17678,7 +17678,7 @@ INPUT
 select c, v2.table_name from v1 right join information_schema.TABLES v2 on (v1.c=v2.table_name) where v1.c rlike "t[1-5]{1}$" order by c;
 END
 OUTPUT
-select c, v2.table_name from v1 right join information_schema.`TABLES` as v2 on v1.c = v2.table_name where v1.c regexp 't[1-5]{1}$' order by c asc
+select c, v2.`table_name` from v1 right join information_schema.`TABLES` as v2 on v1.c = v2.`table_name` where v1.c regexp 't[1-5]{1}$' order by c asc
 END
 INPUT
 select t1.i,t2.i,t3.i from t2 right join t3 on (t2.i=t3.i),t1 order by t1.i,t2.i,t3.i;
@@ -17816,7 +17816,7 @@ INPUT
 select * from `information_schema`.`REFERENTIAL_CONSTRAINTS` where `TABLE_NAME` = NULL;
 END
 OUTPUT
-select * from information_schema.REFERENTIAL_CONSTRAINTS where TABLE_NAME = null
+select * from information_schema.REFERENTIAL_CONSTRAINTS where `TABLE_NAME` = null
 END
 INPUT
 select (1.175494351E-37 div 1.7976931348623157E+308);
@@ -17863,8 +17863,8 @@ END
 INPUT
 select i from t1 where i = 1 into j;
 END
-ERROR
-syntax error at position 36 near 'j'
+OUTPUT
+select i from t1 where i = 1 into j
 END
 INPUT
 select c from t2;
@@ -18019,8 +18019,8 @@ END
 INPUT
 select count(*) into n from t1;
 END
-ERROR
-syntax error at position 23 near 'n'
+OUTPUT
+select count(*) from t1 into n
 END
 INPUT
 select time("1997-12-31 25:59:59.000001");
@@ -18260,7 +18260,7 @@ INPUT
 select table_name from information_schema.TABLES where table_schema like "test%" order by table_name;
 END
 OUTPUT
-select table_name from information_schema.`TABLES` where table_schema like 'test%' order by table_name asc
+select `table_name` from information_schema.`TABLES` where table_schema like 'test%' order by `table_name` asc
 END
 INPUT
 select min(a1), max(a1) from t1 where a4 = 0.080;
@@ -18302,7 +18302,7 @@ INPUT
 select host,db,user,table_name,column_name from mysql.columns_priv where user like 'mysqltest_%' order by host,db,user,table_name,column_name;
 END
 OUTPUT
-select host, db, `user`, table_name, column_name from mysql.columns_priv where `user` like 'mysqltest_%' order by host asc, db asc, `user` asc, table_name asc, column_name asc
+select host, db, `user`, `table_name`, `column_name` from mysql.columns_priv where `user` like 'mysqltest_%' order by host asc, db asc, `user` asc, `table_name` asc, `column_name` asc
 END
 INPUT
 select * from renamed_slow_log;
@@ -18752,7 +18752,7 @@ INPUT
 select * from `information_schema`.`key_column_usage` where `TABLE_NAME` = NULL;
 END
 OUTPUT
-select * from information_schema.key_column_usage where TABLE_NAME = null
+select * from information_schema.key_column_usage where `TABLE_NAME` = null
 END
 INPUT
 select user() like "%@%";
@@ -19238,7 +19238,7 @@ INPUT
 select column_name from information_schema.columns where table_name='t1' order by column_name;
 END
 OUTPUT
-select column_name from information_schema.`columns` where table_name = 't1' order by column_name asc
+select `column_name` from information_schema.`columns` where `table_name` = 't1' order by `column_name` asc
 END
 INPUT
 select * from t1 where t1="ABC";
@@ -19322,7 +19322,7 @@ INPUT
 select character_maximum_length, character_octet_length from information_schema.columns where table_name='t1';
 END
 OUTPUT
-select character_maximum_length, character_octet_length from information_schema.`columns` where table_name = 't1'
+select character_maximum_length, character_octet_length from information_schema.`columns` where `table_name` = 't1'
 END
 INPUT
 select soundex(_utf8mb4 0xD091D092D093);
@@ -19622,7 +19622,7 @@ INPUT
 select t.table_name, group_concat(t.table_schema, '.', t.table_name), count(*) as num1 from information_schema.tables t inner join information_schema.columns c1 on t.table_schema = c1.table_schema AND t.table_name = c1.table_name where t.table_name not like 'ndb%' and t.table_schema = 'information_schema' and c1.ordinal_position = (select isnull(c2.column_type) - isnull(group_concat(c2.table_schema, '.', c2.table_name)) + count(*) as num from information_schema.columns c2 where c2.table_schema='information_schema' and (c2.column_type = 'varchar(7)' or c2.column_type = 'varchar(20)') group by c2.column_type order by num limit 1) and t.table_name not like 'INNODB_%' group by t.table_name order by num1, t.table_name COLLATE utf8_general_ci;
 END
 OUTPUT
-select t.table_name, group_concat(t.table_schema, '.', t.table_name), count(*) as num1 from information_schema.`tables` as t join information_schema.`columns` as c1 on t.table_schema = c1.table_schema and t.table_name = c1.table_name where t.table_name not like 'ndb%' and t.table_schema = 'information_schema' and c1.ordinal_position = (select isnull(c2.column_type) - isnull(group_concat(c2.table_schema, '.', c2.table_name)) + count(*) as num from information_schema.`columns` as c2 where c2.table_schema = 'information_schema' and (c2.column_type = 'varchar(7)' or c2.column_type = 'varchar(20)') group by c2.column_type order by num asc limit 1) and t.table_name not like 'INNODB_%' group by t.table_name order by num1 asc, t.table_name collate utf8_general_ci asc
+select t.`table_name`, group_concat(t.table_schema, '.', t.`table_name`), count(*) as num1 from information_schema.`tables` as t join information_schema.`columns` as c1 on t.table_schema = c1.table_schema and t.`table_name` = c1.`table_name` where t.`table_name` not like 'ndb%' and t.table_schema = 'information_schema' and c1.ordinal_position = (select isnull(c2.column_type) - isnull(group_concat(c2.table_schema, '.', c2.`table_name`)) + count(*) as num from information_schema.`columns` as c2 where c2.table_schema = 'information_schema' and (c2.column_type = 'varchar(7)' or c2.column_type = 'varchar(20)') group by c2.column_type order by num asc limit 1) and t.`table_name` not like 'INNODB_%' group by t.`table_name` order by num1 asc, t.`table_name` collate utf8_general_ci asc
 END
 INPUT
 select a1,a2,b, max(c) from t2 where (a1 = 'b' or a1 = 'd' or a1 = 'a' or a1 = 'c') and (a2 > 'a') group by a1,a2,b;
@@ -19760,7 +19760,7 @@ INPUT
 select * from `information_schema`.`STATISTICS` where `TABLE_NAME` = NULL;
 END
 OUTPUT
-select * from information_schema.STATISTICS where TABLE_NAME = null
+select * from information_schema.STATISTICS where `TABLE_NAME` = null
 END
 INPUT
 select t1.i,t2.i,t3.i from t2 natural right join t3,t1 order by t1.i,t2.i,t3.i;
@@ -19874,7 +19874,7 @@ INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'k' order by table_name;
 END
 OUTPUT
-select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'k' order by table_name asc
+select `table_name`, index_type from information_schema.statistics where table_schema = 'test' and `table_name` like 't%' and index_name = 'k' order by `table_name` asc
 END
 INPUT
 select * from t1 order by a;
@@ -20222,7 +20222,7 @@ INPUT
 select host,db,user,table_name,column_name from mysql.columns_priv where user = 'mysqltest_1' order by host,db,user,table_name,column_name;
 END
 OUTPUT
-select host, db, `user`, table_name, column_name from mysql.columns_priv where `user` = 'mysqltest_1' order by host asc, db asc, `user` asc, table_name asc, column_name asc
+select host, db, `user`, `table_name`, `column_name` from mysql.columns_priv where `user` = 'mysqltest_1' order by host asc, db asc, `user` asc, `table_name` asc, `column_name` asc
 END
 INPUT
 select week("2000-01-06",1) as '2000', week("2001-01-06",1) as '2001', week("2002-01-06",1) as '2002',week("2003-01-06",1) as '2003', week("2004-01-06",1) as '2004', week("2005-01-06",1) as '2005', week("2006-01-06",1) as '2006';
@@ -20528,7 +20528,7 @@ INPUT
 select table_name, is_updatable from information_schema.views where table_schema != 'sys' order by table_name;
 END
 OUTPUT
-select table_name, is_updatable from information_schema.views where table_schema != 'sys' order by table_name asc
+select `table_name`, is_updatable from information_schema.views where table_schema != 'sys' order by `table_name` asc
 END
 INPUT
 select events.binlog from events;
@@ -20564,7 +20564,7 @@ INPUT
 select * from information_schema.partitions where table_schema="test" and table_name="t2";
 END
 OUTPUT
-select * from information_schema.`partitions` where table_schema = 'test' and table_name = 't2'
+select * from information_schema.`partitions` where table_schema = 'test' and `table_name` = 't2'
 END
 INPUT
 select a b, b c from t1 as t2;
@@ -20731,8 +20731,8 @@ END
 INPUT
 select ST_GeomFromText('linestring(-2 -2, 12 7)') into @l;
 END
-ERROR
-syntax error at position 58 near 'l'
+OUTPUT
+select st_geometryfromtext('linestring(-2 -2, 12 7)') from dual into @l
 END
 INPUT
 select RANDOM_BYTES(1025);
@@ -20821,8 +20821,8 @@ END
 INPUT
 select ST_GeomFromText('linestring(6 2, 12 1)') into @l;
 END
-ERROR
-syntax error at position 56 near 'l'
+OUTPUT
+select st_geometryfromtext('linestring(6 2, 12 1)') from dual into @l
 END
 INPUT
 select hex(substr(_utf16 0x00e400e5D800DC00,-2));
@@ -21157,8 +21157,8 @@ END
 INPUT
 select i from t1 where i=1 into k;
 END
-ERROR
-syntax error at position 34 near 'k'
+OUTPUT
+select i from t1 where i = 1 into k
 END
 INPUT
 select s.*, '*', m.*, (s.match_1_h - m.home) UUX from t2 s straight_join t1 m where m.match_id = 1 order by UUX desc;
@@ -21200,7 +21200,7 @@ INPUT
 select * from information_schema.KEY_COLUMN_USAGE where TABLE_SCHEMA= "test" order by TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME;
 END
 OUTPUT
-select * from information_schema.KEY_COLUMN_USAGE where TABLE_SCHEMA = 'test' order by TABLE_SCHEMA asc, TABLE_NAME asc, CONSTRAINT_NAME asc, COLUMN_NAME asc
+select * from information_schema.KEY_COLUMN_USAGE where TABLE_SCHEMA = 'test' order by TABLE_SCHEMA asc, `TABLE_NAME` asc, `CONSTRAINT_NAME` asc, `COLUMN_NAME` asc
 END
 INPUT
 select left('hello', -4294967295);
@@ -21290,7 +21290,7 @@ INPUT
 select TABLE_NAME,COLUMN_NAME,DATA_TYPE,DATETIME_PRECISION from information_schema.columns where TABLE_SCHEMA='mysqltest' order by table_name, column_name;
 END
 OUTPUT
-select TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATETIME_PRECISION from information_schema.`columns` where TABLE_SCHEMA = 'mysqltest' order by table_name asc, column_name asc
+select `TABLE_NAME`, `COLUMN_NAME`, DATA_TYPE, DATETIME_PRECISION from information_schema.`columns` where TABLE_SCHEMA = 'mysqltest' order by `table_name` asc, `column_name` asc
 END
 INPUT
 select left('hello',2),right('hello',2),substring('hello',2,2),mid('hello',1,5);
@@ -21506,7 +21506,7 @@ INPUT
 select column_name from information_schema.columns where table_schema='test' and table_name='t2';
 END
 OUTPUT
-select column_name from information_schema.`columns` where table_schema = 'test' and table_name = 't2'
+select `column_name` from information_schema.`columns` where table_schema = 'test' and `table_name` = 't2'
 END
 INPUT
 select if(1,st,st) s from t1 order by s;
@@ -22226,7 +22226,7 @@ INPUT
 select c,table_name from v1 left join information_schema.TABLES v2 on (v1.c=v2.table_name) where v1.c rlike "t[1-5]{1}$" order by c;
 END
 OUTPUT
-select c, table_name from v1 left join information_schema.`TABLES` as v2 on v1.c = v2.table_name where v1.c regexp 't[1-5]{1}$' order by c asc
+select c, `table_name` from v1 left join information_schema.`TABLES` as v2 on v1.c = v2.`table_name` where v1.c regexp 't[1-5]{1}$' order by c asc
 END
 INPUT
 select row_count();
@@ -22424,7 +22424,7 @@ INPUT
 select SCHEMA_NAME from information_schema.schemata where schema_name='имя_базы_в_кодировке_утф8_длиной_больше_чем_45';
 END
 OUTPUT
-select SCHEMA_NAME from information_schema.schemata where schema_name = 'имя_базы_в_кодировке_утф8_длиной_больше_чем_45'
+select `SCHEMA_NAME` from information_schema.schemata where `schema_name` = 'имя_базы_в_кодировке_утф8_длиной_больше_чем_45'
 END
 INPUT
 select char(0xd18f using utf8mb4);
@@ -22603,8 +22603,8 @@ END
 INPUT
 select @@GLOBAL.expire_logs_days into @save_expire_logs_days;
 END
-ERROR
-syntax error at position 61 near 'save_expire_logs_days'
+OUTPUT
+select @@global.expire_logs_days from dual into @save_expire_logs_days
 END
 INPUT
 select * from t1 where a=if(b<10,_ucs2 0x0062,_ucs2 0x00C0);
@@ -23060,7 +23060,7 @@ INPUT
 select * from t1 where value <=> value;
 END
 OUTPUT
-select * from t1 where value <=> value
+select * from t1 where `value` <=> `value`
 END
 INPUT
 select f3 from t1 where f3 between cast("2006-1-1 12:1:1" as datetime) and cast("2006-1-1 12:1:2" as datetime);
@@ -23084,7 +23084,7 @@ INPUT
 select Host,Db,User,Table_name,Column_name,Column_priv from mysql.columns_priv;
 END
 OUTPUT
-select Host, Db, `User`, Table_name, Column_name, Column_priv from mysql.columns_priv
+select Host, Db, `User`, `Table_name`, `Column_name`, Column_priv from mysql.columns_priv
 END
 INPUT
 select * from t1 group by f1;
