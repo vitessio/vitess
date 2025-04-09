@@ -32,6 +32,7 @@ import (
 	"github.com/spf13/viper"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
@@ -583,6 +584,38 @@ func (vtg *VTGate) Execute(
 	return session, nil, err
 }
 
+// ExecuteMulti executes multiple non-streaming queries.
+func (vtg *VTGate) ExecuteMulti(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sqlString string,
+) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
+	queries, err := vtg.executor.Environment().Parser().SplitStatementToPieces(sqlString)
+	if err != nil {
+		return session, nil, err
+	}
+	if len(queries) == 0 {
+		return session, nil, sqlparser.ErrEmpty
+	}
+	var qr *sqltypes.Result
+	var cancel context.CancelFunc
+	for _, query := range queries {
+		func() {
+			if mysqlQueryTimeout != 0 {
+				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
+				defer cancel()
+			}
+			session, qr, err = vtg.Execute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false)
+		}()
+		if err != nil {
+			return session, qrs, err
+		}
+		qrs = append(qrs, qr)
+	}
+	return session, qrs, nil
+}
+
 // ExecuteBatch executes a batch of queries.
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	// In this context, we don't care if we can't fully parse destination
@@ -648,6 +681,47 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 		return safeSession.Session, recordAndAnnotateError(err, statsKey, query, vtg.logStreamExecute, vtg.executor.vm.parser)
 	}
 	return safeSession.Session, nil
+}
+
+// StreamExecuteMulti executes a streaming query.
+// Note we guarantee the callback will not be called concurrently by multiple go routines.
+func (vtg *VTGate) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
+	queries, err := vtg.executor.Environment().Parser().SplitStatementToPieces(sqlString)
+	if err != nil {
+		return session, err
+	}
+	if len(queries) == 0 {
+		return session, sqlparser.ErrEmpty
+	}
+	var cancel context.CancelFunc
+	firstPacket := true
+	more := true
+	for idx, query := range queries {
+		firstPacket = true
+		more = idx < len(queries)-1
+		func() {
+			if mysqlQueryTimeout != 0 {
+				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
+				defer cancel()
+			}
+			session, err = vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+				defer func() {
+					firstPacket = false
+				}()
+				return callback(sqltypes.QueryResponse{QueryResult: result}, more, firstPacket)
+			})
+		}()
+		if err != nil {
+			// We got an error before we sent a single packet. So it must be an error
+			// because of the query itself. We should return the error in the packet and stop
+			// processing any more queries.
+			if firstPacket {
+				return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
+			}
+			return session, err
+		}
+	}
+	return session, nil
 }
 
 // CloseSession closes the session, rolling back any implicit transactions. This has the
