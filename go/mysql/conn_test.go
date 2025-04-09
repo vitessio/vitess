@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
@@ -803,104 +804,165 @@ func TestIsEOFPacket(t *testing.T) {
 }
 
 func TestMultiStatementStopsOnError(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
-	sConn.Capabilities |= CapabilityClientMultiStatements
+	origMysqlMultiQuery := mysqlMultiQuery
 	defer func() {
-		listener.Close()
-		sConn.Close()
-		cConn.Close()
+		mysqlMultiQuery = origMysqlMultiQuery
 	}()
+	for _, b := range []bool{true, false} {
+		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
+			mysqlMultiQuery = b
+			listener, sConn, cConn := createSocketPair(t)
+			sConn.Capabilities |= CapabilityClientMultiStatements
+			defer func() {
+				listener.Close()
+				sConn.Close()
+				cConn.Close()
+			}()
 
-	err := cConn.WriteComQuery("error;select 2")
-	require.NoError(t, err)
+			err := cConn.WriteComQuery("error;select 2")
+			require.NoError(t, err)
 
-	// this handler will return results according to the query. In case the query contains "error" it will return an error
-	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-	handler := &testRun{err: fmt.Errorf("execution failed")}
-	res := sConn.handleNextCommand(handler)
-	// Execution error will occur in this case because the query sent is error and testRun will throw an error.
-	// We should send an error packet but not close the connection.
-	require.True(t, res, "we should not break the connection because of execution errors")
+			// this handler will return results according to the query. In case the query contains "error" it will return an error
+			// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+			handler := &testRun{err: fmt.Errorf("execution failed")}
+			res := sConn.handleNextCommand(handler)
+			// Execution error will occur in this case because the query sent is error and testRun will throw an error.
+			// We should send an error packet but not close the connection.
+			require.True(t, res, "we should not break the connection because of execution errors")
 
-	data, err := cConn.ReadPacket()
-	require.NoError(t, err)
-	require.NotEmpty(t, data)
-	require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+			data, err := cConn.ReadPacket()
+			require.NoError(t, err)
+			require.NotEmpty(t, data)
+			require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+		})
+	}
+}
+
+func TestEmptyQuery(t *testing.T) {
+	origMysqlMultiQuery := mysqlMultiQuery
+	defer func() {
+		mysqlMultiQuery = origMysqlMultiQuery
+	}()
+	for _, b := range []bool{true, false} {
+		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
+			mysqlMultiQuery = b
+			listener, sConn, cConn := createSocketPair(t)
+			sConn.Capabilities |= CapabilityClientMultiStatements
+			defer func() {
+				listener.Close()
+				sConn.Close()
+				cConn.Close()
+			}()
+
+			err := cConn.WriteComQuery("")
+			require.NoError(t, err)
+
+			// this handler will return results according to the query. In case the query contains "error" it will return an error
+			// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+			handler := &testRun{err: sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")}
+			res := sConn.handleNextCommand(handler)
+			// The queries run will be an empty query; Even with the empty error, the connection should be fine
+			require.True(t, res, "we should not break the connection in case of no errors")
+			// Read the result and assert that we indeed see the error for empty query.
+			data, more, _, err := cConn.ReadQueryResult(100, true)
+			require.EqualError(t, err, "Query was empty (errno 1065) (sqlstate 42000)")
+			require.False(t, more)
+			require.Nil(t, data)
+		})
+	}
 }
 
 func TestMultiStatement(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
-	sConn.Capabilities |= CapabilityClientMultiStatements
+	origMysqlMultiQuery := mysqlMultiQuery
 	defer func() {
-		listener.Close()
-		sConn.Close()
-		cConn.Close()
+		mysqlMultiQuery = origMysqlMultiQuery
 	}()
+	for _, b := range []bool{true, false} {
+		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
+			mysqlMultiQuery = b
+			listener, sConn, cConn := createSocketPair(t)
+			sConn.Capabilities |= CapabilityClientMultiStatements
+			defer func() {
+				listener.Close()
+				sConn.Close()
+				cConn.Close()
+			}()
 
-	err := cConn.WriteComQuery("select 1;select 2")
-	require.NoError(t, err)
+			err := cConn.WriteComQuery("select 1;select 2")
+			require.NoError(t, err)
 
-	// this handler will return results according to the query. In case the query contains "error" it will return an error
-	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")}
-	res := sConn.handleNextCommand(handler)
-	// The queries run will be select 1; and select 2; These queries do not return any errors, so the connection should still be open
-	require.True(t, res, "we should not break the connection in case of no errors")
-	// Read the result of the query and assert that it is indeed what we want. This will contain the result of the first query.
-	data, more, _, err := cConn.ReadQueryResult(100, true)
-	require.NoError(t, err)
-	// Since we executed 2 queries, there should be more results to be read
-	require.True(t, more)
-	require.True(t, data.Equal(selectRowsResult))
+			// this handler will return results according to the query. In case the query contains "error" it will return an error
+			// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+			handler := &testRun{err: sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "cannot get column number")}
+			res := sConn.handleNextCommand(handler)
+			// The queries run will be select 1; and select 2; These queries do not return any errors, so the connection should still be open
+			require.True(t, res, "we should not break the connection in case of no errors")
+			// Read the result of the query and assert that it is indeed what we want. This will contain the result of the first query.
+			data, more, _, err := cConn.ReadQueryResult(100, true)
+			require.NoError(t, err)
+			// Since we executed 2 queries, there should be more results to be read
+			require.True(t, more)
+			require.True(t, data.Equal(selectRowsResult))
 
-	// Read the results for the second query and verify the correctness
-	data, more, _, err = cConn.ReadQueryResult(100, true)
-	require.NoError(t, err)
-	// This was the final query run, so we expect that more should be false as there are no more queries.
-	require.False(t, more)
-	require.True(t, data.Equal(selectRowsResult))
+			// Read the results for the second query and verify the correctness
+			data, more, _, err = cConn.ReadQueryResult(100, true)
+			require.NoError(t, err)
+			// This was the final query run, so we expect that more should be false as there are no more queries.
+			require.False(t, more)
+			require.True(t, data.Equal(selectRowsResult))
 
-	// This time we run two queries fist of which will return an error
-	err = cConn.WriteComQuery("error;select 2")
-	require.NoError(t, err)
+			// This time we run two queries fist of which will return an error
+			err = cConn.WriteComQuery("error;select 2")
+			require.NoError(t, err)
 
-	res = sConn.handleNextCommand(handler)
-	// Even if the query returns an error we should not close the connection as it is an execution error
-	require.True(t, res, "we should not break the connection because of execution errors")
+			res = sConn.handleNextCommand(handler)
+			// Even if the query returns an error we should not close the connection as it is an execution error
+			require.True(t, res, "we should not break the connection because of execution errors")
 
-	// Read the result and assert that we indeed see the error that testRun throws.
-	data, more, _, err = cConn.ReadQueryResult(100, true)
-	require.EqualError(t, err, "cannot get column number (errno 2027) (sqlstate HY000)")
-	// In case of errors in a multi-statement, the following statements are not executed, therefore we want that more should be false
-	require.False(t, more)
-	require.Nil(t, data)
+			// Read the result and assert that we indeed see the error that testRun throws.
+			data, more, _, err = cConn.ReadQueryResult(100, true)
+			require.EqualError(t, err, "cannot get column number (errno 2027) (sqlstate HY000)")
+			// In case of errors in a multi-statement, the following statements are not executed, therefore we want that more should be false
+			require.False(t, more)
+			require.Nil(t, data)
+		})
+	}
 }
 
 func TestMultiStatementOnSplitError(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
-	sConn.Capabilities |= CapabilityClientMultiStatements
+	origMysqlMultiQuery := mysqlMultiQuery
 	defer func() {
-		listener.Close()
-		sConn.Close()
-		cConn.Close()
+		mysqlMultiQuery = origMysqlMultiQuery
 	}()
+	for _, b := range []bool{true, false} {
+		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
+			mysqlMultiQuery = b
+			listener, sConn, cConn := createSocketPair(t)
+			sConn.Capabilities |= CapabilityClientMultiStatements
+			defer func() {
+				listener.Close()
+				sConn.Close()
+				cConn.Close()
+			}()
 
-	err := cConn.WriteComQuery("broken>'query 1;parse<error 2")
-	require.NoError(t, err)
+			err := cConn.WriteComQuery("broken>'query 1;parse<error 2")
+			require.NoError(t, err)
 
-	// this handler will return results according to the query. In case the query contains "error" it will return an error
-	// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
-	handler := &testRun{err: fmt.Errorf("execution failed")}
+			// this handler will return results according to the query. In case the query contains "error" it will return an error
+			// panic if the query contains "panic" and it will return selectRowsResult in case of any other query
+			handler := &testRun{err: fmt.Errorf("execution failed")}
 
-	// We will encounter an error in split statement when this multi statement is processed.
-	res := sConn.handleNextCommand(handler)
-	// Since this is an execution error, we should not be closing the connection.
-	require.True(t, res, "we should not break the connection because of execution errors")
-	// Assert that the returned packet is an error packet.
-	data, err := cConn.ReadPacket()
-	require.NoError(t, err)
-	require.NotEmpty(t, data)
-	require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+			// We will encounter an error in split statement when this multi statement is processed.
+			res := sConn.handleNextCommand(handler)
+			// Since this is an execution error, we should not be closing the connection.
+			require.True(t, res, "we should not break the connection because of execution errors")
+			// Assert that the returned packet is an error packet.
+			data, err := cConn.ReadPacket()
+			require.NoError(t, err)
+			require.NotEmpty(t, data)
+			require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+		})
+	}
 }
 
 func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
@@ -928,19 +990,28 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 }
 
 func TestConnectionErrorWhileWritingComQuery(t *testing.T) {
-	// Set the conn for the server connection to the simulated connection which always returns an error on writing
-	sConn := newConn(testConn{
-		writeToPass: []bool{false, true},
-		pos:         -1,
-		queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComQuery, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
-			0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
-	}, DefaultFlushDelay, 0)
+	origMysqlMultiQuery := mysqlMultiQuery
+	defer func() {
+		mysqlMultiQuery = origMysqlMultiQuery
+	}()
+	for _, b := range []bool{true, false} {
+		t.Run(fmt.Sprintf("MultiQueryProtocol: %v", b), func(t *testing.T) {
+			mysqlMultiQuery = b
+			// Set the conn for the server connection to the simulated connection which always returns an error on writing
+			sConn := newConn(testConn{
+				writeToPass: []bool{false, true},
+				pos:         -1,
+				queryPacket: []byte{0x21, 0x00, 0x00, 0x00, ComQuery, 0x73, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x20, 0x40, 0x40, 0x76, 0x65, 0x72, 0x73,
+					0x69, 0x6f, 0x6e, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x65, 0x6e, 0x74, 0x20, 0x6c, 0x69, 0x6d, 0x69, 0x74, 0x20, 0x31},
+			}, DefaultFlushDelay, 0)
 
-	// this handler will return an error on the first run, and fail the test if it's run more times
-	errorString := make([]byte, 17000)
-	handler := &testRun{err: errors.New(string(errorString))}
-	res := sConn.handleNextCommand(handler)
-	require.False(t, res, "we should beak the connection in case of error writing error packet")
+			// this handler will return an error on the first run, and fail the test if it's run more times
+			errorString := make([]byte, 17000)
+			handler := &testRun{err: errors.New(string(errorString))}
+			res := sConn.handleNextCommand(handler)
+			require.False(t, res, "we should beak the connection in case of error writing error packet")
+		})
+	}
 }
 
 func TestConnectionErrorWhileWritingComStmtSendLongData(t *testing.T) {
@@ -1124,6 +1195,28 @@ func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result)
 		callback(selectRowsResult)
 	}
 	callback(selectRowsResult)
+	return nil
+}
+
+func (t testRun) ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	queries, err := t.Env().Parser().SplitStatementToPieces(sql)
+	if err != nil {
+		return err
+	}
+	if len(queries) == 0 {
+		return sqlerror.NewSQLErrorFromError(sqlparser.ErrEmpty)
+	}
+	for i, query := range queries {
+		firstPacket := true
+		err = t.ComQuery(c, query, func(result *sqltypes.Result) error {
+			err = callback(sqltypes.QueryResponse{QueryResult: result}, i < len(queries)-1, firstPacket)
+			firstPacket = false
+			return err
+		})
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
