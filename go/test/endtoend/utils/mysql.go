@@ -280,54 +280,8 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field,
 		t.Errorf("for column %s field types do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Type.String(), vtField.Type.String())
 	}
 
-	if vtField.Type != myField.Type {
-		vtMatches := checkFieldsRegExpr.FindStringSubmatch(vtField.Type.String())
-		myMatches := checkFieldsRegExpr.FindStringSubmatch(myField.Type.String())
-
-		// Here we want to fail if we have totally different types for instance: "INT64" vs "TIMESTAMP"
-		// We do this by checking the length of the regexp slices and checking the second item of the slices (the real type i.e. "INT")
-		if len(vtMatches) != 3 || len(vtMatches) != len(myMatches) {
-			fail()
-			return
-		}
-
-		if myMatches[2] == "" {
-			myMatches[2] = "0"
-		}
-		if vtMatches[2] == "" {
-			vtMatches[2] = "0"
-		}
-
-		vtVal, vtErr := strconv.Atoi(vtMatches[2])
-		myVal, myErr := strconv.Atoi(myMatches[2])
-		if vtErr != nil || myErr != nil {
-			fail()
-			return
-		}
-
-		switch allowAnyFieldSize {
-		case true:
-			// when we allow any field size, we want to allow the case where MySQL returns an unsigned
-			// type and Vitess returns a signed type with a larger size than MySQL.
-			if strings.HasPrefix(myMatches[1], "U") && !strings.HasPrefix(vtMatches[1], "U") {
-				if myMatches[1][1:] != vtMatches[1] || vtVal <= myVal {
-					fail()
-					return
-				}
-			} else if isChar(vtMatches[1]) && isChar(myMatches[1]) {
-				return
-			} else if isBinary(vtMatches[1]) && isBinary(myMatches[1]) {
-				return
-			} else if myMatches[1] != vtMatches[1] {
-				fail()
-				return
-			}
-		case false:
-			if myMatches[1] != vtMatches[1] || vtVal < myVal {
-				fail()
-				return
-			}
-		}
+	if vtField.Type != myField.Type && compareFieldAttributes(vtField, myField, fail, allowAnyFieldSize) {
+		return
 	}
 
 	// starting in Vitess 20, decimal types are properly sized in their field information
@@ -336,6 +290,78 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field,
 			t.Errorf("for column %s field decimals count do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Decimals, vtField.Decimals)
 		}
 	}
+}
+
+func compareFieldAttributes(vtField *querypb.Field, myField *querypb.Field, fail func(), allowAnyFieldSize bool) bool {
+	vtMatches := checkFieldsRegExpr.FindStringSubmatch(vtField.Type.String())
+	myMatches := checkFieldsRegExpr.FindStringSubmatch(myField.Type.String())
+
+	// Here we want to fail if we have totally different types for instance: "INT64" vs "TIMESTAMP"
+	// We do this by checking the length of the regexp slices and checking the second item of the slices (the real type i.e. "INT")
+	if len(vtMatches) != 3 || len(vtMatches) != len(myMatches) {
+		fail()
+		return true
+	}
+
+	if myMatches[2] == "" {
+		myMatches[2] = "0"
+	}
+	if vtMatches[2] == "" {
+		vtMatches[2] = "0"
+	}
+
+	vtVal, vtErr := strconv.Atoi(vtMatches[2])
+	myVal, myErr := strconv.Atoi(myMatches[2])
+	if vtErr != nil || myErr != nil {
+		fail()
+		return true
+	}
+
+	if allowAnyFieldSize {
+		failed, done := forgivingTypeComparison(myMatches, vtMatches, vtVal, myVal)
+		if failed {
+			fail()
+		}
+		if done {
+			return true
+		}
+	} else if myMatches[1] != vtMatches[1] || vtVal < myVal {
+		fail()
+		return true
+	}
+	return false
+}
+
+func forgivingTypeComparison(myMatches, vtMatches []string, vtVal, myVal int) (failed bool, done bool) {
+	switch {
+	case strings.HasPrefix(myMatches[1], "U") && !strings.HasPrefix(vtMatches[1], "U"):
+		if myMatches[1][1:] != vtMatches[1] || vtVal <= myVal {
+			// Case 1:
+			// This case applies when MySQL indicates an unsigned type (for example, "UINT")
+			// while Vitess indicates a signed equivalent (for instance, "INT").
+			// We remove the "U" from MySQL's type and then check that it exactly matches the Vitess type.
+			// In addition, we require that the size reported by Vitess (vtVal) is equal or greater than the size from MySQL (myVal).
+			// If either of these conditions isn't met, it means the types don't fully match and the comparison fails.
+			return true, true
+		}
+	case isChar(vtMatches[1]) && isChar(myMatches[1]):
+		// Case 2:
+		// When both field types are character types (for example, "CHAR" and "VARCHAR"),
+		// they are considered compatible regardless of the exact character type name.
+		return false, true
+	case isBinary(vtMatches[1]) && isBinary(myMatches[1]):
+		// Case 3:
+		// When both field types are binary types (for example, "BINARY" or "VARBINARY"),
+		// they are considered equivalent, so we return success.
+		return false, true
+	case myMatches[1] != vtMatches[1]:
+		// Case 4:
+		// If the types do not match at all (for example, MySQL returns "TIME" while Vitess returns "INT"),
+		// then the fields are incompatible and we flag a failure.
+		return true, true
+	}
+
+	return false, false
 }
 
 func compareVitessAndMySQLErrors(t TestingT, vtErr, mysqlErr error) {
