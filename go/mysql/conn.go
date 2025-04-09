@@ -30,6 +30,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/bucketpool"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -38,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -66,6 +69,19 @@ const (
 	// ephemeralRead means we currently in process of reading into currentEphemeralBuffer
 	ephemeralRead
 )
+
+var (
+	mysqlMultiQuery = false
+)
+
+func registerConnFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&mysqlMultiQuery, "mysql-server-multi-query-protocol", mysqlMultiQuery, "If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.")
+}
+
+func init() {
+	servenv.OnParseFor("vtgate", registerConnFlags)
+	servenv.OnParseFor("vtcombo", registerConnFlags)
+}
 
 // A Getter has a Get()
 type Getter interface {
@@ -914,6 +930,9 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		res := c.execQuery("use "+sqlescape.EscapeID(db), handler, false)
 		return res != connErr
 	case ComQuery:
+		if mysqlMultiQuery {
+			return c.handleComQueryMulti(handler, data)
+		}
 		return c.handleComQuery(handler, data)
 	case ComPing:
 		return c.handleComPing()
@@ -1277,6 +1296,141 @@ func (c *Conn) handleComPing() bool {
 		}
 	}
 	return true
+}
+
+// handleComQueryMulti is a newer version of handleComQuery that uses
+// the StreamExecuteMulti and ExecuteMulti RPC calls to push the splitting of statements
+// down to Vtgate.
+func (c *Conn) handleComQueryMulti(handler Handler, data []byte) (kontinue bool) {
+	c.startWriterBuffering()
+	defer func() {
+		if err := c.endWriterBuffering(); err != nil {
+			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			kontinue = false
+		}
+	}()
+
+	queryStart := time.Now()
+	query := c.parseComQuery(data)
+	c.recycleReadPacket()
+
+	res := c.execQueryMulti(query, handler)
+	if res != execSuccess {
+		return res != connErr
+	}
+
+	timings.Record(queryTimingKey, queryStart)
+	return true
+}
+
+// execQueryMulti is a newer version of execQuery that uses
+// the StreamExecuteMulti and ExecuteMulti RPC calls to push the splitting of statements
+// down to Vtgate.
+func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
+	// needsEndPacket signifies whether we have need to send the last packet to the client
+	// for a given query. This is used to determine whether we should send an
+	// end packet after the query is done or not. Initially we don't need to send an end packet
+	// so we initialize this value to false.
+	needsEndPacket := false
+	callbackCalled := false
+	var res = execSuccess
+
+	err := handler.ComQueryMulti(c, query, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		callbackCalled = true
+		flag := c.StatusFlags
+		if more {
+			flag |= ServerMoreResultsExists
+		}
+
+		// firstPacket tells us that this is the start of a new query result.
+		// If we haven't sent a last packet yet, we should send the end result packet.
+		if firstPacket && needsEndPacket {
+			if err := c.writeEndResult(true, 0, 0, handler.WarningCount(c)); err != nil {
+				log.Errorf("Error writing result to %s: %v", c, err)
+				return err
+			}
+		}
+
+		// We receive execution errors in a query as part of the QueryResponse.
+		// We check for those errors and send a error packet. If we are unable
+		// to send the error packet, then there is a connection error too.
+		if qr.QueryError != nil {
+			res = execErr
+			if !c.writeErrorPacketFromErrorAndLog(qr.QueryError) {
+				res = connErr
+			}
+			return nil
+		}
+
+		if firstPacket {
+			// The first packet signifies the start of a new query result.
+			// So we reset the needsEndPacket variable to signify we haven't sent the last
+			// packet for this query.
+			needsEndPacket = true
+			if len(qr.QueryResult.Fields) == 0 {
+
+				// A successful callback with no fields means that this was a
+				// DML or other write-only operation.
+				//
+				// We should not send any more packets after this, but make sure
+				// to extract the affected rows and last insert id from the result
+				// struct here since clients expect it.
+				ok := PacketOK{
+					affectedRows:     qr.QueryResult.RowsAffected,
+					lastInsertID:     qr.QueryResult.InsertID,
+					statusFlags:      flag,
+					warnings:         handler.WarningCount(c),
+					info:             "",
+					sessionStateData: qr.QueryResult.SessionStateChanges,
+				}
+				needsEndPacket = false
+				return c.writeOKPacket(&ok)
+			}
+
+			if err := c.writeFields(qr.QueryResult); err != nil {
+				return err
+			}
+		}
+
+		return c.writeRows(qr.QueryResult)
+	})
+
+	// If callback was not called, we expect an error.
+	// It is possible that we don't get a callback if some condition checks
+	// fail before the query starts execution. In this case, we need to write some
+	// error back.
+	if !callbackCalled {
+		// This is just a failsafe. Should never happen.
+		if err == nil || err == io.EOF {
+			err = sqlerror.NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+		}
+		if !c.writeErrorPacketFromErrorAndLog(err) {
+			return connErr
+		}
+		return execErr
+	}
+
+	if res != execSuccess {
+		// We failed during the stream itself.
+		return res
+	}
+
+	if err != nil {
+		// We can't send an error in the middle of a stream.
+		// All we can do is abort the send, which will cause a 2013.
+		log.Errorf("Error in the middle of a stream to %s: %v", c, err)
+		return connErr
+	}
+
+	// If we haven't sent the final packet for the last query, we should send that too.
+	if needsEndPacket {
+		if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+			log.Errorf("Error writing result to %s: %v", c, err)
+			return connErr
+		}
+	}
+
+	return execSuccess
 }
 
 var errEmptyStatement = sqlerror.NewSQLError(sqlerror.EREmptyQuery, sqlerror.SSClientError, "Query was empty")

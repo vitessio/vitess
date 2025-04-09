@@ -1,3 +1,4 @@
+# Release of Vitess v22.0.0
 ## Summary
 
 ### Table of Contents
@@ -27,14 +28,12 @@
     - [LAST_INSERT_ID(x)](#last-insert-id)
     - [Maximum Idle Connections in the Pool](#max-idle-connections)
     - [Filtering Query logs on Error](#query-logs)
-    - [MultiQuery RPC in vtgate](#multiquery)
   - **[Optimization](#optimization)**
     - [Prepared Statement](#prepared-statement)
   - **[RPC Changes](#rpc-changes)**
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[Semi-sync monitor in vttablet](#semi-sync-monitor)**
   - **[Wrapped fatal transaction errors](#new-errors-fatal-tx)**
-  - **[New Join type in VTGate](#new-join-type-vtgate)**
 - **[Minor Changes](#minor-changes)**
   - **[Topology read concurrency behaviour changes](#topo-read-concurrency-changes)**
   - **[VTTablet](#minor-changes-vttablet)**
@@ -121,7 +120,7 @@ $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
 |    `CommitUnresolved`     |                  N/A                  |             Counter for failure after Prepare.              | [#16939](https://github.com/vitessio/vitess/pull/16939) |
 
 
-The work done in [#17727](https://github.com/vitessio/vitess/pull/17727) introduces new metrics for queries. Via this work we have deprecated several vtgate metrics, please see the [Deprecated Metrics](#deprecated-metrics) section. Here is an example on how to use them:
+The work done in [#17727](https://github.com/vitessio/vitess/pull/17727) introduces new metrics for queries. Via this work we have deprecated several vtgate metrics, please see the [Deprecated Metrics](#deprecated-metrics) section. Here is an example on how to use them: 
 ```
 Query: select t1.a, t2.b from t1 join t2 on t1.id = t2.id
 Shards: 2
@@ -268,14 +267,6 @@ The `querylog-mode` setting can be configured to `error` to log only queries tha
 
 ---
 
-#### <a id="multiquery"/>MultiQuery RPC in vtgate</a>
-
-New RPCs in vtgate have been added that allow users to pass multiple queries in a single sql string. It behaves the same way MySQL does where-in multiple result sets for the queries are returned in the same order as the queries were passed until an error is encountered. The new RPCs are `ExecuteMulti` and `StreamExecuteMulti`. 
-
-A new flag `--mysql-server-multi-query-protocol` has also been added that makes the server use this new implementation. This flag is set to `false` by default, so the old implementation is used by default. The new implementation is more efficient and allows for better performance when executing multiple queries in a single RPC call.
-
----
-
 ### <a id="optimization"/>Optimization</a>
 
 #### <a id="prepared-statement"/>Prepared Statement</a>
@@ -334,20 +325,6 @@ to acknowledge that the transaction was automatically rolled back and cleared by
 This change was introduced by [#17669](https://github.com/vitessio/vitess/pull/17669).
 
 
-### <a id="new-join-type-vtgate"/>New Join type in VTGate</a>
-
-This release introduces a new join type in vtgate: Block Joins.
-Block Joins use the MySQL `VALUES` statement to send all rows coming from the left-hand-side of the join to the right-hand-side, in a single network call.
-Unlike Apply Joins, which execute the right-hand-side of the join as many times as we got rows from the left-hand-side.
-This new approach allows vtgate to significantly reduce the amount of network calls and improve the performance of `JOIN`s.
-
-This new feature is experimental, unsupported queries include: DMLs, joins with more than two tables, joins with aggregation, information schema and non-normal tables.
-
-Block Joins can be enabled by setting the `--allow-block-joins` vtgate flag, or by using the `/*vt+ ALLOW_BLOCK_JOIN */` query hint.
-
-More information about this feature can be found in its [RFC #16508](https://github.com/vitessio/vitess/issues/16508) and
-on the Pull Request implementing it [#17641](https://github.com/vitessio/vitess/pull/17641).
-
 ---
 
 ## <a id="minor-changes"/>Minor Changes</a>
@@ -382,3 +359,11 @@ When a tablet is started with `--enforce-tableacl-config` it will exit with an e
 
 Building `vtadmin-web` now requires node >= v22.13.0 (LTS). Breaking changes from v20 to v22 can be found at https://nodejs.org/en/blog/release/v22.13.0 -- with no known issues that apply to VTAdmin.
 Full details on the node v20.12.2 release can be found at https://nodejs.org/en/blog/release/v22.13.1.
+
+------------
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/22.0/22.0.0/changelog.md).
+
+The release includes 457 merged Pull Requests.
+
+Thanks to all our contributors: @GrahamCampbell, @GuptaManan100, @L3o-pold, @akagami-harsh, @anirbanmu, @app/dependabot, @app/vitess-bot, @arthmis, @arthurschreiber, @beingnoble03, @c-r-dev, @corbantek, @dbussink, @deepthi, @derekperkins, @ejortegau, @frouioui, @garfthoffman, @gmpify, @gopoto, @harshit-gangal, @huochexizhan, @jeefy, @jwangace, @kbutz, @lmorduch, @mattlord, @mattrobenolt, @maxenglander, @mcrauwel, @mounicasruthi, @niladrix719, @notfelineit, @rafer, @rohit-nayak-ps, @rvrangel, @shailpujan88, @shanth96, @shlomi-noach, @siadat, @systay, @timvaillancourt, @twthorn, @vitess-bot, @vmg, @wiebeytec, @wukuai
+

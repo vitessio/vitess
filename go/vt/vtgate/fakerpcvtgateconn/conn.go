@@ -115,6 +115,16 @@ func (conn *FakeVTGateConn) ExecuteBatch(ctx context.Context, session *vtgatepb.
 	panic("not implemented")
 }
 
+// ExecuteMulti please see vtgateconn.Impl.ExecuteBatch
+func (conn *FakeVTGateConn) ExecuteMulti(ctx context.Context, session *vtgatepb.Session, sqlString string) (*vtgatepb.Session, []*sqltypes.Result, error) {
+	panic("not implemented")
+}
+
+// StreamExecuteMulti please see vtgateconn.Impl.ExecuteBatch.
+func (conn *FakeVTGateConn) StreamExecuteMulti(ctx context.Context, session *vtgatepb.Session, sqlString string, processResponse func(response *vtgatepb.StreamExecuteMultiResponse)) (sqltypes.MultiResultStream, error) {
+	panic("not implemented")
+}
+
 // StreamExecute please see vtgateconn.Impl.StreamExecute
 func (conn *FakeVTGateConn) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable, _ func(response *vtgatepb.StreamExecuteResponse)) (sqltypes.ResultStream, error) {
 	response, ok := conn.execMap[sql]

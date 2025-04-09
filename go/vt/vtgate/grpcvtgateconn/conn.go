@@ -207,6 +207,69 @@ func (conn *vtgateConn) StreamExecute(ctx context.Context, session *vtgatepb.Ses
 	}, nil
 }
 
+// ExecuteMulti executes multiple non-streaming queries.
+func (conn *vtgateConn) ExecuteMulti(ctx context.Context, session *vtgatepb.Session, sqlString string) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
+	request := &vtgatepb.ExecuteMultiRequest{
+		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		Session:  session,
+		Sql:      sqlString,
+	}
+	response, err := conn.c.ExecuteMulti(ctx, request)
+	if err != nil {
+		return session, nil, vterrors.FromGRPC(err)
+	}
+	return response.Session, sqltypes.Proto3ToResults(response.Results), vterrors.FromVTRPC(response.Error)
+}
+
+type streamExecuteMultiAdapter struct {
+	recv   func() (*querypb.QueryResult, bool, error)
+	fields []*querypb.Field
+}
+
+func (a *streamExecuteMultiAdapter) Recv() (*sqltypes.Result, bool, error) {
+	var qr *querypb.QueryResult
+	var err error
+	var newResult bool
+	for {
+		qr, newResult, err = a.recv()
+		if qr != nil || err != nil {
+			break
+		}
+		// we reach here, only when it is the last packet.
+		// as in the last packet we receive the session and there is no result
+	}
+	if err != nil {
+		return nil, newResult, err
+	}
+	if qr != nil && qr.Fields != nil {
+		a.fields = qr.Fields
+	}
+	return sqltypes.CustomProto3ToResult(a.fields, qr), newResult, nil
+}
+
+// StreamExecuteMulti executes multiple streaming queries.
+func (conn *vtgateConn) StreamExecuteMulti(ctx context.Context, session *vtgatepb.Session, sqlString string, processResponse func(response *vtgatepb.StreamExecuteMultiResponse)) (sqltypes.MultiResultStream, error) {
+	req := &vtgatepb.StreamExecuteMultiRequest{
+		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		Sql:      sqlString,
+		Session:  session,
+	}
+	stream, err := conn.c.StreamExecuteMulti(ctx, req)
+	if err != nil {
+		return nil, vterrors.FromGRPC(err)
+	}
+	return &streamExecuteMultiAdapter{
+		recv: func() (*querypb.QueryResult, bool, error) {
+			ser, err := stream.Recv()
+			if err != nil {
+				return nil, false, vterrors.FromGRPC(err)
+			}
+			processResponse(ser)
+			return ser.Result.GetResult(), ser.NewResult, vterrors.FromVTRPC(ser.Result.GetError())
+		},
+	}, nil
+}
+
 func (conn *vtgateConn) Prepare(ctx context.Context, session *vtgatepb.Session, query string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
 	request := &vtgatepb.PrepareRequest{
 		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
