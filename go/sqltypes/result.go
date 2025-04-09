@@ -233,7 +233,7 @@ func ResultsEqual(r1, r2 []*Result) bool {
 }
 
 // ResultsEqualUnordered compares two unordered arrays of Result.
-func ResultsEqualUnordered(r1, r2 []Result, ignoreTypes bool) bool {
+func ResultsEqualUnordered(r1, r2 []*Result, ignoreTypes bool) bool {
 	if len(r1) != len(r2) {
 		return false
 	}
@@ -264,7 +264,7 @@ func ResultsEqualUnordered(r1, r2 []Result, ignoreTypes bool) bool {
 	return true
 }
 
-func saveRowsAnalysis(r Result, allRows map[string]int, totalRows *int, increment, ignoreTypes bool) {
+func saveRowsAnalysis(r *Result, allRows map[string]int, totalRows *int, increment, ignoreTypes bool) {
 	for _, row := range r.Rows {
 		var newHash string
 		if ignoreTypes {

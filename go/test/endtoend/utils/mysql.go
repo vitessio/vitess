@@ -232,9 +232,9 @@ func CompareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 		mysqlQr.RowsAffected = 0
 	}
 
-	l := []sqltypes.Result{*vtQr}
-	r := []sqltypes.Result{*mysqlQr}
-	if (orderBy && sqltypes.ResultsEqual([]*sqltypes.Result{vtQr}, []*sqltypes.Result{mysqlQr})) ||
+	l := []*sqltypes.Result{vtQr}
+	r := []*sqltypes.Result{mysqlQr}
+	if (orderBy && sqltypes.ResultsEqual(l, r)) ||
 		sqltypes.ResultsEqualUnordered(l, r, opts.AllowAnyFieldSize) {
 		return nil
 	}
