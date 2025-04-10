@@ -19,6 +19,7 @@ package misc
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"fmt"
 	"strings"
 	"testing"
@@ -645,6 +646,12 @@ func TestAlterTableWithView(t *testing.T) {
 	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1)]]`)
 }
 
+//go:embed join_output1.json
+var expJoinOutput1 string
+
+//go:embed join_output2.json
+var expJoinOutput2 string
+
 // TestStraightJoin tests that Vitess respects the ordering of join in a STRAIGHT JOIN query.
 func TestStraightJoin(t *testing.T) {
 	mcmp, closer := start(t)
@@ -659,7 +666,8 @@ func TestStraightJoin(t *testing.T) {
 	// Verify that in a normal join query, vitess joins tbl with t1.
 	res, err := mcmp.VtConn.ExecuteFetch("vexplain plan select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 join tbl where t1.id1 = tbl.nonunq_col", 100, false)
 	require.NoError(t, err)
-	require.Contains(t, fmt.Sprintf("%v", res.Rows), "tbl_t1")
+	require.Len(t, res.Rows, 1)
+	require.JSONEq(t, expJoinOutput1, res.Rows[0][0].ToString())
 
 	// Test the same query with a straight join
 	mcmp.AssertMatchesNoOrder("select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col",
@@ -668,7 +676,8 @@ func TestStraightJoin(t *testing.T) {
 	// Verify that in a straight join query, vitess joins t1 with tbl.
 	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col", 100, false)
 	require.NoError(t, err)
-	require.Contains(t, fmt.Sprintf("%v", res.Rows), "t1_tbl")
+	require.Len(t, res.Rows, 1)
+	require.JSONEq(t, expJoinOutput2, res.Rows[0][0].ToString())
 }
 
 func TestFailingOuterJoinInOLAP(t *testing.T) {
