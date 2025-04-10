@@ -1308,6 +1308,7 @@ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query stri
 
 	return engine.PlanKey{
 		CurrentKeyspace: vcursor.GetKeyspace(),
+		TabletType:      vcursor.TabletType(),
 		Destination:     strings.Join(allDest, ","),
 		Query:           query,
 		SetVarComment:   setVarComment,
