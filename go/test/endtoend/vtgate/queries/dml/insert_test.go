@@ -516,3 +516,11 @@ func TestInsertJson(t *testing.T) {
 	utils.AssertMatches(t, mcmp.VtConn, `select * from uks.j_utbl order by id`,
 		`[[INT64(1) JSON("{}")] [INT64(2) JSON("{\"a\": 1, \"b\": 2}")] [INT64(3) JSON("{\"k\": \"a\"}")] [INT64(4) JSON("{\"date\": 1629849600, \"keywordSourceId\": 930701976723823, \"keywordSourceVersionId\": 210825230433}")]]`)
 }
+
+func TestInsertIgnoreNullAndInsertNull(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert ignore into s_tbl(id) values (1)") // the remaining columns are be set to NULL
+	mcmp.Exec("select * from s_tbl")
+}
