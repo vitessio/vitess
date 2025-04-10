@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -650,6 +651,9 @@ func TestStraightJoin(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
+	vtgateVer, err := cluster.GetMajorVersion("vtgate")
+	require.NoError(t, err)
+
 	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,0,10), (2,10,10), (3,4,20), (4,30,20), (5,40,10)")
 	mcmp.Exec(`insert into t1(id1, id2) values (10, 11), (20, 13)`)
 
@@ -659,7 +663,10 @@ func TestStraightJoin(t *testing.T) {
 	// Verify that in a normal join query, vitess joins tbl with t1.
 	res, err := mcmp.VtConn.ExecuteFetch("vexplain plan select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 join tbl where t1.id1 = tbl.nonunq_col", 100, false)
 	require.NoError(t, err)
-	require.Contains(t, fmt.Sprintf("%v", res.Rows), "tbl_t1")
+	if vtgateVer < 23 {
+		// v23 onwards we test differently. Part of PR https://github.com/vitessio/vitess/pull/18149
+		require.Contains(t, fmt.Sprintf("%v", res.Rows), "tbl_t1")
+	}
 
 	// Test the same query with a straight join
 	mcmp.AssertMatchesNoOrder("select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col",
@@ -668,7 +675,10 @@ func TestStraightJoin(t *testing.T) {
 	// Verify that in a straight join query, vitess joins t1 with tbl.
 	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col", 100, false)
 	require.NoError(t, err)
-	require.Contains(t, fmt.Sprintf("%v", res.Rows), "t1_tbl")
+	if vtgateVer < 23 {
+		// v23 onwards we test differently. Part of PR https://github.com/vitessio/vitess/pull/18149
+		require.Contains(t, fmt.Sprintf("%v", res.Rows), "t1_tbl")
+	}
 }
 
 func TestFailingOuterJoinInOLAP(t *testing.T) {
