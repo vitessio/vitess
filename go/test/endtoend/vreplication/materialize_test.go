@@ -238,6 +238,16 @@ const (
 		id2 bigint not null,
 		primary key (id)
 	) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+	create table ref3 (
+		id bigint not null,
+		id2 bigint not null,
+		primary key (id)
+	) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
+	create table ref4 (
+		id bigint not null,
+		id2 bigint not null,
+		primary key (id)
+	) engine=InnoDB default charset=utf8mb4 collate=utf8mb4_unicode_ci;
 `
 	refSourceVSchema = `
 {
@@ -246,6 +256,12 @@ const (
       "type": "reference"
     },
 	"ref2": {
+      "type": "reference"
+	},
+	"ref3": {
+      "type": "reference"
+	},
+	"ref4": {
       "type": "reference"
 	}
   }
@@ -261,12 +277,22 @@ const (
 	"ref2": {
 		  "type": "reference",
 		  "source": "ks1.ref2"
+	},
+	"ref3": {
+		  "type": "reference",
+		  "source": "ks1.ref3"
+	},
+	"ref4": {
+		  "type": "reference",
+		  "source": "ks1.ref4"
 	}
   }
 }
 `
 	initRef1DataQuery = `insert into ks1.ref1(id, val) values (1, 'abc'), (2, 'def'), (3, 'ghi')`
 	initRef2DataQuery = `insert into ks1.ref2(id, id2) values (1, 1), (2, 2), (3, 3)`
+	initRef3DataQuery = `insert into ks1.ref3(id, id2) values (1, 1), (2, 2), (3, 3), (4, 4)`
+	initRef4DataQuery = `insert into ks1.ref4(id, id2) values (1, 1), (2, 2), (3, 3)`
 )
 
 // TestReferenceTableMaterialize tests materializing reference tables.
@@ -286,6 +312,10 @@ func TestReferenceTableMaterialize(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch(initRef1DataQuery, 0, false)
 	require.NoError(t, err)
 	_, err = vtgateConn.ExecuteFetch(initRef2DataQuery, 0, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch(initRef3DataQuery, 0, false)
+	require.NoError(t, err)
+	_, err = vtgateConn.ExecuteFetch(initRef4DataQuery, 0, false)
 	require.NoError(t, err)
 
 	err = vc.VtctldClient.ExecuteCommand("Materialize", "--target-keyspace", "ks2", "--workflow", "wf1", "create",
@@ -320,6 +350,43 @@ func TestReferenceTableMaterialize(t *testing.T) {
 	for _, shard := range shards {
 		waitForRowCount(t, vtgateConn, "ks2:"+shard, "ref1", 4)
 		waitForRowCount(t, vtgateConn, "ks2:"+shard, "ref2", 4)
+	}
+	vdiff(t, "ks2", "wf1", defaultCellName, nil)
+
+	// Testing update with --add-reference-tables.
+	err = vc.VtctldClient.ExecuteCommand("Materialize", "--target-keyspace", "ks2", "--workflow", "wf1", "update",
+		"--add-reference-tables", "ref3,ref4")
+	require.NoError(t, err, "MaterializeAddTables")
+
+	for _, shard := range shards {
+		tab := vc.getPrimaryTablet(t, "ks2", shard)
+		catchup(t, tab, "wf1", "Materialize")
+	}
+
+	for _, shard := range shards {
+		waitForRowCount(t, vtgateConn, "ks2:"+shard, "ref3", 4)
+		waitForQueryResult(t, vtgateConn, "ks2:"+shard, "select id, id2 from ref3",
+			`[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)]]`)
+		waitForRowCount(t, vtgateConn, "ks2:"+shard, "ref4", 3)
+		waitForQueryResult(t, vtgateConn, "ks2:"+shard, "select id, id2 from ref4",
+			`[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)]]`)
+	}
+	vdiff(t, "ks2", "wf1", defaultCellName, nil)
+
+	queries = []string{
+		"update ks1.ref3 set id2=3 where id=2",
+		"update ks1.ref4 set id2=3 where id=2",
+		"delete from ks1.ref3 where id2=3",
+		"delete from ks1.ref4 where id2=3",
+		"insert into ks1.ref3(id, id2) values (3, 3)",
+		"insert into ks1.ref4(id, id2) values (3, 3), (4, 4)",
+	}
+	for _, query := range queries {
+		execVtgateQuery(t, vtgateConn, "ks1", query)
+	}
+	for _, shard := range shards {
+		waitForRowCount(t, vtgateConn, "ks2:"+shard, "ref3", 3)
+		waitForRowCount(t, vtgateConn, "ks2:"+shard, "ref4", 3)
 	}
 	vdiff(t, "ks2", "wf1", defaultCellName, nil)
 }
