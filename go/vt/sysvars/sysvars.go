@@ -230,6 +230,7 @@ var (
 		{Name: "transaction_isolation", Case: SCUpper},
 		{Name: "transaction_prealloc_size"},
 		{Name: "tx_isolation", Case: SCUpper},
+		{Name: "transaction_isolation", Case: SCUpper},
 		{Name: "unique_checks", IsBoolean: true, SupportSetVar: true},
 		{Name: "updatable_views_with_limit", IsBoolean: true, SupportSetVar: true},
 	}

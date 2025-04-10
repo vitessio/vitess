@@ -1526,13 +1526,13 @@ var (
 	}, {
 		input: "set @@transaction_isolation = 'read-committed'",
 	}, {
-		input: "set tx_isolation = 'repeatable read'",
+		input: "set transaction_isolation = 'repeatable read'",
 	}, {
-		input: "set tx_isolation = 'read committed'",
+		input: "set transaction_isolation = 'read committed'",
 	}, {
-		input: "set tx_isolation = 'read uncommitted'",
+		input: "set transaction_isolation = 'read uncommitted'",
 	}, {
-		input: "set tx_isolation = 'serializable'",
+		input: "set transaction_isolation = 'serializable'",
 	}, {
 		input: "set sql_safe_updates = 0",
 	}, {
