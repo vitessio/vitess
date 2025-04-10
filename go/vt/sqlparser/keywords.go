@@ -669,6 +669,7 @@ var keywords = map[string]int{
 	"value":                         VALUE,
 	"values":                        VALUES,
 	"var_pop":                       VAR_POP,
+	"var_samp":                      VAR_SAMP,
 	"varbinary":                     VARBINARY,
 	"varchar":                       VARCHAR,
 	"varcharacter":                  VARCHARACTER,
