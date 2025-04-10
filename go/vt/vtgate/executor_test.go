@@ -122,8 +122,8 @@ func TestPlanKey(t *testing.T) {
 		expectedPlanPrefixKey: "CurrentKeyspace: ks1, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255",
 	}}
 	cfg := econtext.VCursorConfig{
-		Collation:         collations.CollationUtf8mb4ID,
-		DefaultTabletType: topodatapb.TabletType_PRIMARY,
+		Collation:  collations.CollationUtf8mb4ID,
+		TabletType: &StaticConfig{TabletType: topodatapb.TabletType_PRIMARY},
 	}
 
 	e, _, _, _, ctx := createExecutorEnv(t)

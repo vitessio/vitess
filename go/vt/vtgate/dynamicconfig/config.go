@@ -16,7 +16,17 @@ limitations under the License.
 
 package dynamicconfig
 
-import vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+import (
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+)
+
+// ExecutorConfig is the interface for the
+// dynamic configurations that the executor uses.
+type ExecutorConfig interface {
+	DDL
+	DefaultTabletType
+}
 
 type DDL interface {
 	OnlineEnabled() bool
@@ -25,4 +35,8 @@ type DDL interface {
 
 type TxMode interface {
 	TransactionMode() vtgatepb.TransactionMode
+}
+
+type DefaultTabletType interface {
+	DefaultTabletType() topodatapb.TabletType
 }

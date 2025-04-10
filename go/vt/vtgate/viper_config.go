@@ -18,22 +18,25 @@ package vtgate
 
 import (
 	"vitess.io/vitess/go/viperutil"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 // DynamicViperConfig is a dynamic config that uses viper.
 type DynamicViperConfig struct {
-	onlineDDL viperutil.Value[bool]
-	directDDL viperutil.Value[bool]
-	txMode    viperutil.Value[vtgatepb.TransactionMode]
+	onlineDDL  viperutil.Value[bool]
+	directDDL  viperutil.Value[bool]
+	txMode     viperutil.Value[vtgatepb.TransactionMode]
+	tabletType viperutil.Value[topodatapb.TabletType]
 }
 
 // NewDynamicViperConfig creates a new dynamic viper config
 func NewDynamicViperConfig() *DynamicViperConfig {
 	return &DynamicViperConfig{
-		onlineDDL: enableOnlineDDL,
-		directDDL: enableDirectDDL,
-		txMode:    transactionMode,
+		onlineDDL:  enableOnlineDDL,
+		directDDL:  enableDirectDDL,
+		txMode:     transactionMode,
+		tabletType: defaultTabletType,
 	}
 }
 
@@ -47,4 +50,8 @@ func (d *DynamicViperConfig) DirectEnabled() bool {
 
 func (d *DynamicViperConfig) TransactionMode() vtgatepb.TransactionMode {
 	return d.txMode.Get()
+}
+
+func (d *DynamicViperConfig) DefaultTabletType() topodatapb.TabletType {
+	return d.tabletType.Get()
 }

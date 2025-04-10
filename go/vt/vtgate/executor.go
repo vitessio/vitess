@@ -168,8 +168,8 @@ type (
 
 		warmingReadsChannel chan bool
 
-		vConfig   econtext.VCursorConfig
-		ddlConfig dynamicconfig.DDL
+		vConfig        econtext.VCursorConfig
+		executorConfig dynamicconfig.ExecutorConfig
 	}
 
 	Metrics struct {
@@ -204,7 +204,7 @@ func NewExecutor(
 	plans *PlanCache,
 	schemaTracker SchemaInfo,
 	pv plancontext.PlannerVersion,
-	ddlConfig dynamicconfig.DDL,
+	executorConfig dynamicconfig.ExecutorConfig,
 ) *Executor {
 	e := &Executor{
 		config:      eConfig,
@@ -219,7 +219,7 @@ func NewExecutor(
 		schemaTracker:       schemaTracker,
 		plans:               plans,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
-		ddlConfig:           ddlConfig,
+		executorConfig:      executorConfig,
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
@@ -1130,7 +1130,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
-	return econtext.ParseDestinationTarget(targetString, topodatapb.TabletType(defaultTabletType.Get()), e.VSchema())
+	return econtext.ParseDestinationTarget(targetString, e.executorConfig.DefaultTabletType(), e.VSchema())
 }
 
 func (e *Executor) fetchOrCreatePlan(
@@ -1373,7 +1373,7 @@ func (e *Executor) buildStatement(
 	qh sqlparser.QueryHints,
 	paramsCount uint16,
 ) (*engine.Plan, error) {
-	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, e.ddlConfig)
+	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, e.executorConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -1568,9 +1568,9 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 	}
 
 	e.vConfig = econtext.VCursorConfig{
-		Collation:         connCollation,
-		DefaultTabletType: topodatapb.TabletType(defaultTabletType.Get()),
-		PlannerVersion:    pv,
+		Collation:      connCollation,
+		TabletType:     e.executorConfig,
+		PlannerVersion: pv,
 
 		QueryTimeout:  queryTimeout,
 		MaxMemoryRows: maxMemoryRows,
