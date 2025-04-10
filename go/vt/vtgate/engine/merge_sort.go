@@ -55,9 +55,6 @@ type MergeSort struct {
 	FetchLastInsertID       bool
 }
 
-// RouteType satisfies Primitive.
-func (ms *MergeSort) RouteType() string { return "MergeSort" }
-
 // TryExecute is not supported.
 func (ms *MergeSort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Execute is not reachable")

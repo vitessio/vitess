@@ -56,18 +56,6 @@ func NewConcatenate(Sources []Primitive, ignoreCols []int) *Concatenate {
 	}
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (c *Concatenate) RouteType() string {
-	return "Concatenate"
-}
-
-func formatTwoOptionsNicely(a, b string) string {
-	if a == b {
-		return a
-	}
-	return a + "_" + b
-}
-
 // errWrongNumberOfColumnsInSelect is an error
 var errWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 
@@ -462,5 +450,5 @@ func (c *Concatenate) Inputs() ([]Primitive, []map[string]any) {
 }
 
 func (c *Concatenate) description() PrimitiveDescription {
-	return PrimitiveDescription{OperatorType: c.RouteType()}
+	return PrimitiveDescription{OperatorType: "Concatenate"}
 }

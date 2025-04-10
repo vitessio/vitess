@@ -201,11 +201,6 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 	return nil
 }
 
-// RouteType implements the Primitive interface
-func (hj *HashJoin) RouteType() string {
-	return "HashJoin"
-}
-
 // GetFields implements the Primitive interface
 func (hj *HashJoin) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)

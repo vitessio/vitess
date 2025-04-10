@@ -115,11 +115,6 @@ func (jv *ValuesJoin) Inputs() ([]Primitive, []map[string]any) {
 	return []Primitive{jv.Left, jv.Right}, nil
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (jv *ValuesJoin) RouteType() string {
-	return "ValuesJoin"
-}
-
 // NeedsTransaction implements the Primitive interface
 func (jv *ValuesJoin) NeedsTransaction() bool {
 	return jv.Right.NeedsTransaction() || jv.Left.NeedsTransaction()

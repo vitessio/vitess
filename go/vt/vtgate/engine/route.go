@@ -110,11 +110,6 @@ var (
 	partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
 )
 
-// RouteType returns a description of the query routing type used by the primitive
-func (route *Route) RouteType() string {
-	return route.Opcode.String()
-}
-
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	rss, bvs, err := route.findRoute(ctx, vcursor, bindVars)

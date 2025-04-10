@@ -37,10 +37,6 @@ func (e *ExecStmt) NeedsTransaction() bool {
 	return e.Input.NeedsTransaction()
 }
 
-func (e *ExecStmt) RouteType() string {
-	return "EXECUTE"
-}
-
 func (e *ExecStmt) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.VT12001("prepare command on execute statement")
 }
@@ -65,7 +61,7 @@ func (e *ExecStmt) description() PrimitiveDescription {
 		params = append(params, p.Name.Lowered())
 	}
 	return PrimitiveDescription{
-		OperatorType: e.RouteType(),
+		OperatorType: "EXECUTE",
 		Other: map[string]any{
 			"Parameters": params,
 		},

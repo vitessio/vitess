@@ -40,10 +40,6 @@ type DMLWithInput struct {
 	BVList     []map[string]int
 }
 
-func (dml *DMLWithInput) RouteType() string {
-	return "DMLWithInput"
-}
-
 func (dml *DMLWithInput) Inputs() ([]Primitive, []map[string]any) {
 	return append([]Primitive{dml.Input}, dml.DMLs...), nil
 }

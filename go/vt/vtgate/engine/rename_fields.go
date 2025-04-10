@@ -47,11 +47,6 @@ func NewRenameField(cols []string, indices []int, input Primitive) (*RenameField
 	}, nil
 }
 
-// RouteType implements the primitive interface
-func (r *RenameFields) RouteType() string {
-	return r.Input.RouteType()
-}
-
 // TryExecute implements the Primitive interface
 func (r *RenameFields) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := vcursor.ExecutePrimitive(ctx, r.Input, bindVars, wantfields)

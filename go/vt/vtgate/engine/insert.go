@@ -104,11 +104,6 @@ func newInsert(
 	return ins
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (ins *Insert) RouteType() string {
-	return insName[ins.Opcode]
-}
-
 // TryExecute performs a non-streaming exec.
 func (ins *Insert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	switch ins.Opcode {

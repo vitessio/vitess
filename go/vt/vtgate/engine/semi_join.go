@@ -103,11 +103,6 @@ func (jn *SemiJoin) Inputs() ([]Primitive, []map[string]any) {
 	}}
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (jn *SemiJoin) RouteType() string {
-	return "SemiJoin"
-}
-
 // NeedsTransaction implements the Primitive interface
 func (jn *SemiJoin) NeedsTransaction() bool {
 	return jn.Right.NeedsTransaction() || jn.Left.NeedsTransaction()

@@ -53,11 +53,6 @@ type Limit struct {
 
 var UpperLimitStr = "__upper_limit"
 
-// RouteType returns a description of the query routing type used by the primitive
-func (l *Limit) RouteType() string {
-	return l.Input.RouteType()
-}
-
 // TryExecute satisfies the Primitive interface.
 func (l *Limit) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, offset, err := l.getCountAndOffset(ctx, vcursor, bindVars)

@@ -47,11 +47,6 @@ func (v *AlterVSchema) description() PrimitiveDescription {
 	}
 }
 
-// RouteType implements the Primitive interface
-func (v *AlterVSchema) RouteType() string {
-	return "AlterVSchema"
-}
-
 // TryExecute implements the Primitive interface
 func (v *AlterVSchema) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	err := vcursor.ExecuteVSchema(ctx, v.Keyspace.Name, v.AlterVschemaDDL)

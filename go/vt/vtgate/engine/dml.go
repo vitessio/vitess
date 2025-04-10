@@ -97,11 +97,6 @@ func (dml *DML) execMultiDestination(ctx context.Context, primitive Primitive, v
 	return dml.execMultiShard(ctx, primitive, vcursor, rss, queries)
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (dml *DML) RouteType() string {
-	return dml.Opcode.String()
-}
-
 func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
 	for _, rs := range rss {
 		if rs != nil && rs.Target.TabletType != topodatapb.TabletType_PRIMARY {

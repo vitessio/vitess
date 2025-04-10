@@ -62,11 +62,6 @@ func (ddl *DDL) description() PrimitiveDescription {
 	}
 }
 
-// RouteType implements the Primitive interface
-func (ddl *DDL) RouteType() string {
-	return "DDL"
-}
-
 // IsOnlineSchemaDDL returns true if the query is an online schema change DDL
 func (ddl *DDL) isOnlineSchemaDDL() bool {
 	switch ddl.DDL.GetAction() {

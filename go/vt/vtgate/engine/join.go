@@ -273,11 +273,6 @@ func (code JoinOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (jn *Join) RouteType() string {
-	return "Join"
-}
-
 // NeedsTransaction implements the Primitive interface
 func (jn *Join) NeedsTransaction() bool {
 	return jn.Right.NeedsTransaction() || jn.Left.NeedsTransaction()

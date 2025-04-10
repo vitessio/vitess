@@ -99,11 +99,6 @@ var unsupportedSQLModes = []string{"ANSI_QUOTES", "NO_BACKSLASH_ESCAPES", "PIPES
 
 var _ Primitive = (*Set)(nil)
 
-// RouteType implements the Primitive interface method.
-func (s *Set) RouteType() string {
-	return "Set"
-}
-
 // TryExecute implements the Primitive interface method.
 func (s *Set) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	input, err := vcursor.ExecutePrimitive(ctx, s.Input, bindVars, false)

@@ -246,7 +246,6 @@ type (
 	// During execution, the Primitive's pass Result objects up the tree structure, until reaching the root,
 	// and its result is passed to the client.
 	Primitive interface {
-		RouteType() string
 		GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 		NeedsTransaction() bool
 

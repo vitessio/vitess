@@ -53,11 +53,6 @@ func (v *RevertMigration) description() PrimitiveDescription {
 	}
 }
 
-// RouteType implements the Primitive interface
-func (v *RevertMigration) RouteType() string {
-	return "RevertMigration"
-}
-
 // TryExecute implements the Primitive interface
 func (v *RevertMigration) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{

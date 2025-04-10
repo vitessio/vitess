@@ -50,11 +50,6 @@ func (v *ThrottleApp) description() PrimitiveDescription {
 	}
 }
 
-// RouteType implements the Primitive interface
-func (v *ThrottleApp) RouteType() string {
-	return "ThrottleApp"
-}
-
 // TryExecute implements the Primitive interface
 func (v *ThrottleApp) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	if err := vcursor.ThrottleApp(ctx, v.ThrottledAppRule); err != nil {

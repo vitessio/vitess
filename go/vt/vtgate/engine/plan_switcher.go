@@ -43,10 +43,6 @@ type PlanSwitcher struct {
 	Optimized   Primitive
 }
 
-func (s *PlanSwitcher) RouteType() string {
-	return "PlanSwitcher"
-}
-
 func (s *PlanSwitcher) GetFields(
 	ctx context.Context,
 	vcursor VCursor,
@@ -117,7 +113,7 @@ func (s *PlanSwitcher) description() PrimitiveDescription {
 		other["BaselineErr"] = s.BaselineErr.Error()
 	}
 	return PrimitiveDescription{
-		OperatorType: s.RouteType(),
+		OperatorType: "PlanSwitcher",
 		Other:        other,
 	}
 }

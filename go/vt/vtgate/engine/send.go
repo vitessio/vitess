@@ -72,15 +72,6 @@ func (s *Send) NeedsTransaction() bool {
 	return s.IsDML
 }
 
-// RouteType implements Primitive interface
-func (s *Send) RouteType() string {
-	if s.IsDML {
-		return "SendDML"
-	}
-
-	return "Send"
-}
-
 // TryExecute implements Primitive interface
 func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if err := s.commitIfDDL(ctx, vcursor); err != nil {

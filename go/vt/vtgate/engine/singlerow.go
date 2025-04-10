@@ -32,11 +32,6 @@ type SingleRow struct {
 	noFields
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (s *SingleRow) RouteType() string {
-	return ""
-}
-
 // TryExecute performs a non-streaming exec.
 func (s *SingleRow) TryExecute(context.Context, VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
 	result := sqltypes.Result{

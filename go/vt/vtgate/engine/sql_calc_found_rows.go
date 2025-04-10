@@ -33,11 +33,6 @@ type SQLCalcFoundRows struct {
 	CountPrimitive Primitive
 }
 
-// RouteType implements the Primitive interface
-func (s *SQLCalcFoundRows) RouteType() string {
-	return "SQLCalcFoundRows"
-}
-
 // TryExecute implements the Primitive interface
 func (s *SQLCalcFoundRows) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	limitQr, err := vcursor.ExecutePrimitive(ctx, s.LimitPrimitive, bindVars, wantfields)

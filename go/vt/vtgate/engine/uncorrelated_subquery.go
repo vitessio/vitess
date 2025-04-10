@@ -50,11 +50,6 @@ func (ps *UncorrelatedSubquery) Inputs() ([]Primitive, []map[string]any) {
 	}}
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (ps *UncorrelatedSubquery) RouteType() string {
-	return ps.Opcode.String()
-}
-
 // TryExecute satisfies the Primitive interface.
 func (ps *UncorrelatedSubquery) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)

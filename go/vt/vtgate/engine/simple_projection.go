@@ -46,11 +46,6 @@ func (sc *SimpleProjection) NeedsTransaction() bool {
 	return sc.Input.NeedsTransaction()
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (sc *SimpleProjection) RouteType() string {
-	return sc.Input.RouteType()
-}
-
 // TryExecute performs a non-streaming exec.
 func (sc *SimpleProjection) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	inner, err := vcursor.ExecutePrimitive(ctx, sc.Input, bindVars, wantfields)
