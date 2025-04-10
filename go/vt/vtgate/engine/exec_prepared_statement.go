@@ -41,10 +41,6 @@ func (e *ExecStmt) RouteType() string {
 	return "EXECUTE"
 }
 
-func (e *ExecStmt) GetKeyspaceName() string {
-	return e.Input.GetKeyspaceName()
-}
-
 func (e *ExecStmt) GetTableName() string {
 	return e.Input.GetTableName()
 }

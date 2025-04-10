@@ -61,15 +61,6 @@ func (c *Concatenate) RouteType() string {
 	return "Concatenate"
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to
-func (c *Concatenate) GetKeyspaceName() string {
-	res := c.Sources[0].GetKeyspaceName()
-	for i := 1; i < len(c.Sources); i++ {
-		res = formatTwoOptionsNicely(res, c.Sources[i].GetKeyspaceName())
-	}
-	return res
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (c *Concatenate) GetTableName() string {
 	res := c.Sources[0].GetTableName()

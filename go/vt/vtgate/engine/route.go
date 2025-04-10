@@ -115,11 +115,6 @@ func (route *Route) RouteType() string {
 	return route.Opcode.String()
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (route *Route) GetKeyspaceName() string {
-	return route.Keyspace.Name
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (route *Route) GetTableName() string {
 	return route.TableName

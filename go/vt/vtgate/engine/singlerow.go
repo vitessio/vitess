@@ -37,11 +37,6 @@ func (s *SingleRow) RouteType() string {
 	return ""
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (s *SingleRow) GetKeyspaceName() string {
-	return ""
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (s *SingleRow) GetTableName() string {
 	return ""

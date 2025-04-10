@@ -161,11 +161,6 @@ func (d *Distinct) RouteType() string {
 	return d.Source.RouteType()
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (d *Distinct) GetKeyspaceName() string {
-	return d.Source.GetKeyspaceName()
-}
-
 // GetTableName implements the Primitive interface
 func (d *Distinct) GetTableName() string {
 	return d.Source.GetTableName()

@@ -120,14 +120,6 @@ func (jv *ValuesJoin) RouteType() string {
 	return "ValuesJoin"
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (jv *ValuesJoin) GetKeyspaceName() string {
-	if jv.Left.GetKeyspaceName() == jv.Right.GetKeyspaceName() {
-		return jv.Left.GetKeyspaceName()
-	}
-	return jv.Left.GetKeyspaceName() + "_" + jv.Right.GetKeyspaceName()
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (jv *ValuesJoin) GetTableName() string {
 	return jv.Left.GetTableName() + "_" + jv.Right.GetTableName()

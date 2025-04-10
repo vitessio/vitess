@@ -53,11 +53,6 @@ func (f *FkVerify) RouteType() string {
 	return "FKVerify"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (f *FkVerify) GetKeyspaceName() string {
-	return f.Exec.GetKeyspaceName()
-}
-
 // GetTableName implements the Primitive interface
 func (f *FkVerify) GetTableName() string {
 	return f.Exec.GetTableName()

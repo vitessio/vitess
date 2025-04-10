@@ -134,11 +134,6 @@ func (code InsertOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(insName[code])
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (ic *InsertCommon) GetKeyspaceName() string {
-	return ic.Keyspace.Name
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (ic *InsertCommon) GetTableName() string {
 	return ic.TableName

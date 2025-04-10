@@ -51,11 +51,6 @@ func (sc *SimpleProjection) RouteType() string {
 	return sc.Input.RouteType()
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (sc *SimpleProjection) GetKeyspaceName() string {
-	return sc.Input.GetKeyspaceName()
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (sc *SimpleProjection) GetTableName() string {
 	return sc.Input.GetTableName()

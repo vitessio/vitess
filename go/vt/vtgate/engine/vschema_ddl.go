@@ -52,11 +52,6 @@ func (v *AlterVSchema) RouteType() string {
 	return "AlterVSchema"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (v *AlterVSchema) GetKeyspaceName() string {
-	return v.Keyspace.Name
-}
-
 // GetTableName implements the Primitive interface
 func (v *AlterVSchema) GetTableName() string {
 	return v.AlterVschemaDDL.Table.Name.String()

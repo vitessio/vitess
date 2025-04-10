@@ -81,11 +81,6 @@ func (s *Send) RouteType() string {
 	return "Send"
 }
 
-// GetKeyspaceName implements Primitive interface
-func (s *Send) GetKeyspaceName() string {
-	return s.Keyspace.Name
-}
-
 // GetTableName implements Primitive interface
 func (s *Send) GetTableName() string {
 	return ""

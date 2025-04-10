@@ -104,11 +104,6 @@ func (dml *DML) RouteType() string {
 	return dml.Opcode.String()
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (dml *DML) GetKeyspaceName() string {
-	return dml.Keyspace.Name
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (dml *DML) GetTableName() string {
 	sort.Strings(dml.TableNames)

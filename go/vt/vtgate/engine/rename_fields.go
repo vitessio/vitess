@@ -52,11 +52,6 @@ func (r *RenameFields) RouteType() string {
 	return r.Input.RouteType()
 }
 
-// GetKeyspaceName implements the primitive interface
-func (r *RenameFields) GetKeyspaceName() string {
-	return r.Input.GetKeyspaceName()
-}
-
 // GetTableName implements the primitive interface
 func (r *RenameFields) GetTableName() string {
 	return r.Input.GetTableName()

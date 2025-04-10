@@ -65,10 +65,6 @@ func (f *fakePrimitive) RouteType() string {
 	return "Fake"
 }
 
-func (f *fakePrimitive) GetKeyspaceName() string {
-	return "fakeKs"
-}
-
 func (f *fakePrimitive) GetTableName() string {
 	return "fakeTable"
 }

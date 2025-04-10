@@ -44,10 +44,6 @@ func (dml *DMLWithInput) RouteType() string {
 	return "DMLWithInput"
 }
 
-func (dml *DMLWithInput) GetKeyspaceName() string {
-	return dml.Input.GetKeyspaceName()
-}
-
 func (dml *DMLWithInput) GetTableName() string {
 	return dml.Input.GetTableName()
 }

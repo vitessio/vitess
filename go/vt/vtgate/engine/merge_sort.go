@@ -58,9 +58,6 @@ type MergeSort struct {
 // RouteType satisfies Primitive.
 func (ms *MergeSort) RouteType() string { return "MergeSort" }
 
-// GetKeyspaceName satisfies Primitive.
-func (ms *MergeSort) GetKeyspaceName() string { return "" }
-
 // GetTableName satisfies Primitive.
 func (ms *MergeSort) GetTableName() string { return "" }
 

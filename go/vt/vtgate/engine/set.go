@@ -104,11 +104,6 @@ func (s *Set) RouteType() string {
 	return "Set"
 }
 
-// GetKeyspaceName implements the Primitive interface method.
-func (s *Set) GetKeyspaceName() string {
-	return ""
-}
-
 // GetTableName implements the Primitive interface method.
 func (s *Set) GetTableName() string {
 	return ""

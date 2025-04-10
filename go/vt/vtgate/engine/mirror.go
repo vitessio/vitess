@@ -62,10 +62,6 @@ func (m *percentBasedMirror) RouteType() string {
 	return "Mirror"
 }
 
-func (m *percentBasedMirror) GetKeyspaceName() string {
-	return m.primitive.GetKeyspaceName()
-}
-
 func (m *percentBasedMirror) GetTableName() string {
 	return m.primitive.GetTableName()
 }

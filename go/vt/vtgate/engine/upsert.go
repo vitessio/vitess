@@ -55,14 +55,6 @@ func (u *Upsert) RouteType() string {
 	return "UPSERT"
 }
 
-// GetKeyspaceName implements Primitive interface type.
-func (u *Upsert) GetKeyspaceName() string {
-	if len(u.Upserts) > 0 {
-		return u.Upserts[0].Insert.GetKeyspaceName()
-	}
-	return ""
-}
-
 // GetTableName implements Primitive interface type.
 func (u *Upsert) GetTableName() string {
 	if len(u.Upserts) > 0 {

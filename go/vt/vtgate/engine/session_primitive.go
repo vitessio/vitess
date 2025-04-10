@@ -49,11 +49,6 @@ func (s *SessionPrimitive) RouteType() string {
 	return "SHOW"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (s *SessionPrimitive) GetKeyspaceName() string {
-	return ""
-}
-
 // GetTableName implements the Primitive interface
 func (s *SessionPrimitive) GetTableName() string {
 	return ""

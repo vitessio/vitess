@@ -44,11 +44,6 @@ func (r *Rows) RouteType() string {
 	return "Rows"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (r *Rows) GetKeyspaceName() string {
-	return ""
-}
-
 // GetTableName implements the Primitive interface
 func (r *Rows) GetTableName() string {
 	return ""

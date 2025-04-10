@@ -46,15 +46,6 @@ func (s *Sequential) RouteType() string {
 	return "Sequential"
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to
-func (s *Sequential) GetKeyspaceName() string {
-	res := s.Sources[0].GetKeyspaceName()
-	for i := 1; i < len(s.Sources); i++ {
-		res = formatTwoOptionsNicely(res, s.Sources[i].GetKeyspaceName())
-	}
-	return res
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (s *Sequential) GetTableName() string {
 	res := s.Sources[0].GetTableName()

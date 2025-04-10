@@ -39,10 +39,6 @@ func (s *ShowExec) RouteType() string {
 	return "ShowExec"
 }
 
-func (s *ShowExec) GetKeyspaceName() string {
-	return ""
-}
-
 func (s *ShowExec) GetTableName() string {
 	return ""
 }

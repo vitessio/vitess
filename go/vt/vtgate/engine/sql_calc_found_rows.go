@@ -38,11 +38,6 @@ func (s *SQLCalcFoundRows) RouteType() string {
 	return "SQLCalcFoundRows"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (s *SQLCalcFoundRows) GetKeyspaceName() string {
-	return s.LimitPrimitive.GetKeyspaceName()
-}
-
 // GetTableName implements the Primitive interface
 func (s *SQLCalcFoundRows) GetTableName() string {
 	return s.LimitPrimitive.GetTableName()

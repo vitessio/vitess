@@ -38,10 +38,6 @@ func (u *Unlock) RouteType() string {
 	return "UNLOCK"
 }
 
-func (u *Unlock) GetKeyspaceName() string {
-	return ""
-}
-
 func (u *Unlock) GetTableName() string {
 	return ""
 }

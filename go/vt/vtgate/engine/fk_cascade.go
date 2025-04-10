@@ -67,11 +67,6 @@ func (fkc *FkCascade) RouteType() string {
 	return "FkCascade"
 }
 
-// GetKeyspaceName implements the Primitive interface.
-func (fkc *FkCascade) GetKeyspaceName() string {
-	return fkc.Parent.GetKeyspaceName()
-}
-
 // GetTableName implements the Primitive interface.
 func (fkc *FkCascade) GetTableName() string {
 	return fkc.Parent.GetTableName()

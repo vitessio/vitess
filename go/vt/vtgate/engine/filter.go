@@ -44,11 +44,6 @@ func (f *Filter) RouteType() string {
 	return f.Input.RouteType()
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (f *Filter) GetKeyspaceName() string {
-	return f.Input.GetKeyspaceName()
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (f *Filter) GetTableName() string {
 	return f.Input.GetTableName()

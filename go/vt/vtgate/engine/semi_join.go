@@ -108,14 +108,6 @@ func (jn *SemiJoin) RouteType() string {
 	return "SemiJoin"
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (jn *SemiJoin) GetKeyspaceName() string {
-	if jn.Left.GetKeyspaceName() == jn.Right.GetKeyspaceName() {
-		return jn.Left.GetKeyspaceName()
-	}
-	return jn.Left.GetKeyspaceName() + "_" + jn.Right.GetKeyspaceName()
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (jn *SemiJoin) GetTableName() string {
 	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()

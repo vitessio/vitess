@@ -62,11 +62,6 @@ func (l *Lock) RouteType() string {
 	return "lock"
 }
 
-// GetKeyspaceName is part of the Primitive interface
-func (l *Lock) GetKeyspaceName() string {
-	return l.Keyspace.Name
-}
-
 // GetTableName is part of the Primitive interface
 func (l *Lock) GetTableName() string {
 	return "dual"

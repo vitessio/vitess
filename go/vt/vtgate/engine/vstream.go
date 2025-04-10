@@ -50,11 +50,6 @@ func (v *VStream) RouteType() string {
 	return "VStream"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (v *VStream) GetKeyspaceName() string {
-	return v.Keyspace.Name
-}
-
 // GetTableName implements the Primitive interface
 func (v *VStream) GetTableName() string {
 	return v.TableName

@@ -55,11 +55,6 @@ func (v *ThrottleApp) RouteType() string {
 	return "ThrottleApp"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (v *ThrottleApp) GetKeyspaceName() string {
-	return v.Keyspace.Name
-}
-
 // GetTableName implements the Primitive interface
 func (v *ThrottleApp) GetTableName() string {
 	return ""

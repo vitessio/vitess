@@ -206,14 +206,6 @@ func (hj *HashJoin) RouteType() string {
 	return "HashJoin"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (hj *HashJoin) GetKeyspaceName() string {
-	if hj.Left.GetKeyspaceName() == hj.Right.GetKeyspaceName() {
-		return hj.Left.GetKeyspaceName()
-	}
-	return hj.Left.GetKeyspaceName() + "_" + hj.Right.GetKeyspaceName()
-}
-
 // GetTableName implements the Primitive interface
 func (hj *HashJoin) GetTableName() string {
 	return hj.Left.GetTableName() + "_" + hj.Right.GetTableName()

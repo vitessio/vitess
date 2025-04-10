@@ -49,11 +49,6 @@ func (ms *MemorySort) RouteType() string {
 	return ms.Input.RouteType()
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (ms *MemorySort) GetKeyspaceName() string {
-	return ms.Input.GetKeyspaceName()
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (ms *MemorySort) GetTableName() string {
 	return ms.Input.GetTableName()

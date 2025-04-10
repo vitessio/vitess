@@ -60,11 +60,6 @@ func (vr *VindexLookup) RouteType() string {
 	return "VindexLookup"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (vr *VindexLookup) GetKeyspaceName() string {
-	return vr.SendTo.GetKeyspaceName()
-}
-
 // GetTableName implements the Primitive interface
 func (vr *VindexLookup) GetTableName() string {
 	return vr.SendTo.GetTableName()

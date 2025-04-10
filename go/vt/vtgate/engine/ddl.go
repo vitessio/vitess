@@ -67,11 +67,6 @@ func (ddl *DDL) RouteType() string {
 	return "DDL"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (ddl *DDL) GetKeyspaceName() string {
-	return ddl.Keyspace.Name
-}
-
 // GetTableName implements the Primitive interface
 func (ddl *DDL) GetTableName() string {
 	return ddl.DDL.GetTable().Name.String()

@@ -47,18 +47,11 @@ func (s *PlanSwitcher) RouteType() string {
 	return "PlanSwitcher"
 }
 
-func (s *PlanSwitcher) GetKeyspaceName() string {
-	if s.Baseline != nil {
-		return s.Baseline.GetKeyspaceName()
-	}
-	return s.Optimized.GetKeyspaceName()
-}
-
 func (s *PlanSwitcher) GetTableName() string {
 	if s.Baseline != nil {
-		return s.Baseline.GetKeyspaceName()
+		return s.Baseline.GetTableName()
 	}
-	return s.Optimized.GetKeyspaceName()
+	return s.Optimized.GetTableName()
 }
 
 func (s *PlanSwitcher) GetFields(

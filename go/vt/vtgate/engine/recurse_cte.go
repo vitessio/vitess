@@ -119,13 +119,6 @@ func (r *RecurseCTE) RouteType() string {
 	return "RecurseCTE"
 }
 
-func (r *RecurseCTE) GetKeyspaceName() string {
-	if r.Seed.GetKeyspaceName() == r.Term.GetKeyspaceName() {
-		return r.Seed.GetKeyspaceName()
-	}
-	return r.Seed.GetKeyspaceName() + "_" + r.Term.GetKeyspaceName()
-}
-
 func (r *RecurseCTE) GetTableName() string {
 	return r.Seed.GetTableName()
 }

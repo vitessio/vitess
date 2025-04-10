@@ -49,11 +49,6 @@ func (updTarget *UpdateTarget) RouteType() string {
 	return "UpdateTarget"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (updTarget *UpdateTarget) GetKeyspaceName() string {
-	return updTarget.Target
-}
-
 // GetTableName implements the Primitive interface
 func (updTarget *UpdateTarget) GetTableName() string {
 	return ""

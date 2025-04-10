@@ -60,11 +60,6 @@ func (v *VExplain) RouteType() string {
 	return v.Input.RouteType()
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (v *VExplain) GetKeyspaceName() string {
-	return v.Input.GetKeyspaceName()
-}
-
 // GetTableName implements the Primitive interface
 func (v *VExplain) GetTableName() string {
 	return v.Input.GetTableName()

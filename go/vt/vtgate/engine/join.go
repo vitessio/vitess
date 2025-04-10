@@ -278,14 +278,6 @@ func (jn *Join) RouteType() string {
 	return "Join"
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (jn *Join) GetKeyspaceName() string {
-	if jn.Left.GetKeyspaceName() == jn.Right.GetKeyspaceName() {
-		return jn.Left.GetKeyspaceName()
-	}
-	return jn.Left.GetKeyspaceName() + "_" + jn.Right.GetKeyspaceName()
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (jn *Join) GetTableName() string {
 	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()

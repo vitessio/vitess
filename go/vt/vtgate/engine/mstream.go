@@ -48,11 +48,6 @@ func (m *MStream) RouteType() string {
 	return "MStream"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (m *MStream) GetKeyspaceName() string {
-	return m.Keyspace.Name
-}
-
 // GetTableName implements the Primitive interface
 func (m *MStream) GetTableName() string {
 	return m.TableName

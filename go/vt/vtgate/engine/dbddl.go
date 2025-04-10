@@ -86,11 +86,6 @@ func (c *DBDDL) RouteType() string {
 	return "DropDB"
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (c *DBDDL) GetKeyspaceName() string {
-	return c.name
-}
-
 // GetTableName implements the Primitive interface
 func (c *DBDDL) GetTableName() string {
 	return ""

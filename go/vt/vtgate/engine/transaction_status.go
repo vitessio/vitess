@@ -41,10 +41,6 @@ func (t *TransactionStatus) RouteType() string {
 	return "TransactionStatus"
 }
 
-func (t *TransactionStatus) GetKeyspaceName() string {
-	return ""
-}
-
 func (t *TransactionStatus) GetTableName() string {
 	return ""
 }

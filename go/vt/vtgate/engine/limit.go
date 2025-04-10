@@ -58,11 +58,6 @@ func (l *Limit) RouteType() string {
 	return l.Input.RouteType()
 }
 
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (l *Limit) GetKeyspaceName() string {
-	return l.Input.GetKeyspaceName()
-}
-
 // GetTableName specifies the table that this primitive routes to.
 func (l *Limit) GetTableName() string {
 	return l.Input.GetTableName()

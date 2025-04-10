@@ -44,11 +44,6 @@ func (p *Projection) RouteType() string {
 	return p.Input.RouteType()
 }
 
-// GetKeyspaceName implements the Primitive interface
-func (p *Projection) GetKeyspaceName() string {
-	return p.Input.GetKeyspaceName()
-}
-
 // GetTableName implements the Primitive interface
 func (p *Projection) GetTableName() string {
 	return p.Input.GetTableName()
