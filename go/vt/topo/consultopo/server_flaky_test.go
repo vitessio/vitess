@@ -304,7 +304,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 		}
 
 		// Create the server on the new root.
-		ts, err := topo.OpenServer("consul", serverAddr, path.Join("globalRoot", topo.GlobalCell))
+		_, err := topo.OpenServer("consul", serverAddr, path.Join("globalRoot", topo.GlobalCell))
 		if err == nil {
 			t.Fatal("Expected OpenServer() to return an error due to bad config, got nil")
 		}
