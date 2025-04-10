@@ -37,11 +37,6 @@ func (s *SingleRow) RouteType() string {
 	return ""
 }
 
-// GetTableName specifies the table that this primitive routes to.
-func (s *SingleRow) GetTableName() string {
-	return ""
-}
-
 // TryExecute performs a non-streaming exec.
 func (s *SingleRow) TryExecute(context.Context, VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
 	result := sqltypes.Result{

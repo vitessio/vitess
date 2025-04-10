@@ -60,11 +60,6 @@ func (v *VExplain) RouteType() string {
 	return v.Input.RouteType()
 }
 
-// GetTableName implements the Primitive interface
-func (v *VExplain) GetTableName() string {
-	return v.Input.GetTableName()
-}
-
 // GetFields implements the Primitive interface
 func (v *VExplain) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	var fields []*querypb.Field

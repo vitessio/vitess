@@ -108,20 +108,13 @@ func (jn *SemiJoin) RouteType() string {
 	return "SemiJoin"
 }
 
-// GetTableName specifies the table that this primitive routes to.
-func (jn *SemiJoin) GetTableName() string {
-	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
-}
-
 // NeedsTransaction implements the Primitive interface
 func (jn *SemiJoin) NeedsTransaction() bool {
 	return jn.Right.NeedsTransaction() || jn.Left.NeedsTransaction()
 }
 
 func (jn *SemiJoin) description() PrimitiveDescription {
-	other := map[string]any{
-		"TableName": jn.GetTableName(),
-	}
+	other := map[string]any{}
 	if len(jn.Vars) > 0 {
 		other["JoinVars"] = orderedStringIntMap(jn.Vars)
 	}

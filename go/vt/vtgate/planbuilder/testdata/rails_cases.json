@@ -13,7 +13,6 @@
         "JoinVars": {
           "order2s_id": 0
         },
-        "TableName": "customer2s, order2s_author5s, book6s_book6s_order2s_supplier5s",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -23,8 +22,7 @@
               "Sharded": true
             },
             "FieldQuery": "select order2s.id from order2s, customer2s where 1 != 1",
-            "Query": "select order2s.id from order2s, customer2s where customer2s.id = order2s.customer2_id",
-            "Table": "customer2s, order2s"
+            "Query": "select order2s.id from order2s, customer2s where customer2s.id = order2s.customer2_id"
           },
           {
             "OperatorType": "Join",
@@ -33,7 +31,6 @@
             "JoinVars": {
               "book6s_supplier5_id": 4
             },
-            "TableName": "author5s, book6s_book6s_order2s_supplier5s",
             "Inputs": [
               {
                 "OperatorType": "Join",
@@ -42,7 +39,6 @@
                 "JoinVars": {
                   "book6s_id": 5
                 },
-                "TableName": "author5s, book6s_book6s_order2s",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -52,8 +48,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select author5s.id, author5s.`name`, author5s.created_at, author5s.updated_at, book6s.supplier5_id, book6s.id from author5s, book6s where 1 != 1",
-                    "Query": "select author5s.id, author5s.`name`, author5s.created_at, author5s.updated_at, book6s.supplier5_id, book6s.id from author5s, book6s where book6s.author5_id = author5s.id",
-                    "Table": "author5s, book6s"
+                    "Query": "select author5s.id, author5s.`name`, author5s.created_at, author5s.updated_at, book6s.supplier5_id, book6s.id from author5s, book6s where book6s.author5_id = author5s.id"
                   },
                   {
                     "OperatorType": "Route",
@@ -64,7 +59,6 @@
                     },
                     "FieldQuery": "select 1 from book6s_order2s where 1 != 1",
                     "Query": "select 1 from book6s_order2s where book6s_order2s.order2_id = :order2s_id /* INT64 */ and book6s_order2s.book6_id = :book6s_id /* INT64 */",
-                    "Table": "book6s_order2s",
                     "Values": [
                       ":book6s_id"
                     ],
@@ -81,7 +75,6 @@
                 },
                 "FieldQuery": "select 1 from supplier5s where 1 != 1",
                 "Query": "select 1 from supplier5s where supplier5s.id = :book6s_supplier5_id /* INT64 */",
-                "Table": "supplier5s",
                 "Values": [
                   ":book6s_supplier5_id"
                 ],

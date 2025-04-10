@@ -119,10 +119,6 @@ func (r *RecurseCTE) RouteType() string {
 	return "RecurseCTE"
 }
 
-func (r *RecurseCTE) GetTableName() string {
-	return r.Seed.GetTableName()
-}
-
 func (r *RecurseCTE) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return r.Seed.GetFields(ctx, vcursor, bindVars)
 }

@@ -58,9 +58,6 @@ type MergeSort struct {
 // RouteType satisfies Primitive.
 func (ms *MergeSort) RouteType() string { return "MergeSort" }
 
-// GetTableName satisfies Primitive.
-func (ms *MergeSort) GetTableName() string { return "" }
-
 // TryExecute is not supported.
 func (ms *MergeSort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Execute is not reachable")

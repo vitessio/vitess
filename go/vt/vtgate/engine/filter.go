@@ -44,11 +44,6 @@ func (f *Filter) RouteType() string {
 	return f.Input.RouteType()
 }
 
-// GetTableName specifies the table that this primitive routes to.
-func (f *Filter) GetTableName() string {
-	return f.Input.GetTableName()
-}
-
 // TryExecute satisfies the Primitive interface.
 func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result, err := vcursor.ExecutePrimitive(ctx, f.Input, bindVars, wantfields)

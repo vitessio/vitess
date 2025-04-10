@@ -115,11 +115,6 @@ func (route *Route) RouteType() string {
 	return route.Opcode.String()
 }
 
-// GetTableName specifies the table that this primitive routes to.
-func (route *Route) GetTableName() string {
-	return route.TableName
-}
-
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	rss, bvs, err := route.findRoute(ctx, vcursor, bindVars)
@@ -375,7 +370,6 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 func (route *Route) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query":      route.Query,
-		"Table":      route.GetTableName(),
 		"FieldQuery": route.FieldQuery,
 	}
 	if route.FetchLastInsertID {

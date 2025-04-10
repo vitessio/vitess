@@ -15,7 +15,6 @@
         },
         "FieldQuery": "select exists (select 1 from `user` where 1 != 1) from dual where 1 != 1",
         "Query": "select exists (select 1 from `user` where id = 5) from dual",
-        "Table": "dual",
         "Values": [
           "5"
         ],

@@ -38,11 +38,6 @@ func (s *SQLCalcFoundRows) RouteType() string {
 	return "SQLCalcFoundRows"
 }
 
-// GetTableName implements the Primitive interface
-func (s *SQLCalcFoundRows) GetTableName() string {
-	return s.LimitPrimitive.GetTableName()
-}
-
 // TryExecute implements the Primitive interface
 func (s *SQLCalcFoundRows) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	limitQr, err := vcursor.ExecutePrimitive(ctx, s.LimitPrimitive, bindVars, wantfields)

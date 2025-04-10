@@ -41,10 +41,6 @@ func (t *TransactionStatus) RouteType() string {
 	return "TransactionStatus"
 }
 
-func (t *TransactionStatus) GetTableName() string {
-	return ""
-}
-
 func (t *TransactionStatus) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{
 		Fields: t.getFields(),

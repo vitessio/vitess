@@ -47,13 +47,6 @@ func (s *PlanSwitcher) RouteType() string {
 	return "PlanSwitcher"
 }
 
-func (s *PlanSwitcher) GetTableName() string {
-	if s.Baseline != nil {
-		return s.Baseline.GetTableName()
-	}
-	return s.Optimized.GetTableName()
-}
-
 func (s *PlanSwitcher) GetFields(
 	ctx context.Context,
 	vcursor VCursor,

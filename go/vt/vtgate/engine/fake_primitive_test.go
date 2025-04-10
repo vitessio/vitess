@@ -65,10 +65,6 @@ func (f *fakePrimitive) RouteType() string {
 	return "Fake"
 }
 
-func (f *fakePrimitive) GetTableName() string {
-	return "fakeTable"
-}
-
 func (f *fakePrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if f.useNewPrintBindVars {
 		f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))

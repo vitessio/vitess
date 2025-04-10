@@ -67,11 +67,6 @@ func (fkc *FkCascade) RouteType() string {
 	return "FkCascade"
 }
 
-// GetTableName implements the Primitive interface.
-func (fkc *FkCascade) GetTableName() string {
-	return fkc.Parent.GetTableName()
-}
-
 // TryExecute implements the Primitive interface.
 func (fkc *FkCascade) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	// Execute the Selection primitive to find the rows that are going to modified.

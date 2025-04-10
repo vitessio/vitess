@@ -19,8 +19,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t1.id from t1 where 1 != 1",
-            "Query": "select t1.id from t1 where t1.id = 1",
-            "Table": "t1"
+            "Query": "select t1.id from t1 where t1.id = 1"
           },
           {
             "OperatorType": "Route",
@@ -30,8 +29,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t1.id from t1 where 1 != 1",
-            "Query": "select t1.id from t1 where t1.id = 1",
-            "Table": "t1"
+            "Query": "select t1.id from t1 where t1.id = 1"
           }
         ]
       },
@@ -61,8 +59,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t4.id from t4 where 1 != 1",
-            "Query": "select t4.id from t4 where t4.id = 1",
-            "Table": "t4"
+            "Query": "select t4.id from t4 where t4.id = 1"
           },
           {
             "OperatorType": "Route",
@@ -72,8 +69,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t4.id from t4 where 1 != 1",
-            "Query": "select t4.id from t4 where t4.id = 1",
-            "Table": "t4"
+            "Query": "select t4.id from t4 where t4.id = 1"
           }
         ]
       },
@@ -103,8 +99,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t4.id from t4 where 1 != 1",
-            "Query": "select t4.id from t4 where t4.id = 1",
-            "Table": "t4"
+            "Query": "select t4.id from t4 where t4.id = 1"
           },
           {
             "OperatorType": "Route",
@@ -114,8 +109,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t4.id from t4 where 1 != 1",
-            "Query": "select t4.id from t4 where t4.id = 1",
-            "Table": "t4"
+            "Query": "select t4.id from t4 where t4.id = 1"
           }
         ]
       },
@@ -145,8 +139,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t4.id from t4 where 1 != 1",
-            "Query": "select t4.id from t4 where t4.id = 1",
-            "Table": "t4"
+            "Query": "select t4.id from t4 where t4.id = 1"
           },
           {
             "OperatorType": "Route",
@@ -156,8 +149,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t4.id from t4 where 1 != 1",
-            "Query": "select t4.id from t4 where t4.id = 1",
-            "Table": "t4"
+            "Query": "select t4.id from t4 where t4.id = 1"
           }
         ]
       },
@@ -182,8 +174,7 @@
           "Sharded": false
         },
         "FieldQuery": "select t3.id from t3 where 1 != 1",
-        "Query": "select t3.id from t3 where t3.id = 1",
-        "Table": "t3"
+        "Query": "select t3.id from t3 where t3.id = 1"
       },
       "TablesUsed": [
         "unsharded_src1.t3"
@@ -210,8 +201,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t2.id from t2 where 1 != 1",
-            "Query": "select t2.id from t2 where t2.id = 1",
-            "Table": "t2"
+            "Query": "select t2.id from t2 where t2.id = 1"
           },
           {
             "OperatorType": "Route",
@@ -222,7 +212,6 @@
             },
             "FieldQuery": "select t2.id from t1 as t2 where 1 != 1",
             "Query": "select t2.id from t1 as t2 where t2.id = 1",
-            "Table": "t1",
             "Values": [
               "1"
             ],
@@ -256,8 +245,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t1.id, t2.id from t1, t2 where 1 != 1",
-            "Query": "select t1.id, t2.id from t1, t2 where t1.id = t2.id",
-            "Table": "t1, t2"
+            "Query": "select t1.id, t2.id from t1, t2 where t1.id = t2.id"
           },
           {
             "OperatorType": "Join",
@@ -266,7 +254,6 @@
             "JoinVars": {
               "t1_id1": 0
             },
-            "TableName": "t1_t1",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -276,8 +263,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select t1.id from t1 where 1 != 1",
-                "Query": "select t1.id from t1",
-                "Table": "t1"
+                "Query": "select t1.id from t1"
               },
               {
                 "OperatorType": "Route",
@@ -288,7 +274,6 @@
                 },
                 "FieldQuery": "select t2.id from t1 as t2 where 1 != 1",
                 "Query": "select t2.id from t1 as t2 where t2.id = :t1_id1",
-                "Table": "t1",
                 "Values": [
                   ":t1_id1"
                 ],
@@ -326,8 +311,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t1.id from t1 where 1 != 1 union select t2.id from t2 where 1 != 1",
-            "Query": "select t1.id from t1 union select t2.id from t2",
-            "Table": "t1, t2"
+            "Query": "select t1.id from t1 union select t2.id from t2"
           },
           {
             "OperatorType": "Distinct",
@@ -346,8 +330,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select t1.id from t1 where 1 != 1) as dt(c0) where 1 != 1",
-                    "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct t1.id from t1) as dt(c0)",
-                    "Table": "t1"
+                    "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct t1.id from t1) as dt(c0)"
                   },
                   {
                     "OperatorType": "Route",
@@ -357,8 +340,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select t2.id from t1 as t2 where 1 != 1) as dt(c0) where 1 != 1",
-                    "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct t2.id from t1 as t2) as dt(c0)",
-                    "Table": "t1"
+                    "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct t2.id from t1 as t2) as dt(c0)"
                   }
                 ]
               }
@@ -388,8 +370,7 @@
           "Name": "unsharded_src1",
           "Sharded": false
         },
-        "Query": "insert into t1(id) values (1)",
-        "TableName": "t1"
+        "Query": "insert into t1(id) values (1)"
       },
       "TablesUsed": [
         "unsharded_src1.t1"
@@ -410,8 +391,7 @@
           "Name": "unsharded_src1",
           "Sharded": false
         },
-        "Query": "update t1 set `data` = 'a' where id = 1",
-        "Table": "t1"
+        "Query": "update t1 set `data` = 'a' where id = 1"
       },
       "TablesUsed": [
         "unsharded_src1.t1"
@@ -432,8 +412,7 @@
           "Name": "unsharded_src1",
           "Sharded": false
         },
-        "Query": "delete from t1 where id = 1",
-        "Table": "t1"
+        "Query": "delete from t1 where id = 1"
       },
       "TablesUsed": [
         "unsharded_src1.t1"
@@ -455,8 +434,7 @@
           "Sharded": false
         },
         "FieldQuery": "select t1.id from t1 where 1 != 1",
-        "Query": "select t1.id from t1",
-        "Table": "t1"
+        "Query": "select t1.id from t1"
       },
       "TablesUsed": [
         "unsharded_src2.t1"
@@ -483,8 +461,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t2.id from t2 where 1 != 1",
-            "Query": "select t2.id from t2",
-            "Table": "t2"
+            "Query": "select t2.id from t2"
           },
           {
             "OperatorType": "Route",
@@ -494,8 +471,7 @@
               "Sharded": false
             },
             "FieldQuery": "select t2.id from t2 where 1 != 1",
-            "Query": "select t2.id from t2",
-            "Table": "t2"
+            "Query": "select t2.id from t2"
           }
         ]
       },
@@ -520,8 +496,7 @@
           "Sharded": false
         },
         "FieldQuery": "select t1.id from t1 where 1 != 1",
-        "Query": "select t1.id from t1",
-        "Table": "t1"
+        "Query": "select t1.id from t1"
       },
       "TablesUsed": [
         "unsharded_src3.t1"

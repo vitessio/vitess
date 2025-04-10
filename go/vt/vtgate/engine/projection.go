@@ -44,11 +44,6 @@ func (p *Projection) RouteType() string {
 	return p.Input.RouteType()
 }
 
-// GetTableName implements the Primitive interface
-func (p *Projection) GetTableName() string {
-	return p.Input.GetTableName()
-}
-
 // TryExecute implements the Primitive interface
 func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result, err := vcursor.ExecutePrimitive(ctx, p.Input, bindVars, wantfields)

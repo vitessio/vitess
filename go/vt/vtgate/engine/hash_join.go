@@ -206,11 +206,6 @@ func (hj *HashJoin) RouteType() string {
 	return "HashJoin"
 }
 
-// GetTableName implements the Primitive interface
-func (hj *HashJoin) GetTableName() string {
-	return hj.Left.GetTableName() + "_" + hj.Right.GetTableName()
-}
-
 // GetFields implements the Primitive interface
 func (hj *HashJoin) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
@@ -240,7 +235,6 @@ func (hj *HashJoin) Inputs() ([]Primitive, []map[string]any) {
 // description implements the Primitive interface
 func (hj *HashJoin) description() PrimitiveDescription {
 	other := map[string]any{
-		"TableName":         hj.GetTableName(),
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(hj.Cols)), ","), "[]"),
 		"Predicate":         sqlparser.String(hj.ASTPred),
 		"ComparisonType":    hj.ComparisonType.String(),

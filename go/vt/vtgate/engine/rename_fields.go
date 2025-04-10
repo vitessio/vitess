@@ -52,11 +52,6 @@ func (r *RenameFields) RouteType() string {
 	return r.Input.RouteType()
 }
 
-// GetTableName implements the primitive interface
-func (r *RenameFields) GetTableName() string {
-	return r.Input.GetTableName()
-}
-
 // TryExecute implements the Primitive interface
 func (r *RenameFields) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := vcursor.ExecutePrimitive(ctx, r.Input, bindVars, wantfields)

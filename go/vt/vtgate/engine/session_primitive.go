@@ -49,11 +49,6 @@ func (s *SessionPrimitive) RouteType() string {
 	return "SHOW"
 }
 
-// GetTableName implements the Primitive interface
-func (s *SessionPrimitive) GetTableName() string {
-	return ""
-}
-
 // TryExecute implements the Primitive interface
 func (s *SessionPrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return s.action(vcursor.Session())

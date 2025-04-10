@@ -60,11 +60,6 @@ func (vr *VindexLookup) RouteType() string {
 	return "VindexLookup"
 }
 
-// GetTableName implements the Primitive interface
-func (vr *VindexLookup) GetTableName() string {
-	return vr.SendTo.GetTableName()
-}
-
 // GetFields implements the Primitive interface
 func (vr *VindexLookup) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return vr.SendTo.GetFields(ctx, vcursor, bindVars)

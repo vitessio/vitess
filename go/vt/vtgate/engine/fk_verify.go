@@ -53,11 +53,6 @@ func (f *FkVerify) RouteType() string {
 	return "FKVerify"
 }
 
-// GetTableName implements the Primitive interface
-func (f *FkVerify) GetTableName() string {
-	return f.Exec.GetTableName()
-}
-
 // TryExecute implements the Primitive interface
 func (f *FkVerify) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	for _, v := range f.Verify {

@@ -120,11 +120,6 @@ func (jv *ValuesJoin) RouteType() string {
 	return "ValuesJoin"
 }
 
-// GetTableName specifies the table that this primitive routes to.
-func (jv *ValuesJoin) GetTableName() string {
-	return jv.Left.GetTableName() + "_" + jv.Right.GetTableName()
-}
-
 // NeedsTransaction implements the Primitive interface
 func (jv *ValuesJoin) NeedsTransaction() bool {
 	return jv.Right.NeedsTransaction() || jv.Left.NeedsTransaction()

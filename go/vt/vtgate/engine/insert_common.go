@@ -134,11 +134,6 @@ func (code InsertOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(insName[code])
 }
 
-// GetTableName specifies the table that this primitive routes to.
-func (ic *InsertCommon) GetTableName() string {
-	return ic.TableName
-}
-
 func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, loggingPrimitive Primitive, bindVars map[string]*querypb.BindVariable, query string, insertID uint64) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, nil, []key.ShardDestination{key.DestinationAllShards{}})
 	if err != nil {

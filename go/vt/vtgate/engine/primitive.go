@@ -247,7 +247,6 @@ type (
 	// and its result is passed to the client.
 	Primitive interface {
 		RouteType() string
-		GetTableName() string
 		GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 		NeedsTransaction() bool
 

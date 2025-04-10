@@ -79,11 +79,6 @@ func (vf *VindexFunc) RouteType() string {
 	return vindexOpcodeName[vf.Opcode]
 }
 
-// GetTableName specifies the table that this primitive routes to.
-func (vf *VindexFunc) GetTableName() string {
-	return ""
-}
-
 // TryExecute performs a non-streaming exec.
 func (vf *VindexFunc) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return vf.mapVindex(ctx, vcursor, bindVars)

@@ -49,11 +49,6 @@ func (ms *MemorySort) RouteType() string {
 	return ms.Input.RouteType()
 }
 
-// GetTableName specifies the table that this primitive routes to.
-func (ms *MemorySort) GetTableName() string {
-	return ms.Input.GetTableName()
-}
-
 // TryExecute satisfies the Primitive interface.
 func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := ms.fetchCount(ctx, vcursor, bindVars)
