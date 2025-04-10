@@ -59,7 +59,6 @@ func createRoute() *Route {
 			Vindex:            hash.(*vindexes.Hash),
 		},
 		Query:      "select all the things",
-		TableName:  "tableName",
 		FieldQuery: "more query",
 	}
 }

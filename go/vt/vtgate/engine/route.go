@@ -60,9 +60,6 @@ type Route struct {
 	// Query specifies the query to be executed.
 	Query string
 
-	// TableName specifies the tables to send the query to.
-	TableName string
-
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
 
