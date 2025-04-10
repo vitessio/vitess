@@ -160,7 +160,10 @@ func (tq *TabletQuery) MarshalJSON() ([]byte, error) {
 	var buf strings.Builder
 	for k, v := range tq.BindVars {
 		buf.Reset()
-		sqlparser.EncodeValue(&buf, v)
+		err := sqlparser.EncodeValue(&buf, v)
+		if err != nil {
+			return nil, err
+		}
 		bindVars[k] = buf.String()
 	}
 

@@ -21,33 +21,30 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var _ Primitive = (*ValuesJoin)(nil)
+var _ Primitive = (*BlockJoin)(nil)
 
-// ValuesJoin is a primitive that joins two primitives by constructing a table from the rows of the LHS primitive.
+// BlockJoin is a primitive that joins two primitives by constructing a table from the rows of the LHS primitive.
 // The table is passed in as a bind variable to the RHS primitive.
-// It's called ValuesJoin because the LHS of the join is sent to the RHS as a VALUES clause.
-type ValuesJoin struct {
+// It's called BlockJoin because the data from the LHS of the join is sent to the RHS as a block of values and not row by row.
+type BlockJoin struct {
 	// Left and Right are the LHS and RHS primitives
 	// of the Join. They can be any primitive.
 	Left, Right Primitive
 
-	Vars              []int
-	RowConstructorArg string
-	Cols              []int
-	ColNames          []string
+	// The name for the bind var containing the tuple-of-tuples being sent to the RHS
+	BindVarName string
 }
 
 // TryExecute performs a non-streaming exec.
-func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (jv *BlockJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	lresult, err := vcursor.ExecutePrimitive(ctx, jv.Left, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 	bv := &querypb.BindVariable{
-		Type: querypb.Type_TUPLE,
+		Type: querypb.Type_ROW_TUPLE,
 	}
 	if len(lresult.Rows) == 0 && wantfields {
 		// If there are no rows, we still need to construct a single row
@@ -60,68 +57,45 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		}
 		bv.Values = append(bv.Values, sqltypes.TupleToProto(vals))
 
-		bindVars[jv.RowConstructorArg] = bv
+		bindVars[jv.BindVarName] = bv
 		return jv.Right.GetFields(ctx, vcursor, bindVars)
 	}
 
-	for i, row := range lresult.Rows {
-		newRow := make(sqltypes.Row, 0, len(jv.Vars)+1)      // +1 since we always add the row ID
-		newRow = append(newRow, sqltypes.NewInt64(int64(i))) // Adding the LHS row ID
-
-		for _, loffset := range jv.Vars {
-			newRow = append(newRow, row[loffset])
-		}
-
-		bv.Values = append(bv.Values, sqltypes.TupleToProto(newRow))
+	for _, row := range lresult.Rows {
+		bv.Values = append(bv.Values, sqltypes.TupleToProto(row))
 	}
 
-	bindVars[jv.RowConstructorArg] = bv
-	rresult, err := vcursor.ExecutePrimitive(ctx, jv.Right, bindVars, wantfields)
-	if err != nil {
-		return nil, err
-	}
-
-	result := &sqltypes.Result{}
-
-	result.Fields = joinFields(lresult.Fields, rresult.Fields, jv.Cols)
-	for i := range result.Fields {
-		result.Fields[i].Name = jv.ColNames[i]
-	}
-
-	for _, rrow := range rresult.Rows {
-		lhsRowID, err := rrow[len(rrow)-1].ToCastInt64()
-		if err != nil {
-			return nil, vterrors.VT13001("values joins cannot fetch lhs row ID: " + err.Error())
-		}
-
-		result.Rows = append(result.Rows, joinRows(lresult.Rows[lhsRowID], rrow, jv.Cols))
-	}
-
-	return result, nil
+	bindVars[jv.BindVarName] = bv
+	return vcursor.ExecutePrimitive(ctx, jv.Right, bindVars, wantfields)
 }
 
 // TryStreamExecute performs a streaming exec.
-func (jv *ValuesJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+func (jv *BlockJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	// TODO: Implement streaming. This is a placeholder implementation.
+	rs, err := jv.TryExecute(ctx, vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(rs)
 }
 
 // GetFields fetches the field info.
-func (jv *ValuesJoin) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (jv *BlockJoin) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return jv.Right.GetFields(ctx, vcursor, bindVars)
 }
 
 // Inputs returns the input primitives for this join
-func (jv *ValuesJoin) Inputs() ([]Primitive, []map[string]any) {
+func (jv *BlockJoin) Inputs() ([]Primitive, []map[string]any) {
 	return []Primitive{jv.Left, jv.Right}, nil
 }
 
 // RouteType returns a description of the query routing type used by the primitive
-func (jv *ValuesJoin) RouteType() string {
-	return "ValuesJoin"
+func (jv *BlockJoin) RouteType() string {
+	return "BlockJoin"
 }
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (jv *ValuesJoin) GetKeyspaceName() string {
+func (jv *BlockJoin) GetKeyspaceName() string {
 	if jv.Left.GetKeyspaceName() == jv.Right.GetKeyspaceName() {
 		return jv.Left.GetKeyspaceName()
 	}
@@ -129,22 +103,21 @@ func (jv *ValuesJoin) GetKeyspaceName() string {
 }
 
 // GetTableName specifies the table that this primitive routes to.
-func (jv *ValuesJoin) GetTableName() string {
+func (jv *BlockJoin) GetTableName() string {
 	return jv.Left.GetTableName() + "_" + jv.Right.GetTableName()
 }
 
 // NeedsTransaction implements the Primitive interface
-func (jv *ValuesJoin) NeedsTransaction() bool {
+func (jv *BlockJoin) NeedsTransaction() bool {
 	return jv.Right.NeedsTransaction() || jv.Left.NeedsTransaction()
 }
 
-func (jv *ValuesJoin) description() PrimitiveDescription {
+func (jv *BlockJoin) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "Join",
-		Variant:      "Values",
+		Variant:      "Block",
 		Other: map[string]any{
-			"ValuesArg": jv.RowConstructorArg,
-			"Vars":      jv.Vars,
+			"BindVarName": jv.BindVarName,
 		},
 	}
 }

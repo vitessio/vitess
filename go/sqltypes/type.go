@@ -187,6 +187,7 @@ const (
 	Tuple      = querypb.Type_TUPLE
 	BitNum     = querypb.Type_BITNUM
 	Vector     = querypb.Type_VECTOR
+	RowTuple   = querypb.Type_ROW_TUPLE
 )
 
 // bit-shift the mysql flags by two byte so we

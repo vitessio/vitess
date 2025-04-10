@@ -120,7 +120,7 @@ jobs:
         go install github.com/vitessio/go-junit-report@HEAD
         
         # install vitess tester
-        go install github.com/vitessio/vt/go/vt@e43009309f599378504905d4b804460f47822ac5
+        go install github.com/vitessio/vt/go/vt@8dc5cb36043aa768165b0059d6ca7ab1cc9d88aa
 
     - name: Setup launchable dependencies
       if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
@@ -148,7 +148,8 @@ jobs:
         set -exo pipefail
 
         i=1
-        for dir in {{.Path}}/*/; do 
+        for dir in {{.Path}}/*/; do
+          rm -Rf /tmp/vtroot_*
           # We go over all the directories in the given path.
           # If there is a vschema file there, we use it, otherwise we let vt tester autogenerate it.
           if [ -f $dir/vschema.json ]; then

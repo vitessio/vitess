@@ -18,6 +18,7 @@ package plancontext
 
 import (
 	"io"
+	"slices"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -34,6 +35,12 @@ type PlanningContext struct {
 	ReservedVars *sqlparser.ReservedVars
 	SemTable     *semantics.SemTable
 	VSchema      VSchema
+
+	// skipBlockJoinArgument tracks BlockBuild operator that should be skipped when
+	// rewriting the operator tree to an AST tree.
+	// This happens when a BlockJoin is pushed under a route, and we do not
+	// need to have a BlockBuild operator anymore on its RHS.
+	skipBlockJoinArgument map[string]any
 
 	PlannerVersion querypb.ExecuteOptions_PlannerVersion
 
@@ -69,12 +76,29 @@ type PlanningContext struct {
 	// isMirrored indicates that mirrored tables should be used.
 	isMirrored bool
 
+	// blockJoinColumns stores the columns we need for each blockJoin in the plan.
+	blockJoinColumns   map[string][]*sqlparser.AliasedExpr // TODO: this should be a map[string][]*sqlparser.ColName
+	blockJoinTableName map[semantics.TableSet]string
+
 	emptyEnv    *evalengine.ExpressionEnv
 	constantCfg *evalengine.Config
 
 	PredTracker *predicates.Tracker
 
+	commentDirectives *sqlparser.CommentDirectives
+
 	Conditions []engine.Condition
+}
+
+func CreateEmptyPlanningContext() *PlanningContext {
+	return &PlanningContext{
+		skipBlockJoinArgument: make(map[string]any),
+		ReservedArguments:     make(map[sqlparser.Expr]string),
+		blockJoinColumns:      make(map[string][]*sqlparser.AliasedExpr),
+		blockJoinTableName:    make(map[semantics.TableSet]string),
+		PredTracker:           predicates.NewTracker(),
+		SemTable:              semantics.EmptySemTable(),
+	}
 }
 
 // CreatePlanningContext initializes a new PlanningContext with the given parameters.
@@ -99,14 +123,24 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
+	var commentDirectives *sqlparser.CommentDirectives
+	cmt, ok := stmt.(sqlparser.Commented)
+	if ok {
+		commentDirectives = cmt.GetParsedComments().Directives()
+	}
+
 	return &PlanningContext{
-		ReservedVars:      reservedVars,
-		SemTable:          semTable,
-		VSchema:           vschema,
-		PlannerVersion:    version,
-		ReservedArguments: map[sqlparser.Expr]string{},
-		Statement:         stmt,
-		PredTracker:       predicates.NewTracker(),
+		ReservedVars:          reservedVars,
+		SemTable:              semTable,
+		VSchema:               vschema,
+		PlannerVersion:        version,
+		ReservedArguments:     map[sqlparser.Expr]string{},
+		Statement:             stmt,
+		PredTracker:           predicates.NewTracker(),
+		skipBlockJoinArgument: map[string]any{},
+		blockJoinColumns:      make(map[string][]*sqlparser.AliasedExpr),
+		blockJoinTableName:    make(map[semantics.TableSet]string),
+		commentDirectives:     commentDirectives,
 	}, nil
 }
 
@@ -131,6 +165,15 @@ func (ctx *PlanningContext) GetReservedArgumentFor(expr sqlparser.Expr) string {
 	ctx.ReservedArguments[expr] = bvName
 
 	return bvName
+}
+
+func (ctx *PlanningContext) SkipBlockJoinArgument(name string) {
+	ctx.skipBlockJoinArgument[name] = ""
+}
+
+func (ctx *PlanningContext) IsBlockJoinArgumentSkipped(name string) bool {
+	_, ok := ctx.skipBlockJoinArgument[name]
+	return ok
 }
 
 // TypeForExpr returns the type of the given expression, with nullable set if the expression is from an outer table.
@@ -344,6 +387,27 @@ func (ctx *PlanningContext) ActiveCTE() *ContextCTE {
 	return ctx.CurrentCTE[len(ctx.CurrentCTE)-1]
 }
 
+func (ctx *PlanningContext) GetBlockJoinColumns(joinName string) []*sqlparser.AliasedExpr {
+	return ctx.blockJoinColumns[joinName]
+}
+func (ctx *PlanningContext) SetBlockJoinColumns(joinName string, cols []*sqlparser.AliasedExpr) {
+	ctx.blockJoinColumns[joinName] = cols
+}
+
+func (ctx *PlanningContext) AddBlockJoinColumn(joinName string, expr sqlparser.Expr) {
+	cols := ctx.blockJoinColumns[joinName]
+	idx := slices.IndexFunc(cols, func(ae *sqlparser.AliasedExpr) bool {
+		return sqlparser.Equals.Expr(ae.Expr, expr)
+	})
+
+	if idx != -1 {
+		return
+	}
+
+	cols = append(cols, sqlparser.NewAliasedExpr(expr, ""))
+	ctx.blockJoinColumns[joinName] = cols
+}
+
 func (ctx *PlanningContext) UseMirror() *PlanningContext {
 	if ctx.isMirrored {
 		panic(vterrors.VT13001("cannot mirror already mirrored planning context"))
@@ -366,6 +430,7 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		emptyEnv:          ctx.emptyEnv,
 		PredTracker:       ctx.PredTracker,
 		isMirrored:        true,
+		blockJoinColumns:  ctx.blockJoinColumns,
 	}
 	return ctx.mirror
 }
@@ -406,6 +471,22 @@ func (ctx *PlanningContext) IsConstantBool(expr sqlparser.Expr) *bool {
 		return nil
 	}
 	return &b
+}
+
+func (ctx *PlanningContext) AddBlockJoinTable(id semantics.TableSet, name string) {
+	ctx.blockJoinTableName[id] = name
+}
+
+func (ctx *PlanningContext) GetBlockJoinTableName(id semantics.TableSet) (string, error) {
+	name, found := ctx.blockJoinTableName[id]
+	if !found {
+		return "", vterrors.VT13001("value join table not found")
+	}
+	return name, nil
+}
+
+func (ctx *PlanningContext) IsCommentDirectiveSet(hint string) bool {
+	return ctx.commentDirectives != nil && ctx.commentDirectives.IsSet(hint)
 }
 
 func (ctx *PlanningContext) CollectConditions(conditions []engine.Condition) {
