@@ -137,12 +137,35 @@ func TestSplitStatementToPieces(t *testing.T) {
 		// Test that we don't split on semicolons inside create procedure calls.
 		input:     "select * from t1;create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;select * from t2",
 		lenWanted: 3,
+	}, {
+		// Create procedure with comments.
+		input:     "select * from t1; /* comment1 */ create /* comment2 */ procedure /* comment3 */ p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;select * from t2",
+		lenWanted: 3,
+	}, {
+		// Create procedure with definer current_user.
+		input:     "create DEFINER=CURRENT_USER procedure p1 (in country CHAR(3))  begin declare abc DECIMAL(14,2); DECLARE def DECIMAL(14,2); end",
+		lenWanted: 1,
+	}, {
+		// Create procedure with definer current_user().
+		input:     "create DEFINER=CURRENT_USER() procedure p1 (in country CHAR(3))  begin declare abc DECIMAL(14,2); DECLARE def DECIMAL(14,2); end",
+		lenWanted: 1,
+	}, {
+		// Create procedure with definer string.
+		input:     "create DEFINER='root' procedure p1 (in country CHAR(3))  begin declare abc DECIMAL(14,2); DECLARE def DECIMAL(14,2); end",
+		lenWanted: 1,
+	}, {
+		// Create procedure with definer string at_id.
+		input:     "create DEFINER='root'@localhost procedure p1 (in country CHAR(3))  begin declare abc DECIMAL(14,2); DECLARE def DECIMAL(14,2); end",
+		lenWanted: 1,
+	}, {
+		// Create procedure with definer id.
+		input:     "create DEFINER=`root` procedure p1 (in country CHAR(3))  begin declare abc DECIMAL(14,2); DECLARE def DECIMAL(14,2); end",
+		lenWanted: 1,
+	}, {
+		// Create procedure with definer id at_id.
+		input:     "create DEFINER=`root`@`localhost` procedure p1 (in country CHAR(3))  begin declare abc DECIMAL(14,2); DECLARE def DECIMAL(14,2); end",
+		lenWanted: 1,
 	},
-		{
-			// Create procedure with comments.
-			input:     "select * from t1; /* comment1 */ create /* comment2 */ procedure /* comment3 */ p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;select * from t2",
-			lenWanted: 3,
-		},
 	}
 
 	parser := NewTestParser()
