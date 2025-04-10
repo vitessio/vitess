@@ -265,7 +265,7 @@ func TestFirstSortedKeyspace(t *testing.T) {
 		},
 	}
 
-	vc, err := NewVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&FakeTopoServer{}, nil, ""), nil, fakeObserver{}, VCursorConfig{}, nil)
+	vc, err := NewVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: vschemaWith2KS}, vschemaWith2KS, srvtopo.NewResolver(&FakeTopoServer{}, nil, ""), nil, fakeObserver{}, VCursorConfig{TabletType: &executorConfig{}}, nil)
 	require.NoError(t, err)
 	ks, err := vc.FirstSortedKeyspace()
 	require.NoError(t, err)
@@ -279,6 +279,7 @@ func TestSetExecQueryTimeout(t *testing.T) {
 	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, nil, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{
 		// flag timeout
 		QueryTimeout: 20,
+		TabletType:   &executorConfig{},
 	}, nil)
 	require.NoError(t, err)
 
@@ -320,7 +321,7 @@ func TestSetExecQueryTimeout(t *testing.T) {
 func TestRecordMirrorStats(t *testing.T) {
 	safeSession := NewSafeSession(nil)
 	logStats := logstats.NewLogStats(context.Background(), t.Name(), "select 1", "", nil, streamlog.NewQueryLogConfigForTest())
-	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, logStats, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{}, nil)
+	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, logStats, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{TabletType: &executorConfig{}}, nil)
 	require.NoError(t, err)
 
 	require.Zero(t, logStats.MirrorSourceExecuteTime)
