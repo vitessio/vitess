@@ -4,6 +4,9 @@
     "hash": {
       "type": "hash"
     },
+    "hash_varchar": {
+      "type": "unicode_loose_xxhash"
+    },
     "num_vdx": {
       "type": "consistent_lookup_unique",
       "params": {
@@ -23,6 +26,15 @@
         "ignore_nulls": "true"
       },
       "owner": "s_tbl"
+    },
+    "name_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "name_vdx_tbl",
+        "from": "name,id",
+        "to": "keyspace_id"
+      },
+      "owner": "name_tbl"
     },
     "oid_vdx": {
       "type": "consistent_lookup_unique",
@@ -76,8 +88,26 @@
           "name": "num_vdx"
         },
         {
-          "columns": ["col", "id"],
+          "columns": [
+            "col",
+            "id"
+          ],
           "name": "col_vdx"
+        }
+      ]
+    },
+    "name_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "columns": [
+            "name",
+            "id"
+          ],
+          "name": "name_vdx"
         }
       ]
     },
@@ -94,6 +124,14 @@
         {
           "column": "col",
           "name": "hash"
+        }
+      ]
+    },
+    "name_vdx_tbl": {
+      "column_vindexes": [
+        {
+          "column": "name",
+          "name": "hash_varchar"
         }
       ]
     },
