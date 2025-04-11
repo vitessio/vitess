@@ -154,10 +154,16 @@ jobs:
 
         {{end}}
 
-        sudo service mysql stop
-        sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        sudo service mysql stop || true
+        sudo service etcd stop || true
+
+        if dpkg -l apparmor; then
+          sudo systemctl stop apparmor
+          sudo mkdir -p /etc/apparmor.d/disable
+          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        fi
+
         go mod download
 
         # install JUnit report formatter
