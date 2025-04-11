@@ -147,8 +147,8 @@ message Session {
   // Session UUID
   string SessionUUID = 22;
 
-  // enable-system-settings defines if we can use reserved connections.
-  bool enable-system-settings = 23;
+  // enable_system_settings defines if we can use reserved connections.
+  bool enable_system_settings = 23;
 
   map<string, int64> advisory_lock = 24;
 

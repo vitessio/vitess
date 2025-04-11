@@ -329,7 +329,7 @@ func (SchemaMigration_Status) EnumDescriptor() ([]byte, []int) {
 type ExecuteVtctlCommandRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Args          []string               `protobuf:"bytes,1,rep,name=args,proto3" json:"args,omitempty"`
-	ActionTimeout int64                  `protobuf:"varint,2,opt,name=action-timeout,json=actionTimeout,proto3" json:"action-timeout,omitempty"`
+	ActionTimeout int64                  `protobuf:"varint,2,opt,name=action_timeout,json=actionTimeout,proto3" json:"action_timeout,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

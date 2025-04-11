@@ -496,12 +496,12 @@ This function returns all transaction metadata and the redo statement log.
 
 ## Transaction Coordinator
 
-VTGate is already responsible for Best Effort Commit, aka `transaction_mode=MULTI`, it can naturally be extended to act as the coordinator for 2PC. 
-It needs to support commit with `transaction_mode=twopc`.
+VTGate is already responsible for Best Effort Commit, aka `transaction-mode=MULTI`, it can naturally be extended to act as the coordinator for 2PC. 
+It needs to support commit with `transaction-mode=twopc`.
 
 VTGate also has to listen on the VTTablet health stream to receive unresolved transaction signals and act on them to resolve them.
 
-### Commit(transaction_mode=twopc)
+### Commit(transaction-mode=twopc)
 
 This call is issued on an active transaction, whose Session info is known. The function will perform the workflow described in the life of a transaction:
 
@@ -548,7 +548,7 @@ If any such transaction is found, it will signal this to VTGate via health strea
 
 ## Client API
 
-The client have to modify the `transaction_mode`. 
+The client have to modify the `transaction-mode`. 
 Default is `Multi`, they would need to set to `twopc` either as a VTGate flag or on the session with `SET` statement.
 
 # Production support

@@ -33,8 +33,6 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/utils"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -155,7 +153,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--topo_global_root", vtgate.TopoGlobalRoot,
 		"--config-file", vtgate.ConfigFile,
 		"--log_dir", vtgate.LogDir,
-		"--log-queries-to-file", vtgate.FileToLogQueries,
+		"--log_queries_to_file", vtgate.FileToLogQueries,
 		"--port", fmt.Sprintf("%d", vtgate.Port),
 		"--grpc_port", fmt.Sprintf("%d", vtgate.GrpcPort),
 		"--mysql_server_port", fmt.Sprintf("%d", vtgate.MySQLServerPort),
@@ -210,7 +208,8 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
-		args = append(args, utils.GetFlagVariantForTests("--enable-system-settings"))
+		// TODO: Replace flag with dashed version in v25
+		args = append(args, "--enable_system_settings")
 	}
 	vtgate.proc = exec.Command(
 		vtgate.Binary,

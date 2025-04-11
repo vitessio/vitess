@@ -63,7 +63,6 @@ services:
       - "15000:$WEB_PORT"
       - "$GRPC_PORT"
     command: ["sh", "-c", " /vt/bin/vtctld \
-        # TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
         $TOPOLOGY_FLAGS \
         --cell $CELL \
         --service-map 'grpc-vtctl,grpc-vtctld' \
