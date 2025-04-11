@@ -29,6 +29,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/spf13/viper"
+
+	"vitess.io/vitess/go/viperutil"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/acl"
@@ -70,7 +74,23 @@ import (
 )
 
 var (
-	defaultTabletType = topodatapb.TabletType_PRIMARY
+	defaultTabletType = viperutil.Configure(
+		"default_tablet_type",
+		viperutil.Options[topodatapb.TabletType]{
+			FlagName: "default_tablet_type",
+			Default:  topodatapb.TabletType_PRIMARY,
+			GetFunc: func(v *viper.Viper) func(key string) topodatapb.TabletType {
+				return func(key string) topodatapb.TabletType {
+					val := v.GetInt32(key)
+					if val != 0 {
+						return topodatapb.TabletType(val)
+					}
+					tt, _ := topoproto.ParseTabletType(v.GetString(key))
+					return tt
+				}
+			},
+		},
+	)
 
 	queryExecutions        = stats.NewCountersWithMultiLabels("QueryExecutions", "Counts queries executed at VTGate by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
 	queryRoutes            = stats.NewCountersWithMultiLabels("QueryRoutes", "Counts queries routed from VTGate to VTTablet by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
@@ -92,7 +112,8 @@ const (
 
 func init() {
 	registerTabletTypeFlag := func(fs *pflag.FlagSet) {
-		fs.Var((*topoproto.TabletTypeFlag)(&defaultTabletType), "default_tablet_type", "The default tablet type to set for queries, when one is not explicitly selected.")
+		fs.Var(topoproto.NewTabletTypeFlag(defaultTabletType.Default()), "default_tablet_type", "The default tablet type to set for queries, when one is not explicitly selected.")
+		viperutil.BindFlags(fs, defaultTabletType)
 	}
 
 	servenv.OnParseFor("vtgate", registerTabletTypeFlag)
@@ -141,8 +162,8 @@ type (
 
 		warmingReadsChannel chan bool
 
-		vConfig   econtext.VCursorConfig
-		ddlConfig dynamicconfig.DDL
+		vConfig        econtext.VCursorConfig
+		executorConfig dynamicconfig.ExecutorConfig
 	}
 
 	Metrics struct {
@@ -177,7 +198,7 @@ func NewExecutor(
 	plans *PlanCache,
 	schemaTracker SchemaInfo,
 	pv plancontext.PlannerVersion,
-	ddlConfig dynamicconfig.DDL,
+	executorConfig dynamicconfig.ExecutorConfig,
 ) *Executor {
 	e := &Executor{
 		config:      eConfig,
@@ -192,7 +213,7 @@ func NewExecutor(
 		schemaTracker:       schemaTracker,
 		plans:               plans,
 		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
-		ddlConfig:           ddlConfig,
+		executorConfig:      executorConfig,
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
@@ -1097,7 +1118,7 @@ func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func (e *Executor) ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {
-	return econtext.ParseDestinationTarget(targetString, defaultTabletType, e.VSchema())
+	return econtext.ParseDestinationTarget(targetString, e.executorConfig.DefaultTabletType(), e.VSchema())
 }
 
 func (e *Executor) fetchOrCreatePlan(
@@ -1341,7 +1362,7 @@ func (e *Executor) buildStatement(
 	qh sqlparser.QueryHints,
 	paramsCount uint16,
 ) (*engine.Plan, error) {
-	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, e.ddlConfig)
+	plan, err := planbuilder.BuildFromStmt(ctx, query, stmt, reservedVars, vcursor, bindVarNeeds, e.executorConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -1527,9 +1548,9 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 	}
 
 	e.vConfig = econtext.VCursorConfig{
-		Collation:         connCollation,
-		DefaultTabletType: defaultTabletType,
-		PlannerVersion:    pv,
+		Collation:      connCollation,
+		TabletType:     e.executorConfig,
+		PlannerVersion: pv,
 
 		QueryTimeout:  queryTimeout,
 		MaxMemoryRows: maxMemoryRows,
