@@ -72,7 +72,7 @@ func TestMain(m *testing.M) {
 
 		// Start vtgate
 		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
-		clusterInstance.VtGateExtraArgs = []string{"--transaction-mode", "SINGLE"}
+		clusterInstance.VtGateExtraArgs = []string{"--transaction_mode", "SINGLE"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -223,7 +223,7 @@ func TestNoRecordInTableNotFail(t *testing.T) {
 	conn, cleanup := setup(t)
 	defer cleanup()
 
-	utils.AssertMatches(t, conn, `select @@transaction-mode`, `[[VARCHAR("SINGLE")]]`)
+	utils.AssertMatches(t, conn, `select @@transaction_mode`, `[[VARCHAR("SINGLE")]]`)
 	// Need to run this test multiple times as shards are picked randomly for Impossible query.
 	// After the fix it is not random if a shard session already exists then it reuses that same shard session.
 	for i := 0; i < 100; i++ {
@@ -244,11 +244,11 @@ func setup(t *testing.T) (*mysql.Conn, func()) {
 		"t1", "t1_id_vdx", "t2", "t2_id_vdx",
 	}
 	cleanup := func() {
-		utils.Exec(t, conn, "set transaction-mode=multi")
+		utils.Exec(t, conn, "set transaction_mode=multi")
 		for _, table := range tables {
 			utils.Exec(t, conn, fmt.Sprintf("delete from %s /* cleanup */", table))
 		}
-		utils.Exec(t, conn, "set transaction-mode=single")
+		utils.Exec(t, conn, "set transaction_mode=single")
 	}
 	cleanup()
 	return conn, cleanup

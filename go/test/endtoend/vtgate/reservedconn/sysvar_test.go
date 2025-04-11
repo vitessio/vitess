@@ -292,23 +292,23 @@ func TestEnableSystemSettings(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// test set @@enable-system-settings to false and true
-	utils.Exec(t, conn, "set enable-system-settings = false")
-	utils.AssertMatches(t, conn, `select @@enable-system-settings`, `[[INT64(0)]]`)
-	utils.Exec(t, conn, "set enable-system-settings = true")
-	utils.AssertMatches(t, conn, `select @@enable-system-settings`, `[[INT64(1)]]`)
+	// test set @@enable_system_settings to false and true
+	utils.Exec(t, conn, "set enable_system_settings = false")
+	utils.AssertMatches(t, conn, `select @@enable_system_settings`, `[[INT64(0)]]`)
+	utils.Exec(t, conn, "set enable_system_settings = true")
+	utils.AssertMatches(t, conn, `select @@enable_system_settings`, `[[INT64(1)]]`)
 
 	// prepare the @@sql_mode variable
 	utils.Exec(t, conn, "set sql_mode = 'NO_ZERO_DATE'")
 	utils.AssertMatches(t, conn, "select 	@@sql_mode", `[[VARCHAR("NO_ZERO_DATE")]]`)
 
-	// check disabling @@enable-system-settings
-	utils.Exec(t, conn, "set enable-system-settings = false")
+	// check disabling @@enable_system_settings
+	utils.Exec(t, conn, "set enable_system_settings = false")
 	utils.Exec(t, conn, "set sql_mode = ''")                                          // attempting to set @@sql_mode to an empty string
 	utils.AssertMatches(t, conn, "select 	@@sql_mode", `[[VARCHAR("NO_ZERO_DATE")]]`) // @@sql_mode did not change
 
-	// check enabling @@enable-system-settings
-	utils.Exec(t, conn, "set enable-system-settings = true")
+	// check enabling @@enable_system_settings
+	utils.Exec(t, conn, "set enable_system_settings = true")
 	utils.Exec(t, conn, "set sql_mode = ''")                              // changing @@sql_mode to empty string
 	utils.AssertMatches(t, conn, "select 	@@sql_mode", `[[VARCHAR("")]]`) // @@sql_mode did change
 }

@@ -40,7 +40,7 @@ type (
 		defaultValue evalengine.Expr
 
 		// this allows identifiers (a.k.a. ColName) from the AST to be handled as if they are strings.
-		// SET transaction-mode = two_pc => SET transaction-mode = 'two_pc'
+		// SET transaction_mode = two_pc => SET transaction_mode = 'two_pc'
 		identifierAsString bool
 		supportSetVar      bool
 		storageCase        sysvars.StorageCase

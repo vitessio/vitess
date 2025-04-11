@@ -75,7 +75,7 @@ func TestTransactionModeMetrics(t *testing.T) {
 	}}
 
 	initial := getCommitMetric(t)
-	utils.Exec(t, conn, "set transaction-mode = multi")
+	utils.Exec(t, conn, "set transaction_mode = multi")
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, stmt := range tc.stmts {
@@ -90,7 +90,7 @@ func TestTransactionModeMetrics(t *testing.T) {
 		})
 	}
 
-	utils.Exec(t, conn, "set transaction-mode = twopc")
+	utils.Exec(t, conn, "set transaction_mode = twopc")
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, stmt := range tc.stmts {

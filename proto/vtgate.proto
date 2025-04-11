@@ -31,7 +31,7 @@ import "vtrpc.proto";
 // TransactionMode controls the execution of distributed transaction
 // across multiple shards.
 enum TransactionMode {
-  // UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction-mode'.
+  // UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction_mode'.
   UNSPECIFIED = 0;
   // SINGLE disallows distributed transactions.
   SINGLE = 1;
@@ -82,7 +82,7 @@ message Session {
   // shard_sessions keep track of per-shard transaction info.
   repeated ShardSession shard_sessions = 2;
 
-  // single_db is deprecated. Use transaction-mode instead.
+  // single_db is deprecated. Use transaction_mode instead.
   reserved 3;
 
   // autocommit specifies if the session is in autocommit mode.
@@ -97,8 +97,8 @@ message Session {
   // options is used only for V3.
   query.ExecuteOptions options = 6;
 
-  // transaction-mode specifies the current transaction mode.
-  TransactionMode transaction-mode = 7;
+  // transaction_mode specifies the current transaction mode.
+  TransactionMode transaction_mode = 7;
 
   // warnings contains non-fatal warnings from the previous query
   repeated query.QueryWarning warnings = 8;

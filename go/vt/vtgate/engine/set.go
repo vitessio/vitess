@@ -454,7 +454,7 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		}
 		out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(str)]
 		if !ok {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid transaction-mode: %s", str)
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid transaction_mode: %s", str)
 		}
 		vcursor.Session().SetTransactionMode(vtgatepb.TransactionMode(out))
 	case sysvars.Workload.Name:
