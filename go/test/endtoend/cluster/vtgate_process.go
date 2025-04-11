@@ -74,6 +74,7 @@ type VTGateConfiguration struct {
 	DiscoveryHighReplicationLag       string `json:"discovery_high_replication_lag,omitempty"`
 	DiscoveryMinServingVttablets      string `json:"discovery_min_number_serving_vttablets,omitempty"`
 	DiscoveryLegacyReplicationLagAlgo string `json:"discovery_legacy_replication_lag_algorithm"`
+	DefaultTabletType                 string `json:"default_tablet_type,omitempty"`
 }
 
 // ToJSONString will marshal this configuration as JSON
