@@ -1170,7 +1170,7 @@ func (e *Executor) fetchOrCreatePlan(
 		}
 	}
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, stmt, err
 	}
 
 	if shouldOptimizePlan(preparedPlan, isExecutePath, plan) {
@@ -1329,6 +1329,7 @@ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query stri
 
 	return engine.PlanKey{
 		CurrentKeyspace: vcursor.GetKeyspace(),
+		TabletType:      vcursor.TabletType(),
 		Destination:     strings.Join(allDest, ","),
 		Query:           query,
 		SetVarComment:   setVarComment,
@@ -1612,11 +1613,20 @@ func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 }
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	plan, vcursor, _, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
+	plan, vcursor, stmt, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
 	if err != nil {
+		if stmt != nil {
+			// Attempt to build NULL field types for the statement in case planning fails,
+			// allowing the client to proceed with preparing the statement even without a valid execution plan.
+			// Hoping that an optimized plan can be built later when parameter values are available.
+			flds, paramCount, success := buildNullFieldTypes(stmt)
+			if success {
+				return flds, paramCount, nil
+			}
+		}
 		logStats.Error = err
 		return nil, 0, err
 	}
@@ -1641,6 +1651,27 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), errCount)
 
 	return qr.Fields, plan.ParamsCount, err
+}
+
+// buildNullFieldTypes builds a list of NULL field types for the given statement.
+func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bool) {
+	sel, ok := stmt.(sqlparser.SelectStatement)
+	if !ok {
+		return nil, countArguments(stmt), true
+	}
+	var fields []*querypb.Field
+	for _, expr := range sel.GetColumns() {
+		// *sqlparser.StarExpr is not supported in this context.
+		if ae, ok := expr.(*sqlparser.AliasedExpr); ok {
+			fields = append(fields, &querypb.Field{
+				Name: ae.ColumnName(),
+				Type: querypb.Type_NULL_TYPE,
+			})
+			continue
+		}
+		return nil, 0, false
+	}
+	return fields, countArguments(stmt), true
 }
 
 func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
