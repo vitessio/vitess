@@ -66,7 +66,10 @@
  * Set proper join vars type for the RHS field query in OLAP [#18028](https://github.com/vitessio/vitess/pull/18028)
  * Bugfix: Missing data when running vtgate outer joins [#18036](https://github.com/vitessio/vitess/pull/18036)
  * Fix `SHOW VITESS_SHARDS` bug that led to incomplete output [#18069](https://github.com/vitessio/vitess/pull/18069)
- * [release-22.0] bugfix: allow window functions when possible to push down (#18103) [#18106](https://github.com/vitessio/vitess/pull/18106) 
+ * [release-22.0] bugfix: allow window functions when possible to push down (#18103) [#18106](https://github.com/vitessio/vitess/pull/18106)
+ * [release-22.0] Fix: Add tablet type to the plan key (#18155) [#18156](https://github.com/vitessio/vitess/pull/18156)
+ * [release-22.0] Fix split statement for create procedure to account for definers (#18142) [#18158](https://github.com/vitessio/vitess/pull/18158)
+ * [release-22.0] bugfix: INSERT IGNORE not inserting rows (#18151) [#18165](https://github.com/vitessio/vitess/pull/18165) 
 #### Schema Tracker
  * `engine.Reload()`: fix file size aggregation for partitioned tables [#18058](https://github.com/vitessio/vitess/pull/18058) 
 #### Topology
@@ -198,6 +201,7 @@
  * Update email address for mattlord [#17961](https://github.com/vitessio/vitess/pull/17961) 
 #### Query Serving
  * Update Atomic Distributed Transaction Design [#17005](https://github.com/vitessio/vitess/pull/17005)
+ * [release-22.0] Add summary note change for unsharded `create procedure` support (#18148) [#18157](https://github.com/vitessio/vitess/pull/18157)
 ### Enhancement 
 #### Authn/z
  * Add support for hashed caching sha2 passwords [#17948](https://github.com/vitessio/vitess/pull/17948) 
@@ -355,7 +359,8 @@
 #### Query Serving
  * Add savepoint support to atomic distributed transaction [#16863](https://github.com/vitessio/vitess/pull/16863)
  * feat: add metrics for atomic distributed transactions [#16939](https://github.com/vitessio/vitess/pull/16939)
- * connection pool: max idle connections implementation [#17443](https://github.com/vitessio/vitess/pull/17443) 
+ * connection pool: max idle connections implementation [#17443](https://github.com/vitessio/vitess/pull/17443)
+ * [release-22.0] Add a new implementation for handling multiple queries without needing to split them (#18059) [#18139](https://github.com/vitessio/vitess/pull/18139) 
 #### VReplication
  * LookupVindex: Implement `internalize` command for lookup vindexes [#17429](https://github.com/vitessio/vitess/pull/17429)
  * VReplication: Support passing VStream filters down to MySQL [#17677](https://github.com/vitessio/vitess/pull/17677)
@@ -520,6 +525,8 @@
  * [main] Copy `v19.0.10` release notes [#17769](https://github.com/vitessio/vitess/pull/17769)
  * [release-22.0] Code Freeze for `v22.0.0-RC1` [#18087](https://github.com/vitessio/vitess/pull/18087)
  * Bump to `v23.0.0-SNAPSHOT` after the `v22.0.0-RC1` release [#18088](https://github.com/vitessio/vitess/pull/18088)
+ * [release-22.0] Release of `v22.0.0-RC1` [#18128](https://github.com/vitessio/vitess/pull/18128)
+ * [release-22.0] Bump to `v22.0.0-SNAPSHOT` after the `v22.0.0-RC1` release [#18134](https://github.com/vitessio/vitess/pull/18134)
 ### Testing 
 #### Backup and Restore
  * fix flaky test on mysqlshell backup engine [#17037](https://github.com/vitessio/vitess/pull/17037)
@@ -553,7 +560,8 @@
  * benchmark: TwoPC commit mode [#17397](https://github.com/vitessio/vitess/pull/17397)
  * test: make it easier to run tests without a main keyspace [#17501](https://github.com/vitessio/vitess/pull/17501)
  * Fix TestTrackerNoLock flaky test by increasing time to mark failure [#17886](https://github.com/vitessio/vitess/pull/17886)
- * Test: Increase query timeout to fix flaky test 'TestQueryTimeoutWithShardTargeting' [#18016](https://github.com/vitessio/vitess/pull/18016) 
+ * Test: Increase query timeout to fix flaky test 'TestQueryTimeoutWithShardTargeting' [#18016](https://github.com/vitessio/vitess/pull/18016)
+ * Skip end-to-end test [#18162](https://github.com/vitessio/vitess/pull/18162) 
 #### TabletManager
  * Skip `TestRunFailsToStartTabletManager` for now [#17167](https://github.com/vitessio/vitess/pull/17167)
  * Fix flaky mysqlctl blackbox test [#17387](https://github.com/vitessio/vitess/pull/17387) 
@@ -572,6 +580,8 @@
  * test: Add unit tests for `vtctl/workflow` [#17618](https://github.com/vitessio/vitess/pull/17618)
  * test: Add more unit tests for `server.go` [#17679](https://github.com/vitessio/vitess/pull/17679)
  * CI: Add some randomness to the ports used in VReplication e2e tests [#17712](https://github.com/vitessio/vitess/pull/17712) 
+#### VTGate
+ * [release-22.0]: skip test check for upgrade test for TestStraighJoin [#18153](https://github.com/vitessio/vitess/pull/18153) 
 #### VTTablet
  * Fix data race in `TestIsServingLocked` [#17728](https://github.com/vitessio/vitess/pull/17728) 
 #### VTorc
