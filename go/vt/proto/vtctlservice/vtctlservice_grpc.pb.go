@@ -471,6 +471,20 @@ type VtctldClient interface {
 	VDiffResume(ctx context.Context, in *vtctldata.VDiffResumeRequest, opts ...grpc.CallOption) (*vtctldata.VDiffResumeResponse, error)
 	VDiffShow(ctx context.Context, in *vtctldata.VDiffShowRequest, opts ...grpc.CallOption) (*vtctldata.VDiffShowResponse, error)
 	VDiffStop(ctx context.Context, in *vtctldata.VDiffStopRequest, opts ...grpc.CallOption) (*vtctldata.VDiffStopResponse, error)
+	VSchemaCreate(ctx context.Context, in *vtctldata.VSchemaCreateRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaCreateResponse, error)
+	VSchemaGet(ctx context.Context, in *vtctldata.VSchemaGetRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaGetResponse, error)
+	VSchemaUpdate(ctx context.Context, in *vtctldata.VSchemaUpdateRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaUpdateResponse, error)
+	VSchemaPublish(ctx context.Context, in *vtctldata.VSchemaPublishRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaPublishResponse, error)
+	VSchemaAddVindex(ctx context.Context, in *vtctldata.VSchemaAddVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaAddVindexResponse, error)
+	VSchemaRemoveVindex(ctx context.Context, in *vtctldata.VSchemaRemoveVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaRemoveVindexResponse, error)
+	VSchemaAddLookupVindex(ctx context.Context, in *vtctldata.VSchemaAddLookupVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaAddLookupVindexResponse, error)
+	VSchemaAddTables(ctx context.Context, in *vtctldata.VSchemaAddTablesRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaAddTablesResponse, error)
+	VSchemaRemoveTables(ctx context.Context, in *vtctldata.VSchemaRemoveTablesRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaRemoveTablesResponse, error)
+	VSchemaSetPrimaryVindex(ctx context.Context, in *vtctldata.VSchemaSetPrimaryVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetPrimaryVindexResponse, error)
+	VSchemaSetSequence(ctx context.Context, in *vtctldata.VSchemaSetSequenceRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetSequenceResponse, error)
+	// VSchemaSetReference sets up a reference table, which points to a source
+	// table in another vschema.
+	VSchemaSetReference(ctx context.Context, in *vtctldata.VSchemaSetReferenceRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetReferenceResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
 	WorkflowStatus(ctx context.Context, in *vtctldata.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
@@ -1649,6 +1663,114 @@ func (c *vtctldClient) VDiffStop(ctx context.Context, in *vtctldata.VDiffStopReq
 	return out, nil
 }
 
+func (c *vtctldClient) VSchemaCreate(ctx context.Context, in *vtctldata.VSchemaCreateRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaCreateResponse, error) {
+	out := new(vtctldata.VSchemaCreateResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaCreate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VSchemaGet(ctx context.Context, in *vtctldata.VSchemaGetRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaGetResponse, error) {
+	out := new(vtctldata.VSchemaGetResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaGet", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VSchemaUpdate(ctx context.Context, in *vtctldata.VSchemaUpdateRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaUpdateResponse, error) {
+	out := new(vtctldata.VSchemaUpdateResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaUpdate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VSchemaPublish(ctx context.Context, in *vtctldata.VSchemaPublishRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaPublishResponse, error) {
+	out := new(vtctldata.VSchemaPublishResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaPublish", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VSchemaAddVindex(ctx context.Context, in *vtctldata.VSchemaAddVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaAddVindexResponse, error) {
+	out := new(vtctldata.VSchemaAddVindexResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaAddVindex", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VSchemaRemoveVindex(ctx context.Context, in *vtctldata.VSchemaRemoveVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaRemoveVindexResponse, error) {
+	out := new(vtctldata.VSchemaRemoveVindexResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaRemoveVindex", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VSchemaAddLookupVindex(ctx context.Context, in *vtctldata.VSchemaAddLookupVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaAddLookupVindexResponse, error) {
+	out := new(vtctldata.VSchemaAddLookupVindexResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaAddLookupVindex", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VSchemaAddTables(ctx context.Context, in *vtctldata.VSchemaAddTablesRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaAddTablesResponse, error) {
+	out := new(vtctldata.VSchemaAddTablesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaAddTables", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VSchemaRemoveTables(ctx context.Context, in *vtctldata.VSchemaRemoveTablesRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaRemoveTablesResponse, error) {
+	out := new(vtctldata.VSchemaRemoveTablesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaRemoveTables", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VSchemaSetPrimaryVindex(ctx context.Context, in *vtctldata.VSchemaSetPrimaryVindexRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetPrimaryVindexResponse, error) {
+	out := new(vtctldata.VSchemaSetPrimaryVindexResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaSetPrimaryVindex", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VSchemaSetSequence(ctx context.Context, in *vtctldata.VSchemaSetSequenceRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetSequenceResponse, error) {
+	out := new(vtctldata.VSchemaSetSequenceResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaSetSequence", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VSchemaSetReference(ctx context.Context, in *vtctldata.VSchemaSetReferenceRequest, opts ...grpc.CallOption) (*vtctldata.VSchemaSetReferenceResponse, error) {
+	out := new(vtctldata.VSchemaSetReferenceResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VSchemaSetReference", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error) {
 	out := new(vtctldata.WorkflowDeleteResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowDelete", in, out, opts...)
@@ -2042,6 +2164,20 @@ type VtctldServer interface {
 	VDiffResume(context.Context, *vtctldata.VDiffResumeRequest) (*vtctldata.VDiffResumeResponse, error)
 	VDiffShow(context.Context, *vtctldata.VDiffShowRequest) (*vtctldata.VDiffShowResponse, error)
 	VDiffStop(context.Context, *vtctldata.VDiffStopRequest) (*vtctldata.VDiffStopResponse, error)
+	VSchemaCreate(context.Context, *vtctldata.VSchemaCreateRequest) (*vtctldata.VSchemaCreateResponse, error)
+	VSchemaGet(context.Context, *vtctldata.VSchemaGetRequest) (*vtctldata.VSchemaGetResponse, error)
+	VSchemaUpdate(context.Context, *vtctldata.VSchemaUpdateRequest) (*vtctldata.VSchemaUpdateResponse, error)
+	VSchemaPublish(context.Context, *vtctldata.VSchemaPublishRequest) (*vtctldata.VSchemaPublishResponse, error)
+	VSchemaAddVindex(context.Context, *vtctldata.VSchemaAddVindexRequest) (*vtctldata.VSchemaAddVindexResponse, error)
+	VSchemaRemoveVindex(context.Context, *vtctldata.VSchemaRemoveVindexRequest) (*vtctldata.VSchemaRemoveVindexResponse, error)
+	VSchemaAddLookupVindex(context.Context, *vtctldata.VSchemaAddLookupVindexRequest) (*vtctldata.VSchemaAddLookupVindexResponse, error)
+	VSchemaAddTables(context.Context, *vtctldata.VSchemaAddTablesRequest) (*vtctldata.VSchemaAddTablesResponse, error)
+	VSchemaRemoveTables(context.Context, *vtctldata.VSchemaRemoveTablesRequest) (*vtctldata.VSchemaRemoveTablesResponse, error)
+	VSchemaSetPrimaryVindex(context.Context, *vtctldata.VSchemaSetPrimaryVindexRequest) (*vtctldata.VSchemaSetPrimaryVindexResponse, error)
+	VSchemaSetSequence(context.Context, *vtctldata.VSchemaSetSequenceRequest) (*vtctldata.VSchemaSetSequenceResponse, error)
+	// VSchemaSetReference sets up a reference table, which points to a source
+	// table in another vschema.
+	VSchemaSetReference(context.Context, *vtctldata.VSchemaSetReferenceRequest) (*vtctldata.VSchemaSetReferenceResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
 	WorkflowStatus(context.Context, *vtctldata.WorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error)
@@ -2421,6 +2557,42 @@ func (UnimplementedVtctldServer) VDiffShow(context.Context, *vtctldata.VDiffShow
 }
 func (UnimplementedVtctldServer) VDiffStop(context.Context, *vtctldata.VDiffStopRequest) (*vtctldata.VDiffStopResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VDiffStop not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaCreate(context.Context, *vtctldata.VSchemaCreateRequest) (*vtctldata.VSchemaCreateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaCreate not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaGet(context.Context, *vtctldata.VSchemaGetRequest) (*vtctldata.VSchemaGetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaGet not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaUpdate(context.Context, *vtctldata.VSchemaUpdateRequest) (*vtctldata.VSchemaUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaUpdate not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaPublish(context.Context, *vtctldata.VSchemaPublishRequest) (*vtctldata.VSchemaPublishResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaPublish not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaAddVindex(context.Context, *vtctldata.VSchemaAddVindexRequest) (*vtctldata.VSchemaAddVindexResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaAddVindex not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaRemoveVindex(context.Context, *vtctldata.VSchemaRemoveVindexRequest) (*vtctldata.VSchemaRemoveVindexResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaRemoveVindex not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaAddLookupVindex(context.Context, *vtctldata.VSchemaAddLookupVindexRequest) (*vtctldata.VSchemaAddLookupVindexResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaAddLookupVindex not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaAddTables(context.Context, *vtctldata.VSchemaAddTablesRequest) (*vtctldata.VSchemaAddTablesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaAddTables not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaRemoveTables(context.Context, *vtctldata.VSchemaRemoveTablesRequest) (*vtctldata.VSchemaRemoveTablesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaRemoveTables not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaSetPrimaryVindex(context.Context, *vtctldata.VSchemaSetPrimaryVindexRequest) (*vtctldata.VSchemaSetPrimaryVindexResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaSetPrimaryVindex not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaSetSequence(context.Context, *vtctldata.VSchemaSetSequenceRequest) (*vtctldata.VSchemaSetSequenceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaSetSequence not implemented")
+}
+func (UnimplementedVtctldServer) VSchemaSetReference(context.Context, *vtctldata.VSchemaSetReferenceRequest) (*vtctldata.VSchemaSetReferenceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VSchemaSetReference not implemented")
 }
 func (UnimplementedVtctldServer) WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkflowDelete not implemented")
@@ -4640,6 +4812,222 @@ func _Vtctld_VDiffStop_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_VSchemaCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaCreate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaCreate(ctx, req.(*vtctldata.VSchemaCreateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VSchemaGet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaGetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaGet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaGet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaGet(ctx, req.(*vtctldata.VSchemaGetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VSchemaUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaUpdate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaUpdate(ctx, req.(*vtctldata.VSchemaUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VSchemaPublish_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaPublishRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaPublish(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaPublish",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaPublish(ctx, req.(*vtctldata.VSchemaPublishRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VSchemaAddVindex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaAddVindexRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaAddVindex(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaAddVindex",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaAddVindex(ctx, req.(*vtctldata.VSchemaAddVindexRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VSchemaRemoveVindex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaRemoveVindexRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaRemoveVindex(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaRemoveVindex",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaRemoveVindex(ctx, req.(*vtctldata.VSchemaRemoveVindexRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VSchemaAddLookupVindex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaAddLookupVindexRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaAddLookupVindex(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaAddLookupVindex",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaAddLookupVindex(ctx, req.(*vtctldata.VSchemaAddLookupVindexRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VSchemaAddTables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaAddTablesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaAddTables(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaAddTables",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaAddTables(ctx, req.(*vtctldata.VSchemaAddTablesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VSchemaRemoveTables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaRemoveTablesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaRemoveTables(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaRemoveTables",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaRemoveTables(ctx, req.(*vtctldata.VSchemaRemoveTablesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VSchemaSetPrimaryVindex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaSetPrimaryVindexRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaSetPrimaryVindex(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaSetPrimaryVindex",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaSetPrimaryVindex(ctx, req.(*vtctldata.VSchemaSetPrimaryVindexRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VSchemaSetSequence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaSetSequenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaSetSequence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaSetSequence",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaSetSequence(ctx, req.(*vtctldata.VSchemaSetSequenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VSchemaSetReference_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VSchemaSetReferenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VSchemaSetReference(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VSchemaSetReference",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VSchemaSetReference(ctx, req.(*vtctldata.VSchemaSetReferenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_WorkflowDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.WorkflowDeleteRequest)
 	if err := dec(in); err != nil {
@@ -5226,6 +5614,54 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VDiffStop",
 			Handler:    _Vtctld_VDiffStop_Handler,
+		},
+		{
+			MethodName: "VSchemaCreate",
+			Handler:    _Vtctld_VSchemaCreate_Handler,
+		},
+		{
+			MethodName: "VSchemaGet",
+			Handler:    _Vtctld_VSchemaGet_Handler,
+		},
+		{
+			MethodName: "VSchemaUpdate",
+			Handler:    _Vtctld_VSchemaUpdate_Handler,
+		},
+		{
+			MethodName: "VSchemaPublish",
+			Handler:    _Vtctld_VSchemaPublish_Handler,
+		},
+		{
+			MethodName: "VSchemaAddVindex",
+			Handler:    _Vtctld_VSchemaAddVindex_Handler,
+		},
+		{
+			MethodName: "VSchemaRemoveVindex",
+			Handler:    _Vtctld_VSchemaRemoveVindex_Handler,
+		},
+		{
+			MethodName: "VSchemaAddLookupVindex",
+			Handler:    _Vtctld_VSchemaAddLookupVindex_Handler,
+		},
+		{
+			MethodName: "VSchemaAddTables",
+			Handler:    _Vtctld_VSchemaAddTables_Handler,
+		},
+		{
+			MethodName: "VSchemaRemoveTables",
+			Handler:    _Vtctld_VSchemaRemoveTables_Handler,
+		},
+		{
+			MethodName: "VSchemaSetPrimaryVindex",
+			Handler:    _Vtctld_VSchemaSetPrimaryVindex_Handler,
+		},
+		{
+			MethodName: "VSchemaSetSequence",
+			Handler:    _Vtctld_VSchemaSetSequence_Handler,
+		},
+		{
+			MethodName: "VSchemaSetReference",
+			Handler:    _Vtctld_VSchemaSetReference_Handler,
 		},
 		{
 			MethodName: "WorkflowDelete",

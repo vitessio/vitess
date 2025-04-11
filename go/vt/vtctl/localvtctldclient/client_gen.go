@@ -737,6 +737,66 @@ func (client *localVtctldClient) VDiffStop(ctx context.Context, in *vtctldatapb.
 	return client.s.VDiffStop(ctx, in)
 }
 
+// VSchemaAddLookupVindex is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaAddLookupVindex(ctx context.Context, in *vtctldatapb.VSchemaAddLookupVindexRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaAddLookupVindexResponse, error) {
+	return client.s.VSchemaAddLookupVindex(ctx, in)
+}
+
+// VSchemaAddTables is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaAddTables(ctx context.Context, in *vtctldatapb.VSchemaAddTablesRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaAddTablesResponse, error) {
+	return client.s.VSchemaAddTables(ctx, in)
+}
+
+// VSchemaAddVindex is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaAddVindex(ctx context.Context, in *vtctldatapb.VSchemaAddVindexRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaAddVindexResponse, error) {
+	return client.s.VSchemaAddVindex(ctx, in)
+}
+
+// VSchemaCreate is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaCreate(ctx context.Context, in *vtctldatapb.VSchemaCreateRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaCreateResponse, error) {
+	return client.s.VSchemaCreate(ctx, in)
+}
+
+// VSchemaGet is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaGet(ctx context.Context, in *vtctldatapb.VSchemaGetRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaGetResponse, error) {
+	return client.s.VSchemaGet(ctx, in)
+}
+
+// VSchemaPublish is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaPublish(ctx context.Context, in *vtctldatapb.VSchemaPublishRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaPublishResponse, error) {
+	return client.s.VSchemaPublish(ctx, in)
+}
+
+// VSchemaRemoveTables is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaRemoveTables(ctx context.Context, in *vtctldatapb.VSchemaRemoveTablesRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaRemoveTablesResponse, error) {
+	return client.s.VSchemaRemoveTables(ctx, in)
+}
+
+// VSchemaRemoveVindex is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaRemoveVindex(ctx context.Context, in *vtctldatapb.VSchemaRemoveVindexRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaRemoveVindexResponse, error) {
+	return client.s.VSchemaRemoveVindex(ctx, in)
+}
+
+// VSchemaSetPrimaryVindex is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaSetPrimaryVindex(ctx context.Context, in *vtctldatapb.VSchemaSetPrimaryVindexRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaSetPrimaryVindexResponse, error) {
+	return client.s.VSchemaSetPrimaryVindex(ctx, in)
+}
+
+// VSchemaSetReference is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaSetReference(ctx context.Context, in *vtctldatapb.VSchemaSetReferenceRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaSetReferenceResponse, error) {
+	return client.s.VSchemaSetReference(ctx, in)
+}
+
+// VSchemaSetSequence is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaSetSequence(ctx context.Context, in *vtctldatapb.VSchemaSetSequenceRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaSetSequenceResponse, error) {
+	return client.s.VSchemaSetSequence(ctx, in)
+}
+
+// VSchemaUpdate is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VSchemaUpdate(ctx context.Context, in *vtctldatapb.VSchemaUpdateRequest, opts ...grpc.CallOption) (*vtctldatapb.VSchemaUpdateResponse, error) {
+	return client.s.VSchemaUpdate(ctx, in)
+}
+
 // Validate is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) Validate(ctx context.Context, in *vtctldatapb.ValidateRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateResponse, error) {
 	return client.s.Validate(ctx, in)

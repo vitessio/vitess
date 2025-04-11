@@ -2130,6 +2130,125 @@ message VDiffStopRequest {
 message VDiffStopResponse {
 }
 
+message VSchemaCreateRequest {
+  string v_schema_name = 1;
+  bool sharded = 2;
+  bool draft = 3;
+  string v_schema_json = 4;
+}
+
+message VSchemaCreateResponse {
+}
+
+message VSchemaGetRequest {
+  string v_schema_name = 1;
+  bool include_drafts = 2;
+}
+
+message VSchemaGetResponse {
+  vschema.Keyspace v_schema = 1;
+}
+
+message VSchemaUpdateRequest {
+  string v_schema_name = 1;
+  optional bool sharded = 2;
+  optional string foreign_key_mode = 3;
+  optional bool draft = 4;
+
+  optional bool multi_tenant = 5;
+  optional string tenant_id_column_name = 6;
+  optional string tenant_id_column_type = 7;
+}
+
+message VSchemaUpdateResponse {
+}
+
+message VSchemaPublishRequest {
+  string v_schema_name = 1;
+}
+
+message VSchemaPublishResponse {
+}
+
+message VSchemaAddVindexRequest {
+  string v_schema_name = 1;
+  string vindex_name = 2;
+  string vindex_type = 3;
+  map<string, string> params = 4;
+}
+
+message VSchemaAddVindexResponse {
+}
+
+message VSchemaRemoveVindexRequest {
+  string v_schema_name = 1;
+  string vindex_name = 2;
+}
+
+message VSchemaRemoveVindexResponse {
+}
+
+message VSchemaAddLookupVindexRequest {
+  string v_schema_name = 1;
+  string vindex_name = 2;
+  string lookup_vindex_type = 3;
+  string table_name = 4;
+  repeated string from_columns = 5;
+  string owner = 6;
+  bool ignore_nulls = 7;
+}
+
+message VSchemaAddLookupVindexResponse {
+}
+
+message VSchemaAddTablesRequest {
+  string v_schema_name = 1;
+  repeated string tables = 2;
+  string primary_vindex_name = 3;
+  repeated string columns = 4;
+  bool add_all = 5;
+}
+
+message VSchemaAddTablesResponse {  
+}
+
+message VSchemaRemoveTablesRequest {
+  string v_schema_name = 1;
+  repeated string tables = 2;
+}
+
+message VSchemaRemoveTablesResponse {  
+}
+
+message VSchemaSetPrimaryVindexRequest {
+  string v_schema_name = 1;
+  repeated string tables = 2;
+  string vindex_name = 3;
+  repeated string columns = 4;
+}
+
+message VSchemaSetPrimaryVindexResponse {  
+}
+
+message VSchemaSetSequenceRequest {
+  string v_schema_name = 1;
+  string table_name = 2;
+  string column = 3;
+  string sequence_source = 4;
+}
+
+message VSchemaSetSequenceResponse {
+}
+
+message VSchemaSetReferenceRequest {
+  string v_schema_name = 1;
+  string table_name = 2;
+  string source = 3;
+}
+
+message VSchemaSetReferenceResponse {
+}
+
 message WorkflowDeleteRequest {
   string keyspace = 1;
   string workflow = 2;
