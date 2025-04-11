@@ -26,11 +26,10 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/hashicorp/consul/api"
 
 	"vitess.io/vitess/go/testfiles"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/test"
 
@@ -297,25 +296,42 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 
 	consulAuthClientStaticFile = tmpFile.Name()
 
-	jsonConfig := "{\"global\":{\"acl_token\":\"badtoken\"}}"
-	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
-		t.Fatalf("couldn't write temp file: %v", err)
+	// check valid, empty json causes error
+	{
+		jsonConfig := "{}"
+		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+			t.Fatalf("couldn't write temp file: %v", err)
+		}
+
+		// Create the server on the new root.
+		_, err := topo.OpenServer("consul", serverAddr, path.Join("globalRoot", topo.GlobalCell))
+		if err == nil {
+			t.Fatal("Expected OpenServer() to return an error due to bad config, got nil")
+		}
 	}
 
-	// Create the server on the new root.
-	ts, err := topo.OpenServer("consul", serverAddr, path.Join("globalRoot", topo.GlobalCell))
-	if err != nil {
-		t.Fatalf("OpenServer() failed: %v", err)
-	}
+	// check bad token causes error
+	{
+		jsonConfig := "{\"global\":{\"acl_token\":\"badtoken\"}}"
+		if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+			t.Fatalf("couldn't write temp file: %v", err)
+		}
 
-	// Attempt to Create the CellInfo.
-	err = ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
-		ServerAddress: serverAddr,
-		Root:          path.Join("globalRoot", test.LocalCellName),
-	})
+		// Create the server on the new root.
+		ts, err := topo.OpenServer("consul", serverAddr, path.Join("globalRoot", topo.GlobalCell))
+		if err != nil {
+			t.Fatalf("OpenServer() failed: %v", err)
+		}
 
-	want := "Failed request: ACL not found"
-	if err == nil || err.Error() != want {
-		t.Errorf("Expected CreateCellInfo to fail: got  %v, want %s", err, want)
+		// Attempt to Create the CellInfo.
+		err = ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+			ServerAddress: serverAddr,
+			Root:          path.Join("globalRoot", test.LocalCellName),
+		})
+
+		want := "Failed request: ACL not found"
+		if err == nil || err.Error() != want {
+			t.Errorf("Expected CreateCellInfo to fail: got  %v, want %s", err, want)
+		}
 	}
 }
