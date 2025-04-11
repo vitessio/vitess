@@ -19,6 +19,9 @@ package base
 import (
 	"errors"
 	"net"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // MetricResult is what we expect our probes to return. This can be a numeric result, or
@@ -58,6 +61,11 @@ func IsDialTCPError(err error) bool {
 	if err == nil {
 		return false
 	}
+
+	if s, ok := status.FromError(err); ok {
+		return s.Code() == codes.Unavailable || s.Code() == codes.DeadlineExceeded
+	}
+
 	switch err := err.(type) {
 	case *net.OpError:
 		return err.Op == "dial" && err.Net == "tcp"
