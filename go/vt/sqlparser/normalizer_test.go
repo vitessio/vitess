@@ -1015,18 +1015,14 @@ func TestRewritesSysVar(in *testing.T) {
 		expected: "select :__vtudvx = :__vtsql_mode as `@x = @@sql_mode` from dual",
 		sysVar:   map[string]string{"sql_mode": "' '"},
 	}, {
-		in:       "SELECT @@tx_isolation",
-		expected: "select @@tx_isolation from dual",
+		in:       "SELECT @@transaction_isolation",
+		expected: "select @@transaction_isolation from dual",
 	}, {
 		in:       "SELECT @@transaction_isolation",
 		expected: "select @@transaction_isolation from dual",
 	}, {
 		in:       "SELECT @@session.transaction_isolation",
 		expected: "select @@session.transaction_isolation from dual",
-	}, {
-		in:       "SELECT @@tx_isolation",
-		sysVar:   map[string]string{"tx_isolation": "'READ-COMMITTED'"},
-		expected: "select :__vttx_isolation as `@@tx_isolation` from dual",
 	}, {
 		in:       "SELECT @@transaction_isolation",
 		sysVar:   map[string]string{"transaction_isolation": "'READ-COMMITTED'"},
