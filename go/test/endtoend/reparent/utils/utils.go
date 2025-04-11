@@ -357,7 +357,7 @@ func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, 
 		"PlannedReparentShard",
 		fmt.Sprintf("%s/%s", KeyspaceName, ShardName)}
 	if actionTimeout != "" {
-		args = append(args, utils.GetFlagVariantForTests("--action-timeout"), actionTimeout)
+		args = append(args, "--action-timeout", actionTimeout)
 	}
 	if waitTimeout != "" {
 		args = append(args, "--wait-replicas-timeout", waitTimeout)
@@ -382,7 +382,7 @@ func Ers(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, to
 func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet, preventCrossCellPromotion bool) (string, error) {
 	var args []string
 	if timeout != "" {
-		args = append(args, utils.GetFlagVariantForTests("--action-timeout"), timeout)
+		args = append(args, "--action-timeout", timeout)
 	}
 	args = append(args, "EmergencyReparentShard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName))
 	if tab != nil {

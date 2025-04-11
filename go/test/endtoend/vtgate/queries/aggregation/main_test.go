@@ -70,7 +70,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, fmt.Sprintf("%s=true", vtutils.GetFlagVariantForTests("--enable-system-settings=true")))
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, fmt.Sprintf("%s=true", vtutils.GetFlagVariantForTests("--enable-system-settings")))
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
