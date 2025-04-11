@@ -30,7 +30,7 @@ type SystemVariable struct {
 	IsBoolean bool
 
 	// IdentifierAsString allows identifiers (a.k.a. ColName) from the AST to be handled as if they are strings.
-	// SET transaction-mode = two_pc => SET transaction-mode = 'two_pc'
+	// SET transaction_mode = two_pc => SET transaction_mode = 'two_pc'
 	IdentifierAsString bool
 
 	// Default is the default value, if none is given
@@ -62,13 +62,13 @@ var (
 	Autocommit                  = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
 	Charset                     = SystemVariable{Name: "charset", Default: utf8mb4, IdentifierAsString: true}
 	ClientFoundRows             = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
-	SessionEnableSystemSettings = SystemVariable{Name: "enable-system-settings", IsBoolean: true, Default: on}
+	SessionEnableSystemSettings = SystemVariable{Name: "enable_system_settings", IsBoolean: true, Default: on}
 	Names                       = SystemVariable{Name: "names", Default: utf8mb4, IdentifierAsString: true}
 	SessionUUID                 = SystemVariable{Name: "session_uuid", IdentifierAsString: true}
 	SkipQueryPlanCache          = SystemVariable{Name: "skip_query_plan_cache", IsBoolean: true, Default: off}
 	Socket                      = SystemVariable{Name: "socket", Default: off}
 	SQLSelectLimit              = SystemVariable{Name: "sql_select_limit", Default: off, SupportSetVar: true}
-	TransactionMode             = SystemVariable{Name: "transaction-mode", IdentifierAsString: true}
+	TransactionMode             = SystemVariable{Name: "transaction_mode", IdentifierAsString: true}
 	TransactionReadOnly         = SystemVariable{Name: "transaction_read_only", IsBoolean: true, Default: off}
 	TxReadOnly                  = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
 	Workload                    = SystemVariable{Name: "workload", IdentifierAsString: true}

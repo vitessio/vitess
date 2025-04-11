@@ -803,8 +803,8 @@ func TestSelectSystemVariables(t *testing.T) {
 	logChan := executor.queryLogger.Subscribe("Test")
 	defer executor.queryLogger.Unsubscribe(logChan)
 
-	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, @@enable-system-settings, " +
-		"@@sql_select_limit, @@transaction-mode, @@workload, @@read_after_write_gtid, " +
+	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, @@enable_system_settings, " +
+		"@@sql_select_limit, @@transaction_mode, @@workload, @@read_after_write_gtid, " +
 		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy, @@migration_context, @@socket, @@query_timeout"
 
 	result, err := executorExec(ctx, executor, session, sql, map[string]*querypb.BindVariable{})
@@ -813,9 +813,9 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@autocommit", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "@@client_found_rows", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@enable-system-settings", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "@@enable_system_settings", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "@@sql_select_limit", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@transaction-mode", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
+			{Name: "@@transaction_mode", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 			{Name: "@@workload", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 			{Name: "@@read_after_write_gtid", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
 			{Name: "@@read_after_write_timeout", Type: sqltypes.Float64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
@@ -860,13 +860,13 @@ func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 		QueryTimeout:         75,
 	}
 
-	sql := "select @@autocommit, @@enable-system-settings, @@query_timeout"
+	sql := "select @@autocommit, @@enable_system_settings, @@query_timeout"
 
 	result, err := executorExec(ctx, executor, session, sql, nil)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "@@autocommit", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-			{Name: "@@enable-system-settings", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+			{Name: "@@enable_system_settings", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 			{Name: "@@query_timeout", Type: sqltypes.Int64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 		Rows: [][]sqltypes.Value{{

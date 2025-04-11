@@ -461,7 +461,7 @@ func TestAnalyze(t *testing.T) {
 	}
 }
 
-// TestTransactionModeVar executes SELECT on `transaction-mode` variable
+// TestTransactionModeVar executes SELECT on `transaction_mode` variable
 func TestTransactionModeVar(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -472,13 +472,13 @@ func TestTransactionModeVar(t *testing.T) {
 	}{{
 		expRes: `[[VARCHAR("MULTI")]]`,
 	}, {
-		setStmt: `set transaction-mode = single`,
+		setStmt: `set transaction_mode = single`,
 		expRes:  `[[VARCHAR("SINGLE")]]`,
 	}, {
-		setStmt: `set transaction-mode = multi`,
+		setStmt: `set transaction_mode = multi`,
 		expRes:  `[[VARCHAR("MULTI")]]`,
 	}, {
-		setStmt: `set transaction-mode = twopc`,
+		setStmt: `set transaction_mode = twopc`,
 		expRes:  `[[VARCHAR("TWOPC")]]`,
 	}}
 
@@ -487,7 +487,7 @@ func TestTransactionModeVar(t *testing.T) {
 			if tcase.setStmt != "" {
 				utils.Exec(t, mcmp.VtConn, tcase.setStmt)
 			}
-			utils.AssertMatches(t, mcmp.VtConn, "select @@transaction-mode", tcase.expRes)
+			utils.AssertMatches(t, mcmp.VtConn, "select @@transaction_mode", tcase.expRes)
 		})
 	}
 }
