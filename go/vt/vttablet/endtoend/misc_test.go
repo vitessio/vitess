@@ -701,11 +701,12 @@ func TestSelectBooleanSystemVariables(t *testing.T) {
 		return testCase{Variable: varname, Value: value, Type: vartype}
 	}
 
+	enableSystemSettingsFlag := vtutils.GetFlagVariantForTests("enable-system-settings")
 	tcs := []testCase{
 		newTestCase("autocommit", querypb.Type_INT64, true),
 		newTestCase("autocommit", querypb.Type_INT64, false),
-		newTestCase(vtutils.GetFlagVariantForTests("enable-system-settings"), querypb.Type_INT64, true),
-		newTestCase(vtutils.GetFlagVariantForTests("enable-system-settings"), querypb.Type_INT64, false),
+		newTestCase(enableSystemSettingsFlag, querypb.Type_INT64, true),
+		newTestCase(enableSystemSettingsFlag, querypb.Type_INT64, false),
 	}
 
 	for _, tc := range tcs {
