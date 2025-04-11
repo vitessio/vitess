@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -33,23 +34,23 @@ var (
 	// the caching for both watched and unwatched values.
 	//
 	// For entries we don't watch (like the list of Keyspaces), we refresh
-	// the cached list from the topo after srv_topo_cache_refresh elapses.
+	// the cached list from the topo after srv-topo-cache-refresh elapses.
 	// If the fetch fails, we hold onto the cached value until
-	// srv_topo_cache_ttl elapses.
+	// srv-topo-cache-ttl elapses.
 	//
 	// For entries we watch (like the SrvKeyspace for a given cell), if
 	// setting the watch fails, we will use the last known value until
-	// srv_topo_cache_ttl elapses and we only try to re-establish the watch
-	// once every srv_topo_cache_refresh interval.
+	// srv-topo-cache-ttl elapses and we only try to re-establish the watch
+	// once every srv-topo-cache-refresh interval.
 	srvTopoTimeout      = 5 * time.Second
 	srvTopoCacheTTL     = 1 * time.Second
 	srvTopoCacheRefresh = 1 * time.Second
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&srvTopoTimeout, "srv_topo_timeout", srvTopoTimeout, "topo server timeout")
-	fs.DurationVar(&srvTopoCacheTTL, "srv_topo_cache_ttl", srvTopoCacheTTL, "how long to use cached entries for topology")
-	fs.DurationVar(&srvTopoCacheRefresh, "srv_topo_cache_refresh", srvTopoCacheRefresh, "how frequently to refresh the topology for cached entries")
+	utils.SetFlagDurationVar(fs, &srvTopoTimeout, "srv-topo-timeout", srvTopoTimeout, "topo server timeout")
+	utils.SetFlagDurationVar(fs, &srvTopoCacheTTL, "srv-topo-cache-ttl", srvTopoCacheTTL, "how long to use cached entries for topology")
+	utils.SetFlagDurationVar(fs, &srvTopoCacheRefresh, "srv-topo-cache-refresh", srvTopoCacheRefresh, "how frequently to refresh the topology for cached entries")
 }
 
 func init() {
@@ -80,7 +81,7 @@ type ResilientServer struct {
 // based on the provided topo.Server.
 func NewResilientServer(ctx context.Context, base *topo.Server, counts *stats.CountersWithSingleLabel) *ResilientServer {
 	if srvTopoCacheRefresh > srvTopoCacheTTL {
-		log.Fatalf("srv_topo_cache_refresh must be less than or equal to srv_topo_cache_ttl")
+		log.Fatalf("srv-topo-cache-refresh must be less than or equal to srv-topo-cache-ttl")
 	}
 
 	return &ResilientServer{

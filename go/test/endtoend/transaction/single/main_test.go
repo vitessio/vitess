@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+	// vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (

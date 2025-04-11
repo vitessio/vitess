@@ -81,17 +81,17 @@ Even if a MySQL is external, you can still make vttablet perform some management
 
 ` +
 			"* `--unmanaged`: This flag indicates that this tablet is running in unmanaged mode. In this mode, any reparent or replica commands are not allowed. These are InitShardPrimary, PlannedReparentShard, EmergencyReparentShard, and ReparentTablet. You should use the TabletExternallyReparented command to inform vitess of the current primary.\n" +
-			"* `--replication_connect_retry`: This value is give to mysql when it connects a replica to the primary as the retry duration parameter.\n" +
-			"* `--heartbeat_enable` and `--heartbeat_interval duration`: cause vttablet to write heartbeats to the sidecar database. This information is also used by the replication reporter to assess replica lag.\n",
+			"* `--replication-connect-retry`: This value is give to mysql when it connects a replica to the primary as the retry duration parameter.\n" +
+			"* `--heartbeat-enable` and `--heartbeat-interval duration`: cause vttablet to write heartbeats to the sidecar database. This information is also used by the replication reporter to assess replica lag.\n",
 		Example: `
 vttablet \
 	--topo-implementation etcd2 \
 	--topo-global-server-address localhost:2379 \
 	--topo-global-root /vitess/ \
 	--tablet-path $alias \
-	--init_keyspace $keyspace \
-	--init_shard $shard \
-	--init_tablet_type $tablet_type \
+	--init-keyspace $keyspace \
+	--init-shard $shard \
+	--init-tablet-type $tablet_type \
 	--port $port \
 	--grpc-port $grpc_port \
 	--service-map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream'` + "\n\n`$alias` needs to be of the form: `<cell>-id`, and the cell should match one of the local cells that was created in the topology. The id can be left padded with zeroes: `cell-100` and `cell-000000100` are synonymous.",

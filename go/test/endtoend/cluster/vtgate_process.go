@@ -33,7 +33,6 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -209,6 +208,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
+		// TODO: Replace flag with dashed version in v25
 		args = append(args, "--enable_system_settings")
 	}
 	vtgate.proc = exec.Command(

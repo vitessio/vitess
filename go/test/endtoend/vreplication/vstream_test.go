@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -1035,8 +1036,8 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 func TestVStreamHeartbeats(t *testing.T) {
 	// Enable continuous heartbeats.
 	extraVTTabletArgs = append(extraVTTabletArgs,
-		"--heartbeat_enable",
-		"--heartbeat_interval", "1s",
+		utils.GetFlagVariantForTests("--heartbeat-enable"),
+		utils.GetFlagVariantForTests("--heartbeat-interval"), "1s",
 		"--heartbeat_on_demand_duration", "0",
 	)
 	setSidecarDBName("_vt")

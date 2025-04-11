@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	"vitess.io/vitess/go/acl"
@@ -60,7 +61,7 @@ func init() {
 }
 
 func registerActionRepositoryFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&actionTimeout, "action_timeout", actionTimeout, "time to wait for an action before resorting to force")
+	utils.SetFlagDurationVar(fs, &actionTimeout, "action-timeout", actionTimeout, "time to wait for an action before resorting to force")
 }
 
 // action{Keyspace,Shard,Tablet}Method is a function that performs

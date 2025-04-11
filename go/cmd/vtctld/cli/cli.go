@@ -44,8 +44,8 @@ This is demonstrated in the example usage below.`,
 	--topo-global-server-address localhost:2379 \
 	--topo-global-root /vitess/ \
 	--service-map 'grpc-vtctl,grpc-vtctld' \
-	--backup_storage_implementation file \
-	--file_backup_storage_root $VTDATAROOT/backups \
+	--backup-storage-implementation file \
+	--file-backup-storage-root $VTDATAROOT/backups \
 	--port 15000 \
 	--grpc-port 15999`,
 		Args:    cobra.NoArgs,

@@ -24,6 +24,7 @@ import (
 
 	"github.com/spf13/pflag"
 	// "vitess.io/vitess/go/vt/log"
+	// "vitess.io/vitess/go/vt/log"
 )
 
 /*
@@ -81,12 +82,20 @@ func SetFlagDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def ti
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).DurationVar)
 }
 
+func SetFlagUint32Var(fs *pflag.FlagSet, p *uint32, name string, def uint32, usage string) {
+	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).Uint32Var)
+}
+
 func SetFlagUint64Var(fs *pflag.FlagSet, p *uint64, name string, def uint64, usage string) {
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).Uint64Var)
 }
 
 func SetFlagStringSliceVar(fs *pflag.FlagSet, p *[]string, name string, def []string, usage string) {
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).StringSliceVar)
+}
+
+func SetFlagUintVar(fs *pflag.FlagSet, p *uint, name string, def uint, usage string) {
+	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).UintVar)
 }
 
 // SetFlagVar registers a flag (that implements the pflag.Value interface)
@@ -99,6 +108,34 @@ func SetFlagVar(fs *pflag.FlagSet, value pflag.Value, name, usage string) {
 	}
 	fs.Var(value, dashed, usage)
 	fs.Var(value, underscored, "")
+	_ = fs.MarkHidden(underscored)
+	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
+}
+
+// SetFlagStringWithViperVar registers a string flag with both dash and underscore variants
+// This is designed to work with viper-managed flags
+func SetFlagStringWithViperVar(fs *pflag.FlagSet, name string, def string, usage string) {
+	underscored, dashed := flagVariants(name)
+	if name == underscored {
+		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
+	}
+
+	fs.String(dashed, def, usage)
+	fs.String(underscored, def, "")
+	_ = fs.MarkHidden(underscored)
+	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
+}
+
+// SetFlagBoolWithViperVar registers a boolean flag with both dash and underscore variants
+// This is designed to work with viper-managed flags
+func SetFlagBoolWithViperVar(fs *pflag.FlagSet, name string, def bool, usage string) {
+	underscored, dashed := flagVariants(name)
+	if name == underscored {
+		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
+	}
+
+	fs.Bool(dashed, def, usage)
+	fs.Bool(underscored, def, "")
 	_ = fs.MarkHidden(underscored)
 	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
 }

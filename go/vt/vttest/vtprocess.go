@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 // HealthChecker is a callback that impements a service-specific health check
@@ -238,15 +239,15 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--db_dba_user", user,
 		"--db_dba_password", pass,
 		"--proto_topo", string(protoTopo),
-		"--mycnf_server_id", "1",
-		"--mycnf_socket_file", socket,
+		"--mycnf-server-id", "1",
+		"--mycnf-socket-file", socket,
 		"--normalize_queries",
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
 		"--planner-version", args.PlannerVersion,
-		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
-		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
-		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
+		fmt.Sprintf("%s=%t", utils.GetFlagVariantForTests("--enable-online-ddl"), args.EnableOnlineDDL),
+		fmt.Sprintf("%s=%t", utils.GetFlagVariantForTests("--enable-direct-ddl"), args.EnableDirectDDL),
+		fmt.Sprintf("%s=%t", utils.GetFlagVariantForTests("--enable-system-settings"), args.EnableSystemSettings),
 		fmt.Sprintf("--no_scatter=%t", args.NoScatter),
 	}...)
 
@@ -254,9 +255,9 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	// that the default value is 1 minute, but we are keeping it low to make vttestserver perform faster.
 	// Less value might result in high pressure on topo but for testing purpose that should not be a concern.
 	if args.VtgateTabletRefreshInterval <= 0 {
-		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet_refresh_interval=%v", 10*time.Second))
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet-refresh-interval=%v", 10*time.Second))
 	} else {
-		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet_refresh_interval=%v", args.VtgateTabletRefreshInterval))
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet-refresh-interval=%v", args.VtgateTabletRefreshInterval))
 	}
 
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
@@ -269,19 +270,19 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-persistence-dir", path.Join(args.DataDir, "vschema_data")}...)
 	}
 	if args.TransactionMode != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction_mode", args.TransactionMode}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction-mode", args.TransactionMode}...)
 	}
 	if args.TransactionTimeout != 0 {
 		vt.ExtraArgs = append(vt.ExtraArgs, "--queryserver-config-transaction-timeout", fmt.Sprintf("%v", args.TransactionTimeout))
 	}
 	if args.TabletHostName != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--tablet_hostname", args.TabletHostName}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--tablet-hostname", args.TabletHostName}...)
 	}
 	if servenv.GRPCAuth() == "mtls" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc-auth-mode", servenv.GRPCAuth(), "--grpc-key", servenv.GRPCKey(), "--grpc-cert", servenv.GRPCCert(), "--grpc-ca", servenv.GRPCCertificateAuthority(), "--grpc-auth-mtls-allowed-substrings", servenv.ClientCertSubstrings()}...)
 	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-ddl-authorized-users", args.VSchemaDDLAuthorizedUsers}...)
 	}
 	vt.ExtraArgs = append(vt.ExtraArgs, "--mysql-server-version", servenv.MySQLServerVersion())
 	if socket != "" {
@@ -305,14 +306,14 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	}
 
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
-		"--mysql_auth_server_impl", "none",
-		"--mysql_server_port", fmt.Sprintf("%d", vtcomboMysqlPort),
+		"--mysql-auth-server-impl", "none",
+		"--mysql-server-port", fmt.Sprintf("%d", vtcomboMysqlPort),
 		"--mysql_server_bind_address", vtcomboMysqlBindAddress,
 	}...)
 
 	if args.ExternalTopoImplementation != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
-			"--external_topo_server",
+			"--external-topo-server",
 			"--topo-implementation", args.ExternalTopoImplementation,
 			"--topo-global-server-address", args.ExternalTopoGlobalServerAddress,
 			"--topo-global-root", args.ExternalTopoGlobalRoot,

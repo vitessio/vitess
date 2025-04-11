@@ -56,8 +56,7 @@ var (
 var CommonTags []string
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&emitStats, "emit_stats", emitStats, "If set, emit stats to push-based monitoring and stats backends")
-
+	utils.SetFlagBoolVar(fs, &emitStats, "emit-stats", emitStats, "If set, emit stats to push-based monitoring and stats backends")
 	utils.SetFlagDurationVar(fs, &statsEmitPeriod, "stats-emit-period", statsEmitPeriod, "Interval between emitting stats to all registered backends")
 	utils.SetFlagStringVar(fs, &statsBackend, "stats-backend", statsBackend, "The name of the registered push-based monitoring/stats backend to use")
 	utils.SetFlagStringVar(fs, &combineDimensions, "stats-combine-dimensions", combineDimensions, `List of dimensions to be combined into a single "all" value in exported stats vars`)

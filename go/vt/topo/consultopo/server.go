@@ -49,7 +49,7 @@ func init() {
 }
 
 func registerServerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&consulAuthClientStaticFile, "consul_auth_static_file", consulAuthClientStaticFile, "JSON File to read the topos/tokens from.")
+	utils.SetFlagStringVar(fs, &consulAuthClientStaticFile, "consul-auth-static-file", consulAuthClientStaticFile, "JSON File to read the topos/tokens from.")
 	utils.SetFlagStringVar(fs, &consulLockSessionChecks, "topo-consul-lock-session-checks", consulLockSessionChecks, "List of checks for consul session.")
 	utils.SetFlagStringVar(fs, &consulLockSessionTTL, "topo-consul-lock-session-ttl", consulLockSessionTTL, "TTL for consul session.")
 	utils.SetFlagDurationVar(fs, &consulLockDelay, "topo-consul-lock-delay", consulLockDelay, "LockDelay for consul session.")
@@ -79,18 +79,18 @@ func getClientCreds() (creds map[string]*ClientAuthCred, err error) {
 
 	if consulAuthClientStaticFile == "" {
 		// Not configured, nothing to do.
-		log.Infof("Consul client auth is not set up. consul_auth_static_file was not provided")
+		log.Infof("Consul client auth is not set up. consul-auth-static-file was not provided")
 		return nil, nil
 	}
 
 	data, err := os.ReadFile(consulAuthClientStaticFile)
 	if err != nil {
-		err = vterrors.Wrapf(err, "Failed to read consul_auth_static_file file")
+		err = vterrors.Wrapf(err, "Failed to read consul-auth-static-file file")
 		return creds, err
 	}
 
 	if err := json.Unmarshal(data, &creds); err != nil {
-		err = vterrors.Wrapf(err, "Error parsing consul_auth_static_file")
+		err = vterrors.Wrapf(err, "Error parsing consul-auth-static-file")
 		return creds, err
 	}
 	return creds, nil

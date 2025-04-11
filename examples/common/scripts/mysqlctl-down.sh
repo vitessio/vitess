@@ -24,5 +24,6 @@ uid=$TABLET_UID
 printf -v alias '%s-%010d' $cell $uid
 echo "Shutting down MySQL for tablet $alias..."
 
+ #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 mysqlctl --tablet_uid $uid shutdown
 

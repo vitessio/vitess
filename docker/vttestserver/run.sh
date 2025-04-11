@@ -30,6 +30,7 @@ echo "max_connections = $MYSQL_MAX_CONNECTIONS" >> /vt/config/mycnf/test-suite.c
 rm -vf "$VTDATAROOT"/"$tablet_dir"/{mysql.sock,mysql.sock.lock}
 
 # Run the vttestserver binary
+#TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 /vt/bin/vttestserver \
 	--port "$PORT" \
 	--keyspaces "$KEYSPACES" \

@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	twopcutil "vitess.io/vitess/go/test/endtoend/transaction/twopc/utils"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
@@ -130,7 +131,7 @@ func BenchmarkTwoPCCommit(b *testing.B) {
 	for _, tc := range testCases {
 		for _, commitMode := range []string{"twopc", "multi"} {
 			conn, _ := start(b)
-			_, err := conn.ExecuteFetch(fmt.Sprintf("set transaction_mode = %s", commitMode), 0, false)
+			_, err := conn.ExecuteFetch(fmt.Sprintf("set %s = %s", utils.GetFlagVariantForTests("transaction-mode"), commitMode), 0, false)
 			if err != nil {
 				b.Fatal(err)
 			}

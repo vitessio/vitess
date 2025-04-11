@@ -1064,9 +1064,9 @@ func TestSuite(ctx context.Context, t *testing.T, protocol string, tablet *topod
 	conn.Close(context.Background())
 }
 
-const tabletProtocolFlagName = "tablet_protocol"
+const tabletProtocolFlagName = "tablet-protocol"
 
-// SetProtocol is a helper function to set the tabletconn --tablet_protocol flag
+// SetProtocol is a helper function to set the tabletconn --tablet-protocol flag
 // value for tests.
 //
 // Note that because this variable is bound to a flag, the effects of this

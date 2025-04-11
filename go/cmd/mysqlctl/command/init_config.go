@@ -31,8 +31,8 @@ var InitConfig = &cobra.Command{
 		"This command is the same as `init` except the `mysqld` server will not be started.",
 	Example: `mysqlctl \
 	--alsologtostderr \
-	--tablet_uid 101 \
-	--mysql_port 12345 \
+	--tablet-uid 101 \
+	--mysql-port 12345 \
 	init_config`,
 	Args: cobra.NoArgs,
 	RunE: commandInitConfig,

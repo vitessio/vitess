@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -73,7 +74,7 @@ func init() {
 }
 
 func registerTopoLockFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&RemoteOperationTimeout, "remote_operation_timeout", RemoteOperationTimeout, "time to wait for a remote operation")
+	utils.SetFlagDurationVar(fs, &RemoteOperationTimeout, "remote-operation-timeout", RemoteOperationTimeout, "time to wait for a remote operation")
 	fs.DurationVar(&LockTimeout, "lock-timeout", LockTimeout, "Maximum time to wait when attempting to acquire a lock from the topo server")
 }
 
