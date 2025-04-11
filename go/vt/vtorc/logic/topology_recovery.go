@@ -504,7 +504,7 @@ func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.Replication
 
 // executeCheckAndRecoverFunction will choose the correct check & recovery function based on analysis.
 // It executes the function synchronously
-func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (err error) {
+func executeCheckAndRecoverFunction(ctx context.Context, analysisEntry *inst.ReplicationAnalysis) (err error) {
 	countPendingRecoveries.Add(1)
 	defer countPendingRecoveries.Add(-1)
 
@@ -552,7 +552,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	}
 
 	// We lock the shard here and then refresh the tablets information
-	ctx, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
+	ctx, unlock, err := LockShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
 		getLockAction(analysisEntry.AnalyzedInstanceAlias, analysisEntry.Analysis),
 	)
 	if err != nil {
@@ -572,7 +572,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		// If they have, then recoveries like ReplicaSemiSyncMustNotBeSet, etc won't be valid anymore.
 		// Similarly, a new primary could have been elected in the mean-time that can cause
 		// a change in the recovery we run.
-		err = RefreshKeyspaceAndShard(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+		err = RefreshKeyspaceAndShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 		if err != nil {
 			logger.Errorf("Failed to refresh keyspace and shard, aborting recovery: %v", err)
 			return err
@@ -599,7 +599,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 			logger.Info("Refreshing shard tablet info")
 			refreshTabletInfoOfShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 			logger.Info("Discovering analysis instance")
-			DiscoverInstance(analysisEntry.AnalyzedInstanceAlias, true)
+			DiscoverInstance(ctx, analysisEntry.AnalyzedInstanceAlias, true)
 			logger.Info("Getting shard primary")
 			primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 			if err != nil {
@@ -612,7 +612,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 			// This would be the case for PrimaryHasPrimary recovery. We don't need to refresh the same tablet twice.
 			if analysisEntry.AnalyzedInstanceAlias != primaryTabletAlias {
 				logger.Info("Discovering primary instance")
-				DiscoverInstance(primaryTabletAlias, true)
+				DiscoverInstance(ctx, primaryTabletAlias, true)
 			}
 		}
 		alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
@@ -666,7 +666,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		// so it doesn't hurt to re-read the information of this tablet, otherwise we'll requeue the same recovery
 		// that we just completed because we would be using stale data.
 		logger.Info("Force discovering problem instance %s post recovery", analysisEntry.AnalyzedInstanceAlias)
-		DiscoverInstance(analysisEntry.AnalyzedInstanceAlias, true)
+		DiscoverInstance(ctx, analysisEntry.AnalyzedInstanceAlias, true)
 	}
 	return err
 }
@@ -691,7 +691,7 @@ func checkIfAlreadyFixed(analysisEntry *inst.ReplicationAnalysis) (bool, error) 
 }
 
 // CheckAndRecover is the main entry point for the recovery mechanism
-func CheckAndRecover() {
+func CheckAndRecover(ctx context.Context) {
 	// Allow the analysis to run even if we don't want to recover
 	replicationAnalysis, err := inst.GetReplicationAnalysis("", "", &inst.ReplicationAnalysisHints{AuditAnalysis: true})
 	if err != nil {
@@ -730,7 +730,7 @@ func CheckAndRecover() {
 		analysisEntry := replicationAnalysis[j]
 
 		go func() {
-			if err := executeCheckAndRecoverFunction(analysisEntry); err != nil {
+			if err := executeCheckAndRecoverFunction(ctx, analysisEntry); err != nil {
 				log.Error(err)
 			}
 		}()
