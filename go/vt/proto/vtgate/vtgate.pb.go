@@ -217,8 +217,8 @@ type Session struct {
 	DDLStrategy string `protobuf:"bytes,21,opt,name=DDLStrategy,proto3" json:"DDLStrategy,omitempty"`
 	// Session UUID
 	SessionUUID string `protobuf:"bytes,22,opt,name=SessionUUID,proto3" json:"SessionUUID,omitempty"`
-	// enable-system-settings defines if we can use reserved connections.
-	EnableSystemSettings bool             `protobuf:"varint,23,opt,name=enable-system-settings,json=enableSystemSettings,proto3" json:"enable-system-settings,omitempty"`
+	// enable_system_settings defines if we can use reserved connections.
+	EnableSystemSettings bool             `protobuf:"varint,23,opt,name=enable_system_settings,json=enableSystemSettings,proto3" json:"enable_system_settings,omitempty"`
 	AdvisoryLock         map[string]int64 `protobuf:"bytes,24,rep,name=advisory_lock,json=advisoryLock,proto3" json:"advisory_lock,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	// query_timeout is the maximum amount of time a query is permitted to run
 	QueryTimeout     int64                   `protobuf:"varint,25,opt,name=query_timeout,json=queryTimeout,proto3" json:"query_timeout,omitempty"`

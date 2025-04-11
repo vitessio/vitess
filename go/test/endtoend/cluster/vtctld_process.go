@@ -60,7 +60,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--cell", cell,
 		"--service_map", vtctld.ServiceMap,
 		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
-		"--file-backup-storage-root", vtctld.FileBackupStorageRoot,
+		"--file_backup_storage_root", vtctld.FileBackupStorageRoot,
 		"--log_dir", vtctld.LogDir,
 		"--port", fmt.Sprintf("%d", vtctld.Port),
 		"--grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),

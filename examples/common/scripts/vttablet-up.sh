@@ -36,6 +36,7 @@ fi
 echo "Starting vttablet for $alias..."
 
 # shellcheck disable=SC2086
+#TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 vttablet \
  $TOPOLOGY_FLAGS \
  --log_dir $VTDATAROOT/tmp \
