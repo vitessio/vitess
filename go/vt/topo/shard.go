@@ -257,7 +257,7 @@ func (ts *Server) UpdateShardFields(ctx context.Context, keyspace, shard string,
 // CreateShard creates a new shard and tries to fill in the right information.
 // This will lock the Keyspace, as we may be looking at other shard servedTypes.
 // Using GetOrCreateShard is probably a better idea for most use cases.
-func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err error) {
+func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string, vtorcConfig *topodatapb.ShardVtorcConfig) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -280,7 +280,8 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 	defer unlock(&err)
 
 	value := &topodatapb.Shard{
-		KeyRange: keyRange,
+		KeyRange:    keyRange,
+		VtorcConfig: vtorcConfig,
 	}
 
 	// Set primary as serving only if its keyrange doesn't overlap
@@ -327,7 +328,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 
 // GetOrCreateShard will return the shard object, or create one if it doesn't
 // already exist. Note the shard creation is protected by a keyspace Lock.
-func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) (si *ShardInfo, err error) {
+func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string, vtorcConfig *topodatapb.ShardVtorcConfig) (si *ShardInfo, err error) {
 	si, err = ts.GetShard(ctx, keyspace, shard)
 	if !IsErrType(err, NoNode) {
 		return
@@ -353,7 +354,7 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 	}
 
 	// now try to create with the lock, may already exist
-	if err = ts.CreateShard(ctx, keyspace, shard); err != nil && !IsErrType(err, NodeExists) {
+	if err = ts.CreateShard(ctx, keyspace, shard, vtorcConfig); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateShard(%v/%v) failed", keyspace, shard)
 	}
 

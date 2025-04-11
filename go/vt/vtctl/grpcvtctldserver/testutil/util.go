@@ -168,7 +168,7 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 
 		if tablet.Shard != "" {
 			if _, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard); err != nil {
-				err := ts.CreateShard(ctx, tablet.Keyspace, tablet.Shard)
+				err := ts.CreateShard(ctx, tablet.Keyspace, tablet.Shard, nil)
 				require.NoError(t, err, "CreateShard(%s, %s)", tablet.Keyspace, tablet.Shard)
 			}
 
@@ -218,7 +218,7 @@ func AddShards(ctx context.Context, t *testing.T, ts *topo.Server, shards ...*vt
 			}
 		}
 
-		err := ts.CreateShard(ctx, shard.Keyspace, shard.Name)
+		err := ts.CreateShard(ctx, shard.Keyspace, shard.Name, nil)
 		require.NoError(t, err, "CreateShard(%s/%s)", shard.Keyspace, shard.Name)
 
 		if shard.Shard != nil {

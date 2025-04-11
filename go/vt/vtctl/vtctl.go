@@ -1396,6 +1396,7 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	force := subFlags.Bool("force", false, "Proceeds with the command even if the shard already exists")
 	parent := subFlags.Bool("parent", false, "Creates the parent keyspace if it doesn't already exist")
+	disableErs := subFlags.Bool("vtorc_disable_emergency_reparent", false, "Disables the use of EmergencyReparentShard in VTOrc recoveries")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1413,7 +1414,9 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		}
 	}
 
-	err = wr.TopoServer().CreateShard(ctx, keyspace, shard)
+	err = wr.TopoServer().CreateShard(ctx, keyspace, shard, &topodatapb.ShardVtorcConfig{
+		DisableEmergencyReparent: *disableErs,
+	})
 	if *force && topo.IsErrType(err, topo.NodeExists) {
 		wr.Logger().Infof("shard %v/%v already exists (ignoring error with --force)", keyspace, shard)
 		err = nil
@@ -1815,6 +1818,7 @@ func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	force := subFlags.Bool("force", false, "Proceeds even if the keyspace already exists")
 	allowEmptyVSchema := subFlags.Bool("allow_empty_vschema", false, "If set this will allow a new keyspace to have no vschema")
+	disableErs := subFlags.Bool("vtorc_disable_emergency_reparent", false, "Disables the use of EmergencyReparentShard in VTOrc recoveries")
 
 	keyspaceType := subFlags.String("keyspace_type", "", "Specifies the type of the keyspace")
 	baseKeyspace := subFlags.String("base_keyspace", "", "Specifies the base keyspace for a snapshot keyspace")
@@ -1869,6 +1873,9 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		SnapshotTime:     snapshotTime,
 		DurabilityPolicy: *durabilityPolicy,
 		SidecarDbName:    *sidecarDBName,
+		VtorcConfig: &topodatapb.KeyspaceVtorcConfig{
+			DisableEmergencyReparent: *disableErs,
+		},
 	}
 	err := wr.TopoServer().CreateKeyspace(ctx, keyspace, ki)
 	if *force && topo.IsErrType(err, topo.NodeExists) {
