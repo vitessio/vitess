@@ -115,21 +115,6 @@ func (r *RecurseCTE) recurse(ctx context.Context, vcursor VCursor, bindvars map[
 	return nil
 }
 
-func (r *RecurseCTE) RouteType() string {
-	return "RecurseCTE"
-}
-
-func (r *RecurseCTE) GetKeyspaceName() string {
-	if r.Seed.GetKeyspaceName() == r.Term.GetKeyspaceName() {
-		return r.Seed.GetKeyspaceName()
-	}
-	return r.Seed.GetKeyspaceName() + "_" + r.Term.GetKeyspaceName()
-}
-
-func (r *RecurseCTE) GetTableName() string {
-	return r.Seed.GetTableName()
-}
-
 func (r *RecurseCTE) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return r.Seed.GetFields(ctx, vcursor, bindVars)
 }

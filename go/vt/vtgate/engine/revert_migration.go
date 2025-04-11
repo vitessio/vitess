@@ -53,21 +53,6 @@ func (v *RevertMigration) description() PrimitiveDescription {
 	}
 }
 
-// RouteType implements the Primitive interface
-func (v *RevertMigration) RouteType() string {
-	return "RevertMigration"
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (v *RevertMigration) GetKeyspaceName() string {
-	return v.Keyspace.Name
-}
-
-// GetTableName implements the Primitive interface
-func (v *RevertMigration) GetTableName() string {
-	return ""
-}
-
 // TryExecute implements the Primitive interface
 func (v *RevertMigration) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{
@@ -85,7 +70,7 @@ func (v *RevertMigration) TryExecute(ctx context.Context, vcursor VCursor, bindV
 		return nil, err
 	}
 	ddlStrategySetting.Strategy = schema.DDLStrategyOnline // and we keep the options as they were
-	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), "", v.Query, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()), "", vcursor.Environment().Parser())
+	onlineDDL, err := schema.NewOnlineDDL(v.Keyspace.Name, "", v.Query, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()), "", vcursor.Environment().Parser())
 	if err != nil {
 		return result, err
 	}

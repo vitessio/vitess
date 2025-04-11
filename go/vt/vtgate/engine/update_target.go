@@ -44,21 +44,6 @@ func (updTarget *UpdateTarget) description() PrimitiveDescription {
 	}
 }
 
-// RouteType implements the Primitive interface
-func (updTarget *UpdateTarget) RouteType() string {
-	return "UpdateTarget"
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (updTarget *UpdateTarget) GetKeyspaceName() string {
-	return updTarget.Target
-}
-
-// GetTableName implements the Primitive interface
-func (updTarget *UpdateTarget) GetTableName() string {
-	return ""
-}
-
 // TryExecute implements the Primitive interface
 func (updTarget *UpdateTarget) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	err := vcursor.Session().SetTarget(updTarget.Target)
