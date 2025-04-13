@@ -33,7 +33,6 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 // HealthChecker is a callback that impements a service-specific health check
@@ -245,9 +244,9 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
 		"--planner-version", args.PlannerVersion,
-		fmt.Sprintf("%s=%t", utils.GetFlagVariantForTests("--enable-online-ddl"), args.EnableOnlineDDL),
-		fmt.Sprintf("%s=%t", utils.GetFlagVariantForTests("--enable-direct-ddl"), args.EnableDirectDDL),
-		fmt.Sprintf("%s=%t", utils.GetFlagVariantForTests("--enable-system-settings"), args.EnableSystemSettings),
+		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
+		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
+		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
 		fmt.Sprintf("--no_scatter=%t", args.NoScatter),
 	}...)
 
