@@ -62,6 +62,11 @@ var txAccessModeToEOTxAccessMode = map[sqlparser.TxAccessMode]querypb.ExecuteOpt
 	sqlparser.ReadOnly:               querypb.ExecuteOptions_READ_ONLY,
 }
 
+const (
+	SingleShardTransaction = "Single"
+	CrossShardTransaction  = "Cross"
+)
+
 type txType int
 
 const (
@@ -172,9 +177,9 @@ func (txc *TxConn) Commit(ctx context.Context, session *econtext.SafeSession) er
 
 func getShardDistribution(sessions []*vtgatepb.Session_ShardSession) string {
 	if len(sessions) > 1 {
-		return "Multi"
+		return CrossShardTransaction
 	}
-	return "Single"
+	return SingleShardTransaction
 }
 
 func recordCommitTime(session *econtext.SafeSession, twopc bool, startTime time.Time) {
