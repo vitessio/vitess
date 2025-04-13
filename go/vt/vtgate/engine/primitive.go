@@ -187,7 +187,6 @@ type (
 		SetExecQueryTimeout(timeout *int)
 		SetFoundRows(uint64)
 		SetInDMLExecution(inDMLExec bool)
-		SetExecReadQuery(bool)
 
 		SetDDLStrategy(string)
 		GetDDLStrategy() string

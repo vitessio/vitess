@@ -61,11 +61,6 @@ type noopVCursor struct {
 	inTx bool
 }
 
-func (t *noopVCursor) SetExecReadQuery(b bool) {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (t *noopVCursor) GetExecutionMetrics() *Metrics {
 	panic("implement me")
 }
@@ -574,9 +569,6 @@ func (f *loggingVCursor) ExecuteVSchema(context.Context, string, *sqlparser.Alte
 
 func (f *loggingVCursor) Session() SessionActions {
 	return f
-}
-
-func (f *loggingVCursor) SetExecReadQuery(bool) {
 }
 
 func (f *loggingVCursor) SetTarget(target string) error {

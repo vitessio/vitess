@@ -109,8 +109,6 @@ var (
 
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	vcursor.Session().SetExecReadQuery(true)
-	defer vcursor.Session().SetExecReadQuery(false)
 	rss, bvs, err := route.findRoute(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -209,9 +207,6 @@ func (route *Route) TryStreamExecute(
 	wantfields bool,
 	callback func(*sqltypes.Result) error,
 ) error {
-	vcursor.Session().SetExecReadQuery(true)
-	defer vcursor.Session().SetExecReadQuery(false)
-
 	if route.QueryTimeout != 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(route.QueryTimeout)*time.Millisecond)

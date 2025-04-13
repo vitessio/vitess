@@ -1252,11 +1252,6 @@ func (vc *VCursorImpl) SetInDMLExecution(inDMLExec bool) {
 	vc.SafeSession.SetInDMLExecution(inDMLExec)
 }
 
-// SetExecReadQuery implements the SessionActions interface
-func (v *VCursorImpl) SetExecReadQuery(execReadQuery bool) {
-	v.SafeSession.SetExecReadQuery(execReadQuery)
-}
-
 // SetDDLStrategy implements the SessionActions interface
 func (vc *VCursorImpl) SetDDLStrategy(strategy string) {
 	vc.SafeSession.SetDDLStrategy(strategy)
