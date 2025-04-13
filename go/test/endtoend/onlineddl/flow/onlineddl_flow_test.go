@@ -138,7 +138,8 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--heartbeat-interval", "250ms",
+			// TODO: Replace flag with dashed version in v25
+			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
 			"--migration_check_interval", "2s",
 			"--watch_replication_stream",
