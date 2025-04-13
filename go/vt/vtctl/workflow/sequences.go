@@ -37,7 +37,6 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -123,7 +122,7 @@ func (ts *trafficSwitcher) getMaxSequenceValues(ctx context.Context, sequences m
 			BackingTableName:        seq.backingTableName,
 			UsingColEscaped:         seq.usingCol,
 			UsingTableNameEscaped:   seq.usingTable,
-			UsingTableDbNameEscaped: seq.usingTableDBName,
+			UsingTableDbNameEscaped: seq.usingDB,
 		})
 	}
 
@@ -223,7 +222,7 @@ func (ts *trafficSwitcher) getCurrentSequenceValue(ctx context.Context, seq *seq
 }
 
 func (ts *trafficSwitcher) updateSequenceValues(ctx context.Context, sequences []*sequenceMetadata, maxValues map[string]int64) error {
-	sequencesByShard := map[*topodatapb.TabletAlias][]*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{}
+	sequencesByShard := map[string][]*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{}
 	for _, seq := range sequences {
 		maxValue := maxValues[seq.backingTableName]
 		if maxValue == 0 {
@@ -234,19 +233,25 @@ func (ts *trafficSwitcher) updateSequenceValues(ctx context.Context, sequences [
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
 				seq.backingTableKeyspace, ierr)
 		}
-		sequencesByShard[sequenceShard.PrimaryAlias] = append(sequencesByShard[sequenceShard.PrimaryAlias], &tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
+		tabletAliasStr := topoproto.TabletAliasString(sequenceShard.PrimaryAlias)
+		sequencesByShard[tabletAliasStr] = append(sequencesByShard[tabletAliasStr], &tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
 			BackingTableName:   seq.backingTableName,
 			BackingTableDbName: seq.backingTableDBName,
 			MaxValue:           maxValue,
 		})
 	}
-	for tabletAlias, sequencesMetadata := range sequencesByShard {
+	for tabletAliasStr, sequencesMetadata := range sequencesByShard {
+		tabletAlias, err := topoproto.ParseTabletAlias(tabletAliasStr)
+		if err != nil {
+			// This should be impossible.
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the parse tablet alias %s: %v", tabletAlias, err)
+		}
 		sequenceTablet, ierr := ts.TopoServer().GetTablet(ctx, tabletAlias)
 		if ierr != nil || sequenceTablet == nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
 				sequenceTablet.Keyspace, ierr)
 		}
-		_, err := ts.TabletManagerClient().UpdateSequenceTables(ctx, sequenceTablet.Tablet, &tabletmanagerdatapb.UpdateSequenceTablesRequest{
+		_, err = ts.TabletManagerClient().UpdateSequenceTables(ctx, sequenceTablet.Tablet, &tabletmanagerdatapb.UpdateSequenceTablesRequest{
 			Sequences: sequencesMetadata,
 		})
 		if err != nil {
