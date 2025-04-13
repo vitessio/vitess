@@ -64,19 +64,23 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		"--log_dir":                    vtbackup.LogDir,
 
 		//initDBfile is required to run vtbackup
-		"--mysql_port":       fmt.Sprintf("%d", vtbackup.MysqlPort),
+		"--mysql-port":       fmt.Sprintf("%d", vtbackup.MysqlPort),
 		"--init_db_sql_file": vtbackup.initDBfile,
-		"--init_keyspace":    vtbackup.Keyspace,
-		"--init_shard":       vtbackup.Shard,
+		"--init-keyspace":    vtbackup.Keyspace,
+		"--init-shard":       vtbackup.Shard,
 
 		//Backup Arguments are not optional
-		"--backup_storage_implementation": vtbackup.BackupStorageImplementation,
+		"--backup-storage-implementation": vtbackup.BackupStorageImplementation,
 		"--file_backup_storage_root":      vtbackup.FileBackupStorageRoot,
 	}
 
 	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtbackup.TopoImplementation)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtbackup.TopoGlobalAddress)
 	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtbackup.TopoGlobalRoot)
+	utils.SetFlagVariantsForTests(flags, "--mysql-port", fmt.Sprintf("%d", vtbackup.MysqlPort))
+	utils.SetFlagVariantsForTests(flags, "--init-keyspace", vtbackup.Keyspace)
+	utils.SetFlagVariantsForTests(flags, "--init-shard", vtbackup.Shard)
+	utils.SetFlagVariantsForTests(flags, "--backup-storage-implementation", vtbackup.BackupStorageImplementation)
 
 	vtbackup.proc = exec.Command(vtbackup.Binary)
 	for k, v := range flags {

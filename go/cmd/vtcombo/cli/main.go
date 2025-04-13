@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtcombo"
 	"vitess.io/vitess/go/vt/vtctld"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -106,7 +107,7 @@ func init() {
 
 	Main.Flags().StringVar(&schemaDir, "schema_dir", schemaDir, "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
 	Main.Flags().BoolVar(&startMysql, "start_mysql", startMysql, "Should vtcombo also start mysql")
-	Main.Flags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "mysql port")
+	utils.SetFlagIntVar(Main.Flags(), &mysqlPort, "mysql-port", mysqlPort, "mysql port")
 	Main.Flags().BoolVar(&externalTopoServer, "external_topo_server", externalTopoServer, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
 		"If true, vtcombo will use the flags defined in topo/server.go to open topo server")
 	Main.Flags().StringVar(&plannerName, "planner-version", plannerName, "Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right")
@@ -120,11 +121,11 @@ func init() {
 	Main.Flags().Var(vttest.TextTopoData(&tpb), "proto_topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
 	Main.Flags().Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
 
-	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet_types_to_wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
+	utils.SetFlagVar(Main.Flags(), (*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet-types-to-wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
 
 	// We're going to force the value later, so don't even bother letting the
 	// user know about this flag.
-	Main.Flags().MarkHidden("tablet_protocol")
+	Main.Flags().MarkHidden("tablet-protocol")
 
 	srvTopoCounts = stats.NewCountersWithSingleLabel("ResilientSrvTopoServer", "Resilient srvtopo server operations", "type")
 }
@@ -241,11 +242,11 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	// Tablet configuration and init.
 	// Send mycnf as nil because vtcombo won't do backups and restores.
 	//
-	// Also force the `--tablet-manager-protocol` and `--tablet_protocol` flags
+	// Also force the `--tablet-manager-protocol` and `--tablet-protocol` flags
 	// to be the "internal" protocol that InitTabletMap registers.
 
 	cmd.Flags().Set("tablet-manager-protocol", "internal")
-	cmd.Flags().Set("tablet_protocol", "internal")
+	cmd.Flags().Set("tablet-protocol", "internal")
 	uid, err := vtcombo.InitTabletMap(env, ts, &tpb, mysqld, &dbconfigs.GlobalDBConfigs, schemaDir, startMysql, srvTopoCounts)
 	if err != nil {
 		// ensure we start mysql in the event we fail here
@@ -321,7 +322,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		}
 
 		if len(tabletTypes) == 0 {
-			log.Exitf("tablet_types_to_wait should contain at least one serving tablet type")
+			log.Exitf("tablet-types-to-wait should contain at least one serving tablet type")
 		}
 	} else {
 		tabletTypes = append(tabletTypes, topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY)

@@ -60,6 +60,7 @@ import (
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -142,10 +143,10 @@ func init() {
 }
 
 func registerMySQLDFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&PoolDynamicHostnameResolution, "pool_hostname_resolve_interval", PoolDynamicHostnameResolution, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
+	utils.SetFlagDurationVar(fs, &PoolDynamicHostnameResolution, "pool-hostname-resolve-interval", PoolDynamicHostnameResolution, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
 	fs.StringVar(&mycnfTemplateFile, "mysqlctl_mycnf_template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
 	fs.StringVar(&socketFile, "mysqlctl_socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
-	fs.DurationVar(&replicationConnectRetry, "replication_connect_retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
+	utils.SetFlagDurationVar(fs, &replicationConnectRetry, "replication-connect-retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
 }
 
 func registerReparentFlags(fs *pflag.FlagSet) {
