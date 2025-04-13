@@ -140,7 +140,7 @@ func TestSingleDbPreFailOnFind(t *testing.T) {
 		vtgatepb.TransactionMode_SINGLE)
 	require.NoError(t, err)
 	require.NotNil(t, ss)
-	require.False(t, ss.VindexOnly)
+	require.False(t, ss.ReadOnly)
 	require.EqualValues(t, 1, ss.TabletAlias.Uid)
 
 	// shard session s0 for normal query

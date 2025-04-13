@@ -443,7 +443,7 @@ func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard
 		return nil, nil
 	}
 
-	if !shardSession.VindexOnly {
+	if !shardSession.ReadOnly {
 		return shardSession, nil
 	}
 
@@ -453,7 +453,7 @@ func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard
 
 	// the shard session is now used by non-vindex query as well,
 	// so it is not an exclusive vindex only shard session anymore.
-	shardSession.VindexOnly = false
+	shardSession.ReadOnly = false
 	return shardSession, nil
 }
 
@@ -511,8 +511,8 @@ func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info ShardAct
 		if !existingSession.RowsAffected {
 			existingSession.RowsAffected = info.RowsAffected()
 		}
-		if existingSession.VindexOnly {
-			existingSession.VindexOnly = session.execReadQuery
+		if existingSession.ReadOnly {
+			existingSession.ReadOnly = session.execReadQuery
 		}
 		if err := session.singleModeErrorOnCrossShard(txMode, 1); err != nil {
 			return err
@@ -525,7 +525,7 @@ func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info ShardAct
 		TransactionId: info.TransactionID(),
 		ReservedId:    info.ReservedID(),
 		RowsAffected:  info.RowsAffected(),
-		VindexOnly:    session.execReadQuery,
+		ReadOnly:      session.execReadQuery,
 	}
 
 	// Always append, in order for rollback to succeed.
@@ -569,7 +569,7 @@ func (session *SafeSession) singleModeErrorOnCrossShard(txMode vtgatepb.Transact
 func actualNoOfShardSession(sessions []*vtgatepb.Session_ShardSession) int {
 	actualSS := 0
 	for _, ss := range sessions {
-		if ss.VindexOnly {
+		if ss.ReadOnly {
 			continue
 		}
 		actualSS++
