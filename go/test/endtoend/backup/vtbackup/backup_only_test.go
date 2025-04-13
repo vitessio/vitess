@@ -240,7 +240,7 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 	extraArgs := []string{
 		"--allow_first_backup",
 		"--db-credentials-file", dbCredentialFile,
-		"--mysql_socket", mysqlSocket.Name(),
+		utils.GetFlagVariantForTests("--mysql-socket"), mysqlSocket.Name(),
 
 		// Use opentsdb for stats.
 		utils.GetFlagVariantForTests("--stats-backend"), "opentsdb",

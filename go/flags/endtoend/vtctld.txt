@@ -15,7 +15,7 @@ vtctld \
 	--topo-global-server-address localhost:2379 \
 	--topo-global-root /vitess/ \
 	--service-map 'grpc-vtctl,grpc-vtctld' \
-	--backup_storage_implementation file \
+	--backup-storage-implementation file \
 	--file_backup_storage_root $VTDATAROOT/backups \
 	--port 15000 \
 	--grpc-port 15999
@@ -23,23 +23,23 @@ vtctld \
 Flags:
       --action_timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
       --alsologtostderr                                                  log to standard error as well as files
-      --azblob_backup_account_key_file string                            Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
-      --azblob_backup_account_name string                                Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
-      --azblob_backup_buffer_size int                                    The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service. (default 104857600)
-      --azblob_backup_container_name string                              Azure Blob Container Name.
-      --azblob_backup_parallelism int                                    Azure Blob operation parallelism (requires extra memory when increased -- a multiple of azblob_backup_buffer_size). (default 1)
-      --azblob_backup_storage_root string                                Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').
-      --backup_engine_implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
-      --backup_storage_block_size int                                    if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
-      --backup_storage_compress                                          if set, the backup files will be compressed. (default true)
-      --backup_storage_implementation string                             Which backup storage implementation to use for creating and restoring backups.
-      --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
+      --azblob-backup-account-key-file string                            Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
+      --azblob-backup-account-name string                                Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
+      --azblob-backup-buffer-size int                                    The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service. (default 104857600)
+      --azblob-backup-container-name string                              Azure Blob Container Name.
+      --azblob-backup-parallelism int                                    Azure Blob operation parallelism (requires extra memory when increased -- a multiple of azblob-backup-buffer-size). (default 1)
+      --azblob-backup-storage-root string                                Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').
+      --backup-engine-implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
+      --backup-storage-block-size int                                    if backup-storage-compress is true, backup-storage-block-size sets the byte size for each block while compressing (default is 250000). (default 250000)
+      --backup-storage-compress                                          if set, the backup files will be compressed. (default true)
+      --backup-storage-implementation string                             Which backup storage implementation to use for creating and restoring backups.
+      --backup-storage-number-blocks int                                 if backup-storage-compress is true, backup-storage-number-blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
-      --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
-      --builtinbackup_progress duration                                  how often to send progress updates when backing up large files. (default 5s)
+      --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
+      --builtinbackup-progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cell string                                                      cell to use
       --ceph_backup_storage_config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
@@ -49,14 +49,14 @@ Flags:
       --config-path strings                                              Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                               Config file type (omit to infer config type from file extension).
-      --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
+      --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
       --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
-      --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
+      --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
       --file_backup_storage_root string                                  Root directory for the file backup storage.
-      --gcs_backup_storage_bucket string                                 Google Cloud Storage bucket to use for backups.
-      --gcs_backup_storage_root string                                   Root prefix for all backup-related object names.
+      --gcs-backup-storage-bucket string                                 Google Cloud Storage bucket to use for backups.
+      --gcs-backup-storage-root string                                   Root prefix for all backup-related object names.
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc-auth-mtls-allowed-substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc-auth-static-client-creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -108,17 +108,17 @@ Flags:
       --pprof-http                                                       enable pprof http endpoints
       --proxy_tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
-      --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
-      --s3_backup_aws_endpoint string                                    endpoint of the S3 backend (region must be provided).
-      --s3_backup_aws_min_partsize int                                   Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size. (default 5242880)
-      --s3_backup_aws_region string                                      AWS region to use. (default "us-east-1")
-      --s3_backup_aws_retries int                                        AWS request retries. (default -1)
-      --s3_backup_force_path_style                                       force the s3 path style.
-      --s3_backup_log_level string                                       determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors. (default "LogOff")
-      --s3_backup_server_side_encryption string                          server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).
-      --s3_backup_storage_bucket string                                  S3 bucket to use for backups.
-      --s3_backup_storage_root string                                    root prefix for all backup-related object names.
-      --s3_backup_tls_skip_verify_cert                                   skip the 'certificate is valid' check for SSL connections.
+      --remote-operation-timeout duration                                time to wait for a remote operation (default 15s)
+      --s3-backup-aws-endpoint string                                    endpoint of the S3 backend (region must be provided).
+      --s3-backup-aws-min-partsize int                                   Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size. (default 5242880)
+      --s3-backup-aws-region string                                      AWS region to use. (default "us-east-1")
+      --s3-backup-aws-retries int                                        AWS request retries. (default -1)
+      --s3-backup-force-path-style                                       force the s3 path style.
+      --s3-backup-log-level string                                       determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors. (default "LogOff")
+      --s3-backup-server-side-encryption string                          server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).
+      --s3-backup-storage-bucket string                                  S3 bucket to use for backups.
+      --s3-backup-storage-root string                                    root prefix for all backup-related object names.
+      --s3-backup-tls-skip-verify-cert                                   skip the 'certificate is valid' check for SSL connections.
       --schema_change_check_interval duration                            How often the schema change dir is checked for schema changes. This value must be positive; if zero or lower, the default of 1m is used. (default 1m0s)
       --schema_change_controller string                                  Schema change controller is responsible for finding schema changes and responding to schema change events.
       --schema_change_dir string                                         Directory containing schema changes for all keyspaces. Each keyspace has its own directory, and schema changes are expected to live in '$KEYSPACE/input' dir. (e.g. 'test_keyspace/input/*sql'). Each sql file represents a schema change.
@@ -136,6 +136,11 @@ Flags:
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet-dir string                                                The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
+      --tablet-grpc-ca string                                            the server ca to use to validate servers when connecting
+      --tablet-grpc-cert string                                          the cert to use to connect
+      --tablet-grpc-crl string                                           the server crl to use to validate server certificates when connecting
+      --tablet-grpc-key string                                           the key to use to connect
+      --tablet-grpc-server-name string                                   the server name to use to validate server certificate
       --tablet-manager-grpc-ca string                                    the server ca to use to validate servers when connecting
       --tablet-manager-grpc-cert string                                  the cert to use to connect
       --tablet-manager-grpc-concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus) (default 8)
@@ -144,16 +149,11 @@ Flags:
       --tablet-manager-grpc-key string                                   the key to use to connect
       --tablet-manager-grpc-server-name string                           the server name to use to validate server certificate
       --tablet-manager-protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
-      --tablet_grpc_ca string                                            the server ca to use to validate servers when connecting
-      --tablet_grpc_cert string                                          the cert to use to connect
-      --tablet_grpc_crl string                                           the server crl to use to validate server certificates when connecting
-      --tablet_grpc_key string                                           the key to use to connect
-      --tablet_grpc_server_name string                                   the server name to use to validate server certificate
+      --tablet-protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
+      --tablet-refresh-interval duration                                 Tablet refresh interval. (default 1m0s)
+      --tablet-refresh-known-tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
+      --tablet-url-template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
       --tablet_health_keep_alive duration                                close streaming tablet health connection if there are no requests for this long (default 5m0s)
-      --tablet_protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
-      --tablet_refresh_interval duration                                 Tablet refresh interval. (default 1m0s)
-      --tablet_refresh_known_tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
-      --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")
       --topo-consul-lock-session-ttl string                              TTL for consul session.

@@ -58,13 +58,13 @@ func TestTabletReshuffle(t *testing.T) {
 	// Create new tablet
 	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
-	// mycnf_server_id prevents vttablet from reading the mycnf
+	// mycnf-server-id prevents vttablet from reading the mycnf
 	// Pointing to primaryTablet's socket file
 	// We have to disable active reparenting to prevent the tablet from trying to fix replication.
 	// We also have to disable replication reporting because we're pointed at the primary.
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
-		"--mycnf_server_id", fmt.Sprintf("%d", rTablet.TabletUID),
+		vtutils.GetFlagVariantForTests("--mycnf-server-id"), fmt.Sprintf("%d", rTablet.TabletUID),
 		vtutils.GetFlagVariantForTests("--db-socket"), fmt.Sprintf("%s/mysql.sock", primaryTablet.VttabletProcess.Directory),
 		"--enable_replication_reporter=false",
 	}

@@ -33,8 +33,8 @@ var Init = &cobra.Command{
 		"The MySQL version and flavor will be auto-detected, with a minimal configuration file applied.",
 	Example: `mysqlctl \
 	--alsologtostderr \
-	--tablet_uid 101 \
-	--mysql_port 12345 \
+	--tablet-uid 101 \
+	--mysql-port 12345 \
 	init`,
 	Args: cobra.NoArgs,
 	RunE: commandInit,

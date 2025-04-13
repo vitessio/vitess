@@ -80,7 +80,7 @@ var (
 		// Make this small, so we can get a renewal
 		"--db-credentials-vault-ttl", "21s"}
 	vaultVTGateArg = []string{
-		"--mysql_auth_server_impl", "vault",
+		vtutils.GetFlagVariantForTests("--mysql-auth-server-impl"), "vault",
 		"--mysql_auth_vault_timeout", "3s",
 		"--mysql_auth_vault_path", "kv/prod/vtgatecreds",
 		// This is overriden by our env VAULT_ADDR
