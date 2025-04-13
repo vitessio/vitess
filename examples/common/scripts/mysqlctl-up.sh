@@ -35,6 +35,7 @@ if [ -d $VTDATAROOT/$tablet_dir ]; then
  action='start'
 fi
 
+#TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 mysqlctl \
  --log_dir $VTDATAROOT/tmp \
  --tablet_uid $uid \

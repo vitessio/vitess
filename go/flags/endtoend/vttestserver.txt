@@ -7,15 +7,15 @@ Flags:
       --alsologtostderr                                                  log to standard error as well as files
       --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)
       --app_pool_size int                                                Size of the connection pool for app connections (default 40)
-      --backup_engine_implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
-      --backup_storage_block_size int                                    if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
-      --backup_storage_compress                                          if set, the backup files will be compressed. (default true)
-      --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
+      --backup-engine-implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
+      --backup-storage-block-size int                                    if backup-storage-compress is true, backup-storage-block-size sets the byte size for each block while compressing (default is 250000). (default 250000)
+      --backup-storage-compress                                          if set, the backup files will be compressed. (default true)
+      --backup-storage-number-blocks int                                 if backup-storage-compress is true, backup-storage-number-blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
-      --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
-      --builtinbackup_progress duration                                  how often to send progress updates when backing up large files. (default 5s)
+      --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
+      --builtinbackup-progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cells strings                                                    Comma separated list of cells (default [test])
       --charset string                                                   MySQL charset (default "utf8mb4")
@@ -27,7 +27,7 @@ Flags:
       --config-path strings                                              Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                               Config file type (omit to infer config type from file extension).
-      --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
+      --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
       --data_dir string                                                  Directory where the data files will be placed, defaults to a random directory under /vt/vtdataroot
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
@@ -73,8 +73,8 @@ Flags:
       --grpc-server-keepalive-time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
       --grpc-server-keepalive-timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
   -h, --help                                                             help for vttestserver
+      --initialize-with-random-data                                      If this flag is each table-shard will be initialized with random data. See also the 'rng_seed' and 'min_shard_size' and 'max_shard_size' flags.
       --initialize-with-vt-dba-tcp                                       If this flag is enabled, MySQL will be initialized with an additional user named vt_dba_tcp, who will have access via TCP/IP connection.
-      --initialize_with_random_data                                      If this flag is each table-shard will be initialized with random data. See also the 'rng_seed' and 'min_shard_size' and 'max_shard_size' flags.
       --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --keyspaces strings                                                Comma separated list of keyspaces (default [test_keyspace])
@@ -86,8 +86,8 @@ Flags:
       --logtostderr                                                      log to standard error instead of files
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
-      --max_table_shard_size int                                         The maximum number of initial rows in a table shard. Ignored if--initialize_with_random_data is false. The actual number is chosen randomly (default 10000)
-      --min_table_shard_size int                                         The minimum number of initial rows in a table shard. Ignored if--initialize_with_random_data is false. The actual number is chosen randomly. (default 1000)
+      --max_table_shard_size int                                         The maximum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly (default 10000)
+      --min_table_shard_size int                                         The minimum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly. (default 1000)
       --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
       --mysql-shell-backup-location string                               location where the backup will be stored
       --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
@@ -100,14 +100,14 @@ Flags:
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --no_scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
-      --null_probability float                                           The probability to initialize a field with 'NULL'  if --initialize_with_random_data is true. Only applies to fields that can contain NULL values. (default 0.1)
+      --null_probability float                                           The probability to initialize a field with 'NULL'  if --initialize-with-random-data is true. Only applies to fields that can contain NULL values. (default 0.1)
       --num_shards strings                                               Comma separated shard count (one per keyspace) (default [2])
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
-      --persistent_mode                                                  If this flag is set, the MySQL data directory is not cleaned up when LocalCluster.TearDown() is called. This is useful for running vttestserver as a database container in local developer environments. Note that db migration files (--schema_dir option) and seeding of random data (--initialize_with_random_data option) will only run during cluster startup if the data directory does not already exist.  Changes to VSchema are persisted across cluster restarts using a simple watcher if the --data_dir argument is specified.
+      --persistent_mode                                                  If this flag is set, the MySQL data directory is not cleaned up when LocalCluster.TearDown() is called. This is useful for running vttestserver as a database container in local developer environments. Note that db migration files (--schema_dir option) and seeding of random data (--initialize-with-random-data option) will only run during cluster startup if the data directory does not already exist.  Changes to VSchema are persisted across cluster restarts using a simple watcher if the --data_dir argument is specified.
       --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --planner-version string                                           Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right
-      --pool_hostname_resolve_interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
+      --pool-hostname-resolve-interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         Port to use for vtcombo. If this is 0, a random port will be chosen.
       --pprof strings                                                    enable profiling
       --pprof-http                                                       enable pprof http endpoints
@@ -116,8 +116,8 @@ Flags:
       --queryserver-config-transaction-timeout duration                  query server transaction timeout, a transaction will be killed if it takes longer than this value (default 30s)
       --rdonly_count int                                                 Rdonly tablets per shard (default 1)
       --replica_count int                                                Replica tablets per shard (includes primary) (default 2)
-      --replication_connect_retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
-      --rng_seed int                                                     The random number generator seed to use when initializing with random data (see also --initialize_with_random_data). Multiple runs with the same seed will result with the same initial data. (default 123)
+      --replication-connect-retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
+      --rng_seed int                                                     The random number generator seed to use when initializing with random data (see also --initialize-with-random-data). Multiple runs with the same seed will result with the same initial data. (default 123)
       --schema_dir string                                                Directory for initial schema files. Within this dir, there should be a subdir for each keyspace. Within each keyspace dir, each file is executed as SQL after the database is created on each shard. If the directory contains a vschema.json file, it will be used as the vschema for the V3 API.
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
@@ -127,6 +127,7 @@ Flags:
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet-dir string                                                The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
+      --tablet-hostname string                                           The hostname to use for the tablet otherwise it will be derived from OS' hostname (default "localhost")
       --tablet-manager-grpc-ca string                                    the server ca to use to validate servers when connecting
       --tablet-manager-grpc-cert string                                  the cert to use to connect
       --tablet-manager-grpc-concurrency int                              concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,App}, CheckThrottler and FullStatus) (default 8)
@@ -135,8 +136,7 @@ Flags:
       --tablet-manager-grpc-key string                                   the key to use to connect
       --tablet-manager-grpc-server-name string                           the server name to use to validate server certificate
       --tablet-manager-protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
-      --tablet_hostname string                                           The hostname to use for the tablet otherwise it will be derived from OS' hostname (default "localhost")
-      --tablet_refresh_interval duration                                 Interval at which vtgate refreshes tablet information from topology server. (default 10s)
+      --tablet-refresh-interval duration                                 Interval at which vtgate refreshes tablet information from topology server. (default 10s)
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")
       --topo-consul-lock-session-ttl string                              TTL for consul session.
@@ -165,10 +165,10 @@ Flags:
       --vtgate_grpc_key string                                           the key to use to connect
       --vtgate_grpc_server_name string                                   the server name to use to validate server certificate
       --xbstream_restore_flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
-      --xtrabackup_backup_flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
-      --xtrabackup_prepare_flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command
-      --xtrabackup_root_path string                                      Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
-      --xtrabackup_stream_mode string                                    Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0 (default "tar")
-      --xtrabackup_stripe_block_size uint                                Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe (default 102400)
-      --xtrabackup_stripes uint                                          If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression
-      --xtrabackup_user string                                           User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.
+      --xtrabackup-backup-flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
+      --xtrabackup-prepare-flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command
+      --xtrabackup-root-path string                                      Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
+      --xtrabackup-stream-mode string                                    Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0 (default "tar")
+      --xtrabackup-stripe-block-size uint                                Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe (default 102400)
+      --xtrabackup-stripes uint                                          If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression
+      --xtrabackup-user string                                           User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.

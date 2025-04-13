@@ -44,7 +44,7 @@
 "-db_name_override"
 "-dry-run"
 "-hostname"
-"-mysql_port"
+"-mysql-port"
 "-port"
 "-grpc-port"
 "-tags"

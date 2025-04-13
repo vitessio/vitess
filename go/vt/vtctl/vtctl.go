@@ -174,7 +174,7 @@ var commands = []commandGroup{
 			{
 				name:       "InitTablet",
 				method:     commandInitTablet,
-				params:     "[--allow_update] [--allow_different_shard] [--allow_master_override] [--parent] [--db_name_override=<db name>] [--hostname=<hostname>] [--mysql_port=<port>] [--port=<port>] [--grpc-port=<port>] [--tags=tag1:value1,tag2:value2] --keyspace=<keyspace> --shard=<shard> <tablet alias> <tablet type>",
+				params:     "[--allow_update] [--allow_different_shard] [--allow_master_override] [--parent] [--db_name_override=<db name>] [--hostname=<hostname>] [--mysql-port=<port>] [--port=<port>] [--grpc-port=<port>] [--tags=tag1:value1,tag2:value2] --keyspace=<keyspace> --shard=<shard> <tablet alias> <tablet type>",
 				help:       "Initializes a tablet in the topology.",
 				deprecated: true,
 			},
@@ -918,7 +918,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	createShardAndKeyspace := subFlags.Bool("parent", false, "Creates the parent shard and keyspace if they don't yet exist")
 	hostname := subFlags.String("hostname", "", "The server on which the tablet is running")
 	mysqlHost := subFlags.String("mysql_host", "", "The mysql host for the mysql server")
-	mysqlPort := subFlags.Int("mysql_port", 0, "The mysql port for the mysql server")
+	mysqlPort := subFlags.Int("mysql-port", 0, "The mysql port for the mysql server")
 	port := subFlags.Int("port", 0, "The main port for the vttablet process")
 	grpcPort := subFlags.Int("grpc-port", 0, "The gRPC port for the vttablet process")
 	keyspace := subFlags.String("keyspace", "", "The keyspace to which this tablet belongs")

@@ -2,7 +2,7 @@ VTGate is a stateless proxy responsible for accepting requests from applications
 
 ### Key Options
 
-* `--srv_topo_cache_ttl`: There may be instances where you will need to increase the cached TTL from the default of 1 second to a higher number:
+* `--srv-topo-cache-ttl`: There may be instances where you will need to increase the cached TTL from the default of 1 second to a higher number:
 	* You may want to increase this option if you see that your topo leader goes down and keeps your queries waiting for a few seconds.
 
 Usage:
@@ -16,13 +16,13 @@ vtgate \
 	--log_dir $VTDATAROOT/tmp \
 	--port 15001 \
 	--grpc-port 15991 \
-	--mysql_server_port 15306 \
+	--mysql-server-port 15306 \
 	--cell test \
 	--cells_to_watch test \
-	--tablet_types_to_wait PRIMARY,REPLICA \
+	--tablet-types-to-wait PRIMARY,REPLICA \
 	--service-map 'grpc-vtgateservice' \
 	--pid-file $VTDATAROOT/tmp/vtgate.pid \
-	--mysql_auth_server_impl none
+	--mysql-auth-server-impl none
 
 Flags:
       --allow-kill-statement                                             Allows the execution of kill statement
@@ -46,7 +46,7 @@ Flags:
       --config-path strings                                              Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                               Config file type (omit to infer config type from file extension).
-      --consul_auth_static_file string                                   JSON File to read the topos/tokens from.
+      --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
       --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
       --dbddl_plugin string                                              controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service (default "fail")
@@ -54,7 +54,7 @@ Flags:
       --default_tablet_type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --discovery_high_replication_lag_minimum_serving duration          Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag. (default 2h0m0s)
       --discovery_low_replication_lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
-      --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
+      --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-balancer                                                  Enable the tablet balancer to evenly spread query load for a given tablet type
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable-views                                                     Enable views support in vtgate. (default true)
@@ -121,13 +121,14 @@ Flags:
       --max_payload_size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --message_stream_grace_period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
       --min_number_serving_vttablets int                                 The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving. (default 2)
+      --mysql-auth-server-impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
       --mysql-server-drain-onterm                                        If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work
       --mysql-server-keepalive-period duration                           TCP period between keep-alives
       --mysql-server-multi-query-protocol                                If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.
       --mysql-server-pool-conn-read-buffers                              If set, the server will pool incoming connection read buffers
+      --mysql-server-port int                                            If set, also listen for MySQL binary protocol connections on this port. (default -1)
       --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
       --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
-      --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
       --mysql_auth_server_static_file string                             JSON File to read the users/passwords from.
       --mysql_auth_server_static_string string                           JSON representation of the users/passwords config.
       --mysql_auth_static_reload_interval duration                       Ticker to reload credentials
@@ -147,7 +148,6 @@ Flags:
       --mysql_ldap_auth_method string                                    client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --mysql_server_bind_address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
-      --mysql_server_port int                                            If set, also listen for MySQL binary protocol connections on this port. (default -1)
       --mysql_server_query_timeout duration                              mysql query timeout
       --mysql_server_read_timeout duration                               connection read timeout
       --mysql_server_require_secure_transport                            Reject insecure connections but only if mysql_server_ssl_cert and mysql_server_ssl_key are provided
@@ -181,16 +181,16 @@ Flags:
       --querylog-row-threshold uint                                      Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.
       --querylog-sample-rate float                                       Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
-      --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
+      --remote-operation-timeout duration                                time to wait for a remote operation (default 15s)
       --retry-count int                                                  retry count (default 2)
       --schema_change_signal                                             Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
-      --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
-      --srv_topo_cache_ttl duration                                      how long to use cached entries for topology (default 1s)
-      --srv_topo_timeout duration                                        topo server timeout (default 5s)
+      --srv-topo-cache-refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
+      --srv-topo-cache-ttl duration                                      how long to use cached entries for topology (default 1s)
+      --srv-topo-timeout duration                                        topo server timeout (default 5s)
       --stats-backend string                                             The name of the registered push-based monitoring/stats backend to use
       --stats-combine-dimensions string                                  List of dimensions to be combined into a single "all" value in exported stats vars
       --stats-common-tags strings                                        Comma-separated list of common tags for the stats backend. It provides both label and values. Example: label1:value1,label2:value2
@@ -202,17 +202,17 @@ Flags:
       --stream_buffer_size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet-filter-tags StringMap                                     Specifies a comma-separated list of tablet tags (as key:value pairs) to filter the tablets to watch.
+      --tablet-grpc-ca string                                            the server ca to use to validate servers when connecting
+      --tablet-grpc-cert string                                          the cert to use to connect
+      --tablet-grpc-crl string                                           the server crl to use to validate server certificates when connecting
+      --tablet-grpc-key string                                           the key to use to connect
+      --tablet-grpc-server-name string                                   the server name to use to validate server certificate
+      --tablet-protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
+      --tablet-refresh-interval duration                                 Tablet refresh interval. (default 1m0s)
+      --tablet-refresh-known-tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
+      --tablet-types-to-wait strings                                     Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.
+      --tablet-url-template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
       --tablet_filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
-      --tablet_grpc_ca string                                            the server ca to use to validate servers when connecting
-      --tablet_grpc_cert string                                          the cert to use to connect
-      --tablet_grpc_crl string                                           the server crl to use to validate server certificates when connecting
-      --tablet_grpc_key string                                           the key to use to connect
-      --tablet_grpc_server_name string                                   the server name to use to validate server certificate
-      --tablet_protocol string                                           Protocol to use to make queryservice RPCs to vttablets. (default "grpc")
-      --tablet_refresh_interval duration                                 Tablet refresh interval. (default 1m0s)
-      --tablet_refresh_known_tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
-      --tablet_types_to_wait strings                                     Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.
-      --tablet_url_template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")
       --topo-consul-lock-session-ttl string                              TTL for consul session.
