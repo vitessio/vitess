@@ -7635,125 +7635,16 @@ func (x *ChangeTagsResponse) GetTags() map[string]string {
 	return nil
 }
 
-type SequenceMetadata struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// The name of the sequence table.
-	BackingTableName string `protobuf:"bytes,1,opt,name=backing_table_name,json=backingTableName,proto3" json:"backing_table_name,omitempty"`
-	// The dbName in use by the keyspace where the backing table lives.
-	BackingTableDbName string `protobuf:"bytes,2,opt,name=backing_table_db_name,json=backingTableDbName,proto3" json:"backing_table_db_name,omitempty"`
-	// The name of the table using the sequence.
-	UsingTableName string `protobuf:"bytes,3,opt,name=using_table_name,json=usingTableName,proto3" json:"using_table_name,omitempty"`
-	// The dbName in use by the keyspace where the using table lives.
-	UsingTableDbName string `protobuf:"bytes,4,opt,name=using_table_db_name,json=usingTableDbName,proto3" json:"using_table_db_name,omitempty"`
-	// Escaped column name specified for sequence in table.
-	UsingColEscaped string `protobuf:"bytes,5,opt,name=using_col_escaped,json=usingColEscaped,proto3" json:"using_col_escaped,omitempty"`
-	// Escaped name of the table using the sequence.
-	UsingTableNameEscaped string `protobuf:"bytes,6,opt,name=using_table_name_escaped,json=usingTableNameEscaped,proto3" json:"using_table_name_escaped,omitempty"`
-	// Escaped db name in use by the keyspace where the using table lives.
-	UsingTableDbNameEscaped string `protobuf:"bytes,7,opt,name=using_table_db_name_escaped,json=usingTableDbNameEscaped,proto3" json:"using_table_db_name_escaped,omitempty"`
-	// Escaped name of the sequence table.
-	BackingTableNameEscaped string `protobuf:"bytes,8,opt,name=backing_table_name_escaped,json=backingTableNameEscaped,proto3" json:"backing_table_name_escaped,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
-}
-
-func (x *SequenceMetadata) Reset() {
-	*x = SequenceMetadata{}
-	mi := &file_tabletmanagerdata_proto_msgTypes[145]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SequenceMetadata) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SequenceMetadata) ProtoMessage() {}
-
-func (x *SequenceMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[145]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SequenceMetadata.ProtoReflect.Descriptor instead.
-func (*SequenceMetadata) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{145}
-}
-
-func (x *SequenceMetadata) GetBackingTableName() string {
-	if x != nil {
-		return x.BackingTableName
-	}
-	return ""
-}
-
-func (x *SequenceMetadata) GetBackingTableDbName() string {
-	if x != nil {
-		return x.BackingTableDbName
-	}
-	return ""
-}
-
-func (x *SequenceMetadata) GetUsingTableName() string {
-	if x != nil {
-		return x.UsingTableName
-	}
-	return ""
-}
-
-func (x *SequenceMetadata) GetUsingTableDbName() string {
-	if x != nil {
-		return x.UsingTableDbName
-	}
-	return ""
-}
-
-func (x *SequenceMetadata) GetUsingColEscaped() string {
-	if x != nil {
-		return x.UsingColEscaped
-	}
-	return ""
-}
-
-func (x *SequenceMetadata) GetUsingTableNameEscaped() string {
-	if x != nil {
-		return x.UsingTableNameEscaped
-	}
-	return ""
-}
-
-func (x *SequenceMetadata) GetUsingTableDbNameEscaped() string {
-	if x != nil {
-		return x.UsingTableDbNameEscaped
-	}
-	return ""
-}
-
-func (x *SequenceMetadata) GetBackingTableNameEscaped() string {
-	if x != nil {
-		return x.BackingTableNameEscaped
-	}
-	return ""
-}
-
 type UpdateSequenceTablesRequest struct {
-	state                    protoimpl.MessageState `protogen:"open.v1"`
-	Sequences                []*SequenceMetadata    `protobuf:"bytes,1,rep,name=sequences,proto3" json:"sequences,omitempty"`
-	MaxValuesBySequenceTable map[string]int64       `protobuf:"bytes,2,rep,name=max_values_by_sequence_table,json=maxValuesBySequenceTable,proto3" json:"max_values_by_sequence_table,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	state         protoimpl.MessageState                          `protogen:"open.v1"`
+	Sequences     []*UpdateSequenceTablesRequest_SequenceMetadata `protobuf:"bytes,1,rep,name=sequences,proto3" json:"sequences,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *UpdateSequenceTablesRequest) Reset() {
 	*x = UpdateSequenceTablesRequest{}
-	mi := &file_tabletmanagerdata_proto_msgTypes[146]
+	mi := &file_tabletmanagerdata_proto_msgTypes[145]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7765,7 +7656,7 @@ func (x *UpdateSequenceTablesRequest) String() string {
 func (*UpdateSequenceTablesRequest) ProtoMessage() {}
 
 func (x *UpdateSequenceTablesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[146]
+	mi := &file_tabletmanagerdata_proto_msgTypes[145]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7778,19 +7669,12 @@ func (x *UpdateSequenceTablesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSequenceTablesRequest.ProtoReflect.Descriptor instead.
 func (*UpdateSequenceTablesRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{146}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{145}
 }
 
-func (x *UpdateSequenceTablesRequest) GetSequences() []*SequenceMetadata {
+func (x *UpdateSequenceTablesRequest) GetSequences() []*UpdateSequenceTablesRequest_SequenceMetadata {
 	if x != nil {
 		return x.Sequences
-	}
-	return nil
-}
-
-func (x *UpdateSequenceTablesRequest) GetMaxValuesBySequenceTable() map[string]int64 {
-	if x != nil {
-		return x.MaxValuesBySequenceTable
 	}
 	return nil
 }
@@ -7803,7 +7687,7 @@ type UpdateSequenceTablesResponse struct {
 
 func (x *UpdateSequenceTablesResponse) Reset() {
 	*x = UpdateSequenceTablesResponse{}
-	mi := &file_tabletmanagerdata_proto_msgTypes[147]
+	mi := &file_tabletmanagerdata_proto_msgTypes[146]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7815,7 +7699,7 @@ func (x *UpdateSequenceTablesResponse) String() string {
 func (*UpdateSequenceTablesResponse) ProtoMessage() {}
 
 func (x *UpdateSequenceTablesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[147]
+	mi := &file_tabletmanagerdata_proto_msgTypes[146]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7828,19 +7712,19 @@ func (x *UpdateSequenceTablesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSequenceTablesResponse.ProtoReflect.Descriptor instead.
 func (*UpdateSequenceTablesResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{147}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{146}
 }
 
 type GetMaxValueForSequencesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Sequences     []*SequenceMetadata    `protobuf:"bytes,1,rep,name=sequences,proto3" json:"sequences,omitempty"`
+	state         protoimpl.MessageState                             `protogen:"open.v1"`
+	Sequences     []*GetMaxValueForSequencesRequest_SequenceMetadata `protobuf:"bytes,1,rep,name=sequences,proto3" json:"sequences,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetMaxValueForSequencesRequest) Reset() {
 	*x = GetMaxValueForSequencesRequest{}
-	mi := &file_tabletmanagerdata_proto_msgTypes[148]
+	mi := &file_tabletmanagerdata_proto_msgTypes[147]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7852,7 +7736,7 @@ func (x *GetMaxValueForSequencesRequest) String() string {
 func (*GetMaxValueForSequencesRequest) ProtoMessage() {}
 
 func (x *GetMaxValueForSequencesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[148]
+	mi := &file_tabletmanagerdata_proto_msgTypes[147]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7865,10 +7749,10 @@ func (x *GetMaxValueForSequencesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMaxValueForSequencesRequest.ProtoReflect.Descriptor instead.
 func (*GetMaxValueForSequencesRequest) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{148}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{147}
 }
 
-func (x *GetMaxValueForSequencesRequest) GetSequences() []*SequenceMetadata {
+func (x *GetMaxValueForSequencesRequest) GetSequences() []*GetMaxValueForSequencesRequest_SequenceMetadata {
 	if x != nil {
 		return x.Sequences
 	}
@@ -7884,7 +7768,7 @@ type GetMaxValueForSequencesResponse struct {
 
 func (x *GetMaxValueForSequencesResponse) Reset() {
 	*x = GetMaxValueForSequencesResponse{}
-	mi := &file_tabletmanagerdata_proto_msgTypes[149]
+	mi := &file_tabletmanagerdata_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7896,7 +7780,7 @@ func (x *GetMaxValueForSequencesResponse) String() string {
 func (*GetMaxValueForSequencesResponse) ProtoMessage() {}
 
 func (x *GetMaxValueForSequencesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[149]
+	mi := &file_tabletmanagerdata_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7909,7 +7793,7 @@ func (x *GetMaxValueForSequencesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMaxValueForSequencesResponse.ProtoReflect.Descriptor instead.
 func (*GetMaxValueForSequencesResponse) Descriptor() ([]byte, []int) {
-	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{149}
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{148}
 }
 
 func (x *GetMaxValueForSequencesResponse) GetMaxValuesBySequenceTable() map[string]int64 {
@@ -7941,7 +7825,7 @@ type ReadVReplicationWorkflowResponse_Stream struct {
 
 func (x *ReadVReplicationWorkflowResponse_Stream) Reset() {
 	*x = ReadVReplicationWorkflowResponse_Stream{}
-	mi := &file_tabletmanagerdata_proto_msgTypes[155]
+	mi := &file_tabletmanagerdata_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7953,7 +7837,7 @@ func (x *ReadVReplicationWorkflowResponse_Stream) String() string {
 func (*ReadVReplicationWorkflowResponse_Stream) ProtoMessage() {}
 
 func (x *ReadVReplicationWorkflowResponse_Stream) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[155]
+	mi := &file_tabletmanagerdata_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8089,7 +7973,7 @@ type CheckThrottlerResponse_Metric struct {
 
 func (x *CheckThrottlerResponse_Metric) Reset() {
 	*x = CheckThrottlerResponse_Metric{}
-	mi := &file_tabletmanagerdata_proto_msgTypes[158]
+	mi := &file_tabletmanagerdata_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8101,7 +7985,7 @@ func (x *CheckThrottlerResponse_Metric) String() string {
 func (*CheckThrottlerResponse_Metric) ProtoMessage() {}
 
 func (x *CheckThrottlerResponse_Metric) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[158]
+	mi := &file_tabletmanagerdata_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8176,7 +8060,7 @@ type GetThrottlerStatusResponse_MetricResult struct {
 
 func (x *GetThrottlerStatusResponse_MetricResult) Reset() {
 	*x = GetThrottlerStatusResponse_MetricResult{}
-	mi := &file_tabletmanagerdata_proto_msgTypes[160]
+	mi := &file_tabletmanagerdata_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8188,7 +8072,7 @@ func (x *GetThrottlerStatusResponse_MetricResult) String() string {
 func (*GetThrottlerStatusResponse_MetricResult) ProtoMessage() {}
 
 func (x *GetThrottlerStatusResponse_MetricResult) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[160]
+	mi := &file_tabletmanagerdata_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8228,7 +8112,7 @@ type GetThrottlerStatusResponse_MetricHealth struct {
 
 func (x *GetThrottlerStatusResponse_MetricHealth) Reset() {
 	*x = GetThrottlerStatusResponse_MetricHealth{}
-	mi := &file_tabletmanagerdata_proto_msgTypes[163]
+	mi := &file_tabletmanagerdata_proto_msgTypes[162]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8240,7 +8124,7 @@ func (x *GetThrottlerStatusResponse_MetricHealth) String() string {
 func (*GetThrottlerStatusResponse_MetricHealth) ProtoMessage() {}
 
 func (x *GetThrottlerStatusResponse_MetricHealth) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[163]
+	mi := &file_tabletmanagerdata_proto_msgTypes[162]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8281,7 +8165,7 @@ type GetThrottlerStatusResponse_RecentApp struct {
 
 func (x *GetThrottlerStatusResponse_RecentApp) Reset() {
 	*x = GetThrottlerStatusResponse_RecentApp{}
-	mi := &file_tabletmanagerdata_proto_msgTypes[167]
+	mi := &file_tabletmanagerdata_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8293,7 +8177,7 @@ func (x *GetThrottlerStatusResponse_RecentApp) String() string {
 func (*GetThrottlerStatusResponse_RecentApp) ProtoMessage() {}
 
 func (x *GetThrottlerStatusResponse_RecentApp) ProtoReflect() protoreflect.Message {
-	mi := &file_tabletmanagerdata_proto_msgTypes[167]
+	mi := &file_tabletmanagerdata_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8321,6 +8205,142 @@ func (x *GetThrottlerStatusResponse_RecentApp) GetResponseCode() CheckThrottlerR
 		return x.ResponseCode
 	}
 	return CheckThrottlerResponseCode_UNDEFINED
+}
+
+type UpdateSequenceTablesRequest_SequenceMetadata struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The name of the sequence table.
+	BackingTableName string `protobuf:"bytes,1,opt,name=backing_table_name,json=backingTableName,proto3" json:"backing_table_name,omitempty"`
+	// The dbName in use by the keyspace where the backing table lives.
+	BackingTableDbName string `protobuf:"bytes,2,opt,name=backing_table_db_name,json=backingTableDbName,proto3" json:"backing_table_db_name,omitempty"`
+	// The maximum used sequence value.
+	MaxValue      int64 `protobuf:"varint,3,opt,name=max_value,json=maxValue,proto3" json:"max_value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateSequenceTablesRequest_SequenceMetadata) Reset() {
+	*x = UpdateSequenceTablesRequest_SequenceMetadata{}
+	mi := &file_tabletmanagerdata_proto_msgTypes[170]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateSequenceTablesRequest_SequenceMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateSequenceTablesRequest_SequenceMetadata) ProtoMessage() {}
+
+func (x *UpdateSequenceTablesRequest_SequenceMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[170]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateSequenceTablesRequest_SequenceMetadata.ProtoReflect.Descriptor instead.
+func (*UpdateSequenceTablesRequest_SequenceMetadata) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{145, 0}
+}
+
+func (x *UpdateSequenceTablesRequest_SequenceMetadata) GetBackingTableName() string {
+	if x != nil {
+		return x.BackingTableName
+	}
+	return ""
+}
+
+func (x *UpdateSequenceTablesRequest_SequenceMetadata) GetBackingTableDbName() string {
+	if x != nil {
+		return x.BackingTableDbName
+	}
+	return ""
+}
+
+func (x *UpdateSequenceTablesRequest_SequenceMetadata) GetMaxValue() int64 {
+	if x != nil {
+		return x.MaxValue
+	}
+	return 0
+}
+
+type GetMaxValueForSequencesRequest_SequenceMetadata struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The name of the sequence table. This will be used for mapping max value
+	// with table in the response.
+	BackingTableName string `protobuf:"bytes,1,opt,name=backing_table_name,json=backingTableName,proto3" json:"backing_table_name,omitempty"`
+	// Escaped column name specified for sequence in table.
+	UsingColEscaped string `protobuf:"bytes,2,opt,name=using_col_escaped,json=usingColEscaped,proto3" json:"using_col_escaped,omitempty"`
+	// Escaped name of the table using the sequence.
+	UsingTableNameEscaped string `protobuf:"bytes,3,opt,name=using_table_name_escaped,json=usingTableNameEscaped,proto3" json:"using_table_name_escaped,omitempty"`
+	// Escaped db name in use by the keyspace where the using table lives.
+	UsingTableDbNameEscaped string `protobuf:"bytes,4,opt,name=using_table_db_name_escaped,json=usingTableDbNameEscaped,proto3" json:"using_table_db_name_escaped,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *GetMaxValueForSequencesRequest_SequenceMetadata) Reset() {
+	*x = GetMaxValueForSequencesRequest_SequenceMetadata{}
+	mi := &file_tabletmanagerdata_proto_msgTypes[171]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMaxValueForSequencesRequest_SequenceMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMaxValueForSequencesRequest_SequenceMetadata) ProtoMessage() {}
+
+func (x *GetMaxValueForSequencesRequest_SequenceMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_tabletmanagerdata_proto_msgTypes[171]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMaxValueForSequencesRequest_SequenceMetadata.ProtoReflect.Descriptor instead.
+func (*GetMaxValueForSequencesRequest_SequenceMetadata) Descriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{147, 0}
+}
+
+func (x *GetMaxValueForSequencesRequest_SequenceMetadata) GetBackingTableName() string {
+	if x != nil {
+		return x.BackingTableName
+	}
+	return ""
+}
+
+func (x *GetMaxValueForSequencesRequest_SequenceMetadata) GetUsingColEscaped() string {
+	if x != nil {
+		return x.UsingColEscaped
+	}
+	return ""
+}
+
+func (x *GetMaxValueForSequencesRequest_SequenceMetadata) GetUsingTableNameEscaped() string {
+	if x != nil {
+		return x.UsingTableNameEscaped
+	}
+	return ""
+}
+
+func (x *GetMaxValueForSequencesRequest_SequenceMetadata) GetUsingTableDbNameEscaped() string {
+	if x != nil {
+		return x.UsingTableDbNameEscaped
+	}
+	return ""
 }
 
 var File_tabletmanagerdata_proto protoreflect.FileDescriptor
@@ -9492,94 +9512,81 @@ var file_tabletmanagerdata_proto_rawDesc = string([]byte{
 	0x0a, 0x09, 0x54, 0x61, 0x67, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b,
 	0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a,
 	0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61,
-	0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0xac, 0x03, 0x0a, 0x10, 0x53, 0x65, 0x71, 0x75,
-	0x65, 0x6e, 0x63, 0x65, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x12, 0x2c, 0x0a, 0x12,
-	0x62, 0x61, 0x63, 0x6b, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x6e, 0x61,
-	0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x10, 0x62, 0x61, 0x63, 0x6b, 0x69, 0x6e,
-	0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x31, 0x0a, 0x15, 0x62, 0x61,
-	0x63, 0x6b, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x64, 0x62, 0x5f, 0x6e,
-	0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x12, 0x62, 0x61, 0x63, 0x6b, 0x69,
-	0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x44, 0x62, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x28, 0x0a,
-	0x10, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x6e, 0x61, 0x6d,
-	0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0e, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x54, 0x61,
-	0x62, 0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x2d, 0x0a, 0x13, 0x75, 0x73, 0x69, 0x6e, 0x67,
-	0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x64, 0x62, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x04,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x10, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65,
-	0x44, 0x62, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x2a, 0x0a, 0x11, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x5f,
-	0x63, 0x6f, 0x6c, 0x5f, 0x65, 0x73, 0x63, 0x61, 0x70, 0x65, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x0f, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x43, 0x6f, 0x6c, 0x45, 0x73, 0x63, 0x61, 0x70,
-	0x65, 0x64, 0x12, 0x37, 0x0a, 0x18, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c,
-	0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x5f, 0x65, 0x73, 0x63, 0x61, 0x70, 0x65, 0x64, 0x18, 0x06,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x15, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65,
-	0x4e, 0x61, 0x6d, 0x65, 0x45, 0x73, 0x63, 0x61, 0x70, 0x65, 0x64, 0x12, 0x3c, 0x0a, 0x1b, 0x75,
-	0x73, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x64, 0x62, 0x5f, 0x6e, 0x61,
-	0x6d, 0x65, 0x5f, 0x65, 0x73, 0x63, 0x61, 0x70, 0x65, 0x64, 0x18, 0x07, 0x20, 0x01, 0x28, 0x09,
-	0x52, 0x17, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x44, 0x62, 0x4e, 0x61,
-	0x6d, 0x65, 0x45, 0x73, 0x63, 0x61, 0x70, 0x65, 0x64, 0x12, 0x3b, 0x0a, 0x1a, 0x62, 0x61, 0x63,
-	0x6b, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x5f,
-	0x65, 0x73, 0x63, 0x61, 0x70, 0x65, 0x64, 0x18, 0x08, 0x20, 0x01, 0x28, 0x09, 0x52, 0x17, 0x62,
-	0x61, 0x63, 0x6b, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x45,
-	0x73, 0x63, 0x61, 0x70, 0x65, 0x64, 0x22, 0xbc, 0x02, 0x0a, 0x1b, 0x55, 0x70, 0x64, 0x61, 0x74,
-	0x65, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x41, 0x0a, 0x09, 0x73, 0x65, 0x71, 0x75, 0x65, 0x6e,
-	0x63, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x23, 0x2e, 0x74, 0x61, 0x62, 0x6c,
-	0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53, 0x65,
-	0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x52, 0x09,
-	0x73, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x12, 0x8c, 0x01, 0x0a, 0x1c, 0x6d, 0x61,
-	0x78, 0x5f, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x5f, 0x62, 0x79, 0x5f, 0x73, 0x65, 0x71, 0x75,
-	0x65, 0x6e, 0x63, 0x65, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b,
-	0x32, 0x4c, 0x2e, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72,
-	0x64, 0x61, 0x74, 0x61, 0x2e, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x53, 0x65, 0x71, 0x75, 0x65,
-	0x6e, 0x63, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x2e, 0x4d, 0x61, 0x78, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x42, 0x79, 0x53, 0x65, 0x71, 0x75,
-	0x65, 0x6e, 0x63, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x18,
-	0x6d, 0x61, 0x78, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x42, 0x79, 0x53, 0x65, 0x71, 0x75, 0x65,
-	0x6e, 0x63, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x1a, 0x4b, 0x0a, 0x1d, 0x4d, 0x61, 0x78, 0x56,
-	0x61, 0x6c, 0x75, 0x65, 0x73, 0x42, 0x79, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x54,
-	0x61, 0x62, 0x6c, 0x65, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76,
-	0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75,
-	0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x1e, 0x0a, 0x1c, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x53,
-	0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x73, 0x52, 0x65, 0x73,
-	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x63, 0x0a, 0x1e, 0x47, 0x65, 0x74, 0x4d, 0x61, 0x78, 0x56,
+	0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x8f, 0x02, 0x0a, 0x1b, 0x55, 0x70, 0x64, 0x61,
+	0x74, 0x65, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x73,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x5d, 0x0a, 0x09, 0x73, 0x65, 0x71, 0x75, 0x65,
+	0x6e, 0x63, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x3f, 0x2e, 0x74, 0x61, 0x62,
+	0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x55,
+	0x70, 0x64, 0x61, 0x74, 0x65, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x54, 0x61, 0x62,
+	0x6c, 0x65, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x2e, 0x53, 0x65, 0x71, 0x75, 0x65,
+	0x6e, 0x63, 0x65, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x52, 0x09, 0x73, 0x65, 0x71,
+	0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x1a, 0x90, 0x01, 0x0a, 0x10, 0x53, 0x65, 0x71, 0x75, 0x65,
+	0x6e, 0x63, 0x65, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x12, 0x2c, 0x0a, 0x12, 0x62,
+	0x61, 0x63, 0x6b, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x6e, 0x61, 0x6d,
+	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x10, 0x62, 0x61, 0x63, 0x6b, 0x69, 0x6e, 0x67,
+	0x54, 0x61, 0x62, 0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x31, 0x0a, 0x15, 0x62, 0x61, 0x63,
+	0x6b, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x64, 0x62, 0x5f, 0x6e, 0x61,
+	0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x12, 0x62, 0x61, 0x63, 0x6b, 0x69, 0x6e,
+	0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x44, 0x62, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x1b, 0x0a, 0x09,
+	0x6d, 0x61, 0x78, 0x5f, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x03, 0x52,
+	0x08, 0x6d, 0x61, 0x78, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x22, 0x1e, 0x0a, 0x1c, 0x55, 0x70, 0x64,
+	0x61, 0x74, 0x65, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65,
+	0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0xe8, 0x02, 0x0a, 0x1e, 0x47, 0x65,
+	0x74, 0x4d, 0x61, 0x78, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x46, 0x6f, 0x72, 0x53, 0x65, 0x71, 0x75,
+	0x65, 0x6e, 0x63, 0x65, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x60, 0x0a, 0x09,
+	0x73, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32,
+	0x42, 0x2e, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64,
+	0x61, 0x74, 0x61, 0x2e, 0x47, 0x65, 0x74, 0x4d, 0x61, 0x78, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x46,
+	0x6f, 0x72, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x2e, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x4d, 0x65, 0x74, 0x61, 0x64,
+	0x61, 0x74, 0x61, 0x52, 0x09, 0x73, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x1a, 0xe3,
+	0x01, 0x0a, 0x10, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x4d, 0x65, 0x74, 0x61, 0x64,
+	0x61, 0x74, 0x61, 0x12, 0x2c, 0x0a, 0x12, 0x62, 0x61, 0x63, 0x6b, 0x69, 0x6e, 0x67, 0x5f, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x10, 0x62, 0x61, 0x63, 0x6b, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x4e, 0x61, 0x6d,
+	0x65, 0x12, 0x2a, 0x0a, 0x11, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x5f, 0x63, 0x6f, 0x6c, 0x5f, 0x65,
+	0x73, 0x63, 0x61, 0x70, 0x65, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0f, 0x75, 0x73,
+	0x69, 0x6e, 0x67, 0x43, 0x6f, 0x6c, 0x45, 0x73, 0x63, 0x61, 0x70, 0x65, 0x64, 0x12, 0x37, 0x0a,
+	0x18, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x6e, 0x61, 0x6d,
+	0x65, 0x5f, 0x65, 0x73, 0x63, 0x61, 0x70, 0x65, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x15, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x4e, 0x61, 0x6d, 0x65, 0x45,
+	0x73, 0x63, 0x61, 0x70, 0x65, 0x64, 0x12, 0x3c, 0x0a, 0x1b, 0x75, 0x73, 0x69, 0x6e, 0x67, 0x5f,
+	0x74, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x64, 0x62, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x5f, 0x65, 0x73,
+	0x63, 0x61, 0x70, 0x65, 0x64, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x17, 0x75, 0x73, 0x69,
+	0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x44, 0x62, 0x4e, 0x61, 0x6d, 0x65, 0x45, 0x73, 0x63,
+	0x61, 0x70, 0x65, 0x64, 0x22, 0x81, 0x02, 0x0a, 0x1f, 0x47, 0x65, 0x74, 0x4d, 0x61, 0x78, 0x56,
 	0x61, 0x6c, 0x75, 0x65, 0x46, 0x6f, 0x72, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73,
-	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x41, 0x0a, 0x09, 0x73, 0x65, 0x71, 0x75, 0x65,
-	0x6e, 0x63, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x23, 0x2e, 0x74, 0x61, 0x62,
-	0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x53,
-	0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x52,
-	0x09, 0x73, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x22, 0x81, 0x02, 0x0a, 0x1f, 0x47,
-	0x65, 0x74, 0x4d, 0x61, 0x78, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x46, 0x6f, 0x72, 0x53, 0x65, 0x71,
-	0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x90,
-	0x01, 0x0a, 0x1c, 0x6d, 0x61, 0x78, 0x5f, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x5f, 0x62, 0x79,
-	0x5f, 0x73, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x18,
-	0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x50, 0x2e, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61,
-	0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x47, 0x65, 0x74, 0x4d, 0x61, 0x78,
-	0x56, 0x61, 0x6c, 0x75, 0x65, 0x46, 0x6f, 0x72, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65,
-	0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x4d, 0x61, 0x78, 0x56, 0x61, 0x6c,
-	0x75, 0x65, 0x73, 0x42, 0x79, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x54, 0x61, 0x62,
-	0x6c, 0x65, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x18, 0x6d, 0x61, 0x78, 0x56, 0x61, 0x6c, 0x75,
-	0x65, 0x73, 0x42, 0x79, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x54, 0x61, 0x62, 0x6c,
-	0x65, 0x1a, 0x4b, 0x0a, 0x1d, 0x4d, 0x61, 0x78, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x42, 0x79,
-	0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x45, 0x6e, 0x74,
-	0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
-	0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20,
-	0x01, 0x28, 0x03, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x2a, 0x3e,
-	0x0a, 0x19, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x53, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x69, 0x6f,
-	0x6e, 0x50, 0x72, 0x65, 0x66, 0x65, 0x72, 0x65, 0x6e, 0x63, 0x65, 0x12, 0x07, 0x0a, 0x03, 0x41,
-	0x4e, 0x59, 0x10, 0x00, 0x12, 0x0b, 0x0a, 0x07, 0x49, 0x4e, 0x4f, 0x52, 0x44, 0x45, 0x52, 0x10,
-	0x01, 0x12, 0x0b, 0x0a, 0x07, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x10, 0x03, 0x2a, 0x83,
-	0x01, 0x0a, 0x1a, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x54, 0x68, 0x72, 0x6f, 0x74, 0x74, 0x6c, 0x65,
-	0x72, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x43, 0x6f, 0x64, 0x65, 0x12, 0x0d, 0x0a,
-	0x09, 0x55, 0x4e, 0x44, 0x45, 0x46, 0x49, 0x4e, 0x45, 0x44, 0x10, 0x00, 0x12, 0x06, 0x0a, 0x02,
-	0x4f, 0x4b, 0x10, 0x01, 0x12, 0x16, 0x0a, 0x12, 0x54, 0x48, 0x52, 0x45, 0x53, 0x48, 0x4f, 0x4c,
-	0x44, 0x5f, 0x45, 0x58, 0x43, 0x45, 0x45, 0x44, 0x45, 0x44, 0x10, 0x02, 0x12, 0x0e, 0x0a, 0x0a,
-	0x41, 0x50, 0x50, 0x5f, 0x44, 0x45, 0x4e, 0x49, 0x45, 0x44, 0x10, 0x03, 0x12, 0x12, 0x0a, 0x0e,
-	0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x5f, 0x4d, 0x45, 0x54, 0x52, 0x49, 0x43, 0x10, 0x04,
-	0x12, 0x12, 0x0a, 0x0e, 0x49, 0x4e, 0x54, 0x45, 0x52, 0x4e, 0x41, 0x4c, 0x5f, 0x45, 0x52, 0x52,
-	0x4f, 0x52, 0x10, 0x05, 0x42, 0x30, 0x5a, 0x2e, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69,
-	0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70,
-	0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67,
-	0x65, 0x72, 0x64, 0x61, 0x74, 0x61, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x90, 0x01, 0x0a, 0x1c, 0x6d, 0x61, 0x78,
+	0x5f, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x5f, 0x62, 0x79, 0x5f, 0x73, 0x65, 0x71, 0x75, 0x65,
+	0x6e, 0x63, 0x65, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32,
+	0x50, 0x2e, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64,
+	0x61, 0x74, 0x61, 0x2e, 0x47, 0x65, 0x74, 0x4d, 0x61, 0x78, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x46,
+	0x6f, 0x72, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x2e, 0x4d, 0x61, 0x78, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x42, 0x79, 0x53,
+	0x65, 0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x45, 0x6e, 0x74, 0x72,
+	0x79, 0x52, 0x18, 0x6d, 0x61, 0x78, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x42, 0x79, 0x53, 0x65,
+	0x71, 0x75, 0x65, 0x6e, 0x63, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x1a, 0x4b, 0x0a, 0x1d, 0x4d,
+	0x61, 0x78, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x73, 0x42, 0x79, 0x53, 0x65, 0x71, 0x75, 0x65, 0x6e,
+	0x63, 0x65, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03,
+	0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14,
+	0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x03, 0x52, 0x05, 0x76,
+	0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x2a, 0x3e, 0x0a, 0x19, 0x54, 0x61, 0x62, 0x6c,
+	0x65, 0x74, 0x53, 0x65, 0x6c, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x50, 0x72, 0x65, 0x66, 0x65,
+	0x72, 0x65, 0x6e, 0x63, 0x65, 0x12, 0x07, 0x0a, 0x03, 0x41, 0x4e, 0x59, 0x10, 0x00, 0x12, 0x0b,
+	0x0a, 0x07, 0x49, 0x4e, 0x4f, 0x52, 0x44, 0x45, 0x52, 0x10, 0x01, 0x12, 0x0b, 0x0a, 0x07, 0x55,
+	0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x10, 0x03, 0x2a, 0x83, 0x01, 0x0a, 0x1a, 0x43, 0x68, 0x65,
+	0x63, 0x6b, 0x54, 0x68, 0x72, 0x6f, 0x74, 0x74, 0x6c, 0x65, 0x72, 0x52, 0x65, 0x73, 0x70, 0x6f,
+	0x6e, 0x73, 0x65, 0x43, 0x6f, 0x64, 0x65, 0x12, 0x0d, 0x0a, 0x09, 0x55, 0x4e, 0x44, 0x45, 0x46,
+	0x49, 0x4e, 0x45, 0x44, 0x10, 0x00, 0x12, 0x06, 0x0a, 0x02, 0x4f, 0x4b, 0x10, 0x01, 0x12, 0x16,
+	0x0a, 0x12, 0x54, 0x48, 0x52, 0x45, 0x53, 0x48, 0x4f, 0x4c, 0x44, 0x5f, 0x45, 0x58, 0x43, 0x45,
+	0x45, 0x44, 0x45, 0x44, 0x10, 0x02, 0x12, 0x0e, 0x0a, 0x0a, 0x41, 0x50, 0x50, 0x5f, 0x44, 0x45,
+	0x4e, 0x49, 0x45, 0x44, 0x10, 0x03, 0x12, 0x12, 0x0a, 0x0e, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57,
+	0x4e, 0x5f, 0x4d, 0x45, 0x54, 0x52, 0x49, 0x43, 0x10, 0x04, 0x12, 0x12, 0x0a, 0x0e, 0x49, 0x4e,
+	0x54, 0x45, 0x52, 0x4e, 0x41, 0x4c, 0x5f, 0x45, 0x52, 0x52, 0x4f, 0x52, 0x10, 0x05, 0x42, 0x30,
+	0x5a, 0x2e, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65,
+	0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x74,
+	0x61, 0x62, 0x6c, 0x65, 0x74, 0x6d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x72, 0x64, 0x61, 0x74, 0x61,
+	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 })
 
 var (
@@ -9744,45 +9751,45 @@ var file_tabletmanagerdata_proto_goTypes = []any{
 	(*GetThrottlerStatusResponse)(nil),              // 144: tabletmanagerdata.GetThrottlerStatusResponse
 	(*ChangeTagsRequest)(nil),                       // 145: tabletmanagerdata.ChangeTagsRequest
 	(*ChangeTagsResponse)(nil),                      // 146: tabletmanagerdata.ChangeTagsResponse
-	(*SequenceMetadata)(nil),                        // 147: tabletmanagerdata.SequenceMetadata
-	(*UpdateSequenceTablesRequest)(nil),             // 148: tabletmanagerdata.UpdateSequenceTablesRequest
-	(*UpdateSequenceTablesResponse)(nil),            // 149: tabletmanagerdata.UpdateSequenceTablesResponse
-	(*GetMaxValueForSequencesRequest)(nil),          // 150: tabletmanagerdata.GetMaxValueForSequencesRequest
-	(*GetMaxValueForSequencesResponse)(nil),         // 151: tabletmanagerdata.GetMaxValueForSequencesResponse
-	nil,                                             // 152: tabletmanagerdata.UserPermission.PrivilegesEntry
-	nil,                                             // 153: tabletmanagerdata.DbPermission.PrivilegesEntry
-	nil,                                             // 154: tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
-	nil,                                             // 155: tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
-	nil,                                             // 156: tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
-	(*ReadVReplicationWorkflowResponse_Stream)(nil), // 157: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
-	nil,                                   // 158: tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
-	nil,                                   // 159: tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntry
-	(*CheckThrottlerResponse_Metric)(nil), // 160: tabletmanagerdata.CheckThrottlerResponse.Metric
-	nil,                                   // 161: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
-	(*GetThrottlerStatusResponse_MetricResult)(nil), // 162: tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
-	nil, // 163: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
-	nil, // 164: tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
-	(*GetThrottlerStatusResponse_MetricHealth)(nil), // 165: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
-	nil, // 166: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
-	nil, // 167: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
-	nil, // 168: tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
-	(*GetThrottlerStatusResponse_RecentApp)(nil), // 169: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
-	nil,                                      // 170: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
-	nil,                                      // 171: tabletmanagerdata.ChangeTagsRequest.TagsEntry
-	nil,                                      // 172: tabletmanagerdata.ChangeTagsResponse.TagsEntry
-	nil,                                      // 173: tabletmanagerdata.UpdateSequenceTablesRequest.MaxValuesBySequenceTableEntry
-	nil,                                      // 174: tabletmanagerdata.GetMaxValueForSequencesResponse.MaxValuesBySequenceTableEntry
-	(*query.Field)(nil),                      // 175: query.Field
-	(topodata.TabletType)(0),                 // 176: topodata.TabletType
-	(*vtrpc.CallerID)(nil),                   // 177: vtrpc.CallerID
-	(*query.QueryResult)(nil),                // 178: query.QueryResult
-	(*query.TransactionMetadata)(nil),        // 179: query.TransactionMetadata
-	(*mysqlctl.HostMetricsResponse)(nil),     // 180: mysqlctl.HostMetricsResponse
-	(*replicationdata.Status)(nil),           // 181: replicationdata.Status
-	(*replicationdata.PrimaryStatus)(nil),    // 182: replicationdata.PrimaryStatus
-	(*topodata.TabletAlias)(nil),             // 183: topodata.TabletAlias
-	(*replicationdata.FullStatus)(nil),       // 184: replicationdata.FullStatus
-	(replicationdata.StopReplicationMode)(0), // 185: replicationdata.StopReplicationMode
+	(*UpdateSequenceTablesRequest)(nil),             // 147: tabletmanagerdata.UpdateSequenceTablesRequest
+	(*UpdateSequenceTablesResponse)(nil),            // 148: tabletmanagerdata.UpdateSequenceTablesResponse
+	(*GetMaxValueForSequencesRequest)(nil),          // 149: tabletmanagerdata.GetMaxValueForSequencesRequest
+	(*GetMaxValueForSequencesResponse)(nil),         // 150: tabletmanagerdata.GetMaxValueForSequencesResponse
+	nil,                                             // 151: tabletmanagerdata.UserPermission.PrivilegesEntry
+	nil,                                             // 152: tabletmanagerdata.DbPermission.PrivilegesEntry
+	nil,                                             // 153: tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
+	nil,                                             // 154: tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
+	nil,                                             // 155: tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
+	(*ReadVReplicationWorkflowResponse_Stream)(nil), // 156: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
+	nil,                                   // 157: tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
+	nil,                                   // 158: tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntry
+	(*CheckThrottlerResponse_Metric)(nil), // 159: tabletmanagerdata.CheckThrottlerResponse.Metric
+	nil,                                   // 160: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
+	(*GetThrottlerStatusResponse_MetricResult)(nil), // 161: tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
+	nil, // 162: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
+	nil, // 163: tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
+	(*GetThrottlerStatusResponse_MetricHealth)(nil), // 164: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
+	nil, // 165: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
+	nil, // 166: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
+	nil, // 167: tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
+	(*GetThrottlerStatusResponse_RecentApp)(nil), // 168: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
+	nil, // 169: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
+	nil, // 170: tabletmanagerdata.ChangeTagsRequest.TagsEntry
+	nil, // 171: tabletmanagerdata.ChangeTagsResponse.TagsEntry
+	(*UpdateSequenceTablesRequest_SequenceMetadata)(nil),    // 172: tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata
+	(*GetMaxValueForSequencesRequest_SequenceMetadata)(nil), // 173: tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata
+	nil,                                           // 174: tabletmanagerdata.GetMaxValueForSequencesResponse.MaxValuesBySequenceTableEntry
+	(*query.Field)(nil),                           // 175: query.Field
+	(topodata.TabletType)(0),                      // 176: topodata.TabletType
+	(*vtrpc.CallerID)(nil),                        // 177: vtrpc.CallerID
+	(*query.QueryResult)(nil),                     // 178: query.QueryResult
+	(*query.TransactionMetadata)(nil),             // 179: query.TransactionMetadata
+	(*mysqlctl.HostMetricsResponse)(nil),          // 180: mysqlctl.HostMetricsResponse
+	(*replicationdata.Status)(nil),                // 181: replicationdata.Status
+	(*replicationdata.PrimaryStatus)(nil),         // 182: replicationdata.PrimaryStatus
+	(*topodata.TabletAlias)(nil),                  // 183: topodata.TabletAlias
+	(*replicationdata.FullStatus)(nil),            // 184: replicationdata.FullStatus
+	(replicationdata.StopReplicationMode)(0),      // 185: replicationdata.StopReplicationMode
 	(*replicationdata.StopReplicationStatus)(nil), // 186: replicationdata.StopReplicationStatus
 	(*vttime.Duration)(nil),                       // 187: vttime.Duration
 	(*logutil.Event)(nil),                         // 188: logutil.Event
@@ -9799,14 +9806,14 @@ var file_tabletmanagerdata_proto_depIdxs = []int32{
 	2,   // 1: tabletmanagerdata.SchemaDefinition.table_definitions:type_name -> tabletmanagerdata.TableDefinition
 	3,   // 2: tabletmanagerdata.SchemaChangeResult.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
 	3,   // 3: tabletmanagerdata.SchemaChangeResult.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
-	152, // 4: tabletmanagerdata.UserPermission.privileges:type_name -> tabletmanagerdata.UserPermission.PrivilegesEntry
-	153, // 5: tabletmanagerdata.DbPermission.privileges:type_name -> tabletmanagerdata.DbPermission.PrivilegesEntry
+	151, // 4: tabletmanagerdata.UserPermission.privileges:type_name -> tabletmanagerdata.UserPermission.PrivilegesEntry
+	152, // 5: tabletmanagerdata.DbPermission.privileges:type_name -> tabletmanagerdata.DbPermission.PrivilegesEntry
 	5,   // 6: tabletmanagerdata.Permissions.user_permissions:type_name -> tabletmanagerdata.UserPermission
 	6,   // 7: tabletmanagerdata.Permissions.db_permissions:type_name -> tabletmanagerdata.DbPermission
-	154, // 8: tabletmanagerdata.ExecuteHookRequest.extra_env:type_name -> tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
+	153, // 8: tabletmanagerdata.ExecuteHookRequest.extra_env:type_name -> tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
 	3,   // 9: tabletmanagerdata.GetSchemaResponse.schema_definition:type_name -> tabletmanagerdata.SchemaDefinition
 	7,   // 10: tabletmanagerdata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
-	155, // 11: tabletmanagerdata.GetGlobalStatusVarsResponse.status_values:type_name -> tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
+	154, // 11: tabletmanagerdata.GetGlobalStatusVarsResponse.status_values:type_name -> tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
 	176, // 12: tabletmanagerdata.ChangeTypeRequest.tablet_type:type_name -> topodata.TabletType
 	4,   // 13: tabletmanagerdata.PreflightSchemaResponse.change_results:type_name -> tabletmanagerdata.SchemaChangeResult
 	3,   // 14: tabletmanagerdata.ApplySchemaRequest.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
@@ -9844,7 +9851,7 @@ var file_tabletmanagerdata_proto_depIdxs = []int32{
 	191, // 46: tabletmanagerdata.CreateVReplicationWorkflowRequest.workflow_type:type_name -> binlogdata.VReplicationWorkflowType
 	192, // 47: tabletmanagerdata.CreateVReplicationWorkflowRequest.workflow_sub_type:type_name -> binlogdata.VReplicationWorkflowSubType
 	178, // 48: tabletmanagerdata.CreateVReplicationWorkflowResponse.result:type_name -> query.QueryResult
-	156, // 49: tabletmanagerdata.DeleteTableDataRequest.table_filters:type_name -> tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
+	155, // 49: tabletmanagerdata.DeleteTableDataRequest.table_filters:type_name -> tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
 	178, // 50: tabletmanagerdata.DeleteVReplicationWorkflowResponse.result:type_name -> query.QueryResult
 	193, // 51: tabletmanagerdata.ReadVReplicationWorkflowsRequest.include_states:type_name -> binlogdata.VReplicationWorkflowState
 	193, // 52: tabletmanagerdata.ReadVReplicationWorkflowsRequest.exclude_states:type_name -> binlogdata.VReplicationWorkflowState
@@ -9853,8 +9860,8 @@ var file_tabletmanagerdata_proto_depIdxs = []int32{
 	0,   // 55: tabletmanagerdata.ReadVReplicationWorkflowResponse.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
 	191, // 56: tabletmanagerdata.ReadVReplicationWorkflowResponse.workflow_type:type_name -> binlogdata.VReplicationWorkflowType
 	192, // 57: tabletmanagerdata.ReadVReplicationWorkflowResponse.workflow_sub_type:type_name -> binlogdata.VReplicationWorkflowSubType
-	157, // 58: tabletmanagerdata.ReadVReplicationWorkflowResponse.streams:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
-	158, // 59: tabletmanagerdata.ReadVReplicationWorkflowResponse.config_overrides:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
+	156, // 58: tabletmanagerdata.ReadVReplicationWorkflowResponse.streams:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
+	157, // 59: tabletmanagerdata.ReadVReplicationWorkflowResponse.config_overrides:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
 	133, // 60: tabletmanagerdata.VDiffRequest.options:type_name -> tabletmanagerdata.VDiffOptions
 	178, // 61: tabletmanagerdata.VDiffResponse.output:type_name -> query.QueryResult
 	130, // 62: tabletmanagerdata.VDiffOptions.picker_options:type_name -> tabletmanagerdata.VDiffPickerOptions
@@ -9866,44 +9873,43 @@ var file_tabletmanagerdata_proto_depIdxs = []int32{
 	0,   // 68: tabletmanagerdata.UpdateVReplicationWorkflowRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
 	194, // 69: tabletmanagerdata.UpdateVReplicationWorkflowRequest.on_ddl:type_name -> binlogdata.OnDDLAction
 	193, // 70: tabletmanagerdata.UpdateVReplicationWorkflowRequest.state:type_name -> binlogdata.VReplicationWorkflowState
-	159, // 71: tabletmanagerdata.UpdateVReplicationWorkflowRequest.config_overrides:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntry
+	158, // 71: tabletmanagerdata.UpdateVReplicationWorkflowRequest.config_overrides:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntry
 	178, // 72: tabletmanagerdata.UpdateVReplicationWorkflowResponse.result:type_name -> query.QueryResult
 	193, // 73: tabletmanagerdata.UpdateVReplicationWorkflowsRequest.state:type_name -> binlogdata.VReplicationWorkflowState
 	178, // 74: tabletmanagerdata.UpdateVReplicationWorkflowsResponse.result:type_name -> query.QueryResult
-	161, // 75: tabletmanagerdata.CheckThrottlerResponse.metrics:type_name -> tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
+	160, // 75: tabletmanagerdata.CheckThrottlerResponse.metrics:type_name -> tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
 	1,   // 76: tabletmanagerdata.CheckThrottlerResponse.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
-	163, // 77: tabletmanagerdata.GetThrottlerStatusResponse.aggregated_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
-	164, // 78: tabletmanagerdata.GetThrottlerStatusResponse.metric_thresholds:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
-	166, // 79: tabletmanagerdata.GetThrottlerStatusResponse.metrics_health:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
-	167, // 80: tabletmanagerdata.GetThrottlerStatusResponse.throttled_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
-	168, // 81: tabletmanagerdata.GetThrottlerStatusResponse.app_checked_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
-	170, // 82: tabletmanagerdata.GetThrottlerStatusResponse.recent_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
-	171, // 83: tabletmanagerdata.ChangeTagsRequest.tags:type_name -> tabletmanagerdata.ChangeTagsRequest.TagsEntry
-	172, // 84: tabletmanagerdata.ChangeTagsResponse.tags:type_name -> tabletmanagerdata.ChangeTagsResponse.TagsEntry
-	147, // 85: tabletmanagerdata.UpdateSequenceTablesRequest.sequences:type_name -> tabletmanagerdata.SequenceMetadata
-	173, // 86: tabletmanagerdata.UpdateSequenceTablesRequest.max_values_by_sequence_table:type_name -> tabletmanagerdata.UpdateSequenceTablesRequest.MaxValuesBySequenceTableEntry
-	147, // 87: tabletmanagerdata.GetMaxValueForSequencesRequest.sequences:type_name -> tabletmanagerdata.SequenceMetadata
-	174, // 88: tabletmanagerdata.GetMaxValueForSequencesResponse.max_values_by_sequence_table:type_name -> tabletmanagerdata.GetMaxValueForSequencesResponse.MaxValuesBySequenceTableEntry
-	190, // 89: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.bls:type_name -> binlogdata.BinlogSource
-	189, // 90: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_updated:type_name -> vttime.Time
-	189, // 91: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.transaction_timestamp:type_name -> vttime.Time
-	193, // 92: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.state:type_name -> binlogdata.VReplicationWorkflowState
-	189, // 93: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_heartbeat:type_name -> vttime.Time
-	189, // 94: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_throttled:type_name -> vttime.Time
-	1,   // 95: tabletmanagerdata.CheckThrottlerResponse.Metric.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
-	160, // 96: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry.value:type_name -> tabletmanagerdata.CheckThrottlerResponse.Metric
-	162, // 97: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
-	189, // 98: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.last_healthy_at:type_name -> vttime.Time
-	165, // 99: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
-	195, // 100: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
-	189, // 101: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.checked_at:type_name -> vttime.Time
-	1,   // 102: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
-	169, // 103: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
-	104, // [104:104] is the sub-list for method output_type
-	104, // [104:104] is the sub-list for method input_type
-	104, // [104:104] is the sub-list for extension type_name
-	104, // [104:104] is the sub-list for extension extendee
-	0,   // [0:104] is the sub-list for field type_name
+	162, // 77: tabletmanagerdata.GetThrottlerStatusResponse.aggregated_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
+	163, // 78: tabletmanagerdata.GetThrottlerStatusResponse.metric_thresholds:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
+	165, // 79: tabletmanagerdata.GetThrottlerStatusResponse.metrics_health:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
+	166, // 80: tabletmanagerdata.GetThrottlerStatusResponse.throttled_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
+	167, // 81: tabletmanagerdata.GetThrottlerStatusResponse.app_checked_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
+	169, // 82: tabletmanagerdata.GetThrottlerStatusResponse.recent_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
+	170, // 83: tabletmanagerdata.ChangeTagsRequest.tags:type_name -> tabletmanagerdata.ChangeTagsRequest.TagsEntry
+	171, // 84: tabletmanagerdata.ChangeTagsResponse.tags:type_name -> tabletmanagerdata.ChangeTagsResponse.TagsEntry
+	172, // 85: tabletmanagerdata.UpdateSequenceTablesRequest.sequences:type_name -> tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata
+	173, // 86: tabletmanagerdata.GetMaxValueForSequencesRequest.sequences:type_name -> tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata
+	174, // 87: tabletmanagerdata.GetMaxValueForSequencesResponse.max_values_by_sequence_table:type_name -> tabletmanagerdata.GetMaxValueForSequencesResponse.MaxValuesBySequenceTableEntry
+	190, // 88: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.bls:type_name -> binlogdata.BinlogSource
+	189, // 89: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_updated:type_name -> vttime.Time
+	189, // 90: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.transaction_timestamp:type_name -> vttime.Time
+	193, // 91: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.state:type_name -> binlogdata.VReplicationWorkflowState
+	189, // 92: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_heartbeat:type_name -> vttime.Time
+	189, // 93: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_throttled:type_name -> vttime.Time
+	1,   // 94: tabletmanagerdata.CheckThrottlerResponse.Metric.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
+	159, // 95: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry.value:type_name -> tabletmanagerdata.CheckThrottlerResponse.Metric
+	161, // 96: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
+	189, // 97: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.last_healthy_at:type_name -> vttime.Time
+	164, // 98: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
+	195, // 99: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
+	189, // 100: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.checked_at:type_name -> vttime.Time
+	1,   // 101: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
+	168, // 102: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
+	103, // [103:103] is the sub-list for method output_type
+	103, // [103:103] is the sub-list for method input_type
+	103, // [103:103] is the sub-list for extension type_name
+	103, // [103:103] is the sub-list for extension extendee
+	0,   // [0:103] is the sub-list for field type_name
 }
 
 func init() { file_tabletmanagerdata_proto_init() }

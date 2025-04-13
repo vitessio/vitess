@@ -37,6 +37,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -113,16 +114,13 @@ func (sm *sequenceMetadata) escapeValues() error {
 }
 
 func (ts *trafficSwitcher) getMaxSequenceValues(ctx context.Context, sequences map[string]*sequenceMetadata) (map[string]int64, error) {
-	var sequencesMetadata []*tabletmanagerdatapb.SequenceMetadata
+	var sequencesMetadata []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata
 	for _, seq := range sequences {
 		if err := seq.escapeValues(); err != nil {
 			return nil, err
 		}
-		sequencesMetadata = append(sequencesMetadata, &tabletmanagerdatapb.SequenceMetadata{
+		sequencesMetadata = append(sequencesMetadata, &tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata{
 			BackingTableName:        seq.backingTableName,
-			BackingTableDbName:      seq.backingTableDBName,
-			UsingTableName:          seq.usingTableName,
-			UsingTableDbName:        seq.usingTableDBName,
 			UsingColEscaped:         seq.usingCol,
 			UsingTableNameEscaped:   seq.usingTable,
 			UsingTableDbNameEscaped: seq.usingTableDBName,
@@ -225,43 +223,34 @@ func (ts *trafficSwitcher) getCurrentSequenceValue(ctx context.Context, seq *seq
 }
 
 func (ts *trafficSwitcher) updateSequenceValues(ctx context.Context, sequences []*sequenceMetadata, maxValues map[string]int64) error {
-	sequencesByShard := map[string][]*tabletmanagerdatapb.SequenceMetadata{}
+	sequencesByShard := map[*topodatapb.TabletAlias][]*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{}
 	for _, seq := range sequences {
-		if err := seq.escapeValues(); err != nil {
-			return err
+		maxValue := maxValues[seq.backingTableName]
+		if maxValue == 0 {
+			continue
 		}
 		sequenceShard, ierr := ts.TopoServer().GetOnlyShard(ctx, seq.backingTableKeyspace)
 		if ierr != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
 				seq.backingTableKeyspace, ierr)
 		}
-		tabletAliasStr := topoproto.TabletAliasString(sequenceShard.PrimaryAlias)
-		sequencesByShard[tabletAliasStr] = append(sequencesByShard[tabletAliasStr], &tabletmanagerdatapb.SequenceMetadata{
-			BackingTableName:        seq.backingTableName,
-			BackingTableDbName:      seq.backingTableDBName,
-			UsingTableName:          seq.usingTableName,
-			UsingTableDbName:        seq.usingTableDBName,
-			UsingColEscaped:         seq.usingCol,
-			UsingTableNameEscaped:   seq.usingTable,
-			UsingTableDbNameEscaped: seq.usingTableDBName,
+		sequencesByShard[sequenceShard.PrimaryAlias] = append(sequencesByShard[sequenceShard.PrimaryAlias], &tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
+			BackingTableName:   seq.backingTableName,
+			BackingTableDbName: seq.backingTableDBName,
+			MaxValue:           maxValue,
 		})
 	}
-	for tabletAliasStr, sequencesMetadata := range sequencesByShard {
-		tabletAlias, err := topoproto.ParseTabletAlias(tabletAliasStr)
-		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the parse tablet alias %s: %v", tabletAlias, err)
-		}
+	for tabletAlias, sequencesMetadata := range sequencesByShard {
 		sequenceTablet, ierr := ts.TopoServer().GetTablet(ctx, tabletAlias)
 		if ierr != nil || sequenceTablet == nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
 				sequenceTablet.Keyspace, ierr)
 		}
-		_, err = ts.TabletManagerClient().UpdateSequenceTables(ctx, sequenceTablet.Tablet, &tabletmanagerdatapb.UpdateSequenceTablesRequest{
-			Sequences:                sequencesMetadata,
-			MaxValuesBySequenceTable: maxValues,
+		_, err := ts.TabletManagerClient().UpdateSequenceTables(ctx, sequenceTablet.Tablet, &tabletmanagerdatapb.UpdateSequenceTablesRequest{
+			Sequences: sequencesMetadata,
 		})
 		if err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence tables on tablet %s: %v", tabletAliasStr, err)
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence tables on tablet %s: %v", topoproto.TabletAliasString(tabletAlias), err)
 		}
 	}
 	return nil

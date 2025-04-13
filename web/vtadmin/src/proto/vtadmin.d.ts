@@ -36330,153 +36330,11 @@ export namespace tabletmanagerdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a SequenceMetadata. */
-    interface ISequenceMetadata {
-
-        /** SequenceMetadata backing_table_name */
-        backing_table_name?: (string|null);
-
-        /** SequenceMetadata backing_table_db_name */
-        backing_table_db_name?: (string|null);
-
-        /** SequenceMetadata using_table_name */
-        using_table_name?: (string|null);
-
-        /** SequenceMetadata using_table_db_name */
-        using_table_db_name?: (string|null);
-
-        /** SequenceMetadata using_col_escaped */
-        using_col_escaped?: (string|null);
-
-        /** SequenceMetadata using_table_name_escaped */
-        using_table_name_escaped?: (string|null);
-
-        /** SequenceMetadata using_table_db_name_escaped */
-        using_table_db_name_escaped?: (string|null);
-
-        /** SequenceMetadata backing_table_name_escaped */
-        backing_table_name_escaped?: (string|null);
-    }
-
-    /** Represents a SequenceMetadata. */
-    class SequenceMetadata implements ISequenceMetadata {
-
-        /**
-         * Constructs a new SequenceMetadata.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: tabletmanagerdata.ISequenceMetadata);
-
-        /** SequenceMetadata backing_table_name. */
-        public backing_table_name: string;
-
-        /** SequenceMetadata backing_table_db_name. */
-        public backing_table_db_name: string;
-
-        /** SequenceMetadata using_table_name. */
-        public using_table_name: string;
-
-        /** SequenceMetadata using_table_db_name. */
-        public using_table_db_name: string;
-
-        /** SequenceMetadata using_col_escaped. */
-        public using_col_escaped: string;
-
-        /** SequenceMetadata using_table_name_escaped. */
-        public using_table_name_escaped: string;
-
-        /** SequenceMetadata using_table_db_name_escaped. */
-        public using_table_db_name_escaped: string;
-
-        /** SequenceMetadata backing_table_name_escaped. */
-        public backing_table_name_escaped: string;
-
-        /**
-         * Creates a new SequenceMetadata instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns SequenceMetadata instance
-         */
-        public static create(properties?: tabletmanagerdata.ISequenceMetadata): tabletmanagerdata.SequenceMetadata;
-
-        /**
-         * Encodes the specified SequenceMetadata message. Does not implicitly {@link tabletmanagerdata.SequenceMetadata.verify|verify} messages.
-         * @param message SequenceMetadata message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: tabletmanagerdata.ISequenceMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified SequenceMetadata message, length delimited. Does not implicitly {@link tabletmanagerdata.SequenceMetadata.verify|verify} messages.
-         * @param message SequenceMetadata message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: tabletmanagerdata.ISequenceMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a SequenceMetadata message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns SequenceMetadata
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.SequenceMetadata;
-
-        /**
-         * Decodes a SequenceMetadata message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns SequenceMetadata
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.SequenceMetadata;
-
-        /**
-         * Verifies a SequenceMetadata message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a SequenceMetadata message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns SequenceMetadata
-         */
-        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.SequenceMetadata;
-
-        /**
-         * Creates a plain object from a SequenceMetadata message. Also converts values to other types if specified.
-         * @param message SequenceMetadata
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: tabletmanagerdata.SequenceMetadata, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this SequenceMetadata to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for SequenceMetadata
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
     /** Properties of an UpdateSequenceTablesRequest. */
     interface IUpdateSequenceTablesRequest {
 
         /** UpdateSequenceTablesRequest sequences */
-        sequences?: (tabletmanagerdata.ISequenceMetadata[]|null);
-
-        /** UpdateSequenceTablesRequest max_values_by_sequence_table */
-        max_values_by_sequence_table?: ({ [k: string]: (number|Long) }|null);
+        sequences?: (tabletmanagerdata.UpdateSequenceTablesRequest.ISequenceMetadata[]|null);
     }
 
     /** Represents an UpdateSequenceTablesRequest. */
@@ -36489,10 +36347,7 @@ export namespace tabletmanagerdata {
         constructor(properties?: tabletmanagerdata.IUpdateSequenceTablesRequest);
 
         /** UpdateSequenceTablesRequest sequences. */
-        public sequences: tabletmanagerdata.ISequenceMetadata[];
-
-        /** UpdateSequenceTablesRequest max_values_by_sequence_table. */
-        public max_values_by_sequence_table: { [k: string]: (number|Long) };
+        public sequences: tabletmanagerdata.UpdateSequenceTablesRequest.ISequenceMetadata[];
 
         /**
          * Creates a new UpdateSequenceTablesRequest instance using the specified properties.
@@ -36570,6 +36425,118 @@ export namespace tabletmanagerdata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace UpdateSequenceTablesRequest {
+
+        /** Properties of a SequenceMetadata. */
+        interface ISequenceMetadata {
+
+            /** SequenceMetadata backing_table_name */
+            backing_table_name?: (string|null);
+
+            /** SequenceMetadata backing_table_db_name */
+            backing_table_db_name?: (string|null);
+
+            /** SequenceMetadata max_value */
+            max_value?: (number|Long|null);
+        }
+
+        /** Represents a SequenceMetadata. */
+        class SequenceMetadata implements ISequenceMetadata {
+
+            /**
+             * Constructs a new SequenceMetadata.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: tabletmanagerdata.UpdateSequenceTablesRequest.ISequenceMetadata);
+
+            /** SequenceMetadata backing_table_name. */
+            public backing_table_name: string;
+
+            /** SequenceMetadata backing_table_db_name. */
+            public backing_table_db_name: string;
+
+            /** SequenceMetadata max_value. */
+            public max_value: (number|Long);
+
+            /**
+             * Creates a new SequenceMetadata instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns SequenceMetadata instance
+             */
+            public static create(properties?: tabletmanagerdata.UpdateSequenceTablesRequest.ISequenceMetadata): tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata;
+
+            /**
+             * Encodes the specified SequenceMetadata message. Does not implicitly {@link tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata.verify|verify} messages.
+             * @param message SequenceMetadata message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: tabletmanagerdata.UpdateSequenceTablesRequest.ISequenceMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified SequenceMetadata message, length delimited. Does not implicitly {@link tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata.verify|verify} messages.
+             * @param message SequenceMetadata message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: tabletmanagerdata.UpdateSequenceTablesRequest.ISequenceMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a SequenceMetadata message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns SequenceMetadata
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata;
+
+            /**
+             * Decodes a SequenceMetadata message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns SequenceMetadata
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata;
+
+            /**
+             * Verifies a SequenceMetadata message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a SequenceMetadata message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns SequenceMetadata
+             */
+            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata;
+
+            /**
+             * Creates a plain object from a SequenceMetadata message. Also converts values to other types if specified.
+             * @param message SequenceMetadata
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this SequenceMetadata to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for SequenceMetadata
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Properties of an UpdateSequenceTablesResponse. */
@@ -36667,7 +36634,7 @@ export namespace tabletmanagerdata {
     interface IGetMaxValueForSequencesRequest {
 
         /** GetMaxValueForSequencesRequest sequences */
-        sequences?: (tabletmanagerdata.ISequenceMetadata[]|null);
+        sequences?: (tabletmanagerdata.GetMaxValueForSequencesRequest.ISequenceMetadata[]|null);
     }
 
     /** Represents a GetMaxValueForSequencesRequest. */
@@ -36680,7 +36647,7 @@ export namespace tabletmanagerdata {
         constructor(properties?: tabletmanagerdata.IGetMaxValueForSequencesRequest);
 
         /** GetMaxValueForSequencesRequest sequences. */
-        public sequences: tabletmanagerdata.ISequenceMetadata[];
+        public sequences: tabletmanagerdata.GetMaxValueForSequencesRequest.ISequenceMetadata[];
 
         /**
          * Creates a new GetMaxValueForSequencesRequest instance using the specified properties.
@@ -36758,6 +36725,124 @@ export namespace tabletmanagerdata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace GetMaxValueForSequencesRequest {
+
+        /** Properties of a SequenceMetadata. */
+        interface ISequenceMetadata {
+
+            /** SequenceMetadata backing_table_name */
+            backing_table_name?: (string|null);
+
+            /** SequenceMetadata using_col_escaped */
+            using_col_escaped?: (string|null);
+
+            /** SequenceMetadata using_table_name_escaped */
+            using_table_name_escaped?: (string|null);
+
+            /** SequenceMetadata using_table_db_name_escaped */
+            using_table_db_name_escaped?: (string|null);
+        }
+
+        /** Represents a SequenceMetadata. */
+        class SequenceMetadata implements ISequenceMetadata {
+
+            /**
+             * Constructs a new SequenceMetadata.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: tabletmanagerdata.GetMaxValueForSequencesRequest.ISequenceMetadata);
+
+            /** SequenceMetadata backing_table_name. */
+            public backing_table_name: string;
+
+            /** SequenceMetadata using_col_escaped. */
+            public using_col_escaped: string;
+
+            /** SequenceMetadata using_table_name_escaped. */
+            public using_table_name_escaped: string;
+
+            /** SequenceMetadata using_table_db_name_escaped. */
+            public using_table_db_name_escaped: string;
+
+            /**
+             * Creates a new SequenceMetadata instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns SequenceMetadata instance
+             */
+            public static create(properties?: tabletmanagerdata.GetMaxValueForSequencesRequest.ISequenceMetadata): tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata;
+
+            /**
+             * Encodes the specified SequenceMetadata message. Does not implicitly {@link tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata.verify|verify} messages.
+             * @param message SequenceMetadata message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: tabletmanagerdata.GetMaxValueForSequencesRequest.ISequenceMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified SequenceMetadata message, length delimited. Does not implicitly {@link tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata.verify|verify} messages.
+             * @param message SequenceMetadata message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: tabletmanagerdata.GetMaxValueForSequencesRequest.ISequenceMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a SequenceMetadata message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns SequenceMetadata
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata;
+
+            /**
+             * Decodes a SequenceMetadata message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns SequenceMetadata
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata;
+
+            /**
+             * Verifies a SequenceMetadata message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a SequenceMetadata message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns SequenceMetadata
+             */
+            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata;
+
+            /**
+             * Creates a plain object from a SequenceMetadata message. Also converts values to other types if specified.
+             * @param message SequenceMetadata
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this SequenceMetadata to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for SequenceMetadata
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
     }
 
     /** Properties of a GetMaxValueForSequencesResponse. */

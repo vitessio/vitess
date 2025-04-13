@@ -3024,19 +3024,14 @@ func (m *ChangeTagsResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *SequenceMetadata) CloneVT() *SequenceMetadata {
+func (m *UpdateSequenceTablesRequest_SequenceMetadata) CloneVT() *UpdateSequenceTablesRequest_SequenceMetadata {
 	if m == nil {
-		return (*SequenceMetadata)(nil)
+		return (*UpdateSequenceTablesRequest_SequenceMetadata)(nil)
 	}
-	r := new(SequenceMetadata)
+	r := new(UpdateSequenceTablesRequest_SequenceMetadata)
 	r.BackingTableName = m.BackingTableName
 	r.BackingTableDbName = m.BackingTableDbName
-	r.UsingTableName = m.UsingTableName
-	r.UsingTableDbName = m.UsingTableDbName
-	r.UsingColEscaped = m.UsingColEscaped
-	r.UsingTableNameEscaped = m.UsingTableNameEscaped
-	r.UsingTableDbNameEscaped = m.UsingTableDbNameEscaped
-	r.BackingTableNameEscaped = m.BackingTableNameEscaped
+	r.MaxValue = m.MaxValue
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -3044,7 +3039,7 @@ func (m *SequenceMetadata) CloneVT() *SequenceMetadata {
 	return r
 }
 
-func (m *SequenceMetadata) CloneMessageVT() proto.Message {
+func (m *UpdateSequenceTablesRequest_SequenceMetadata) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
@@ -3054,18 +3049,11 @@ func (m *UpdateSequenceTablesRequest) CloneVT() *UpdateSequenceTablesRequest {
 	}
 	r := new(UpdateSequenceTablesRequest)
 	if rhs := m.Sequences; rhs != nil {
-		tmpContainer := make([]*SequenceMetadata, len(rhs))
+		tmpContainer := make([]*UpdateSequenceTablesRequest_SequenceMetadata, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
 		r.Sequences = tmpContainer
-	}
-	if rhs := m.MaxValuesBySequenceTable; rhs != nil {
-		tmpContainer := make(map[string]int64, len(rhs))
-		for k, v := range rhs {
-			tmpContainer[k] = v
-		}
-		r.MaxValuesBySequenceTable = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -3094,13 +3082,33 @@ func (m *UpdateSequenceTablesResponse) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
+func (m *GetMaxValueForSequencesRequest_SequenceMetadata) CloneVT() *GetMaxValueForSequencesRequest_SequenceMetadata {
+	if m == nil {
+		return (*GetMaxValueForSequencesRequest_SequenceMetadata)(nil)
+	}
+	r := new(GetMaxValueForSequencesRequest_SequenceMetadata)
+	r.BackingTableName = m.BackingTableName
+	r.UsingColEscaped = m.UsingColEscaped
+	r.UsingTableNameEscaped = m.UsingTableNameEscaped
+	r.UsingTableDbNameEscaped = m.UsingTableDbNameEscaped
+	if len(m.unknownFields) > 0 {
+		r.unknownFields = make([]byte, len(m.unknownFields))
+		copy(r.unknownFields, m.unknownFields)
+	}
+	return r
+}
+
+func (m *GetMaxValueForSequencesRequest_SequenceMetadata) CloneMessageVT() proto.Message {
+	return m.CloneVT()
+}
+
 func (m *GetMaxValueForSequencesRequest) CloneVT() *GetMaxValueForSequencesRequest {
 	if m == nil {
 		return (*GetMaxValueForSequencesRequest)(nil)
 	}
 	r := new(GetMaxValueForSequencesRequest)
 	if rhs := m.Sequences; rhs != nil {
-		tmpContainer := make([]*SequenceMetadata, len(rhs))
+		tmpContainer := make([]*GetMaxValueForSequencesRequest_SequenceMetadata, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
@@ -10720,7 +10728,7 @@ func (m *ChangeTagsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *SequenceMetadata) MarshalVT() (dAtA []byte, err error) {
+func (m *UpdateSequenceTablesRequest_SequenceMetadata) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -10733,12 +10741,12 @@ func (m *SequenceMetadata) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *SequenceMetadata) MarshalToVT(dAtA []byte) (int, error) {
+func (m *UpdateSequenceTablesRequest_SequenceMetadata) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *SequenceMetadata) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *UpdateSequenceTablesRequest_SequenceMetadata) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -10750,47 +10758,10 @@ func (m *SequenceMetadata) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.BackingTableNameEscaped) > 0 {
-		i -= len(m.BackingTableNameEscaped)
-		copy(dAtA[i:], m.BackingTableNameEscaped)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.BackingTableNameEscaped)))
+	if m.MaxValue != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.MaxValue))
 		i--
-		dAtA[i] = 0x42
-	}
-	if len(m.UsingTableDbNameEscaped) > 0 {
-		i -= len(m.UsingTableDbNameEscaped)
-		copy(dAtA[i:], m.UsingTableDbNameEscaped)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.UsingTableDbNameEscaped)))
-		i--
-		dAtA[i] = 0x3a
-	}
-	if len(m.UsingTableNameEscaped) > 0 {
-		i -= len(m.UsingTableNameEscaped)
-		copy(dAtA[i:], m.UsingTableNameEscaped)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.UsingTableNameEscaped)))
-		i--
-		dAtA[i] = 0x32
-	}
-	if len(m.UsingColEscaped) > 0 {
-		i -= len(m.UsingColEscaped)
-		copy(dAtA[i:], m.UsingColEscaped)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.UsingColEscaped)))
-		i--
-		dAtA[i] = 0x2a
-	}
-	if len(m.UsingTableDbName) > 0 {
-		i -= len(m.UsingTableDbName)
-		copy(dAtA[i:], m.UsingTableDbName)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.UsingTableDbName)))
-		i--
-		dAtA[i] = 0x22
-	}
-	if len(m.UsingTableName) > 0 {
-		i -= len(m.UsingTableName)
-		copy(dAtA[i:], m.UsingTableName)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.UsingTableName)))
-		i--
-		dAtA[i] = 0x1a
+		dAtA[i] = 0x18
 	}
 	if len(m.BackingTableDbName) > 0 {
 		i -= len(m.BackingTableDbName)
@@ -10839,23 +10810,6 @@ func (m *UpdateSequenceTablesRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.MaxValuesBySequenceTable) > 0 {
-		for k := range m.MaxValuesBySequenceTable {
-			v := m.MaxValuesBySequenceTable[k]
-			baseI := i
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(v))
-			i--
-			dAtA[i] = 0x10
-			i -= len(k)
-			copy(dAtA[i:], k)
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(k)))
-			i--
-			dAtA[i] = 0xa
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(baseI-i))
-			i--
-			dAtA[i] = 0x12
-		}
-	}
 	if len(m.Sequences) > 0 {
 		for iNdEx := len(m.Sequences) - 1; iNdEx >= 0; iNdEx-- {
 			size, err := m.Sequences[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
@@ -10900,6 +10854,67 @@ func (m *UpdateSequenceTablesResponse) MarshalToSizedBufferVT(dAtA []byte) (int,
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetMaxValueForSequencesRequest_SequenceMetadata) MarshalVT() (dAtA []byte, err error) {
+	if m == nil {
+		return nil, nil
+	}
+	size := m.SizeVT()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBufferVT(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetMaxValueForSequencesRequest_SequenceMetadata) MarshalToVT(dAtA []byte) (int, error) {
+	size := m.SizeVT()
+	return m.MarshalToSizedBufferVT(dAtA[:size])
+}
+
+func (m *GetMaxValueForSequencesRequest_SequenceMetadata) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.unknownFields != nil {
+		i -= len(m.unknownFields)
+		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.UsingTableDbNameEscaped) > 0 {
+		i -= len(m.UsingTableDbNameEscaped)
+		copy(dAtA[i:], m.UsingTableDbNameEscaped)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.UsingTableDbNameEscaped)))
+		i--
+		dAtA[i] = 0x22
+	}
+	if len(m.UsingTableNameEscaped) > 0 {
+		i -= len(m.UsingTableNameEscaped)
+		copy(dAtA[i:], m.UsingTableNameEscaped)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.UsingTableNameEscaped)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.UsingColEscaped) > 0 {
+		i -= len(m.UsingColEscaped)
+		copy(dAtA[i:], m.UsingColEscaped)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.UsingColEscaped)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.BackingTableName) > 0 {
+		i -= len(m.BackingTableName)
+		copy(dAtA[i:], m.BackingTableName)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.BackingTableName)))
+		i--
+		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
 }
@@ -13741,7 +13756,7 @@ func (m *ChangeTagsResponse) SizeVT() (n int) {
 	return n
 }
 
-func (m *SequenceMetadata) SizeVT() (n int) {
+func (m *UpdateSequenceTablesRequest_SequenceMetadata) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -13755,29 +13770,8 @@ func (m *SequenceMetadata) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	l = len(m.UsingTableName)
-	if l > 0 {
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	l = len(m.UsingTableDbName)
-	if l > 0 {
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	l = len(m.UsingColEscaped)
-	if l > 0 {
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	l = len(m.UsingTableNameEscaped)
-	if l > 0 {
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	l = len(m.UsingTableDbNameEscaped)
-	if l > 0 {
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	l = len(m.BackingTableNameEscaped)
-	if l > 0 {
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	if m.MaxValue != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.MaxValue))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -13795,14 +13789,6 @@ func (m *UpdateSequenceTablesRequest) SizeVT() (n int) {
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
-	if len(m.MaxValuesBySequenceTable) > 0 {
-		for k, v := range m.MaxValuesBySequenceTable {
-			_ = k
-			_ = v
-			mapEntrySize := 1 + len(k) + protohelpers.SizeOfVarint(uint64(len(k))) + 1 + protohelpers.SizeOfVarint(uint64(v))
-			n += mapEntrySize + 1 + protohelpers.SizeOfVarint(uint64(mapEntrySize))
-		}
-	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -13813,6 +13799,32 @@ func (m *UpdateSequenceTablesResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
+	n += len(m.unknownFields)
+	return n
+}
+
+func (m *GetMaxValueForSequencesRequest_SequenceMetadata) SizeVT() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.BackingTableName)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.UsingColEscaped)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.UsingTableNameEscaped)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.UsingTableDbNameEscaped)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -31568,7 +31580,7 @@ func (m *ChangeTagsResponse) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *SequenceMetadata) UnmarshalVT(dAtA []byte) error {
+func (m *UpdateSequenceTablesRequest_SequenceMetadata) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -31591,10 +31603,10 @@ func (m *SequenceMetadata) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: SequenceMetadata: wiretype end group for non-group")
+			return fmt.Errorf("proto: UpdateSequenceTablesRequest_SequenceMetadata: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: SequenceMetadata: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: UpdateSequenceTablesRequest_SequenceMetadata: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -31662,10 +31674,10 @@ func (m *SequenceMetadata) UnmarshalVT(dAtA []byte) error {
 			m.BackingTableDbName = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field UsingTableName", wireType)
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxValue", wireType)
 			}
-			var stringLen uint64
+			m.MaxValue = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -31675,184 +31687,11 @@ func (m *SequenceMetadata) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				m.MaxValue |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.UsingTableName = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 4:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field UsingTableDbName", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.UsingTableDbName = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 5:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field UsingColEscaped", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.UsingColEscaped = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 6:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field UsingTableNameEscaped", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.UsingTableNameEscaped = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 7:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field UsingTableDbNameEscaped", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.UsingTableDbNameEscaped = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 8:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field BackingTableNameEscaped", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.BackingTableNameEscaped = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -31933,123 +31772,10 @@ func (m *UpdateSequenceTablesRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Sequences = append(m.Sequences, &SequenceMetadata{})
+			m.Sequences = append(m.Sequences, &UpdateSequenceTablesRequest_SequenceMetadata{})
 			if err := m.Sequences[len(m.Sequences)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field MaxValuesBySequenceTable", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.MaxValuesBySequenceTable == nil {
-				m.MaxValuesBySequenceTable = make(map[string]int64)
-			}
-			var mapkey string
-			var mapvalue int64
-			for iNdEx < postIndex {
-				entryPreIndex := iNdEx
-				var wire uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return protohelpers.ErrIntOverflow
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					wire |= uint64(b&0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				fieldNum := int32(wire >> 3)
-				if fieldNum == 1 {
-					var stringLenmapkey uint64
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return protohelpers.ErrIntOverflow
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						stringLenmapkey |= uint64(b&0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					intStringLenmapkey := int(stringLenmapkey)
-					if intStringLenmapkey < 0 {
-						return protohelpers.ErrInvalidLength
-					}
-					postStringIndexmapkey := iNdEx + intStringLenmapkey
-					if postStringIndexmapkey < 0 {
-						return protohelpers.ErrInvalidLength
-					}
-					if postStringIndexmapkey > l {
-						return io.ErrUnexpectedEOF
-					}
-					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
-					iNdEx = postStringIndexmapkey
-				} else if fieldNum == 2 {
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return protohelpers.ErrIntOverflow
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						mapvalue |= int64(b&0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-				} else {
-					iNdEx = entryPreIndex
-					skippy, err := protohelpers.Skip(dAtA[iNdEx:])
-					if err != nil {
-						return err
-					}
-					if (skippy < 0) || (iNdEx+skippy) < 0 {
-						return protohelpers.ErrInvalidLength
-					}
-					if (iNdEx + skippy) > postIndex {
-						return io.ErrUnexpectedEOF
-					}
-					iNdEx += skippy
-				}
-			}
-			m.MaxValuesBySequenceTable[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -32102,6 +31828,185 @@ func (m *UpdateSequenceTablesResponse) UnmarshalVT(dAtA []byte) error {
 			return fmt.Errorf("proto: UpdateSequenceTablesResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.unknownFields = append(m.unknownFields, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetMaxValueForSequencesRequest_SequenceMetadata) UnmarshalVT(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return protohelpers.ErrIntOverflow
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetMaxValueForSequencesRequest_SequenceMetadata: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetMaxValueForSequencesRequest_SequenceMetadata: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BackingTableName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.BackingTableName = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UsingColEscaped", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.UsingColEscaped = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UsingTableNameEscaped", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.UsingTableNameEscaped = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UsingTableDbNameEscaped", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.UsingTableDbNameEscaped = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -32182,7 +32087,7 @@ func (m *GetMaxValueForSequencesRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Sequences = append(m.Sequences, &SequenceMetadata{})
+			m.Sequences = append(m.Sequences, &GetMaxValueForSequencesRequest_SequenceMetadata{})
 			if err := m.Sequences[len(m.Sequences)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}

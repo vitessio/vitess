@@ -734,11 +734,11 @@ func (tm *TabletManager) GetMaxValueForSequences(ctx context.Context, req *table
 	return maxValues, nil
 }
 
-func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, seq *tabletmanagerdatapb.SequenceMetadata) (int64, error) {
+func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, sm *tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata) (int64, error) {
 	query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
-		seq.UsingColEscaped,
-		seq.UsingTableDbNameEscaped,
-		seq.UsingTableNameEscaped,
+		sm.UsingColEscaped,
+		sm.UsingTableDbNameEscaped,
+		sm.UsingTableNameEscaped,
 	)
 	qr, err := tm.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 		Query:   []byte(query.Query),
@@ -746,14 +746,14 @@ func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, seq *tabletman
 	})
 	if err != nil || len(qr.Rows) != 1 {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-			"failed to get the max used sequence value for target table %s in order to initialize the backing sequence table: %v", seq.UsingTableName, err)
+			"failed to get the max used sequence value for target table %s in order to initialize the backing sequence table: %v", sm.UsingTableNameEscaped, err)
 	}
 	rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
 	maxID := int64(0)
 	if !rawVal.IsNull() { // If it's NULL then there are no rows and 0 remains the max
 		maxID, err = rawVal.ToInt64()
 		if err != nil {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s in order to initialize the backing sequence table: %v", seq.UsingTableName, err)
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s in order to initialize the backing sequence table: %v", sm.UsingTableNameEscaped, err)
 		}
 	}
 	return maxID, nil
@@ -761,21 +761,22 @@ func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, seq *tabletman
 
 func (tm *TabletManager) UpdateSequenceTables(ctx context.Context, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) error {
 	for _, sm := range req.Sequences {
-		maxValue := req.MaxValuesBySequenceTable[sm.BackingTableName]
-		if maxValue == 0 {
-			continue
-		}
-		if err := tm.updateSequenceValue(ctx, sm, maxValue); err != nil {
+		if err := tm.updateSequenceValue(ctx, sm); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletmanagerdatapb.SequenceMetadata, currentMaxValue int64) error {
-	nextVal := currentMaxValue + 1
+func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata) error {
+	nextVal := seq.MaxValue + 1
 	if tm.Tablet().DbNameOverride != "" {
 		seq.BackingTableDbName = tm.Tablet().DbNameOverride
+	}
+	backingTableNameEscaped, err := sqlescape.EnsureEscaped(seq.BackingTableName)
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name %s specified for sequence backing table: %v",
+			seq.BackingTableName, err)
 	}
 	log.Infof("Updating sequence %s.%s to %d", seq.BackingTableDbName, seq.BackingTableName, nextVal)
 	initQuery := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
@@ -786,7 +787,6 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 		nextVal,
 	)
 	const maxTries = 2
-	var err error
 
 	for i := 0; i < maxTries; i++ {
 		// Attempt to initialize the sequence.
@@ -808,27 +808,22 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 			)
 		}
 
-		if err := tm.createSequenceTable(ctx, seq.BackingTableNameEscaped); err != nil {
+		if err := tm.createSequenceTable(ctx, backingTableNameEscaped); err != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 				"failed to create the backing sequence table %s in the global-keyspace %s: %v",
-				seq.BackingTableNameEscaped, tm.Tablet().Keyspace, err)
+				backingTableNameEscaped, tm.Tablet().Keyspace, err)
 		}
 		// Table has been created, so we fall through and try again on the next loop iteration.
 	}
 
 	return vterrors.Errorf(
 		vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s after retries. Last error: %v",
-		seq.BackingTableDbName, seq.BackingTableNameEscaped, err)
+		seq.BackingTableDbName, backingTableNameEscaped, err)
 }
 
-func (tm *TabletManager) createSequenceTable(ctx context.Context, tableName string) error {
-	escapedTableName, err := sqlescape.EnsureEscaped(tableName)
-	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %s: %v",
-			tableName, err)
-	}
+func (tm *TabletManager) createSequenceTable(ctx context.Context, escapedTableName string) error {
 	stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, escapedTableName)
-	_, err = tm.ApplySchema(ctx, &tmutils.SchemaChange{
+	_, err := tm.ApplySchema(ctx, &tmutils.SchemaChange{
 		SQL:                     stmt.Query,
 		Force:                   false,
 		AllowReplication:        true,

@@ -839,6 +839,16 @@ func (tmc *testTMClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Ta
 	return nil
 }
 
+func (tmc *testTMClient) UpdateSequenceTables(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+	return &tabletmanagerdatapb.UpdateSequenceTablesResponse{}, nil
+}
+
+func (tmc *testTMClient) GetMaxValueForSequences(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (*tabletmanagerdatapb.GetMaxValueForSequencesResponse, error) {
+	return &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
+		MaxValuesBySequenceTable: map[string]int64{},
+	}, nil
+}
+
 //
 // Utility / helper functions.
 //
