@@ -2196,6 +2196,9 @@ type DDL struct {
 	// Set for constraint alter statements
 	ConstraintAction string
 
+	// ConstraintIfExists is set to true if the constraint action should not fail if the constraint doesn't exist.
+	ConstraintIfExists bool
+
 	// Set for column add / drop / rename statements
 	Column ColIdent
 
