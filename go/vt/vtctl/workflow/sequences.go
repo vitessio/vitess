@@ -42,10 +42,8 @@ import (
 )
 
 const (
-	sqlInitSequenceTable     = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
 	sqlCreateSequenceTable   = "create table if not exists %a (id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence'"
 	sqlGetCurrentSequenceVal = "select next_id from %a.%a where id = 0"
-	sqlGetMaxSequenceVal     = "select max(%a) as maxval from %a.%a"
 )
 
 // sequenceMetadata contains all of the relevant metadata for a sequence that
