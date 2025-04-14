@@ -711,7 +711,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *t
 	}, nil
 }
 
-func (tm *TabletManager) GetMaxValueForSequences(ctx context.Context, req *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (map[string]int64, error) {
+func (tm *TabletManager) GetMaxValueForSequences(ctx context.Context, req *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (*tabletmanagerdatapb.GetMaxValueForSequencesResponse, error) {
 	maxValues := make(map[string]int64, len(req.Sequences))
 	mu := sync.Mutex{}
 	initGroup, gctx := errgroup.WithContext(ctx)
@@ -731,7 +731,9 @@ func (tm *TabletManager) GetMaxValueForSequences(ctx context.Context, req *table
 	if errs != nil {
 		return nil, errs
 	}
-	return maxValues, nil
+	return &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
+		MaxValuesBySequenceTable: maxValues,
+	}, nil
 }
 
 func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, sm *tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata) (int64, error) {
@@ -759,13 +761,13 @@ func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, sm *tabletmana
 	return maxID, nil
 }
 
-func (tm *TabletManager) UpdateSequenceTables(ctx context.Context, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) error {
+func (tm *TabletManager) UpdateSequenceTables(ctx context.Context, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
 	for _, sm := range req.Sequences {
 		if err := tm.updateSequenceValue(ctx, sm); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return &tabletmanagerdatapb.UpdateSequenceTablesResponse{}, nil
 }
 
 func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata) error {
