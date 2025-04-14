@@ -2696,7 +2696,7 @@ var (
 		}, {
 			input: "select `name`, nth_value(a) over (partition by b) from t",
 		}, {
-			input: "select `name`, ntile() over (partition by b) from t",
+			input: "select `name`, ntile(123) over (partition by b) from t",
 		}, {
 			input: "select `name`, percent_rank() over (partition by b) from t",
 		}, {
@@ -2720,7 +2720,7 @@ var (
 		}, {
 			input: "select `name`, nth_value(a) over (partition by b order by c asc) from t",
 		}, {
-			input: "select `name`, ntile() over (partition by b order by c asc) from t",
+			input: "select `name`, ntile(123) over (partition by b order by c asc) from t",
 		}, {
 			input: "select `name`, percent_rank() over (partition by b order by c asc) from t",
 		}, {
@@ -6269,7 +6269,7 @@ func TestFunctionCalls(t *testing.T) {
 		"select NAME_CONST() from dual",
 		"select NOW() from dual",
 		"select NTH_VALUE(col) over mywindow from dual",
-		"select NTILE() over mywindow from dual",
+		"select NTILE(123) over mywindow from dual",
 		"select NULLIF() from dual",
 		"select OCT() from dual",
 		"select OCTET_LENGTH() from dual",
@@ -8014,8 +8014,8 @@ var (
 		input:  "select name, dense_rank(a) over (partition by b) from t",
 		output: "syntax error at position 26 near 'a'",
 	}, {
-		input:  "select name, ntile(a) over (partition by b) from t",
-		output: "syntax error at position 21 near 'a'",
+		input:  "select name, ntile() over (partition by b) from t",
+		output: "syntax error at position 21 near 'ntile'",
 	}, {
 		input:  "select name, percent_rank(a) over (partition by b) from t",
 		output: "syntax error at position 28 near 'a'",
