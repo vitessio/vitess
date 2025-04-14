@@ -89,24 +89,6 @@ func (jv *BlockJoin) Inputs() ([]Primitive, []map[string]any) {
 	return []Primitive{jv.Left, jv.Right}, nil
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (jv *BlockJoin) RouteType() string {
-	return "BlockJoin"
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (jv *BlockJoin) GetKeyspaceName() string {
-	if jv.Left.GetKeyspaceName() == jv.Right.GetKeyspaceName() {
-		return jv.Left.GetKeyspaceName()
-	}
-	return jv.Left.GetKeyspaceName() + "_" + jv.Right.GetKeyspaceName()
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (jv *BlockJoin) GetTableName() string {
-	return jv.Left.GetTableName() + "_" + jv.Right.GetTableName()
-}
-
 // NeedsTransaction implements the Primitive interface
 func (jv *BlockJoin) NeedsTransaction() bool {
 	return jv.Right.NeedsTransaction() || jv.Left.NeedsTransaction()

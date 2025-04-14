@@ -19,6 +19,7 @@ package misc
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -886,6 +887,12 @@ func TestAlterTableWithView(t *testing.T) {
 	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1)]]`)
 }
 
+//go:embed join_output1.json
+var expJoinOutput1 string
+
+//go:embed join_output2.json
+var expJoinOutput2 string
+
 // TestStraightJoin tests that Vitess respects the ordering of join in a STRAIGHT JOIN query.
 func TestStraightJoin(t *testing.T) {
 	mcmp, closer := start(t)
@@ -900,7 +907,8 @@ func TestStraightJoin(t *testing.T) {
 	// Verify that in a normal join query, vitess joins tbl with t1.
 	res, err := mcmp.VtConn.ExecuteFetch("vexplain plan select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 join tbl where t1.id1 = tbl.nonunq_col", 100, false)
 	require.NoError(t, err)
-	require.Contains(t, fmt.Sprintf("%v", res.Rows), "tbl_t1")
+	require.Len(t, res.Rows, 1)
+	require.JSONEq(t, expJoinOutput1, res.Rows[0][0].ToString())
 
 	// Test the same query with a straight join
 	mcmp.AssertMatchesNoOrder("select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col",
@@ -909,7 +917,8 @@ func TestStraightJoin(t *testing.T) {
 	// Verify that in a straight join query, vitess joins t1 with tbl.
 	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col", 100, false)
 	require.NoError(t, err)
-	require.Contains(t, fmt.Sprintf("%v", res.Rows), "t1_tbl")
+	require.Len(t, res.Rows, 1)
+	require.JSONEq(t, expJoinOutput2, res.Rows[0][0].ToString())
 }
 
 func TestFailingOuterJoinInOLAP(t *testing.T) {
@@ -1056,4 +1065,39 @@ func TestBlockJoin(t *testing.T) {
 			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t2.id1), abs(t2.id1+t3.id) from tbl2 t3 join t2 on t3.unq_col = t2.id2")
 		})
 	}
+}
+
+// TestTabletTypeRouting tests that the tablet type routing works as intended.
+func TestTabletTypeRouting(t *testing.T) {
+	// We are gonna configure the routing rules to send the
+	// query for a replica tablet in ks_misc.t1 to go to a table that doesn't exist.
+	// I know this doesn't make much practical sense, but makes testing really easy.
+	routingRules := `{"rules": [
+	{
+	"from_table": "ks_misc.t1@replica",
+	"to_tables": ["uks.unknown"]
+	}
+]}`
+	err := clusterInstance.VtctldClientProcess.ApplyRoutingRules(routingRules)
+	require.NoError(t, err)
+	defer func() {
+		// Clear the routing rules after the test.
+		err = clusterInstance.VtctldClientProcess.ApplyRoutingRules("{}")
+		require.NoError(t, err)
+	}()
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,0)")
+
+	vtConn := mcmp.VtConn
+	// We first verify that querying the primary tablet goes to the t1 table.
+	utils.Exec(t, vtConn, "use ks_misc@primary")
+	utils.AssertMatches(t, vtConn, "select * from ks_misc.t1", `[[INT64(0) INT64(0)]]`)
+	// Now we change the connection's target
+	utils.Exec(t, vtConn, "use ks_misc@replica")
+	// We verify that querying the replica tablet creates an unknown table error.
+	_, err = utils.ExecAllowError(t, vtConn, "select * from ks_misc.t1")
+	require.ErrorContains(t, err, "table unknown not found")
 }

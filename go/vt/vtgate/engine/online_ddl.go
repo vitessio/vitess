@@ -55,21 +55,6 @@ func (v *OnlineDDL) description() PrimitiveDescription {
 	}
 }
 
-// RouteType implements the Primitive interface
-func (v *OnlineDDL) RouteType() string {
-	return "OnlineDDL"
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (v *OnlineDDL) GetKeyspaceName() string {
-	return v.Keyspace.Name
-}
-
-// GetTableName implements the Primitive interface
-func (v *OnlineDDL) GetTableName() string {
-	return v.DDL.GetTable().Name.String()
-}
-
 // TryExecute implements the Primitive interface
 func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{
@@ -87,7 +72,7 @@ func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		// default to @@session_uuid
 		migrationContext = fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID())
 	}
-	onlineDDLs, err := schema.NewOnlineDDLs(v.GetKeyspaceName(), v.SQL, v.DDL,
+	onlineDDLs, err := schema.NewOnlineDDLs(v.Keyspace.Name, v.SQL, v.DDL,
 		v.DDLStrategySetting, migrationContext, "", vcursor.Environment().Parser(),
 	)
 	if err != nil {

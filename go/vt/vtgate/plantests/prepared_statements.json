@@ -32,7 +32,6 @@
                     },
                     "FieldQuery": "select 1 from `user` where 1 != 1",
                     "Query": "select distinct 1 from `user` where id = :v1",
-                    "Table": "`user`",
                     "Values": [
                       ":v1"
                     ],
@@ -47,7 +46,6 @@
                     },
                     "FieldQuery": "select 1 from user_extra where 1 != 1",
                     "Query": "select distinct 1 from user_extra where user_id = :v2",
-                    "Table": "user_extra",
                     "Values": [
                       ":v2"
                     ],
@@ -68,7 +66,6 @@
             "Conditions": "v1=v2",
             "FieldQuery": "select 1 from `user` where 1 != 1 union select 1 from user_extra where 1 != 1",
             "Query": "select 1 from `user` where id = :v1 union select 1 from user_extra where user_id = :v2",
-            "Table": "`user`, user_extra",
             "Values": [
               ":v1"
             ],
@@ -111,7 +108,6 @@
                 },
                 "FieldQuery": "select 1 from `user` where 1 != 1",
                 "Query": "select distinct 1 from `user` where id = :v1",
-                "Table": "`user`",
                 "Values": [
                   ":v1"
                 ],
@@ -126,7 +122,6 @@
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
                 "Query": "select distinct 1 from user_extra where user_id = :v2",
-                "Table": "user_extra",
                 "Values": [
                   ":v2"
                 ],
@@ -161,7 +156,6 @@
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "L:0",
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -172,7 +166,6 @@
                 },
                 "FieldQuery": "select 1 from `user` where 1 != 1",
                 "Query": "select 1 from `user` where `user`.id = :v1",
-                "Table": "`user`",
                 "Values": [
                   ":v1"
                 ],
@@ -187,7 +180,6 @@
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
                 "Query": "select 1 from user_extra where user_extra.user_id = :v2",
-                "Table": "user_extra",
                 "Values": [
                   ":v2"
                 ],
@@ -206,7 +198,6 @@
             "Conditions": "v1=v2",
             "FieldQuery": "select 1 from `user`, user_extra where 1 != 1",
             "Query": "select 1 from `user`, user_extra where `user`.id = :v1 and user_extra.user_id = :v2",
-            "Table": "`user`, user_extra",
             "Values": [
               ":v1"
             ],
@@ -235,7 +226,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
-        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -246,7 +236,6 @@
             },
             "FieldQuery": "select 1 from `user` where 1 != 1",
             "Query": "select 1 from `user` where `user`.id = :v1",
-            "Table": "`user`",
             "Values": [
               ":v1"
             ],
@@ -261,7 +250,6 @@
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
             "Query": "select 1 from user_extra where user_extra.user_id = :v2",
-            "Table": "user_extra",
             "Values": [
               ":v2"
             ],
@@ -307,7 +295,6 @@
                 },
                 "FieldQuery": "select count(*) from user_extra where 1 != 1",
                 "Query": "select count(*) from user_extra where user_id = :v1",
-                "Table": "user_extra",
                 "Values": [
                   ":v1"
                 ],
@@ -323,7 +310,6 @@
                 },
                 "FieldQuery": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra where user_id = :v1)` from `user` where 1 != 1",
                 "Query": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra where user_id = :v1)` from `user` where id = :v2",
-                "Table": "`user`",
                 "Values": [
                   ":v2"
                 ],
@@ -342,7 +328,6 @@
             "Conditions": "v1=v2",
             "FieldQuery": "select (select count(*) from user_extra where 1 != 1) from `user` where 1 != 1",
             "Query": "select (select count(*) from user_extra where user_id = :v1) from `user` where id = :v2",
-            "Table": "`user`",
             "Values": [
               ":v2"
             ],
@@ -384,7 +369,6 @@
             },
             "FieldQuery": "select count(*) from user_extra where 1 != 1",
             "Query": "select count(*) from user_extra where user_id = :v1",
-            "Table": "user_extra",
             "Values": [
               ":v1"
             ],
@@ -400,7 +384,6 @@
             },
             "FieldQuery": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra where user_id = :v1)` from `user` where 1 != 1",
             "Query": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra where user_id = :v1)` from `user` where id = :v2",
-            "Table": "`user`",
             "Values": [
               ":v2"
             ],
@@ -442,7 +425,6 @@
             },
             "FieldQuery": "select count(*) from user_extra where 1 != 1",
             "Query": "select count(*) from user_extra where user_id = :v1",
-            "Table": "user_extra",
             "Values": [
               ":v1"
             ],
@@ -458,7 +440,6 @@
             },
             "FieldQuery": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra where user_id = :v1)` from `user` where 1 != 1",
             "Query": "select :__sq1 /* INT64 */ as `(select count(*) from user_extra where user_id = :v1)` from `user` where id = :v2",
-            "Table": "`user`",
             "Values": [
               ":v2"
             ],
@@ -498,7 +479,6 @@
             "Conditions": "v1=v2",
             "FieldQuery": "select (select count(*) from user_extra where 1 != 1) from `user` where 1 != 1",
             "Query": "select (select count(*) from user_extra where user_id = :v1 and foo = `user`.bar) from `user` where id = :v2",
-            "Table": "`user`",
             "Values": [
               ":v2"
             ],

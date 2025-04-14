@@ -765,6 +765,7 @@ var keywords = []keyword{
 	{"utc_time", UTC_TIME},
 	{"utc_timestamp", UTC_TIMESTAMP},
 	{"validation", VALIDATION},
+	{"value", VALUE},
 	{"values", VALUES},
 	{"var_pop", VAR_POP},
 	{"var_samp", VAR_SAMP},

@@ -273,24 +273,6 @@ func (code JoinOpcode) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (jn *Join) RouteType() string {
-	return "Join"
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (jn *Join) GetKeyspaceName() string {
-	if jn.Left.GetKeyspaceName() == jn.Right.GetKeyspaceName() {
-		return jn.Left.GetKeyspaceName()
-	}
-	return jn.Left.GetKeyspaceName() + "_" + jn.Right.GetKeyspaceName()
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (jn *Join) GetTableName() string {
-	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
-}
-
 // NeedsTransaction implements the Primitive interface
 func (jn *Join) NeedsTransaction() bool {
 	return jn.Right.NeedsTransaction() || jn.Left.NeedsTransaction()
@@ -309,7 +291,6 @@ func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.
 
 func (jn *Join) description() PrimitiveDescription {
 	other := map[string]any{
-		"TableName":         jn.GetTableName(),
 		"JoinColumnIndexes": jn.joinColsDescription(),
 	}
 	if len(jn.Vars) > 0 {

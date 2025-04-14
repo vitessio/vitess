@@ -224,11 +224,11 @@ func buildCreateViewCommon(
 	vschema plancontext.VSchema,
 	reservedVars *sqlparser.ReservedVars,
 	cfg dynamicconfig.DDL,
-	ddlSelect sqlparser.TableStatement,
+	sel sqlparser.TableStatement,
 	ddl sqlparser.DDLStatement,
 ) (key.ShardDestination, *vindexes.Keyspace, error) {
 	if vschema.IsViewsEnabled() {
-		return createViewEnabled(vschema, reservedVars, ddlSelect, ddl)
+		return createViewEnabled(vschema, reservedVars, sel, ddl)
 	}
 
 	// For Create View, we require that the keyspace exist and the select query can be satisfied within the keyspace itself
@@ -238,22 +238,33 @@ func buildCreateViewCommon(
 		return nil, nil, err
 	}
 
-	// because we don't trust the schema tracker to have up-to-date info, we don't want to expand any SELECT * here
+	// views definition with `select *` should not be expanded as schema tracker might not be up-to-date
+	// We copy the expressions and restore them after the planning context is created
 	var expressions []*sqlparser.SelectExprs
-	_ = sqlparser.VisitAllSelects(ddlSelect, func(p *sqlparser.Select, idx int) error {
+	_ = sqlparser.VisitAllSelects(sel, func(p *sqlparser.Select, idx int) error {
 		expressions = append(expressions, sqlparser.Clone(p.SelectExprs))
 		return nil
 	})
-	selectPlan, err := createInstructionFor(ctx, sqlparser.String(ddlSelect), ddlSelect, reservedVars, vschema, cfg)
+	selectPlan, err := createInstructionFor(ctx, sqlparser.String(sel), sel, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, nil, err
 	}
-	selPlanKs := selectPlan.primitive.GetKeyspaceName()
-	if keyspace.Name != selPlanKs {
+
+	diffKs := false
+	engine.Visit(selectPlan.primitive, func(node engine.Primitive) {
+		if route, ok := node.(*engine.Route); ok {
+			if route.Keyspace.Name != keyspace.Name {
+				diffKs = true
+			}
+		}
+	})
+
+	if diffKs {
 		return nil, nil, vterrors.VT12001(ViewDifferentKeyspace)
 	}
 
-	_ = sqlparser.VisitAllSelects(ddlSelect, func(p *sqlparser.Select, idx int) error {
+	// We need to restore the original select expressions
+	_ = sqlparser.VisitAllSelects(sel, func(p *sqlparser.Select, idx int) error {
 		p.SelectExprs = expressions[idx]
 		return nil
 	})
@@ -309,6 +320,7 @@ func createViewEnabled(vschema plancontext.VSchema, reservedVars *sqlparser.Rese
 		return nil, nil, vterrors.VT12001(ViewDifferentKeyspace)
 	}
 
+	// We need to restore the original select expressions
 	_ = sqlparser.VisitAllSelects(ddlSelect, func(p *sqlparser.Select, idx int) error {
 		p.SelectExprs = expressions[idx]
 		return nil

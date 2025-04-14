@@ -145,6 +145,12 @@ BEGIN
 	insert into allDefaults(id) values (128);
 	select 128 into val from dual;
 END;
+`,
+		`CREATE DEFINER=current_user() PROCEDURE with_definer(OUT val int)
+BEGIN
+	insert into allDefaults(id) values (128);
+	select 128 into val from dual;
+END;
 `}
 )
 

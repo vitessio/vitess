@@ -1310,7 +1310,7 @@ INPUT
 select value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value having COUNT(bug_id) IN (0,2);
 END
 OUTPUT
-select value, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value having count(bug_id) in (0, 2)
+select `value`, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.`value` = t1.component where program = 'AAAAA' group by `value` having count(bug_id) in (0, 2)
 END
 INPUT
 select * from t1 where s1 < 'K' and s1 = 'Y';
@@ -3920,7 +3920,7 @@ INPUT
 select row_number() over (), value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value having COUNT(bug_id) IN (0,2);
 END
 OUTPUT
-select row_number() over (), value, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value having count(bug_id) in (0, 2)
+select row_number() over (), `value`, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.`value` = t1.component where program = 'AAAAA' group by `value` having count(bug_id) in (0, 2)
 END
 INPUT
 select * from t1 where lower(a)='aaa';
@@ -4292,7 +4292,7 @@ INPUT
 select max(value) from t1 AS m LEFT JOIN t2 AS c1 ON m.c1id = c1.id AND c1.active = 'Yes' LEFT JOIN t3 AS c2 ON m.c2id = c2.id AND c2.active = 'Yes' WHERE m.pid=1 AND (c1.id IS NOT NULL OR c2.id IS NOT NULL);
 END
 OUTPUT
-select max(value) from t1 as m left join t2 as c1 on m.c1id = c1.id and c1.active = 'Yes' left join t3 as c2 on m.c2id = c2.id and c2.active = 'Yes' where m.pid = 1 and (c1.id is not null or c2.id is not null)
+select max(`value`) from t1 as m left join t2 as c1 on m.c1id = c1.id and c1.active = 'Yes' left join t3 as c2 on m.c2id = c2.id and c2.active = 'Yes' where m.pid = 1 and (c1.id is not null or c2.id is not null)
 END
 INPUT
 select * from t1 where a in (select a from t11) order by 1, 2, 3 limit 1;
@@ -10178,7 +10178,7 @@ INPUT
 select t1.*, t2.*, t1.value<=>t2.value from t1, t2 where t1.id=t2.id and t1.id=1;
 END
 OUTPUT
-select t1.*, t2.*, t1.value <=> t2.value from t1, t2 where t1.id = t2.id and t1.id = 1
+select t1.*, t2.*, t1.`value` <=> t2.`value` from t1, t2 where t1.id = t2.id and t1.id = 1
 END
 INPUT
 select left('hello',null),left(null,1),left(null,null);
@@ -10634,7 +10634,7 @@ INPUT
 select value,description,COUNT(bug_id) from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA" group by value;
 END
 OUTPUT
-select value, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA' group by value
+select `value`, description, count(bug_id) from t2 left join t1 on t2.program = t1.product and t2.`value` = t1.component where program = 'AAAAA' group by `value`
 END
 INPUT
 select sql_big_result c,count(t) from t1 group by c order by c limit 10;
@@ -11426,7 +11426,7 @@ INPUT
 select * from t1 where id <=> value or value<=>id;
 END
 OUTPUT
-select * from t1 where id <=> value or value <=> id
+select * from t1 where id <=> `value` or `value` <=> id
 END
 INPUT
 select a1,a2,b, max(c) from t1 where (c > 'f123') group by a1,a2,b;
@@ -17180,7 +17180,7 @@ INPUT
 select value,description,bug_id from t2 left join t1 on t2.program=t1.product and t2.value=t1.component where program="AAAAA";
 END
 OUTPUT
-select value, description, bug_id from t2 left join t1 on t2.program = t1.product and t2.value = t1.component where program = 'AAAAA'
+select `value`, description, bug_id from t2 left join t1 on t2.program = t1.product and t2.`value` = t1.component where program = 'AAAAA'
 END
 INPUT
 select "foo" = "foo " collate latin1_test;
@@ -23060,7 +23060,7 @@ INPUT
 select * from t1 where value <=> value;
 END
 OUTPUT
-select * from t1 where value <=> value
+select * from t1 where `value` <=> `value`
 END
 INPUT
 select f3 from t1 where f3 between cast("2006-1-1 12:1:1" as datetime) and cast("2006-1-1 12:1:2" as datetime);

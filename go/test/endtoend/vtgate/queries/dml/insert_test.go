@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -515,4 +517,29 @@ func TestInsertJson(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, `insert into uks.j_utbl(id, jdoc) select * from sks.j_tbl`)
 	utils.AssertMatches(t, mcmp.VtConn, `select * from uks.j_utbl order by id`,
 		`[[INT64(1) JSON("{}")] [INT64(2) JSON("{\"a\": 1, \"b\": 2}")] [INT64(3) JSON("{\"k\": \"a\"}")] [INT64(4) JSON("{\"date\": 1629849600, \"keywordSourceId\": 930701976723823, \"keywordSourceVersionId\": 210825230433}")]]`)
+}
+
+func TestInsertIgnoreNullAndInsertNull(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert ignore into s_tbl(id) values (1)") // the remaining columns are be set to NULL
+	mcmp.Exec("select id, num, col from s_tbl")
+	mcmp.Exec("insert ignore into s_tbl(id, num, col) values (2, 2, 2), (3, NULL, 3), (4, 4, NULL)")
+	mcmp.Exec("insert into s_tbl(id, num, col) values (5, 5, 5), (6, NULL, 6), (7, 7, NULL)")
+	mcmp.Exec("select id, num, col from s_tbl")
+	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num",
+		`[[INT64(2) VARCHAR("06E7EA22CE92708F")] [INT64(4) VARCHAR("D2FD8867D50D2DFE")] [INT64(5) VARCHAR("70BB023C810CA87A")] [INT64(7) VARCHAR("FB8BAAAD918119B8")]]`)
+	utils.AssertMatches(t, mcmp.VtConn, "select col, id, hex(keyspace_id) from col_vdx_tbl order by col, id",
+		`[[INT64(2) INT64(2) VARCHAR("06E7EA22CE92708F")] [INT64(3) INT64(3) VARCHAR("4EB190C9A2FA169C")] [INT64(5) INT64(5) VARCHAR("70BB023C810CA87A")] [INT64(6) INT64(6) VARCHAR("F098480AC4C4BE71")]]`)
+
+	mcmp.Exec("insert ignore into name_tbl(id, name) values (1, 'foo'), (2, 'bar')")
+	mcmp.Exec("select id, name from name_tbl order by id")
+
+	// This should contain the one row that was inserted above
+	utils.AssertMatches(t, mcmp.VtConn, "select name, id, hex(keyspace_id) from name_vdx_tbl order by name, id",
+		`[[VARCHAR("bar") INT64(2) VARCHAR("06E7EA22CE92708F")] [VARCHAR("foo") INT64(1) VARCHAR("166B40B44ABA4BD6")]]`)
+
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, "insert ignore into name_tbl(id, name) values (22, NULL)") // this should fail, since we have a vindex that does not ignore nulls
+	require.ErrorContains(t, err, "Column 'name,id' cannot be null")
 }

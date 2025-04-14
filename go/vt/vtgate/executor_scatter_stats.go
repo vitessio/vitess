@@ -19,6 +19,7 @@ package vtgate
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -26,8 +27,6 @@ import (
 
 	"vitess.io/vitess/go/vt/logz"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -58,9 +57,7 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 	totalExecTime := time.Duration(0)
 	totalCount := uint64(0)
 
-	var err error
 	plans := make([]*engine.Plan, 0)
-	routes := make([]*engine.Route, 0)
 	// First we go over all plans and collect statistics and all query plans for scatter queries
 	e.ForEachPlan(func(plan *engine.Plan) bool {
 		scatter := engine.Find(findScatter, plan.Instructions)
@@ -68,13 +65,7 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 		isScatter := scatter != nil
 
 		if isScatter {
-			route, isRoute := scatter.(*engine.Route)
-			if !isRoute {
-				err = vterrors.Errorf(vtrpc.Code_INTERNAL, "expected a route, but found a %v", scatter)
-				return false
-			}
 			plans = append(plans, plan)
-			routes = append(routes, route)
 			scatterExecTime += time.Duration(atomic.LoadUint64(&plan.ExecTime))
 			scatterCount += atomic.LoadUint64(&plan.ExecCount)
 		}
@@ -87,14 +78,10 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 		totalCount += atomic.LoadUint64(&plan.ExecCount)
 		return true
 	})
-	if err != nil {
-		return statsResults{}, err
-	}
 
 	// Now we'll go over all scatter queries we've found and produce result items for each
 	resultItems := make([]*statsResultItem, len(plans))
 	for i, plan := range plans {
-		route := routes[i]
 		execCount := atomic.LoadUint64(&plan.ExecCount)
 		execTime := time.Duration(atomic.LoadUint64(&plan.ExecTime))
 
@@ -102,6 +89,7 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 		if execCount != 0 {
 			avgTimePerQuery = execTime.Nanoseconds() / int64(execCount)
 		}
+
 		resultItems[i] = &statsResultItem{
 			Query:                  plan.Original,
 			AvgTimePerQuery:        time.Duration(avgTimePerQuery),
@@ -109,7 +97,7 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 			PercentTimeOfScatters:  100 * float64(execTime) / float64(scatterExecTime),
 			PercentCountOfReads:    100 * float64(execCount) / float64(readOnlyCount),
 			PercentCountOfScatters: 100 * float64(execCount) / float64(scatterCount),
-			From:                   route.Keyspace.Name + "." + route.GetTableName(),
+			From:                   strings.Join(plan.TablesUsed, ","),
 			Count:                  execCount,
 		}
 	}

@@ -4,6 +4,8 @@
 - **[Major Changes](#major-changes)**
     - **[New Join type in VTGate](#new-join-type-vtgate)**
 - **[Minor Changes](#minor-changes)**
+    - **[Deletions](#deletions)**
+        - [Metrics](#deleted-metrics)
     - **[VTTablet](#minor-changes-vttablet)**
         - [CLI Flags](#flags-vttablet)
         - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password)
@@ -33,6 +35,17 @@ Testing with common MySQL drivers and ORM libraries suggests this change is unli
 
 
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="deletions"/>Deletions</a>
+
+#### <a id="deleted-metrics"/>Metrics</a>
+
+| Component |        Metric Name        | Was Deprecated In |                     Deprecation PR                      |
+|:---------:|:-------------------------:|:-----------------:|:-------------------------------------------------------:|
+| `vtgate`  |    `QueriesProcessed`     |     `v22.0.0`     | [#17727](https://github.com/vitessio/vitess/pull/17727) |
+| `vtgate`  |      `QueriesRouted`      |     `v22.0.0`     | [#17727](https://github.com/vitessio/vitess/pull/17727) |
+| `vtgate`  | `QueriesProcessedByTable` |     `v22.0.0`     | [#17727](https://github.com/vitessio/vitess/pull/17727) |
+| `vtgate`  |  `QueriesRoutedByTable`   |     `v22.0.0`     | [#17727](https://github.com/vitessio/vitess/pull/17727) |
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 

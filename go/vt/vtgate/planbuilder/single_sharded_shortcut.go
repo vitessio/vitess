@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"sort"
-	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -51,21 +50,12 @@ func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.Se
 			Opcode:   engine.Unsharded,
 			Keyspace: ks,
 		},
-		TableName: strings.Join(escapedTableNames(tableNames), ", "),
 	}
 	prim, err := WireupRoute(ctx, eroute, stmt)
 	if err != nil {
 		return nil, nil, err
 	}
 	return prim, operators.QualifiedTableNames(ks, tableNames), nil
-}
-
-func escapedTableNames(tableNames []sqlparser.TableName) []string {
-	escaped := make([]string, len(tableNames))
-	for i, tableName := range tableNames {
-		escaped[i] = sqlparser.String(tableName)
-	}
-	return escaped
 }
 
 func getTableNames(semTable *semantics.SemTable) ([]sqlparser.TableName, error) {

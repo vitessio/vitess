@@ -28,6 +28,8 @@
     - [LAST_INSERT_ID(x)](#last-insert-id)
     - [Maximum Idle Connections in the Pool](#max-idle-connections)
     - [Filtering Query logs on Error](#query-logs)
+    - [MultiQuery RPC in vtgate](#multiquery)
+    - [Unsharded `CREATE PROCEDURE` support](#create-procedure)
   - **[Optimization](#optimization)**
     - [Prepared Statement](#prepared-statement)
   - **[RPC Changes](#rpc-changes)**
@@ -120,7 +122,7 @@ $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
 |    `CommitUnresolved`     |                  N/A                  |             Counter for failure after Prepare.              | [#16939](https://github.com/vitessio/vitess/pull/16939) |
 
 
-The work done in [#17727](https://github.com/vitessio/vitess/pull/17727) introduces new metrics for queries. Via this work we have deprecated several vtgate metrics, please see the [Deprecated Metrics](#deprecated-metrics) section. Here is an example on how to use them: 
+The work done in [#17727](https://github.com/vitessio/vitess/pull/17727) introduces new metrics for queries. Via this work we have deprecated several vtgate metrics, please see the [Deprecated Metrics](#deprecated-metrics) section. Here is an example on how to use them:
 ```
 Query: select t1.a, t2.b from t1 join t2 on t1.id = t2.id
 Shards: 2
@@ -267,6 +269,20 @@ The `querylog-mode` setting can be configured to `error` to log only queries tha
 
 ---
 
+#### <a id="multiquery"/>MultiQuery RPC in vtgate</a>
+
+New RPCs in vtgate have been added that allow users to pass multiple queries in a single sql string. It behaves the same way MySQL does where-in multiple result sets for the queries are returned in the same order as the queries were passed until an error is encountered. The new RPCs are `ExecuteMulti` and `StreamExecuteMulti`. 
+
+A new flag `--mysql-server-multi-query-protocol` has also been added that makes the server use this new implementation. This flag is set to `false` by default, so the old implementation is used by default. The new implementation is more efficient and allows for better performance when executing multiple queries in a single RPC call.
+
+---
+
+#### <a id="create-procedure"/>Unsharded `CREATE PROCEDURE` support</a>
+
+Until now Vitess didn't allow users to create procedures through the vtgate, and they had to be created by running a DDL directly against the vttablets. In this release, we have started adding support for running `CREATE PROCEDURE` statements through the vtgate for unsharded keyspaces. Not all constructs of procedures are currently supported in the parser, so there are still some limitations which will be addressed in future releases.
+
+---
+
 ### <a id="optimization"/>Optimization</a>
 
 #### <a id="prepared-statement"/>Prepared Statement</a>
@@ -363,7 +379,7 @@ Full details on the node v20.12.2 release can be found at https://nodejs.org/en/
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/22.0/22.0.0/changelog.md).
 
-The release includes 457 merged Pull Requests.
+The release includes 466 merged Pull Requests.
 
 Thanks to all our contributors: @GrahamCampbell, @GuptaManan100, @L3o-pold, @akagami-harsh, @anirbanmu, @app/dependabot, @app/vitess-bot, @arthmis, @arthurschreiber, @beingnoble03, @c-r-dev, @corbantek, @dbussink, @deepthi, @derekperkins, @ejortegau, @frouioui, @garfthoffman, @gmpify, @gopoto, @harshit-gangal, @huochexizhan, @jeefy, @jwangace, @kbutz, @lmorduch, @mattlord, @mattrobenolt, @maxenglander, @mcrauwel, @mounicasruthi, @niladrix719, @notfelineit, @rafer, @rohit-nayak-ps, @rvrangel, @shailpujan88, @shanth96, @shlomi-noach, @siadat, @systay, @timvaillancourt, @twthorn, @vitess-bot, @vmg, @wiebeytec, @wukuai
 

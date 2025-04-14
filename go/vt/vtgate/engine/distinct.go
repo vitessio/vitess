@@ -156,21 +156,6 @@ func (d *Distinct) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 	return err
 }
 
-// RouteType implements the Primitive interface
-func (d *Distinct) RouteType() string {
-	return d.Source.RouteType()
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (d *Distinct) GetKeyspaceName() string {
-	return d.Source.GetKeyspaceName()
-}
-
-// GetTableName implements the Primitive interface
-func (d *Distinct) GetTableName() string {
-	return d.Source.GetTableName()
-}
-
 // GetFields implements the Primitive interface
 func (d *Distinct) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return d.Source.GetFields(ctx, vcursor, bindVars)
