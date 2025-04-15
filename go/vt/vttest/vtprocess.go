@@ -269,7 +269,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-persistence-dir", path.Join(args.DataDir, "vschema_data")}...)
 	}
 	if args.TransactionModeFlag != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction-mode", args.TransactionModeFlag}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction_mode", args.TransactionModeFlag}...)
 	}
 	if args.TransactionTimeout != 0 {
 		vt.ExtraArgs = append(vt.ExtraArgs, "--queryserver-config-transaction-timeout", fmt.Sprintf("%v", args.TransactionTimeout))
