@@ -117,7 +117,7 @@ var (
 		},
 	)
 
-	transactionMode = viperutil.Configure(
+	transactionModeFlag = viperutil.Configure(
 		"transaction-mode",
 		viperutil.Options[vtgatepb.TransactionMode]{
 			FlagName: "transaction-mode",
@@ -206,7 +206,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	viperutil.BindFlags(fs,
 		enableOnlineDDL,
 		enableDirectDDL,
-		transactionMode,
+		transactionModeFlag,
 	)
 }
 
