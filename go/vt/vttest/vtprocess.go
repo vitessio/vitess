@@ -246,6 +246,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--planner-version", args.PlannerVersion,
 		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
+		// fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettingsFlag),
 		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
 		fmt.Sprintf("--no_scatter=%t", args.NoScatter),
 	}...)
@@ -281,7 +282,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc-auth-mode", servenv.GRPCAuth(), "--grpc-key", servenv.GRPCKey(), "--grpc-cert", servenv.GRPCCert(), "--grpc-ca", servenv.GRPCCertificateAuthority(), "--grpc-auth-mtls-allowed-substrings", servenv.ClientCertSubstrings()}...)
 	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-ddl-authorized-users", args.VSchemaDDLAuthorizedUsers}...)
 	}
 	vt.ExtraArgs = append(vt.ExtraArgs, "--mysql-server-version", servenv.MySQLServerVersion())
 	if socket != "" {
@@ -312,7 +313,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 
 	if args.ExternalTopoImplementation != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
-			"--external_topo_server",
+			"--external-topo-server",
 			"--topo-implementation", args.ExternalTopoImplementation,
 			"--topo-global-server-address", args.ExternalTopoGlobalServerAddress,
 			"--topo-global-root", args.ExternalTopoGlobalRoot,

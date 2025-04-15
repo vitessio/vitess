@@ -237,7 +237,7 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 	}
 
 	clusterInstance.VtGateExtraArgs = []string{
-		"--enable_buffer",
+		vtutils.GetFlagVariantForTests("--enable-buffer"),
 		// Long timeout in case failover is slow.
 		"--buffer_window", "10m",
 		"--buffer_max_failover_duration", "10m",

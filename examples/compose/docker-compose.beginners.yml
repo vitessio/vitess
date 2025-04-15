@@ -63,12 +63,11 @@ services:
       - "15000:$WEB_PORT"
       - "$GRPC_PORT"
     command: ["sh", "-c", " /vt/bin/vtctld \
-        # TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
         $TOPOLOGY_FLAGS \
         --cell $CELL \
         --service-map 'grpc-vtctl,grpc-vtctld' \
         --backup-storage-implementation file \
-        --file_backup_storage_root /vt/vtdataroot/backups \
+        --file-backup-storage-root /vt/vtdataroot/backups \
         --logtostderr=true \
         --port $WEB_PORT \
         --grpc-port $GRPC_PORT
@@ -102,6 +101,7 @@ services:
         --tablet-types-to-wait PRIMARY,REPLICA \
         --service-map 'grpc-vtgateservice' \
         --enable_system_settings=true \
+       # --enable-system-settings=true \
         "]
     volumes:
       - ".:/script"

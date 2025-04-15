@@ -634,7 +634,7 @@ func generateVtctld(opts vtOptions) string {
         --cell %[4]s \
         --service-map 'grpc-vtctl,grpc-vtctld' \
         --backup-storage-implementation file \
-        --file_backup_storage_root /vt/vtdataroot/backups \
+        --file-backup-storage-root /vt/vtdataroot/backups \
         --logtostderr=true \
         --port %[1]d \
         --grpc-port %[2]d \

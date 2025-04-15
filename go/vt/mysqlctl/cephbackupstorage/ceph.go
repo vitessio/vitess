@@ -33,6 +33,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	"vitess.io/vitess/go/vt/utils"
 
 	"vitess.io/vitess/go/vt/log"
 	errorsbackup "vitess.io/vitess/go/vt/mysqlctl/errors"
@@ -45,7 +46,7 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&configFilePath, "ceph_backup_storage_config", "ceph_backup_config.json",
+	utils.SetFlagStringVar(fs, &configFilePath, "ceph-backup-storage-config", "ceph_backup_config.json",
 		"Path to JSON config file for ceph backup storage.")
 }
 
