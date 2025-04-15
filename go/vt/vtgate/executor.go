@@ -502,7 +502,8 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 		case sysvars.TransactionMode.Name:
 			txMode := session.TransactionMode
 			if txMode == vtgatepb.TransactionMode_UNSPECIFIED {
-				txMode = transactionModeFlag.Get()
+				// txMode = transactionModeFlag.Get()
+				txMode = transactionMode.Get()
 			}
 			bindVars[key] = sqltypes.StringBindVariable(txMode.String())
 		case sysvars.Workload.Name:

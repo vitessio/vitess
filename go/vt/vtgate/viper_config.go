@@ -33,7 +33,8 @@ func NewDynamicViperConfig() *DynamicViperConfig {
 	return &DynamicViperConfig{
 		onlineDDL: enableOnlineDDL,
 		directDDL: enableDirectDDL,
-		txMode:    transactionModeFlag,
+		// txMode:    transactionModeFlag,
+		txMode: transactionMode,
 	}
 }
 

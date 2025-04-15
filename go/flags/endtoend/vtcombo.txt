@@ -114,7 +114,6 @@ Flags:
       --enable-online-ddl                                                Allow users to submit, review and control Online DDL (default true)
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable-per-workload-table-metrics                                If true, query counts and query error metrics include a label that identifies the workload
-      --enable-system-settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
       --enable-tx-throttler                                              Synonym to -enable_tx_throttler
       --enable-views                                                     Enable views support in vtgate. (default true)
       --enable_buffer_dry_run                                            Detect and log failover events, but do not actually buffer requests.
@@ -124,6 +123,7 @@ Flags:
       --enable_hot_row_protection_dry_run                                If true, hot row protection is not enforced but logs if transactions would have been queued.
       --enable_replication_reporter                                      Use polling to track replication lag.
       --enable_set_var                                                   This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections (default true)
+      --enable_system_settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
       --enable_transaction_limit                                         If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.
       --enable_transaction_limit_dry_run                                 If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.
       --enable_tx_throttler                                              If true replication-lag-based throttling on transactions will be enabled.
@@ -385,12 +385,12 @@ Flags:
       --track-udfs                                                       Track UDFs in vtgate.
       --track_schema_versions                                            When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position
       --transaction-log-stream-handler string                            URL handler for streaming transactions log (default "/debug/txlog")
-      --transaction-mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
       --transaction_limit_by_component                                   Include CallerID.component when considering who the user is for the purpose of transaction limit.
       --transaction_limit_by_principal                                   Include CallerID.principal when considering who the user is for the purpose of transaction limit. (default true)
       --transaction_limit_by_subcomponent                                Include CallerID.subcomponent when considering who the user is for the purpose of transaction limit.
       --transaction_limit_by_username                                    Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit. (default true)
       --transaction_limit_per_user float                                 Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap. (default 0.4)
+      --transaction_mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
       --truncate-error-len int                                           truncate errors sent to client if they are longer than this value (0 means do not truncate)
       --twopc_abandon_age time.Duration                                  Any unresolved transaction older than this time will be sent to the coordinator to be resolved. NOTE: Providing time as seconds (float64) is deprecated. Use time.Duration format (e.g., '1s', '2m', '1h'). (default 15m0s)
       --tx-throttler-config string                                       Synonym to -tx_throttler_config (default "target_replication_lag_sec:2 max_replication_lag_sec:10 initial_rate:100 max_increase:1 emergency_decrease:0.5 min_duration_between_increases_sec:40 max_duration_between_increases_sec:62 min_duration_between_decreases_sec:20 spread_backlog_across_sec:20 age_bad_rate_after_sec:180 bad_rate_increase:0.1 max_rate_approach_threshold:0.9")

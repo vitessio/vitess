@@ -100,7 +100,8 @@ services:
         --cells_to_watch $CELL \
         --tablet-types-to-wait PRIMARY,REPLICA \
         --service-map 'grpc-vtgateservice' \
-        --enable-system-settings=true \
+        --enable_system_settings=true \
+       # --enable-system-settings=true \
         "]
     volumes:
       - ".:/script"

@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	vtutils "vitess.io/vitess/go/vt/utils"
+	// vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -69,7 +69,8 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, fmt.Sprintf("%s=true", vtutils.GetFlagVariantForTests("--enable-system-settings")))
+		// clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, fmt.Sprintf("%s=true", vtutils.GetFlagVariantForTests("--enable-system-settings")))
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
