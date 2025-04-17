@@ -223,7 +223,7 @@ func (lkp *lookupInternal) VerifyCustom(ctx context.Context, vcursor VCursor, id
 		if err != nil {
 			return nil, vterrors.Wrap(err, "lookup.Verify")
 		}
-		out[i] = (len(result.Rows) != 0)
+		out[i] = len(result.Rows) != 0
 	}
 	return out, nil
 }

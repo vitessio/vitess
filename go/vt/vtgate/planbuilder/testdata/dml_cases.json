@@ -25,8 +25,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update m1 set val = 1",
-        "Table": "m1"
+        "Query": "update m1 set val = 1"
       },
       "TablesUsed": [
         "main.m1"
@@ -48,8 +47,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update unsharded set val = 1",
-        "Table": "unsharded"
+        "Query": "update unsharded set val = 1"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -71,8 +69,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update unsharded set col = (select col from unsharded limit 1)",
-        "Table": "unsharded"
+        "Query": "update unsharded set col = (select col from unsharded limit 1)"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -94,8 +91,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)",
-        "Table": "unsharded"
+        "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -117,8 +113,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)",
-        "Table": "unsharded"
+        "Query": "update unsharded set col = (select id from unsharded as a join unsharded as b on a.id = b.id)"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -140,8 +135,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000",
-        "Table": "unsharded"
+        "Query": "update unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id set col1 = 'asdf' where keepers.id is null and foo.col is not null and foo.col < 1000"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -164,7 +158,6 @@
           "Sharded": true
         },
         "Query": "update `user` as route1 set a = 1 where id = 1",
-        "Table": "user",
         "Values": [
           "1"
         ],
@@ -190,8 +183,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update unsharded_a set a = (select a from unsharded as route2)",
-        "Table": "unsharded, unsharded_a"
+        "Query": "update unsharded_a set a = (select a from unsharded as route2)"
       },
       "TablesUsed": [
         "main.unsharded",
@@ -214,8 +206,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete from unsharded",
-        "Table": "unsharded"
+        "Query": "delete from unsharded"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -237,8 +228,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete from seq",
-        "Table": "seq"
+        "Query": "delete from seq"
       },
       "TablesUsed": [
         "main.seq"
@@ -260,8 +250,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete from unsharded_ref",
-        "Table": "unsharded_ref"
+        "Query": "delete from unsharded_ref"
       },
       "TablesUsed": [
         "main.unsharded_ref"
@@ -284,7 +273,6 @@
           "Sharded": true
         },
         "Query": "update `user` set val = 1 where id = 1",
-        "Table": "user",
         "Values": [
           "1"
         ],
@@ -311,7 +299,6 @@
           "Sharded": true
         },
         "Query": "update `user` as user_alias set val = 1 where user_alias.id = 1",
-        "Table": "user",
         "Values": [
           "1"
         ],
@@ -338,7 +325,6 @@
           "Sharded": true
         },
         "Query": "update `user` set val = 1 where id = 1",
-        "Table": "user",
         "Values": [
           "1"
         ],
@@ -365,7 +351,6 @@
           "Sharded": true
         },
         "Query": "update `user` set val = 1 where `name` = 'foo' and id = 1",
-        "Table": "user",
         "Values": [
           "1"
         ],
@@ -398,7 +383,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io' from user_metadata where user_id = 1 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
-        "Table": "user_metadata",
         "Values": [
           "1"
         ],
@@ -438,7 +422,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io', address = '155 5th street' from user_metadata where user_id = 1 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
-        "Table": "user_metadata",
         "Values": [
           "1"
         ],
@@ -471,7 +454,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select user_id, email, address, non_planable, email = 'juan@vitess.io' from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
         "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 order by user_id asc limit 10",
-        "Table": "user_metadata",
         "Values": [
           "1"
         ],
@@ -504,7 +486,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select user_id, music_id = 1 from music_extra where user_id = 1 for update",
         "Query": "update music_extra set music_id = 1 where user_id = 1",
-        "Table": "music_extra",
         "Values": [
           "1"
         ],
@@ -531,7 +512,6 @@
           "Sharded": true
         },
         "Query": "update `user` set val = 1 where id = id2 and id = 1",
-        "Table": "user",
         "Values": [
           "1"
         ],
@@ -558,7 +538,6 @@
           "Sharded": true
         },
         "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1",
-        "Table": "user",
         "Values": [
           "1"
         ],
@@ -588,7 +567,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = 1 for update",
         "Query": "delete from `user` where id = 1",
-        "Table": "user",
         "Values": [
           "1"
         ],
@@ -614,8 +592,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1",
-        "Table": "unsharded_a, unsharded_b"
+        "Query": "delete a from unsharded_a as a, unsharded_b as b where a.id = b.id and b.val = 1"
       },
       "TablesUsed": [
         "main.unsharded_a",
@@ -638,8 +615,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1",
-        "Table": "unsharded_a, unsharded_b"
+        "Query": "delete a from unsharded_a as a join unsharded_b as b on a.id = b.id where b.val = 1"
       },
       "TablesUsed": [
         "main.unsharded_a",
@@ -662,8 +638,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
-        "Table": "unsharded"
+        "Query": "delete foo from unsharded as foo left join (select id from unsharded where col is not null order by col desc limit 10) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -689,7 +664,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as route1 where id = 1 for update",
         "Query": "delete from `user` as route1 where id = 1",
-        "Table": "user",
         "Values": [
           "1"
         ],
@@ -715,8 +689,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete from unsharded_a where a = (select a from unsharded as route2)",
-        "Table": "unsharded, unsharded_a"
+        "Query": "delete from unsharded_a where a = (select a from unsharded as route2)"
       },
       "TablesUsed": [
         "main.unsharded",
@@ -740,7 +713,6 @@
           "Sharded": true
         },
         "Query": "update music set val = 1 where id = 1",
-        "Table": "music",
         "Values": [
           "1"
         ],
@@ -766,8 +738,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1",
-        "Table": "unsharded_a, unsharded_b"
+        "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1"
       },
       "TablesUsed": [
         "main.unsharded_a",
@@ -790,8 +761,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1",
-        "Table": "unsharded_a, unsharded_b"
+        "Query": "update unsharded_a as a, unsharded_b as b set a.val = 'foo' where a.id = b.id and b.val = 1"
       },
       "TablesUsed": [
         "main.unsharded_a",
@@ -818,7 +788,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
         "Query": "delete from music where id = 1",
-        "Table": "music",
         "Values": [
           "1"
         ],
@@ -845,7 +814,6 @@
           "Sharded": true
         },
         "Query": "delete from music_extra where user_id = 1",
-        "Table": "music_extra",
         "Values": [
           "1"
         ],
@@ -871,8 +839,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into unsharded values ()",
-        "TableName": "unsharded"
+        "Query": "insert into unsharded values ()"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -894,8 +861,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into unsharded values (1, 2)",
-        "TableName": "unsharded"
+        "Query": "insert into unsharded values (1, 2)"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -917,8 +883,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3",
-        "TableName": "unsharded"
+        "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -941,8 +906,7 @@
           "Sharded": false
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
-        "Query": "insert into unsharded_authoritative(col1, col2) values (:__seq0, 1)",
-        "TableName": "unsharded_authoritative"
+        "Query": "insert into unsharded_authoritative(col1, col2) values (:__seq0, 1)"
       },
       "TablesUsed": [
         "main.unsharded_authoritative"
@@ -966,7 +930,6 @@
         },
         "InsertIgnore": true,
         "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0) on duplicate key update user_id = values(user_id)",
-        "TableName": "music",
         "VindexValues": {
           "music_user_map": "2",
           "user_index": "1"
@@ -994,7 +957,6 @@
         },
         "InsertIgnore": true,
         "Query": "insert into music(user_id, id) values (:_user_id_0, :_id_0), (:_user_id_1, :_id_1) on duplicate key update user_id = values(user_id)",
-        "TableName": "music",
         "VindexValues": {
           "music_user_map": "2, 4",
           "user_index": "1, 3"
@@ -1020,8 +982,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into unsharded select id from unsharded_auto",
-        "TableName": "unsharded"
+        "Query": "insert into unsharded select id from unsharded_auto"
       },
       "TablesUsed": [
         "main.unsharded",
@@ -1044,8 +1005,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into unsharded select id from unsharded join unsharded_auto",
-        "TableName": "unsharded"
+        "Query": "insert into unsharded select id from unsharded join unsharded_auto"
       },
       "TablesUsed": [
         "main.unsharded",
@@ -1069,8 +1029,7 @@
           "Sharded": false
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(18446744073709551616)",
-        "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
-        "TableName": "unsharded_auto"
+        "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')"
       },
       "TablesUsed": [
         "main.unsharded_auto"
@@ -1093,8 +1052,7 @@
           "Sharded": false
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
-        "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')",
-        "TableName": "unsharded_auto"
+        "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa')"
       },
       "TablesUsed": [
         "main.unsharded_auto"
@@ -1117,8 +1075,7 @@
           "Sharded": false
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
-        "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)",
-        "TableName": "unsharded_auto"
+        "Query": "insert into unsharded_auto(val, id) values ('aa', :__seq0)"
       },
       "TablesUsed": [
         "main.unsharded_auto"
@@ -1141,8 +1098,7 @@
           "Sharded": false
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
-        "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)",
-        "TableName": "unsharded_auto"
+        "Query": "insert into unsharded_auto(val, id) values (false, :__seq0)"
       },
       "TablesUsed": [
         "main.unsharded_auto"
@@ -1165,8 +1121,7 @@
           "Sharded": false
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, null)",
-        "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
-        "TableName": "unsharded_auto"
+        "Query": "insert into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')"
       },
       "TablesUsed": [
         "main.unsharded_auto"
@@ -1188,8 +1143,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into unsharded values (1, 1)",
-        "TableName": "unsharded"
+        "Query": "insert into unsharded values (1, 1)"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -1213,7 +1167,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "Query": "insert into `user`(id, val, `Name`, Costly) values (:_Id_0, 1, :_Name_0, :_Costly_0)",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null",
           "name_user_map": "null",
@@ -1242,7 +1195,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null",
           "name_user_map": "null",
@@ -1276,7 +1228,6 @@
           "Sharded": true
         },
         "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, 2, 3)",
-        "TableName": "authoritative",
         "VindexValues": {
           "user_index": "1"
         }
@@ -1303,7 +1254,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null",
           "name_user_map": "null",
@@ -1332,7 +1282,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null",
           "name_user_map": "null",
@@ -1362,7 +1311,6 @@
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "InsertIgnore": true,
         "Query": "insert ignore into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null",
           "name_user_map": "null",
@@ -1392,7 +1340,6 @@
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "InsertIgnore": true,
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null",
           "name_user_map": "null",
@@ -1421,7 +1368,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(:aa)",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0)",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null",
           "name_user_map": "null",
@@ -1450,7 +1396,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "insert into `user`(nonid, id, `Name`, Costly) values (2, :_Id_0, :_Name_0, :_Costly_0)",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null",
           "name_user_map": "null",
@@ -1479,7 +1424,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "insert into `user`(id, nonid, `Name`, Costly) values (:_Id_0, 2, :_Name_0, :_Costly_0)",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null",
           "name_user_map": "null",
@@ -1508,7 +1452,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "insert into `user`(nonid, id, `Name`, Costly) values (true, :_Id_0, :_Name_0, :_Costly_0)",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null",
           "name_user_map": "null",
@@ -1537,7 +1480,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "Query": "insert into `user`(nonid, `name`, id, Costly) values (2, :_Name_0, :_Id_0, :_Costly_0)",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null",
           "name_user_map": "'foo'",
@@ -1566,7 +1508,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
         "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
-        "TableName": "user_extra",
         "VindexValues": {
           "user_index": "null"
         }
@@ -1592,7 +1533,6 @@
           "Sharded": true
         },
         "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c_0, 2)",
-        "TableName": "weird`name",
         "VindexValues": {
           "user_index": "1"
         }
@@ -1617,8 +1557,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into unsharded select 1 from dual union select 1 from dual",
-        "TableName": "unsharded"
+        "Query": "insert into unsharded select 1 from dual union select 1 from dual"
       },
       "TablesUsed": [
         "main.dual",
@@ -1643,7 +1582,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(18446744073709551616)",
         "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id_0)",
-        "TableName": "user_extra",
         "VindexValues": {
           "user_index": "null"
         }
@@ -1669,7 +1607,6 @@
           "Sharded": true
         },
         "Query": "insert into music_extra(music_id, user_id) values (:_music_id_0, :_user_id_0)",
-        "TableName": "music_extra",
         "VindexValues": {
           "music_user_map": "1",
           "user_index": "18446744073709551616"
@@ -1709,7 +1646,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, 2)",
         "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null, null",
           "name_user_map": "null, null",
@@ -1739,7 +1675,6 @@
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, 2)",
         "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
         "QueryTimeout": 1,
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null, null",
           "name_user_map": "null, null",
@@ -1769,7 +1704,6 @@
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, 2)",
         "MultiShardAutocommit": true,
         "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
-        "TableName": "user",
         "VindexValues": {
           "costly_map": "null, null",
           "name_user_map": "null, null",
@@ -1802,8 +1736,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "replace into unsharded values (1, 2)",
-        "TableName": "unsharded"
+        "Query": "replace into unsharded values (1, 2)"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -1825,8 +1758,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "replace into unsharded select id from unsharded_auto",
-        "TableName": "unsharded"
+        "Query": "replace into unsharded select id from unsharded_auto"
       },
       "TablesUsed": [
         "main.unsharded",
@@ -1850,8 +1782,7 @@
           "Sharded": false
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(18446744073709551616)",
-        "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
-        "TableName": "unsharded_auto"
+        "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')"
       },
       "TablesUsed": [
         "main.unsharded_auto"
@@ -1874,8 +1805,7 @@
           "Sharded": false
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
-        "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')",
-        "TableName": "unsharded_auto"
+        "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa')"
       },
       "TablesUsed": [
         "main.unsharded_auto"
@@ -1898,8 +1828,7 @@
           "Sharded": false
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
-        "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)",
-        "TableName": "unsharded_auto"
+        "Query": "replace into unsharded_auto(val, id) values ('aa', :__seq0)"
       },
       "TablesUsed": [
         "main.unsharded_auto"
@@ -1922,8 +1851,7 @@
           "Sharded": false
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, null)",
-        "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')",
-        "TableName": "unsharded_auto"
+        "Query": "replace into unsharded_auto(id, val) values (:__seq0, 'aa'), (:__seq1, 'bb')"
       },
       "TablesUsed": [
         "main.unsharded_auto"
@@ -1952,7 +1880,6 @@
           "Sharded": true
         },
         "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0)",
-        "TableName": "multicolvin",
         "VindexValues": {
           "cola_map": "1",
           "colb_colc_map": "2, 3",
@@ -1980,7 +1907,6 @@
           "Sharded": true
         },
         "Query": "insert into overlap_vindex(kid, column_a, column_b) values (:_kid_0, :_column_a_0, 3)",
-        "TableName": "overlap_vindex",
         "VindexValues": {
           "cola_kid_map": "2, 1",
           "kid_index": "1"
@@ -2007,7 +1933,6 @@
           "Sharded": true
         },
         "Query": "insert into multicolvin(column_a, column_b, column_c, kid) values (:_column_a_0, :_column_b_0, :_column_c_0, :_kid_0), (:_column_a_1, :_column_b_1, :_column_c_1, :_kid_1)",
-        "TableName": "multicolvin",
         "VindexValues": {
           "cola_map": "1, 5",
           "colb_colc_map": "2, 6, 3, 7",
@@ -2038,7 +1963,6 @@
         "KsidVindex": "kid_index",
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
         "Query": "delete from multicolvin where kid = 1",
-        "Table": "multicolvin",
         "Values": [
           "1"
         ],
@@ -2071,7 +1995,6 @@
         "KsidVindex": "kid_index",
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
         "Query": "update multicolvin set column_b = 1, column_c = 2 where kid = 1",
-        "Table": "multicolvin",
         "Values": [
           "1"
         ],
@@ -2105,7 +2028,6 @@
         "KsidVindex": "kid_index",
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_a = 0, column_b = 1 and column_c = 2 from multicolvin where kid = 1 for update",
         "Query": "update multicolvin set column_a = 0, column_b = 1, column_c = 2 where kid = 1",
-        "Table": "multicolvin",
         "Values": [
           "1"
         ],
@@ -2131,8 +2053,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "update user_extra set val = 1",
-        "Table": "user_extra"
+        "Query": "update user_extra set val = 1"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2154,8 +2075,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "update user_extra set val = 1",
-        "Table": "user_extra"
+        "Query": "update user_extra set val = 1"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2178,8 +2098,7 @@
           "Sharded": true
         },
         "MultiShardAutocommit": true,
-        "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user_extra set val = 1",
-        "Table": "user_extra"
+        "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user_extra set val = 1"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2202,8 +2121,7 @@
           "Sharded": true
         },
         "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ user_extra set val = 1",
-        "QueryTimeout": 1,
-        "Table": "user_extra"
+        "QueryTimeout": 1
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2225,8 +2143,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "update user_extra set val = 1 where id between 1 and 2",
-        "Table": "user_extra"
+        "Query": "update user_extra set val = 1 where id between 1 and 2"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2249,7 +2166,6 @@
           "Sharded": true
         },
         "Query": "update user_extra set val = 1 where user_id in ::__vals",
-        "Table": "user_extra",
         "Values": [
           "(1, 2)"
         ],
@@ -2275,8 +2191,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "update user_extra set val = 1 where `name` = 'foo'",
-        "Table": "user_extra"
+        "Query": "update user_extra set val = 1 where `name` = 'foo'"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2298,8 +2213,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "update user_extra set val = 1 where id in (1, 2)",
-        "Table": "user_extra"
+        "Query": "update user_extra set val = 1 where id in (1, 2)"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2321,8 +2235,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "update user_extra set val = 1 where `name` = 'foo' or id = 1",
-        "Table": "user_extra"
+        "Query": "update user_extra set val = 1 where `name` = 'foo' or id = 1"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2345,8 +2258,7 @@
           "Sharded": true
         },
         "FetchLastInsertID": true,
-        "Query": "update user_extra set col = last_insert_id(123)",
-        "Table": "user_extra"
+        "Query": "update user_extra set col = last_insert_id(123)"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2368,8 +2280,7 @@
           "Sharded": true
         },
         "FetchLastInsertID": true,
-        "Query": "delete from user_extra where col = last_insert_id(123)",
-        "Table": "user_extra"
+        "Query": "delete from user_extra where col = last_insert_id(123)"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2390,8 +2301,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "delete from user_extra",
-        "Table": "user_extra"
+        "Query": "delete from user_extra"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2413,8 +2323,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "delete from user_extra",
-        "Table": "user_extra"
+        "Query": "delete from user_extra"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2436,8 +2345,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "delete from user_extra where user_id between 1 and 2",
-        "Table": "user_extra"
+        "Query": "delete from user_extra where user_id between 1 and 2"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2459,8 +2367,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "delete from user_extra where `name` = 'jose'",
-        "Table": "user_extra"
+        "Query": "delete from user_extra where `name` = 'jose'"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2483,8 +2390,7 @@
           "Sharded": true
         },
         "MultiShardAutocommit": true,
-        "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where `name` = 'jose'",
-        "Table": "user_extra"
+        "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where `name` = 'jose'"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2507,8 +2413,7 @@
           "Sharded": true
         },
         "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where `name` = 'jose'",
-        "QueryTimeout": 1,
-        "Table": "user_extra"
+        "QueryTimeout": 1
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2531,7 +2436,6 @@
           "Sharded": true
         },
         "Query": "delete from user_extra where user_id in ::__vals",
-        "Table": "user_extra",
         "Values": [
           "(1, 2)"
         ],
@@ -2557,8 +2461,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)",
-        "Table": "unsharded, unsharded_a, unsharded_b"
+        "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
       },
       "TablesUsed": [
         "main.unsharded",
@@ -2582,8 +2485,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)",
-        "Table": "unsharded, unsharded_a"
+        "Query": "delete from unsharded where col = (select id from unsharded_a where id = unsharded.col)"
       },
       "TablesUsed": [
         "main.unsharded",
@@ -2613,7 +2515,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id = 1 for update",
         "Query": "update `user` set `name` = null where id = 1",
-        "Table": "user",
         "Values": [
           "1"
         ],
@@ -2639,8 +2540,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into unsharded values (:__lastInsertId, 2)",
-        "TableName": "unsharded"
+        "Query": "insert into unsharded values (:__lastInsertId, 2)"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -2663,8 +2563,7 @@
           "Sharded": false
         },
         "FetchLastInsertID": true,
-        "Query": "insert into unsharded values (last_insert_id(789), 2)",
-        "TableName": "unsharded"
+        "Query": "insert into unsharded values (last_insert_id(789), 2)"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -2693,7 +2592,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id in (1, 2, 3) for update",
         "Query": "update `user` set `name` = null where id in ::__vals",
-        "Table": "user",
         "Values": [
           "(1, 2, 3)"
         ],
@@ -2725,8 +2623,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` for update",
-        "Query": "update `user` set `name` = null",
-        "Table": "user"
+        "Query": "update `user` set `name` = null"
       },
       "TablesUsed": [
         "user.user"
@@ -2754,8 +2651,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = null from `user` where id + 1 = 2 for update",
-        "Query": "update `user` set `name` = null where id + 1 = 2",
-        "Table": "user"
+        "Query": "update `user` set `name` = null where id + 1 = 2"
       },
       "TablesUsed": [
         "user.user"
@@ -2781,7 +2677,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id in (1, 2, 3) for update",
         "Query": "delete from `user` where id in ::__vals",
-        "Table": "user",
         "Values": [
           "(1, 2, 3)"
         ],
@@ -2810,8 +2705,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id + 1 = 2 for update",
-        "Query": "delete from `user` where id + 1 = 2",
-        "Table": "user"
+        "Query": "delete from `user` where id + 1 = 2"
       },
       "TablesUsed": [
         "user.user"
@@ -2836,8 +2730,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
-        "Query": "delete from `user`",
-        "Table": "user"
+        "Query": "delete from `user`"
       },
       "TablesUsed": [
         "user.user"
@@ -2863,7 +2756,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
         "Query": "delete from music where id = 1",
-        "Table": "music",
         "Values": [
           "1"
         ],
@@ -2889,8 +2781,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "update `user` set val = 1",
-        "Table": "user"
+        "Query": "update `user` set val = 1"
       },
       "TablesUsed": [
         "user.user"
@@ -2915,8 +2806,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
-        "Query": "delete from `user`",
-        "Table": "user"
+        "Query": "delete from `user`"
       },
       "TablesUsed": [
         "user.user"
@@ -2945,7 +2835,6 @@
         "KsidVindex": "kid_index",
         "OwnedVindexQuery": "select kid, column_a, column_b, column_c, column_c = 2 from multicolvin where kid = 1 for update",
         "Query": "update multicolvin set column_c = 2 where kid = 1",
-        "Table": "multicolvin",
         "Values": [
           "1"
         ],
@@ -2978,7 +2867,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = _binary 'abc' from `user` where id = 1 for update",
         "Query": "update `user` set `name` = _binary 'abc' where id = 1",
-        "Table": "user",
         "Values": [
           "1"
         ],
@@ -3008,7 +2896,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `name` = _binary 'abc' for update",
         "Query": "delete from `user` where `name` = _binary 'abc'",
-        "Table": "user",
         "Values": [
           "_binary'abc'"
         ],
@@ -3037,8 +2924,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
-        "Query": "delete from `user`",
-        "Table": "user"
+        "Query": "delete from `user`"
       },
       "TablesUsed": [
         "user.user"
@@ -3066,8 +2952,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = 'myname' from `user` for update",
-        "Query": "update `user` set `name` = 'myname'",
-        "Table": "user"
+        "Query": "update `user` set `name` = 'myname'"
       },
       "TablesUsed": [
         "user.user"
@@ -3089,8 +2974,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "update user_extra set val = 1",
-        "Table": "user_extra"
+        "Query": "update user_extra set val = 1"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -3115,8 +2999,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id * `user`.col = `user`.foo for update",
-        "Query": "delete from `user` where `user`.id * `user`.col = `user`.foo",
-        "Table": "user"
+        "Query": "delete from `user` where `user`.id * `user`.col = `user`.foo"
       },
       "TablesUsed": [
         "user.user"
@@ -3156,8 +3039,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1)",
-        "TableName": "user_privacy_consents"
+        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1)"
       },
       "TablesUsed": [
         "main.dual",
@@ -3183,8 +3065,7 @@
         "KsidLength": 1,
         "KsidVindex": "xxhash",
         "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 20 for update",
-        "Query": "delete from t1 where c2 = 20",
-        "Table": "t1"
+        "Query": "delete from t1 where c2 = 20"
       },
       "TablesUsed": [
         "zlookup_unique.t1"
@@ -3212,8 +3093,7 @@
         "KsidLength": 1,
         "KsidVindex": "xxhash",
         "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 20 for update",
-        "Query": "update t1 set c2 = 1 where c2 = 20",
-        "Table": "t1"
+        "Query": "update t1 set c2 = 1 where c2 = 20"
       },
       "TablesUsed": [
         "zlookup_unique.t1"
@@ -3239,7 +3119,6 @@
         "KsidVindex": "xxhash",
         "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 = 20 for update",
         "Query": "delete from t1 where c2 = 10 and c3 = 20",
-        "Table": "t1",
         "Values": [
           "20"
         ],
@@ -3272,7 +3151,6 @@
         "KsidVindex": "xxhash",
         "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 10 and c3 = 20 for update",
         "Query": "update t1 set c2 = 1 where c2 = 10 and c3 = 20",
-        "Table": "t1",
         "Values": [
           "20"
         ],
@@ -3302,7 +3180,6 @@
         "KsidVindex": "xxhash",
         "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 in (20, 21) for update",
         "Query": "delete from t1 where c2 = 10 and c3 in ::__vals",
-        "Table": "t1",
         "Values": [
           "(20, 21)"
         ],
@@ -3335,7 +3212,6 @@
         "KsidVindex": "xxhash",
         "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 10 and c3 in (20, 21) for update",
         "Query": "update t1 set c2 = 1 where c2 = 10 and c3 in ::__vals",
-        "Table": "t1",
         "Values": [
           "(20, 21)"
         ],
@@ -3367,8 +3243,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly, u.`name` = 'john' from `user` as u where u.col > 20 for update",
-        "Query": "update `user` as u set u.`name` = 'john' where u.col > 20",
-        "Table": "user"
+        "Query": "update `user` as u set u.`name` = 'john' where u.col > 20"
       },
       "TablesUsed": [
         "user.user"
@@ -3393,8 +3268,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.col > 20 for update",
-        "Query": "delete from `user` as u where u.col > 20",
-        "Table": "user"
+        "Query": "delete from `user` as u where u.col > 20"
       },
       "TablesUsed": [
         "user.user"
@@ -3417,7 +3291,6 @@
           "Sharded": true
         },
         "Query": "update multicol_tbl set x = 1 where cola = 1 and colb = 2",
-        "Table": "multicol_tbl",
         "Values": [
           "1",
           "2"
@@ -3445,7 +3318,6 @@
           "Sharded": true
         },
         "Query": "update multicol_tbl set x = 1 where colb = 2 and cola = 1",
-        "Table": "multicol_tbl",
         "Values": [
           "1",
           "2"
@@ -3473,7 +3345,6 @@
           "Sharded": true
         },
         "Query": "update multicol_tbl set x = 1 where colb in ::__vals1 and cola = 1",
-        "Table": "multicol_tbl",
         "Values": [
           "1",
           "(1, 2)"
@@ -3501,7 +3372,6 @@
           "Sharded": true
         },
         "Query": "update multicol_tbl set x = 1 where colb in ::__vals1 and cola in ::__vals0",
-        "Table": "multicol_tbl",
         "Values": [
           "(3, 4)",
           "(1, 2)"
@@ -3532,7 +3402,6 @@
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 and colb = 2 for update",
         "Query": "delete from multicol_tbl where cola = 1 and colb = 2",
-        "Table": "multicol_tbl",
         "Values": [
           "1",
           "2"
@@ -3563,7 +3432,6 @@
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb = 2 and cola = 1 for update",
         "Query": "delete from multicol_tbl where colb = 2 and cola = 1",
-        "Table": "multicol_tbl",
         "Values": [
           "1",
           "2"
@@ -3594,7 +3462,6 @@
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb in (1, 2) and cola = 1 for update",
         "Query": "delete from multicol_tbl where colb in ::__vals1 and cola = 1",
-        "Table": "multicol_tbl",
         "Values": [
           "1",
           "(1, 2)"
@@ -3625,7 +3492,6 @@
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where colb in (1, 2) and cola in (3, 4) for update",
         "Query": "delete from multicol_tbl where colb in ::__vals1 and cola in ::__vals0",
-        "Table": "multicol_tbl",
         "Values": [
           "(3, 4)",
           "(1, 2)"
@@ -3659,7 +3525,6 @@
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name`, colc = 1 from multicol_tbl where cola = 1 and colb = 2 for update",
         "Query": "update multicol_tbl set colc = 1 where cola = 1 and colb = 2",
-        "Table": "multicol_tbl",
         "Values": [
           "1",
           "2"
@@ -3687,7 +3552,6 @@
           "Sharded": true
         },
         "Query": "update multicol_tbl set x = 42 where `name` = 'foo'",
-        "Table": "multicol_tbl",
         "Values": [
           "'foo'"
         ],
@@ -3714,7 +3578,6 @@
           "Sharded": true
         },
         "Query": "update multicol_tbl set x = 42 where cola = 1",
-        "Table": "multicol_tbl",
         "Values": [
           "1"
         ],
@@ -3747,7 +3610,6 @@
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name`, `name` = 'bar' from multicol_tbl where cola = 1 for update",
         "Query": "update multicol_tbl set `name` = 'bar' where cola = 1",
-        "Table": "multicol_tbl",
         "Values": [
           "1"
         ],
@@ -3780,7 +3642,6 @@
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name`, `name` = 'bar' from multicol_tbl where cola in (1, 2) for update",
         "Query": "update multicol_tbl set `name` = 'bar' where cola in ::__vals0",
-        "Table": "multicol_tbl",
         "Values": [
           "(1, 2)"
         ],
@@ -3807,7 +3668,6 @@
           "Sharded": true
         },
         "Query": "update multicol_tbl set x = 1 where `name` = 'foo' and cola = 2",
-        "Table": "multicol_tbl",
         "Values": [
           "'foo'"
         ],
@@ -3837,7 +3697,6 @@
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' for update",
         "Query": "delete from multicol_tbl where `name` = 'foo'",
-        "Table": "multicol_tbl",
         "Values": [
           "'foo'"
         ],
@@ -3867,7 +3726,6 @@
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola = 1 for update",
         "Query": "delete from multicol_tbl where cola = 1",
-        "Table": "multicol_tbl",
         "Values": [
           "1"
         ],
@@ -3897,7 +3755,6 @@
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where cola in (1, 2) for update",
         "Query": "delete from multicol_tbl where cola in ::__vals0",
-        "Table": "multicol_tbl",
         "Values": [
           "(1, 2)"
         ],
@@ -3927,7 +3784,6 @@
         "KsidVindex": "multicolIdx",
         "OwnedVindexQuery": "select cola, colb, colc, `name` from multicol_tbl where `name` = 'foo' and cola = 2 for update",
         "Query": "delete from multicol_tbl where `name` = 'foo' and cola = 2",
-        "Table": "multicol_tbl",
         "Values": [
           "'foo'"
         ],
@@ -3953,7 +3809,6 @@
           "Name": "user",
           "Sharded": true
         },
-        "TableName": "music",
         "VindexOffsetFromSelect": {
           "music_user_map": "[0]",
           "user_index": "[1]"
@@ -3967,8 +3822,7 @@
               "Sharded": true
             },
             "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user` lock in share mode",
-            "Table": "`user`"
+            "Query": "select * from `user` lock in share mode"
           }
         ]
       },
@@ -4012,7 +3866,6 @@
           "Sharded": true
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
-        "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[0]"
         },
@@ -4025,8 +3878,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` lock in share mode",
-            "Table": "`user`"
+            "Query": "select id from `user` lock in share mode"
           }
         ]
       },
@@ -4052,7 +3904,6 @@
           "Sharded": true
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
-        "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[1]"
         },
@@ -4065,8 +3916,7 @@
               "Sharded": true
             },
             "FieldQuery": "select null, id from `user` where 1 != 1",
-            "Query": "select null, id from `user` lock in share mode",
-            "Table": "`user`"
+            "Query": "select null, id from `user` lock in share mode"
           }
         ]
       },
@@ -4092,7 +3942,6 @@
           "Sharded": true
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(0)",
-        "TableName": "user",
         "VindexOffsetFromSelect": {
           "costly_map": "[-1]",
           "name_user_map": "[-1]",
@@ -4107,8 +3956,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from dual where 1 != 1",
-            "Query": "select 1 from dual lock in share mode",
-            "Table": "dual"
+            "Query": "select 1 from dual lock in share mode"
           }
         ]
       },
@@ -4134,7 +3982,6 @@
           "Sharded": true
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
-        "TableName": "user",
         "VindexOffsetFromSelect": {
           "costly_map": "[-1]",
           "name_user_map": "[-1]",
@@ -4149,8 +3996,7 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from dual where 1 != 1",
-            "Query": "select 1 from dual lock in share mode",
-            "Table": "dual"
+            "Query": "select 1 from dual lock in share mode"
           }
         ]
       },
@@ -4182,7 +4028,6 @@
           "Sharded": true
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
-        "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[0]"
         },
@@ -4195,8 +4040,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2 from `user` where 1 != 1",
-            "Query": "select col1, col2 from `user` lock in share mode",
-            "Table": "`user`"
+            "Query": "select col1, col2 from `user` lock in share mode"
           }
         ]
       },
@@ -4221,8 +4065,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into unsharded(col) select col from unsharded_auto",
-        "TableName": "unsharded"
+        "Query": "insert into unsharded(col) select col from unsharded_auto"
       },
       "TablesUsed": [
         "main.unsharded",
@@ -4246,7 +4089,6 @@
           "Sharded": true
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
-        "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[0]"
         },
@@ -4259,8 +4101,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2 from t1 where 1 != 1",
-            "Query": "select col1, col2 from t1 lock in share mode",
-            "Table": "t1"
+            "Query": "select col1, col2 from t1 lock in share mode"
           }
         ]
       },
@@ -4286,7 +4127,6 @@
           "Sharded": true
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
-        "TableName": "user_extra",
         "VindexOffsetFromSelect": {
           "user_index": "[0]"
         },
@@ -4299,8 +4139,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col1, col2 from unsharded_tab where 1 != 1",
-            "Query": "select col1, col2 from unsharded_tab lock in share mode",
-            "Table": "unsharded_tab"
+            "Query": "select col1, col2 from unsharded_tab lock in share mode"
           }
         ]
       },
@@ -4325,7 +4164,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TableName": "unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -4335,8 +4173,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col from unsharded_tab where 1 != 1",
-            "Query": "select col from unsharded_tab lock in share mode",
-            "Table": "unsharded_tab"
+            "Query": "select col from unsharded_tab lock in share mode"
           }
         ]
       },
@@ -4361,7 +4198,6 @@
           "Name": "main",
           "Sharded": false
         },
-        "TableName": "unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -4371,8 +4207,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from t1 where 1 != 1",
-            "Query": "select col from t1 lock in share mode",
-            "Table": "t1"
+            "Query": "select col from t1 lock in share mode"
           }
         ]
       },
@@ -4406,8 +4241,7 @@
               "Sharded": false
             },
             "FieldQuery": "select id from unsharded where 1 != 1",
-            "Query": "select id from unsharded lock in share mode",
-            "Table": "unsharded"
+            "Query": "select id from unsharded lock in share mode"
           },
           {
             "InputName": "Outer",
@@ -4417,8 +4251,7 @@
               "Name": "user",
               "Sharded": true
             },
-            "Query": "update `user` set col = :__sq1",
-            "Table": "user"
+            "Query": "update `user` set col = :__sq1"
           }
         ]
       },
@@ -4452,8 +4285,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` lock in share mode",
-            "Table": "`user`"
+            "Query": "select id from `user` lock in share mode"
           },
           {
             "InputName": "Outer",
@@ -4463,8 +4295,7 @@
               "Name": "main",
               "Sharded": false
             },
-            "Query": "update unsharded set col = :__sq1",
-            "Table": "unsharded"
+            "Query": "update unsharded set col = :__sq1"
           }
         ]
       },
@@ -4497,7 +4328,6 @@
             "JoinVars": {
               "unsharded_id": 0
             },
-            "TableName": "unsharded_`user`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4507,8 +4337,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-                "Query": "select unsharded.id from unsharded lock in share mode",
-                "Table": "unsharded"
+                "Query": "select unsharded.id from unsharded lock in share mode"
               },
               {
                 "OperatorType": "Route",
@@ -4519,7 +4348,6 @@
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
                 "Query": "select id from `user` where `user`.id = :unsharded_id lock in share mode",
-                "Table": "`user`",
                 "Values": [
                   ":unsharded_id"
                 ],
@@ -4535,8 +4363,7 @@
               "Name": "main",
               "Sharded": false
             },
-            "Query": "update unsharded set col = :__sq1",
-            "Table": "unsharded"
+            "Query": "update unsharded set col = :__sq1"
           }
         ]
       },
@@ -4562,7 +4389,6 @@
           "Sharded": true
         },
         "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = 5) where id = 5",
-        "Table": "user",
         "Values": [
           "5"
         ],
@@ -4590,7 +4416,6 @@
           "Sharded": true
         },
         "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id = 5",
-        "Table": "user",
         "Values": [
           "5"
         ],
@@ -4617,8 +4442,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id > 5",
-        "Table": "user"
+        "Query": "update `user` set col = (select count(*) from user_extra where user_extra.user_id = `user`.id) where id > 5"
       },
       "TablesUsed": [
         "user.user",
@@ -4642,7 +4466,6 @@
           "Sharded": true
         },
         "Query": "insert into authoritative(user_id) values (:_user_id_0)",
-        "TableName": "authoritative",
         "VindexValues": {
           "user_index": "null"
         }
@@ -4680,8 +4503,7 @@
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
-            "Query": "delete from `user`",
-            "Table": "user"
+            "Query": "delete from `user`"
           }
         ]
       },
@@ -4712,8 +4534,7 @@
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` for update",
-            "Query": "delete from `user`",
-            "Table": "user"
+            "Query": "delete from `user`"
           }
         ]
       },
@@ -4737,8 +4558,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete foo from unsharded as foo join (select id from unsharded as a join unsharded_b as b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000",
-        "Table": "unsharded, unsharded_b"
+        "Query": "delete foo from unsharded as foo join (select id from unsharded as a join unsharded_b as b on a.user_id = b.user_id) as keepers on foo.id = keepers.id where keepers.id is null and foo.col is not null and foo.col < 1000"
       },
       "TablesUsed": [
         "main.unsharded",
@@ -4762,7 +4582,6 @@
           "Sharded": true
         },
         "Query": "update `user` set col = 1 where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
-        "Table": "user",
         "Values": [
           "('aa', 'cc')"
         ],
@@ -4792,7 +4611,6 @@
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd')) for update",
         "Query": "delete from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
-        "Table": "user",
         "Values": [
           "('aa', 'cc')"
         ],
@@ -4818,8 +4636,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "insert into ref(col) values (1)",
-        "TableName": "ref"
+        "Query": "insert into ref(col) values (1)"
       },
       "TablesUsed": [
         "user.ref"
@@ -4841,8 +4658,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update m1 set foo = last_insert_id(foo + 1) where id = 12345",
-        "Table": "m1"
+        "Query": "update m1 set foo = last_insert_id(foo + 1) where id = 12345"
       },
       "TablesUsed": [
         "main.m1"
@@ -4865,8 +4681,7 @@
           "Sharded": false
         },
         "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
-        "QueryTimeout": 1,
-        "Table": "unsharded"
+        "QueryTimeout": 1
       },
       "TablesUsed": [
         "main.unsharded"
@@ -4889,8 +4704,7 @@
           "Sharded": false
         },
         "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into unsharded values ()",
-        "QueryTimeout": 1,
-        "TableName": "unsharded"
+        "QueryTimeout": 1
       },
       "TablesUsed": [
         "main.unsharded"
@@ -4913,7 +4727,6 @@
           "Sharded": true
         },
         "InputAsNonStreaming": true,
-        "TableName": "music",
         "VindexOffsetFromSelect": {
           "music_user_map": "[0]",
           "user_index": "[1]"
@@ -4928,7 +4741,6 @@
             },
             "FieldQuery": "select id, user_id from music where 1 != 1",
             "Query": "select id, user_id from music where user_id = 1 lock in share mode",
-            "Table": "music",
             "Values": [
               "1"
             ],
@@ -4958,7 +4770,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null, null, null)",
         "Query": "insert into mixed_tbl(shard_key, lkp_key) values (:_shard_key_0, :_lkp_key_0), (:_shard_key_1, :_lkp_key_1), (:_shard_key_2, :_lkp_key_2)",
-        "TableName": "mixed_tbl",
         "VindexValues": {
           "lkp_shard_map": ":__seq0, :__seq1, :__seq2",
           "shard_index": "1, 4, 9"
@@ -4986,7 +4797,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, null, 27)",
         "Query": "insert into mixed_tbl(shard_key, lkp_key) values (:_shard_key_0, :_lkp_key_0), (:_shard_key_1, :_lkp_key_1), (:_shard_key_2, :_lkp_key_2)",
-        "TableName": "mixed_tbl",
         "VindexValues": {
           "lkp_shard_map": ":__seq0, :__seq1, :__seq2",
           "shard_index": "1, 4, 9"
@@ -5013,7 +4823,6 @@
           "Sharded": true
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
-        "TableName": "mixed_tbl",
         "VindexOffsetFromSelect": {
           "lkp_shard_map": "[1]",
           "shard_index": "[0]"
@@ -5028,7 +4837,6 @@
             },
             "FieldQuery": "select foo from `user` where 1 != 1",
             "Query": "select foo from `user` where id = 1 lock in share mode",
-            "Table": "`user`",
             "Values": [
               "1"
             ],
@@ -5058,7 +4866,6 @@
           "Sharded": true
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
-        "TableName": "mixed_tbl",
         "VindexOffsetFromSelect": {
           "lkp_shard_map": "[1]",
           "shard_index": "[0]"
@@ -5073,7 +4880,6 @@
             },
             "FieldQuery": "select foo, bar from `user` where 1 != 1",
             "Query": "select foo, bar from `user` where id = 1 lock in share mode",
-            "Table": "`user`",
             "Values": [
               "1"
             ],
@@ -5110,7 +4916,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(0)",
         "InputAsNonStreaming": true,
-        "TableName": "user",
         "VindexOffsetFromSelect": {
           "costly_map": "[-1]",
           "name_user_map": "[-1]",
@@ -5125,8 +4930,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` lock in share mode",
-            "Table": "`user`"
+            "Query": "select id from `user` lock in share mode"
           }
         ]
       },
@@ -5182,7 +4986,6 @@
         },
         "InsertIgnore": true,
         "Query": "insert into music(id, user_id, col) values (:_id_0, :_user_id_0, 3) on duplicate key update music.col = 5",
-        "TableName": "music",
         "VindexValues": {
           "music_user_map": "1",
           "user_index": "2"
@@ -5208,8 +5011,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete from source_of_ref where col = 1",
-        "Table": "source_of_ref"
+        "Query": "delete from source_of_ref where col = 1"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -5231,8 +5033,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "delete from ref",
-        "Table": "ref"
+        "Query": "delete from ref"
       },
       "TablesUsed": [
         "user.ref"
@@ -5257,8 +5058,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select Id, `Name`, Costly from `user` limit 20 for update",
-        "Query": "delete from `user` limit 20",
-        "Table": "user"
+        "Query": "delete from `user` limit 20"
       },
       "TablesUsed": [
         "user.user"
@@ -5283,8 +5083,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u, ref_with_source as r where u.col = r.col for update",
-        "Query": "delete u from `user` as u, ref_with_source as r where u.col = r.col",
-        "Table": "user"
+        "Query": "delete u from `user` as u, ref_with_source as r where u.col = r.col"
       },
       "TablesUsed": [
         "user.ref_with_source",
@@ -5310,8 +5109,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u, music as m where u.id = m.user_id for update",
-        "Query": "delete u from `user` as u, music as m where u.id = m.user_id",
-        "Table": "user"
+        "Query": "delete u from `user` as u, music as m where u.id = m.user_id"
       },
       "TablesUsed": [
         "user.music",
@@ -5340,7 +5138,6 @@
             "JoinVars": {
               "user_extra_id": 0
             },
-            "TableName": "user_extra_`user`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5350,8 +5147,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-                "Query": "select user_extra.id from user_extra",
-                "Table": "user_extra"
+                "Query": "select user_extra.id from user_extra"
               },
               {
                 "OperatorType": "Route",
@@ -5362,7 +5158,6 @@
                 },
                 "FieldQuery": "select `user`.id from `user` where 1 != 1",
                 "Query": "select `user`.id from `user` where `user`.`name` = 'foo' and `user`.id = :user_extra_id",
-                "Table": "`user`",
                 "Values": [
                   ":user_extra_id"
                 ],
@@ -5381,7 +5176,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select `user`.Id, `user`.`Name`, `user`.Costly from `user` where `user`.id in ::dml_vals for update",
             "Query": "delete from `user` where `user`.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -5416,7 +5210,6 @@
             "JoinVars": {
               "u_col": 1
             },
-            "TableName": "`user`_music",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5426,8 +5219,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
-                "Query": "select u.id, u.col from `user` as u",
-                "Table": "`user`"
+                "Query": "select u.id, u.col from `user` as u"
               },
               {
                 "OperatorType": "Route",
@@ -5437,8 +5229,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from music as m where 1 != 1",
-                "Query": "select 1 from music as m where m.col = :u_col /* INT16 */",
-                "Table": "music"
+                "Query": "select 1 from music as m where m.col = :u_col /* INT16 */"
               }
             ]
           },
@@ -5453,7 +5244,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dml_vals for update",
             "Query": "delete from `user` as u where u.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -5488,7 +5278,6 @@
             "JoinVars": {
               "m_col": 0
             },
-            "TableName": "music_`user`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5498,8 +5287,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select m.col from music as m where 1 != 1",
-                "Query": "select m.col from music as m where m.foo = 42",
-                "Table": "music"
+                "Query": "select m.col from music as m where m.foo = 42"
               },
               {
                 "OperatorType": "Route",
@@ -5509,8 +5297,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u.id from `user` as u where 1 != 1",
-                "Query": "select u.id from `user` as u where u.col = :m_col",
-                "Table": "`user`"
+                "Query": "select u.id from `user` as u where u.col = :m_col"
               }
             ]
           },
@@ -5525,7 +5312,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dml_vals for update",
             "Query": "delete from `user` as u where u.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -5557,8 +5343,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u, music as m where m.foo = 42 and u.id = m.user_id for update",
-        "Query": "delete u from `user` as u, music as m where m.foo = 42 and u.id = m.user_id",
-        "Table": "user"
+        "Query": "delete u from `user` as u, music as m where m.foo = 42 and u.id = m.user_id"
       },
       "TablesUsed": [
         "user.music",
@@ -5587,7 +5372,6 @@
             "JoinVars": {
               "u_col": 1
             },
-            "TableName": "`user`_music, user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5597,8 +5381,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
-                "Query": "select u.id, u.col from `user` as u where u.col = 30",
-                "Table": "`user`"
+                "Query": "select u.id, u.col from `user` as u where u.col = 30"
               },
               {
                 "OperatorType": "Route",
@@ -5608,8 +5391,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from music as m, user_extra as ue where 1 != 1",
-                "Query": "select 1 from music as m, user_extra as ue where m.bar = 40 and m.col = :u_col /* INT16 */ and ue.foo = 20 and m.user_id = ue.user_id",
-                "Table": "music, user_extra"
+                "Query": "select 1 from music as m, user_extra as ue where m.bar = 40 and m.col = :u_col /* INT16 */ and ue.foo = 20 and m.user_id = ue.user_id"
               }
             ]
           },
@@ -5624,7 +5406,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select u.Id, u.`Name`, u.Costly from `user` as u where u.id in ::dml_vals for update",
             "Query": "delete from `user` as u where u.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -5660,7 +5441,6 @@
             "JoinVars": {
               "u_col": 0
             },
-            "TableName": "`user`_music, user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5670,8 +5450,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u.col from `user` as u where 1 != 1",
-                "Query": "select u.col from `user` as u where u.col = 30",
-                "Table": "`user`"
+                "Query": "select u.col from `user` as u where u.col = 30"
               },
               {
                 "OperatorType": "Route",
@@ -5681,8 +5460,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select m.id from music as m, user_extra as ue where 1 != 1",
-                "Query": "select m.id from music as m, user_extra as ue where m.bar = 40 and m.col = :u_col /* INT16 */ and ue.foo = 20 and m.user_id = ue.user_id",
-                "Table": "music, user_extra"
+                "Query": "select m.id from music as m, user_extra as ue where m.bar = 40 and m.col = :u_col /* INT16 */ and ue.foo = 20 and m.user_id = ue.user_id"
               }
             ]
           },
@@ -5697,7 +5475,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select m.user_id, m.id from music as m where m.id in ::dml_vals for update",
             "Query": "delete from music as m where m.id in ::dml_vals",
-            "Table": "music",
             "Values": [
               "::dml_vals"
             ],
@@ -5738,8 +5515,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.id from `user` limit :__upper_limit",
-                "Table": "`user`"
+                "Query": "select `user`.id from `user` limit :__upper_limit"
               }
             ]
           },
@@ -5754,7 +5530,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dml_vals for update",
             "Query": "delete from `user` where `user`.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -5794,8 +5569,7 @@
                 },
                 "FieldQuery": "select `user`.id, `name`, weight_string(`name`), col from `user` where 1 != 1",
                 "OrderBy": "(1|2) ASC, 3 ASC",
-                "Query": "select `user`.id, `name`, weight_string(`name`), col from `user` order by `name` asc, col asc limit :__upper_limit",
-                "Table": "`user`"
+                "Query": "select `user`.id, `name`, weight_string(`name`), col from `user` order by `name` asc, col asc limit :__upper_limit"
               }
             ]
           },
@@ -5810,7 +5584,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dml_vals for update",
             "Query": "delete from `user` where `user`.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -5849,8 +5622,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.id from `user` where `name` = 'foo' or id = 1 limit :__upper_limit lock in share mode",
-                "Table": "`user`"
+                "Query": "select `user`.id from `user` where `name` = 'foo' or id = 1 limit :__upper_limit lock in share mode"
               }
             ]
           },
@@ -5862,7 +5634,6 @@
               "Sharded": true
             },
             "Query": "update `user` set val = 1 where `user`.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -5901,8 +5672,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id from `user` where 1 != 1",
-                "Query": "select `user`.id from `user` where id > 10 limit :__upper_limit lock in share mode",
-                "Table": "`user`"
+                "Query": "select `user`.id from `user` where id > 10 limit :__upper_limit lock in share mode"
               }
             ]
           },
@@ -5920,7 +5690,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = 'abc' from `user` where `user`.id in ::dml_vals for update",
             "Query": "update `user` set `name` = 'abc' where `user`.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -5954,7 +5723,6 @@
             "JoinVars": {
               "ue_id": 0
             },
-            "TableName": "user_extra_`user`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5964,8 +5732,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select ue.id from user_extra as ue where 1 != 1",
-                "Query": "select ue.id from user_extra as ue lock in share mode",
-                "Table": "user_extra"
+                "Query": "select ue.id from user_extra as ue lock in share mode"
               },
               {
                 "OperatorType": "Route",
@@ -5976,7 +5743,6 @@
                 },
                 "FieldQuery": "select u.id from `user` as u where 1 != 1",
                 "Query": "select u.id from `user` as u where u.id = :ue_id lock in share mode",
-                "Table": "`user`",
                 "Values": [
                   ":ue_id"
                 ],
@@ -5998,7 +5764,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly, u.`name` = 'foo' from `user` as u where u.id in ::dml_vals for update",
             "Query": "update `user` as u set u.`name` = 'foo' where u.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -6033,7 +5798,6 @@
             "JoinVars": {
               "user_extra_id": 0
             },
-            "TableName": "user_extra_`user`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6043,8 +5807,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-                "Query": "select user_extra.id from user_extra lock in share mode",
-                "Table": "user_extra"
+                "Query": "select user_extra.id from user_extra lock in share mode"
               },
               {
                 "OperatorType": "Route",
@@ -6055,7 +5818,6 @@
                 },
                 "FieldQuery": "select `user`.id from `user` where 1 != 1",
                 "Query": "select `user`.id from `user` where `user`.id = :user_extra_id lock in share mode",
-                "Table": "`user`",
                 "Values": [
                   ":user_extra_id"
                 ],
@@ -6077,7 +5839,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly, `user`.`name` = 'foo' from `user` where `user`.id in ::dml_vals for update",
             "Query": "update `user` set `user`.`name` = 'foo' where `user`.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -6115,7 +5876,6 @@
             "JoinVars": {
               "ue_id": 1
             },
-            "TableName": "user_extra_`user`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6125,8 +5885,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select ue.col, ue.id from user_extra as ue where 1 != 1",
-                "Query": "select ue.col, ue.id from user_extra as ue for update",
-                "Table": "user_extra"
+                "Query": "select ue.col, ue.id from user_extra as ue for update"
               },
               {
                 "OperatorType": "Route",
@@ -6137,7 +5896,6 @@
                 },
                 "FieldQuery": "select u.id from `user` as u where 1 != 1",
                 "Query": "select u.id from `user` as u where u.id = :ue_id for update",
-                "Table": "`user`",
                 "Values": [
                   ":ue_id"
                 ],
@@ -6153,7 +5911,6 @@
               "Sharded": true
             },
             "Query": "update `user` as u set u.col = :ue_col /* INT16 */ where u.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -6191,7 +5948,6 @@
             "JoinVars": {
               "ue_id": 2
             },
-            "TableName": "user_extra_`user`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6201,8 +5957,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select ue.foo, ue.bar, ue.id from user_extra as ue where 1 != 1",
-                "Query": "select ue.foo, ue.bar, ue.id from user_extra as ue for update",
-                "Table": "user_extra"
+                "Query": "select ue.foo, ue.bar, ue.id from user_extra as ue for update"
               },
               {
                 "OperatorType": "Route",
@@ -6213,7 +5968,6 @@
                 },
                 "FieldQuery": "select u.id from `user` as u where 1 != 1",
                 "Query": "select u.id from `user` as u where u.id = :ue_id for update",
-                "Table": "`user`",
                 "Values": [
                   ":ue_id"
                 ],
@@ -6229,7 +5983,6 @@
               "Sharded": true
             },
             "Query": "update `user` as u set u.col = :ue_foo + :ue_bar + u.baz where u.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -6269,7 +6022,6 @@
             "JoinVars": {
               "user_id": 0
             },
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6280,7 +6032,6 @@
                 },
                 "FieldQuery": "select `user`.id, `user`.baz from `user` where 1 != 1",
                 "Query": "select `user`.id, `user`.baz from `user` where `user`.id = 1 for update",
-                "Table": "`user`",
                 "Values": [
                   "1"
                 ],
@@ -6294,8 +6045,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select ue.id, ue.user_id from user_extra as ue where 1 != 1",
-                "Query": "select ue.id, ue.user_id from user_extra as ue where ue.id = :user_id for update",
-                "Table": "user_extra"
+                "Query": "select ue.id, ue.user_id from user_extra as ue where ue.id = :user_id for update"
               }
             ]
           },
@@ -6313,7 +6063,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly, `user`.`name` = :ue_id + 'foo' from `user` where `user`.id in ::dml_vals for update",
             "Query": "update `user` set `user`.`name` = :ue_id + 'foo' where `user`.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -6327,7 +6076,6 @@
               "Sharded": true
             },
             "Query": "update user_extra as ue set ue.bar = :user_baz where (ue.id, ue.user_id) in ::dml_vals",
-            "Table": "user_extra",
             "Values": [
               "dml_vals:1"
             ],
@@ -6371,8 +6119,7 @@
         "KsidLength": 1,
         "KsidVindex": "user_index",
         "OwnedVindexQuery": "select user_id, id from music as bar for update",
-        "Query": "delete from music as bar",
-        "Table": "music"
+        "Query": "delete from music as bar"
       },
       "TablesUsed": [
         "user.music"
@@ -6394,8 +6141,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "update music as bar set col = 23",
-        "Table": "music"
+        "Query": "update music as bar set col = 23"
       },
       "TablesUsed": [
         "user.music"
@@ -6418,7 +6164,6 @@
           "Sharded": true
         },
         "Query": "insert into music(id, user_id) values (:_id_0, :_user_id_0)",
-        "TableName": "music",
         "VindexValues": {
           "music_user_map": "2",
           "user_index": "null"
@@ -6454,7 +6199,6 @@
             },
             "FieldQuery": "select id from music where 1 != 1",
             "Query": "select id from music where user_id = 1",
-            "Table": "music",
             "Values": [
               "1"
             ],
@@ -6472,7 +6216,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = :__sq1 for update",
             "Query": "delete from `user` where id = :__sq1",
-            "Table": "user",
             "Values": [
               ":__sq1"
             ],
@@ -6510,8 +6253,7 @@
               "Sharded": false
             },
             "FieldQuery": "select id from unsharded where 1 != 1",
-            "Query": "select id from unsharded",
-            "Table": "unsharded"
+            "Query": "select id from unsharded"
           },
           {
             "InputName": "Outer",
@@ -6524,8 +6266,7 @@
             "KsidLength": 1,
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where col = :__sq1 for update",
-            "Query": "delete from `user` where col = :__sq1",
-            "Table": "user"
+            "Query": "delete from `user` where col = :__sq1"
           }
         ]
       },
@@ -6559,8 +6300,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user`",
-            "Table": "`user`"
+            "Query": "select id from `user`"
           },
           {
             "InputName": "Outer",
@@ -6570,8 +6310,7 @@
               "Name": "main",
               "Sharded": false
             },
-            "Query": "delete from unsharded where col = :__sq1",
-            "Table": "unsharded"
+            "Query": "delete from unsharded where col = :__sq1"
           }
         ]
       },
@@ -6613,8 +6352,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select id from `user`",
-                "Table": "`user`"
+                "Query": "select id from `user`"
               },
               {
                 "InputName": "Outer",
@@ -6625,8 +6363,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select id from unsharded where 1 != 1",
-                "Query": "select id from unsharded where id = :__sq2",
-                "Table": "unsharded"
+                "Query": "select id from unsharded where id = :__sq2"
               }
             ]
           },
@@ -6638,8 +6375,7 @@
               "Name": "main",
               "Sharded": false
             },
-            "Query": "delete from unsharded where col = :__sq1",
-            "Table": "unsharded"
+            "Query": "delete from unsharded where col = :__sq1"
           }
         ]
       },
@@ -6672,7 +6408,6 @@
             "JoinVars": {
               "unsharded_id": 0
             },
-            "TableName": "unsharded_`user`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6682,8 +6417,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-                "Query": "select unsharded.id from unsharded",
-                "Table": "unsharded"
+                "Query": "select unsharded.id from unsharded"
               },
               {
                 "OperatorType": "Route",
@@ -6694,7 +6428,6 @@
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
                 "Query": "select id from `user` where `user`.id = :unsharded_id",
-                "Table": "`user`",
                 "Values": [
                   ":unsharded_id"
                 ],
@@ -6710,8 +6443,7 @@
               "Name": "main",
               "Sharded": false
             },
-            "Query": "delete from unsharded where col = :__sq1",
-            "Table": "unsharded"
+            "Query": "delete from unsharded where col = :__sq1"
           }
         ]
       },
@@ -6744,7 +6476,6 @@
               "u_col": 1,
               "u_foo": 2
             },
-            "TableName": "`user`_music",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6754,8 +6485,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u.id, u.col, u.foo from `user` as u where 1 != 1",
-                "Query": "select u.id, u.col, u.foo from `user` as u where u.baz = 12 for update",
-                "Table": "`user`"
+                "Query": "select u.id, u.col, u.foo from `user` as u where u.baz = 12 for update"
               },
               {
                 "OperatorType": "Route",
@@ -6765,8 +6495,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select m.id from music as m where 1 != 1",
-                "Query": "select m.id from music as m where m.baz = 21 and m.bar = :u_foo and m.col = :u_col /* INT16 */ for update",
-                "Table": "music"
+                "Query": "select m.id from music as m where m.baz = 21 and m.bar = :u_foo and m.col = :u_col /* INT16 */ for update"
               }
             ]
           },
@@ -6781,7 +6510,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.id in ::dml_vals for update",
             "Query": "delete from `user` as u where u.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -6798,7 +6526,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select user_id, id from music as m where m.id in ::dml_vals for update",
             "Query": "delete from music as m where m.id in ::dml_vals",
-            "Table": "music",
             "Values": [
               "::dml_vals"
             ],
@@ -6834,7 +6561,6 @@
             "JoinVars": {
               "music_id": 0
             },
-            "TableName": "music_`user`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6844,8 +6570,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select music.id from music where 1 != 1",
-                "Query": "select music.id from music for update",
-                "Table": "music"
+                "Query": "select music.id from music for update"
               },
               {
                 "OperatorType": "Route",
@@ -6856,7 +6581,6 @@
                 },
                 "FieldQuery": "select `user`.id from `user` where 1 != 1",
                 "Query": "select `user`.id from `user` where `user`.id = :music_id for update",
-                "Table": "`user`",
                 "Values": [
                   ":music_id"
                 ],
@@ -6875,7 +6599,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select user_id, id from music where music.id in ::dml_vals for update",
             "Query": "delete from music where music.id in ::dml_vals",
-            "Table": "music",
             "Values": [
               "::dml_vals"
             ],
@@ -6892,7 +6615,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where `user`.id in ::dml_vals for update",
             "Query": "delete from `user` where `user`.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -6929,8 +6651,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.id, m.id from `user` as u, music as m where 1 != 1",
-            "Query": "select u.id, m.id from `user` as u, music as m where u.id = m.user_id for update",
-            "Table": "`user`, music"
+            "Query": "select u.id, m.id from `user` as u, music as m where u.id = m.user_id for update"
           },
           {
             "OperatorType": "Delete",
@@ -6943,7 +6664,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.id in ::dml_vals for update",
             "Query": "delete from `user` as u where u.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -6960,7 +6680,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select user_id, id from music as m where m.id in ::dml_vals for update",
             "Query": "delete from music as m where m.id in ::dml_vals",
-            "Table": "music",
             "Values": [
               "::dml_vals"
             ],
@@ -6996,7 +6715,6 @@
             "JoinVars": {
               "u_col": 1
             },
-            "TableName": "`user`_music",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -7006,8 +6724,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
-                "Query": "select u.id, u.col from `user` as u for update",
-                "Table": "`user`"
+                "Query": "select u.id, u.col from `user` as u for update"
               },
               {
                 "OperatorType": "Route",
@@ -7017,8 +6734,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select m.id from music as m where 1 != 1",
-                "Query": "select m.id from music as m where m.col = :u_col /* INT16 */ for update",
-                "Table": "music"
+                "Query": "select m.id from music as m where m.col = :u_col /* INT16 */ for update"
               }
             ]
           },
@@ -7033,7 +6749,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.id in ::dml_vals for update",
             "Query": "delete from `user` as u where u.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -7050,7 +6765,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select user_id, id from music as m where m.id in ::dml_vals for update",
             "Query": "delete from music as m where m.id in ::dml_vals",
-            "Table": "music",
             "Values": [
               "::dml_vals"
             ],
@@ -7087,8 +6801,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.id, ue.id, ue.user_id from `user` as u, user_extra as ue where 1 != 1",
-            "Query": "select u.id, ue.id, ue.user_id from `user` as u, user_extra as ue where u.id = ue.user_id for update",
-            "Table": "`user`, user_extra"
+            "Query": "select u.id, ue.id, ue.user_id from `user` as u, user_extra as ue where u.id = ue.user_id for update"
           },
           {
             "OperatorType": "Delete",
@@ -7101,7 +6814,6 @@
             "KsidVindex": "user_index",
             "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.id in ::dml_vals for update",
             "Query": "delete from `user` as u where u.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -7115,7 +6827,6 @@
               "Sharded": true
             },
             "Query": "delete from user_extra as ue where (ue.id, ue.user_id) in ::dml_vals",
-            "Table": "user_extra",
             "Values": [
               "dml_vals:1"
             ],
@@ -7152,8 +6863,7 @@
               "Sharded": true
             },
             "FieldQuery": "select ev.oid, ev.ename, o.oid, o.region_id from `order` as o, order_event as ev where 1 != 1",
-            "Query": "select ev.oid, ev.ename, o.oid, o.region_id from `order` as o, order_event as ev where ev.ename = 'a' and o.oid = ev.oid for update",
-            "Table": "`order`, order_event"
+            "Query": "select ev.oid, ev.ename, o.oid, o.region_id from `order` as o, order_event as ev where ev.ename = 'a' and o.oid = ev.oid for update"
           },
           {
             "OperatorType": "Delete",
@@ -7163,7 +6873,6 @@
               "Sharded": true
             },
             "Query": "delete from order_event as ev where (ev.oid, ev.ename) in ::dml_vals",
-            "Table": "order_event",
             "Values": [
               "dml_vals:0"
             ],
@@ -7180,7 +6889,6 @@
             "KsidVindex": "xxhash",
             "OwnedVindexQuery": "select region_id, oid from `order` as o where (o.oid, o.region_id) in ::dml_vals for update",
             "Query": "delete from `order` as o where (o.oid, o.region_id) in ::dml_vals",
-            "Table": "order",
             "Values": [
               "dml_vals:1"
             ],
@@ -7216,7 +6924,6 @@
             "JoinVars": {
               "u_col": 1
             },
-            "TableName": "`user`_music",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -7226,8 +6933,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
-                "Query": "select u.id, u.col from `user` as u for update",
-                "Table": "`user`"
+                "Query": "select u.id, u.col from `user` as u for update"
               },
               {
                 "OperatorType": "Route",
@@ -7237,8 +6943,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select m.id from music as m where 1 != 1",
-                "Query": "select m.id from music as m where m.col = :u_col /* INT16 */ for update",
-                "Table": "music"
+                "Query": "select m.id from music as m where m.col = :u_col /* INT16 */ for update"
               }
             ]
           },
@@ -7250,7 +6955,6 @@
               "Sharded": true
             },
             "Query": "update ignore `user` as u set u.foo = 21 where u.id in ::dml_vals",
-            "Table": "user",
             "Values": [
               "::dml_vals"
             ],
@@ -7264,7 +6968,6 @@
               "Sharded": true
             },
             "Query": "update ignore music as m set m.bar = 'abc' where m.id in ::dml_vals",
-            "Table": "music",
             "Values": [
               "::dml_vals"
             ],
@@ -7295,7 +6998,6 @@
         },
         "InsertIgnore": true,
         "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, '2', 3), (:_user_id_1, '5', 6) as new on duplicate key update col2 = new.user_id + new.col1",
-        "TableName": "authoritative",
         "VindexValues": {
           "user_index": "1, 4"
         }
@@ -7322,7 +7024,6 @@
         },
         "InsertIgnore": true,
         "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, '2', 3), (:_user_id_1, '5', 6) as new (a, b, c) on duplicate key update col1 = a + c",
-        "TableName": "authoritative",
         "VindexValues": {
           "user_index": "1, 4"
         }
@@ -7349,7 +7050,6 @@
         },
         "InsertIgnore": true,
         "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, '2', 3), (:_user_id_1, '5', 6) as new on duplicate key update col2 = new.user_id + new.col1",
-        "TableName": "authoritative",
         "VindexValues": {
           "user_index": "1, 4"
         }
@@ -7376,7 +7076,6 @@
         },
         "InsertIgnore": true,
         "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id_0, '2', 3), (:_user_id_1, '5', 6) as new (a, b, c) on duplicate key update col1 = a + c",
-        "TableName": "authoritative",
         "VindexValues": {
           "user_index": "1, 4"
         }

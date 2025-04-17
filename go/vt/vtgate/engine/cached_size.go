@@ -967,12 +967,10 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(96)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
-	// field TableName string
-	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	// field FieldQuery string
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison

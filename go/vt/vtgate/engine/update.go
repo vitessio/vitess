@@ -194,7 +194,6 @@ func (upd *Update) isVindexModified() bool {
 func (upd *Update) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query":                upd.Query,
-		"Table":                upd.GetTableName(),
 		"OwnedVindexQuery":     upd.OwnedVindexQuery,
 		"MultiShardAutocommit": upd.MultiShardAutocommit,
 		"QueryTimeout":         upd.QueryTimeout,

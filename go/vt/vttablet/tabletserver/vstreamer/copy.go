@@ -73,6 +73,7 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 
 	errch := make(chan error, 1)
 	go func() {
+		uvs.stopPos = replication.Position{} // reset stopPos which was potentially set during fastforward
 		startPos := replication.EncodePosition(uvs.pos)
 		vs := newVStreamer(ctx, uvs.cp, uvs.se, startPos, "", uvs.filter, uvs.getVSchema(), uvs.throttlerApp, uvs.send2, "catchup", uvs.vse, nil)
 		uvs.setVs(vs)

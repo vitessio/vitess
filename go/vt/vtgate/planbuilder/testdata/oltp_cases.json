@@ -15,7 +15,6 @@
         },
         "FieldQuery": "select c from sbtest34 where 1 != 1",
         "Query": "select c from sbtest34 where id = 15",
-        "Table": "sbtest34",
         "Values": [
           "15"
         ],
@@ -41,8 +40,7 @@
           "Sharded": true
         },
         "FieldQuery": "select c from sbtest12 where 1 != 1",
-        "Query": "select c from sbtest12 where id between 1 and 10",
-        "Table": "sbtest12"
+        "Query": "select c from sbtest12 where id between 1 and 10"
       },
       "TablesUsed": [
         "main.sbtest12"
@@ -69,8 +67,7 @@
               "Sharded": true
             },
             "FieldQuery": "select sum(k) from sbtest43 where 1 != 1",
-            "Query": "select sum(k) from sbtest43 where id between 90 and 990",
-            "Table": "sbtest43"
+            "Query": "select sum(k) from sbtest43 where id between 90 and 990"
           }
         ]
       },
@@ -95,8 +92,7 @@
         },
         "FieldQuery": "select c from sbtest1 where 1 != 1",
         "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-        "Query": "select c from sbtest1 where id between 50 and 235 order by sbtest1.c asc",
-        "Table": "sbtest1"
+        "Query": "select c from sbtest1 where id between 50 and 235 order by sbtest1.c asc"
       },
       "TablesUsed": [
         "main.sbtest1"
@@ -124,8 +120,7 @@
             },
             "FieldQuery": "select c from sbtest30 where 1 != 1 group by c",
             "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
-            "Query": "select c from sbtest30 where id between 1 and 10 group by c order by sbtest30.c asc",
-            "Table": "sbtest30"
+            "Query": "select c from sbtest30 where id between 1 and 10 group by c order by sbtest30.c asc"
           }
         ]
       },
@@ -149,7 +144,6 @@
           "Sharded": true
         },
         "Query": "update sbtest6 set k = k + 1 where id = 5",
-        "Table": "sbtest6",
         "Values": [
           "5"
         ],
@@ -175,7 +169,6 @@
           "Sharded": true
         },
         "Query": "update sbtest9 set c = 7 where id = 8",
-        "Table": "sbtest9",
         "Values": [
           "8"
         ],
@@ -201,7 +194,6 @@
           "Sharded": true
         },
         "Query": "delete from sbtest15 where id = 7525",
-        "Table": "sbtest15",
         "Values": [
           "7525"
         ],
@@ -227,7 +219,6 @@
           "Sharded": true
         },
         "Query": "insert into sbtest16(id, k, c, pad) values (:_id_0, 1, 2, 50)",
-        "TableName": "sbtest16",
         "VindexValues": {
           "hash": "42"
         }
