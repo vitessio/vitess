@@ -63,6 +63,9 @@ var (
 	discoveryWorkersActiveGauge        = stats.NewGauge("DiscoveryWorkersActive", "Number of discovery workers actively discovering tablets")
 	isElectedGauge                     = stats.NewGauge("elect.is_elected", "Elected state")
 	isHealthyGauge                     = stats.NewGauge("health.is_healthy", "Healthy state")
+
+	discoverInstanceTimingsActions = []string{"Backend", "Instance", "Other"}
+	discoverInstanceTimings        = stats.NewTimings("DiscoverInstanceTimings", "Timings for instance discovery actions", "Action", discoverInstanceTimingsActions...)
 )
 
 var discoveryMetrics = collection.CreateOrReturnCollection(DiscoveryMetricsName)
@@ -135,7 +138,7 @@ func closeVTOrc() {
 func waitForLocksRelease() {
 	timeout := time.After(shutdownWaitTime)
 	for {
-		count := atomic.LoadInt32(&shardsLockCounter)
+		count := atomic.LoadInt64(&shardsLockCounter)
 		if count == 0 {
 			break
 		}
@@ -242,6 +245,11 @@ func DiscoverInstance(tabletAlias string, forceDiscovery bool) {
 	totalLatency := latency.Elapsed("total")
 	backendLatency := latency.Elapsed("backend")
 	instanceLatency := latency.Elapsed("instance")
+	otherLatency := totalLatency - (backendLatency + instanceLatency)
+
+	discoverInstanceTimings.Add("Backend", backendLatency)
+	discoverInstanceTimings.Add("Instance", instanceLatency)
+	discoverInstanceTimings.Add("Other", otherLatency)
 
 	if forceDiscovery {
 		log.Infof("Force discovered - %+v, err - %v", instance, err)

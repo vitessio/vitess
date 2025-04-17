@@ -23,7 +23,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -46,11 +45,10 @@ import (
 )
 
 var (
-	ts                *topo.Server
-	tmc               tmclient.TabletManagerClient
-	clustersToWatch   []string
-	shutdownWaitTime  = 30 * time.Second
-	shardsLockCounter int32
+	ts               *topo.Server
+	tmc              tmclient.TabletManagerClient
+	clustersToWatch  []string
+	shutdownWaitTime = 30 * time.Second
 	// shardsToWatch is a map storing the shards for a given keyspace that need to be watched.
 	// We store the key range for all the shards that we want to watch.
 	// This is populated by parsing `--clusters_to_watch` flag.
@@ -356,35 +354,6 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 			log.Error(err)
 		}
 	}
-}
-
-func getLockAction(analysedInstance string, code inst.AnalysisCode) string {
-	return fmt.Sprintf("VTOrc Recovery for %v on %v", code, analysedInstance)
-}
-
-// LockShard locks the keyspace-shard preventing others from performing conflicting actions.
-func LockShard(ctx context.Context, keyspace, shard string, lockAction string) (context.Context, func(*error), error) {
-	if keyspace == "" {
-		return nil, nil, errors.New("can't lock shard: keyspace is unspecified")
-	}
-	if shard == "" {
-		return nil, nil, errors.New("can't lock shard: shard name is unspecified")
-	}
-	val := atomic.LoadInt32(&hasReceivedSIGTERM)
-	if val > 0 {
-		return nil, nil, errors.New("can't lock shard: SIGTERM received")
-	}
-
-	atomic.AddInt32(&shardsLockCounter, 1)
-	ctx, unlock, err := ts.TryLockShard(ctx, keyspace, shard, lockAction)
-	if err != nil {
-		atomic.AddInt32(&shardsLockCounter, -1)
-		return nil, nil, err
-	}
-	return ctx, func(e *error) {
-		defer atomic.AddInt32(&shardsLockCounter, -1)
-		unlock(e)
-	}, nil
 }
 
 // tabletUndoDemotePrimary calls the said RPC for the given tablet.
