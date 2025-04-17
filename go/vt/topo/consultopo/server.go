@@ -31,6 +31,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -102,6 +103,10 @@ func getClientCreds() (creds map[string]*ClientAuthCred, err error) {
 
 	if err := json.Unmarshal(data, &creds); err != nil {
 		err = vterrors.Wrapf(err, "Error parsing consul_auth_static_file")
+		return creds, err
+	}
+	if len(creds) == 0 {
+		err = vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Found no credentials in consul_auth_static_file")
 		return creds, err
 	}
 	return creds, nil
