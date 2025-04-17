@@ -6794,6 +6794,7 @@ all_non_reserved:
 | non_reserved_keyword2
 | non_reserved_keyword3
 | column_name_safe_keyword
+| function_call_keywords
 
 prepare_statement:
   PREPARE ID FROM STRING
@@ -8397,6 +8398,10 @@ table_alias:
   {
     $$ = NewTableIdent(string($1))
   }
+| function_call_keywords
+  {
+    $$ = NewTableIdent(string($1))
+  }
 
 inner_join:
   JOIN
@@ -9764,6 +9769,10 @@ column_name:
   {
     $$ = &ColName{Qualifier: TableName{Name: $1.(TableIdent)}, Name: NewColIdent(string($3))}
   }
+| table_id '.' function_call_keywords
+  {
+    $$ = &ColName{Qualifier: TableName{Name: $1.(TableIdent)}, Name: NewColIdent(string($3))}
+  }
 | table_id '.' ACCOUNT
   {
     $$ = &ColName{Qualifier: TableName{Name: $1.(TableIdent)}, Name: NewColIdent(string($3))}
@@ -9773,6 +9782,10 @@ column_name:
     $$ = &ColName{Qualifier: TableName{Name: $1.(TableIdent)}, Name: NewColIdent(string($3))}
   }
 | column_name_safe_keyword '.' sql_id
+  {
+    $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3.(ColIdent)}
+  }
+| function_call_keywords '.' sql_id
   {
     $$ = &ColName{Qualifier: TableName{Name: NewTableIdent(string($1))}, Name: $3.(ColIdent)}
   }
@@ -10094,6 +10107,10 @@ ins_column:
     $$ = $1.(ColIdent)
   }
 | column_name_safe_keyword
+  {
+    $$ = NewColIdent(string($1))
+  }
+| function_call_keywords
   {
     $$ = NewColIdent(string($1))
   }
