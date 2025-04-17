@@ -16,8 +16,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on:
-      group: vitess-ubuntu20
+    runs-on: vitess-ubuntu24-16cpu-1
 
     steps:
     - name: Skip CI
@@ -108,7 +107,7 @@ jobs:
         sudo apt-get update
 
         # Install everything else we need, and configure
-        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils libncurses5
+        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd-client etcd-server git wget eatmydata xz-utils libncurses6
 
         {{else}}
 
@@ -120,7 +119,7 @@ jobs:
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
         # Install everything else we need, and configure
-        sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils libncurses5
+        sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
 
         {{end}}
 

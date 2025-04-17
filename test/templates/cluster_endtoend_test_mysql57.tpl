@@ -21,8 +21,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on:
-      group: vitess-ubuntu20
+    runs-on: vitess-ubuntu24-16cpu-1
 
     steps:
     - name: Skip CI
@@ -126,7 +125,7 @@ jobs:
         sudo apt-get update
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses5
 
-        sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
         sudo service mysql stop
         sudo service etcd stop
 

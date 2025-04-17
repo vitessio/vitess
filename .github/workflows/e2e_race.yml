@@ -9,8 +9,7 @@ jobs:
 
   build:
     name: End-to-End Test (Race)
-    runs-on:
-      group: vitess-ubuntu20
+    runs-on: vitess-ubuntu24-16cpu-1
     steps:
     - name: Skip CI
       run: |
@@ -77,7 +76,7 @@ jobs:
         sudo apt-get update
         
         # Install everything else we need, and configure
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/

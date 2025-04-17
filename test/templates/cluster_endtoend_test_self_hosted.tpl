@@ -13,8 +13,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on:
-      group: vitess-ubuntu20
+    runs-on: vitess-ubuntu24-16cpu-1
 
     steps:
       - name: Skip CI

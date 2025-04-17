@@ -18,8 +18,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on Cluster (backup_pitr_xtrabackup)
-    runs-on:
-      group: vitess-ubuntu20
+    runs-on: vitess-ubuntu24-16cpu-1
 
     steps:
     - name: Skip CI
@@ -106,7 +105,7 @@ jobs:
         sudo apt-get update
 
         # Install everything else we need, and configure
-        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils libncurses5
+        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd-client etcd-server git wget eatmydata xz-utils libncurses6
 
         sudo service mysql stop
         sudo service etcd stop

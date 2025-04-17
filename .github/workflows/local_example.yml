@@ -8,8 +8,7 @@ jobs:
 
   build:
     name: Local example using ${{ matrix.topo }} on ubuntu-22.04
-    runs-on:
-      group: vitess-ubuntu20
+    runs-on: vitess-ubuntu24-16cpu-1
     strategy:
       matrix:
         topo: [consul,etcd,zk2]
@@ -88,13 +87,13 @@ jobs:
           sudo apt-get update
         
           # Install everything else we need, and configure
-          sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+          sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata
           sudo service mysql stop
           sudo service etcd stop
           sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
           sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         elif [ ${{matrix.os}} = "macos-latest" ]; then
-          brew install mysql@5.7 make unzip etcd curl git wget
+          brew install mysql@5.7 make unzip etcd-client etcd-server curl git wget
         fi
         go mod download
 
