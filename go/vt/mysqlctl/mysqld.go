@@ -1167,12 +1167,12 @@ func (mysqld *Mysqld) executeMysqlScript(ctx context.Context, connParams *mysql.
 	}
 	defer conn.Close()
 
-	_, more, err := conn.ExecuteFetchMulti(sql, -1, false)
+	_, status, err := conn.ExecuteFetchMulti(sql, -1, false)
 	if err != nil {
 		return err
 	}
-	for more {
-		_, more, _, err = conn.ReadQueryResult(0, false)
+	for (status & mysql.ServerMoreResultsExists) != 0 {
+		_, status, _, err = conn.ReadQueryResult(0, false)
 		if err != nil {
 			return err
 		}
