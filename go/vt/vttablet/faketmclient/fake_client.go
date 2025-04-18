@@ -338,6 +338,16 @@ func (client *FakeTabletManagerClient) VReplicationWaitForPos(ctx context.Contex
 	return nil
 }
 
+// UpdateSequenceTables is part of the tmclient.TabletManagerClient interface.
+func (itmc *FakeTabletManagerClient) UpdateSequenceTables(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+	return nil, nil
+}
+
+// GetMaxValueForSequences is part of the tmclient.TabletManagerClient interface.
+func (itmc *FakeTabletManagerClient) GetMaxValueForSequences(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (*tabletmanagerdatapb.GetMaxValueForSequencesResponse, error) {
+	return nil, nil
+}
+
 //
 // Reparenting related functions
 //

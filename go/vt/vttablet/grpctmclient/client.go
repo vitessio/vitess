@@ -1060,6 +1060,24 @@ func (client *Client) UpdateVReplicationWorkflows(ctx context.Context, tablet *t
 	return response, nil
 }
 
+func (client *Client) GetMaxValueForSequences(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (*tabletmanagerdatapb.GetMaxValueForSequencesResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	return c.GetMaxValueForSequences(ctx, request)
+}
+
+func (client *Client) UpdateSequenceTables(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	return c.UpdateSequenceTables(ctx, request)
+}
+
 // VDiff is part of the tmclient.TabletManagerClient interface.
 func (client *Client) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
 	log.Infof("VDiff for tablet %s, request %+v", tablet.Alias.String(), req)
