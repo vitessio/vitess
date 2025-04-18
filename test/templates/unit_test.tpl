@@ -104,17 +104,21 @@ jobs:
         {{if (eq .Platform "mysql57")}}
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-
-        # mysql57
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
         # Bionic packages are still compatible for Jammy since there's no MySQL 5.7
         # packages for Jammy.
         echo mysql-apt-config mysql-apt-config/repo-codename select bionic | sudo debconf-set-selections
         echo mysql-apt-config mysql-apt-config/select-server select mysql-5.7 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses5
-
+        # We have to install this old version of libaio1. See also:
+        # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
+        curl -L -O http://mirrors.kernel.org/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb
+        sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
+        # libtinfo5 is also needed for older MySQL 5.7 builds.
+        curl -L -O http://mirrors.kernel.org/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
+        sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
         {{end}}
 
         {{if (eq .Platform "mysql80")}}

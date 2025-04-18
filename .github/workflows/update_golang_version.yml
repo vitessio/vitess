@@ -17,7 +17,7 @@ jobs:
       matrix:
         branch: [ main, release-19.0, release-18.0, release-17.0, release-16.0 ]
     name: Update Golang Version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Set up Go
         uses: actions/setup-go@v5

@@ -100,7 +100,7 @@ jobs:
 
         # Install MySQL 8.0
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update

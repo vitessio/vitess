@@ -116,14 +116,14 @@ jobs:
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
 
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.29-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
         # Bionic packages are still compatible for Jammy since there's no MySQL 5.7
         # packages for Jammy.
         echo mysql-apt-config mysql-apt-config/repo-codename select bionic | sudo debconf-set-selections
         echo mysql-apt-config mysql-apt-config/select-server select mysql-5.7 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses5
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6 libaio1 libtinfo5
 
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
         sudo service mysql stop
@@ -134,13 +134,13 @@ jobs:
 
         {{if .InstallXtraBackup}}
 
-        wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
+        wget "https://repo.percona.com/apt/percona-release_latest.jammy_all.deb"
         sudo apt-get install -y gnupg2
-        sudo dpkg -i "percona-release_latest.$(lsb_release -sc)_all.deb"
+        sudo dpkg -i "percona-release_latest.jammy_all.deb"
         sudo percona-release enable-only tools
         sudo apt-get update
         if [[ -n $XTRABACKUP_VERSION ]]; then
-          debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.$(lsb_release -sc)_amd64.deb"
+          debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.jammy_amd64.deb"
           wget "https://repo.percona.com/pxb-24/apt/pool/main/p/percona-xtrabackup-24/$debfile"
           sudo apt install -y "./$debfile"
         else
