@@ -164,6 +164,9 @@ var (
 	// allowKillStmt to allow execution of kill statement.
 	allowKillStmt bool
 
+	// allowBlockJoins enables the use of VALUES-based joins instead of Apply Joins.
+	allowBlockJoins bool
+
 	warmingReadsPercent      = 0
 	warmingReadsQueryTimeout = 5 * time.Second
 	warmingReadsConcurrency  = 500
@@ -201,6 +204,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&enableViews, "enable-views", enableViews, "Enable views support in vtgate.")
 	fs.BoolVar(&enableUdfs, "track-udfs", enableUdfs, "Track UDFs in vtgate.")
 	fs.BoolVar(&allowKillStmt, "allow-kill-statement", allowKillStmt, "Allows the execution of kill statement")
+	fs.BoolVar(&allowBlockJoins, "allow-block-joins", allowBlockJoins, "Allows the use of experimental block joins instead of traditional apply joins")
 	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm")
 	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
 	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries")

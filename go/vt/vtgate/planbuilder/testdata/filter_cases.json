@@ -4447,6 +4447,67 @@
     }
   },
   {
+    "comment": "Three tables join and subquery cannot be a block join",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ unsharded.x, u1.x from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ unsharded.x, u1.x from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,R:0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select unsharded.x from unsharded where 1 != 1",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ unsharded.x from unsharded"
+          },
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "u1_bar": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u1.x, u1.bar from `user` as u1 where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ u1.x, u1.bar from `user` as u1"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ 1 from unsharded as u2 where u2.baz = :u1_bar limit 1"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "must merge subquery with the right side of the join",
     "query": "select 1 from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
     "plan": {

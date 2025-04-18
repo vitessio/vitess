@@ -1,12 +1,38 @@
 ## Summary
 
 ### Table of Contents
+- **[Major Changes](#major-changes)**
+    - **[New Join type in VTGate](#new-join-type-vtgate)**
 - **[Minor Changes](#minor-changes)**
     - **[Deletions](#deletions)**
         - [Metrics](#deleted-metrics)
     - **[VTTablet](#minor-changes-vttablet)**
         - [CLI Flags](#flags-vttablet)
         - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password)
+
+## <a id="major-changes"/>Major Changes</a>
+
+### <a id="new-join-type-vtgate"/>New Join type in VTGate</a>
+
+This release introduces a new join type in vtgate: Block Joins.
+Block Joins use the MySQL `VALUES` statement to send all rows coming from the left-hand-side of the join to the right-hand-side, in a single network call.
+Unlike Apply Joins, which execute the right-hand-side of the join as many times as we got rows from the left-hand-side.
+This new approach allows vtgate to significantly reduce the amount of network calls and improve the performance of `JOIN`s.
+
+This new feature is experimental, unsupported queries include: DMLs, joins with more than two tables, joins with aggregation, information schema and non-normal tables.
+
+Block Joins can be enabled by setting the `--allow-block-joins` vtgate flag, or by using the `/*vt+ ALLOW_BLOCK_JOIN */` query hint.
+
+More information about this feature can be found in its [RFC #16508](https://github.com/vitessio/vitess/issues/16508) and
+on the Pull Request implementing it [#17641](https://github.com/vitessio/vitess/pull/17641).
+
+_Compatibility notice_
+
+This join implementation may change the result column types returned by certain queries.
+For example, some columns previously typed as INT may now be returned as BIGINT.
+Testing with common MySQL drivers and ORM libraries suggests this change is unlikely to cause issues, but users should verify compatibility in their applications before committing to this new experimental join type.
+---
+
 
 ## <a id="minor-changes"/>Minor Changes</a>
 

@@ -72,7 +72,10 @@ func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*qu
 			if err != nil {
 				return err
 			}
-			EncodeValue(buf, supplied)
+			err = EncodeValue(buf, supplied)
+			if err != nil {
+				return err
+			}
 		}
 		current = loc.Offset + loc.Length
 	}
@@ -90,7 +93,7 @@ func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
 }
 
 // EncodeValue encodes one bind variable value into the query.
-func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
+func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) error {
 	switch value.Type {
 	case querypb.Type_TUPLE:
 		buf.WriteByte('(')
@@ -107,7 +110,10 @@ func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
 				buf.WriteString(", ")
 			}
 			buf.WriteString("row")
-			sqltypes.ProtoToValue(bv).EncodeSQLStringBuilder(buf)
+			err := sqltypes.ProtoToValue(bv).EncodeSQLStringBuilderWithCasting(buf)
+			if err != nil {
+				return err
+			}
 		}
 	case querypb.Type_RAW:
 		v, _ := sqltypes.BindVariableToValue(value)
@@ -116,6 +122,7 @@ func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
 		v, _ := sqltypes.BindVariableToValue(value)
 		v.EncodeSQLStringBuilder(buf)
 	}
+	return nil
 }
 
 // FetchBindVar resolves the bind variable by fetching it from bindVariables.

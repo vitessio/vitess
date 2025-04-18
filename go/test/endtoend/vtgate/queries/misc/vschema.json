@@ -23,10 +23,38 @@
         "ignore_nulls": "true"
       },
       "owner": "tbl"
+    },
+    "tbl2_unq_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "unq_idx",
+        "from": "unq_col",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "tbl2"
+    },
+    "tbl2_nonunq_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "nonunq_idx",
+        "from": "nonunq_col,id",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "tbl2"
     }
   },
   "tables": {
     "t1": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "hash"
+        }
+      ]
+    },
+    "t2": {
       "column_vindexes": [
         {
           "column": "id1",
@@ -50,6 +78,25 @@
             "id"
           ],
           "name": "nonunq_vdx"
+        }
+      ]
+    },
+    "tbl2": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "column": "unq_col",
+          "name": "tbl2_unq_vdx"
+        },
+        {
+          "columns": [
+            "nonunq_col",
+            "id"
+          ],
+          "name": "tbl2_nonunq_vdx"
         }
       ]
     },

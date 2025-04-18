@@ -49,7 +49,8 @@ type ShardedRouting struct {
 
 	// SeenPredicates contains all the predicates that have had a chance to influence routing.
 	// If we need to replan routing, we'll use this list
-	SeenPredicates []sqlparser.Expr
+	SeenPredicates     []sqlparser.Expr
+	BlockJoinTablesIDs semantics.TableSet
 }
 
 var _ Routing = (*ShardedRouting)(nil)
@@ -192,6 +193,10 @@ func (tr *ShardedRouting) Clone() Routing {
 	}
 }
 
+func (tr *ShardedRouting) AddBlockJoinTableID(id semantics.TableSet) {
+	tr.BlockJoinTablesIDs = tr.BlockJoinTablesIDs.Merge(id)
+}
+
 func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing {
 	tr.SeenPredicates = append(tr.SeenPredicates, expr)
 
@@ -209,6 +214,7 @@ func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, e
 	return tr
 }
 
+// resetRoutingLogic resets the routing logic to the initial state, and uses the predicates to recompute the routing
 func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Routing {
 	tr.RouteOpCode = engine.Scatter
 	tr.Selected = nil
@@ -532,8 +538,7 @@ func (tr *ShardedRouting) getLoweredNameAndIndex(colVindex *vindexes.ColumnVinde
 
 func (tr *ShardedRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sqlparser.ComparisonExpr) bool {
 	column, ok := node.Left.(*sqlparser.ColName)
-	other := node.Right
-	vdValue := other
+	vdValue := node.Right
 	if !ok {
 		column, ok = node.Right.(*sqlparser.ColName)
 		if !ok {
@@ -543,11 +548,80 @@ func (tr *ShardedRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sq
 		vdValue = node.Left
 	}
 	val := makeEvalEngineExpr(ctx, vdValue)
-	if val == nil {
+	if val != nil {
+		return tr.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
+	}
+
+	return tr.planBlockJoinsPredicate(ctx, node)
+}
+
+// planBlockJoinsPredicate is a special case where we have a predicate that is a join between two columns,
+// one of which is a values derived table
+func (tr *ShardedRouting) planBlockJoinsPredicate(ctx *plancontext.PlanningContext, node *sqlparser.ComparisonExpr) bool {
+	cola, ok := node.Left.(*sqlparser.ColName)
+	if !ok {
+		return false
+	}
+	colb, ok := node.Right.(*sqlparser.ColName)
+	if !ok {
+		return false
+	}
+	lhsCol, rhsCol := cola, colb
+	if !ctx.SemTable.RecursiveDeps(cola).IsSolvedBy(tr.BlockJoinTablesIDs) {
+		if !ctx.SemTable.RecursiveDeps(colb).IsSolvedBy(tr.BlockJoinTablesIDs) {
+			return false
+		}
+		lhsCol, rhsCol = colb, cola
+	}
+	tblName, err := ctx.GetBlockJoinTableName(tr.BlockJoinTablesIDs)
+	if err != nil {
 		return false
 	}
 
-	return tr.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
+	value := &evalengine.TupleBindVariable{
+		Key:   tblName,
+		Index: -1, // we don't know the index yet, we will set it at planOffset time
+	}
+
+	if typ, found := ctx.TypeForExpr(rhsCol); found {
+		value.Collation = typ.Collation()
+	}
+
+	opcode := func(*vindexes.ColumnVindex) engine.Opcode { return engine.MultiEqual }
+	return tr.haveMatchingVindex(ctx, node, lhsCol, rhsCol, value, opcode, justTheVindex)
+}
+
+func (tr *ShardedRouting) planOffsets(ctx *plancontext.PlanningContext) {
+	if tr.RouteOpCode != engine.MultiEqual {
+		return
+	}
+
+	trv, ok := tr.Selected.Values[0].(*evalengine.TupleBindVariable)
+	if !ok {
+		return
+	}
+
+	if len(tr.Selected.ValueExprs) != 1 {
+		// this is not a block-join predicate
+		return
+	}
+
+	lhsCol := tr.Selected.ValueExprs[0]
+	columns := ctx.GetBlockJoinColumns(trv.Key)
+	for idx, expr := range columns {
+		if ctx.SemTable.EqualsExpr(lhsCol, expr.Expr) {
+			trv.Index = idx
+			break
+		}
+	}
+
+	if trv.Index != -1 {
+		return
+	}
+
+	columns = append(columns, aeWrap(sqlparser.NewStrLiteral("unknown")))
+	trv.Index = len(columns) - 1
+	ctx.SetBlockJoinColumns(trv.Key, columns)
 }
 
 func (tr *ShardedRouting) planCompositeInOpRecursive(

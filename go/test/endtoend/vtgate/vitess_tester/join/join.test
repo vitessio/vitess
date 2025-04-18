@@ -3,47 +3,55 @@ CREATE TABLE `t1`
     `id`   int unsigned NOT NULL AUTO_INCREMENT,
     `name` varchar(191) NOT NULL,
     PRIMARY KEY (`id`)
-) ENGINE InnoDB,
-  CHARSET utf8mb4,
-  COLLATE utf8mb4_unicode_ci;
+);
 
 CREATE TABLE `t2`
 (
     `id`    bigint unsigned NOT NULL AUTO_INCREMENT,
     `t1_id` int unsigned NOT NULL,
     PRIMARY KEY (`id`)
-) ENGINE InnoDB,
-  CHARSET utf8mb4,
-  COLLATE utf8mb4_unicode_ci;
+);
 
 CREATE TABLE `t3`
 (
     `id`   bigint unsigned NOT NULL AUTO_INCREMENT,
     `name` varchar(191) NOT NULL,
     PRIMARY KEY (`id`)
-) ENGINE InnoDB,
-  CHARSET utf8mb4,
-  COLLATE utf8mb4_unicode_ci;
+);
 
 CREATE TABLE `t4`
 (
     `id`  bigint unsigned NOT NULL AUTO_INCREMENT,
     `col` int unsigned NOT NULL,
     PRIMARY KEY (`id`)
-) ENGINE InnoDB,
-  CHARSET utf8mb4,
-  COLLATE utf8mb4_unicode_ci;
+);
 
 insert into t1 (id, name)
 values (1, 'A'),
        (2, 'B'),
        (3, 'C'),
-       (4, 'D');
+       (4, 'D'),
+       (5, 'E'),
+       (6, 'F'),
+       (7, 'G'),
+       (8, 'H'),
+       (9, 'J');
 
 insert into t2 (id, t1_id)
 values (1, 1),
        (2, 2),
-       (3, 3);
+       (3, 3),
+       (4, 4),
+       (5, 5),
+       (6, 6),
+       (7, 7),
+       (8, 8),
+       (9, 9),
+       (10, 10),
+       (11, 11),
+       (12, 12),
+       (13, 13),
+       (14, 14);
 
 insert into t3 (id, name)
 values (1, 'A'),
@@ -76,3 +84,37 @@ from t1
          left join (select t4.col, count(*) as count from t4 group by t4.col) t3 on t3.col = t2.id
 where t1.id IN (1, 2)
 group by t2.id, t4.col;
+
+-- allow_different_field_sizes
+select /*vt+ ALLOW_BLOCK_JOIN */ t3.id, t1.id
+from t1
+        join t3 on t1.name = t3.name
+where t1.name IN ('A', 'B', 'C');
+
+-- allow_different_field_sizes
+select /*vt+ ALLOW_BLOCK_JOIN */ a.id as a_id, b.id as b_id
+from t1 a
+         join t1 b on a.name = b.name
+where a.id in (1, 2, 3);
+
+-- allow_different_field_sizes
+select /*vt+ ALLOW_BLOCK_JOIN */ t3.id, t1.id
+from t3
+         join t1 on t3.name = t1.name
+where t3.name = 'B';
+
+-- allow_different_field_sizes
+select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t1.id), abs(t1.id+t3.id)
+from t3
+         join t1 on lower(t3.name) = lower(t1.name)
+where lower(t3.name) = 'b' and abs(t1.id) > 1;
+
+-- allow_different_field_sizes
+select /*vt+ ALLOW_BLOCK_JOIN */ abs(d.id), abs(t3.id), abs(d.id + t3.id)
+from (
+         select id, lower(name) as lname
+         from t1
+         where abs(id) > 1
+     ) as d
+         join t3 on lower(t3.name) = d.lname
+where lower(t3.name) = 'b';

@@ -51,6 +51,8 @@ type (
 		Conditions []engine.Condition
 
 		ResultColumns int
+
+		SeenValues semantics.TableSet
 	}
 
 	RouteOrdering struct {
@@ -106,15 +108,18 @@ type (
 		OpCode() engine.Opcode
 		Keyspace() *vindexes.Keyspace // note that all routings do not have a keyspace, so this method can return nil
 
+		AddBlockJoinTableID(id semantics.TableSet)
+
 		// updateRoutingLogic updates the routing to take predicates into account. This can be used for routing
 		// using vindexes or for figuring out which keyspace an information_schema query should be sent to.
 		updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Routing
 
 		resetRoutingLogic(ctx *plancontext.PlanningContext) Routing
+		planOffsets(ctx *plancontext.PlanningContext)
 	}
 )
 
-// UpdateRoutingLogic first checks if we are dealing with a predicate that
+// UpdateRoutingLogic first checks if we are dealing with a predicate that can be evaluated to false or NULL.
 func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r Routing) Routing {
 	ks := r.Keyspace()
 	if ks == nil {
@@ -625,6 +630,8 @@ func addColumnToInput(
 		src, updateSrc = op.Source, func(newSrc Operator) { op.Source = newSrc }
 	case *LockAndComment:
 		src, updateSrc = op.Source, func(newSrc Operator) { op.Source = newSrc }
+	case *BlockBuild:
+		src, updateSrc = op.Source, func(newSrc Operator) { op.Source = newSrc }
 
 	// Union needs special handling, we can't really add new columns to all inputs
 	case *Union:
@@ -687,6 +694,8 @@ func addWSColumnToInput(ctx *plancontext.PlanningContext, source Operator, offse
 	case *Distinct:
 		return addWSColumnToInput(ctx, op.Source, offset)
 	case *Filter:
+		return addWSColumnToInput(ctx, op.Source, offset)
+	case *BlockBuild:
 		return addWSColumnToInput(ctx, op.Source, offset)
 	case *Projection:
 		return true, op.AddWSColumn(ctx, offset, true)
@@ -765,6 +774,8 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	if r.IsSingleShard() {
 		return nil
 	}
+
+	r.Routing.planOffsets(ctx)
 
 	// if we are getting results from multiple shards, we need to do a merge-sort
 	// between them to get the final output correctly sorted

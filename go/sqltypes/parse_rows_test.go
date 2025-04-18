@@ -200,7 +200,7 @@ func TestRowsEquals(t *testing.T) {
 			right, err := ParseRows(tt.right)
 			require.NoError(t, err)
 
-			err = RowsEquals(left, right)
+			err = RowsEquals(left, right, false)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
