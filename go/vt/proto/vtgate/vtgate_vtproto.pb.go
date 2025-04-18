@@ -34,7 +34,7 @@ func (m *Session_ShardSession) CloneVT() *Session_ShardSession {
 	r.TransactionId = m.TransactionId
 	r.TabletAlias = m.TabletAlias.CloneVT()
 	r.ReservedId = m.ReservedId
-	r.VindexOnly = m.VindexOnly
+	r.ReadOnly = m.ReadOnly
 	r.RowsAffected = m.RowsAffected
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -610,9 +610,9 @@ func (m *Session_ShardSession) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		i--
 		dAtA[i] = 0x30
 	}
-	if m.VindexOnly {
+	if m.ReadOnly {
 		i--
-		if m.VindexOnly {
+		if m.ReadOnly {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -2282,7 +2282,7 @@ func (m *Session_ShardSession) SizeVT() (n int) {
 	if m.ReservedId != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.ReservedId))
 	}
-	if m.VindexOnly {
+	if m.ReadOnly {
 		n += 2
 	}
 	if m.RowsAffected {
@@ -3031,7 +3031,7 @@ func (m *Session_ShardSession) UnmarshalVT(dAtA []byte) error {
 			}
 		case 5:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field VindexOnly", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ReadOnly", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -3048,7 +3048,7 @@ func (m *Session_ShardSession) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.VindexOnly = bool(v != 0)
+			m.ReadOnly = bool(v != 0)
 		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field RowsAffected", wireType)
