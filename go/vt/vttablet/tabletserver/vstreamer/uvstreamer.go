@@ -166,14 +166,20 @@ func (uvs *uvstreamer) buildTablePlan() error {
 	}
 
 	// Set of tables to skip during the copy phase.
-	TablesToSkipCopySet := sets.New(uvs.options.TablesToSkipCopy...)
+	var TablesToSkipCopySet sets.Set[string]
+	if uvs.options != nil && len(uvs.options.TablesToSkipCopy) > 0 {
+		TablesToSkipCopySet = sets.New(uvs.options.TablesToSkipCopy...)
+	}
 
 	for tableName := range tables {
 		rule, err := matchTable(tableName, uvs.filter, tables)
 		if err != nil {
 			return err
 		}
-		if rule == nil || TablesToSkipCopySet.Has(tableName) {
+		if rule == nil {
+			continue
+		}
+		if TablesToSkipCopySet != nil && TablesToSkipCopySet.Has(tableName) {
 			continue
 		}
 		plan := &tablePlan{
