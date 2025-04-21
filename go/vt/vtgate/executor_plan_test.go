@@ -119,13 +119,15 @@ func TestDeferredOptimization(t *testing.T) {
 
 	resolver := newTestResolver(ctx, nil, nil, "")
 	executor := Executor{
-		config:      createExecutorConfig(),
-		env:         env,
-		resolver:    resolver,
-		vschema:     vindexes.BuildVSchema(result, parser),
-		queryLogger: queryLogger,
-		plans:       DefaultPlanCache(),
+		config:         createExecutorConfig(),
+		env:            env,
+		resolver:       resolver,
+		vschema:        vindexes.BuildVSchema(result, parser),
+		queryLogger:    queryLogger,
+		plans:          DefaultPlanCache(),
+		executorConfig: NewDynamicViperConfig(),
 	}
+	executor.initVConfig(false, querypb.ExecuteOptions_DEFAULT_PLANNER)
 	defer executor.plans.Close()
 	opts := jsondiff.DefaultConsoleOptions()
 	for _, tcase := range readJSONTests("prepared_statements.json") {
