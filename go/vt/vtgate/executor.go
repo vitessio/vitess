@@ -79,6 +79,7 @@ var (
 		viperutil.Options[topodatapb.TabletType]{
 			FlagName: "default_tablet_type",
 			Default:  topodatapb.TabletType_PRIMARY,
+			Dynamic:  true,
 			GetFunc: func(v *viper.Viper) func(key string) topodatapb.TabletType {
 				return func(key string) topodatapb.TabletType {
 					val := v.GetInt32(key)

@@ -802,19 +802,44 @@ func TestTabletTypeRouting(t *testing.T) {
 		err = clusterInstance.VtctldClientProcess.ApplyRoutingRules("{}")
 		require.NoError(t, err)
 	}()
+	ctx := context.Background()
 
 	mcmp, closer := start(t)
 	defer closer()
 
 	mcmp.Exec("insert into t1(id1, id2) values (0,0)")
 
-	vtConn := mcmp.VtConn
-	// We first verify that querying the primary tablet goes to the t1 table.
-	utils.Exec(t, vtConn, "use ks_misc@primary")
-	utils.AssertMatches(t, vtConn, "select * from ks_misc.t1", `[[INT64(0) INT64(0)]]`)
-	// Now we change the connection's target
-	utils.Exec(t, vtConn, "use ks_misc@replica")
-	// We verify that querying the replica tablet creates an unknown table error.
-	_, err = utils.ExecAllowError(t, vtConn, "select * from ks_misc.t1")
-	require.ErrorContains(t, err, "table unknown not found")
+	t.Run("VtgateConnection", func(t *testing.T) {
+		vtConn := mcmp.VtConn
+		// We first verify that querying the primary tablet goes to the t1 table.
+		utils.Exec(t, vtConn, "use ks_misc@primary")
+		utils.AssertMatches(t, vtConn, "select * from ks_misc.t1", `[[INT64(0) INT64(0)]]`)
+		// Now we change the connection's target
+		utils.Exec(t, vtConn, "use ks_misc@replica")
+		// We verify that querying the replica tablet creates an unknown table error.
+		_, err = utils.ExecAllowError(t, vtConn, "select * from ks_misc.t1")
+		require.ErrorContains(t, err, "table unknown not found")
+	})
+	t.Run("Changing default tablet type", func(t *testing.T) {
+		defer func() {
+			// Restore default back.
+			clusterInstance.VtgateProcess.Config.DefaultTabletType = "PRIMARY"
+			err = clusterInstance.VtgateProcess.RewriteConfiguration()
+			require.NoError(t, err)
+		}()
+		// Create a new connection.
+		vtConn, err := mysql.Connect(ctx, &vtParams)
+		require.NoError(t, err)
+		// We first verify that querying the primary tablet goes to the t1 table.
+		utils.AssertMatches(t, vtConn, "select * from ks_misc.t1", `[[INT64(0) INT64(0)]]`)
+		// Let's now change the default configuration of vtgate.
+		clusterInstance.VtgateProcess.Config.DefaultTabletType = "REPLICA"
+		err = clusterInstance.VtgateProcess.RewriteConfiguration()
+		require.NoError(t, err)
+		err = clusterInstance.VtgateProcess.WaitForConfig(`"default_tablet_type":"REPLICA"`)
+		require.NoError(t, err)
+		// We verify that now the query tries to target a replica, and fails.
+		_, err = utils.ExecAllowError(t, vtConn, "select * from ks_misc.t1")
+		require.ErrorContains(t, err, "table unknown not found")
+	})
 }
