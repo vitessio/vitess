@@ -2152,8 +2152,10 @@ type VStreamOptions struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	InternalTables  []string               `protobuf:"bytes,1,rep,name=internal_tables,json=internalTables,proto3" json:"internal_tables,omitempty"`
 	ConfigOverrides map[string]string      `protobuf:"bytes,2,rep,name=config_overrides,json=configOverrides,proto3" json:"config_overrides,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Skip copy phase for these tables.
+	TablesToSkipCopy []string `protobuf:"bytes,3,rep,name=tables_to_skip_copy,json=tablesToSkipCopy,proto3" json:"tables_to_skip_copy,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *VStreamOptions) Reset() {
@@ -2196,6 +2198,13 @@ func (x *VStreamOptions) GetInternalTables() []string {
 func (x *VStreamOptions) GetConfigOverrides() map[string]string {
 	if x != nil {
 		return x.ConfigOverrides
+	}
+	return nil
+}
+
+func (x *VStreamOptions) GetTablesToSkipCopy() []string {
+	if x != nil {
+		return x.TablesToSkipCopy
 	}
 	return nil
 }
@@ -3196,10 +3205,11 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\vp_k_columns\x18\x03 \x03(\x03R\tpKColumns\x12#\n" +
 	"\x0ep_k_index_name\x18\x04 \x01(\tR\vpKIndexName\"A\n" +
 	"\rMinimalSchema\x120\n" +
-	"\x06tables\x18\x01 \x03(\v2\x18.binlogdata.MinimalTableR\x06tables\"\xd9\x01\n" +
+	"\x06tables\x18\x01 \x03(\v2\x18.binlogdata.MinimalTableR\x06tables\"\x88\x02\n" +
 	"\x0eVStreamOptions\x12'\n" +
 	"\x0finternal_tables\x18\x01 \x03(\tR\x0einternalTables\x12Z\n" +
-	"\x10config_overrides\x18\x02 \x03(\v2/.binlogdata.VStreamOptions.ConfigOverridesEntryR\x0fconfigOverrides\x1aB\n" +
+	"\x10config_overrides\x18\x02 \x03(\v2/.binlogdata.VStreamOptions.ConfigOverridesEntryR\x0fconfigOverrides\x12-\n" +
+	"\x13tables_to_skip_copy\x18\x03 \x03(\tR\x10tablesToSkipCopy\x1aB\n" +
 	"\x14ConfigOverridesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfd\x02\n" +

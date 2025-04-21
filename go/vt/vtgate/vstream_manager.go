@@ -642,6 +642,14 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			}
 		}
 
+		if options != nil {
+			options.TablesToSkipCopy = vs.flags.TablesToSkipCopy
+		} else {
+			options = &binlogdatapb.VStreamOptions{
+				TablesToSkipCopy: vs.flags.TablesToSkipCopy,
+			}
+		}
+
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
 		req := &binlogdatapb.VStreamRequest{
 			Target:       target,
