@@ -186,7 +186,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 			// ExecuteMultiFetchAsDba will be the only way to execute multiple statements.
 			// See https://github.com/vitessio/vitess/issues/15505
 			if len(queries) > 1 {
-				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "multi statement queries are not supported in ExecuteFetchAsDba unless all are CREATE TABLE or CREATE VIEW")
+				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "multi statement queries are not supported in ExecuteFetchAsDba")
 			}
 			return nil
 		},
