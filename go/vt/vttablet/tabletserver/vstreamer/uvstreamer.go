@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -163,12 +164,16 @@ func (uvs *uvstreamer) buildTablePlan() error {
 			}
 		}
 	}
+
+	// Set of tables to skip during the copy phase.
+	TablesToSkipCopySet := sets.New(uvs.options.TablesToSkipCopy...)
+
 	for tableName := range tables {
 		rule, err := matchTable(tableName, uvs.filter, tables)
 		if err != nil {
 			return err
 		}
-		if rule == nil {
+		if rule == nil || TablesToSkipCopySet.Has(tableName) {
 			continue
 		}
 		plan := &tablePlan{
