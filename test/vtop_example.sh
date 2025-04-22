@@ -58,8 +58,10 @@ function checkPodStatusWithTimeout() {
 
   # We use this for loop instead of `kubectl wait` because we don't have access to the full pod name
   # and `kubectl wait` does not support regex to match resource name.
-  for i in {1..1200} ; do
+  printMysqlErrorFiles
+  for i in {1..600} ; do
     out=$(kubectl get pods -A)
+    echo "$out"
     echo "$out" | grep -E "$regex" | wc -l | grep "$nb" > /dev/null 2>&1
     if [ $? -eq 0 ]; then
       echo "$regex found"
@@ -68,6 +70,7 @@ function checkPodStatusWithTimeout() {
     sleep 1
   done
   echo -e "ERROR: checkPodStatusWithTimeout timeout to find pod matching:\ngot:\n$out\nfor regex: $regex"
+  printMysqlErrorFiles
   exit 1
 }
 
@@ -114,6 +117,11 @@ function applySchemaWithRetry() {
 }
 
 function printMysqlErrorFiles() {
+  for vtbackup in $(kubectl get pods -n example --no-headers -o custom-columns=":metadata.name" | grep "vtbackup-init") ; do
+    echo "Finding error.log file in $vtbackup"
+    kubectl logs -n example "$vtbackup"
+  done
+
   for vttablet in $(kubectl get pods -n example --no-headers -o custom-columns=":metadata.name" | grep "vttablet") ; do
     echo "Finding error.log file in $vttablet"
     kubectl logs -n example "$vttablet" -c mysqld
