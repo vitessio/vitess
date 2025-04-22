@@ -853,6 +853,9 @@ func TestIsDialTCPError(t *testing.T) {
 
 	require.True(t, base.IsDialTCPError(err))
 	require.True(t, base.IsDialTCPError(fmt.Errorf("wrapped: %w", err)))
+
+	nonDialErr := fmt.Errorf("rpc error: code = NotFound desc = method not found")
+	require.False(t, base.IsDialTCPError(nonDialErr))
 }
 
 func TestProbeWithUnavailableHost(t *testing.T) {
