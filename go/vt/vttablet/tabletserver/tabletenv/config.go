@@ -141,7 +141,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&queryLogHandler, "query-log-stream-handler", queryLogHandler, "URL handler for streaming queries log")
 	fs.StringVar(&txLogHandler, "transaction-log-stream-handler", txLogHandler, "URL handler for streaming transactions log")
 
-	fs.Int("queryserver-config-pool-size", queryserverConfigPoolSize.Default(), "query server read pool size, used by regular queries (non-streaming, not in a transaction)")
+	fs.Int("queryserver-config-pool-size", queryserverConfigPoolSize.Default(), "query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
 	fs.Int("queryserver-config-transaction-cap", queryserverConfigTransactionCap.Default(), "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
 	fs.IntVar(&currentConfig.OlapReadPool.Size, "queryserver-config-stream-pool-size", defaultConfig.OlapReadPool.Size, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
 	fs.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
