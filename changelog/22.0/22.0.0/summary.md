@@ -328,7 +328,7 @@ The monitoring interval can be adjusted using the `--semi-sync-monitor-interval`
 
 When a query fails while running in a transaction, due to the transaction no longer being valid (e.g. PRS, rollout, primary down, etc.), the original error is now wrapped in a `VT15001` error.
 
-For non-transactional queries that produce a `VT15001`, VTGate will try to rollback and clear the transaction.
+When a query produce a `VT15001` error, VTGate will try to rollback and clear the transaction.
 Any new queries on the same connection will fail with a `VT09032` error, until a `ROLLBACK` is received
 to acknowledge that the transaction was automatically rolled back and cleared by VTGate.
 
