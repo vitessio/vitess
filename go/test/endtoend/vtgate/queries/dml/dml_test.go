@@ -94,21 +94,20 @@ func TestUniqueLookupDuplicateIgnore(t *testing.T) {
 
 	// insert duplicate row in multi-row insert - lookup single shard
 	// Current behavior does not work as expected—one of the rows should be inserted.
-	// The lookup table is updated, but the main table is not. This is a bug in Vitess.
 	// The issue occurs because the table has two vindex columns (`num` and `col`), both of which ignore nulls during vindex insertion.
 	// In the `INSERT IGNORE` case, after the vindex create API call, a verify call checks if the row exists in the lookup table.
 	// - If the row exists, it is inserted into the main table.
 	// - If the row does not exist, the main table insertion is skipped.
 	// Since the `col` column is null, the row is not inserted into the lookup table, causing the main table insertion to be ignored.
 	qr = utils.Exec(t, mcmp.VtConn, "insert ignore into s_tbl(id, num) values (3,20), (4,20)")
-	assert.EqualValues(t, 0, qr.RowsAffected)
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)]]`)
+	assert.EqualValues(t, 1, qr.RowsAffected)
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num from s_tbl order by id", `[[INT64(1) INT64(10)] [INT64(3) INT64(20)]]`)
 	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(20) VARCHAR("4EB190C9A2FA169C")]]`)
 
 	// insert duplicate row in multi-row insert - vindex values are not null
 	qr = utils.Exec(t, mcmp.VtConn, "insert ignore into s_tbl(id, num, col) values (3,20, 30), (4,20, 40)")
-	assert.EqualValues(t, 1, qr.RowsAffected)
-	utils.AssertMatches(t, mcmp.VtConn, "select id, num, col from s_tbl order by id", `[[INT64(1) INT64(10) NULL] [INT64(3) INT64(20) INT64(30)]]`)
+	assert.EqualValues(t, 0, qr.RowsAffected)
+	utils.AssertMatches(t, mcmp.VtConn, "select id, num, col from s_tbl order by id", `[[INT64(1) INT64(10) NULL] [INT64(3) INT64(20) NULL]]`)
 	utils.AssertMatches(t, mcmp.VtConn, "select num, hex(keyspace_id) from num_vdx_tbl order by num", `[[INT64(10) VARCHAR("166B40B44ABA4BD6")] [INT64(20) VARCHAR("4EB190C9A2FA169C")]]`)
 	utils.AssertMatches(t, mcmp.VtConn, "select col, hex(keyspace_id) from col_vdx_tbl order by col", `[[INT64(30) VARCHAR("4EB190C9A2FA169C")]]`)
 

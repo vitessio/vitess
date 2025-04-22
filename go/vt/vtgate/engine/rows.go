@@ -39,21 +39,6 @@ func NewRowsPrimitive(rows [][]sqltypes.Value, fields []*querypb.Field) Primitiv
 	return &Rows{rows: rows, fields: fields}
 }
 
-// RouteType implements the Primitive interface
-func (r *Rows) RouteType() string {
-	return "Rows"
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (r *Rows) GetKeyspaceName() string {
-	return ""
-}
-
-// GetTableName implements the Primitive interface
-func (r *Rows) GetTableName() string {
-	return ""
-}
-
 // TryExecute implements the Primitive interface
 func (r *Rows) TryExecute(context.Context, VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
 	return &sqltypes.Result{

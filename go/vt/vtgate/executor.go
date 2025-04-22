@@ -72,12 +72,6 @@ import (
 var (
 	defaultTabletType = topodatapb.TabletType_PRIMARY
 
-	// TODO: @harshit/@systay - Remove these deprecated stats once we have a replacement in a released version.
-	queriesProcessed        = stats.NewCountersWithSingleLabel("QueriesProcessed", "Deprecated: Queries processed at vtgate by plan type", "Plan")
-	queriesRouted           = stats.NewCountersWithSingleLabel("QueriesRouted", "Deprecated: Queries routed from vtgate to vttablet by plan type", "Plan")
-	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Deprecated: Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
-	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Deprecated: Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
-
 	queryExecutions        = stats.NewCountersWithMultiLabels("QueryExecutions", "Counts queries executed at VTGate by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
 	queryRoutes            = stats.NewCountersWithMultiLabels("QueryRoutes", "Counts queries routed from VTGate to VTTablet by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
 	queryExecutionsByTable = stats.NewCountersWithMultiLabels("QueryExecutionsByTable", "Counts queries executed at VTGate per table by query type and table.", []string{"Query", "Table"})
@@ -397,7 +391,6 @@ func (e *Executor) StreamExecute(
 		logStats.ExecuteTime = time.Since(execStart)
 		logStats.ActiveKeyspace = vc.GetKeyspace()
 
-		e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 		e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
 
 		return err
@@ -614,7 +607,6 @@ func ifReadAfterWriteExist(session *econtext.SafeSession, f func(*vtgatepb.ReadA
 func (e *Executor) handleBegin(ctx context.Context, vcursor *econtext.VCursorImpl, safeSession *econtext.SafeSession, logStats *logstats.LogStats, stmt sqlparser.Statement) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	e.updateQueryCounts(sqlparser.StmtBegin.String(), "", "", 0)
 	e.updateQueryStats(sqlparser.StmtBegin.String(), engine.PlanTransaction.String(), vcursor.TabletType().String(), 0, nil)
 
 	begin := stmt.(*sqlparser.Begin)
@@ -627,7 +619,6 @@ func (e *Executor) handleCommit(ctx context.Context, vcursor *econtext.VCursorIm
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
-	e.updateQueryCounts(sqlparser.StmtCommit.String(), "", "", int64(logStats.ShardQueries))
 	e.updateQueryStats(sqlparser.StmtCommit.String(), engine.PlanTransaction.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), nil)
 
 	err := e.txConn.Commit(ctx, safeSession)
@@ -644,7 +635,6 @@ func (e *Executor) handleRollback(ctx context.Context, vcursor *econtext.VCursor
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
-	e.updateQueryCounts(sqlparser.StmtRollback.String(), "", "", int64(logStats.ShardQueries))
 	e.updateQueryStats(sqlparser.StmtRollback.String(), engine.PlanTransaction.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), nil)
 
 	err := e.txConn.Rollback(ctx, safeSession)
@@ -656,7 +646,6 @@ func (e *Executor) handleSavepoint(ctx context.Context, vcursor *econtext.VCurso
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
-	e.updateQueryCounts(queryType, "", "", int64(logStats.ShardQueries))
 	e.updateQueryStats(queryType, engine.PlanTransaction.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), nil)
 
 	defer func() {
@@ -719,7 +708,6 @@ func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *econ
 func (e *Executor) handleKill(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, logStats *logstats.LogStats) (result *sqltypes.Result, err error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	e.updateQueryCounts("Kill", "", "", 0)
 	e.updateQueryStats("Kill", engine.PlanLocal.String(), vcursor.TabletType().String(), 0, nil)
 
 	defer func() {
@@ -1149,7 +1137,7 @@ func (e *Executor) fetchOrCreatePlan(
 		}
 	}
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, stmt, err
 	}
 
 	if shouldOptimizePlan(preparedPlan, isExecutePath, plan) {
@@ -1308,6 +1296,7 @@ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query stri
 
 	return engine.PlanKey{
 		CurrentKeyspace: vcursor.GetKeyspace(),
+		TabletType:      vcursor.TabletType(),
 		Destination:     strings.Join(allDest, ","),
 		Query:           query,
 		SetVarComment:   setVarComment,
@@ -1418,15 +1407,6 @@ func (e *Executor) ForEachPlan(each func(plan *engine.Plan) bool) {
 
 func (e *Executor) ClearPlans() {
 	e.epoch.Add(1)
-}
-
-func (e *Executor) updateQueryCounts(planType, keyspace, tableName string, shardQueries int64) {
-	queriesProcessed.Add(planType, 1)
-	queriesRouted.Add(planType, shardQueries)
-	if tableName != "" {
-		queriesProcessedByTable.Add([]string{planType, keyspace, tableName}, 1)
-		queriesRoutedByTable.Add([]string{planType, keyspace, tableName}, shardQueries)
-	}
 }
 
 func (e *Executor) updateQueryStats(queryType, planType, tabletType string, shards int64, tables []string) {
@@ -1591,11 +1571,20 @@ func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 }
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	plan, vcursor, _, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
+	plan, vcursor, stmt, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
 	if err != nil {
+		if stmt != nil {
+			// Attempt to build NULL field types for the statement in case planning fails,
+			// allowing the client to proceed with preparing the statement even without a valid execution plan.
+			// Hoping that an optimized plan can be built later when parameter values are available.
+			flds, paramCount, success := buildNullFieldTypes(stmt)
+			if success {
+				return flds, paramCount, nil
+			}
+		}
 		logStats.Error = err
 		return nil, 0, err
 	}
@@ -1620,6 +1609,27 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), errCount)
 
 	return qr.Fields, plan.ParamsCount, err
+}
+
+// buildNullFieldTypes builds a list of NULL field types for the given statement.
+func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bool) {
+	sel, ok := stmt.(sqlparser.SelectStatement)
+	if !ok {
+		return nil, countArguments(stmt), true
+	}
+	var fields []*querypb.Field
+	for _, expr := range sel.GetColumns() {
+		// *sqlparser.StarExpr is not supported in this context.
+		if ae, ok := expr.(*sqlparser.AliasedExpr); ok {
+			fields = append(fields, &querypb.Field{
+				Name: ae.ColumnName(),
+				Type: querypb.Type_NULL_TYPE,
+			})
+			continue
+		}
+		return nil, 0, false
+	}
+	return fields, countArguments(stmt), true
 }
 
 func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {

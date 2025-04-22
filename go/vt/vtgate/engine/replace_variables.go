@@ -36,21 +36,6 @@ func NewReplaceVariables(input Primitive) *ReplaceVariables {
 	return &ReplaceVariables{Input: input}
 }
 
-// RouteType implements the Primitive interface
-func (r *ReplaceVariables) RouteType() string {
-	return r.Input.RouteType()
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (r *ReplaceVariables) GetKeyspaceName() string {
-	return r.Input.GetKeyspaceName()
-}
-
-// GetTableName implements the Primitive interface
-func (r *ReplaceVariables) GetTableName() string {
-	return r.Input.GetTableName()
-}
-
 // TryExecute implements the Primitive interface
 func (r *ReplaceVariables) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := vcursor.ExecutePrimitive(ctx, r.Input, bindVars, wantfields)

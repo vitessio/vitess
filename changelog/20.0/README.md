@@ -1,4 +1,8 @@
 ## v20.0
+* **[20.0.7](20.0.7)**
+	* [Changelog](20.0.7/changelog.md)
+	* [Release Notes](20.0.7/release_notes.md)
+
 * **[20.0.6](20.0.6)**
 	* [Changelog](20.0.6/changelog.md)
 	* [Release Notes](20.0.6/release_notes.md)

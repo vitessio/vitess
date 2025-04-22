@@ -1,0 +1,26 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    }
+  },
+  "tables": {
+    "t2": {
+      "column_vindexes": [
+        {
+          "column": "id5",
+          "name": "hash"
+        }
+      ]
+    },
+    "t1": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}
