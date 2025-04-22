@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -82,6 +83,24 @@ var (
 	enableReplicationReporter    bool
 )
 
+var queryserverConfigPoolSize = viperutil.Configure(
+	"queryserver-config-pool-size",
+	viperutil.Options[int]{
+		FlagName: "queryserver-config-pool-size",
+		Default:  16,
+		Dynamic:  true,
+	},
+)
+
+var queryserverConfigTransactionCap = viperutil.Configure(
+	"queryserver-config-transaction-cap",
+	viperutil.Options[int]{
+		FlagName: "queryserver-config-transaction-cap",
+		Default:  20,
+		Dynamic:  true,
+	},
+)
+
 func init() {
 	currentConfig = *NewDefaultConfig()
 	currentConfig.DB = &dbconfigs.GlobalDBConfigs
@@ -122,9 +141,9 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&queryLogHandler, "query-log-stream-handler", queryLogHandler, "URL handler for streaming queries log")
 	fs.StringVar(&txLogHandler, "transaction-log-stream-handler", txLogHandler, "URL handler for streaming transactions log")
 
-	fs.IntVar(&currentConfig.OltpReadPool.Size, "queryserver-config-pool-size", defaultConfig.OltpReadPool.Size, "query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
+	fs.Int("queryserver-config-pool-size", queryserverConfigPoolSize.Default(), "query server read pool size, used by regular queries (non-streaming, not in a transaction)")
+	fs.Int("queryserver-config-transaction-cap", queryserverConfigTransactionCap.Default(), "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
 	fs.IntVar(&currentConfig.OlapReadPool.Size, "queryserver-config-stream-pool-size", defaultConfig.OlapReadPool.Size, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
-	fs.IntVar(&currentConfig.TxPool.Size, "queryserver-config-transaction-cap", defaultConfig.TxPool.Size, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
 	fs.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	fs.DurationVar(&currentConfig.Oltp.TxTimeout, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeout, "query server transaction timeout, a transaction will be killed if it takes longer than this value")
 	fs.DurationVar(&currentConfig.GracePeriods.Shutdown, "shutdown_grace_period", defaultConfig.GracePeriods.Shutdown, "how long to wait for queries and transactions to complete during graceful shutdown.")
@@ -219,6 +238,11 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.SkipUserMetrics, "skip-user-metrics", defaultConfig.SkipUserMetrics, "If true, user based stats are not recorded.")
 
 	fs.BoolVar(&currentConfig.Unmanaged, "unmanaged", false, "Indicates an unmanaged tablet, i.e. using an external mysql-compatible database")
+
+	viperutil.BindFlags(fs,
+		queryserverConfigPoolSize,
+		queryserverConfigTransactionCap,
+	)
 }
 
 var (
@@ -234,6 +258,8 @@ func Init() {
 	currentConfig.TxPool.IdleTimeout = currentConfig.OltpReadPool.IdleTimeout
 	currentConfig.OlapReadPool.MaxLifetime = currentConfig.OltpReadPool.MaxLifetime
 	currentConfig.TxPool.MaxLifetime = currentConfig.OltpReadPool.MaxLifetime
+	currentConfig.OltpReadPool.Size = queryserverConfigPoolSize.Get()
+	currentConfig.TxPool.Size = queryserverConfigTransactionCap.Get()
 
 	if enableHotRowProtection {
 		if enableHotRowProtectionDryRun {

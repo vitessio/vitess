@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/viperutil"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -502,4 +504,27 @@ func TestVerifyUnmanagedTabletConfig(t *testing.T) {
 	err = config.verifyUnmanagedTabletConfig()
 	assert.Nil(t, err)
 	assert.Equal(t, "testPassword", config.DB.App.Password)
+}
+
+func TestDynamicFlagsWithViper(t *testing.T) {
+	fs := pflag.NewFlagSet("TestDynamicFlags", pflag.ContinueOnError)
+	registerTabletEnvFlags(fs)
+
+	require.NoError(t, fs.Set("queryserver-config-pool-size", "42"))
+	require.NoError(t, fs.Set("queryserver-config-transaction-cap", "99"))
+
+	viperutil.BindFlags(fs, queryserverConfigPoolSize, queryserverConfigTransactionCap)
+
+	Init()
+
+	require.Equal(t, 42, currentConfig.OltpReadPool.Size)
+	require.Equal(t, 99, currentConfig.TxPool.Size)
+
+	require.NoError(t, fs.Set("queryserver-config-pool-size", "77"))
+	require.NoError(t, fs.Set("queryserver-config-transaction-cap", "123"))
+	viperutil.BindFlags(fs, queryserverConfigPoolSize, queryserverConfigTransactionCap)
+	Init()
+
+	require.Equal(t, 77, currentConfig.OltpReadPool.Size)
+	require.Equal(t, 123, currentConfig.TxPool.Size)
 }
