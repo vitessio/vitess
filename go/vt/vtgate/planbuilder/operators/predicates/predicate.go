@@ -61,6 +61,6 @@ func (j *JoinPredicate) Format(buf *sqlparser.TrackedBuffer) {
 }
 
 func (j *JoinPredicate) FormatFast(buf *sqlparser.TrackedBuffer) {
-	buf.WriteString(fmt.Sprintf("JP(%d):", j.ID))
+	fmt.Fprintf(buf, "JP(%d):", j.ID)
 	j.Current().FormatFast(buf)
 }

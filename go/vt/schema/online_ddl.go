@@ -434,7 +434,7 @@ func IsOnlineDDLUUID(uuid string) bool {
 
 // OnlineDDLToGCUUID converts a UUID in online-ddl format to GC-table format
 func OnlineDDLToGCUUID(uuid string) string {
-	return strings.Replace(uuid, "_", "", -1)
+	return strings.ReplaceAll(uuid, "_", "")
 }
 
 // IsOnlineDDLTableName answers 'true' when the given table name _appears to be_ a name

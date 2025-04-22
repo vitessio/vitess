@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # Required version of golangci-lint
-REQUIRED_VERSION="v1.64.5"
+REQUIRED_VERSION="v2.0.2"
 
 # Function to compare versions in pure Bash
 version_greater_or_equal() {
@@ -45,14 +45,14 @@ version_greater_or_equal() {
 # Check if golangci-lint is installed and capture the version
 if ! command -v golangci-lint >/dev/null 2>&1; then
   echo "golangci-lint not found. Installing version $REQUIRED_VERSION..."
-  go install github.com/golangci/golangci-lint/cmd/golangci-lint@$REQUIRED_VERSION
+  go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$REQUIRED_VERSION
 else
   VERSION_OUTPUT=$(golangci-lint --version)
-  INSTALLED_VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/^golangci-lint has version v\([0-9.]*\).*/\1/p')
+  INSTALLED_VERSION=$(echo "$VERSION_OUTPUT" | sed -E -n 's/^golangci-lint has version v?([0-9.]+) .*/\1/p')
   if ! version_greater_or_equal "$INSTALLED_VERSION" "${REQUIRED_VERSION#v}"; then
     echo "golangci-lint version $INSTALLED_VERSION found, but $REQUIRED_VERSION or newer is required."
     echo "Installing version $REQUIRED_VERSION..."
-    go install github.com/golangci/golangci-lint/cmd/golangci-lint@$REQUIRED_VERSION
+    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$REQUIRED_VERSION
   fi
 fi
 

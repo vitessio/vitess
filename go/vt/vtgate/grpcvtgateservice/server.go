@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -154,6 +155,62 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	}, nil
 }
 
+// ExecuteMulti is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) ExecuteMulti(ctx context.Context, request *vtgatepb.ExecuteMultiRequest) (response *vtgatepb.ExecuteMultiResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = withCallerIDContext(ctx, request.CallerId)
+
+	// Handle backward compatibility.
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{Autocommit: true}
+	}
+	newSession, qrs, err := vtg.server.ExecuteMulti(ctx, nil, session, request.Sql)
+	return &vtgatepb.ExecuteMultiResponse{
+		Results: sqltypes.ResultsToProto3(qrs),
+		Session: newSession,
+		Error:   vterrors.ToVTRPC(err),
+	}, nil
+}
+
+func (vtg *VTGate) StreamExecuteMulti(request *vtgatepb.StreamExecuteMultiRequest, stream vtgateservicepb.Vitess_StreamExecuteMultiServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{Autocommit: true}
+	}
+
+	session, vtgErr := vtg.server.StreamExecuteMulti(ctx, nil, session, request.Sql, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		// Send is not safe to call concurrently, but vtgate
+		// guarantees that it's not.
+		return stream.Send(&vtgatepb.StreamExecuteMultiResponse{
+			Result:      sqltypes.QueryResponseToProto3(qr),
+			MoreResults: more,
+			NewResult:   firstPacket,
+		})
+	})
+
+	var errs []error
+	if vtgErr != nil {
+		errs = append(errs, vtgErr)
+	}
+
+	if sendSessionInStreaming {
+		// even if there is an error, session could have been modified.
+		// So, this needs to be sent back to the client. Session is sent in the last stream response.
+		lastErr := stream.Send(&vtgatepb.StreamExecuteMultiResponse{
+			Session: session,
+		})
+		if lastErr != nil {
+			errs = append(errs, lastErr)
+		}
+	}
+
+	return vterrors.ToGRPC(vterrors.Aggregate(errs))
+}
+
 // ExecuteBatch is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBatchRequest) (response *vtgatepb.ExecuteBatchResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
@@ -270,6 +327,9 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 				Events: events,
 			})
 		})
+	if vtgErr != nil {
+		log.Infof("VStream grpc error: %v", vtgErr)
+	}
 	return vterrors.ToGRPC(vtgErr)
 }
 

@@ -100,6 +100,20 @@ func (cached *Concatenate) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Condition) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field A string
+	size += hack.RuntimeAllocSize(int64(len(cached.A)))
+	// field B string
+	size += hack.RuntimeAllocSize(int64(len(cached.B)))
+	return size
+}
 func (cached *DBDDL) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -806,6 +820,31 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	size += cached.QueryHints.CachedSize(false)
 	return size
 }
+func (cached *PlanSwitcher) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(80)
+	}
+	// field Conditions []vitess.io/vitess/go/vt/vtgate/engine.Condition
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Conditions)) * int64(32))
+		for _, elem := range cached.Conditions {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field Baseline vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Baseline.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Optimized vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Optimized.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Projection) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -928,12 +967,10 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(96)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
-	// field TableName string
-	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	// field FieldQuery string
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison

@@ -19,6 +19,7 @@ package misc
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"fmt"
 	"strings"
 	"testing"
@@ -512,6 +513,87 @@ func TestAliasesInOuterJoinQueries(t *testing.T) {
 	}
 }
 
+func TestJoinTypes(t *testing.T) {
+	columns := []string{
+		"id",
+		"msg",
+		"keyspace_id",
+		"tinyint_unsigned",
+		"bool_signed",
+		"smallint_unsigned",
+		"mediumint_unsigned",
+		"int_unsigned",
+		"float_unsigned",
+		"double_unsigned",
+		"decimal_unsigned",
+		"t_date",
+		"t_datetime",
+		"t_datetime_micros",
+		"t_time",
+		"t_timestamp",
+		"c8",
+		"c16",
+		"c24",
+		"c32",
+		"c40",
+		"c48",
+		"c56",
+		"c63",
+		"c64",
+		"json_col",
+		"text_col",
+		"data",
+		"tinyint_min",
+		"tinyint_max",
+		"tinyint_pos",
+		"tinyint_neg",
+		"smallint_min",
+		"smallint_max",
+		"smallint_pos",
+		"smallint_neg",
+		"medint_min",
+		"medint_max",
+		"medint_pos",
+		"medint_neg",
+		"int_min",
+		"int_max",
+		"int_pos",
+		"int_neg",
+		"bigint_min",
+		"bigint_max",
+		"bigint_pos",
+		"bigint_neg",
+	}
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert data into the 2 tables
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
+	mcmp.Exec("insert into all_types(id) values (1)")
+
+	for _, mode := range []string{"oltp", "olap"} {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+			// No result from the RHS, but the RHS uses LHS's values in a few places
+			// There used to be instances where the query sent to vttablet looked like this:
+			//
+			// "select tbl.unq_col + tbl.id + :t1_id1 /* INT64 */ as col from tbl where 1 != 1"
+			// {"t1_id1": {"type": "NULL_TYPE", "value": ""}, "t1_id2": {"type": "NULL_TYPE", "value": ""}, "tbl_id": {"type": "INT64", "value": 90}}
+			//
+			// Because we were hardcoding the join vars to NULL when sending the RHS field query iff there were no results from the RHS
+			// leading to DECIMAL/FLOAT64 types returned by MySQL as we are doing "tbl.unq_col + null + null"
+
+			for _, column := range columns {
+				query := fmt.Sprintf("select t1.id1 as t0, tbl.%s+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90", column)
+				mcmp.Run(column, func(mcmp *utils.MySQLCompare) {
+					mcmp.ExecWithColumnCompare(query)
+				})
+			}
+		})
+	}
+}
+
 func TestAlterTableWithView(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -564,6 +646,12 @@ func TestAlterTableWithView(t *testing.T) {
 	mcmp.AssertMatches("select * from v1", `[[INT64(1) INT64(1)]]`)
 }
 
+//go:embed join_output1.json
+var expJoinOutput1 string
+
+//go:embed join_output2.json
+var expJoinOutput2 string
+
 // TestStraightJoin tests that Vitess respects the ordering of join in a STRAIGHT JOIN query.
 func TestStraightJoin(t *testing.T) {
 	mcmp, closer := start(t)
@@ -578,7 +666,8 @@ func TestStraightJoin(t *testing.T) {
 	// Verify that in a normal join query, vitess joins tbl with t1.
 	res, err := mcmp.VtConn.ExecuteFetch("vexplain plan select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 join tbl where t1.id1 = tbl.nonunq_col", 100, false)
 	require.NoError(t, err)
-	require.Contains(t, fmt.Sprintf("%v", res.Rows), "tbl_t1")
+	require.Len(t, res.Rows, 1)
+	require.JSONEq(t, expJoinOutput1, res.Rows[0][0].ToString())
 
 	// Test the same query with a straight join
 	mcmp.AssertMatchesNoOrder("select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col",
@@ -587,7 +676,23 @@ func TestStraightJoin(t *testing.T) {
 	// Verify that in a straight join query, vitess joins t1 with tbl.
 	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select tbl.unq_col, tbl.nonunq_col, t1.id2 from t1 straight_join tbl where t1.id1 = tbl.nonunq_col", 100, false)
 	require.NoError(t, err)
-	require.Contains(t, fmt.Sprintf("%v", res.Rows), "t1_tbl")
+	require.Len(t, res.Rows, 1)
+	require.JSONEq(t, expJoinOutput2, res.Rows[0][0].ToString())
+}
+
+func TestFailingOuterJoinInOLAP(t *testing.T) {
+	// This query was returning different results in MySQL and Vitess
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert data into the 2 tables
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (5, 42)")
+	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,2,3), (2,5,3)")
+
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+
+	// This query was
+	mcmp.Exec("select t1.id1 from t1 left join tbl on t1.id2 = tbl.nonunq_col")
 }
 
 func TestColumnAliases(t *testing.T) {
@@ -686,4 +791,39 @@ func TestSemiJoin(t *testing.T) {
 			mcmp.Exec("select id1, id2 from t1 where exists (select id from tbl where nonunq_col = t1.id2) order by id1")
 		})
 	}
+}
+
+// TestTabletTypeRouting tests that the tablet type routing works as intended.
+func TestTabletTypeRouting(t *testing.T) {
+	// We are gonna configure the routing rules to send the
+	// query for a replica tablet in ks_misc.t1 to go to a table that doesn't exist.
+	// I know this doesn't make much practical sense, but makes testing really easy.
+	routingRules := `{"rules": [
+	{
+	"from_table": "ks_misc.t1@replica",
+	"to_tables": ["uks.unknown"]
+	}
+]}`
+	err := clusterInstance.VtctldClientProcess.ApplyRoutingRules(routingRules)
+	require.NoError(t, err)
+	defer func() {
+		// Clear the routing rules after the test.
+		err = clusterInstance.VtctldClientProcess.ApplyRoutingRules("{}")
+		require.NoError(t, err)
+	}()
+
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,0)")
+
+	vtConn := mcmp.VtConn
+	// We first verify that querying the primary tablet goes to the t1 table.
+	utils.Exec(t, vtConn, "use ks_misc@primary")
+	utils.AssertMatches(t, vtConn, "select * from ks_misc.t1", `[[INT64(0) INT64(0)]]`)
+	// Now we change the connection's target
+	utils.Exec(t, vtConn, "use ks_misc@replica")
+	// We verify that querying the replica tablet creates an unknown table error.
+	_, err = utils.ExecAllowError(t, vtConn, "select * from ks_misc.t1")
+	require.ErrorContains(t, err, "table unknown not found")
 }

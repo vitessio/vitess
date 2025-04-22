@@ -121,7 +121,6 @@ func (del *Delete) isVindexModified() bool {
 func (del *Delete) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query":                del.Query,
-		"Table":                del.GetTableName(),
 		"OwnedVindexQuery":     del.OwnedVindexQuery,
 		"MultiShardAutocommit": del.MultiShardAutocommit,
 		"QueryTimeout":         del.QueryTimeout,

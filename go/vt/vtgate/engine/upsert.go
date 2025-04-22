@@ -50,27 +50,6 @@ func (u *Upsert) AddUpsert(ins, upd Primitive) {
 	})
 }
 
-// RouteType implements Primitive interface type.
-func (u *Upsert) RouteType() string {
-	return "UPSERT"
-}
-
-// GetKeyspaceName implements Primitive interface type.
-func (u *Upsert) GetKeyspaceName() string {
-	if len(u.Upserts) > 0 {
-		return u.Upserts[0].Insert.GetKeyspaceName()
-	}
-	return ""
-}
-
-// GetTableName implements Primitive interface type.
-func (u *Upsert) GetTableName() string {
-	if len(u.Upserts) > 0 {
-		return u.Upserts[0].Insert.GetTableName()
-	}
-	return ""
-}
-
 // TryExecute implements Primitive interface type.
 func (u *Upsert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}

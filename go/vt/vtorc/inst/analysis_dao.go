@@ -452,7 +452,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
-		} else if a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_PRIMARY {
+		} else if a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY {
 			a.Analysis = PrimaryCurrentTypeMismatch
 			a.Description = "Primary tablet's current type is not PRIMARY"
 		} else if topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "" {

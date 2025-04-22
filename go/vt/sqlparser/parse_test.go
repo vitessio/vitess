@@ -1262,13 +1262,31 @@ var (
 	}, {
 		input: "insert /* multi-value list */ into a values (1, 2), (3, 4)",
 	}, {
-		input: "insert /* no values */ into a values ()",
+		input:  "insert /* simple */ into a value (1)",
+		output: "insert /* simple */ into a values (1)",
+	}, {
+		input:  "insert /* a.b */ into a.b value (1)",
+		output: "insert /* a.b */ into a.b values (1)",
+	}, {
+		input:  "insert /* multi-value */ into a value (1, 2)",
+		output: "insert /* multi-value */ into a values (1, 2)",
+	}, {
+		input:  "insert /* multi-value list */ into a value (1, 2), (3, 4)",
+		output: "insert /* multi-value list */ into a values (1, 2), (3, 4)",
+	}, {
+		input:  "insert /* no values */ into a value ()",
+		output: "insert /* no values */ into a values ()",
 	}, {
 		input:  "insert /* set */ into a set a = 1, b = 2",
 		output: "insert /* set */ into a(a, b) values (1, 2)",
 	}, {
 		input:  "insert /* set default */ into a set a = default, b = 2",
 		output: "insert /* set default */ into a(a, b) values (default, 2)",
+	}, {
+		input: "replace into a values (1, 2), (3, 4)",
+	}, {
+		input:  "replace into a value (1, 2), (3, 4)",
+		output: "replace into a values (1, 2), (3, 4)",
 	}, {
 		input: "insert /* value expression list */ into a values (a + 1, 2 * 3)",
 	}, {
@@ -1402,14 +1420,11 @@ var (
 		input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
 		output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
 	}, {
-		input:  "set /* simple */ a = 3",
-		output: "set /* simple */ @@a = 3",
+		input: "set /* simple */ a = 3",
 	}, {
-		input:  "set #simple\n b = 4",
-		output: "set #simple\n @@b = 4",
+		input: "set #simple\n b = 4",
 	}, {
-		input:  "set character_set_results = utf8",
-		output: "set @@character_set_results = utf8",
+		input: "set character_set_results = utf8",
 	}, {
 		input:  "set @@session.autocommit = true",
 		output: "set @@autocommit = true",
@@ -1424,10 +1439,10 @@ var (
 		output: "set @@autocommit = 'off'",
 	}, {
 		input:  "set autocommit = on",
-		output: "set @@autocommit = 'on'",
+		output: "set autocommit = 'on'",
 	}, {
 		input:  "set autocommit = off",
-		output: "set @@autocommit = 'off'",
+		output: "set autocommit = 'off'",
 	}, {
 		input:  "set names utf8 collate foo",
 		output: "set names 'utf8'",
@@ -1442,7 +1457,7 @@ var (
 		output: "set charset 'utf8'",
 	}, {
 		input:  "set s = 1--4",
-		output: "set @@s = 1 - -4",
+		output: "set s = 1 - -4",
 	}, {
 		input:  "set character set \"utf8\"",
 		output: "set charset 'utf8'",
@@ -1465,11 +1480,9 @@ var (
 		input:  "set @@local.wait_timeout = 3600",
 		output: "set @@wait_timeout = 3600",
 	}, {
-		input:  "set /* list */ a = 3, b = 4",
-		output: "set /* list */ @@a = 3, @@b = 4",
+		input: "set /* list */ a = 3, b = 4",
 	}, {
-		input:  "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
-		output: "set /* mixed list */ @@a = 3, names 'utf8', charset 'ascii', @@b = 4",
+		input: "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
 	}, {
 		input:  "set session transaction isolation level repeatable read",
 		output: "set @@session.transaction_isolation = 'repeatable-read'",
@@ -1501,39 +1514,29 @@ var (
 		input:  "set session transaction read only, isolation level serializable",
 		output: "set @@session.transaction_read_only = 'on', @@session.transaction_isolation = 'serializable'",
 	}, {
-		input:  "set tx_read_only = 1",
-		output: "set @@tx_read_only = 1",
+		input: "set tx_read_only = 1",
 	}, {
-		input:  "set tx_read_only = 0",
-		output: "set @@tx_read_only = 0",
+		input: "set tx_read_only = 0",
 	}, {
-		input:  "set transaction_read_only = 1",
-		output: "set @@session.transaction_read_only = 1",
+		input: "set transaction_read_only = 1",
 	}, {
-		input:  "set transaction_read_only = 0",
-		output: "set @@session.transaction_read_only = 0",
+		input: "set transaction_read_only = 0",
 	}, {
 		input: "set @@transaction_read_only = 1",
 	}, {
 		input: "set @@transaction_isolation = 'read-committed'",
 	}, {
-		input:  "set tx_isolation = 'repeatable read'",
-		output: "set @@tx_isolation = 'repeatable read'",
+		input: "set tx_isolation = 'repeatable read'",
 	}, {
-		input:  "set tx_isolation = 'read committed'",
-		output: "set @@tx_isolation = 'read committed'",
+		input: "set tx_isolation = 'read committed'",
 	}, {
-		input:  "set tx_isolation = 'read uncommitted'",
-		output: "set @@tx_isolation = 'read uncommitted'",
+		input: "set tx_isolation = 'read uncommitted'",
 	}, {
-		input:  "set tx_isolation = 'serializable'",
-		output: "set @@tx_isolation = 'serializable'",
+		input: "set tx_isolation = 'serializable'",
 	}, {
-		input:  "set sql_safe_updates = 0",
-		output: "set @@sql_safe_updates = 0",
+		input: "set sql_safe_updates = 0",
 	}, {
-		input:  "set sql_safe_updates = 1",
-		output: "set @@sql_safe_updates = 1",
+		input: "set sql_safe_updates = 1",
 	}, {
 		input: "set @variable = 42",
 	}, {
@@ -1541,10 +1544,10 @@ var (
 		output: "set @`period.variable` = 42",
 	}, {
 		input:  "set S= +++-++-+(4+1)",
-		output: "set @@S = - -(4 + 1)",
+		output: "set S = - -(4 + 1)",
 	}, {
 		input:  "set S= +- - - - -(4+1)",
-		output: "set @@S = - - - - -(4 + 1)",
+		output: "set S = - - - - -(4 + 1)",
 	}, {
 		input:  "alter table a add foo int references b (a) on delete restrict first",
 		output: "alter table a add column foo int references b (a) on delete restrict first",
@@ -2133,6 +2136,95 @@ var (
 		input:  "create definer = 'sa'@b.c.d view a(b,c,d) as select * from e",
 		output: "create definer = 'sa'@`b.c.d` view a(b, c, d) as select * from e",
 	}, {
+		input: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
+	}, {
+		input:  "create procedure p1 (country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
+		output: "create procedure p1 (in country CHAR(3), out cities INT) begin select count(*) from x where d = e; end;",
+	}, {
+		input:  `CREATE PROCEDURE p1 (IN a CHAR(3), OUT b INT) SELECT COUNT(*) FROM x WHERE d = e;`,
+		output: "create procedure p1 (in a CHAR(3), out b INT) select count(*) from x where d = e;",
+	}, {
+		input:  `CREATE PROCEDURE p1 (IN country CHAR(3), OUT cities INT) begin create table t1(a int); begin end; end;`,
+		output: "create procedure p1 (in country CHAR(3), out cities INT) begin create table t1 (\n\ta int\n); begin end; end;",
+	}, {
+		input:  `CREATE PROCEDURE compare (IN n INT, IN m INT, INOUT s VARCHAR(50)) BEGIN IF n = m THEN SET s = 'equals'; ELSE IF n > m THEN SET s = 'greater'; ELSE SET s = 'less'; END IF; SET s = CONCAT('is ', s, ' than'); END IF; SET s = CONCAT(n, ' ', s, ' ', m, '.'); END;`,
+		output: `create procedure compare (in n INT, in m INT, inout s VARCHAR(50)) begin if n = m then set s = 'equals'; else if n > m then set s = 'greater'; else set s = 'less'; end if; set s = CONCAT('is ', s, ' than'); end if; set s = CONCAT(n, ' ', s, ' ', m, '.'); end;`,
+	}, {
+		input:  "create procedure SimpleProcedure() begin select 'Hello, World!'; end;",
+		output: "create procedure SimpleProcedure () begin select 'Hello, World!' from dual; end;",
+	}, {
+		input:  "create procedure DeclareVariableProcedure() begin declare message varchar(100); set message = 'Test Message'; select message; end;",
+		output: "create procedure DeclareVariableProcedure () begin declare message varchar(100); set message = 'Test Message'; select message from dual; end;",
+	}, {
+		input:  "create procedure IfBlockProcedure(in input_value int) begin if input_value > 0 then select 'Positive'; elseif input_value < 0 then select 'Negative'; else select 'Zero'; end if; end;",
+		output: "create procedure IfBlockProcedure (in input_value int) begin if input_value > 0 then select 'Positive' from dual; elseif input_value < 0 then select 'Negative' from dual; else select 'Zero' from dual; end if; end;",
+	}, {
+		input:  "create procedure DeclareAndIfProcedure(in input_value int) begin declare message varchar(50); if input_value > 100 then set message = 'High'; elseif input_value > 50 then set message = 'Medium'; else set message = 'Low'; end if; select message; end;",
+		output: "create procedure DeclareAndIfProcedure (in input_value int) begin declare message varchar(50); if input_value > 100 then set message = 'High'; elseif input_value > 50 then set message = 'Medium'; else set message = 'Low'; end if; select message from dual; end;",
+	}, {
+		input:  "create procedure NestedIfProcedure(in test_value int) begin if test_value > 0 then if test_value > 100 then select 'Very High'; else select 'High'; end if; else select 'Low or Negative'; end if; end;",
+		output: "create procedure NestedIfProcedure (in test_value int) begin if test_value > 0 then if test_value > 100 then select 'Very High' from dual; else select 'High' from dual; end if; else select 'Low or Negative' from dual; end if; end;",
+	}, {
+		input:  "create procedure MultipleDeclareProcedure(in val1 int, in val2 int) begin declare sum_result int; declare diff_result int; set sum_result = val1 + val2; set diff_result = val1 - val2; select sum_result as Sum, diff_result as Difference; end;",
+		output: "create procedure MultipleDeclareProcedure (in val1 int, in val2 int) begin declare sum_result int; declare diff_result int; set sum_result = val1 + val2; set diff_result = val1 - val2; select sum_result as `Sum`, diff_result as Difference from dual; end;",
+	}, {
+		input:  "create procedure ErrorHandlingProcedure(in test_value int) begin declare exit handler for sqlexception begin select 'An error occurred'; end; if test_value < 0 then signal sqlstate '45000' set message_text = 'Negative values not allowed'; else select 'Valid value'; end if; end;",
+		output: "create procedure ErrorHandlingProcedure (in test_value int) begin declare exit handler for sqlexception begin select 'An error occurred' from dual; end; if test_value < 0 then signal sqlstate '45000' set message_text = 'Negative values not allowed'; else select 'Valid value' from dual; end if; end;",
+	}, {
+		input:  "create procedure HandlerWithSQLEXCEPTION() begin declare undo handler for sqlexception begin select 'SQL Exception occurred'; end; insert into non_existing_table values (1); end;",
+		output: "create procedure HandlerWithSQLEXCEPTION () begin declare undo handler for sqlexception begin select 'SQL Exception occurred' from dual; end; insert into non_existing_table values (1); end;",
+	}, {
+		input:  "create procedure HandlerWithNOTFOUND() begin declare exit handler for not found begin select 'No data found'; end; select * from employees where id = -1; end;",
+		output: "create procedure HandlerWithNOTFOUND () begin declare exit handler for not found begin select 'No data found' from dual; end; select * from employees where id = -1; end;",
+	}, {
+		input:  "create procedure HandlerWithSQLWARNING() begin declare continue handler for sqlwarning begin select 'A warning occurred'; end; insert into employees (id, name) values (null, 'John'); end;",
+		output: "create procedure HandlerWithSQLWARNING () begin declare continue handler for sqlwarning begin select 'A warning occurred' from dual; end; insert into employees(id, `name`) values (null, 'John'); end;",
+	}, {
+		input:  "create procedure HandlerWithMySQLErrorCode() begin declare exit handler for 1062 begin select 'Duplicate entry error'; end; insert into employees (id, name) values (1, 'John'); end;",
+		output: "create procedure HandlerWithMySQLErrorCode () begin declare exit handler for 1062 begin select 'Duplicate entry error' from dual; end; insert into employees(id, `name`) values (1, 'John'); end;",
+	}, {
+		input:  "create procedure HandlerWithSQLSTATEValue() begin declare exit handler for sqlstate '23000' begin select 'Integrity constraint violation'; end; insert into employees (id, name) values (1, 'John'); end;",
+		output: "create procedure HandlerWithSQLSTATEValue () begin declare exit handler for sqlstate '23000' begin select 'Integrity constraint violation' from dual; end; insert into employees(id, `name`) values (1, 'John'); end;",
+	}, {
+		input:  "create procedure HandlerWithMultipleConditions() begin declare exit handler for not found, 1062, sqlwarning begin select 'Error or warning occurred'; end; insert into employees (id, name) values (1, 'John'); end;",
+		output: "create procedure HandlerWithMultipleConditions () begin declare exit handler for not found, 1062, sqlwarning begin select 'Error or warning occurred' from dual; end; insert into employees(id, `name`) values (1, 'John'); end;",
+	}, {
+		input:  "create procedure HandlerWithContinueAndExit() begin declare continue handler for sqlwarning begin select 'Warning handled, continuing execution'; end; declare exit handler for sqlexception begin select 'Exception handled, exiting'; end; insert into non_existing_table values (1); end;",
+		output: "create procedure HandlerWithContinueAndExit () begin declare continue handler for sqlwarning begin select 'Warning handled, continuing execution' from dual; end; declare exit handler for sqlexception begin select 'Exception handled, exiting' from dual; end; insert into non_existing_table values (1); end;",
+	}, {
+		input:  "create procedure ProcedureWithDefaultValue() begin declare myVar int; set myVar = 100; select myVar; end;",
+		output: "create procedure ProcedureWithDefaultValue () begin declare myVar int; set myVar = 100; select myVar from dual; end;",
+	}, {
+		input:  "create procedure ProcedureWithDefaultValueNewSyntax() begin declare myVar int default 200; select myVar; end;",
+		output: "create procedure ProcedureWithDefaultValueNewSyntax () begin declare myVar int default 200; select myVar from dual; end;",
+	}, {
+		input:  "create procedure MultipleDefaults() begin declare var1 int default 10; declare var2 varchar(50) default 'Hello World'; select var1, var2; end;",
+		output: "create procedure MultipleDefaults () begin declare var1 int default 10; declare var2 varchar(50) default 'Hello World'; select var1, var2 from dual; end;",
+	}, {
+		input:  "create procedure DefaultValueWithExpression() begin declare currentTime datetime default now(); select currentTime; end;",
+		output: "create procedure DefaultValueWithExpression () begin declare currentTime datetime default now(); select currentTime from dual; end;",
+	}, {
+		input:  "create procedure UpdateSalaryProcedure(in emp_id int, in bonus decimal(10,2)) begin declare current_salary decimal(10,2); select salary into current_salary from employees where id = emp_id; if current_salary is not null then update employees set salary = current_salary + bonus where id = emp_id; else select 'Employee Not Found'; end if; end;",
+		output: "create procedure UpdateSalaryProcedure (in emp_id int, in bonus decimal(10,2)) begin declare current_salary decimal(10,2); select salary from employees where id = emp_id into current_salary; if current_salary is not null then update employees set salary = current_salary + bonus where id = emp_id; else select 'Employee Not Found' from dual; end if; end;",
+	}, {
+		input:  "create procedure ConditionWithCustomError() begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Custom error handled'; end; signal sqlstate '45000' set message_text = 'Triggering custom error'; end;",
+		output: "create procedure ConditionWithCustomError () begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Custom error handled' from dual; end; signal sqlstate '45000' set message_text = 'Triggering custom error'; end;",
+	}, {
+		input:  "create procedure ConditionWithDuplicateEntryError() begin declare duplicate_entry condition for 1062; declare exit handler for duplicate_entry begin select 'Duplicate entry error handled'; end; insert into employees (id, name) values (1, 'John'); end;",
+		output: "create procedure ConditionWithDuplicateEntryError () begin declare duplicate_entry condition for 1062; declare exit handler for duplicate_entry begin select 'Duplicate entry error handled' from dual; end; insert into employees(id, `name`) values (1, 'John'); end;",
+	}, {
+		input:  "create procedure ConditionWithMultipleConditions() begin declare custom_error condition for sqlstate '45000'; declare integrity_error condition for sqlstate '23000'; declare exit handler for custom_error, integrity_error begin select 'Custom or Integrity error handled'; end; signal sqlstate '23000' set message_text = 'Integrity constraint violation'; end;",
+		output: "create procedure ConditionWithMultipleConditions () begin declare custom_error condition for sqlstate '45000'; declare integrity_error condition for sqlstate '23000'; declare exit handler for custom_error, integrity_error begin select 'Custom or Integrity error handled' from dual; end; signal sqlstate '23000' set message_text = 'Integrity constraint violation'; end;",
+	}, {
+		input:  "create procedure ConditionWithCaseInsensitiveName() begin declare Custom_Error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Case-insensitive condition name handled'; end; signal sqlstate '45000' set message_text = 'Triggering error'; end;",
+		output: "create procedure ConditionWithCaseInsensitiveName () begin declare Custom_Error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Case-insensitive condition name handled' from dual; end; signal sqlstate '45000' set message_text = 'Triggering error'; end;",
+	}, {
+		input:  "create procedure ConditionWithContinueHandler() begin declare custom_error condition for sqlstate '45000'; declare continue handler for custom_error begin select 'Continuing after handling custom error'; end; signal sqlstate '45000' set message_text = 'Triggering custom error'; select 'Continued Execution'; end;",
+		output: "create procedure ConditionWithContinueHandler () begin declare custom_error condition for sqlstate '45000'; declare continue handler for custom_error begin select 'Continuing after handling custom error' from dual; end; signal sqlstate '45000' set message_text = 'Triggering custom error'; select 'Continued Execution' from dual; end;",
+	}, {
+		input:  "create procedure ConditionWithSignalAndHandler() begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Handled with custom condition and signal'; end; signal sqlstate '45000' set message_text = 'Custom signal triggered'; end;",
+		output: "create procedure ConditionWithSignalAndHandler () begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Handled with custom condition and signal' from dual; end; signal sqlstate '45000' set message_text = 'Custom signal triggered'; end;",
+	}, {
 		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {
 		input: "alter view a as select * from t",
@@ -2149,6 +2241,10 @@ var (
 	}, {
 		input:  "drop view a,B,c",
 		output: "drop view a, B, c",
+	}, {
+		input: "drop procedure a",
+	}, {
+		input: "drop procedure if exists a",
 	}, {
 		input: "drop /*vt+ strategy=online */ view if exists v",
 	}, {
@@ -4637,6 +4733,9 @@ func TestSelectInto(t *testing.T) {
 	}, {
 		input: "select * from t into dumpfile 'out_file_name'",
 	}, {
+		input:  "SELECT id, data INTO @x, @y FROM test.t1 LIMIT 1;",
+		output: "select id, `data` from test.t1 limit 1 into @x, @y",
+	}, {
 		input: "select * from t into outfile 'out_file_name' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n'",
 	}, {
 		input: "select * from t into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n' manifest on overwrite off",
@@ -4721,7 +4820,7 @@ func TestPositionedErr(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range invalidSQL {
 		tkn := parser.NewStringTokenizer(tcase.input)
-		_, err := ParseNext(tkn)
+		_, err := parse(tkn)
 
 		if posErr, ok := err.(PositionedErr); !ok {
 			t.Errorf("%s: %v expected PositionedErr, got (%T) %v", tcase.input, err, err, tcase.output)
@@ -5988,6 +6087,20 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 			input:  "CREATE TABLE `locations` (`geocode` json DEFAULT NULL, `lat_long` point GENERATED ALWAYS AS (point(json_unquote(json_extract(`geocode`,_utf8mb4'$.geometry.location.lat')),json_unquote(json_extract(`geocode`,_utf8mb4'$.geometry.location.lng')))) VIRTUAL /*!80003 SRID 4326 */) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
 			output: "create table locations (\n\tgeocode json default null,\n\tlat_long point as (point(json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lat')), json_unquote(json_extract(geocode, _utf8mb4 '$.geometry.location.lng')))) virtual srid 4326\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci",
 		},
+		// test TEXT column with length parameter
+		{
+			input:  "CREATE TABLE t (col TEXT(1024))",
+			output: "create table t (\n\tcol TEXT(1024)\n)",
+		},
+		{
+			input:  "CREATE TABLE t (col TEXT(1024) CHARACTER SET utf8mb4)",
+			output: "create table t (\n\tcol TEXT(1024) character set utf8mb4\n)",
+		},
+		// test BLOB column with length parameter
+		{
+			input:  "CREATE TABLE t (col BLOB(1024))",
+			output: "create table t (\n\tcol BLOB(1024)\n)",
+		},
 	}
 	parser := NewTestParser()
 	for _, test := range createTableQueries {
@@ -6092,9 +6205,8 @@ func TestCreateTableEscaped(t *testing.T) {
 
 var (
 	invalidSQL = []struct {
-		input        string
-		output       string
-		excludeMulti bool // Don't use in the ParseNext multi-statement parsing tests.
+		input  string
+		output string
 	}{{
 		input:  "select : from t",
 		output: "syntax error at position 9 near ':'",
@@ -6191,26 +6303,22 @@ var (
 		input:  "select /* straight_join using */ 1 from t1 straight_join t2 using (a)",
 		output: "syntax error at position 66 near 'using'",
 	}, {
-		input:        "select 'aa",
-		output:       "syntax error at position 11 near 'aa'",
-		excludeMulti: true,
+		input:  "select 'aa",
+		output: "syntax error at position 11 near 'aa'",
 	}, {
-		input:        "select 'aa\\",
-		output:       "syntax error at position 12 near 'aa'",
-		excludeMulti: true,
+		input:  "select 'aa\\",
+		output: "syntax error at position 12 near 'aa'",
 	}, {
-		input:        "select /* aa",
-		output:       "syntax error at position 13 near '/* aa'",
-		excludeMulti: true,
+		input:  "select /* aa",
+		output: "syntax error at position 13 near '/* aa'",
 	}, {
 		// This is a valid MySQL query but does not yet work with Vitess.
 		// The problem is that the tokenizer takes .3 as a single token which causes parsing error
 		// We should instead be using . as a separate token and then 3t2 as an identifier.
 		// This highlights another problem, the tokenization has to be aware of the context of parsing!
 		// Since in an alternate query like `select .3e3t`, we should use .3e3 as a single token FLOAT and then t as ID.
-		input:        "create table 2t.3t2 (c1 bigint not null, c2 text, primary key(c1))",
-		output:       "syntax error at position 18 near '.3'",
-		excludeMulti: true,
+		input:  "create table 2t.3t2 (c1 bigint not null, c2 text, primary key(c1))",
+		output: "syntax error at position 18 near '.3'",
 	}, {
 		input:  "ALTER TABLE t ADD PARTITION (PARTITION p10 VALUES LESS THAN (10)), ADD PARTITION (PARTITION p20 VALUES LESS THAN (20))",
 		output: "syntax error at position 67",
@@ -6273,7 +6381,7 @@ func TestSkipToEnd(t *testing.T) {
 	}, {
 		// Partial DDL should get reset for valid DDLs also.
 		input:  "create table a(id int); select * from t",
-		output: "syntax error at position 31 near 'select'",
+		output: ErrMultipleStatements.Error(),
 	}, {
 		// Partial DDL does not get reset here. But we allow the
 		// DDL only if there are no new tokens after skipping to end.
@@ -6363,14 +6471,7 @@ partition by range (id)
 		}, {
 			input:        "CREATE TABLE `TABLE_NAME` (\n  `col1` longblob /*!50633 COLUMN_FORMAT COMPRESSED */,\n  `id` bigint unsigned NOT NULL,\n  PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=COMPRESSED",
 			mysqlVersion: "8.0.1",
-			output: `create table TABLE_NAME (
-	col1 longblob column_format compressed,
-	id bigint unsigned not null,
-	primary key (id)
-) ENGINE InnoDB,
-  CHARSET utf8mb4,
-  COLLATE utf8mb4_bin,
-  ROW_FORMAT COMPRESSED`,
+			output:       "create table `TABLE_NAME` (\n\tcol1 longblob column_format compressed,\n\tid bigint unsigned not null,\n\tprimary key (id)\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_bin,\n  ROW_FORMAT COMPRESSED",
 		},
 	}
 
@@ -6488,6 +6589,112 @@ func TestValidUnionCases(t *testing.T) {
 
 func TestValidSelectCases(t *testing.T) {
 	testFile(t, "select_cases.txt", makeTestOutput(t))
+}
+
+// TestParseMultiple concatenates all the valid SQL test cases and check it can read
+// them as one long string.
+func TestParseMultiple(t *testing.T) {
+	var sql strings.Builder
+	totalCases := len(validSQL)
+	for _, tcase := range validSQL {
+		if tcase.partialDDL {
+			totalCases--
+			continue
+		}
+		sql.WriteString(tcase.input)
+		sql.WriteRune(';')
+	}
+
+	parser := NewTestParser()
+	sqlString := sql.String()
+	stmts, err := parser.ParseMultiple(sqlString)
+	require.NoError(t, err)
+	var finalStmts []Statement
+	for _, stmt := range stmts {
+		if stmt != nil {
+			finalStmts = append(finalStmts, stmt)
+		}
+	}
+	require.EqualValues(t, totalCases, len(finalStmts))
+	idx := 0
+	for _, tcase := range validSQL {
+		if tcase.partialDDL {
+			continue
+		}
+		want := tcase.output
+		if want == "" {
+			want = tcase.input
+		}
+		require.Equal(t, want, String(finalStmts[idx]))
+		idx++
+	}
+}
+
+func TestIgnoreSpecialComments(t *testing.T) {
+	input := `SELECT 1;/*! ALTER TABLE foo DISABLE KEYS; */ SELECT 2;`
+
+	parser := NewTestParser()
+	tokenizer := parser.NewStringTokenizer(input)
+	tokenizer.SkipSpecialComments = true
+	stmts, err := parse(tokenizer)
+	require.NoError(t, err)
+	require.Len(t, stmts, 2)
+	require.Equal(t, "select 1 from dual", String(stmts[0]))
+	require.Equal(t, "select 2 from dual", String(stmts[1]))
+}
+
+// TestParseMultipleEdgeCases tests various ParseMultiple edge cases.
+func TestParseMultipleEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+		want    []string
+	}{{
+		name:  "Trailing ;",
+		input: "select 1 from a; update a set b = 2;",
+		want:  []string{"select 1 from a", "update a set b = 2"},
+	}, {
+		name:  "No trailing ;",
+		input: "select 1 from a; update a set b = 2",
+		want:  []string{"select 1 from a", "update a set b = 2"},
+	}, {
+		name:  "Trailing whitespace",
+		input: "select 1 from a; update a set b = 2    ",
+		want:  []string{"select 1 from a", "update a set b = 2"},
+	}, {
+		name:  "Trailing whitespace and ;",
+		input: "select 1 from a; update a set b = 2   ;   ",
+		want:  []string{"select 1 from a", "update a set b = 2"},
+	}, {
+		name:  "Handle SkipToEnd statements",
+		input: "set character set utf8; select 1 from a",
+		want:  []string{"set charset 'utf8'", "select 1 from a"},
+	}, {
+		name:  "Semicolin inside a string",
+		input: "set character set ';'; select 1 from a",
+		want:  []string{"set charset ';'", "select 1 from a"},
+	}, {
+		name:    "Partial DDL",
+		input:   "create table a ignore me this is garbage; select 1 from a",
+		wantErr: "syntax error at position 22 near 'ignore'",
+	}}
+	parser := NewTestParser()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stmts, err := parser.ParseMultiple(test.input)
+			if test.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), test.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.EqualValues(t, len(test.want), len(stmts))
+			for i, stmt := range stmts {
+				require.Equal(t, test.want[i], String(stmt))
+			}
+		})
+	}
 }
 
 func makeTestOutput(t *testing.T) string {

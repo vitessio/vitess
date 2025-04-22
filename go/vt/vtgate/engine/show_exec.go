@@ -35,18 +35,6 @@ type ShowExec struct {
 	ShowFilter *sqlparser.ShowFilter
 }
 
-func (s *ShowExec) RouteType() string {
-	return "ShowExec"
-}
-
-func (s *ShowExec) GetKeyspaceName() string {
-	return ""
-}
-
-func (s *ShowExec) GetTableName() string {
-	return ""
-}
-
 func (s *ShowExec) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	qr, err := s.TryExecute(ctx, vcursor, bindVars, true)
 	if err != nil {

@@ -123,6 +123,7 @@ Flags:
       --min_number_serving_vttablets int                                 The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving. (default 2)
       --mysql-server-drain-onterm                                        If set, the server waits for --onterm_timeout for already connected clients to complete their in flight work
       --mysql-server-keepalive-period duration                           TCP period between keep-alives
+      --mysql-server-multi-query-protocol                                If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.
       --mysql-server-pool-conn-read-buffers                              If set, the server will pool incoming connection read buffers
       --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")

@@ -32,7 +32,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
+
+	"math/rand/v2"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/syscallutil"
@@ -313,8 +314,8 @@ func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
 	}
 	defer conn.Close()
 	// randomly generate an update set to use and the value to increment it by.
-	updateSetVal := rand.Intn(fz.updateSets)
-	incrementVal := rand.Int31()
+	updateSetVal := rand.IntN(fz.updateSets)
+	incrementVal := rand.Int32()
 	// We have to generate the update queries first. We can run the inserts only after the update queries.
 	// Otherwise, our check to see that the ids in the twopc_fuzzer_insert table in all the shards are the exact same
 	// for each update set ordered by the auto increment column will not be true.
@@ -338,7 +339,7 @@ func (fz *fuzzer) generateAndExecuteTransaction(threadId int) {
 }
 
 func getUpdateQuery(incrementVal int32, id int) string {
-	if rand.Intn(2) == 1 {
+	if rand.IntN(2) == 1 {
 		return fmt.Sprintf(updateFuzzUpdateMulti, incrementVal, id)
 	}
 	return fmt.Sprintf(updateFuzzUpdate, incrementVal, id)
@@ -398,7 +399,7 @@ func (fz *fuzzer) runClusterDisruptionThread(t *testing.T) {
 // runClusterDisruption tries to run a single cluster disruption.
 func (fz *fuzzer) runClusterDisruption(t *testing.T) {
 	for idx, prob := range fz.disruptionProbability {
-		if rand.Intn(100) < prob {
+		if rand.IntN(100) < prob {
 			fz.clusterDisruptions[idx](fz.t)
 			return
 		}
@@ -411,20 +412,20 @@ func (fz *fuzzer) runClusterDisruption(t *testing.T) {
 func (fz *fuzzer) addRandomSavePoints(queries []string) []string {
 	savePointCount := 1
 	for {
-		shouldAddSavePoint := rand.Intn(2)
+		shouldAddSavePoint := rand.IntN(2)
 		if shouldAddSavePoint == 0 {
 			return queries
 		}
 
 		savePointQueries := []string{"SAVEPOINT sp" + strconv.Itoa(savePointCount)}
-		randomDmlCount := rand.Intn(2) + 1
+		randomDmlCount := rand.IntN(2) + 1
 		for i := 0; i < randomDmlCount; i++ {
 			savePointQueries = append(savePointQueries, fz.randomDML())
 		}
 		savePointQueries = append(savePointQueries, "ROLLBACK TO sp"+strconv.Itoa(savePointCount))
 		savePointCount++
 
-		savePointPosition := rand.Intn(len(queries))
+		savePointPosition := rand.IntN(len(queries))
 		newQueries := slices.Clone(queries[:savePointPosition])
 		newQueries = append(newQueries, savePointQueries...)
 		newQueries = append(newQueries, queries[savePointPosition:]...)
@@ -434,14 +435,14 @@ func (fz *fuzzer) addRandomSavePoints(queries []string) []string {
 
 // randomDML generates a random DML to be used.
 func (fz *fuzzer) randomDML() string {
-	queryType := rand.Intn(2)
+	queryType := rand.IntN(2)
 	if queryType == 0 {
 		// Generate INSERT
-		return fmt.Sprintf(insertIntoFuzzInsert, updateRowBaseVals[rand.Intn(len(updateRowBaseVals))], rand.Intn(fz.updateSets), rand.Intn(fz.threads))
+		return fmt.Sprintf(insertIntoFuzzInsert, updateRowBaseVals[rand.IntN(len(updateRowBaseVals))], rand.IntN(fz.updateSets), rand.IntN(fz.threads))
 	}
 	// Generate UPDATE
-	updateId := fz.updateRowsVals[rand.Intn(len(fz.updateRowsVals))][rand.Intn(len(updateRowBaseVals))]
-	return getUpdateQuery(rand.Int31n(100000), updateId)
+	updateId := fz.updateRowsVals[rand.IntN(len(fz.updateRowsVals))][rand.IntN(len(updateRowBaseVals))]
+	return getUpdateQuery(rand.Int32N(100000), updateId)
 }
 
 /*
@@ -450,9 +451,9 @@ Cluster Level Disruptions for the fuzzer
 
 func prs(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
-	shard := shards[rand.Intn(len(shards))]
+	shard := shards[rand.IntN(len(shards))]
 	vttablets := shard.Vttablets
-	newPrimary := vttablets[rand.Intn(len(vttablets))]
+	newPrimary := vttablets[rand.IntN(len(vttablets))]
 	log.Errorf("Running PRS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias)
 	err := clusterInstance.VtctldClientProcess.PlannedReparentShard(keyspaceName, shard.Name, newPrimary.Alias)
 	if err != nil {
@@ -462,9 +463,9 @@ func prs(t *testing.T) {
 
 func ers(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
-	shard := shards[rand.Intn(len(shards))]
+	shard := shards[rand.IntN(len(shards))]
 	vttablets := shard.Vttablets
-	newPrimary := vttablets[rand.Intn(len(vttablets))]
+	newPrimary := vttablets[rand.IntN(len(vttablets))]
 	log.Errorf("Running ERS for - %v/%v with new primary - %v", keyspaceName, shard.Name, newPrimary.Alias)
 	_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("EmergencyReparentShard", fmt.Sprintf("%s/%s", keyspaceName, shard.Name), "--new-primary", newPrimary.Alias)
 	if err != nil {
@@ -474,9 +475,9 @@ func ers(t *testing.T) {
 
 func vttabletRestarts(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
-	shard := shards[rand.Intn(len(shards))]
+	shard := shards[rand.IntN(len(shards))]
 	vttablets := shard.Vttablets
-	tablet := vttablets[rand.Intn(len(vttablets))]
+	tablet := vttablets[rand.IntN(len(vttablets))]
 	log.Errorf("Restarting vttablet for - %v/%v - %v", keyspaceName, shard.Name, tablet.Alias)
 	err := tablet.VttabletProcess.TearDown()
 	if err != nil {
@@ -572,9 +573,9 @@ func reshardFuzzer(t *testing.T) {
 
 func mysqlRestarts(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
-	shard := shards[rand.Intn(len(shards))]
+	shard := shards[rand.IntN(len(shards))]
 	vttablets := shard.Vttablets
-	tablet := vttablets[rand.Intn(len(vttablets))]
+	tablet := vttablets[rand.IntN(len(vttablets))]
 	log.Errorf("Restarting MySQL for - %v/%v tablet - %v", keyspaceName, shard.Name, tablet.Alias)
 	pidFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.pid", tablet.TabletUID))
 	pidBytes, err := os.ReadFile(pidFile)
