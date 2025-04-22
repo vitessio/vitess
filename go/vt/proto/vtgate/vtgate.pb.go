@@ -1338,10 +1338,11 @@ type VStreamFlags struct {
 	StreamKeyspaceHeartbeats bool `protobuf:"varint,7,opt,name=stream_keyspace_heartbeats,json=streamKeyspaceHeartbeats,proto3" json:"stream_keyspace_heartbeats,omitempty"`
 	// Include reshard journal events in the stream.
 	IncludeReshardJournalEvents bool `protobuf:"varint,8,opt,name=include_reshard_journal_events,json=includeReshardJournalEvents,proto3" json:"include_reshard_journal_events,omitempty"`
-	// Skip copy phase for these tables.
-	TablesToSkipCopy []string `protobuf:"bytes,9,rep,name=tables_to_skip_copy,json=tablesToSkipCopy,proto3" json:"tables_to_skip_copy,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Copy only these tables, skip the rest in the filter.
+	// If not provided, the default behaviour is to copy all tables.
+	TablesToCopy  []string `protobuf:"bytes,9,rep,name=tables_to_copy,json=tablesToCopy,proto3" json:"tables_to_copy,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VStreamFlags) Reset() {
@@ -1430,9 +1431,9 @@ func (x *VStreamFlags) GetIncludeReshardJournalEvents() bool {
 	return false
 }
 
-func (x *VStreamFlags) GetTablesToSkipCopy() []string {
+func (x *VStreamFlags) GetTablesToCopy() []string {
 	if x != nil {
-		return x.TablesToSkipCopy
+		return x.TablesToCopy
 	}
 	return nil
 }
@@ -2003,7 +2004,7 @@ const file_vtgate_proto_rawDesc = "" +
 	"\x19ResolveTransactionRequest\x12,\n" +
 	"\tcaller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\bcallerId\x12\x12\n" +
 	"\x04dtid\x18\x02 \x01(\tR\x04dtid\"\x1c\n" +
-	"\x1aResolveTransactionResponse\"\x9e\x03\n" +
+	"\x1aResolveTransactionResponse\"\x95\x03\n" +
 	"\fVStreamFlags\x12#\n" +
 	"\rminimize_skew\x18\x01 \x01(\bR\fminimizeSkew\x12-\n" +
 	"\x12heartbeat_interval\x18\x02 \x01(\rR\x11heartbeatInterval\x12&\n" +
@@ -2012,8 +2013,8 @@ const file_vtgate_proto_rawDesc = "" +
 	"\x0fcell_preference\x18\x05 \x01(\tR\x0ecellPreference\x12!\n" +
 	"\ftablet_order\x18\x06 \x01(\tR\vtabletOrder\x12<\n" +
 	"\x1astream_keyspace_heartbeats\x18\a \x01(\bR\x18streamKeyspaceHeartbeats\x12C\n" +
-	"\x1einclude_reshard_journal_events\x18\b \x01(\bR\x1bincludeReshardJournalEvents\x12-\n" +
-	"\x13tables_to_skip_copy\x18\t \x03(\tR\x10tablesToSkipCopy\"\xf6\x01\n" +
+	"\x1einclude_reshard_journal_events\x18\b \x01(\bR\x1bincludeReshardJournalEvents\x12$\n" +
+	"\x0etables_to_copy\x18\t \x03(\tR\ftablesToCopy\"\xf6\x01\n" +
 	"\x0eVStreamRequest\x12,\n" +
 	"\tcaller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\bcallerId\x125\n" +
 	"\vtablet_type\x18\x02 \x01(\x0e2\x14.topodata.TabletTypeR\n" +

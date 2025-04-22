@@ -643,10 +643,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}
 
 		if options != nil {
-			options.TablesToSkipCopy = vs.flags.GetTablesToSkipCopy()
+			options.TablesToCopy = vs.flags.GetTablesToCopy()
 		} else {
 			options = &binlogdatapb.VStreamOptions{
-				TablesToSkipCopy: vs.flags.GetTablesToSkipCopy(),
+				TablesToCopy: vs.flags.GetTablesToCopy(),
 			}
 		}
 
