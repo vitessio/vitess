@@ -435,10 +435,10 @@ func (m *VStreamFlags) CloneVT() *VStreamFlags {
 	r.TabletOrder = m.TabletOrder
 	r.StreamKeyspaceHeartbeats = m.StreamKeyspaceHeartbeats
 	r.IncludeReshardJournalEvents = m.IncludeReshardJournalEvents
-	if rhs := m.TablesToSkipCopy; rhs != nil {
+	if rhs := m.TablesToCopy; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
-		r.TablesToSkipCopy = tmpContainer
+		r.TablesToCopy = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -1846,11 +1846,11 @@ func (m *VStreamFlags) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.TablesToSkipCopy) > 0 {
-		for iNdEx := len(m.TablesToSkipCopy) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.TablesToSkipCopy[iNdEx])
-			copy(dAtA[i:], m.TablesToSkipCopy[iNdEx])
-			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.TablesToSkipCopy[iNdEx])))
+	if len(m.TablesToCopy) > 0 {
+		for iNdEx := len(m.TablesToCopy) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.TablesToCopy[iNdEx])
+			copy(dAtA[i:], m.TablesToCopy[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.TablesToCopy[iNdEx])))
 			i--
 			dAtA[i] = 0x4a
 		}
@@ -2774,8 +2774,8 @@ func (m *VStreamFlags) SizeVT() (n int) {
 	if m.IncludeReshardJournalEvents {
 		n += 2
 	}
-	if len(m.TablesToSkipCopy) > 0 {
-		for _, s := range m.TablesToSkipCopy {
+	if len(m.TablesToCopy) > 0 {
+		for _, s := range m.TablesToCopy {
 			l = len(s)
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
@@ -6454,7 +6454,7 @@ func (m *VStreamFlags) UnmarshalVT(dAtA []byte) error {
 			m.IncludeReshardJournalEvents = bool(v != 0)
 		case 9:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field TablesToSkipCopy", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field TablesToCopy", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -6482,7 +6482,7 @@ func (m *VStreamFlags) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.TablesToSkipCopy = append(m.TablesToSkipCopy, string(dAtA[iNdEx:postIndex]))
+			m.TablesToCopy = append(m.TablesToCopy, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

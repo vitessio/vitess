@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/log"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -78,7 +79,7 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 		},
 	}
 	flags := &vtgatepb.VStreamFlags{
-		TablesToSkipCopy: []string{"customer", "merchant"},
+		TablesToCopy: []string{"product", "customer"},
 	}
 	id := 0
 	vtgateConn := vc.GetVTGateConn(t)
@@ -104,6 +105,7 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	done := atomic.Bool{}
 	done.Store(false)
 
+	copiedTables := make(sets.Set[string])
 	// Start reading events from the VStream.
 	go func() {
 		for {
@@ -112,6 +114,11 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 			case nil:
 				for _, ev := range evs {
 					if ev.Type == binlogdatapb.VEventType_ROW {
+						if !copyPhaseCompleted.Load() {
+							escapedTableNameParts := strings.Split(ev.RowEvent.TableName, ".")
+							require.Len(t, escapedTableNameParts, 2)
+							copiedTables.Insert(escapedTableNameParts[1])
+						}
 						numRowEvents++
 					}
 					if ev.Type == binlogdatapb.VEventType_COPY_COMPLETED {
@@ -179,9 +186,16 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	require.NoError(t, err)
 	require.NotZero(t, insertedRows3)
 
-	// Since we don't expect customer and merchant table to be part of copy
-	// phase, we can subtract 10 * 2 from the total rows found in the 3 tables.
-	wantTotalRows := insertedRows1 + insertedRows2 + insertedRows3 - 10*2
+	assert.Len(t, copiedTables, 2)
+	for _, expectedCopiedTableName := range flags.TablesToCopy {
+		assert.Truef(t, copiedTables.Has(expectedCopiedTableName), "expected table %s to be copied", expectedCopiedTableName)
+	}
+	// We don't expect merchant table to be part of copy phase.
+	assert.False(t, copiedTables.Has("merchant"), "expected table merchant not to be copied")
+
+	// Since we don't expect merchant table to be part of copy phase, we can
+	// subtract 10 from the total rows found in the 3 tables.
+	wantTotalRows := insertedRows1 + insertedRows2 + insertedRows3 - 10
 	assert.Equal(t, wantTotalRows, numRowEvents)
 }
 

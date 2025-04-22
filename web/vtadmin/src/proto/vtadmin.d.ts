@@ -39014,8 +39014,8 @@ export namespace binlogdata {
         /** VStreamOptions config_overrides */
         config_overrides?: ({ [k: string]: string }|null);
 
-        /** VStreamOptions tables_to_skip_copy */
-        tables_to_skip_copy?: (string[]|null);
+        /** VStreamOptions tables_to_copy */
+        tables_to_copy?: (string[]|null);
     }
 
     /** Represents a VStreamOptions. */
@@ -39033,8 +39033,8 @@ export namespace binlogdata {
         /** VStreamOptions config_overrides. */
         public config_overrides: { [k: string]: string };
 
-        /** VStreamOptions tables_to_skip_copy. */
-        public tables_to_skip_copy: string[];
+        /** VStreamOptions tables_to_copy. */
+        public tables_to_copy: string[];
 
         /**
          * Creates a new VStreamOptions instance using the specified properties.
