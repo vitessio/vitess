@@ -141,9 +141,9 @@ Metrics Published:
 | `TableClusteredIndexSize` |     `Table`      | Byte size of the clustered index (i.e. row data). | [#17570](https://github.com/vitessio/vitess/pull/17570) |
 |    `IndexCardinality`     | `Table`, `Index` |  Estimated number of unique values in the index   | [#17570](https://github.com/vitessio/vitess/pull/17570) |
 |       `IndexBytes`        | `Table`, `Index` |              Byte size of the index.              | [#17570](https://github.com/vitessio/vitess/pull/17570) |
-|  `UnresolvedTransaction`  |  `ManagerType`   |    Number of events sent across all vstreams.     | [#16939](https://github.com/vitessio/vitess/pull/16939) |
-|   `CommitPreparedFail`    |  `FailureType`   |    Number of vstreams that ended with errors.     | [#16939](https://github.com/vitessio/vitess/pull/16939) |
-|    `RedoPreparedFail`     |  `FailureType`   | Timing metrics for commit (Single, Multi, TwoPC)  | [#16939](https://github.com/vitessio/vitess/pull/16939) |
+|  `UnresolvedTransaction`  |  `ManagerType`   |    Current number of unresolved transactions.     | [#16939](https://github.com/vitessio/vitess/pull/16939) |
+|   `CommitPreparedFail`    |  `FailureType`   | Transactions that failed to commit after prepare. | [#16939](https://github.com/vitessio/vitess/pull/16939) |
+|    `RedoPreparedFail`     |  `FailureType`   |      Transactions that failed to re-prepare.      | [#16939](https://github.com/vitessio/vitess/pull/16939) |
 
 ---
 
