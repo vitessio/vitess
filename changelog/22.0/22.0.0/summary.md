@@ -3,7 +3,6 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
-  - **[Upgrade Path from v21](#upgrade-from-v21)**
   - **[Deprecations](#deprecations)**
     - [Metrics](#deprecated-metrics)
     - [CLI Flags](#deprecated-cli-flags)
@@ -45,15 +44,6 @@
     - [Updated to node v22.13.1](#updated-node)
 
 ## <a id="major-changes"/>Major Changes</a>
-
-### <a id="upgrade-from-v21"/>Upgrade Path from v21</a>
-
-For end-users using prepared statements along with JSON type values, upgrading to v22.0.0 is slightly different from previous versions.
-
-Pull Request [#16988](https://github.com/vitessio/vitess/pull/16988) causes an issue ([#18143](https://github.com/vitessio/vitess/issues/18143))
-when upgrading VTTablet to v22.0.0 first while using prepared statements and JSON type values.
-
-If you are in this category, it is recommended to upgrade VTGate first, followed by VTTablet.
 
 ### <a id="deprecations"/>Deprecations</a>
 
