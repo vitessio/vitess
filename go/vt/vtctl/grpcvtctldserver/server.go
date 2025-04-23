@@ -4478,7 +4478,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	}
 
 	log.Infof("TabletExternallyReparented: executing tablet type change %v -> PRIMARY on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
-	reparent := &eventsdatapb.Reparent{
+	reparent := eventsdatapb.Reparent{
 		ShardInfo: &topodatapb.ShardInfo{
 			Keyspace:  shardInfo.Keyspace(),
 			ShardName: shardInfo.ShardName(),

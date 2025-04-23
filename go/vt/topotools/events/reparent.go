@@ -22,7 +22,7 @@ import eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 
 // Reparent is an event that describes a single step in the reparent process.
 type Reparent struct {
-	*eventsdatapb.Reparent
+	eventsdatapb.Reparent
 }
 
 // Update updates the status of the reparent event.

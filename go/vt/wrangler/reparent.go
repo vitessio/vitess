@@ -139,7 +139,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 		}
 
 		// Create a reusable Reparent event with available info.
-		reparent := &eventsdatapb.Reparent{
+		reparent := eventsdatapb.Reparent{
 			ShardInfo: &topodatapb.ShardInfo{
 				Keyspace:  si.Keyspace(),
 				ShardName: si.ShardName(),
