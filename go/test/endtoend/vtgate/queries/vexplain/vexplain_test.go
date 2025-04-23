@@ -75,7 +75,7 @@ func TestVtGateVExplain(t *testing.T) {
 		"vexplain queries/all will actually run queries")
 
 	binaryPrefix := ""
-	if utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
+	if utils.BinaryIsAtLeastAtVersion(23, "vtgate") {
 		binaryPrefix = "_binary"
 	}
 
