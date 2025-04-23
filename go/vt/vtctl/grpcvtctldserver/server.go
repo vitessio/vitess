@@ -54,7 +54,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -4478,19 +4477,10 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	}
 
 	log.Infof("TabletExternallyReparented: executing tablet type change %v -> PRIMARY on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
-	reparent := eventsdatapb.Reparent{
-		ShardInfo: &topodatapb.ShardInfo{
-			Keyspace:  shardInfo.Keyspace(),
-			ShardName: shardInfo.ShardName(),
-			Shard:     shardInfo.Shard,
-		},
-		NewPrimary: tablet.Tablet.CloneVT(),
-		OldPrimary: &topodatapb.Tablet{
-			Alias: shardInfo.PrimaryAlias,
-			Type:  topodatapb.TabletType_PRIMARY,
-		},
-	}
-	ev := &events.Reparent{reparent}
+	ev := events.NewReparent(shardInfo, tablet.Tablet.CloneVT(), &topodatapb.Tablet{
+		Alias: shardInfo.PrimaryAlias,
+		Type:  topodatapb.TabletType_PRIMARY,
+	})
 
 	defer func() {
 		// Ensure we dispatch an update with any failure.

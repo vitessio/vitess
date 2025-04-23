@@ -22,32 +22,27 @@ import (
 	"log/syslog"
 	"testing"
 
-	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 )
 
 func TestReparentSyslog(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [reparent cell-0000012345 -> cell-0000054321] status"
-	eventData := eventsdatapb.Reparent{
-		ShardInfo: &topodatapb.ShardInfo{
-			Keyspace:  "keyspace-123",
-			ShardName: "shard-123",
-			Shard:     nil,
-		},
-		OldPrimary: &topodatapb.Tablet{
-			Alias: &topodatapb.TabletAlias{
-				Cell: "cell",
-				Uid:  12345,
-			},
-		},
-		NewPrimary: &topodatapb.Tablet{
+	tc := NewReparent(
+		topo.NewShardInfo("keyspace-123", "shard-123", nil, nil),
+		&topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Cell: "cell",
 				Uid:  54321,
 			},
 		},
-	}
-	tc := &Reparent{eventData}
+		&topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "cell",
+				Uid:  12345,
+			},
+		},
+	)
 	tc.Update("status")
 	gotSev, gotMsg := tc.Syslog()
 

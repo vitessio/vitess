@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
-	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -139,19 +138,10 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 		}
 
 		// Create a reusable Reparent event with available info.
-		reparent := eventsdatapb.Reparent{
-			ShardInfo: &topodatapb.ShardInfo{
-				Keyspace:  si.Keyspace(),
-				ShardName: si.ShardName(),
-				Shard:     si.Shard,
-			},
-			NewPrimary: tablet,
-			OldPrimary: &topodatapb.Tablet{
-				Alias: si.PrimaryAlias,
-				Type:  topodatapb.TabletType_PRIMARY,
-			},
-		}
-		ev := &events.Reparent{reparent}
+		ev := events.NewReparent(si, tablet, &topodatapb.Tablet{
+			Alias: si.PrimaryAlias,
+			Type:  topodatapb.TabletType_PRIMARY,
+		})
 		defer func() {
 			if err != nil {
 				event.DispatchUpdate(ev, "failed: "+err.Error())

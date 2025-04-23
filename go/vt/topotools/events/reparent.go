@@ -18,11 +18,33 @@ limitations under the License.
 // wrangler package.
 package events
 
-import eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
+import (
+	"time"
+
+	"vitess.io/vitess/go/protoutil"
+	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+)
 
 // Reparent is an event that describes a single step in the reparent process.
 type Reparent struct {
-	eventsdatapb.Reparent
+	eventsdatapb.ReparentEvent
+}
+
+// NewReparent inits a new Reparent object.
+func NewReparent(si *topo.ShardInfo, newPrimary, oldPrimary *topodatapb.Tablet) *Reparent {
+	eventData := eventsdatapb.ReparentEvent{
+		Timestamp: protoutil.TimeToProto(time.Now()),
+		ShardInfo: &topodatapb.ShardInfo{
+			Keyspace:  si.Keyspace(),
+			ShardName: si.ShardName(),
+			Shard:     si.Shard,
+		},
+		NewPrimary: newPrimary,
+		OldPrimary: oldPrimary,
+	}
+	return &Reparent{eventData}
 }
 
 // Update updates the status of the reparent event.

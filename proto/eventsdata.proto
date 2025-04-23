@@ -29,7 +29,7 @@ package eventsdata;
 import "topodata.proto";
 import "vttime.proto";
 
-message Reparent {
+message ReparentEvent {
   vttime.Time timestamp = 1;
   topodata.ShardInfo shard_info = 2;
   topodata.Tablet new_primary = 3;
