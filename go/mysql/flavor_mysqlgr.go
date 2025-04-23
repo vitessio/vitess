@@ -143,12 +143,11 @@ func (mysqlGRFlavor) status(c *Conn) (replication.ReplicationStatus, error) {
 	var chanel string
 	err = fetchStatusForGroupReplication(c, query, func(values []sqltypes.Value) error {
 		state := values[0].ToString()
-		switch state {
-		case "ONLINE":
+		if state == "ONLINE" {
 			chanel = "group_replication_applier"
-		case "RECOVERING":
+		} else if state == "RECOVERING" {
 			chanel = "group_replication_recovery"
-		default: // OFFLINE, ERROR, UNREACHABLE
+		} else { // OFFLINE, ERROR, UNREACHABLE
 			// If the member is not in healthy state, use max int as lag
 			res.ReplicationLagSeconds = math.MaxUint32
 		}

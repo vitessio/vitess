@@ -186,8 +186,10 @@ func (c *compiler) nextChar(ch *reChar) {
 			// We are in free-spacing and comments mode.
 			//  Scan through any white space and comments, until we
 			//  reach a significant character or the end of input.
-			for ch.char != -1 {
-
+			for {
+				if ch.char == -1 {
+					break // End of Input
+				}
 				if ch.char == chPound && c.eolComments {
 					// Start of a comment.  Consume the rest of it, until EOF or a new line
 					for {
@@ -331,7 +333,10 @@ func (c *compiler) compile(pat []rune) error {
 	//      - pushing or popping a state to/from the local state return stack.
 	//   file regexcst.txt is the source for the state table.  The logic behind
 	//     recongizing the pattern syntax is there, not here.
-	for c.err == nil {
+	for {
+		if c.err != nil {
+			break
+		}
 
 		if state == 0 {
 			panic("bad state?")
@@ -3407,18 +3412,17 @@ func (c *compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 		//  Try the various Java specific properties.
 		//   These all begin with "java"
 		//
-		switch propName {
-		case "javaDefined":
+		if propName == "javaDefined" {
 			c.err = uprops.AddCategory(set, uchar.GcCnMask)
 			set.Complement()
-		case "javaDigit":
+		} else if propName == "javaDigit" {
 			c.err = uprops.AddCategory(set, uchar.GcNdMask)
-		case "javaIdentifierIgnorable":
+		} else if propName == "javaIdentifierIgnorable" {
 			c.err = addIdentifierIgnorable(set)
-		case "javaISOControl":
+		} else if propName == "javaISOControl" {
 			set.AddRuneRange(0, 0x1F)
 			set.AddRuneRange(0x7F, 0x9F)
-		case "javaJavaIdentifierPart":
+		} else if propName == "javaJavaIdentifierPart" {
 			c.err = uprops.AddCategory(set, uchar.GcLMask)
 			if c.err == nil {
 				c.err = uprops.AddCategory(set, uchar.GcScMask)
@@ -3441,7 +3445,7 @@ func (c *compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 			if c.err == nil {
 				c.err = addIdentifierIgnorable(set)
 			}
-		case "javaJavaIdentifierStart":
+		} else if propName == "javaJavaIdentifierStart" {
 			c.err = uprops.AddCategory(set, uchar.GcLMask)
 			if c.err == nil {
 				c.err = uprops.AddCategory(set, uchar.GcNlMask)
@@ -3452,29 +3456,29 @@ func (c *compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 			if c.err == nil {
 				c.err = uprops.AddCategory(set, uchar.GcPcMask)
 			}
-		case "javaLetter":
+		} else if propName == "javaLetter" {
 			c.err = uprops.AddCategory(set, uchar.GcLMask)
-		case "javaLetterOrDigit":
+		} else if propName == "javaLetterOrDigit" {
 			c.err = uprops.AddCategory(set, uchar.GcLMask)
 			if c.err == nil {
 				c.err = uprops.AddCategory(set, uchar.GcNdMask)
 			}
-		case "javaLowerCase":
+		} else if propName == "javaLowerCase" {
 			c.err = uprops.AddCategory(set, uchar.GcLlMask)
-		case "javaMirrored":
+		} else if propName == "javaMirrored" {
 			c.err = uprops.ApplyIntPropertyValue(set, uprops.UCharBidiMirrored, 1)
-		case "javaSpaceChar":
+		} else if propName == "javaSpaceChar" {
 			c.err = uprops.AddCategory(set, uchar.GcZMask)
-		case "javaSupplementaryCodePoint":
+		} else if propName == "javaSupplementaryCodePoint" {
 			set.AddRuneRange(0x10000, uset.MaxValue)
-		case "javaTitleCase":
+		} else if propName == "javaTitleCase" {
 			c.err = uprops.AddCategory(set, uchar.GcLtMask)
-		case "javaUnicodeIdentifierStart":
+		} else if propName == "javaUnicodeIdentifierStart" {
 			c.err = uprops.AddCategory(set, uchar.GcLMask)
 			if c.err == nil {
 				c.err = uprops.AddCategory(set, uchar.GcNlMask)
 			}
-		case "javaUnicodeIdentifierPart":
+		} else if propName == "javaUnicodeIdentifierPart" {
 			c.err = uprops.AddCategory(set, uchar.GcLMask)
 			if c.err == nil {
 				c.err = uprops.AddCategory(set, uchar.GcPcMask)
@@ -3494,11 +3498,11 @@ func (c *compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 			if c.err == nil {
 				c.err = addIdentifierIgnorable(set)
 			}
-		case "javaUpperCase":
+		} else if propName == "javaUpperCase" {
 			c.err = uprops.AddCategory(set, uchar.GcLuMask)
-		case "javaValidCodePoint":
+		} else if propName == "javaValidCodePoint" {
 			set.AddRuneRange(0, uset.MaxValue)
-		case "javaWhitespace":
+		} else if propName == "javaWhitespace" {
 			c.err = uprops.AddCategory(set, uchar.GcZMask)
 			excl := uset.New()
 			excl.AddRune(0x0a)
@@ -3507,7 +3511,7 @@ func (c *compiler) createSetForProperty(propName string, negated bool) *uset.Uni
 			set.RemoveAll(excl)
 			set.AddRuneRange(9, 0x0d)
 			set.AddRuneRange(0x1c, 0x1f)
-		default:
+		} else {
 			c.error(PropertySyntax)
 		}
 

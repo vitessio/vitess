@@ -230,7 +230,7 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 		switch {
 		case be.IsGTID():
 			// We expect one of these at least.
-			gtid, hasBegin, err := be.GTID(f)
+			gtid, hasBegin, _, _, err := be.GTID(f)
 			if err != nil {
 				t.Fatalf("GTID event is broken: %v", err)
 			}

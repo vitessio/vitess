@@ -23,6 +23,8 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCellLengthAndData(t *testing.T) {
@@ -556,4 +558,11 @@ func TestCellLengthAndData(t *testing.T) {
 				tcase.typ, tcase.data, out, l, err, tcase.out, len(tcase.data), tcase.out.Raw(), out.Raw())
 		}
 	}
+}
+
+func TestPrintTimestamp(t *testing.T) {
+	var timestamp uint32 = 1741794544
+
+	result := printTimestamp(timestamp).String()
+	assert.Equal(t, "2025-03-12 15:49:04", result)
 }

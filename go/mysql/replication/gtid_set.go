@@ -34,6 +34,9 @@ type GTIDSet interface {
 	// registered in the transactionSetParsers map.
 	Flavor() string
 
+	// Empty returns true when the GTID has no entries
+	Empty() bool
+
 	// ContainsGTID returns true if the set contains the specified transaction.
 	ContainsGTID(GTID) bool
 
@@ -47,8 +50,14 @@ type GTIDSet interface {
 	// AddGTID returns a new GTIDSet that is expanded to contain the given GTID.
 	AddGTID(GTID) GTIDSet
 
+	// AddGTID returns a new GTIDSet that is expanded to contain the given GTID, modifying the receiver GTID set
+	AddGTIDInPlace(GTID) GTIDSet
+
 	// Union returns a union of the receiver GTIDSet and the supplied GTIDSet.
 	Union(GTIDSet) GTIDSet
+
+	// InPlaceUnion returns a union of the receiver GTIDSet and the supplied GTIDSet, modifying the receiver GTID set
+	InPlaceUnion(GTIDSet) GTIDSet
 
 	// Union returns a union of the receiver GTIDSet and the supplied GTIDSet.
 	Last() string

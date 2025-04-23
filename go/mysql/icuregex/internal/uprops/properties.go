@@ -390,15 +390,15 @@ func ApplyPropertyAlias(u *uset.UnicodeSet, prop, value string) error {
 				p = getPropertyEnum(prop)
 				if p >= UCharBinaryStart && p < uCharBinaryLimit {
 					v = 1
-				} else if comparePropertyNames("ANY", prop) == 0 {
+				} else if 0 == comparePropertyNames("ANY", prop) {
 					u.Clear()
 					u.AddRuneRange(uset.MinValue, uset.MaxValue)
 					return nil
-				} else if comparePropertyNames("ASCII", prop) == 0 {
+				} else if 0 == comparePropertyNames("ASCII", prop) {
 					u.Clear()
 					u.AddRuneRange(0, 0x7F)
 					return nil
-				} else if comparePropertyNames("Assigned", prop) == 0 {
+				} else if 0 == comparePropertyNames("Assigned", prop) {
 					// [:Assigned:]=[:^Cn:]
 					p = UCharGeneralCategoryMask
 					v = int32(uchar.GcCnMask)

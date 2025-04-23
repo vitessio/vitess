@@ -152,10 +152,6 @@ type flavor interface {
 	baseShowTables() string
 	baseShowTablesWithSizes() string
 	baseShowInnodbTableSizes() string
-	baseShowPartitions() string
-	baseShowTableRowCountClusteredIndex() string
-	baseShowIndexSizes() string
-	baseShowIndexCardinalities() string
 
 	supportsCapability(capability capabilities.FlavorCapability) (bool, error)
 }
@@ -462,22 +458,6 @@ func (c *Conn) BaseShowTablesWithSizes() string {
 // BaseShowInnodbTableSizes returns a query that shows innodb-internal FULLTEXT index tables and their sizes
 func (c *Conn) BaseShowInnodbTableSizes() string {
 	return c.flavor.baseShowInnodbTableSizes()
-}
-
-func (c *Conn) BaseShowPartitions() string {
-	return c.flavor.baseShowPartitions()
-}
-
-func (c *Conn) BaseShowTableRowCountClusteredIndex() string {
-	return c.flavor.baseShowTableRowCountClusteredIndex()
-}
-
-func (c *Conn) BaseShowIndexSizes() string {
-	return c.flavor.baseShowIndexSizes()
-}
-
-func (c *Conn) BaseShowIndexCardinalities() string {
-	return c.flavor.baseShowIndexCardinalities()
 }
 
 // SupportsCapability checks if the database server supports the given capability

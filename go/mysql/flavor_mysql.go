@@ -485,11 +485,6 @@ const InnoDBTableSizes = `
 		GROUP BY it.name
 `
 
-const ShowPartitons = `select table_name, partition_name from information_schema.partitions where table_schema = database() and partition_name is not null`
-const ShowTableRowCountClusteredIndex = `select table_name, n_rows, clustered_index_size * @@innodb_page_size from mysql.innodb_table_stats where database_name = database()`
-const ShowIndexSizes = `select table_name, index_name, stat_value * @@innodb_page_size from mysql.innodb_index_stats where database_name = database() and stat_name = 'size'`
-const ShowIndexCardinalities = `select table_name, index_name, max(cardinality) from information_schema.statistics s where table_schema = database() group by s.table_name, s.index_name`
-
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor57) baseShowTablesWithSizes() string {
 	// For 5.7, we use the base query instead of the query with sizes. Flavor57 should only be used
@@ -502,22 +497,6 @@ func (mysqlFlavor57) baseShowTablesWithSizes() string {
 
 // baseShowInnodbTableSizes is part of the Flavor interface.
 func (mysqlFlavor57) baseShowInnodbTableSizes() string {
-	return ""
-}
-
-func (mysqlFlavor57) baseShowPartitions() string {
-	return ""
-}
-
-func (mysqlFlavor57) baseShowTableRowCountClusteredIndex() string {
-	return ""
-}
-
-func (mysqlFlavor57) baseShowIndexSizes() string {
-	return ""
-}
-
-func (mysqlFlavor57) baseShowIndexCardinalities() string {
 	return ""
 }
 
@@ -536,22 +515,6 @@ func (mysqlFlavor) baseShowInnodbTableSizes() string {
 	return InnoDBTableSizes
 }
 
-func (mysqlFlavor) baseShowPartitions() string {
-	return ShowPartitons
-}
-
-func (mysqlFlavor) baseShowTableRowCountClusteredIndex() string {
-	return ShowTableRowCountClusteredIndex
-}
-
-func (mysqlFlavor) baseShowIndexSizes() string {
-	return ShowIndexSizes
-}
-
-func (mysqlFlavor) baseShowIndexCardinalities() string {
-	return ShowIndexCardinalities
-}
-
 func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
 	args := []string{
 		fmt.Sprintf("SOURCE_HOST = '%s'", host),
@@ -562,8 +525,6 @@ func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, 
 	}
 	if params.SslEnabled() {
 		args = append(args, "SOURCE_SSL = 1")
-	} else {
-		args = append(args, "GET_SOURCE_PUBLIC_KEY = 1")
 	}
 	if params.SslCa != "" {
 		args = append(args, fmt.Sprintf("SOURCE_SSL_CA = '%s'", params.SslCa))
@@ -605,7 +566,7 @@ func (mysqlFlavor) catchupToGTIDCommands(params *ConnParams, replPos replication
 		cmds = append(cmds, cmd+";")
 	} else {
 		// No TLS
-		cmds = append(cmds, fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='%s', SOURCE_PASSWORD='%s', GET_SOURCE_PUBLIC_KEY=1, SOURCE_AUTO_POSITION=1;", params.Host, params.Port, params.Uname, params.Pass))
+		cmds = append(cmds, fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='%s', SOURCE_PASSWORD='%s', SOURCE_AUTO_POSITION=1;", params.Host, params.Port, params.Uname, params.Pass))
 	}
 
 	if replPos.IsZero() { // when the there is no afterPos, that means need to replicate completely

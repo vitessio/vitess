@@ -95,11 +95,10 @@ func Fold(c rune) rune {
 		if (excWord & excConditionalFold) != 0 {
 			/* special case folding mappings, hardcoded */
 			/* default mappings */
-			switch c {
-			case 0x49:
+			if c == 0x49 {
 				/* 0049; C; 0069; # LATIN CAPITAL LETTER I */
 				return 0x69
-			case 0x130:
+			} else if c == 0x130 {
 				/* no simple case folding for U+0130 */
 				return c
 			}
@@ -148,11 +147,10 @@ func FullFolding(c rune) (rune, []uint16) {
 	if excWord&excConditionalFold != 0 {
 		/* use hardcoded conditions and mappings */
 		/* default mappings */
-		switch c {
-		case 0x49:
+		if c == 0x49 {
 			/* 0049; C; 0069; # LATIN CAPITAL LETTER I */
 			return 0x69, nil
-		case 0x130:
+		} else if c == 0x130 {
 			/* 0130; F; 0069 0307; # LATIN CAPITAL LETTER I WITH DOT ABOVE */
 			return -1, []uint16{0x69, 0x307}
 		}

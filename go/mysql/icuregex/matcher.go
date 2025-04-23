@@ -602,10 +602,9 @@ func (m *Matcher) MatchAt(startIdx int, toEnd bool) error {
 					return err
 				}
 			}
-			switch maxCount {
-			case -1:
+			if maxCount == -1 {
 				*fp.extra(op.value() + 1) = *fp.inputIdx() // For loop breaking.
-			case 0:
+			} else if maxCount == 0 {
 				fp = m.stack.popFrame()
 			}
 
@@ -1250,8 +1249,10 @@ func (m *Matcher) isWordBoundary(pos int) bool {
 	}
 
 	prevCIsWord := false
-	for pos > m.lookStart {
-
+	for {
+		if pos <= m.lookStart {
+			break
+		}
 		prevChar := charAt(m.input, pos-1)
 		pos--
 		if !(uprops.HasBinaryProperty(prevChar, uprops.UCharGraphemeExtend) || uchar.CharType(prevChar) == uchar.FormatChar) {
