@@ -2342,16 +2342,20 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			logger := logutil.NewMemoryLogger()
-			ev := &events.Reparent{ShardInfo: topo.ShardInfo{
-				Shard: &topodatapb.Shard{
-					PrimaryAlias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  100,
+			ev := events.NewReparent(
+				&topo.ShardInfo{
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
 					},
 				},
-			}}
+				nil,
+				nil,
+			)
 			if tt.initializationTest {
-				ev.ShardInfo.PrimaryAlias = nil
+				ev.ShardInfo.Shard.PrimaryAlias = nil
 			}
 
 			ts := memorytopo.NewServer(ctx, "zone1")
@@ -3515,8 +3519,8 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			}
 
 			logger := logutil.NewMemoryLogger()
-			ev := &events.Reparent{
-				ShardInfo: topo.ShardInfo{
+			ev := events.NewReparent(
+				&topo.ShardInfo{
 					Shard: &topodatapb.Shard{
 						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone1",
@@ -3524,7 +3528,9 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 						},
 					},
 				},
-			}
+				nil,
+				nil,
+			)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

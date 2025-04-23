@@ -30,9 +30,10 @@ import "topodata.proto";
 import "vttime.proto";
 
 message ReparentEvent {
-  vttime.Time timestamp = 1;
-  topodata.ShardInfo shard_info = 2;
-  topodata.Tablet new_primary = 3;
-  topodata.Tablet old_primary = 4;
-  string status = 5;
+  string id = 1;
+  vttime.Time timestamp = 2;
+  topodata.ShardInfo shard_info = 3;
+  topodata.Tablet new_primary = 4;
+  topodata.Tablet old_primary = 5;
+  string status = 6;
 }

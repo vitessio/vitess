@@ -21,6 +21,8 @@ package events
 import (
 	"time"
 
+	"github.com/google/uuid"
+
 	"vitess.io/vitess/go/protoutil"
 	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -35,6 +37,7 @@ type Reparent struct {
 // NewReparent inits a new Reparent object.
 func NewReparent(si *topo.ShardInfo, newPrimary, oldPrimary *topodatapb.Tablet) *Reparent {
 	eventData := eventsdatapb.ReparentEvent{
+		Id:        uuid.NewString(),
 		Timestamp: protoutil.TimeToProto(time.Now()),
 		ShardInfo: &topodatapb.ShardInfo{
 			Keyspace:  si.Keyspace(),
@@ -50,4 +53,5 @@ func NewReparent(si *topo.ShardInfo, newPrimary, oldPrimary *topodatapb.Tablet) 
 // Update updates the status of the reparent event.
 func (r *Reparent) Update(status any) {
 	r.Status = status.(string)
+	r.Timestamp = protoutil.TimeToProto(time.Now())
 }
