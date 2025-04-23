@@ -1328,8 +1328,8 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	}
 
 	if ev != nil {
-		resp.Keyspace = ev.Keyspace
-		resp.Shard = ev.ShardName
+		resp.Keyspace = ev.ShardInfo.Keyspace
+		resp.Shard = ev.ShardInfo.ShardName
 
 		if ev.NewPrimary != nil && !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
 			resp.PromotedPrimary = ev.NewPrimary.Alias
@@ -2821,9 +2821,11 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	if err != nil {
 		return err
 	}
-	ev.Keyspace = shardInfo.Keyspace()
-	ev.ShardName = shardInfo.ShardName()
-	ev.Shard = shardInfo.Shard
+	ev.ShardInfo = &topodatapb.ShardInfo{
+		Keyspace:  shardInfo.Keyspace(),
+		ShardName: shardInfo.ShardName(),
+		Shard:     shardInfo.Shard,
+	}
 
 	durabilityName, err := s.ts.GetKeyspaceDurability(ctx, req.Keyspace)
 	if err != nil {
@@ -3313,8 +3315,8 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 	}
 
 	if ev != nil {
-		resp.Keyspace = ev.Keyspace
-		resp.Shard = ev.ShardName
+		resp.Keyspace = ev.ShardInfo.GetKeyspace()
+		resp.Shard = ev.ShardInfo.GetShardName()
 
 		if ev.NewPrimary != nil && !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
 			resp.PromotedPrimary = ev.NewPrimary.Alias
@@ -4477,9 +4479,11 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 
 	log.Infof("TabletExternallyReparented: executing tablet type change %v -> PRIMARY on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
 	reparent := &eventsdatapb.Reparent{
-		Keyspace:   shardInfo.Keyspace(),
-		ShardName:  shardInfo.ShardName(),
-		Shard:      shardInfo.Shard,
+		ShardInfo: &topodatapb.ShardInfo{
+			Keyspace:  shardInfo.Keyspace(),
+			ShardName: shardInfo.ShardName(),
+			Shard:     shardInfo.Shard,
+		},
 		NewPrimary: tablet.Tablet.CloneVT(),
 		OldPrimary: &topodatapb.Tablet{
 			Alias: shardInfo.PrimaryAlias,

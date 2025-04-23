@@ -34,6 +34,5 @@ message Reparent {
   topodata.ShardInfo shard_info = 2;
   topodata.Tablet new_primary = 3;
   topodata.Tablet old_primary = 4;
-  string external_id = 5;
-  string status = 6;
+  string status = 5;
 }

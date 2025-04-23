@@ -30,7 +30,6 @@ func (m *Reparent) CloneVT() *Reparent {
 	r.ShardInfo = m.ShardInfo.CloneVT()
 	r.NewPrimary = m.NewPrimary.CloneVT()
 	r.OldPrimary = m.OldPrimary.CloneVT()
-	r.ExternalId = m.ExternalId
 	r.Status = m.Status
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -77,13 +76,6 @@ func (m *Reparent) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.Status)
 		copy(dAtA[i:], m.Status)
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Status)))
-		i--
-		dAtA[i] = 0x32
-	}
-	if len(m.ExternalId) > 0 {
-		i -= len(m.ExternalId)
-		copy(dAtA[i:], m.ExternalId)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.ExternalId)))
 		i--
 		dAtA[i] = 0x2a
 	}
@@ -150,10 +142,6 @@ func (m *Reparent) SizeVT() (n int) {
 	}
 	if m.OldPrimary != nil {
 		l = m.OldPrimary.SizeVT()
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	l = len(m.ExternalId)
-	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	l = len(m.Status)
@@ -338,38 +326,6 @@ func (m *Reparent) UnmarshalVT(dAtA []byte) error {
 			}
 			iNdEx = postIndex
 		case 5:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ExternalId", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.ExternalId = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 6:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Status", wireType)
 			}

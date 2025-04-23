@@ -260,7 +260,7 @@ message Shard {
 message ShardInfo {
   string keyspace = 1;
   string shard_name = 2;
-  topodata.Shard shard = 3;
+  Shard shard = 3;
 }
 
 // A Keyspace contains data about a keyspace.
