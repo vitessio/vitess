@@ -48,8 +48,7 @@
 
 ### <a id="upgrade-from-v21"/>Upgrade Path from v21</a>
 
-Upgrading from v21.0.x to v22.0.0 is slightly different from previous versions where we recommended users
-to upgrade their VTTablet first, followed by VTGate.
+Upgrading from v21.0.x to v22.0.0 is slightly different from previous versions.
 
 Pull Request [#16988](https://github.com/vitessio/vitess/pull/16988) causes an issue ([#18143](https://github.com/vitessio/vitess/issues/18143))
 when upgrading VTTablet to v22.0.0 first. It is thus recommended to upgrade VTGate first, followed by VTTablet.
