@@ -35,8 +35,8 @@ type Schema struct {
 	named  map[string]Entity
 	sorted []Entity
 
-	foreignKeyParents  []*CreateTableEntity // subset of tables
-	foreignKeyChildren []*CreateTableEntity // subset of tables
+	fkChildToParents   map[string][]*CreateTableEntity
+	fkParentToChildren map[string][]*CreateTableEntity
 
 	env *Environment
 }
@@ -49,8 +49,8 @@ func newEmptySchema(env *Environment) *Schema {
 		named:  map[string]Entity{},
 		sorted: []Entity{},
 
-		foreignKeyParents:  []*CreateTableEntity{},
-		foreignKeyChildren: []*CreateTableEntity{},
+		fkChildToParents:   map[string][]*CreateTableEntity{},
+		fkParentToChildren: map[string][]*CreateTableEntity{},
 
 		env: env,
 	}
@@ -236,8 +236,13 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			}
 			// Not handled. Does this table reference an already handled table?
 			referencedTableNames := getForeignKeyParentTableNames(t.CreateTable)
-			if len(referencedTableNames) > 0 {
-				s.foreignKeyChildren = append(s.foreignKeyChildren, t)
+			for _, referencedTableName := range referencedTableNames {
+				referencedTableEntity := s.Table(referencedTableName)
+				if referencedTableEntity == nil {
+					continue
+				}
+				s.fkParentToChildren[referencedTableName] = append(s.fkParentToChildren[referencedTableName], t)
+				s.fkChildToParents[name] = append(s.fkChildToParents[name], referencedTableEntity)
 			}
 			nonSelfReferenceNames := []string{}
 			for _, referencedTableName := range referencedTableNames {
@@ -268,11 +273,6 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			break
 		}
 		iterationLevel++
-	}
-	for _, t := range s.tables {
-		if fkParents[t.Name()] {
-			s.foreignKeyParents = append(s.foreignKeyParents, t)
-		}
 	}
 	if len(dependencyLevels) != len(s.tables) {
 		// We have leftover tables. This can happen if there's foreign key loops
@@ -890,7 +890,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 	if err != nil {
 		return nil, err
 	}
-	schemaDiff := NewSchemaDiff(s, hints)
+	schemaDiff := NewSchemaDiff(s, other, hints)
 	schemaDiff.loadDiffs(diffs)
 
 	// Utility function to see whether the given diff has dependencies on diffs that operate on any of the given named entities,
