@@ -454,10 +454,10 @@ func (d *SchemaDiff) InstantDDLCapability() InstantDDLCapability {
 	return capability
 }
 
-// AffectedForeignKeys returns the foreign key tables, either parent or child, that are affected by the
+// RelatedForeignKeyTables returns the foreign key tables, either parent or child, that are affected by the
 // diffs in this schema diff, either explicitly (table is modified) or implicitly (table's parent or
 // child is modified).
-func (d *SchemaDiff) AffectedForeignKeyTables() (fkTables map[string]*CreateTableEntity) {
+func (d *SchemaDiff) RelatedForeignKeyTables() (fkTables map[string]*CreateTableEntity) {
 	fkTables = make(map[string]*CreateTableEntity)
 
 	scanForAffectedFKs := func(entityName string) {
