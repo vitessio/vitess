@@ -1328,8 +1328,8 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	}
 
 	if ev != nil {
-		resp.Keyspace = ev.ShardInfo.Keyspace
-		resp.Shard = ev.ShardInfo.ShardName
+		resp.Keyspace = ev.ShardInfo.GetKeyspace()
+		resp.Shard = ev.ShardInfo.GetShardName()
 
 		if ev.NewPrimary != nil && !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
 			resp.PromotedPrimary = ev.NewPrimary.Alias
