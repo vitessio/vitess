@@ -26,6 +26,22 @@ func (mariadbFlavor) baseShowInnodbTableSizes() string {
 	return ""
 }
 
+func (mariadbFlavor) baseShowPartitions() string {
+	return ""
+}
+
+func (mariadbFlavor) baseShowTableRowCountClusteredIndex() string {
+	return ""
+}
+
+func (mariadbFlavor) baseShowIndexSizes() string {
+	return ""
+}
+
+func (mariadbFlavor) baseShowIndexCardinalities() string {
+	return ""
+}
+
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mariadbFlavor101) baseShowTablesWithSizes() string {
 	return TablesWithSize56
