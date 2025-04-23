@@ -39,11 +39,11 @@ func (r *Reparent) Syslog() (syslog.Priority, string) {
 		newAlias = r.NewPrimary.Alias
 	}
 
-	return syslog.LOG_INFO, fmt.Sprintf("%s/%s [reparent %v -> %v] %s (%s)",
+	return syslog.LOG_INFO, fmt.Sprintf("%s/%s [reparent %v -> %v] %s",
 		r.ShardInfo.GetKeyspace(), r.ShardInfo.GetShardName(),
 		topoproto.TabletAliasString(oldAlias),
 		topoproto.TabletAliasString(newAlias),
-		r.GetStatus(), r.GetTimestamp())
+		r.GetStatus())
 }
 
 var _ syslogger.Syslogger = (*Reparent)(nil) // compile-time interface check
