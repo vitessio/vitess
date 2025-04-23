@@ -416,8 +416,11 @@ func (uvs *uvstreamer) currentPosition() (replication.Position, error) {
 // 2. TablePKs nil, startPos empty => full table copy of tables matching filter
 // 3. TablePKs not nil, startPos empty => table copy (for pks > lastPK)
 // 4. TablePKs not nil, startPos set => run catchup from startPos, then table copy  (for pks > lastPK)
+//
+// If TablesToCopy option is not nil, copy only the tables listed in TablesToCopy.
+// For other tables not in TablesToCopy, if startPos is set, perform catchup starting from startPos.
 func (uvs *uvstreamer) init() error {
-	if uvs.startPos == "" /* full copy */ || len(uvs.inTablePKs) > 0 /* resume copy */ {
+	if uvs.startPos == "" /* full copy */ || len(uvs.inTablePKs) > 0 /* resume copy */ || len(uvs.options.GetTablesToCopy()) > 0 /* copy specific tables */ {
 		if err := uvs.buildTablePlan(); err != nil {
 			return err
 		}
