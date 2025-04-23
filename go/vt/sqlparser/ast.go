@@ -1778,6 +1778,9 @@ type Update struct {
 	Where      *Where
 	OrderBy    OrderBy
 	Limit      *Limit
+	// Returning is specific to PostgreSQL syntax, and allows Insert statements to return
+	// results via a set of select expressions that are evaluated on the inserted rows.
+	Returning SelectExprs
 }
 
 // Format formats the node.
@@ -1814,6 +1817,9 @@ type Delete struct {
 	Where      *Where
 	OrderBy    OrderBy
 	Limit      *Limit
+	// Returning is specific to PostgreSQL syntax, and allows Insert statements to return
+	// results via a set of select expressions that are evaluated on the inserted rows.
+	Returning SelectExprs
 }
 
 // Format formats the node.
