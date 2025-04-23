@@ -167,7 +167,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
-	ev.ShardInfo = *shardInfo
+	ev.ShardInfo = &topodatapb.ShardInfo{
+		Shard:     shardInfo.Shard,
+		Keyspace:  shardInfo.Keyspace(),
+		ShardName: shardInfo.ShardName(),
+	}
 
 	if opts.ExpectedPrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.ExpectedPrimaryAlias, shardInfo.PrimaryAlias) {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %s is not equal to expected alias %s",
@@ -537,7 +541,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		if !intermediateReparent {
 			var position string
 			var err error
-			if ev.ShardInfo.PrimaryAlias == nil {
+			if ev.ShardInfo.Shard.PrimaryAlias == nil {
 				erp.logger.Infof("setting up %v as new primary for an uninitialized cluster", alias)
 				// we call InitPrimary when the PrimaryAlias in the ShardInfo is empty. This happens when we have an uninitialized cluster.
 				position, err = erp.tmc.InitPrimary(primaryCtx, tablet, policy.SemiSyncAckers(opts.durability, tablet) > 0)

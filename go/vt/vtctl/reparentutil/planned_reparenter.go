@@ -177,14 +177,14 @@ func (pr *PlannedReparenter) preflightChecks(
 	if opts.NewPrimaryAlias == nil {
 		// We don't want to fail when both ShardInfo.PrimaryAlias and AvoidPrimaryAlias are nil.
 		// This happens when we are using PRS to initialize the cluster without specifying the NewPrimaryAlias
-		if ev.ShardInfo.PrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.AvoidPrimaryAlias, ev.ShardInfo.PrimaryAlias) {
+		if ev.ShardInfo.Shard.PrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.AvoidPrimaryAlias, ev.ShardInfo.Shard.PrimaryAlias) {
 			event.DispatchUpdate(ev, "current primary is different than tablet to avoid, nothing to do")
 			return true, nil
 		}
 	}
 
 	event.DispatchUpdate(ev, "electing a primary candidate")
-	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, &ev.ShardInfo, tabletMap, innodbBufferPoolData, opts, pr.logger)
+	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, ev.ShardInfo.Shard, tabletMap, innodbBufferPoolData, opts, pr.logger)
 	if err != nil {
 		return true, err
 	}
@@ -527,7 +527,11 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
-	ev.ShardInfo = *shardInfo
+	ev.ShardInfo = &topodatapb.ShardInfo{
+		Keyspace:  shardInfo.Keyspace(),
+		ShardName: shardInfo.ShardName(),
+		Shard:     shardInfo.Shard,
+	}
 
 	event.DispatchUpdate(ev, "reading tablet map")
 
@@ -600,12 +604,12 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	// inserted in the new primary's journal, so we can use it below to check
 	// that all the replicas have attached to new primary successfully.
 	switch {
-	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime == nil:
+	case currentPrimary == nil && ev.ShardInfo.Shard.PrimaryTermStartTime == nil:
 		// Case (1): no primary has been elected ever. Initialize
 		// the primary-elect tablet
 		reparentJournalPos, err = pr.performInitialPromotion(ctx, ev.NewPrimary, opts)
 		needsRefresh = true
-	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
+	case currentPrimary == nil && ev.ShardInfo.Shard.PrimaryTermStartTime != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
 		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap)

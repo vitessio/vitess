@@ -18,18 +18,14 @@ limitations under the License.
 // wrangler package.
 package events
 
-import (
-	base "vitess.io/vitess/go/vt/events"
-	"vitess.io/vitess/go/vt/topo"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-)
+import eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 
 // Reparent is an event that describes a single step in the reparent process.
 type Reparent struct {
-	base.StatusUpdater
+	*eventsdatapb.Reparent
+}
 
-	ShardInfo              topo.ShardInfo
-	OldPrimary, NewPrimary *topodatapb.Tablet
-	ExternalID             string
+// Update updates the status of the reparent event.
+func (r *Reparent) Update(status any) {
+	r.Status = status.(string)
 }

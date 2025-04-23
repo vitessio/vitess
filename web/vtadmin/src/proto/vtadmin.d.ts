@@ -18914,6 +18914,115 @@ export namespace topodata {
         }
     }
 
+    /** Properties of a ShardInfo. */
+    interface IShardInfo {
+
+        /** ShardInfo keyspace */
+        keyspace?: (string|null);
+
+        /** ShardInfo shard_name */
+        shard_name?: (string|null);
+
+        /** ShardInfo shard */
+        shard?: (topodata.IShard|null);
+    }
+
+    /** Represents a ShardInfo. */
+    class ShardInfo implements IShardInfo {
+
+        /**
+         * Constructs a new ShardInfo.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IShardInfo);
+
+        /** ShardInfo keyspace. */
+        public keyspace: string;
+
+        /** ShardInfo shard_name. */
+        public shard_name: string;
+
+        /** ShardInfo shard. */
+        public shard?: (topodata.IShard|null);
+
+        /**
+         * Creates a new ShardInfo instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardInfo instance
+         */
+        public static create(properties?: topodata.IShardInfo): topodata.ShardInfo;
+
+        /**
+         * Encodes the specified ShardInfo message. Does not implicitly {@link topodata.ShardInfo.verify|verify} messages.
+         * @param message ShardInfo message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IShardInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardInfo message, length delimited. Does not implicitly {@link topodata.ShardInfo.verify|verify} messages.
+         * @param message ShardInfo message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IShardInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardInfo message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardInfo;
+
+        /**
+         * Decodes a ShardInfo message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardInfo;
+
+        /**
+         * Verifies a ShardInfo message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardInfo message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardInfo
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ShardInfo;
+
+        /**
+         * Creates a plain object from a ShardInfo message. Also converts values to other types if specified.
+         * @param message ShardInfo
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ShardInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardInfo to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardInfo
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a Keyspace. */
     interface IKeyspace {
 

@@ -40,10 +40,10 @@ func (r *Reparent) Syslog() (syslog.Priority, string) {
 	}
 
 	return syslog.LOG_INFO, fmt.Sprintf("%s/%s [reparent %v -> %v] %s (%s)",
-		r.ShardInfo.Keyspace(), r.ShardInfo.ShardName(),
+		r.ShardInfo.Keyspace, r.ShardInfo.ShardName,
 		topoproto.TabletAliasString(oldAlias),
 		topoproto.TabletAliasString(newAlias),
-		r.Status, r.ExternalID)
+		r.Status, r.ExternalId)
 }
 
 var _ syslogger.Syslogger = (*Reparent)(nil) // compile-time interface check

@@ -256,6 +256,13 @@ message Shard {
   reserved 5;
 }
 
+// A ShardInfo contains a Shard and the keyspace/shard name.
+message ShardInfo {
+  string keyspace = 1;
+  string shard_name = 2;
+  topodata.Shard shard = 3;
+}
+
 // A Keyspace contains data about a keyspace.
 message Keyspace {
   // OBSOLETE string sharding_column_name = 1;
