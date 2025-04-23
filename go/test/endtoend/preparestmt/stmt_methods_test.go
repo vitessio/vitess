@@ -444,3 +444,20 @@ func TestBinaryColumn(t *testing.T) {
               ORDER BY BINARY table_info.table_name`, keyspaceName, keyspaceName)
 	require.NoError(t, err)
 }
+
+// TestInsertTest inserts a row with empty json array.
+func TestInsertTest(t *testing.T) {
+	dbo := Connect(t, "interpolateParams=false")
+	defer dbo.Close()
+
+	stmt, err := dbo.Prepare(`insert into vt_prepare_stmt_test(id, keyspace_id, json_col) values( null, ?, ?)`)
+	require.NoError(t, err)
+
+	res, err := stmt.Exec(1, "[]")
+	require.NoError(t, err)
+
+	ra, err := res.RowsAffected()
+	require.NoError(t, err)
+
+	assert.Equal(t, int64(1), ra)
+}
