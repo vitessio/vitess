@@ -249,7 +249,7 @@ func (tr *ShardedRouting) planBetweenOp(ctx *plancontext.PlanningContext, node *
 	if !ok {
 		return nil, false
 	}
-	var vdValue sqlparser.ValTuple = sqlparser.ValTuple([]sqlparser.Expr{node.From, node.To})
+	vdValue := sqlparser.ValTuple([]sqlparser.Expr{node.From, node.To})
 
 	opcode := func(vindex *vindexes.ColumnVindex) engine.Opcode {
 		if _, ok := vindex.Vindex.(vindexes.Sequential); ok {
@@ -700,8 +700,13 @@ func tryMergeShardedRouting(
 			bVdx := tblB.SelectedVindex()
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
-			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB)
+			if aVdx == bVdx {
+				equal, conditions := gen4ValuesEqual(ctx, aExpr, bExpr)
+				if equal {
+					allCond := append(routeA.Conditions, routeB.Conditions...)
+					allCond = append(allCond, conditions...)
+					return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB, allCond...)
+				}
 			}
 		}
 

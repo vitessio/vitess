@@ -318,6 +318,6 @@ func objName(parts ...string) string {
 func alterBucketName(dir string) string {
 	bucket := strings.ToLower(dir)
 	bucket = strings.Split(bucket, "/")[0]
-	bucket = strings.Replace(bucket, "_", "-", -1)
+	bucket = strings.ReplaceAll(bucket, "_", "-")
 	return bucket
 }

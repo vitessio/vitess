@@ -64,7 +64,7 @@ func CreateUUIDWithDelimiter(delimiter string) (string, error) {
 		return "", err
 	}
 	result := u.String()
-	result = strings.Replace(result, "-", delimiter, -1)
+	result = strings.ReplaceAll(result, "-", delimiter)
 	return result, nil
 }
 

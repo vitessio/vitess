@@ -69,7 +69,7 @@ func NewVschemaWrapper(
 		Collation:         env.CollationEnv().DefaultConnectionCharset(),
 		DefaultTabletType: topodatapb.TabletType_PRIMARY,
 		SetVarEnabled:     true,
-	})
+	}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -224,21 +224,7 @@ func (vw *VSchemaWrapper) SysVarSetEnabled() bool {
 }
 
 func (vw *VSchemaWrapper) TargetDestination(qualifier string) (key.ShardDestination, *vindexes.Keyspace, topodatapb.TabletType, error) {
-	var keyspaceName string
-	if vw.Keyspace != nil {
-		keyspaceName = vw.Keyspace.Name
-	}
-	if vw.Dest == nil && qualifier != "" {
-		keyspaceName = qualifier
-	}
-	if keyspaceName == "" {
-		return nil, nil, 0, vterrors.VT03007()
-	}
-	keyspace := vw.V.Keyspaces[keyspaceName]
-	if keyspace == nil {
-		return nil, nil, 0, vterrors.VT05003(keyspaceName)
-	}
-	return vw.Dest, keyspace.Keyspace, vw.TabletType_, nil
+	return vw.Vcursor.TargetDestination(qualifier)
 }
 
 func (vw *VSchemaWrapper) TabletType() topodatapb.TabletType {
@@ -324,6 +310,10 @@ func (vw *VSchemaWrapper) ErrorIfShardedF(keyspace *vindexes.Keyspace, _, errFmt
 	if keyspace.Sharded {
 		return fmt.Errorf(errFmt, params...)
 	}
+	return nil
+}
+
+func (vw *VSchemaWrapper) GetBindVars() map[string]*querypb.BindVariable {
 	return nil
 }
 

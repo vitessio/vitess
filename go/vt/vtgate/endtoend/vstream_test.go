@@ -775,7 +775,7 @@ recvLoop:
 	// The last response, when the vstream copy completes, does not
 	// typically contain ROW events.
 	if beginEventSeen || commitEventSeen {
-		require.True(t, (beginEventSeen && commitEventSeen), "did not receive both BEGIN and COMMIT events in the final ROW event set")
+		require.True(t, beginEventSeen && commitEventSeen, "did not receive both BEGIN and COMMIT events in the final ROW event set")
 	}
 }
 

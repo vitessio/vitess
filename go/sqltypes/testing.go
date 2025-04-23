@@ -193,8 +193,8 @@ var numericTypes = []func(int) Value{
 	func(i int) Value { return NewUint64(uint64(i)) },
 	func(i int) Value { return NewUint32(uint32(i)) },
 	func(i int) Value { return NewFloat64(float64(i)) },
-	func(i int) Value { return NewDecimal(fmt.Sprintf("%d", i)) },
-	func(i int) Value { return NewVarChar(fmt.Sprintf("%d", i)) },
+	func(i int) Value { return NewDecimal(strconv.Itoa(i)) },
+	func(i int) Value { return NewVarChar(strconv.Itoa(i)) },
 	func(i int) Value { return NewVarChar(fmt.Sprintf("  %f aa", float64(i))) },
 }
 

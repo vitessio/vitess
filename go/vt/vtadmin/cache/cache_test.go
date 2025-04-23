@@ -123,7 +123,7 @@ func TestBackfillQueueSize(t *testing.T) {
 			}, cache.Config{
 				BackfillQueueSize: tt.configuredBackfillQueueSize,
 			})
-			var config cache.Config = c.Debug()["config"].(cache.Config)
+			var config = c.Debug()["config"].(cache.Config)
 			assert.Equal(t, tt.expectedBackfillQueueSize, config.BackfillQueueSize)
 		})
 	}

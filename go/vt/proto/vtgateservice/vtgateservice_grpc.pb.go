@@ -28,6 +28,8 @@ type VitessClient interface {
 	// information in conjunction with the vindexes to route the query.
 	// API group: v3
 	Execute(ctx context.Context, in *vtgate.ExecuteRequest, opts ...grpc.CallOption) (*vtgate.ExecuteResponse, error)
+	// ExecuteMulti executes multiple queries on the right shards.
+	ExecuteMulti(ctx context.Context, in *vtgate.ExecuteMultiRequest, opts ...grpc.CallOption) (*vtgate.ExecuteMultiResponse, error)
 	// ExecuteBatch tries to route the list of queries on the right shards.
 	// It depends on the query and bind variables to provide enough
 	// information in conjunction with the vindexes to route the query.
@@ -39,6 +41,8 @@ type VitessClient interface {
 	// Use this method if the query returns a large number of rows.
 	// API group: v3
 	StreamExecute(ctx context.Context, in *vtgate.StreamExecuteRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteClient, error)
+	// StreamExecuteMulti executes multiple streaming queries.
+	StreamExecuteMulti(ctx context.Context, in *vtgate.StreamExecuteMultiRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteMultiClient, error)
 	// VStream streams binlog events from the requested sources.
 	VStream(ctx context.Context, in *vtgate.VStreamRequest, opts ...grpc.CallOption) (Vitess_VStreamClient, error)
 	// Prepare is used by the MySQL server plugin as part of supporting prepared statements.
@@ -60,6 +64,15 @@ func NewVitessClient(cc grpc.ClientConnInterface) VitessClient {
 func (c *vitessClient) Execute(ctx context.Context, in *vtgate.ExecuteRequest, opts ...grpc.CallOption) (*vtgate.ExecuteResponse, error) {
 	out := new(vtgate.ExecuteResponse)
 	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/Execute", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vitessClient) ExecuteMulti(ctx context.Context, in *vtgate.ExecuteMultiRequest, opts ...grpc.CallOption) (*vtgate.ExecuteMultiResponse, error) {
+	out := new(vtgate.ExecuteMultiResponse)
+	err := c.cc.Invoke(ctx, "/vtgateservice.Vitess/ExecuteMulti", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +120,40 @@ func (x *vitessStreamExecuteClient) Recv() (*vtgate.StreamExecuteResponse, error
 	return m, nil
 }
 
+func (c *vitessClient) StreamExecuteMulti(ctx context.Context, in *vtgate.StreamExecuteMultiRequest, opts ...grpc.CallOption) (Vitess_StreamExecuteMultiClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Vitess_ServiceDesc.Streams[1], "/vtgateservice.Vitess/StreamExecuteMulti", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &vitessStreamExecuteMultiClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Vitess_StreamExecuteMultiClient interface {
+	Recv() (*vtgate.StreamExecuteMultiResponse, error)
+	grpc.ClientStream
+}
+
+type vitessStreamExecuteMultiClient struct {
+	grpc.ClientStream
+}
+
+func (x *vitessStreamExecuteMultiClient) Recv() (*vtgate.StreamExecuteMultiResponse, error) {
+	m := new(vtgate.StreamExecuteMultiResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *vitessClient) VStream(ctx context.Context, in *vtgate.VStreamRequest, opts ...grpc.CallOption) (Vitess_VStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Vitess_ServiceDesc.Streams[1], "/vtgateservice.Vitess/VStream", opts...)
+	stream, err := c.cc.NewStream(ctx, &Vitess_ServiceDesc.Streams[2], "/vtgateservice.Vitess/VStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -166,6 +211,8 @@ type VitessServer interface {
 	// information in conjunction with the vindexes to route the query.
 	// API group: v3
 	Execute(context.Context, *vtgate.ExecuteRequest) (*vtgate.ExecuteResponse, error)
+	// ExecuteMulti executes multiple queries on the right shards.
+	ExecuteMulti(context.Context, *vtgate.ExecuteMultiRequest) (*vtgate.ExecuteMultiResponse, error)
 	// ExecuteBatch tries to route the list of queries on the right shards.
 	// It depends on the query and bind variables to provide enough
 	// information in conjunction with the vindexes to route the query.
@@ -177,6 +224,8 @@ type VitessServer interface {
 	// Use this method if the query returns a large number of rows.
 	// API group: v3
 	StreamExecute(*vtgate.StreamExecuteRequest, Vitess_StreamExecuteServer) error
+	// StreamExecuteMulti executes multiple streaming queries.
+	StreamExecuteMulti(*vtgate.StreamExecuteMultiRequest, Vitess_StreamExecuteMultiServer) error
 	// VStream streams binlog events from the requested sources.
 	VStream(*vtgate.VStreamRequest, Vitess_VStreamServer) error
 	// Prepare is used by the MySQL server plugin as part of supporting prepared statements.
@@ -195,11 +244,17 @@ type UnimplementedVitessServer struct {
 func (UnimplementedVitessServer) Execute(context.Context, *vtgate.ExecuteRequest) (*vtgate.ExecuteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Execute not implemented")
 }
+func (UnimplementedVitessServer) ExecuteMulti(context.Context, *vtgate.ExecuteMultiRequest) (*vtgate.ExecuteMultiResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteMulti not implemented")
+}
 func (UnimplementedVitessServer) ExecuteBatch(context.Context, *vtgate.ExecuteBatchRequest) (*vtgate.ExecuteBatchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteBatch not implemented")
 }
 func (UnimplementedVitessServer) StreamExecute(*vtgate.StreamExecuteRequest, Vitess_StreamExecuteServer) error {
 	return status.Errorf(codes.Unimplemented, "method StreamExecute not implemented")
+}
+func (UnimplementedVitessServer) StreamExecuteMulti(*vtgate.StreamExecuteMultiRequest, Vitess_StreamExecuteMultiServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamExecuteMulti not implemented")
 }
 func (UnimplementedVitessServer) VStream(*vtgate.VStreamRequest, Vitess_VStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method VStream not implemented")
@@ -241,6 +296,24 @@ func _Vitess_Execute_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vitess_ExecuteMulti_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtgate.ExecuteMultiRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VitessServer).ExecuteMulti(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtgateservice.Vitess/ExecuteMulti",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VitessServer).ExecuteMulti(ctx, req.(*vtgate.ExecuteMultiRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vitess_ExecuteBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtgate.ExecuteBatchRequest)
 	if err := dec(in); err != nil {
@@ -277,6 +350,27 @@ type vitessStreamExecuteServer struct {
 }
 
 func (x *vitessStreamExecuteServer) Send(m *vtgate.StreamExecuteResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Vitess_StreamExecuteMulti_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(vtgate.StreamExecuteMultiRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(VitessServer).StreamExecuteMulti(m, &vitessStreamExecuteMultiServer{stream})
+}
+
+type Vitess_StreamExecuteMultiServer interface {
+	Send(*vtgate.StreamExecuteMultiResponse) error
+	grpc.ServerStream
+}
+
+type vitessStreamExecuteMultiServer struct {
+	grpc.ServerStream
+}
+
+func (x *vitessStreamExecuteMultiServer) Send(m *vtgate.StreamExecuteMultiResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -349,6 +443,10 @@ var Vitess_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vitess_Execute_Handler,
 		},
 		{
+			MethodName: "ExecuteMulti",
+			Handler:    _Vitess_ExecuteMulti_Handler,
+		},
+		{
 			MethodName: "ExecuteBatch",
 			Handler:    _Vitess_ExecuteBatch_Handler,
 		},
@@ -365,6 +463,11 @@ var Vitess_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StreamExecute",
 			Handler:       _Vitess_StreamExecute_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "StreamExecuteMulti",
+			Handler:       _Vitess_StreamExecuteMulti_Handler,
 			ServerStreams: true,
 		},
 		{

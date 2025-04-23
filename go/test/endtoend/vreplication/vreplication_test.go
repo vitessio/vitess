@@ -1518,7 +1518,7 @@ func materializeMerchantOrders(t *testing.T) {
 
 func checkVtgateHealth(t *testing.T, cell *Cell) {
 	for _, vtgate := range cell.Vtgates {
-		vtgateHealthURL := strings.Replace(vtgate.VerifyURL, "vars", "health", -1)
+		vtgateHealthURL := strings.ReplaceAll(vtgate.VerifyURL, "vars", "health")
 		if !checkHealth(t, vtgateHealthURL) {
 			assert.Fail(t, "Vtgate not healthy: ", vtgateHealthURL)
 		}
@@ -1526,7 +1526,7 @@ func checkVtgateHealth(t *testing.T, cell *Cell) {
 }
 
 func checkTabletHealth(t *testing.T, tablet *Tablet) {
-	vttabletHealthURL := strings.Replace(tablet.Vttablet.VerifyURL, "debug/vars", "healthz", -1)
+	vttabletHealthURL := strings.ReplaceAll(tablet.Vttablet.VerifyURL, "debug/vars", "healthz")
 	if !checkHealth(t, vttabletHealthURL) {
 		assert.Fail(t, "Vttablet not healthy: ", vttabletHealthURL)
 	}

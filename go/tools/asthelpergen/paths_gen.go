@@ -172,8 +172,11 @@ func (p *pathGen) debugString() *jen.Statement {
 		switchCases = append(switchCases, jen.Case(jen.Id(stepName+"Offset")).Block(
 			jen.Return(jen.Lit(debugStr+"Offset")),
 		))
-
 	}
+
+	switchCases = append(switchCases, jen.Case(jen.Id(visitableInner)).Block(
+		jen.Return(jen.Lit(visitableInner)),
+	))
 
 	debugStringMethod := jen.Func().Params(jen.Id("s").Id("ASTStep")).Id("DebugString").Params().String().Block(
 		jen.Switch(jen.Id("s")).Block(switchCases...),
@@ -181,6 +184,8 @@ func (p *pathGen) debugString() *jen.Statement {
 	)
 	return debugStringMethod
 }
+
+var visitableInner = visitableName + "Inner"
 
 func (p *pathGen) buildConstWithEnum() *jen.Statement {
 	// Create the const block with all step constants
@@ -203,6 +208,8 @@ func (p *pathGen) buildConstWithEnum() *jen.Statement {
 
 		addStep(stepName)
 	}
+
+	addStep(visitableInner)
 
 	constBlock := jen.Const().Defs(constDefs...)
 	return constBlock
@@ -258,6 +265,14 @@ func (p *pathGen) generateWalkCases(spi generatorSPI) []jen.Code {
 			jen.Id("node").Op("=").Add(assignNode),
 		))
 	}
+
+	/*
+		case VisitableInner:
+		node = node.(Visitable).VisitThis()
+	*/
+	cases = append(cases, jen.Case(jen.Id(visitableInner)).Block(
+		jen.Id("node").Op("=").Id("node").Assert(jen.Id("Visitable")).Dot("VisitThis").Call(),
+	))
 
 	cases = append(cases, jen.Default().Block(
 		jen.Return(jen.Nil()),

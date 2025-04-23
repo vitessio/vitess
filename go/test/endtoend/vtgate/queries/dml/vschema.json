@@ -4,14 +4,37 @@
     "hash": {
       "type": "hash"
     },
+    "hash_varchar": {
+      "type": "unicode_loose_xxhash"
+    },
     "num_vdx": {
       "type": "consistent_lookup_unique",
       "params": {
         "table": "num_vdx_tbl",
         "from": "num",
-        "to": "keyspace_id"
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
       },
       "owner": "s_tbl"
+    },
+    "col_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "col_vdx_tbl",
+        "from": "col,id",
+        "to": "keyspace_id",
+        "ignore_nulls": "true"
+      },
+      "owner": "s_tbl"
+    },
+    "name_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "name_vdx_tbl",
+        "from": "name,id",
+        "to": "keyspace_id"
+      },
+      "owner": "name_tbl"
     },
     "oid_vdx": {
       "type": "consistent_lookup_unique",
@@ -63,6 +86,28 @@
         {
           "column": "num",
           "name": "num_vdx"
+        },
+        {
+          "columns": [
+            "col",
+            "id"
+          ],
+          "name": "col_vdx"
+        }
+      ]
+    },
+    "name_tbl": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        },
+        {
+          "columns": [
+            "name",
+            "id"
+          ],
+          "name": "name_vdx"
         }
       ]
     },
@@ -71,6 +116,22 @@
         {
           "column": "num",
           "name": "hash"
+        }
+      ]
+    },
+    "col_vdx_tbl": {
+      "column_vindexes": [
+        {
+          "column": "col",
+          "name": "hash"
+        }
+      ]
+    },
+    "name_vdx_tbl": {
+      "column_vindexes": [
+        {
+          "column": "name",
+          "name": "hash_varchar"
         }
       ]
     },

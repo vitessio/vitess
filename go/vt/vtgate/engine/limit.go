@@ -53,21 +53,6 @@ type Limit struct {
 
 var UpperLimitStr = "__upper_limit"
 
-// RouteType returns a description of the query routing type used by the primitive
-func (l *Limit) RouteType() string {
-	return l.Input.RouteType()
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (l *Limit) GetKeyspaceName() string {
-	return l.Input.GetKeyspaceName()
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (l *Limit) GetTableName() string {
-	return l.Input.GetTableName()
-}
-
 // TryExecute satisfies the Primitive interface.
 func (l *Limit) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, offset, err := l.getCountAndOffset(ctx, vcursor, bindVars)

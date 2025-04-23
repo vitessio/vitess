@@ -106,7 +106,7 @@ func TestResults(t *testing.T) {
 		Name: "col13",
 		Type: Float64,
 	}}
-	sqlResults := []Result{{
+	sqlResults := []*Result{{
 		Fields:          fields1,
 		InsertID:        1,
 		InsertIDChanged: true,

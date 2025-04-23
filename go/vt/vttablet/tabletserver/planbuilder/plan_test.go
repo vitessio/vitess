@@ -161,7 +161,7 @@ func TestCustom(t *testing.T) {
 	for _, schemFile := range testSchemas {
 		schem := loadSchema(schemFile)
 		t.Logf("Testing schema %s", schemFile)
-		files, err := filepath.Glob(strings.Replace(schemFile, "schema.json", "*.txt", -1))
+		files, err := filepath.Glob(strings.ReplaceAll(schemFile, "schema.json", "*.txt"))
 		if err != nil {
 			log.Fatal(err)
 		}

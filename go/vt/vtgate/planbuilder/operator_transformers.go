@@ -36,6 +36,20 @@ import (
 )
 
 func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operator) (engine.Primitive, error) {
+	prim, err := recursiveTransform(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+	if len(ctx.Conditions) > 0 {
+		prim = &engine.PlanSwitcher{
+			Conditions: ctx.Conditions,
+			Optimized:  prim,
+		}
+	}
+	return prim, nil
+}
+
+func recursiveTransform(ctx *plancontext.PlanningContext, op operators.Operator) (engine.Primitive, error) {
 	switch op := op.(type) {
 	case *operators.Route:
 		return transformRoutePlan(ctx, op)
@@ -523,16 +537,10 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 }
 
 func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, hints *queryHints) (*engine.Route, error) {
-	tableNames, err := getAllTableNames(op)
-	if err != nil {
-		return nil, err
-	}
-
 	rp := newRoutingParams(ctx, op.Routing.OpCode())
 	op.Routing.UpdateRoutingParams(ctx, rp)
 
 	e := &engine.Route{
-		TableName:           strings.Join(tableNames, ", "),
 		RoutingParameters:   rp,
 		TruncateColumnCount: op.ResultColumns,
 		FetchLastInsertID:   ctx.SemTable.ShouldFetchLastInsertID(),
@@ -579,6 +587,8 @@ func getHints(cmt *sqlparser.ParsedComments) *queryHints {
 }
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (engine.Primitive, error) {
+	ctx.CollectConditions(op.Conditions)
+
 	stmt, dmlOp, err := operators.ToSQL(ctx, op.Source)
 	if err != nil {
 		return nil, err
