@@ -48,10 +48,12 @@
 
 ### <a id="upgrade-from-v21"/>Upgrade Path from v21</a>
 
-Upgrading from v21.0.x to v22.0.0 is slightly different from previous versions.
+For end-users using prepared statements along with JSON type values, upgrading to v22.0.0 is slightly different from previous versions.
 
 Pull Request [#16988](https://github.com/vitessio/vitess/pull/16988) causes an issue ([#18143](https://github.com/vitessio/vitess/issues/18143))
-when upgrading VTTablet to v22.0.0 first. It is thus recommended to upgrade VTGate first, followed by VTTablet.
+when upgrading VTTablet to v22.0.0 first while using prepared statements and JSON type values.
+
+If you are in this category, it is recommended to upgrade VTGate first, followed by VTTablet.
 
 ### <a id="deprecations"/>Deprecations</a>
 
