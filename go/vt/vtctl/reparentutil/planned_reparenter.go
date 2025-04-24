@@ -183,19 +183,19 @@ func (pr *PlannedReparenter) preflightChecks(
 		// We don't want to fail when both ShardInfo.PrimaryAlias and AvoidPrimaryAlias are nil.
 		// This happens when we are using PRS to initialize the cluster without specifying the NewPrimaryAlias
 		if ev.ShardInfo.Shard.PrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.AvoidPrimaryAlias, ev.ShardInfo.Shard.PrimaryAlias) {
-			event.DispatchUpdate(ev, "current primary is different than tablet to avoid, nothing to do")
+			event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_Skip)
 			return true, nil
 		}
 	}
 
-	event.DispatchUpdate(ev, "electing a primary candidate")
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_PrimaryElection)
 	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, ev.ShardInfo.Shard, tabletMap, innodbBufferPoolData, opts, pr.logger)
 	if err != nil {
 		return true, err
 	}
 
 	pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
-	event.DispatchUpdate(ev, "elected new primary candidate")
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_PrimaryElected)
 
 	primaryElectAliasStr := topoproto.TabletAliasString(opts.NewPrimaryAlias)
 
@@ -275,7 +275,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	// It's fine if the current primary was already demoted, since DemotePrimary
 	// is idempotent.
 	pr.logger.Infof("demoting current primary: %v", currentPrimary.AliasString())
-	event.DispatchUpdate(ev, "demoting old primary")
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_DemoteOldPrimary)
 
 	demoteCtx, demoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer demoteCancel()
@@ -538,7 +538,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		Shard:     shardInfo.Shard,
 	}
 
-	event.DispatchUpdate(ev, "reading tablet map")
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_ReadTabletMap)
 
 	tabletMap, err := pr.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
@@ -670,7 +670,7 @@ func (pr *PlannedReparenter) reparentTablets(
 	// - New primary: populate the reparent journal.
 	// - Everybody else: reparent to the new primary; wait for the reparent
 	//	 journal row.
-	event.DispatchUpdate(ev, "reparenting all tablets")
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_ReparentAllTablets)
 
 	// We add a (hopefully) unique record to the reparent journal table on the
 	// new primary, so we can check if replicas got it through replication.
