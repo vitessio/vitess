@@ -52579,6 +52579,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions global_keyspace */
         global_keyspace?: (string|null);
+
+        /** WorkflowOptions lookup_vindexes */
+        lookup_vindexes?: (string[]|null);
     }
 
     /** Represents a WorkflowOptions. */
@@ -52604,6 +52607,9 @@ export namespace vtctldata {
 
         /** WorkflowOptions global_keyspace. */
         public global_keyspace: string;
+
+        /** WorkflowOptions lookup_vindexes. */
+        public lookup_vindexes: string[];
 
         /**
          * Creates a new WorkflowOptions instance using the specified properties.
