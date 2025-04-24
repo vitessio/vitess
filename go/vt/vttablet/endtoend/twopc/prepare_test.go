@@ -64,7 +64,7 @@ func TestCommitPreparedFailNonRetryable(t *testing.T) {
 
 	qr, err := client2.Execute("select dtid, state, message from _vt.redo_state where dtid = 'bb'", nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[VARBINARY("bb") INT64(0) TEXT("Lock wait timeout exceeded; try restarting transaction (errno 1205) (sqlstate HY000) during query: delete from _vt.redo_state where dtid = _binary'bb'")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, `[[VARBINARY("bb") INT64(0) TEXT("Lock wait timeout exceeded; try restarting transaction (errno 1205) (sqlstate HY000) during query: delete from _vt.redo_state where dtid = 'bb'")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 // TestCommitPreparedFailRetryable tests the case where the commit_prepared fails when the query is killed.
@@ -81,7 +81,7 @@ func TestCommitPreparedFailRetryable(t *testing.T) {
 	require.NoError(t, err)
 
 	client2 := framework.NewClient()
-	_, err = client2.BeginExecute(`select * from _vt.redo_state where dtid = _binary'aa' for update`, nil, nil)
+	_, err = client2.BeginExecute(`select * from _vt.redo_state where dtid = 'aa' for update`, nil, nil)
 	require.NoError(t, err)
 
 	ch := make(chan any)
@@ -103,7 +103,7 @@ func TestCommitPreparedFailRetryable(t *testing.T) {
 	client2.Release()
 	<-ch
 
-	qr, err := client2.Execute("select dtid, state, message from _vt.redo_state where dtid = _binary'aa'", nil)
+	qr, err := client2.Execute("select dtid, state, message from _vt.redo_state where dtid = 'aa'", nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[VARBINARY("aa") INT64(1) TEXT("Query execution was interrupted (errno 1317) (sqlstate 70100) during query: delete from _vt.redo_state where dtid = _binary'aa'")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, `[[VARBINARY("aa") INT64(1) TEXT("Query execution was interrupted (errno 1317) (sqlstate 70100) during query: delete from _vt.redo_state where dtid = 'aa'")]]`, fmt.Sprintf("%v", qr.Rows))
 }

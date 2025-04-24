@@ -508,8 +508,6 @@ func (v Value) EncodeSQL(b BinWriter) {
 	switch {
 	case v.Type() == Null:
 		b.Write(NullBytes)
-	case v.IsBinary():
-		encodeBinarySQL(v.val, b)
 	case v.IsQuoted():
 		encodeBytesSQL(v.val, b)
 	case v.Type() == Bit:
@@ -525,8 +523,6 @@ func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
 	switch {
 	case v.Type() == Null:
 		b.Write(NullBytes)
-	case v.IsBinary():
-		encodeBinarySQLStringBuilder(v.val, b)
 	case v.IsQuoted():
 		encodeBytesSQLStringBuilder(v.val, b)
 	case v.Type() == Bit:
@@ -553,8 +549,6 @@ func (v Value) EncodeSQLBytes2(b *bytes2.Buffer) {
 	switch {
 	case v.Type() == Null:
 		b.Write(NullBytes)
-	case v.IsBinary():
-		encodeBinarySQLBytes2(v.val, b)
 	case v.IsQuoted():
 		encodeBytesSQLBytes2(v.val, b)
 	case v.Type() == Bit:

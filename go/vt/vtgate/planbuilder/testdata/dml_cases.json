@@ -3010,7 +3010,7 @@
         "Query": "delete from `user` where `name` = _binary 'abc'",
         "Table": "user",
         "Values": [
-          "_binary'abc'"
+          "'abc'"
         ],
         "Vindex": "name_user_map"
       },

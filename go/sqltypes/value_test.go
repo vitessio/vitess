@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/bytes2"
@@ -380,7 +379,7 @@ func TestEncode(t *testing.T) {
 		outSQL: "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
 	}, {
 		in:     TestValue(VarBinary, "\x00'\"\b\n\r\t\x1A\\"),
-		outSQL: "_binary'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
+		outSQL: "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
 	}, {
 		in:     TestValue(Bit, "a"),
 		outSQL: "b'01100001'",
@@ -635,7 +634,7 @@ func TestEncodeSQLStringBuilder(t *testing.T) {
 		outSQL: "(1, 'foo')",
 	}, {
 		in:     TestValue(VarBinary, "foo"),
-		outSQL: "_binary'foo'",
+		outSQL: "'foo'",
 	}}
 	for _, tcase := range testcases {
 		var buf strings.Builder

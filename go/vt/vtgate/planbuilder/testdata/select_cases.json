@@ -1144,7 +1144,7 @@
         "Query": "select * from `user` where id = 0x04",
         "Table": "`user`",
         "Values": [
-          "_binary'\u0004'"
+          "'\u0004'"
         ],
         "Vindex": "user_index"
       },

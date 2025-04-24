@@ -624,43 +624,43 @@ func TestCheckReceivedError(t *testing.T) {
 	}{{
 		receivedErr: vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "deadline exceeded"),
 		retryable:   true,
-		expQuery:    `update _vt.redo_state set state = 1, message = 'deadline exceeded' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'deadline exceeded' where dtid = 'aa'`,
 	}, {
 		receivedErr: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid argument"),
 		retryable:   false,
-		expQuery:    `update _vt.redo_state set state = 0, message = 'invalid argument' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'invalid argument' where dtid = 'aa'`,
 	}, {
 		receivedErr: sqlerror.NewSQLError(sqlerror.ERLockDeadlock, sqlerror.SSLockDeadlock, "Deadlock found when trying to get lock; try restarting transaction"),
 		retryable:   false,
-		expQuery:    `update _vt.redo_state set state = 0, message = 'Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)' where dtid = 'aa'`,
 	}, {
 		receivedErr: context.DeadlineExceeded,
 		retryable:   true,
-		expQuery:    `update _vt.redo_state set state = 1, message = 'context deadline exceeded' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'context deadline exceeded' where dtid = 'aa'`,
 	}, {
 		receivedErr: context.Canceled,
 		retryable:   true,
-		expQuery:    `update _vt.redo_state set state = 1, message = 'context canceled' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'context canceled' where dtid = 'aa'`,
 	}, {
 		receivedErr: sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "Lost connection to MySQL server during query"),
 		retryable:   true,
-		expQuery:    `update _vt.redo_state set state = 1, message = 'Lost connection to MySQL server during query (errno 2013) (sqlstate HY000)' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'Lost connection to MySQL server during query (errno 2013) (sqlstate HY000)' where dtid = 'aa'`,
 	}, {
 		receivedErr: sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "Malformed packet"),
 		retryable:   false,
-		expQuery:    `update _vt.redo_state set state = 0, message = 'Malformed packet (errno 2027) (sqlstate HY000)' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'Malformed packet (errno 2027) (sqlstate HY000)' where dtid = 'aa'`,
 	}, {
 		receivedErr: sqlerror.NewSQLError(sqlerror.CRServerGone, sqlerror.SSUnknownSQLState, "Server has gone away"),
 		retryable:   true,
-		expQuery:    `update _vt.redo_state set state = 1, message = 'Server has gone away (errno 2006) (sqlstate HY000)' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'Server has gone away (errno 2006) (sqlstate HY000)' where dtid = 'aa'`,
 	}, {
 		receivedErr: vterrors.New(vtrpcpb.Code_ABORTED, "Row count exceeded"),
 		retryable:   false,
-		expQuery:    `update _vt.redo_state set state = 0, message = 'Row count exceeded' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'Row count exceeded' where dtid = 'aa'`,
 	}, {
 		receivedErr: errors.New("(errno 2013) (sqlstate HY000) lost connection"),
 		retryable:   true,
-		expQuery:    `update _vt.redo_state set state = 1, message = '(errno 2013) (sqlstate HY000) lost connection' where dtid = _binary'aa'`,
+		expQuery:    `update _vt.redo_state set state = 1, message = '(errno 2013) (sqlstate HY000) lost connection' where dtid = 'aa'`,
 	}}
 
 	for _, tc := range tcases {
