@@ -41,10 +41,16 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 
+	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
+
+var testEventSource = &eventsdatapb.Source{
+	Type:     eventsdatapb.SourceType_Vtctld,
+	Hostname: "test",
+}
 
 func TestNewEmergencyReparenter(t *testing.T) {
 	t.Parallel()
@@ -67,7 +73,7 @@ func TestNewEmergencyReparenter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			er := NewEmergencyReparenter(nil, nil, tt.logger)
+			er := NewEmergencyReparenter(nil, nil, tt.logger, testEventSource)
 			assert.NotNil(t, er.logger, "NewEmergencyReparenter should never result in a nil logger instance on the EmergencyReparenter")
 		})
 	}
@@ -1899,7 +1905,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				ctx = lctx // make the reparentShardLocked call use the lock ctx
 			}
 
-			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
+			erp := NewEmergencyReparenter(ts, tt.tmc, logger, testEventSource)
 
 			err := erp.reparentShardLocked(ctx, ev, tt.keyspace, tt.shard, tt.emergencyReparentOps)
 			if tt.shouldErr {
@@ -2351,6 +2357,8 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 						},
 					},
 				},
+				testEventSource,
+				eventsdatapb.ReparentType_EmergencyReparentShard,
 				nil,
 				nil,
 			)
@@ -2384,7 +2392,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 
 			tt.emergencyReparentOps.durability = durability
 
-			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
+			erp := NewEmergencyReparenter(ts, tt.tmc, logger, testEventSource)
 			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -2629,7 +2637,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
+			erp := NewEmergencyReparenter(nil, tt.tmc, logger, testEventSource)
 			err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -2757,7 +2765,7 @@ func TestEmergencyReparenterStats(t *testing.T) {
 		SkipShardCreation:   false,
 	}, tablets...)
 
-	erp := NewEmergencyReparenter(ts, tmc, logger)
+	erp := NewEmergencyReparenter(ts, tmc, logger, testEventSource)
 
 	// run a successful ers
 	_, err := erp.ReparentShard(ctx, keyspace, shard, emergencyReparentOps)
@@ -3030,7 +3038,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
+			erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger(), testEventSource)
 
 			test.emergencyReparentOps.durability = durability
 			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.emergencyReparentOps)
@@ -3528,6 +3536,8 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 						},
 					},
 				},
+				testEventSource,
+				eventsdatapb.ReparentType_EmergencyReparentShard,
 				nil,
 				nil,
 			)
@@ -3560,7 +3570,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 
 			tt.emergencyReparentOps.durability = durability
 
-			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
+			erp := NewEmergencyReparenter(ts, tt.tmc, logger, testEventSource)
 			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false /* intermediateReparent */)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -4135,7 +4145,7 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 
 			tt.emergencyReparentOps.durability = durability
 
-			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
+			erp := NewEmergencyReparenter(ts, tt.tmc, logger, testEventSource)
 			res, err := erp.promoteIntermediateSource(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.validCandidateTablets, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -4347,7 +4357,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 			test.emergencyReparentOps.durability = durability
 			logger := logutil.NewMemoryLogger()
 
-			erp := NewEmergencyReparenter(nil, nil, logger)
+			erp := NewEmergencyReparenter(nil, nil, logger, testEventSource)
 			res, err := erp.identifyPrimaryCandidate(test.intermediateSource, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.EqualError(t, err, test.err)
@@ -4419,7 +4429,7 @@ func TestParentContextCancelled(t *testing.T) {
 		Name:     shard,
 	})
 
-	erp := NewEmergencyReparenter(ts, tmc, logger)
+	erp := NewEmergencyReparenter(ts, tmc, logger, testEventSource)
 	// Cancel the parent context after 1 second. Even though the parent context is cancelled, the command should still succeed
 	// We should not be cancelling the context of the RPC call to SetReplicationSource since some tablets may keep on running this even after
 	// ERS returns
@@ -4590,7 +4600,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			require.NoError(t, err)
 			tt.opts.durability = durability
 			logger := logutil.NewMemoryLogger()
-			erp := NewEmergencyReparenter(nil, nil, logger)
+			erp := NewEmergencyReparenter(nil, nil, logger, testEventSource)
 			tabletList, err := erp.filterValidCandidates(tt.validTablets, tt.tabletsReachable, tt.tabletsTakingBackup, tt.prevPrimary, tt.opts)
 			if tt.errShouldContain != "" {
 				require.Error(t, err)

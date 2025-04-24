@@ -37,17 +37,19 @@ type Reparent struct {
 // NewReparent inits a new Reparent object.
 func NewReparent(si *topo.ShardInfo, src *eventsdatapb.Source, reparentType eventsdatapb.ReparentType, newPrimary, oldPrimary *topodatapb.Tablet) *Reparent {
 	eventData := eventsdatapb.ReparentEvent{
-		Id:        uuid.NewString(),
-		Timestamp: protoutil.TimeToProto(time.Now()),
-		Source:    src,
-		ShardInfo: &topodatapb.ShardInfo{
-			Keyspace:  si.Keyspace(),
-			ShardName: si.ShardName(),
-			Shard:     si.Shard,
-		},
+		Id:         uuid.NewString(),
+		Timestamp:  protoutil.TimeToProto(time.Now()),
+		Source:     src,
 		Type:       reparentType,
 		NewPrimary: newPrimary,
 		OldPrimary: oldPrimary,
+	}
+	if si != nil {
+		eventData.ShardInfo = &topodatapb.ShardInfo{
+			Keyspace:  si.Keyspace(),
+			ShardName: si.ShardName(),
+			Shard:     si.Shard,
+		}
 	}
 	return &Reparent{eventData}
 }
