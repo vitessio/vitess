@@ -16,14 +16,14 @@ spec:
             path: /tmp
             type: Directory
   images:
-    vtctld: vitess/lite:v22.0.0-rc2
-    vtadmin: vitess/vtadmin:v22.0.0-rc2
-    vtgate: vitess/lite:v22.0.0-rc2
-    vttablet: vitess/lite:v22.0.0-rc2
-    vtbackup: vitess/lite:v22.0.0-rc2
-    vtorc: vitess/lite:v22.0.0-rc2
+    vtctld: vitess/lite:v22.0.0-rc3
+    vtadmin: vitess/vtadmin:v22.0.0-rc3
+    vtgate: vitess/lite:v22.0.0-rc3
+    vttablet: vitess/lite:v22.0.0-rc3
+    vtbackup: vitess/lite:v22.0.0-rc3
+    vtorc: vitess/lite:v22.0.0-rc3
     mysqld:
-      mysql80Compatible: vitess/lite:v22.0.0-rc2
+      mysql80Compatible: vitess/lite:v22.0.0-rc3
     mysqldExporter: prom/mysqld-exporter:v0.14.0
   cells:
   - name: zone1
