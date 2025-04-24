@@ -34497,6 +34497,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest message */
         message?: (string|null);
+
+        /** UpdateVReplicationWorkflowRequest filter_rules */
+        filter_rules?: (binlogdata.IRule[]|null);
     }
 
     /** Represents an UpdateVReplicationWorkflowRequest. */
@@ -34534,6 +34537,9 @@ export namespace tabletmanagerdata {
 
         /** UpdateVReplicationWorkflowRequest message. */
         public message?: (string|null);
+
+        /** UpdateVReplicationWorkflowRequest filter_rules. */
+        public filter_rules: binlogdata.IRule[];
 
         /**
          * Creates a new UpdateVReplicationWorkflowRequest instance using the specified properties.
@@ -51580,7 +51586,8 @@ export namespace vtctldata {
     enum MaterializationIntent {
         CUSTOM = 0,
         MOVETABLES = 1,
-        CREATELOOKUPINDEX = 2
+        CREATELOOKUPINDEX = 2,
+        REFERENCE = 3
     }
 
     /** Properties of a TableMaterializeSettings. */
@@ -68038,6 +68045,212 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for MaterializeCreateResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a WorkflowAddTablesRequest. */
+    interface IWorkflowAddTablesRequest {
+
+        /** WorkflowAddTablesRequest workflow */
+        workflow?: (string|null);
+
+        /** WorkflowAddTablesRequest keyspace */
+        keyspace?: (string|null);
+
+        /** WorkflowAddTablesRequest table_settings */
+        table_settings?: (vtctldata.ITableMaterializeSettings[]|null);
+
+        /** WorkflowAddTablesRequest materialization_intent */
+        materialization_intent?: (vtctldata.MaterializationIntent|null);
+    }
+
+    /** Represents a WorkflowAddTablesRequest. */
+    class WorkflowAddTablesRequest implements IWorkflowAddTablesRequest {
+
+        /**
+         * Constructs a new WorkflowAddTablesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowAddTablesRequest);
+
+        /** WorkflowAddTablesRequest workflow. */
+        public workflow: string;
+
+        /** WorkflowAddTablesRequest keyspace. */
+        public keyspace: string;
+
+        /** WorkflowAddTablesRequest table_settings. */
+        public table_settings: vtctldata.ITableMaterializeSettings[];
+
+        /** WorkflowAddTablesRequest materialization_intent. */
+        public materialization_intent: vtctldata.MaterializationIntent;
+
+        /**
+         * Creates a new WorkflowAddTablesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowAddTablesRequest instance
+         */
+        public static create(properties?: vtctldata.IWorkflowAddTablesRequest): vtctldata.WorkflowAddTablesRequest;
+
+        /**
+         * Encodes the specified WorkflowAddTablesRequest message. Does not implicitly {@link vtctldata.WorkflowAddTablesRequest.verify|verify} messages.
+         * @param message WorkflowAddTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowAddTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowAddTablesRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowAddTablesRequest.verify|verify} messages.
+         * @param message WorkflowAddTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowAddTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowAddTablesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowAddTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowAddTablesRequest;
+
+        /**
+         * Decodes a WorkflowAddTablesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowAddTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowAddTablesRequest;
+
+        /**
+         * Verifies a WorkflowAddTablesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowAddTablesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowAddTablesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowAddTablesRequest;
+
+        /**
+         * Creates a plain object from a WorkflowAddTablesRequest message. Also converts values to other types if specified.
+         * @param message WorkflowAddTablesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowAddTablesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowAddTablesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowAddTablesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a WorkflowAddTablesResponse. */
+    interface IWorkflowAddTablesResponse {
+    }
+
+    /** Represents a WorkflowAddTablesResponse. */
+    class WorkflowAddTablesResponse implements IWorkflowAddTablesResponse {
+
+        /**
+         * Constructs a new WorkflowAddTablesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowAddTablesResponse);
+
+        /**
+         * Creates a new WorkflowAddTablesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowAddTablesResponse instance
+         */
+        public static create(properties?: vtctldata.IWorkflowAddTablesResponse): vtctldata.WorkflowAddTablesResponse;
+
+        /**
+         * Encodes the specified WorkflowAddTablesResponse message. Does not implicitly {@link vtctldata.WorkflowAddTablesResponse.verify|verify} messages.
+         * @param message WorkflowAddTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowAddTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowAddTablesResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowAddTablesResponse.verify|verify} messages.
+         * @param message WorkflowAddTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowAddTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowAddTablesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowAddTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowAddTablesResponse;
+
+        /**
+         * Decodes a WorkflowAddTablesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowAddTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowAddTablesResponse;
+
+        /**
+         * Verifies a WorkflowAddTablesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowAddTablesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowAddTablesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowAddTablesResponse;
+
+        /**
+         * Creates a plain object from a WorkflowAddTablesResponse message. Also converts values to other types if specified.
+         * @param message WorkflowAddTablesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowAddTablesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowAddTablesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for WorkflowAddTablesResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

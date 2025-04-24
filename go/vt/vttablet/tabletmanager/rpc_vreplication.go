@@ -594,6 +594,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		if req.OnDdl != nil && *req.OnDdl != binlogdatapb.OnDDLAction(textutil.SimulatedNullInt) {
 			bls.OnDdl = *req.OnDdl
 		}
+		bls.Filter.Rules = append(bls.Filter.Rules, req.FilterRules...)
 		source, err = prototext.Marshal(bls)
 		if err != nil {
 			return nil, err

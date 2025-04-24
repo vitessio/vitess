@@ -787,6 +787,8 @@ message UpdateVReplicationWorkflowRequest {
   repeated string shards = 7;
   map<string, string> config_overrides = 8;
   optional string message = 9;
+  // Specify filter rules which need to be appended in the existing binlogsource filter rules.
+  repeated binlogdata.Rule filter_rules = 10;
 }
 
 message UpdateVReplicationWorkflowResponse {
