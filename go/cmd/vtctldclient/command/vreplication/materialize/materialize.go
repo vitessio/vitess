@@ -18,15 +18,22 @@ package materialize
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
+	updateOptions = struct {
+		AddReferenceTables []string
+	}{}
+
 	// base is the base command for all actions related to Materialize.
 	base = &cobra.Command{
 		Use:                   "Materialize --workflow <workflow> --target-keyspace <keyspace> [command] [command-flags]",
@@ -35,7 +42,41 @@ var (
 		Aliases:               []string{"materialize"},
 		Args:                  cobra.ExactArgs(1),
 	}
+
+	// update is the command for updating existing materialize workflow.
+	// This can be helpful if we plan to add other actions as well such as
+	// removing tables from workflow.
+	update = &cobra.Command{
+		Use:     "update --add-tables='table1,table2'",
+		Short:   "Update existing materialize workflow.",
+		Aliases: []string{"Update"},
+		Args:    cobra.NoArgs,
+		RunE:    commandUpdate,
+	}
 )
+
+func commandUpdate(cmd *cobra.Command, args []string) error {
+	tableSettings := []*vtctldatapb.TableMaterializeSettings{}
+	for _, table := range updateOptions.AddReferenceTables {
+		tableSettings = append(tableSettings, &vtctldatapb.TableMaterializeSettings{
+			TargetTable: table,
+		})
+	}
+
+	_, err := common.GetClient().WorkflowAddTables(common.GetCommandCtx(), &vtctldatapb.WorkflowAddTablesRequest{
+		Workflow:              common.BaseOptions.Workflow,
+		Keyspace:              common.BaseOptions.TargetKeyspace,
+		TableSettings:         tableSettings,
+		MaterializationIntent: vtctldatapb.MaterializationIntent_REFERENCE,
+	})
+
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Table(s) %s added to the workflow %s. Use show to view the status.\n",
+		strings.Join(updateOptions.AddReferenceTables, ", "), common.BaseOptions.Workflow)
+	return nil
+}
 
 func registerCommands(root *cobra.Command) {
 	common.AddCommonFlags(base)
@@ -53,6 +94,10 @@ func registerCommands(root *cobra.Command) {
 	create.Flags().IntVar(&common.CreateOptions.TruncateErrLen, "sql-max-length-errors", 0, "truncate queries in error logs to the given length (default unlimited)")
 	create.Flags().StringSliceVarP(&common.CreateOptions.ReferenceTables, "reference-tables", "r", nil, "Used to specify the reference tables to materialize on every target shard.")
 	base.AddCommand(create)
+
+	update.Flags().StringSliceVar(&updateOptions.AddReferenceTables, "add-reference-tables", nil, "Used to specify the reference tables to be added to the existing workflow")
+	update.MarkFlagRequired("add-reference-tables")
+	base.AddCommand(update)
 
 	// Generic workflow commands.
 	opts := &common.SubCommandsOpts{

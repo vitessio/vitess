@@ -306,6 +306,8 @@ type VtctldClient interface {
 	// MaterializeCreate creates a workflow to materialize one or more tables
 	// from a source keyspace to a target keyspace using a provided expressions.
 	MaterializeCreate(ctx context.Context, in *vtctldata.MaterializeCreateRequest, opts ...grpc.CallOption) (*vtctldata.MaterializeCreateResponse, error)
+	// WorkflowAddTables adds tables to the existing materialize/movetables workflow.
+	WorkflowAddTables(ctx context.Context, in *vtctldata.WorkflowAddTablesRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowAddTablesResponse, error)
 	// MigrateCreate creates a workflow which migrates one or more tables from an
 	// external cluster into Vitess.
 	MigrateCreate(ctx context.Context, in *vtctldata.MigrateCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
@@ -1149,6 +1151,15 @@ func (c *vtctldClient) MaterializeCreate(ctx context.Context, in *vtctldata.Mate
 	return out, nil
 }
 
+func (c *vtctldClient) WorkflowAddTables(ctx context.Context, in *vtctldata.WorkflowAddTablesRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowAddTablesResponse, error) {
+	out := new(vtctldata.WorkflowAddTablesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowAddTables", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) MigrateCreate(ctx context.Context, in *vtctldata.MigrateCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error) {
 	out := new(vtctldata.WorkflowStatusResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/MigrateCreate", in, out, opts...)
@@ -1877,6 +1888,8 @@ type VtctldServer interface {
 	// MaterializeCreate creates a workflow to materialize one or more tables
 	// from a source keyspace to a target keyspace using a provided expressions.
 	MaterializeCreate(context.Context, *vtctldata.MaterializeCreateRequest) (*vtctldata.MaterializeCreateResponse, error)
+	// WorkflowAddTables adds tables to the existing materialize/movetables workflow.
+	WorkflowAddTables(context.Context, *vtctldata.WorkflowAddTablesRequest) (*vtctldata.WorkflowAddTablesResponse, error)
 	// MigrateCreate creates a workflow which migrates one or more tables from an
 	// external cluster into Vitess.
 	MigrateCreate(context.Context, *vtctldata.MigrateCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
@@ -2262,6 +2275,9 @@ func (UnimplementedVtctldServer) LookupVindexInternalize(context.Context, *vtctl
 }
 func (UnimplementedVtctldServer) MaterializeCreate(context.Context, *vtctldata.MaterializeCreateRequest) (*vtctldata.MaterializeCreateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MaterializeCreate not implemented")
+}
+func (UnimplementedVtctldServer) WorkflowAddTables(context.Context, *vtctldata.WorkflowAddTablesRequest) (*vtctldata.WorkflowAddTablesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowAddTables not implemented")
 }
 func (UnimplementedVtctldServer) MigrateCreate(context.Context, *vtctldata.MigrateCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MigrateCreate not implemented")
@@ -3683,6 +3699,24 @@ func _Vtctld_MaterializeCreate_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_WorkflowAddTables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.WorkflowAddTablesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).WorkflowAddTables(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/WorkflowAddTables",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).WorkflowAddTables(ctx, req.(*vtctldata.WorkflowAddTablesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_MigrateCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.MigrateCreateRequest)
 	if err := dec(in); err != nil {
@@ -5018,6 +5052,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MaterializeCreate",
 			Handler:    _Vtctld_MaterializeCreate_Handler,
+		},
+		{
+			MethodName: "WorkflowAddTables",
+			Handler:    _Vtctld_WorkflowAddTables_Handler,
 		},
 		{
 			MethodName: "MigrateCreate",
