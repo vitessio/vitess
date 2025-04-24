@@ -39,21 +39,6 @@ type Filter struct {
 	Truncate int
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (f *Filter) RouteType() string {
-	return f.Input.RouteType()
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (f *Filter) GetKeyspaceName() string {
-	return f.Input.GetKeyspaceName()
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (f *Filter) GetTableName() string {
-	return f.Input.GetTableName()
-}
-
 // TryExecute satisfies the Primitive interface.
 func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result, err := vcursor.ExecutePrimitive(ctx, f.Input, bindVars, wantfields)

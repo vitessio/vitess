@@ -60,7 +60,7 @@ func (pc *sysvarPlanCache) parseAndBuildDefaultValue(sysvar sysvars.SystemVariab
 		panic(fmt.Sprintf("bug in set plan init - default value for %s not parsable: %s", sysvar.Name, sysvar.Default))
 	}
 	sel := stmt.(*sqlparser.Select)
-	aliasedExpr := sel.SelectExprs[0].(*sqlparser.AliasedExpr)
+	aliasedExpr := sel.GetColumns()[0].(*sqlparser.AliasedExpr)
 	def, err := evalengine.Translate(aliasedExpr.Expr, &evalengine.Config{
 		Collation:   pc.env.CollationEnv().DefaultConnectionCharset(),
 		Environment: pc.env,

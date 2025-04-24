@@ -12,10 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 golang:1.23.5-bookworm AS builder
+FROM --platform=linux/amd64 golang:1.24.2-bookworm AS builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
+
+# Allows docker builds to set the BUILD_GIT_BRANCH
+ARG BUILD_GIT_BRANCH
+
+# Allows docker builds to set the BUILD_GIT_REV
+ARG BUILD_GIT_REV
+
+# Allows docker builds to set the BUILD_TIME
+ARG BUILD_TIME
 
 WORKDIR /vt/src/vitess.io/vitess
 

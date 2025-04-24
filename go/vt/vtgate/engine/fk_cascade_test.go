@@ -62,7 +62,7 @@ func TestDeleteCascade(t *testing.T) {
 		Parent:    parentP,
 	}
 
-	vc := newDMLTestVCursor("0")
+	vc := newTestVCursor("0")
 	vc.results = []*sqltypes.Result{fakeRes}
 	_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestUpdateCascade(t *testing.T) {
 		Parent:    parentP,
 	}
 
-	vc := newDMLTestVCursor("0")
+	vc := newTestVCursor("0")
 	vc.results = []*sqltypes.Result{fakeRes}
 	_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
@@ -195,7 +195,7 @@ func TestNonLiteralUpdateCascade(t *testing.T) {
 		Parent: parentP,
 	}
 
-	vc := newDMLTestVCursor("0")
+	vc := newTestVCursor("0")
 	vc.results = []*sqltypes.Result{fakeRes}
 	_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)

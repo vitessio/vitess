@@ -44,6 +44,7 @@ CREATE TABLE database_instance (
 	alias varchar(256) NOT NULL,
 	hostname varchar(128) NOT NULL,
 	port smallint NOT NULL,
+	tablet_type smallint(5) NOT NULL,
 	last_checked timestamp not null default (''),
 	last_seen timestamp NULL DEFAULT NULL,
 	server_id int NOT NULL,
@@ -105,6 +106,7 @@ CREATE TABLE database_instance (
 	semi_sync_primary_status TINYint NOT NULL DEFAULT 0,
 	semi_sync_replica_status TINYint NOT NULL DEFAULT 0,
 	semi_sync_primary_clients int NOT NULL DEFAULT 0,
+	semi_sync_blocked tinyint NOT NULL DEFAULT 0,
 	is_disk_stalled TINYint NOT NULL DEFAULT 0,
 	PRIMARY KEY (alias)
 )`,
@@ -113,6 +115,9 @@ CREATE INDEX last_checked_idx_database_instance ON database_instance(last_checke
 	`,
 	`
 CREATE INDEX last_seen_idx_database_instance ON database_instance(last_seen)
+	`,
+	`
+CREATE INDEX hostname_port_database_instance ON database_instance(hostname, port)
 	`,
 	`
 DROP TABLE IF EXISTS audit

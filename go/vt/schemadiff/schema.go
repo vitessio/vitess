@@ -114,7 +114,7 @@ func NewSchemaFromQueries(env *Environment, queries []string) (*Schema, error) {
 // NewSchemaFromSQL creates a valid and normalized schema based on a SQL blob that contains
 // CREATE statements for various objects (tables, views)
 func NewSchemaFromSQL(env *Environment, sql string) (*Schema, error) {
-	statements, err := env.Parser().SplitStatements(sql)
+	statements, err := env.Parser().ParseMultipleIgnoreEmpty(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +341,14 @@ func (s *Schema) normalize(hints *DiffHints) error {
 			if _, ok := dependencyLevels[v.Name()]; !ok {
 				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
 				// We gather all the errors.
-				errs = errors.Join(errs, &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()})
+				dependentNames := getViewDependentTableNames(v.CreateView)
+				missingReferencedEntities := []string{}
+				for _, name := range dependentNames {
+					if _, ok := dependencyLevels[name]; !ok {
+						missingReferencedEntities = append(missingReferencedEntities, name)
+					}
+				}
+				errs = errors.Join(errs, &ViewDependencyUnresolvedError{View: v.ViewName.Name.String(), MissingReferencedEntities: missingReferencedEntities})
 				// We still add it so it shows up in the output if that is used for anything.
 				s.sorted = append(s.sorted, v)
 			}
@@ -755,7 +762,7 @@ func (s *Schema) apply(diffs []EntityDiff, hints *DiffHints) error {
 			if _, ok := s.named[name]; ok {
 				return &ApplyDuplicateEntityError{Entity: name}
 			}
-			s.tables = append(s.tables, &CreateTableEntity{CreateTable: diff.createTable})
+			s.tables = append(s.tables, &CreateTableEntity{CreateTable: diff.createTable, Env: s.env})
 			_, s.named[name] = diff.Entities()
 		case *CreateViewEntityDiff:
 			// We expect the view to not exist
@@ -1085,6 +1092,11 @@ func (s *Schema) ValidateViewReferences() error {
 					View:   view.Name(),
 					Column: e.Column.Name.String(),
 				}
+			case *semantics.UnsupportedConstruct:
+				// These are error types from semantic analysis for executing queries. When we
+				// have a view, we don't have Vitess execute these queries but MySQL does, so
+				// we don't want to return errors for these.
+				return nil
 			}
 			return err
 		}

@@ -156,10 +156,7 @@ func (mz *materializer) createWorkflowStreams(req *tabletmanagerdatapb.CreateVRe
 		// shard have equal key ranges. This can be done, for example, when doing
 		// shard by shard migrations -- migrating a single shard at a time between
 		// sharded source and sharded target keyspaces.
-		streamKeyRangesEqual := false
-		if len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange) {
-			streamKeyRangesEqual = true
-		}
+		streamKeyRangesEqual := len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange)
 
 		// Each tablet needs its own copy of the request as it will have a unique
 		// BinlogSource.
@@ -233,7 +230,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 					}
 					mappedCols = append(mappedCols, colName)
 				}
-				subExprs := make(sqlparser.Exprs, 0, len(mappedCols)+2)
+				subExprs := make([]sqlparser.Expr, 0, len(mappedCols)+2)
 				for _, mappedCol := range mappedCols {
 					subExprs = append(subExprs, mappedCol)
 				}
@@ -253,10 +250,7 @@ func (mz *materializer) generateBinlogSources(ctx context.Context, targetShard *
 
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(vindexName))
 				subExprs = append(subExprs, sqlparser.NewStrLiteral(key.KeyRangeString(targetShard.KeyRange)))
-				inKeyRange := &sqlparser.FuncExpr{
-					Name:  sqlparser.NewIdentifierCI("in_keyrange"),
-					Exprs: subExprs,
-				}
+				inKeyRange := sqlparser.NewFuncExpr("in_keyrange", subExprs...)
 				addFilter(sel, inKeyRange)
 			}
 			if tenantClause != nil {

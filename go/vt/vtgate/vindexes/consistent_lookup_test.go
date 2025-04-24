@@ -121,7 +121,7 @@ func TestConsistentLookupMap(t *testing.T) {
 
 	got, err := lookup.Map(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceIDs([][]byte{
 			[]byte("1"),
 			[]byte("2"),
@@ -153,7 +153,7 @@ func TestConsistentLookupMapWriteOnly(t *testing.T) {
 
 	got, err := lookup.Map(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
 		},
@@ -174,7 +174,7 @@ func TestConsistentLookupUniqueMap(t *testing.T) {
 
 	got, err := lookup.Map(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationNone{},
 		key.DestinationKeyspaceID([]byte("1")),
 	}
@@ -200,7 +200,7 @@ func TestConsistentLookupUniqueMapWriteOnly(t *testing.T) {
 
 	got, err := lookup.Map(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
 		},
@@ -221,7 +221,7 @@ func TestConsistentLookupMapAbsent(t *testing.T) {
 
 	got, err := lookup.Map(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationNone{},
 		key.DestinationNone{},
 	}

@@ -926,3 +926,116 @@ func getVar(t *testing.T, key string) interface{} {
 	}
 	return val
 }
+
+// TestQueryProcessedMetric verifies that query metrics are correctly published.
+func TestQueryProcessedMetric(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	tcases := []struct {
+		sql          string
+		queryMetric  string
+		tableMetrics []string
+		shards       int
+	}{{
+		sql:          "select id1, id2 from t1",
+		queryMetric:  "SELECT.Scatter.PRIMARY",
+		shards:       2,
+		tableMetrics: []string{"SELECT.ks_t1"},
+	}, {
+		sql:          "update t1 set id2 = 2 where id1 = 1",
+		queryMetric:  "UPDATE.MultiShard.PRIMARY",
+		shards:       2,
+		tableMetrics: []string{"UPDATE.ks_t1"},
+	}, {
+		sql:          "delete from t1 where id1 in (1)",
+		queryMetric:  "DELETE.MultiShard.PRIMARY",
+		shards:       2,
+		tableMetrics: []string{"DELETE.ks_t1"},
+	}, {
+		sql:         "show tables",
+		queryMetric: "SHOW.Passthrough.PRIMARY",
+		shards:      1,
+	}, {
+		sql:         "savepoint a",
+		queryMetric: "SAVEPOINT.Transaction.PRIMARY",
+	}, {
+		sql:         "rollback",
+		queryMetric: "ROLLBACK.Transaction.PRIMARY",
+	}, {
+		sql:         "set @x=3",
+		queryMetric: "SET.Local.PRIMARY",
+	}, {
+		sql:         "set sql_mode=''",
+		queryMetric: "SET.MultiShard.PRIMARY",
+		shards:      1,
+	}, {
+		sql:         "set @@vitess_metadata.k1='v1'",
+		queryMetric: "SET.Topology.PRIMARY",
+	}, {
+		sql:          "select 1 from t1 a, t1 b",
+		queryMetric:  "SELECT.Join.PRIMARY",
+		shards:       3,
+		tableMetrics: []string{"SELECT.ks_t1"},
+	}, {
+		sql:          "select count(*) from t1 a, t1 b",
+		queryMetric:  "SELECT.Complex.PRIMARY",
+		shards:       6,
+		tableMetrics: []string{"SELECT.ks_t1"},
+	}, {
+		sql:          "select 1 from t1, t2, t3, t4 where t1.id1 = t2.id3 and t2.id3 = t3.id6 and t3.id6 = t4.id1 and t3.id7 = 5",
+		queryMetric:  "SELECT.Lookup.PRIMARY",
+		shards:       2,
+		tableMetrics: []string{"SELECT.ks_t1", "SELECT.ks_t2", "SELECT.ks_t3", "SELECT.ks_t4"},
+	}}
+
+	initialQP := getQPMetric(t, "QueryExecutions")
+	initialQR := getQPMetric(t, "QueryRoutes")
+	initialQT := getQPMetric(t, "QueryExecutionsByTable")
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			utils.Exec(t, conn, tc.sql)
+			updatedQP := getQPMetric(t, "QueryExecutions")
+			updatedQR := getQPMetric(t, "QueryRoutes")
+			updatedQT := getQPMetric(t, "QueryExecutionsByTable")
+			assert.EqualValuesf(t, 1, getValue(updatedQP, tc.queryMetric)-getValue(initialQP, tc.queryMetric), "queryExecutions metric: %s", tc.queryMetric)
+			assert.EqualValuesf(t, tc.shards, getValue(updatedQR, tc.queryMetric)-getValue(initialQR, tc.queryMetric), "queryRoutes metric: %s", tc.queryMetric)
+			for _, metric := range tc.tableMetrics {
+				assert.EqualValuesf(t, 1, getValue(updatedQT, metric)-getValue(initialQT, metric), "queryExecutionsByTable metric: %s", metric)
+			}
+			initialQP, initialQR, initialQT = updatedQP, updatedQR, updatedQT
+		})
+	}
+}
+
+func getQPMetric(t *testing.T, metric string) map[string]any {
+	t.Helper()
+
+	vars := clusterInstance.VtgateProcess.GetVars()
+	require.NotNil(t, vars)
+
+	qpVars, exists := vars[metric]
+	if !exists {
+		return nil
+	}
+
+	qpMap, ok := qpVars.(map[string]any)
+	require.True(t, ok, "query queryMetric vars is not a map")
+
+	return qpMap
+}
+
+func getValue(m map[string]any, key string) float64 {
+	if m == nil {
+		return 0
+	}
+	val, exists := m[key]
+	if !exists {
+		return 0
+	}
+	f, ok := val.(float64)
+	if !ok {
+		return 0
+	}
+	return f
+}

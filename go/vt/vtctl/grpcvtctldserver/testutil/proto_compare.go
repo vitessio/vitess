@@ -18,15 +18,12 @@ package testutil
 
 import (
 	"encoding/json"
-	"fmt"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/test/utils"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -105,16 +102,6 @@ func AssertPlannedReparentShardResponsesEqual(t *testing.T, expected *vtctldatap
 	actual = actual.CloneVT()
 	actual.Events = nil
 
-	utils.MustMatch(t, expected, actual)
-}
-
-func AssertSameTablets(t *testing.T, expected, actual []*topodatapb.Tablet) {
-	sort.Slice(expected, func(i, j int) bool {
-		return fmt.Sprintf("%v", expected[i]) < fmt.Sprintf("%v", expected[j])
-	})
-	sort.Slice(actual, func(i, j int) bool {
-		return fmt.Sprintf("%v", actual[i]) < fmt.Sprintf("%v", actual[j])
-	})
 	utils.MustMatch(t, expected, actual)
 }
 

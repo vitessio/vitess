@@ -829,6 +829,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (`id` int primary key, i int, key i2_alternative (`i`, id), key i_idx ( i ) )",
 			diff:  "alter table t1 rename index i2_idx to i2_alternative",
 			cdiff: "ALTER TABLE `t1` RENAME INDEX `i2_idx` TO `i2_alternative`",
+			textdiffs: []string{
+				"-	KEY `i2_idx` (`i`, `id`)",
+				"+	KEY `i2_alternative` (`i`, `id`)",
+			},
 		},
 		{
 			name:  "reordered and renamed keys",
@@ -836,6 +840,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (`id` int primary key, i int, key i2_alternative (`i`, id), key i_alternative ( i ) )",
 			diff:  "alter table t1 rename index i2_idx to i2_alternative, rename index i_idx to i_alternative",
 			cdiff: "ALTER TABLE `t1` RENAME INDEX `i2_idx` TO `i2_alternative`, RENAME INDEX `i_idx` TO `i_alternative`",
+			textdiffs: []string{
+				"-	KEY `i_idx` (`i`)",
+				"-	KEY `i2_idx` (`i`, `id`)",
+				"+	KEY `i_alternative` (`i`)",
+				"+	KEY `i2_alternative` (`i`, `id`)",
+			},
 		},
 		{
 			name:  "multiple similar keys, one rename",
@@ -843,6 +853,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (`id` int primary key, i int, key i_idx(i), key i2_alternative(i))",
 			diff:  "alter table t1 rename index i2_idx to i2_alternative",
 			cdiff: "ALTER TABLE `t1` RENAME INDEX `i2_idx` TO `i2_alternative`",
+			textdiffs: []string{
+				"-	KEY `i2_idx` (`i`)",
+				"+	KEY `i2_alternative` (`i`)",
+			},
 		},
 		{
 			name:  "multiple similar keys, two renames",
@@ -850,6 +864,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (`id` int primary key, i int, key i_alternative(i), key i2_alternative(i))",
 			diff:  "alter table t1 rename index i_idx to i_alternative, rename index i2_idx to i2_alternative",
 			cdiff: "ALTER TABLE `t1` RENAME INDEX `i_idx` TO `i_alternative`, RENAME INDEX `i2_idx` TO `i2_alternative`",
+			textdiffs: []string{
+				"-	KEY `i_idx` (`i`)",
+				"-	KEY `i2_idx` (`i`)",
+				"+	KEY `i_alternative` (`i`)",
+				"+	KEY `i2_alternative` (`i`)",
+			},
 		},
 		{
 			name:  "multiple similar keys, two renames, reorder",
@@ -857,6 +877,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (`id` int primary key, i int, key i_alternative(i), key i2_alternative(i), key i0 (i, id))",
 			diff:  "alter table t1 rename index i_idx to i_alternative, rename index i2_idx to i2_alternative",
 			cdiff: "ALTER TABLE `t1` RENAME INDEX `i_idx` TO `i_alternative`, RENAME INDEX `i2_idx` TO `i2_alternative`",
+			textdiffs: []string{
+				"-	KEY `i_idx` (`i`)",
+				"-	KEY `i2_idx` (`i`)",
+				"+	KEY `i_alternative` (`i`)",
+				"+	KEY `i2_alternative` (`i`)",
+			},
 		},
 		{
 			name:  "key made visible",
@@ -1866,6 +1892,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) ",
 			diff:  "alter table t1 row_format DEFAULT",
 			cdiff: "ALTER TABLE `t1` ROW_FORMAT DEFAULT",
+			textdiffs: []string{
+				"-) ROW_FORMAT COMPRESSED",
+			},
 		},
 		{
 			name:  "remove table option 2",
@@ -1873,6 +1902,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) ",
 			diff:  "alter table t1 checksum 0",
 			cdiff: "ALTER TABLE `t1` CHECKSUM 0",
+			textdiffs: []string{
+				"-) CHECKSUM 1",
+			},
 		},
 		{
 			name:  "remove table option 3",
@@ -1880,6 +1912,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) ",
 			diff:  "alter table t1 checksum 0",
 			cdiff: "ALTER TABLE `t1` CHECKSUM 0",
+			textdiffs: []string{
+				"-) CHECKSUM 1",
+			},
 		},
 		{
 			name:  "remove table option 4",
@@ -1887,6 +1922,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (id int auto_increment primary key)",
 			diff:  "alter table t1 key_block_size 0 compression ''",
 			cdiff: "ALTER TABLE `t1` KEY_BLOCK_SIZE 0 COMPRESSION ''",
+			textdiffs: []string{
+				"-) KEY_BLOCK_SIZE 16",
+				"-  COMPRESSION 'zlib'",
+			},
 		},
 		{
 			name:  "add, modify and remove table option",
@@ -1894,6 +1933,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) row_format=compressed, engine=innodb, charset=utf8mb4",
 			diff:  "alter table t1 checksum 0 charset utf8mb4 row_format COMPRESSED",
 			cdiff: "ALTER TABLE `t1` CHECKSUM 0 CHARSET utf8mb4 ROW_FORMAT COMPRESSED",
+			textdiffs: []string{
+				"+) ROW_FORMAT COMPRESSED",
+				"-  CHARSET utf8mb3,",
+				"-  CHECKSUM 1",
+				"+  CHARSET utf8mb4",
+			},
 		},
 		{
 			name: "ignore AUTO_INCREMENT addition",
@@ -1907,6 +1952,9 @@ func TestCreateTableDiff(t *testing.T) {
 			autoinc: AutoIncrementApplyHigher,
 			diff:    "alter table t1 auto_increment 300",
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 300",
+			textdiffs: []string{
+				"+) AUTO_INCREMENT 300",
+			},
 		},
 		{
 			name: "ignore AUTO_INCREMENT removal",
@@ -1931,6 +1979,10 @@ func TestCreateTableDiff(t *testing.T) {
 			autoinc: AutoIncrementApplyHigher,
 			diff:    "alter table t1 auto_increment 300",
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 300",
+			textdiffs: []string{
+				"-) AUTO_INCREMENT 100",
+				"+) AUTO_INCREMENT 300",
+			},
 		},
 		{
 			name:    "ignore AUTO_INCREMENT decrease",
@@ -1945,6 +1997,10 @@ func TestCreateTableDiff(t *testing.T) {
 			autoinc: AutoIncrementApplyAlways,
 			diff:    "alter table t1 auto_increment 100",
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 100",
+			textdiffs: []string{
+				"-) AUTO_INCREMENT 300",
+				"+) AUTO_INCREMENT 100",
+			},
 		},
 		{
 			name:  "apply table charset",
@@ -1952,6 +2008,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4",
 			diff:  "alter table t charset utf8mb4",
 			cdiff: "ALTER TABLE `t` CHARSET utf8mb4",
+			textdiffs: []string{
+				"+) CHARSET utf8mb4",
+			},
 		},
 		{
 			name:    "ignore empty table charset",
@@ -1978,6 +2037,10 @@ func TestCreateTableDiff(t *testing.T) {
 			charset: TableCharsetCollateIgnoreEmpty,
 			diff:    "alter table t collate utf8mb4_0900_ai_ci",
 			cdiff:   "ALTER TABLE `t` COLLATE utf8mb4_0900_ai_ci",
+			textdiffs: []string{
+				"-) COLLATE utf8mb4_0900_bin",
+				"+) COLLATE utf8mb4_0900_ai_ci",
+			},
 		},
 		{
 			name:    "ignore empty table charset and collate in target",
@@ -2003,6 +2066,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4",
 			diff:  "alter table t charset utf8mb4",
 			cdiff: "ALTER TABLE `t` CHARSET utf8mb4",
+			textdiffs: []string{
+				"-) CHARSET utf8",
+				"+) CHARSET utf8mb4",
+			},
 		},
 		{
 			name:  `change table charset and columns`,
@@ -2010,6 +2077,16 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t (id int primary key, t1 varchar(128) not null, t2 varchar(128) not null, t3 tinytext, t4 tinytext charset latin1) default charset=utf8mb4",
 			diff:  "alter table t modify column t1 varchar(128) not null, modify column t2 varchar(128) not null, modify column t3 tinytext, charset utf8mb4",
 			cdiff: "ALTER TABLE `t` MODIFY COLUMN `t1` varchar(128) NOT NULL, MODIFY COLUMN `t2` varchar(128) NOT NULL, MODIFY COLUMN `t3` tinytext, CHARSET utf8mb4",
+			textdiffs: []string{
+				"-	`t1` varchar(128),",
+				"-	`t2` varchar(128) NOT NULL,",
+				"-	`t3` tinytext CHARACTER SET latin1,",
+				"+	`t1` varchar(128) NOT NULL",
+				"+	`t2` varchar(128) NOT NULL",
+				"+	`t3` tinytext",
+				"-) CHARSET utf8",
+				"+) CHARSET utf8mb4",
+			},
 		},
 		{
 			name:  "change table collation",
@@ -2017,6 +2094,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_bin",
 			diff:  "alter table t collate utf8mb4_0900_bin",
 			cdiff: "ALTER TABLE `t` COLLATE utf8mb4_0900_bin",
+			textdiffs: []string{
+				"-  COLLATE utf8mb4_0900_ai_ci",
+				"+  COLLATE utf8mb4_0900_bin",
+			},
 		},
 		{
 			name:  "change table collation with textual column",
@@ -2024,6 +2105,12 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t (id int, t varchar(192) not null) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_bin",
 			diff:  "alter table t modify column t varchar(192) not null, collate utf8mb4_0900_bin",
 			cdiff: "ALTER TABLE `t` MODIFY COLUMN `t` varchar(192) NOT NULL, COLLATE utf8mb4_0900_bin",
+			textdiffs: []string{
+				"-	`t` varchar(192) NOT NULL",
+				"+	`t` varchar(192) NOT NULL",
+				"-  COLLATE utf8mb4_0900_ai_ci",
+				"+  COLLATE utf8mb4_0900_bin",
+			},
 		},
 		{
 			name:  "change table collation with textual column that has collation",
@@ -2031,6 +2118,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t (id int, t varchar(192) not null collate utf8mb4_0900_bin) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_bin",
 			diff:  "alter table t collate utf8mb4_0900_bin",
 			cdiff: "ALTER TABLE `t` COLLATE utf8mb4_0900_bin",
+			textdiffs: []string{
+				"-  COLLATE utf8mb4_0900_ai_ci",
+				"+  COLLATE utf8mb4_0900_bin",
+			},
 		},
 		{
 			name: "ignore identical implicit charset",
@@ -2073,6 +2164,10 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int unsigned primary key)",
 			diff:  "alter table t1 modify column id int unsigned",
 			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `id` int unsigned",
+			textdiffs: []string{
+				"-	`id` int,",
+				"+	`id` int unsigned,",
+			},
 		},
 		{
 			name:  "normalized ENGINE InnoDB value",
@@ -2111,6 +2206,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) engine=memory, character set=utf8",
 			diff:  "alter table t1 engine MEMORY",
 			cdiff: "ALTER TABLE `t1` ENGINE MEMORY",
+			textdiffs: []string{
+				"+) ENGINE MEMORY",
+			},
 		},
 		{
 			name:  "normalized CHARSET value",
@@ -2118,6 +2216,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) engine=innodb, character set=UTF8MB4",
 			diff:  "alter table t1 charset utf8mb4",
 			cdiff: "ALTER TABLE `t1` CHARSET utf8mb4",
+			textdiffs: []string{
+				"+  CHARSET utf8mb4",
+			},
 		},
 		{
 			name:  "normalized CHARSET utf8 value",
@@ -2125,6 +2226,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) engine=innodb, character set=UTF8",
 			diff:  "alter table t1 charset utf8mb3",
 			cdiff: "ALTER TABLE `t1` CHARSET utf8mb3",
+			textdiffs: []string{
+				"+  CHARSET utf8mb3",
+			},
 		},
 		{
 			name:  "normalized COLLATE value",
@@ -2132,6 +2236,9 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t1 (id int primary key) engine=innodb, collate=UTF8_BIN",
 			diff:  "alter table t1 collate utf8mb3_bin",
 			cdiff: "ALTER TABLE `t1` COLLATE utf8mb3_bin",
+			textdiffs: []string{
+				"+  COLLATE utf8mb3_bin",
+			},
 		},
 		{
 			name:  "remove table comment",
@@ -2160,6 +2267,9 @@ func TestCreateTableDiff(t *testing.T) {
 				)`,
 			diff:  "alter table t4 add key index_on_company_id ((cast(json_unquote(json_extract(properties, _utf8mb4 '$.company_id')) as signed)))",
 			cdiff: "ALTER TABLE `t4` ADD KEY `index_on_company_id` ((CAST(JSON_UNQUOTE(JSON_EXTRACT(`properties`, _utf8mb4 '$.company_id')) AS signed)))",
+			textdiffs: []string{
+				"+	KEY `index_on_company_id` ((CAST(JSON_UNQUOTE(JSON_EXTRACT(`properties`, _utf8mb4 '$.company_id')) AS signed)))",
+			},
 		},
 		{
 			// validates that CanonicalString prints 'interval 30 minute' and not ' INTERVAL 30 MINUTE', as MySQL's `SHOW CREATE TABLE` outputs lower case 'interval 30 minute'
@@ -2175,6 +2285,9 @@ func TestCreateTableDiff(t *testing.T) {
 				)`,
 			diff:  "alter table t4 add column created_at datetime(6) not null default (now() + interval 30 minute)",
 			cdiff: "ALTER TABLE `t4` ADD COLUMN `created_at` datetime(6) NOT NULL DEFAULT (now() + INTERVAL 30 minute)",
+			textdiffs: []string{
+				"+	`created_at` datetime(6) NOT NULL DEFAULT (now() + INTERVAL 30 minute)",
+			},
 		},
 		// algorithm
 		{
@@ -2184,6 +2297,9 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:      "alter table t1 add column i int not null default 0, algorithm = COPY",
 			cdiff:     "ALTER TABLE `t1` ADD COLUMN `i` int NOT NULL DEFAULT 0, ALGORITHM = COPY",
 			algorithm: AlterTableAlgorithmStrategyCopy,
+			textdiffs: []string{
+				"+	`i` int NOT NULL DEFAULT 0",
+			},
 		},
 		{
 			name:      "algorithm: INPLACE",
@@ -2192,6 +2308,9 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:      "alter table t1 add column i int not null default 0, algorithm = INPLACE",
 			cdiff:     "ALTER TABLE `t1` ADD COLUMN `i` int NOT NULL DEFAULT 0, ALGORITHM = INPLACE",
 			algorithm: AlterTableAlgorithmStrategyInplace,
+			textdiffs: []string{
+				"+	`i` int NOT NULL DEFAULT 0",
+			},
 		},
 		{
 			name:      "algorithm: INSTANT",
@@ -2200,6 +2319,9 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:      "alter table t1 add column i int not null default 0, algorithm = INSTANT",
 			cdiff:     "ALTER TABLE `t1` ADD COLUMN `i` int NOT NULL DEFAULT 0, ALGORITHM = INSTANT",
 			algorithm: AlterTableAlgorithmStrategyInstant,
+			textdiffs: []string{
+				"+	`i` int NOT NULL DEFAULT 0",
+			},
 		},
 	}
 	standardHints := DiffHints{}
@@ -2362,18 +2484,16 @@ func TestCreateTableDiff(t *testing.T) {
 							assert.NotEqual(t, eToStatementString, annotatedToString)
 						}
 					}
-					if len(ts.textdiffs) > 0 { // Still incomplete.
-						// For this test, we should validate the given diffs
-						uniqueDiffs := make(map[string]bool)
-						for _, textdiff := range ts.textdiffs {
-							uniqueDiffs[textdiff] = true
-						}
-						require.Equal(t, len(uniqueDiffs), len(ts.textdiffs)) // integrity of test
-						for _, textdiff := range ts.textdiffs {
-							assert.Containsf(t, annotatedUnifiedString, textdiff, annotatedUnifiedString)
-						}
-						assert.Equalf(t, len(annotatedUnified.Removed())+len(annotatedUnified.Added()), len(ts.textdiffs), annotatedUnifiedString)
+					require.NotEmpty(t, ts.textdiffs)
+					uniqueDiffs := make(map[string]bool)
+					for _, textdiff := range ts.textdiffs {
+						uniqueDiffs[textdiff] = true
 					}
+					require.Equal(t, len(uniqueDiffs), len(ts.textdiffs)) // integrity of test
+					for _, textdiff := range ts.textdiffs {
+						assert.Containsf(t, annotatedUnifiedString, textdiff, "unified: %s\nfrom: %s\nto: %s\nstmt: %s", annotatedUnifiedString, annotatedFromString, annotatedToString, alterEntityDiff.CanonicalStatementString())
+					}
+					assert.Equalf(t, len(annotatedUnified.Removed())+len(annotatedUnified.Added()), len(ts.textdiffs), annotatedUnifiedString)
 				}
 			}
 			{
@@ -2406,6 +2526,24 @@ func TestValidate(t *testing.T) {
 			from:      "create table t (id int primary key, id varchar(10))",
 			alter:     "alter table t add column i int",
 			expectErr: &ApplyDuplicateColumnError{Table: "t", Column: "id"},
+		},
+		{
+			name:  "matching utf8mb3 column and charset",
+			from:  "create table t (id int primary key, t text charset utf8mb3 collate utf8mb3_bin)",
+			alter: "alter table t engine=innodb",
+			to:    "create table t (id int primary key, t text charset utf8mb3 collate utf8mb3_bin)",
+		},
+		{
+			name:  "matching utf8mb4 column and charset",
+			from:  "create table t (id int primary key, t text charset utf8mb4 collate utf8mb4_bin)",
+			alter: "alter table t engine=innodb",
+			to:    "create table t (id int primary key, t text charset utf8mb4 collate utf8mb4_bin)",
+		},
+		{
+			name:      "mismatching column and charset",
+			from:      "create table t (id int primary key, t text charset utf8mb3 collate utf8mb4_bin)",
+			alter:     "alter table t engine=innodb",
+			expectErr: &MismatchedColumnCharsetCollationError{Column: "t", Charset: "utf8mb3", Collation: "utf8mb4_bin"},
 		},
 		// keys
 		{
@@ -3243,6 +3381,41 @@ func TestNormalize(t *testing.T) {
 			name: "normalize primary key and column with no default, with type boolean",
 			from: "create table t (id boolean primary key, b boolean)",
 			to:   "CREATE TABLE `t` (\n\t`id` tinyint(1),\n\t`b` tinyint(1),\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name: "normalize text types with length information: implicit utf8mb4",
+			from: "create table t (id int primary key, t63_utf8mb4 text(63), t64_utf8mb4 text(64))",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`t63_utf8mb4` tinytext,\n\t`t64_utf8mb4` text,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name: "normalize text types with length information: utf8mb4 table charset",
+			from: "create table t (id int primary key, t63_utf8mb4 text(63), t64_utf8mb4 text(64)) charset utf8mb4",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`t63_utf8mb4` tinytext,\n\t`t64_utf8mb4` text,\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb4",
+		},
+		{
+			name: "normalize text types with length information: utf8mb3 table charset",
+			from: "create table t (id int primary key, t63_utf8mb3 text(63), t64_utf8mb3 text(64), t86_utf8mb3 text(86)) CHARACTER SET utf8mb3",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`t63_utf8mb3` tinytext,\n\t`t64_utf8mb3` tinytext,\n\t`t86_utf8mb3` text,\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb3",
+		},
+		{
+			name: "normalize text types with length information: utf8mb3 column charset",
+			from: "create table t (id int primary key, t63_utf8mb3 text(63) charset utf8mb3, t64_utf8mb3 text(64) charset utf8mb3, t86_utf8mb3 text(86) charset utf8mb3)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`t63_utf8mb3` tinytext CHARACTER SET utf8mb3,\n\t`t64_utf8mb3` tinytext CHARACTER SET utf8mb3,\n\t`t86_utf8mb3` text CHARACTER SET utf8mb3,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name: "normalize text types with length information: ucs2 table charset",
+			from: "create table t (id int primary key, t63_ucs2 text(63), t64_ucs2 text(64), t86_ucs2 text(86), t128_ucs2 text(128), t256_ucs2 text(256)) CHARACTER SET ucs2",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`t63_ucs2` tinytext,\n\t`t64_ucs2` tinytext,\n\t`t86_ucs2` tinytext,\n\t`t128_ucs2` text,\n\t`t256_ucs2` text,\n\tPRIMARY KEY (`id`)\n) CHARSET ucs2",
+		},
+		{
+			name: "normalize text types with length information: latin1 table charset",
+			from: "create table t (id int primary key, t63_latin1 text(63), t64_latin1 text(64), t86_latin1 text(86), t128_latin1 text(128), t256_latin1 text(256)) CHARACTER SET latin1",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`t63_latin1` tinytext,\n\t`t64_latin1` tinytext,\n\t`t86_latin1` tinytext,\n\t`t128_latin1` tinytext,\n\t`t256_latin1` text,\n\tPRIMARY KEY (`id`)\n) CHARSET latin1",
+		},
+		{
+			name: "normalize blob types with length information",
+			from: "create table t (id int primary key, b127 blob(127), b128 blob(128), b255 blob(255), b256 blob(256), b65535 blob(65535), b65536 blob(65536), b16777215 blob(16777215), b16777216 blob(16777216))",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`b127` tinyblob,\n\t`b128` tinyblob,\n\t`b255` tinyblob,\n\t`b256` blob,\n\t`b65535` blob,\n\t`b65536` mediumblob,\n\t`b16777215` mediumblob,\n\t`b16777216` longblob,\n\tPRIMARY KEY (`id`)\n)",
 		},
 	}
 	env := NewTestEnv()

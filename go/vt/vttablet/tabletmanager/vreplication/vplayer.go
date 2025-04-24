@@ -125,7 +125,8 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		settings.StopPos = pausePos
 		saveStop = false
 	}
-	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %+v",
+	log.Infof("Starting VReplication player id: %v, name: %v, startPos: %v, stop: %v", vr.id, vr.WorkflowName, settings.StartPos, settings.StopPos)
+	log.V(2).Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %+v",
 		vr.id, settings.StartPos, settings.StopPos, vr.source.Filter)
 	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
@@ -133,11 +134,9 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	commitFunc := func() error {
 		return vr.dbClient.Commit()
 	}
-	batchMode := false
 	// We only do batching in the running/replicating phase.
-	if len(copyState) == 0 && vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0 {
-		batchMode = true
-	}
+	batchMode := len(copyState) == 0 && vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0
+
 	if batchMode {
 		// relayLogMaxSize is effectively the limit used when not batching.
 		maxAllowedPacket := int64(vr.workflowConfig.RelayLogMaxSize)
@@ -234,10 +233,7 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 	if !mustUpdate {
 		return nil
 	}
-	dbForeignKeyChecksEnabled := true
-	if flags2&NoForeignKeyCheckFlagBitmask == NoForeignKeyCheckFlagBitmask {
-		dbForeignKeyChecksEnabled = false
-	}
+	dbForeignKeyChecksEnabled := !(flags2&NoForeignKeyCheckFlagBitmask == NoForeignKeyCheckFlagBitmask)
 
 	if vp.foreignKeyChecksStateInitialized /* already set earlier */ &&
 		dbForeignKeyChecksEnabled == vp.foreignKeyChecksEnabled /* no change in the state, no need to update */ {
@@ -266,7 +262,7 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 // one. This allows for the apply thread to catch up more quickly if
 // a backlog builds up.
 func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
-	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.source)
+	log.Infof("Starting VReplication player id: %v, name: %v, startPos: %v, stop: %v", vp.vr.id, vp.vr.WorkflowName, vp.startPos, vp.stopPos)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -351,12 +347,14 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
 	applyFunc := func(sql string) (*sqltypes.Result, error) {
-		stats := NewVrLogStats("ROWCHANGE")
 		start := time.Now()
 		qr, err := vp.query(ctx, sql)
 		vp.vr.stats.QueryCount.Add(vp.phase, 1)
 		vp.vr.stats.QueryTimings.Record(vp.phase, start)
-		stats.Send(sql)
+		if vp.vr.workflowConfig.EnableHttpLog {
+			stats := NewVrLogStats("ROWCHANGE", start)
+			stats.Send(sql)
+		}
 		return qr, err
 	}
 
@@ -642,7 +640,10 @@ func getNextPosition(items [][]*binlogdatapb.VEvent, i, j int) string {
 }
 
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
-	stats := NewVrLogStats(event.Type.String())
+	var stats *VrLogStats
+	if vp.vr.workflowConfig.EnableHttpLog {
+		stats = NewVrLogStats(event.Type.String(), time.Now())
+	}
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := binlogplayer.DecodePosition(event.Gtid)
@@ -688,7 +689,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		vp.tablePlans[event.FieldEvent.TableName] = tplan
-		stats.Send(fmt.Sprintf("%v", event.FieldEvent))
+		if stats != nil {
+			stats.Send(fmt.Sprintf("%v", event.FieldEvent))
+		}
 
 	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE,
 		binlogdatapb.VEventType_REPLACE, binlogdatapb.VEventType_SAVEPOINT:
@@ -706,7 +709,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if err := vp.applyStmtEvent(ctx, event); err != nil {
 				return err
 			}
-			stats.Send(sql)
+			if stats != nil {
+				stats.Send(sql)
+			}
 		}
 	case binlogdatapb.VEventType_ROW:
 		// This player is configured for row based replication
@@ -719,7 +724,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 		// Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed
 		// time for the Row event.
-		stats.Send(fmt.Sprintf("%v", event.RowEvent))
+		if stats != nil {
+			stats.Send(fmt.Sprintf("%v", event.RowEvent))
+		}
 	case binlogdatapb.VEventType_OTHER:
 		if vp.vr.dbClient.InTransaction {
 			// Unreachable
@@ -773,7 +780,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.query(ctx, event.Statement); err != nil {
 				return err
 			}
-			stats.Send(fmt.Sprintf("%v", event.Statement))
+			if stats != nil {
+				stats.Send(fmt.Sprintf("%v", event.Statement))
+			}
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
@@ -785,7 +794,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.query(ctx, event.Statement); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
 			}
-			stats.Send(fmt.Sprintf("%v", event.Statement))
+			if stats != nil {
+				stats.Send(fmt.Sprintf("%v", event.Statement))
+			}
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
 				return err
@@ -839,7 +850,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 			return io.EOF
 		}
-		stats.Send(fmt.Sprintf("%v", event.Journal))
+		if stats != nil {
+			stats.Send(fmt.Sprintf("%v", event.Journal))
+		}
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		if event.Throttled {

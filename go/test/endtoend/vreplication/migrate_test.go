@@ -96,8 +96,9 @@ func TestMigrateUnsharded(t *testing.T) {
 	var output, expected string
 
 	t.Run("mount external cluster", func(t *testing.T) {
+		etcdHostPort := fmt.Sprintf("localhost:%d", extVc.ClusterConfig.topoPort)
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Mount", "register", "--name=ext1", "--topo-type=etcd2",
-			fmt.Sprintf("--topo-server=localhost:%d", extVc.ClusterConfig.topoPort), "--topo-root=/vitess/global")
+			"--topo-server", etcdHostPort, "--topo-root=/vitess/global")
 		require.NoError(t, err, "Mount Register command failed with %s", output)
 
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "list")
@@ -110,7 +111,7 @@ func TestMigrateUnsharded(t *testing.T) {
 		require.NoError(t, err, "Mount command failed with %s\n", output)
 
 		require.Equal(t, "etcd2", gjson.Get(output, "topo_type").String())
-		require.Equal(t, "localhost:12379", gjson.Get(output, "topo_server").String())
+		require.Equal(t, etcdHostPort, gjson.Get(output, "topo_server").String())
 		require.Equal(t, "/vitess/global", gjson.Get(output, "topo_root").String())
 	})
 

@@ -30,14 +30,14 @@ type Union struct {
 	Sources []Operator
 
 	// These are the select expressions coming from each source
-	Selects  []sqlparser.SelectExprs
+	Selects  [][]sqlparser.SelectExpr
 	distinct bool
 
-	unionColumns              sqlparser.SelectExprs
+	unionColumns              []sqlparser.SelectExpr
 	unionColumnsAsAlisedExprs []*sqlparser.AliasedExpr
 }
 
-func newUnion(srcs []Operator, sourceSelects []sqlparser.SelectExprs, columns sqlparser.SelectExprs, distinct bool) *Union {
+func newUnion(srcs []Operator, sourceSelects [][]sqlparser.SelectExpr, columns []sqlparser.SelectExpr, distinct bool) *Union {
 	if columns == nil {
 		panic("rt")
 	}
@@ -95,7 +95,7 @@ can be found on the same offset. The names of the RHS are discarded.
 func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	offsets := make(map[string]int)
 	sel := u.GetSelectFor(0)
-	for i, selectExpr := range sel.SelectExprs {
+	for i, selectExpr := range sel.GetColumns() {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
 			panic(vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT"))
@@ -133,7 +133,7 @@ func (u *Union) predicatePerSource(expr sqlparser.Expr, offsets map[string]int) 
 			}
 
 			sel := u.GetSelectFor(i)
-			ae, ok := sel.SelectExprs[idx].(*sqlparser.AliasedExpr)
+			ae, ok := sel.GetColumns()[idx].(*sqlparser.AliasedExpr)
 			if !ok {
 				panic(vterrors.VT09015())
 			}
@@ -170,10 +170,10 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 			return offset
 		}
 	}
-	cols := u.GetColumns(ctx)
 
 	switch e := expr.Expr.(type) {
 	case *sqlparser.ColName:
+		cols := u.GetColumns(ctx)
 		// here we deal with pure column access on top of the union
 		offset := slices.IndexFunc(cols, func(expr *sqlparser.AliasedExpr) bool {
 			return e.Name.EqualString(expr.ColumnName())
@@ -184,6 +184,7 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 		return offset
 	case *sqlparser.WeightStringFuncExpr:
 		wsArg := e.Expr
+		cols := u.GetColumns(ctx)
 		argIdx := slices.IndexFunc(cols, func(expr *sqlparser.AliasedExpr) bool {
 			return ctx.SemTable.EqualsExprWithDeps(wsArg, expr.Expr)
 		})
@@ -196,8 +197,69 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 	case *sqlparser.Literal, *sqlparser.Argument:
 		return u.addConstantToUnion(ctx, expr)
 	default:
-		panic(vterrors.VT13001(fmt.Sprintf("only weight_string function is expected - got %s", sqlparser.String(expr))))
+		return u.pushColumnToSources(ctx, expr)
 	}
+}
+
+func (u *Union) pushColumnToSources(ctx *plancontext.PlanningContext, ae *sqlparser.AliasedExpr) int {
+	// pushColumnToSources adds a new column (defined by ae) to each source in the UNION
+	// while ensuring that the column’s offset is kept consistent across all sources.
+	colsToReplace := make(map[sqlparser.ASTPath]int)
+	cols := u.Sources[0].GetColumns(ctx)
+	expr := sqlparser.Clone(ae.Expr)
+
+	// Step 1: Identify column references in the first source's expression and record their offsets.
+	exprForFirstSource := sqlparser.RewriteWithPath(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return true
+		}
+		// here we deal with pure column access on top of the union
+		offset := slices.IndexFunc(cols, func(expr *sqlparser.AliasedExpr) bool {
+			return col.Name.EqualString(expr.ColumnName())
+		})
+		if offset == -1 {
+			panic(vterrors.VT13001(fmt.Sprintf("could not find the column '%s' on the UNION", sqlparser.String(col))))
+		}
+		// we need to replace this column on all sources
+		colsToReplace[cursor.Path()] = offset
+
+		expr := cols[offset].Expr
+		cursor.Replace(expr)
+
+		return true
+	})
+
+	// Step 2: Add the fully substituted expression as a column in the first source's column list.
+	offset := u.Sources[0].AddColumn(ctx, false, false, aeWrap(exprForFirstSource.(sqlparser.Expr)))
+
+	// Step 3: For each subsequent source, use the same offsets to replace column references,
+	// ensuring consistent expressions across all sources in the UNION.
+	for _, src := range u.Sources[1:] {
+		cols := src.GetColumns(ctx)
+		// we don't want to use the already rewritten expression, as it might have been rewritten to a different column
+		expr := sqlparser.Clone(ae.Expr)
+		rewritten := sqlparser.RewriteWithPath(expr, nil, func(cursor *sqlparser.Cursor) bool {
+			_, ok := cursor.Node().(*sqlparser.ColName)
+			if !ok {
+				return true
+			}
+			offset := colsToReplace[cursor.Path()]
+			expr := cols[offset].Expr
+			cursor.Replace(expr)
+
+			return true
+		}).(sqlparser.Expr)
+		// Add the rewritten column expression to this source. It must match the same offset as the first source.
+		thisOffset := src.AddColumn(ctx, false, false, aeWrap(rewritten))
+		if thisOffset != offset {
+			tree := ToTree(u)
+			panic(vterrors.VT13001(fmt.Sprintf("argument offsets did not line up for UNION. Pushing %s - want %d got %d\n%s", sqlparser.String(ae), offset, thisOffset, tree)))
+		}
+	}
+
+	// Return the offset for the newly added/rewritten column across all sources.
+	return offset
 }
 
 func (u *Union) addConstantToUnion(ctx *plancontext.PlanningContext, aexpr *sqlparser.AliasedExpr) (outputOffset int) {
@@ -269,7 +331,7 @@ func (u *Union) GetColumns(ctx *plancontext.PlanningContext) (result []*sqlparse
 	return u.unionColumnsAsAlisedExprs
 }
 
-func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (u *Union) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	// if any of the inputs has more columns that we expect, we want to show on top of UNION, so the results can
 	// be truncated to the expected result columns and nothing else
 	for _, src := range u.Sources {

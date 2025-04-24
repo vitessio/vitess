@@ -73,6 +73,7 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 
 	errch := make(chan error, 1)
 	go func() {
+		uvs.stopPos = replication.Position{} // reset stopPos which was potentially set during fastforward
 		startPos := replication.EncodePosition(uvs.pos)
 		vs := newVStreamer(ctx, uvs.cp, uvs.se, startPos, "", uvs.filter, uvs.getVSchema(), uvs.throttlerApp, uvs.send2, "catchup", uvs.vse, nil)
 		uvs.setVs(vs)
@@ -212,7 +213,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 	lastPK := getLastPKFromQR(uvs.plans[tableName].tablePK.Lastpk)
 	filter := uvs.plans[tableName].rule.Filter
 
-	log.Infof("Starting copyTable for %s, PK %v", tableName, lastPK)
+	log.Infof("Starting copyTable for %s, Filter: %s, LastPK: %v", tableName, filter, lastPK)
 	uvs.sendTestEvent(fmt.Sprintf("Copy Start %s", tableName))
 
 	err := uvs.vse.StreamRows(ctx, filter, lastPK, func(rows *binlogdatapb.VStreamRowsResponse) error {

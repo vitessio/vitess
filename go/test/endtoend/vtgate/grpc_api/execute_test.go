@@ -102,7 +102,7 @@ func exec(ctx context.Context, conn *vtgateconn.VTGateSession, sql string, bv ma
 	if options != nil && options.Workload == querypb.ExecuteOptions_OLAP {
 		return streamExec(ctx, conn, sql, bv)
 	}
-	res, err := conn.Execute(ctx, sql, bv)
+	res, err := conn.Execute(ctx, sql, bv, false)
 	return res, conn.SessionPb(), err
 }
 

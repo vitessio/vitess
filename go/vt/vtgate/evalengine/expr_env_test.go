@@ -42,7 +42,7 @@ func TestExpressionEnvTypeOf(t *testing.T) {
 		Type:   sqltypes.Unknown,
 		Offset: 1,
 		Original: &sqlparser.Count{
-			Args: sqlparser.Exprs{
+			Args: []sqlparser.Expr{
 				sqlparser.NewColName("l_discount"),
 			},
 		},

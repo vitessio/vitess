@@ -222,20 +222,14 @@ func (vm *VSchemaManager) updateViewInfo(ks *vindexes.KeyspaceSchema, ksName str
 	if views == nil {
 		return
 	}
-	ks.Views = make(map[string]sqlparser.TableStatement, len(views))
+	ks.Views = make(map[string]*vindexes.View, len(views))
 	for name, def := range views {
-		ks.Views[name] = sqlparser.Clone(def)
-		vTbl, ok := ks.Tables[name]
-		if ok {
-			vTbl.Type = vindexes.TypeView
-		} else {
-			// Adding view to the VSchema as a table.
-			ks.Tables[name] = &vindexes.Table{
-				Type:     vindexes.TypeView,
-				Name:     sqlparser.NewIdentifierCS(name),
-				Keyspace: ks.Keyspace,
-			}
+		v := &vindexes.View{
+			Name:      name,
+			Keyspace:  ks.Keyspace,
+			Statement: def,
 		}
+		ks.Views[name] = v
 	}
 }
 
@@ -276,7 +270,7 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 					rTbl.PrimaryKey = append(rTbl.PrimaryKey, idxCol.Column)
 				}
 			case sqlparser.IndexTypeUnique:
-				var uniqueKey sqlparser.Exprs
+				var uniqueKey []sqlparser.Expr
 				for _, idxCol := range idxDef.Columns {
 					if idxCol.Expression == nil {
 						uniqueKey = append(uniqueKey, sqlparser.NewColName(idxCol.Column.String()))
@@ -353,11 +347,11 @@ func addCrossEdges(g *graph.Graph[string], from []string, to []string) {
 	}
 }
 
-func setColumns(ks *vindexes.KeyspaceSchema, tblName string, columns []vindexes.Column) *vindexes.Table {
+func setColumns(ks *vindexes.KeyspaceSchema, tblName string, columns []vindexes.Column) *vindexes.BaseTable {
 	vTbl := ks.Tables[tblName]
 	if vTbl == nil {
 		// a table that is unknown by the vschema. we add it as a normal table
-		ks.Tables[tblName] = &vindexes.Table{
+		ks.Tables[tblName] = &vindexes.BaseTable{
 			Name:                    sqlparser.NewIdentifierCS(tblName),
 			Keyspace:                ks.Keyspace,
 			Columns:                 columns,

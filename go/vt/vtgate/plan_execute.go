@@ -65,12 +65,11 @@ func (e *Executor) newExecute(
 	safeSession *econtext.SafeSession,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
 	logStats *logstats.LogStats,
 	execPlan planExec, // used when there is a plan to execute
 	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
 ) (err error) {
-	// 1: Prepare before planning and execution.
-
 	// Start an implicit transaction if necessary.
 	err = e.startTxIfNecessary(ctx, safeSession)
 	if err != nil {
@@ -81,19 +80,13 @@ func (e *Executor) newExecute(
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
 
-	query, comments := sqlparser.SplitMarginComments(sql)
-
-	// 2: Parse and Validate query.
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
-	if err != nil {
-		return err
-	}
-
 	var (
 		vs                 = e.VSchema()
 		lastVSchemaCreated = vs.GetCreated()
 		result             *sqltypes.Result
 		plan               *engine.Plan
+		vcursor            *econtext.VCursorImpl
+		stmt               sqlparser.Statement
 		cancel             context.CancelFunc
 	)
 
@@ -119,19 +112,17 @@ func (e *Executor) newExecute(
 			}
 		}
 
-		vcursor, err := econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, vs, e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
-		if err != nil {
-			return err
-		}
+		// Enable parameterization if normalization is enabled and the query is not prepared statement.
+		parameterize := e.config.Normalize && !prepared
 
-		// 3: Create a plan for the query.
+		// Create a plan for the query.
 		// If we are retrying, it is likely that the routing rules have changed and hence we need to
 		// replan the query since the target keyspace of the resolved shards may have changed as a
 		// result of MoveTables SwitchTraffic which does a RebuildSrvVSchema which in turn causes
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
 		// take full advatange of the cached plan.
-		plan, err = e.getPlan(ctx, vcursor, query, stmt, comments, bindVars, reservedVars, e.config.Normalize, logStats)
+		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
 		execStart := e.logPlanningFinished(logStats, plan)
 
 		if err != nil {
@@ -139,7 +130,7 @@ func (e *Executor) newExecute(
 			return err
 		}
 
-		if plan.Type != sqlparser.StmtShow {
+		if plan.QueryType != sqlparser.StmtShow {
 			safeSession.ClearWarnings()
 		}
 
@@ -152,22 +143,27 @@ func (e *Executor) newExecute(
 		ctx, cancel = vcursor.GetContextWithTimeOut(ctx)
 		defer cancel()
 
+		// If we have previously issued a VT15001 error, we block any new queries on this session until we receive a ROLLBACK or "show warnings".
+		if shouldBlockQueries(plan, safeSession) {
+			return vterrors.VT09032()
+		}
+
 		result, err = e.handleTransactions(ctx, mysqlCtx, safeSession, plan, logStats, vcursor, stmt)
 		if err != nil {
 			return err
 		}
 		if result != nil {
-			return recResult(plan.Type, result)
+			return recResult(plan.QueryType, result)
 		}
 
-		// 4: Prepare for execution.
+		// Prepare for execution.
 		err = e.addNeededBindVars(vcursor, plan.BindVarNeeds, bindVars, safeSession)
 		if err != nil {
 			logStats.Error = err
 			return err
 		}
 
-		// 5: Execute the plan.
+		// Execute the plan.
 		if plan.Instructions.NeedsTransaction() {
 			err = e.insideTransaction(ctx, safeSession, logStats,
 				func() error {
@@ -181,10 +177,10 @@ func (e *Executor) newExecute(
 			return err
 		}
 
-		// 6: Retry if needed.
+		// Retry if needed.
 		rootCause := vterrors.RootCause(err)
 		if rootCause != nil && strings.Contains(rootCause.Error(), "enforce denied tables") {
-			log.V(2).Infof("Retry: %d, will retry query %s due to %v", try, query, err)
+			log.V(2).Infof("Retry: %d, will retry query %s due to %v", try, sql, err)
 			if try == 0 { // We are going to retry at least once
 				defer func() {
 					// Prevent any plan cache pollution from queries planned against the wrong keyspace during a MoveTables
@@ -219,7 +215,7 @@ func (e *Executor) newExecute(
 
 		return err
 	}
-	return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("query %s failed after retries: %v ", query, err))
+	return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("query %s failed after retries: %v ", sql, err))
 }
 
 // handleTransactions deals with transactional queries: begin, commit, rollback and savepoint management
@@ -234,36 +230,36 @@ func (e *Executor) handleTransactions(
 ) (*sqltypes.Result, error) {
 	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
 	// will fall through and be handled through planning
-	switch plan.Type {
+	switch plan.QueryType {
 	case sqlparser.StmtBegin:
-		qr, err := e.handleBegin(ctx, safeSession, logStats, stmt)
+		qr, err := e.handleBegin(ctx, vcursor, safeSession, logStats, stmt)
 		return qr, err
 	case sqlparser.StmtCommit:
-		qr, err := e.handleCommit(ctx, safeSession, logStats)
+		qr, err := e.handleCommit(ctx, vcursor, safeSession, logStats)
 		return qr, err
 	case sqlparser.StmtRollback:
-		qr, err := e.handleRollback(ctx, safeSession, logStats)
+		qr, err := e.handleRollback(ctx, vcursor, safeSession, logStats)
 		return qr, err
 	case sqlparser.StmtSavepoint:
-		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Savepoint", logStats, func(_ string) (*sqltypes.Result, error) {
+		qr, err := e.handleSavepoint(ctx, vcursor, safeSession, plan.Original, plan.QueryType.String(), logStats, func(_ string) (*sqltypes.Result, error) {
 			// Safely to ignore as there is no transaction.
 			return &sqltypes.Result{}, nil
 		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtSRollback:
-		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Rollback Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
+		qr, err := e.handleSavepoint(ctx, vcursor, safeSession, plan.Original, plan.QueryType.String(), logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
 		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtRelease:
-		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Release Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
+		qr, err := e.handleSavepoint(ctx, vcursor, safeSession, plan.Original, plan.QueryType.String(), logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
 		}, vcursor.IgnoreMaxMemoryRows())
 		return qr, err
 	case sqlparser.StmtKill:
-		return e.handleKill(ctx, mysqlCtx, stmt, logStats)
+		return e.handleKill(ctx, mysqlCtx, vcursor, stmt, logStats)
 	}
 	return nil, nil
 }
@@ -344,11 +340,28 @@ func (e *Executor) executePlan(
 
 // rollbackExecIfNeeded rollbacks the partial execution if earlier it was detected that it needs partial query execution to be rolled back.
 func (e *Executor) rollbackExecIfNeeded(ctx context.Context, safeSession *econtext.SafeSession, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats, err error) error {
-	if safeSession.InTransaction() && safeSession.IsRollbackSet() {
+	if !safeSession.InTransaction() {
+		return err
+	}
+	if e.rollbackOnFatalTxError(ctx, safeSession, err) {
+		return err
+	}
+
+	if safeSession.IsRollbackSet() {
 		rErr := e.rollbackPartialExec(ctx, safeSession, bindVars, logStats)
 		return vterrors.Wrap(err, rErr.Error())
 	}
 	return err
+}
+
+func (e *Executor) rollbackOnFatalTxError(ctx context.Context, safeSession *econtext.SafeSession, err error) bool {
+	if !vterrors.IsError(err, vterrors.VT15001(0).ID) {
+		return false
+	}
+	// we already know one or more shards are going to fail rolling back, the error can be discarded
+	_ = e.txConn.Rollback(ctx, safeSession)
+	safeSession.SetErrorUntilRollback(true)
+	return true
 }
 
 // rollbackPartialExec rollbacks to the savepoint or rollbacks transaction based on the value set on SafeSession.rollbackOnPartialExec.
@@ -371,10 +384,10 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 	rQuery := safeSession.GetRollbackOnPartialExec()
 	if rQuery != econtext.TxRollback {
 		safeSession.SavepointRollback()
-		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, logStats)
+		_, _, err = e.execute(ctx, nil, safeSession, rQuery, bindVars, false, logStats)
 		// If no error, the revert is successful with the savepoint. Notify the reason as error to the client.
 		if err == nil {
-			errMsg.WriteString("reverted partial DML execution failure")
+			errMsg.WriteString(vterrors.RevertedPartialExec)
 			return vterrors.New(vtrpcpb.Code_ABORTED, errMsg.String())
 		}
 		// not able to rollback changes of the failed query, so have to abort the complete transaction.
@@ -382,7 +395,8 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 
 	// abort the transaction.
 	_ = e.txConn.Rollback(ctx, safeSession)
-	errMsg.WriteString("transaction rolled back to reverse changes of partial DML execution")
+
+	errMsg.WriteString(vterrors.TxRollbackOnPartialExec)
 	if err != nil {
 		return vterrors.Wrap(err, errMsg.String())
 	}
@@ -390,18 +404,18 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 }
 
 func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *econtext.VCursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
-	logStats.StmtType = plan.Type.String()
+	logStats.StmtType = plan.QueryType.String()
 	logStats.ActiveKeyspace = vcursor.GetKeyspace()
 	logStats.TablesUsed = plan.TablesUsed
 	logStats.TabletType = vcursor.TabletType().String()
-	errCount := e.logExecutionEnd(logStats, execStart, plan, err, qr)
+	errCount := e.logExecutionEnd(logStats, execStart, plan, vcursor, err, qr)
 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
 }
 
-func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.Time, plan *engine.Plan, err error, qr *sqltypes.Result) uint64 {
+func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.Time, plan *engine.Plan, vcursor *econtext.VCursorImpl, err error, qr *sqltypes.Result) uint64 {
 	logStats.ExecuteTime = time.Since(execStart)
 
-	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
+	e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
 
 	var errCount uint64
 	if err != nil {
@@ -417,8 +431,19 @@ func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.T
 func (e *Executor) logPlanningFinished(logStats *logstats.LogStats, plan *engine.Plan) time.Time {
 	execStart := time.Now()
 	if plan != nil {
-		logStats.StmtType = plan.Type.String()
+		logStats.StmtType = plan.QueryType.String()
 	}
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	return execStart
+}
+
+func shouldBlockQueries(plan *engine.Plan, safeSession *econtext.SafeSession) bool {
+	block := safeSession.IsErrorUntilRollback()
+	if plan.QueryType != sqlparser.StmtRollback && block {
+		return true
+	}
+	if block {
+		safeSession.SetErrorUntilRollback(false)
+	}
+	return false
 }

@@ -362,6 +362,23 @@ func (asm *assembler) PushColumn_datetime(offset int) {
 	}, "PUSH DATETIME(:%d)", offset)
 }
 
+func push_timestamp(env *ExpressionEnv, raw []byte) int {
+	env.vm.stack[env.vm.sp], env.vm.err = parseTimestamp(raw)
+	env.vm.sp++
+	return 1
+}
+
+func (asm *assembler) PushColumn_timestamp(offset int) {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		col := env.Row[offset]
+		if col.IsNull() {
+			return push_null(env)
+		}
+		return push_timestamp(env, col.Raw())
+	}, "PUSH TIMESTAMP(:%d)", offset)
+}
+
 func (asm *assembler) PushBVar_datetime(key string) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
@@ -372,6 +389,18 @@ func (asm *assembler) PushBVar_datetime(key string) {
 		}
 		return push_datetime(env, bvar.Value)
 	}, "PUSH DATETIME(:%q)", key)
+}
+
+func (asm *assembler) PushBVar_timestamp(key string) {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		var bvar *querypb.BindVariable
+		bvar, env.vm.err = env.lookupBindVar(key)
+		if env.vm.err != nil {
+			return 0
+		}
+		return push_timestamp(env, bvar.Value)
+	}, "PUSH TIMESTAMP(:%q)", key)
 }
 
 func push_date(env *ExpressionEnv, raw []byte) int {

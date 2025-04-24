@@ -89,7 +89,7 @@ func TestVindexMap(t *testing.T) {
 	}})
 	assert.NoError(t, err)
 
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x01\x16k@\xb4J\xbaK\xd6")),
 	}
 	assert.Equal(t, want, got)
@@ -101,7 +101,7 @@ func TestVindexMap(t *testing.T) {
 		sqltypes.NewInt64(1),
 	}})
 	assert.NoError(t, err)
-	want = []key.Destination{
+	want = []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x16k@\xb4J\xbaK\xd6")),
 	}
 	assert.Equal(t, want, got)

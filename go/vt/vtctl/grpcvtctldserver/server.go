@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
@@ -463,6 +464,8 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("allow_primary", req.AllowPrimary)
 	span.Annotate("concurrency", req.Concurrency)
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
+	span.Annotate("upgrade_safe", req.UpgradeSafe)
+	span.Annotate("mysql_shutdown_timeout", req.MysqlShutdownTimeout)
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
 	// Instead of return on err directly, only return err when no tablets for backup at all
@@ -483,6 +486,11 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 		switch tablet.Type {
 		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE:
 		default:
+			continue
+		}
+
+		// ignore tablet with an unknown replication lag status
+		if stats[i].ReplicationLagUnknown {
 			continue
 		}
 
@@ -510,7 +518,13 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(backupTablet.Alias))
 
-	r := &vtctldatapb.BackupRequest{Concurrency: req.Concurrency, AllowPrimary: req.AllowPrimary, UpgradeSafe: req.UpgradeSafe, IncrementalFromPos: req.IncrementalFromPos}
+	r := &vtctldatapb.BackupRequest{
+		Concurrency:          req.Concurrency,
+		AllowPrimary:         req.AllowPrimary,
+		IncrementalFromPos:   req.IncrementalFromPos,
+		UpgradeSafe:          req.UpgradeSafe,
+		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
+	}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
 }
@@ -520,11 +534,12 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 },
 ) error {
 	r := &tabletmanagerdatapb.BackupRequest{
-		Concurrency:        req.Concurrency,
-		AllowPrimary:       req.AllowPrimary,
-		IncrementalFromPos: req.IncrementalFromPos,
-		UpgradeSafe:        req.UpgradeSafe,
-		BackupEngine:       req.BackupEngine,
+		Concurrency:          req.Concurrency,
+		AllowPrimary:         req.AllowPrimary,
+		IncrementalFromPos:   req.IncrementalFromPos,
+		BackupEngine:         req.BackupEngine,
+		UpgradeSafe:          req.UpgradeSafe,
+		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -574,6 +589,7 @@ func (s *VtctldServer) CancelSchemaMigration(ctx context.Context, req *vtctldata
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -736,7 +752,6 @@ func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.Chec
 		Scope:                 req.Scope,
 		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
 		OkIfNotExists:         req.OkIfNotExists,
-		MultiMetricsEnabled:   true,
 	}
 	r, err := s.tmc.CheckThrottler(ctx, ti.Tablet, tmReq)
 	if err != nil {
@@ -794,6 +809,7 @@ func (s *VtctldServer) CleanupSchemaMigration(ctx context.Context, req *vtctldat
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -825,6 +841,7 @@ func (s *VtctldServer) ForceCutOverSchemaMigration(ctx context.Context, req *vtc
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -856,6 +873,7 @@ func (s *VtctldServer) CompleteSchemaMigration(ctx context.Context, req *vtctlda
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -1509,11 +1527,17 @@ func (s *VtctldServer) GetBackups(ctx context.Context, req *vtctldatapb.GetBacku
 
 	totalBackups := len(bhs)
 	if req.Limit > 0 {
+		if int(req.Limit) < 0 {
+			return nil, fmt.Errorf("limit %v exceeds maximum allowed value %v", req.DetailedLimit, math.MaxInt)
+		}
 		totalBackups = int(req.Limit)
 	}
 
 	totalDetailedBackups := len(bhs)
 	if req.DetailedLimit > 0 {
+		if int(req.DetailedLimit) < 0 {
+			return nil, fmt.Errorf("detailed_limit %v exceeds maximum allowed value %v", req.DetailedLimit, math.MaxInt)
+		}
 		totalDetailedBackups = int(req.DetailedLimit)
 	}
 
@@ -2051,9 +2075,6 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 	if req.Enable && req.Disable {
 		return nil, fmt.Errorf("--enable and --disable are mutually exclusive")
 	}
-	if req.CheckAsCheckSelf && req.CheckAsCheckShard {
-		return nil, fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
-	}
 
 	if req.MetricName != "" && !base.KnownMetricNames.Contains(base.MetricName(req.MetricName)) {
 		return nil, fmt.Errorf("unknown metric name: %s", req.MetricName)
@@ -2118,12 +2139,6 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		}
 		if req.Disable {
 			throttlerConfig.Enabled = false
-		}
-		if req.CheckAsCheckSelf {
-			throttlerConfig.CheckAsCheckSelf = true
-		}
-		if req.CheckAsCheckShard {
-			throttlerConfig.CheckAsCheckSelf = false
 		}
 		if req.ThrottledApp != nil && req.ThrottledApp.Name != "" {
 			timeNow := time.Now()
@@ -2329,6 +2344,10 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			tablets = append(tablets, ti.Tablet)
 		}
 
+		// Sort the list of tablets alphabetically by alias to improve readability of output.
+		sort.Slice(tablets, func(i, j int) bool {
+			return topoproto.TabletAliasString(tablets[i].Alias) < topoproto.TabletAliasString(tablets[j].Alias)
+		})
 		return &vtctldatapb.GetTabletsResponse{Tablets: tablets}, nil
 	}
 
@@ -2417,6 +2436,10 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 
 		adjustedTablets[i] = ti.Tablet
 	}
+	// Sort the list of tablets alphabetically by alias to improve readability of output.
+	sort.Slice(adjustedTablets, func(i, j int) bool {
+		return topoproto.TabletAliasString(adjustedTablets[i].Alias) < topoproto.TabletAliasString(adjustedTablets[j].Alias)
+	})
 
 	return &vtctldatapb.GetTabletsResponse{
 		Tablets: adjustedTablets,
@@ -3007,6 +3030,7 @@ func (s *VtctldServer) LaunchSchemaMigration(ctx context.Context, req *vtctldata
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -3789,6 +3813,7 @@ func (s *VtctldServer) RetrySchemaMigration(ctx context.Context, req *vtctldatap
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
 		WaitReplicasTimeout: protoutil.DurationToProto(DefaultWaitReplicasTimeout),
+		CallerId:            req.CallerId,
 	})
 	if err != nil {
 		return nil, err
@@ -4717,6 +4742,11 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 		return resp, err
 	}
 
+	if len(shards) == 0 {
+		resp.Results = append(resp.Results, fmt.Sprintf("no shards found in keyspace %v", req.Keyspace))
+		return resp, err
+	}
+
 	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
 
 	var (
@@ -4727,6 +4757,7 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
+
 			shardResp, err := s.ValidateShard(ctx, &vtctldatapb.ValidateShardRequest{
 				Keyspace:    req.Keyspace,
 				Shard:       shard,
@@ -4746,6 +4777,7 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 	}
 
 	wg.Wait()
+
 	return resp, err
 }
 
@@ -5046,8 +5078,17 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 
 	var (
 		wg      sync.WaitGroup
-		results = make(chan string, len(aliases))
+		results = make(chan string, len(aliases)+1)
 	)
+	// Start processing results immediately, so that we
+	// don't end up blocking on writes.
+	done := make(chan bool)
+	go func() {
+		for result := range results {
+			resp.Results = append(resp.Results, result)
+		}
+		done <- true
+	}()
 
 	for _, alias := range aliases {
 		wg.Add(1)
@@ -5151,14 +5192,6 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 		validateReplication(ctx, si, tabletMap, results) // done synchronously
 		pingTablets(ctx, tabletMap, results)             // done async, using the waitgroup declared above in the main method body.
 	}
-
-	done := make(chan bool)
-	go func() {
-		for result := range results {
-			resp.Results = append(resp.Results, result)
-		}
-		done <- true
-	}()
 
 	wg.Wait()
 	close(results)

@@ -153,8 +153,14 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			primary_instance.semi_sync_primary_status
 		) AS semi_sync_primary_status,
 		MIN(
+			primary_instance.semi_sync_blocked
+		) AS semi_sync_blocked,
+		MIN(
 			primary_instance.semi_sync_replica_enabled
 		) AS semi_sync_replica_enabled,
+		MIN(
+			primary_instance.tablet_type
+		) AS current_tablet_type,
 		SUM(replica_instance.oracle_gtid) AS count_oracle_gtid_replicas,
 		IFNULL(
 			SUM(
@@ -297,6 +303,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		}
 
 		a.TabletType = tablet.Type
+		a.CurrentTabletType = topodatapb.TabletType(m.GetInt("current_tablet_type"))
 		a.AnalyzedKeyspace = m.GetString("keyspace")
 		a.AnalyzedShard = m.GetString("shard")
 		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
@@ -333,6 +340,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.BinlogServerImmediateTopology = countValidBinlogServerReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
 		a.SemiSyncPrimaryStatus = m.GetBool("semi_sync_primary_status")
+		a.SemiSyncBlocked = m.GetBool("semi_sync_blocked")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
@@ -444,6 +452,9 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
+		} else if a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY {
+			a.Analysis = PrimaryCurrentTypeMismatch
+			a.Description = "Primary tablet's current type is not PRIMARY"
 		} else if topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "" {
 			a.Analysis = ErrantGTIDDetected
 			a.Description = "Tablet has errant GTIDs"
@@ -457,6 +468,13 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			// the primary tablet was deleted.
 			a.Analysis = PrimaryTabletDeleted
 			a.Description = "Primary tablet has been deleted"
+			ca.hasClusterwideAction = true
+		} else if a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount {
+			// The primary is reporting that semi-sync monitor is blocked on writes.
+			// There are enough replicas configured to send semi-sync ACKs such that the primary shouldn't be blocked.
+			// There is some network diruption in progress. We should run an ERS.
+			a.Analysis = PrimarySemiSyncBlocked
+			a.Description = "Writes seem to be blocked on semi-sync acks on the primary, even though sufficient replicas are configured to send ACKs"
 			ca.hasClusterwideAction = true
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsReadOnly {
 			a.Analysis = ReplicaIsWritable

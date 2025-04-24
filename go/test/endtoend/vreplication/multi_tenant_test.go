@@ -249,7 +249,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	sourceTablet := vc.getPrimaryTablet(t, sourceKeyspace, "0")
 	require.NotNil(t, sourceTablet)
 	// Wait for the rows to be reverse replicated to the source keyspace.
-	waitForRowCountInTablet(t, sourceTablet, sourceKeyspace, "t1", int(lastIndex))
+	waitForRowCountInTablet(t, sourceTablet, sourceKeyspace, "t1", lastIndex)
 
 	mt.Complete()
 	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))

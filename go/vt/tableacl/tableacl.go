@@ -107,14 +107,18 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 	}
 	data, err := os.ReadFile(configFile)
 	if err != nil {
-		log.Infof("unable to read tableACL config file: %v  Error: %v", configFile, err)
+		log.Errorf("unable to read tableACL config file: %v  Error: %v", configFile, err)
 		return err
 	}
+	if len(data) == 0 {
+		return errors.New("tableACL config file is empty")
+	}
+
 	config := &tableaclpb.Config{}
 	if err := config.UnmarshalVT(data); err != nil {
 		// try to parse tableacl as json file
 		if jsonErr := json2.UnmarshalPB(data, config); jsonErr != nil {
-			log.Infof("unable to parse tableACL config file as a protobuf or json file.  protobuf err: %v  json err: %v", err, jsonErr)
+			log.Errorf("unable to parse tableACL config file as a protobuf or json file.  protobuf err: %v  json err: %v", err, jsonErr)
 			return fmt.Errorf("unable to unmarshal Table ACL data: %s", data)
 		}
 	}

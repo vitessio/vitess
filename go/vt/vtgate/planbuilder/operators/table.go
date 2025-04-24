@@ -30,7 +30,7 @@ import (
 type (
 	Table struct {
 		QTable  *QueryTable
-		VTable  *vindexes.Table
+		VTable  *vindexes.BaseTable
 		Columns []*sqlparser.ColName
 
 		nullaryOperator
@@ -91,7 +91,7 @@ func (to *Table) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedEx
 	return slice.Map(to.Columns, colNameToExpr)
 }
 
-func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (to *Table) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return transformColumnsToSelectExprs(ctx, to)
 }
 

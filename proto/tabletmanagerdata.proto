@@ -571,6 +571,9 @@ message BackupRequest {
   bool upgrade_safe = 4;
   // BackupEngine specifies if we want to use a particular backup engine for this backup request
   optional string backup_engine = 5;
+  // MysqlShutdownTimeout is the timeout in seconds to wait for MySQL to shutdown
+  // before taking the backup. If not set, the default value is used.
+  vttime.Duration mysql_shutdown_timeout = 6;
 }
 
 message BackupResponse {
@@ -824,9 +827,8 @@ message CheckThrottlerRequest {
   bool skip_request_heartbeats = 3;
   // OKIfNotExists asks the throttler to return OK even if the metric does not exist
   bool ok_if_not_exists = 4;
-  // MultiMetricsEnabled is always set to "true" and is how a multi-metrics enabled replica
-  // throttler knows its being probed by a multi-metrics enabled primary vttablet.
-  bool multi_metrics_enabled = 5;
+  reserved 5; // used to be multi_metrics_enabled, introduced in v21 for backwards compatibility, and removed in v22
+  reserved "multi_metrics_enabled";
 }
 
 enum CheckThrottlerResponseCode {
@@ -839,8 +841,8 @@ enum CheckThrottlerResponseCode {
 }
 
 message CheckThrottlerResponse {
-  // StatusCode is HTTP compliant response code (e.g. 200 for OK)
-  int32 status_code = 1;
+  reserved 1; // was `status_code`, HTTP compliant, deprecated
+  reserved "status_code";
   // Value is the metric value collected by the tablet
   double value = 2;
   // Threshold is the throttling threshold the table was comparing the value with
@@ -856,8 +858,7 @@ message CheckThrottlerResponse {
   message Metric {
     // Name of the metric
     string name = 1;
-    // StatusCode is HTTP compliant response code (e.g. 200 for OK)
-    int32 status_code = 2;
+    reserved 2; // was `status_code`, HTTP compliant, deprecated
     // Value is the metric value collected by the tablet
     double value = 3;
     // Threshold is the throttling threshold the table was comparing the value with
@@ -940,7 +941,7 @@ message GetThrottlerStatusResponse {
 
   message RecentApp {
     vttime.Time checked_at = 1;
-    int32 status_code = 2;
+    reserved 2; // was HTTP `status_code`, deprecated
     // ResponseCode is the enum representation of the response
     CheckThrottlerResponseCode response_code = 3;
   }

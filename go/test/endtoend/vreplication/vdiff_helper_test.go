@@ -274,9 +274,7 @@ func getVDiffInfo(json string) *vdiffInfo {
 }
 
 func encodeString(in string) string {
-	var buf strings.Builder
-	sqltypes.NewVarChar(in).EncodeSQL(&buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }
 
 // generateMoreCustomers creates additional test data for better tests

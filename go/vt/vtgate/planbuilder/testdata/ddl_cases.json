@@ -3,6 +3,7 @@
     "comment": "simple create table",
     "query": "create table t1(id bigint, primary key(id))",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create table t1(id bigint, primary key(id))",
       "Instructions": {
@@ -22,6 +23,7 @@
     "comment": "simple create table with keyspace",
     "query": "create table user.t1(id bigint, primary key(id))",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create table user.t1(id bigint, primary key(id))",
       "Instructions": {
@@ -38,9 +40,110 @@
     }
   },
   {
+    "comment": "simple create procedure",
+    "query": "create procedure p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "create procedure p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "create procedure p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end;"
+      },
+      "TablesUsed": [
+        "main.p1"
+      ]
+    }
+  },
+  {
+    "comment": "simple drop procedure",
+    "query": "drop procedure p1",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "drop procedure p1",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "drop procedure p1"
+      },
+      "TablesUsed": [
+        "main.p1"
+      ]
+    }
+  },
+  {
+    "comment": "simple create procedure with keyspace",
+    "query": "create procedure main_2.p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "create procedure main_2.p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main_2",
+          "Sharded": false
+        },
+        "Query": "create procedure p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end;"
+      },
+      "TablesUsed": [
+        "main_2.p1"
+      ]
+    }
+  },
+  {
+    "comment": "simple drop procedure with keyspace",
+    "query": "drop procedure if exists user.p1",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "drop procedure if exists user.p1",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "drop procedure if exists p1"
+      },
+      "TablesUsed": [
+        "user.p1"
+      ]
+    }
+  },
+  {
+    "comment": "simple create procedure with keyspace inside select too",
+    "query": "create procedure main_2.p1 (in a CHAR(3), out b INT) begin select c from main_2.x where d = e; end",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "create procedure main_2.p1 (in a CHAR(3), out b INT) begin select c from main_2.x where d = e; end",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main_2",
+          "Sharded": false
+        },
+        "Query": "create procedure p1 (in a CHAR(3), out b INT) begin select c from x where d = e; end;"
+      },
+      "TablesUsed": [
+        "main_2.p1"
+      ]
+    }
+  },
+  {
     "comment": "DDL",
     "query": "create table a(id int)",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create table a(id int)",
       "Instructions": {
@@ -65,6 +168,7 @@
     "comment": "Alter table",
     "query": "alter table a ADD id int",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "alter table a ADD id int",
       "Instructions": {
@@ -84,6 +188,7 @@
     "comment": "Alter table with qualifier",
     "query": "alter table user.user ADD id int",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "alter table user.user ADD id int",
       "Instructions": {
@@ -103,6 +208,7 @@
     "comment": "Alter table with qualifier and table not in vschema",
     "query": "alter table user.a ADD id int",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "alter table user.a ADD id int",
       "Instructions": {
@@ -127,6 +233,7 @@
     "comment": "create db foo",
     "query": "create database foo",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DDL",
       "Original": "create database foo",
       "Instructions": {
@@ -147,6 +254,7 @@
     "comment": "create db if not exists main",
     "query": "create database if not exists main",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DDL",
       "Original": "create database if not exists main",
       "Instructions": {
@@ -173,6 +281,7 @@
     "comment": "drop db main",
     "query": "drop database main",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DDL",
       "Original": "drop database main",
       "Instructions": {
@@ -188,6 +297,7 @@
     "comment": "drop db if exists main",
     "query": "drop database if exists main",
     "plan": {
+      "Type": "Complex",
       "QueryType": "DDL",
       "Original": "drop database if exists main",
       "Instructions": {
@@ -203,6 +313,7 @@
     "comment": "drop db if exists foo",
     "query": "drop schema if exists foo",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DDL",
       "Original": "drop schema if exists foo",
       "Instructions": {
@@ -214,6 +325,7 @@
     "comment": "DDL with qualifier",
     "query": "create index a on user.user(id)",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create index a on user.user(id)",
       "Instructions": {
@@ -233,6 +345,7 @@
     "comment": "DDL with qualifier for a table not in vschema of an unsharded keyspace",
     "query": "create index a on main.unknown(id)",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create index a on main.unknown(id)",
       "Instructions": {
@@ -252,6 +365,7 @@
     "comment": "create view with subquery in unsharded keyspace",
     "query": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
       "Instructions": {
@@ -271,6 +385,7 @@
     "comment": "create view with subquery in unsharded keyspace with IN clause",
     "query": "create view view_a as select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create view view_a as select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
       "Instructions": {
@@ -290,6 +405,7 @@
     "comment": "create view with subquery in unsharded keyspace with UNION clause",
     "query": "create view view_a as (select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create view view_a as (select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
       "Instructions": {
@@ -309,6 +425,7 @@
     "comment": "create view with subquery in unsharded keyspace with multiple UNION clauses",
     "query": "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
       "Instructions": {
@@ -328,6 +445,7 @@
     "comment": "create view with subquery in unsharded keyspace with UNION clauses in subqueries",
     "query": "create view view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create view view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
       "Instructions": {
@@ -347,6 +465,7 @@
     "comment": "Alter View",
     "query": "alter view user.user_extra as select * from user.user",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "alter view user.user_extra as select * from user.user",
       "Instructions": {
@@ -366,6 +485,7 @@
     "comment": "Create View with authoritative column",
     "query": "create view user.tmp_view as select * from user.authoritative",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create view user.tmp_view as select * from user.authoritative",
       "Instructions": {
@@ -385,6 +505,7 @@
     "comment": "drop table without qualifier",
     "query": "drop table unsharded_a",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "drop table unsharded_a",
       "Instructions": {
@@ -404,6 +525,7 @@
     "comment": "Drop view",
     "query": "drop view main.a",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "drop view main.a",
       "Instructions": {
@@ -423,6 +545,7 @@
     "comment": "Truncate table with qualifier",
     "query": "truncate user.user_extra",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "truncate user.user_extra",
       "Instructions": {
@@ -442,6 +565,7 @@
     "comment": "Rename table",
     "query": "rename table a to main.b",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "rename table a to main.b",
       "Instructions": {
@@ -462,6 +586,7 @@
     "comment": "CREATE temp TABLE",
     "query": "create temporary table a(id int)",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create temporary table a(id int)",
       "Instructions": {
@@ -482,6 +607,7 @@
     "comment": "DROP temp TABLE",
     "query": "drop temporary table a",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "drop temporary table a",
       "Instructions": {
@@ -502,6 +628,7 @@
     "comment": "create table with function as a default value",
     "query": "create table function_default (x varchar(25) DEFAULT (TRIM(' check ')))",
     "plan": {
+      "Type": "DirectDDL",
       "QueryType": "DDL",
       "Original": "create table function_default (x varchar(25) DEFAULT (TRIM(' check ')))",
       "Instructions": {

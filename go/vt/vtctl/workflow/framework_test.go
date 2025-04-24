@@ -272,13 +272,15 @@ type testTMClient struct {
 	createVReplicationWorkflowRequests map[uint32]*createVReplicationWorkflowRequestResponse
 	readVReplicationWorkflowRequests   map[uint32]*readVReplicationWorkflowRequestResponse
 	updateVReplicationWorklowsRequests map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest
+	updateVReplicationWorklowRequests  map[uint32]*updateVReplicationWorkflowRequestResponse
 	applySchemaRequests                map[uint32][]*applySchemaRequestResponse
 	primaryPositions                   map[uint32]string
 	vdiffRequests                      map[uint32]*vdiffRequestResponse
 	refreshStateErrors                 map[uint32]error
 
 	// Stack of ReadVReplicationWorkflowsResponse to return, in order, for each shard
-	readVReplicationWorkflowsResponses map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse
+	readVReplicationWorkflowsResponses       map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse
+	validateVReplicationPermissionsResponses map[uint32]*validateVReplicationPermissionsResponse
 
 	env     *testEnv    // For access to the env config from tmc methods.
 	reverse atomic.Bool // Are we reversing traffic?
@@ -296,6 +298,7 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		createVReplicationWorkflowRequests: make(map[uint32]*createVReplicationWorkflowRequestResponse),
 		readVReplicationWorkflowRequests:   make(map[uint32]*readVReplicationWorkflowRequestResponse),
 		updateVReplicationWorklowsRequests: make(map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest),
+		updateVReplicationWorklowRequests:  make(map[uint32]*updateVReplicationWorkflowRequestResponse),
 		applySchemaRequests:                make(map[uint32][]*applySchemaRequestResponse),
 		readVReplicationWorkflowsResponses: make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse),
 		primaryPositions:                   make(map[uint32]string),
@@ -519,6 +522,17 @@ func (tmc *testTMClient) expectApplySchemaRequest(tabletID uint32, req *applySch
 	tmc.applySchemaRequests[tabletID] = append(tmc.applySchemaRequests[tabletID], req)
 }
 
+func (tmc *testTMClient) expectValidateVReplicationPermissionsResponse(tabletID uint32, req *validateVReplicationPermissionsResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	if tmc.validateVReplicationPermissionsResponses == nil {
+		tmc.validateVReplicationPermissionsResponses = make(map[uint32]*validateVReplicationPermissionsResponse)
+	}
+
+	tmc.validateVReplicationPermissionsResponses[tabletID] = req
+}
+
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
 func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	tmc.mu.Lock()
@@ -576,6 +590,17 @@ type applySchemaRequestResponse struct {
 	change *tmutils.SchemaChange
 	res    *tabletmanagerdatapb.SchemaChangeResult
 	err    error
+}
+
+type updateVReplicationWorkflowRequestResponse struct {
+	req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest
+	res *tabletmanagerdatapb.UpdateVReplicationWorkflowResponse
+	err error
+}
+
+type validateVReplicationPermissionsResponse struct {
+	res *tabletmanagerdatapb.ValidateVReplicationPermissionsResponse
+	err error
 }
 
 func (tmc *testTMClient) expectVDiffRequest(tablet *topodatapb.Tablet, vrr *vdiffRequestResponse) {
@@ -692,6 +717,15 @@ func (tmc *testTMClient) ReadVReplicationWorkflows(ctx context.Context, tablet *
 }
 
 func (tmc *testTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	if expect := tmc.updateVReplicationWorklowRequests[tablet.Alias.Uid]; expect != nil {
+		if !proto.Equal(expect.req, req) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ReadVReplicationWorkflow request on tablet %s: got %+v, want %+v",
+				topoproto.TabletAliasString(tablet.Alias), req, expect)
+		}
+		return expect.res, expect.err
+	}
 	return &tabletmanagerdatapb.UpdateVReplicationWorkflowResponse{
 		Result: &querypb.QueryResult{
 			RowsAffected: 1,
@@ -713,6 +747,11 @@ func (tmc *testTMClient) UpdateVReplicationWorkflows(ctx context.Context, tablet
 }
 
 func (tmc *testTMClient) ValidateVReplicationPermissions(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	if resp, ok := tmc.validateVReplicationPermissionsResponses[tablet.Alias.Uid]; ok {
+		return resp.res, resp.err
+	}
 	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
 		User: "vt_filtered",
 		Ok:   true,
@@ -775,6 +814,12 @@ func (tmc *testTMClient) AddUpdateVReplicationRequests(tabletUID uint32, req *ta
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 	tmc.updateVReplicationWorklowsRequests[tabletUID] = req
+}
+
+func (tmc *testTMClient) AddUpdateVReplicationWorkflowRequestResponse(tabletUID uint32, reqres *updateVReplicationWorkflowRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	tmc.updateVReplicationWorklowRequests[tabletUID] = reqres
 }
 
 func (tmc *testTMClient) getVReplicationWorkflowsResponse(key string) *tabletmanagerdatapb.ReadVReplicationWorkflowsResponse {

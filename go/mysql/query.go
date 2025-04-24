@@ -44,6 +44,9 @@ const (
 	// This is different than specifying `0`, because `0` means "expect zero results", while this means
 	// "do not attempt to read any results into memory".
 	FETCH_NO_ROWS = math.MinInt
+
+	// FETCH_ALL_ROWS used as `maxrows` in `ExecuteFetch` and related functions, to indicate all rows should be fetched.
+	FETCH_ALL_ROWS = -1
 )
 
 //
@@ -339,7 +342,9 @@ func (c *Conn) drainMoreResults(more bool, err error) error {
 	for more {
 		var moreErr error
 		_, more, _, moreErr = c.ReadQueryResult(FETCH_NO_ROWS, false)
-		err = errors.Join(err, moreErr)
+		if moreErr != nil {
+			err = errors.Join(err, moreErr)
+		}
 	}
 	return err
 }
@@ -504,7 +509,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		}
 
 		// Check we're not over the limit before we add more.
-		if len(result.Rows) == maxrows {
+		if maxrows != FETCH_ALL_ROWS && len(result.Rows) == maxrows {
 			c.recycleReadPacket()
 			if err := c.drainResults(); err != nil {
 				return nil, false, 0, err
@@ -628,7 +633,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 	newParamsBoundFlag, pos, ok := readByte(payload, pos)
 	if ok && newParamsBoundFlag == 0x01 {
 		var mysqlType, flags byte
-		for i := range uint16(prepare.ParamsCount) {
+		for i := range prepare.ParamsCount {
 			mysqlType, pos, ok = readByte(payload, pos)
 			if !ok {
 				return stmtID, 0, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "reading parameter type failed")
@@ -649,7 +654,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 		}
 	}
 
-	for i := range len(prepare.ParamsType) {
+	for i := range prepare.ParamsCount {
 		var val sqltypes.Value
 		parameterID := fmt.Sprintf("v%d", i+1)
 		if v, ok := prepare.BindVars[parameterID]; ok {
@@ -1159,7 +1164,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 	}
 
 	for i, field := range fld {
-		field.Name = strings.Replace(field.Name, "'?'", "?", -1)
+		field.Name = strings.ReplaceAll(field.Name, "'?'", "?")
 		prepare.ColumnNames[i] = field.Name
 		if err := c.writeColumnDefinition(field); err != nil {
 			return err

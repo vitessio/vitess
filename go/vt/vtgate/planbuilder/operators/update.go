@@ -186,7 +186,7 @@ func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Up
 		colsList = append(colsList, from.cols)
 		uList = append(uList, from.updList)
 		for _, col := range from.cols {
-			selectStmt.SelectExprs = append(selectStmt.SelectExprs, aeWrap(col))
+			selectStmt.AddSelectExpr(aeWrap(col))
 		}
 		return from.op
 	})
@@ -543,7 +543,7 @@ func addColumns(ctx *plancontext.PlanningContext, columns sqlparser.Columns, exp
 // For an update query having non-literal updates, we add the updated expression and a comparison expression to the select query.
 // For example, for a query like `update fk_table set col = id * 100 + 1`
 // We would add the expression `id * 100 + 1` and the comparison expression `col <=> id * 100 + 1` to the select query.
-func addNonLiteralUpdExprToSelect(ctx *plancontext.PlanningContext, updatedTable *vindexes.Table, updExpr *sqlparser.UpdateExpr, exprs []sqlparser.SelectExpr) (engine.NonLiteralUpdateInfo, []sqlparser.SelectExpr) {
+func addNonLiteralUpdExprToSelect(ctx *plancontext.PlanningContext, updatedTable *vindexes.BaseTable, updExpr *sqlparser.UpdateExpr, exprs []sqlparser.SelectExpr) (engine.NonLiteralUpdateInfo, []sqlparser.SelectExpr) {
 	// Create the comparison expression.
 	castedExpr := getCastedUpdateExpression(updatedTable, updExpr)
 	compExpr := sqlparser.NewComparisonExpr(sqlparser.NullSafeEqualOp, updExpr.Name, castedExpr, nil)
@@ -572,7 +572,7 @@ func addNonLiteralUpdExprToSelect(ctx *plancontext.PlanningContext, updatedTable
 	return info, exprs
 }
 
-func getCastedUpdateExpression(updatedTable *vindexes.Table, updExpr *sqlparser.UpdateExpr) sqlparser.Expr {
+func getCastedUpdateExpression(updatedTable *vindexes.BaseTable, updExpr *sqlparser.UpdateExpr) sqlparser.Expr {
 	castTypeStr := getCastTypeForColumn(updatedTable, updExpr)
 	if castTypeStr == "" {
 		return updExpr.Expr
@@ -585,7 +585,7 @@ func getCastedUpdateExpression(updatedTable *vindexes.Table, updExpr *sqlparser.
 	}
 }
 
-func getCastTypeForColumn(updatedTable *vindexes.Table, updExpr *sqlparser.UpdateExpr) string {
+func getCastTypeForColumn(updatedTable *vindexes.BaseTable, updExpr *sqlparser.UpdateExpr) string {
 	var ty querypb.Type
 	for _, column := range updatedTable.Columns {
 		if updExpr.Name.Name.Equal(column.Name) {
@@ -616,7 +616,7 @@ func getCastTypeForColumn(updatedTable *vindexes.Table, updExpr *sqlparser.Updat
 }
 
 // createFkChildForUpdate creates the update query operator for the child table based on the foreign key constraints.
-func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, selectOffsets []int, nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo, updatedTable *vindexes.Table) *FkChild {
+func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, selectOffsets []int, nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo, updatedTable *vindexes.BaseTable) *FkChild {
 	// Create a ValTuple of child column names
 	var valTuple sqlparser.ValTuple
 	for _, column := range fk.ChildColumns {
@@ -660,7 +660,7 @@ func createFkChildForUpdate(ctx *plancontext.PlanningContext, fk vindexes.ChildF
 // The query looks like this -
 //
 //	`UPDATE <child_table> SET <child_column_updated_using_update_exprs_from_parent_update_query> WHERE <child_columns_in_fk> IN (<bind variable for the output from SELECT>)`
-func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, childWhereExpr sqlparser.Expr, nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo, updatedTable *vindexes.Table) Operator {
+func buildChildUpdOpForCascade(ctx *plancontext.PlanningContext, fk vindexes.ChildFKInfo, childWhereExpr sqlparser.Expr, nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo, updatedTable *vindexes.BaseTable) Operator {
 	// The update expressions are the same as the update expressions in the parent update query
 	// with the column names replaced with the child column names.
 	var childUpdateExprs sqlparser.UpdateExprs
@@ -708,7 +708,7 @@ func buildChildUpdOpForSetNull(
 	fk vindexes.ChildFKInfo,
 	childWhereExpr sqlparser.Expr,
 	nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo,
-	updatedTable *vindexes.Table,
+	updatedTable *vindexes.BaseTable,
 ) Operator {
 	// For the SET NULL type constraint, we need to set all the child columns to NULL.
 	var childUpdateExprs sqlparser.UpdateExprs
@@ -769,7 +769,7 @@ func createFKVerifyOp(
 	updStmt *sqlparser.Update,
 	parentFks []vindexes.ParentFKInfo,
 	restrictChildFks []vindexes.ChildFKInfo,
-	updatedTable *vindexes.Table,
+	updatedTable *vindexes.BaseTable,
 ) Operator {
 	if len(parentFks) == 0 && len(restrictChildFks) == 0 {
 		return childOp
@@ -811,7 +811,7 @@ func createFKVerifyOp(
 // where Parent.p1 is null and Parent.p2 is null and Child.id = 1 and Child.c2 + 1 is not null
 // and Child.c2 is not null and not ((Child.c1) <=> (Child.c2 + 1))
 // limit 1
-func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updatedTable *vindexes.Table, updStmt *sqlparser.Update, pFK vindexes.ParentFKInfo) Operator {
+func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, updatedTable *vindexes.BaseTable, updStmt *sqlparser.Update, pFK vindexes.ParentFKInfo) Operator {
 	childTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	childTbl, err := childTblExpr.TableName()
 	if err != nil {
@@ -889,7 +889,7 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, upda
 		whereCond = &sqlparser.AndExpr{Left: whereCond, Right: prefixColNames(ctx, childTbl, updStmt.Where.Expr)}
 	}
 	return createSelectionOp(ctx,
-		sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
+		[]sqlparser.SelectExpr{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
 		[]sqlparser.TableExpr{
 			sqlparser.NewJoinTableExpr(
 				childTblExpr,
@@ -903,14 +903,14 @@ func createFkVerifyOpForParentFKForUpdate(ctx *plancontext.PlanningContext, upda
 		getVerifyLock(updatedTable))
 }
 
-func getVerifyLock(vTbl *vindexes.Table) sqlparser.Lock {
+func getVerifyLock(vTbl *vindexes.BaseTable) sqlparser.Lock {
 	if len(vTbl.UniqueKeys) > 0 {
 		return sqlparser.ForShareLockNoWait
 	}
 	return sqlparser.ForShareLock
 }
 
-func getUpdateLock(vTbl *vindexes.Table) sqlparser.Lock {
+func getUpdateLock(vTbl *vindexes.BaseTable) sqlparser.Lock {
 	if len(vTbl.UniqueKeys) > 0 {
 		return sqlparser.ForUpdateLockNoWait
 	}
@@ -925,7 +925,7 @@ func getUpdateLock(vTbl *vindexes.Table) sqlparser.Lock {
 // verify query:
 // select 1 from Child join Parent on Parent.p1 = Child.c1 and Parent.p2 = Child.c2
 // where Parent.id = 1 and ((Parent.col + 1) IS NULL OR (child.c1) NOT IN ((Parent.col + 1))) limit 1
-func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updatedTable *vindexes.Table, updStmt *sqlparser.Update, cFk vindexes.ChildFKInfo) Operator {
+func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updatedTable *vindexes.BaseTable, updStmt *sqlparser.Update, cFk vindexes.ChildFKInfo) Operator {
 	// ON UPDATE RESTRICT foreign keys that require validation, should only be allowed in the case where we
 	// are verifying all the FKs on vtgate level.
 	if !ctx.VerifyAllFKs {
@@ -973,7 +973,7 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updat
 	}
 
 	return createSelectionOp(ctx,
-		sqlparser.SelectExprs{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
+		[]sqlparser.SelectExpr{sqlparser.NewAliasedExpr(sqlparser.NewIntLiteral("1"), "")},
 		[]sqlparser.TableExpr{
 			sqlparser.NewJoinTableExpr(
 				parentTblExpr,
@@ -992,7 +992,7 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updat
 // `:v1 IS NULL OR :v2 IS NULL OR (cola, colb) NOT IN ((:v1,:v2))`
 // So, if either of :v1 or :v2 is NULL, then the entire condition is true (which is the same as not having the condition when :v1 or :v2 is NULL)
 // This expression is used in cascading SET NULLs and in verifying whether an update should be restricted.
-func nullSafeNotInComparison(ctx *plancontext.PlanningContext, updatedTable *vindexes.Table, updateExprs sqlparser.UpdateExprs, cFk vindexes.ChildFKInfo, parentTbl sqlparser.TableName, nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo, appendQualifier bool) sqlparser.Expr {
+func nullSafeNotInComparison(ctx *plancontext.PlanningContext, updatedTable *vindexes.BaseTable, updateExprs sqlparser.UpdateExprs, cFk vindexes.ChildFKInfo, parentTbl sqlparser.TableName, nonLiteralUpdateInfo []engine.NonLiteralUpdateInfo, appendQualifier bool) sqlparser.Expr {
 	var valTuple sqlparser.ValTuple
 	var updateValues sqlparser.ValTuple
 	for idx, updateExpr := range updateExprs {
@@ -1031,7 +1031,7 @@ func nullSafeNotInComparison(ctx *plancontext.PlanningContext, updatedTable *vin
 func buildChangedVindexesValues(
 	ctx *plancontext.PlanningContext,
 	update *sqlparser.Update,
-	table *vindexes.Table,
+	table *vindexes.BaseTable,
 	ksidCols []sqlparser.IdentifierCI,
 	assignments []SetExpr,
 ) (changedVindexes map[string]*engine.VindexValues, ovq *sqlparser.Select, subQueriesArgOnChangedVindex []string) {
@@ -1056,7 +1056,7 @@ func buildChangedVindexesValues(
 		}
 
 		// Checks done, let's actually add the expressions and the vindex map
-		selExprs = append(selExprs, aeWrap(sqlparser.AndExpressions(compExprs...)))
+		selExprs.Exprs = append(selExprs.Exprs, aeWrap(sqlparser.AndExpressions(compExprs...)))
 		changedVindexes[vindex.Name] = &engine.VindexValues{
 			EvalExprMap: vindexValueMap,
 			Offset:      offset,
@@ -1076,16 +1076,16 @@ func buildChangedVindexesValues(
 	return changedVindexes, ovq, subQueriesArgOnChangedVindex
 }
 
-func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (sqlparser.SelectExprs, int) {
-	var selExprs sqlparser.SelectExprs
+func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.BaseTable) (*sqlparser.SelectExprs, int) {
+	selExprs := new(sqlparser.SelectExprs)
 	offset := 0
 	for _, col := range ksidCols {
-		selExprs = append(selExprs, aeWrap(sqlparser.NewColName(col.String())))
+		selExprs.Exprs = append(selExprs.Exprs, aeWrap(sqlparser.NewColName(col.String())))
 		offset++
 	}
 	for _, cv := range table.Owned {
 		for _, column := range cv.Columns {
-			selExprs = append(selExprs, aeWrap(sqlparser.NewColName(column.String())))
+			selExprs.Exprs = append(selExprs.Exprs, aeWrap(sqlparser.NewColName(column.String())))
 			offset++
 		}
 	}

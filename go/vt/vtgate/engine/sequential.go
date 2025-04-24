@@ -21,14 +21,14 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Sequential Primitive is used to execute DML statements in a fixed order.
 // Any failure, stops the execution and returns.
 type Sequential struct {
 	txNeeded
+	noFields
+
 	Sources []Primitive
 }
 
@@ -39,29 +39,6 @@ func NewSequential(Sources []Primitive) *Sequential {
 	return &Sequential{
 		Sources: Sources,
 	}
-}
-
-// RouteType returns a description of the query routing type used by the primitive
-func (s *Sequential) RouteType() string {
-	return "Sequential"
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to
-func (s *Sequential) GetKeyspaceName() string {
-	res := s.Sources[0].GetKeyspaceName()
-	for i := 1; i < len(s.Sources); i++ {
-		res = formatTwoOptionsNicely(res, s.Sources[i].GetKeyspaceName())
-	}
-	return res
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (s *Sequential) GetTableName() string {
-	res := s.Sources[0].GetTableName()
-	for i := 1; i < len(s.Sources); i++ {
-		res = formatTwoOptionsNicely(res, s.Sources[i].GetTableName())
-	}
-	return res
 }
 
 // TryExecute performs a non-streaming exec.
@@ -92,16 +69,11 @@ func (s *Sequential) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	return callback(qr)
 }
 
-// GetFields fetches the field info.
-func (s *Sequential) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code for Sequential engine")
-}
-
 // Inputs returns the input primitives for this
 func (s *Sequential) Inputs() ([]Primitive, []map[string]any) {
 	return s.Sources, nil
 }
 
 func (s *Sequential) description() PrimitiveDescription {
-	return PrimitiveDescription{OperatorType: s.RouteType()}
+	return PrimitiveDescription{OperatorType: "Sequential"}
 }

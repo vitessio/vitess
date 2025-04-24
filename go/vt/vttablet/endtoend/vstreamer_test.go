@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -472,9 +471,7 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 }
 
 func encodeString(in string) string {
-	buf := bytes.NewBuffer(nil)
-	sqltypes.NewVarChar(in).EncodeSQL(buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }
 
 func validateSchemaInserted(client *framework.QueryClient, ddl string) bool {

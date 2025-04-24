@@ -29,6 +29,18 @@ import (
 // ErrShardNotFound is a fixed error message used when a shard is not found in the database.
 var ErrShardNotFound = errors.New("shard not found")
 
+// ReadShardNames reads the names of vitess shards for a single keyspace.
+func ReadShardNames(keyspaceName string) (shardNames []string, err error) {
+	shardNames = make([]string, 0)
+	query := `select shard from vitess_shard where keyspace = ?`
+	args := sqlutils.Args(keyspaceName)
+	err = db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
+		shardNames = append(shardNames, row.GetString("shard"))
+		return nil
+	})
+	return shardNames, err
+}
+
 // ReadShardPrimaryInformation reads the vitess shard record and gets the shard primary alias and timestamp.
 func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias string, primaryTimestamp string, err error) {
 	if err = topo.ValidateKeyspaceName(keyspaceName); err != nil {
@@ -94,4 +106,17 @@ func getShardPrimaryTermStartTimeString(shard *topo.ShardInfo) string {
 		return ""
 	}
 	return protoutil.TimeFromProto(shard.PrimaryTermStartTime).UTC().String()
+}
+
+// DeleteShard deletes a shard using a keyspace and shard name.
+func DeleteShard(keyspace, shard string) error {
+	_, err := db.ExecVTOrc(`DELETE FROM
+			vitess_shard
+		WHERE
+			keyspace = ?
+			AND shard = ?`,
+		keyspace,
+		shard,
+	)
+	return err
 }

@@ -109,7 +109,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
-	_, err := qe.GetPlan(ctx, logStats, "", false)
+	_, err := qe.GetPlan(ctx, logStats, "", false, false)
 	require.EqualError(t, err, "Query was empty")
 }
 
@@ -199,10 +199,8 @@ func TestQueryPlanCache(t *testing.T) {
 
 	initialHits := qe.queryEnginePlanCacheHits.Get()
 	initialMisses := qe.queryEnginePlanCacheMisses.Get()
-	initialHitsDeprecated := qe.queryCacheHitsDeprecated.Get()
-	initialMissesDeprecated := qe.queryCacheMissesDeprecated.Get()
 
-	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
+	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false)
 	require.NoError(t, err)
 	require.NotNil(t, firstPlan, "plan should not be nil")
 
@@ -211,10 +209,7 @@ func TestQueryPlanCache(t *testing.T) {
 	require.Equal(t, int64(0), qe.queryEnginePlanCacheHits.Get()-initialHits)
 	require.Equal(t, int64(1), qe.queryEnginePlanCacheMisses.Get()-initialMisses)
 
-	require.Equal(t, int64(0), qe.queryCacheHitsDeprecated.Get()-initialHitsDeprecated)
-	require.Equal(t, int64(1), qe.queryCacheMissesDeprecated.Get()-initialMissesDeprecated)
-
-	secondPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
+	secondPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false)
 	require.NoError(t, err)
 	require.NotNil(t, secondPlan, "plan should not be nil")
 
@@ -222,9 +217,6 @@ func TestQueryPlanCache(t *testing.T) {
 
 	require.Equal(t, int64(1), qe.queryEnginePlanCacheHits.Get()-initialHits)
 	require.Equal(t, int64(1), qe.queryEnginePlanCacheMisses.Get()-initialMisses)
-
-	require.Equal(t, int64(1), qe.queryCacheHitsDeprecated.Get()-initialHitsDeprecated)
-	require.Equal(t, int64(1), qe.queryCacheMissesDeprecated.Get()-initialMissesDeprecated)
 
 	qe.ClearQueryPlanCache()
 }
@@ -246,13 +238,9 @@ func TestNoQueryPlanCache(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
-	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if firstPlan == nil {
-		t.Fatalf("plan should not be nil")
-	}
+	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true, false)
+	require.NoError(t, err)
+	require.NotNil(t, firstPlan, "plan should not be nil")
 	assertPlanCacheSize(t, qe, 0)
 	qe.ClearQueryPlanCache()
 }
@@ -275,13 +263,9 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
-	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if firstPlan == nil {
-		t.Fatalf("plan should not be nil")
-	}
+	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false)
+	require.NoError(t, err)
+	require.NotNil(t, firstPlan, "plan should not be nil")
 	assertPlanCacheSize(t, qe, 0)
 	qe.ClearQueryPlanCache()
 }
@@ -370,7 +354,7 @@ func TestStatsURL(t *testing.T) {
 	// warm up cache
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
-	qe.GetPlan(ctx, logStats, query, false)
+	qe.GetPlan(ctx, logStats, query, false, false)
 
 	request, _ := http.NewRequest("GET", "/debug/tablet_plans", nil)
 	response := httptest.NewRecorder()
@@ -471,7 +455,7 @@ func BenchmarkPlanCacheThroughput(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.IntN(500))
-		_, err := qe.GetPlan(ctx, logStats, query, false)
+		_, err := qe.GetPlan(ctx, logStats, query, false, false)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -501,7 +485,7 @@ func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, par int) {
 
 		for pb.Next() {
 			query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.IntN(500))
-			_, err := qe.GetPlan(ctx, logStats, query, false)
+			_, err := qe.GetPlan(ctx, logStats, query, false, false)
 			require.NoErrorf(b, err, "bad query: %s", query)
 		}
 	})
@@ -616,7 +600,7 @@ func TestPlanCachePollution(t *testing.T) {
 			query := sample()
 
 			start := time.Now()
-			_, err := qe.GetPlan(ctx, logStats, query, false)
+			_, err := qe.GetPlan(ctx, logStats, query, false, false)
 			require.NoErrorf(t, err, "bad query: %s", query)
 			stats.interval += time.Since(start)
 

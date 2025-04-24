@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ limitations under the License.
 
 package integration
 
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteAST(parent AST, node AST, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -46,11 +47,15 @@ func (a *application) rewriteAST(parent AST, node AST, replacer replacerFunc) bo
 		return a.rewriteValueContainer(parent, node, replacer)
 	case ValueSliceContainer:
 		return a.rewriteValueSliceContainer(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteBytes(parent AST, node Bytes, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -61,9 +66,8 @@ func (a *application) rewriteBytes(parent AST, node Bytes, replacer replacerFunc
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(Bytes)
 			a.cur.revisit = false
-			return a.rewriteBytes(parent, node, replacer)
+			return a.rewriteAST(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
@@ -81,12 +85,19 @@ func (a *application) rewriteBytes(parent AST, node Bytes, replacer replacerFunc
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteInterfaceContainer(parent AST, node InterfaceContainer, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -102,6 +113,8 @@ func (a *application) rewriteInterfaceContainer(parent AST, node InterfaceContai
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -112,15 +125,21 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(InterfaceSlice)
 			a.cur.revisit = false
-			return a.rewriteInterfaceSlice(parent, node, replacer)
+			return a.rewriteAST(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(InterfaceSliceOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteAST(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
 				parent.(InterfaceSlice)[idx] = newNode.(AST)
@@ -128,6 +147,9 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 		}(x)) {
 			return false
 		}
+	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -139,6 +161,8 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfLeaf(parent AST, node *Leaf, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -147,7 +171,12 @@ func (a *application) rewriteRefOfLeaf(parent AST, node *Leaf, replacer replacer
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -163,6 +192,8 @@ func (a *application) rewriteRefOfLeaf(parent AST, node *Leaf, replacer replacer
 	}
 	return true
 }
+
+// Function Generation Source: SliceMethod
 func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -173,15 +204,21 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 		a.cur.node = node
 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
-			node = a.cur.node.(LeafSlice)
 			a.cur.revisit = false
-			return a.rewriteLeafSlice(parent, node, replacer)
+			return a.rewriteAST(parent, a.cur.node, replacer)
 		}
 		if kontinue {
 			return true
 		}
 	}
 	for x, el := range node {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(LeafSliceOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
 				parent.(LeafSlice)[idx] = newNode.(*Leaf)
@@ -190,6 +227,9 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 			return false
 		}
 	}
+	if a.collectPaths && len(node) > 0 {
+		a.cur.current.Pop()
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -200,6 +240,8 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfNoCloneType(parent AST, node *NoCloneType, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -208,7 +250,12 @@ func (a *application) rewriteRefOfNoCloneType(parent AST, node *NoCloneType, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -224,6 +271,8 @@ func (a *application) rewriteRefOfNoCloneType(parent AST, node *NoCloneType, rep
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRefContainer(parent AST, node *RefContainer, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -232,19 +281,34 @@ func (a *application) rewriteRefOfRefContainer(parent AST, node *RefContainer, r
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfRefContainerASTType))
 	}
 	if !a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 		parent.(*RefContainer).ASTType = newNode.(AST)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfRefContainerASTImplementationType))
+	}
 	if !a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
 		parent.(*RefContainer).ASTImplementationType = newNode.(*Leaf)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -256,6 +320,8 @@ func (a *application) rewriteRefOfRefContainer(parent AST, node *RefContainer, r
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceContainer, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -264,11 +330,23 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
 	for x, el := range node.ASTElements {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfRefSliceContainerASTElementsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteAST(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
 				parent.(*RefSliceContainer).ASTElements[idx] = newNode.(AST)
@@ -277,7 +355,17 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 			return false
 		}
 	}
+	if a.collectPaths && len(node.ASTElements) > 0 {
+		a.cur.current.Pop()
+	}
 	for x, el := range node.ASTImplementationElements {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfRefSliceContainerASTImplementationElementsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
 				parent.(*RefSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
@@ -286,6 +374,9 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 			return false
 		}
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -296,6 +387,8 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -304,15 +397,26 @@ func (a *application) rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfSubImplinner))
 	}
 	if !a.rewriteSubIface(node, node.inner, func(newNode, parent AST) {
 		parent.(*SubImpl).inner = newNode.(SubIface)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -323,24 +427,41 @@ func (a *application) rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer re
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteValueContainer(parent AST, node ValueContainer, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(ValueContainerASTType))
 	}
 	if !a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 		panic("[BUG] tried to replace 'ASTType' on 'ValueContainer'")
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(ValueContainerASTImplementationType))
+	}
 	if !a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
 		panic("[BUG] tried to replace 'ASTImplementationType' on 'ValueContainer'")
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -352,28 +473,47 @@ func (a *application) rewriteValueContainer(parent AST, node ValueContainer, rep
 	}
 	return true
 }
+
+// Function Generation Source: StructMethod
 func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceContainer, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
-	for _, el := range node.ASTElements {
+	for x, el := range node.ASTElements {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(ValueSliceContainerASTElementsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteAST(node, el, func(newNode, parent AST) {
 			panic("[BUG] tried to replace 'ASTElements' on 'ValueSliceContainer'")
 		}) {
 			return false
 		}
 	}
-	for _, el := range node.ASTImplementationElements {
-		if !a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
-			panic("[BUG] tried to replace 'ASTImplementationElements' on 'ValueSliceContainer'")
-		}) {
-			return false
-		}
+	if a.collectPaths && len(node.ASTElements) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(ValueSliceContainerASTImplementationElements))
+	}
+	if !a.rewriteLeafSlice(node, node.ASTImplementationElements, func(newNode, parent AST) {
+		panic("[BUG] tried to replace 'ASTImplementationElements' on 'ValueSliceContainer'")
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -385,6 +525,8 @@ func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceCont
 	}
 	return true
 }
+
+// Function Generation Source: InterfaceMethod
 func (a *application) rewriteSubIface(parent AST, node SubIface, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -392,17 +534,26 @@ func (a *application) rewriteSubIface(parent AST, node SubIface, replacer replac
 	switch node := node.(type) {
 	case *SubImpl:
 		return a.rewriteRefOfSubImpl(parent, node, replacer)
+	case Visitable:
+		return a.rewriteVisitable(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
 	}
 }
+
+// Function Generation Source: BasicMethod
 func (a *application) rewriteBasicType(parent AST, node BasicType, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -418,6 +569,8 @@ func (a *application) rewriteBasicType(parent AST, node BasicType, replacer repl
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfInterfaceContainer(parent AST, node *InterfaceContainer, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -426,7 +579,12 @@ func (a *application) rewriteRefOfInterfaceContainer(parent AST, node *Interface
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -442,6 +600,8 @@ func (a *application) rewriteRefOfInterfaceContainer(parent AST, node *Interface
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfValueContainer(parent AST, node *ValueContainer, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -450,19 +610,34 @@ func (a *application) rewriteRefOfValueContainer(parent AST, node *ValueContaine
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfValueContainerASTType))
 	}
 	if !a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 		parent.(*ValueContainer).ASTType = newNode.(AST)
 	}) {
 		return false
 	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfValueContainerASTImplementationType))
+	}
 	if !a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
 		parent.(*ValueContainer).ASTImplementationType = newNode.(*Leaf)
 	}) {
 		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -474,6 +649,8 @@ func (a *application) rewriteRefOfValueContainer(parent AST, node *ValueContaine
 	}
 	return true
 }
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSliceContainer, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -482,11 +659,23 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
 	for x, el := range node.ASTElements {
+		if a.collectPaths {
+			if x == 0 {
+				a.cur.current.AddStepWithOffset(uint16(RefOfValueSliceContainerASTElementsOffset))
+			} else {
+				a.cur.current.ChangeOffset(x)
+			}
+		}
 		if !a.rewriteAST(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent AST) {
 				parent.(*ValueSliceContainer).ASTElements[idx] = newNode.(AST)
@@ -495,14 +684,52 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 			return false
 		}
 	}
-	for x, el := range node.ASTImplementationElements {
-		if !a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
-			return func(newNode, parent AST) {
-				parent.(*ValueSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
-			}
-		}(x)) {
+	if a.collectPaths && len(node.ASTElements) > 0 {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfValueSliceContainerASTImplementationElements))
+	}
+	if !a.rewriteLeafSlice(node, node.ASTImplementationElements, func(newNode, parent AST) {
+		parent.(*ValueSliceContainer).ASTImplementationElements = newNode.(LeafSlice)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
 			return false
 		}
+	}
+	return true
+}
+func (a *application) rewriteVisitable(parent AST, node Visitable, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteAST(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(VisitableInner))
+	}
+	if !a.rewriteAST(node, node.VisitThis(), func(newNode, parent AST) {
+		panic("[BUG] tried to replace 'VisitThis' on 'Visitable'")
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer

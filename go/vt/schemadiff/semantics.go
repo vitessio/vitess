@@ -38,19 +38,19 @@ var _ semantics.SchemaInformation = (*declarativeSchemaInformation)(nil)
 // declarativeSchemaInformation is a utility wrapper around FakeSI, and adds a few utility functions
 // to make it more simple and accessible to schemadiff's logic.
 type declarativeSchemaInformation struct {
-	Tables map[string]*vindexes.Table
+	Tables map[string]*vindexes.BaseTable
 	env    *Environment
 }
 
 func newDeclarativeSchemaInformation(env *Environment) *declarativeSchemaInformation {
 	return &declarativeSchemaInformation{
-		Tables: make(map[string]*vindexes.Table),
+		Tables: make(map[string]*vindexes.BaseTable),
 		env:    env,
 	}
 }
 
 // FindTableOrVindex implements the SchemaInformation interface
-func (si *declarativeSchemaInformation) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+func (si *declarativeSchemaInformation) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
 	table := si.Tables[tablename.Name.String()]
 	return table, nil, "", 0, nil, nil
 }
@@ -86,7 +86,7 @@ func (si *declarativeSchemaInformation) FindMirrorRule(tablename sqlparser.Table
 
 // addTable adds a fake table with an empty column list
 func (si *declarativeSchemaInformation) addTable(tableName string) {
-	tbl := &vindexes.Table{
+	tbl := &vindexes.BaseTable{
 		Name:                    sqlparser.NewIdentifierCS(tableName),
 		Columns:                 []vindexes.Column{},
 		ColumnListAuthoritative: true,

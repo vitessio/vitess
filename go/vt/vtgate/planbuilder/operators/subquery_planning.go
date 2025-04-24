@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -148,30 +149,38 @@ func mergeSubqueryExpr(ctx *plancontext.PlanningContext, pe *ProjExpr) {
 
 func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpression, expr sqlparser.Expr) (sqlparser.Expr, bool) {
 	rewritten := false
-	for _, sq := range se {
-		for _, sq2 := range ctx.MergedSubqueries {
-			if sq.originalSubquery == sq2 {
-				expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-					switch expr := cursor.Node().(type) {
-					case *sqlparser.ColName:
-						if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
+
+	merged := true
+	for merged {
+		// we need to keep rewriting the expression until we can't find any more subqueries to merge
+		// this is because we might have subqueries inside subqueries, and we need to merge them all
+		merged = false
+		for _, sq := range se {
+			for _, sq2 := range ctx.MergedSubqueries {
+				if sq.originalSubquery == sq2 {
+					expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+						switch expr := cursor.Node().(type) {
+						case *sqlparser.ColName:
+							if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
+								return true
+							}
+						case *sqlparser.Argument:
+							if expr.Name != sq.ArgName {
+								return true
+							}
+						default:
 							return true
 						}
-					case *sqlparser.Argument:
-						if expr.Name != sq.ArgName {
-							return true
+						rewritten = true
+						if sq.FilterType == opcode.PulloutExists {
+							cursor.Replace(&sqlparser.ExistsExpr{Subquery: sq.originalSubquery})
+						} else {
+							cursor.Replace(sq.originalSubquery)
 						}
-					default:
-						return true
-					}
-					rewritten = true
-					if sq.FilterType == opcode.PulloutExists {
-						cursor.Replace(&sqlparser.ExistsExpr{Subquery: sq.originalSubquery})
-					} else {
-						cursor.Replace(sq.originalSubquery)
-					}
-					return false
-				}).(sqlparser.Expr)
+						merged = true
+						return false
+					}).(sqlparser.Expr)
+				}
 			}
 		}
 	}
@@ -507,7 +516,7 @@ func tryMergeSubqueriesRecursively(
 		return outer, NoRewrite
 	}
 
-	op = Clone(op).(*Route)
+	op = Clone(op)
 	op.Source = outer.Source
 	var finalResult *ApplyResult
 	for _, subq := range inner.Inner {
@@ -577,7 +586,12 @@ type subqueryRouteMerger struct {
 	subq     *SubQuery
 }
 
-func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningContext, r1, r2 *ShardedRouting, old1, old2 *Route) *Route {
+func (s *subqueryRouteMerger) mergeShardedRouting(
+	ctx *plancontext.PlanningContext,
+	r1, r2 *ShardedRouting,
+	old1, old2 *Route,
+	conditions ...engine.Condition,
+) *Route {
 	tr := &ShardedRouting{
 		VindexPreds: append(r1.VindexPreds, r2.VindexPreds...),
 		keyspace:    r1.keyspace,
@@ -626,10 +640,12 @@ func (s *subqueryRouteMerger) mergeShardedRouting(ctx *plancontext.PlanningConte
 	}
 
 	routing := tr.resetRoutingLogic(ctx)
-	return s.merge(ctx, old1, old2, routing)
+	return s.merge(ctx, old1, old2, routing, conditions...)
 }
 
-func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing) *Route {
+func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing, conditions ...engine.Condition) *Route {
+	allCond := append(outer.Conditions, inner.Conditions...)
+	allCond = append(allCond, conditions...)
 	if !s.subq.TopLevel {
 		// if the subquery we are merging isn't a top level predicate, we can't use it for routing
 		return &Route{
@@ -638,6 +654,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 			Routing:       outer.Routing,
 			Ordering:      outer.Ordering,
 			ResultColumns: outer.ResultColumns,
+			Conditions:    allCond,
 		}
 	}
 	_, isSharded := r.(*ShardedRouting)
@@ -656,6 +673,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		Routing:       r,
 		Ordering:      s.outer.Ordering,
 		ResultColumns: s.outer.ResultColumns,
+		Conditions:    allCond,
 	}
 }
 

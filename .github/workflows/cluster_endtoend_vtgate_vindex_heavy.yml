@@ -167,6 +167,8 @@ jobs:
         slow-query-log=OFF
         EOF
         
+        # Some of these tests require specific locales to be installed.
+        # See https://github.com/cncf/automation/commit/49f2ad7a791a62ff7d038002bbb2b1f074eed5d5
         # run the tests however you normally do, then produce a JUnit XML file
         eatmydata -- go run test.go -docker=false -follow -shard vtgate_vindex_heavy | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 

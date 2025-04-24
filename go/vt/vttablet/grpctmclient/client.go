@@ -1124,7 +1124,7 @@ func (client *Client) PopulateReparentJournal(ctx context.Context, tablet *topod
 }
 
 // ReadReparentJournalInfo is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int, error) {
+func (client *Client) ReadReparentJournalInfo(ctx context.Context, tablet *topodatapb.Tablet) (int32, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return 0, err
@@ -1134,7 +1134,7 @@ func (client *Client) ReadReparentJournalInfo(ctx context.Context, tablet *topod
 	if err != nil {
 		return 0, err
 	}
-	return int(resp.Length), nil
+	return resp.Length, nil
 }
 
 // InitReplica is part of the tmclient.TabletManagerClient interface.

@@ -38,7 +38,7 @@ type SubQuery struct {
 	FilterType        opcode.PulloutOpcode // Type of subquery filter.
 	Original          sqlparser.Expr       // This is the expression we should use if we can merge the inner to the outer
 	originalSubquery  *sqlparser.Subquery  // Subquery representation, e.g., (SELECT foo from user LIMIT 1).
-	Predicates        sqlparser.Exprs      // Predicates joining outer and inner queries. Empty for uncorrelated subqueries.
+	Predicates        []sqlparser.Expr     // Predicates joining outer and inner queries. Empty for uncorrelated subqueries.
 	OuterPredicate    sqlparser.Expr       // This is the predicate that is using the subquery expression. It will not be empty for projections
 	ArgName           string               // This is the name of the ColName or Argument used to replace the subquery
 	TopLevel          bool                 // will be false if the subquery is deeply nested
@@ -125,7 +125,7 @@ func (sq *SubQuery) Clone(inputs []Operator) Operator {
 	}
 	klone.JoinColumns = slices.Clone(sq.JoinColumns)
 	klone.Vars = maps.Clone(sq.Vars)
-	klone.Predicates = sqlparser.Clone(sq.Predicates)
+	klone.Predicates = slices.Clone(sq.Predicates)
 	return &klone
 }
 
@@ -195,7 +195,7 @@ func (sq *SubQuery) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.Al
 	return sq.Outer.GetColumns(ctx)
 }
 
-func (sq *SubQuery) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (sq *SubQuery) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return sq.Outer.GetSelectExprs(ctx)
 }
 

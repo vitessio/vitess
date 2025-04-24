@@ -110,14 +110,21 @@ func trimmedRequestToError(received string) error {
 	}
 }
 
-func (c *errorClient) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (c *errorClient) Execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if err := requestToPartialError(sql, session); err != nil {
 		return session, nil, err
 	}
 	if err := requestToError(sql); err != nil {
 		return session, nil, err
 	}
-	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables)
+	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables, prepared)
 }
 
 func (c *errorClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
@@ -139,14 +146,26 @@ func (c *errorClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.
 	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
 }
 
-func (c *errorClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+// ExecuteMulti is part of the VTGateService interface
+func (c *errorClient) ExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
+	// Look at https://github.com/vitessio/vitess/pull/18059 for details on how to implement this.
+	panic("unimplemented")
+}
+
+// StreamExecuteMulti is part of the VTGateService interface
+func (c *errorClient) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
+	// Look at https://github.com/vitessio/vitess/pull/18059 for details on how to implement this.
+	panic("unimplemented")
+}
+
+func (c *errorClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
 	if err := requestToPartialError(sql, session); err != nil {
-		return session, nil, err
+		return session, nil, 0, err
 	}
 	if err := requestToError(sql); err != nil {
-		return session, nil, err
+		return session, nil, 0, err
 	}
-	return c.fallbackClient.Prepare(ctx, session, sql, bindVariables)
+	return c.fallbackClient.Prepare(ctx, session, sql)
 }
 
 func (c *errorClient) CloseSession(ctx context.Context, session *vtgatepb.Session) error {

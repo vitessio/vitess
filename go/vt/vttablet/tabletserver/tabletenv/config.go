@@ -75,6 +75,7 @@ var (
 	heartbeatInterval            time.Duration
 	heartbeatOnDemandDuration    time.Duration
 	healthCheckInterval          time.Duration
+	semiSyncMonitorInterval      time.Duration
 	degradedThreshold            time.Duration
 	unhealthyThreshold           time.Duration
 	transitionGracePeriod        time.Duration
@@ -203,12 +204,11 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&degradedThreshold, "degraded_threshold", defaultConfig.Healthcheck.DegradedThreshold, "replication lag after which a replica is considered degraded")
 	fs.DurationVar(&unhealthyThreshold, "unhealthy_threshold", defaultConfig.Healthcheck.UnhealthyThreshold, "replication lag after which a replica is considered unhealthy")
 	fs.DurationVar(&transitionGracePeriod, "serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
+	fs.DurationVar(&semiSyncMonitorInterval, "semi-sync-monitor-interval", defaultConfig.SemiSyncMonitor.Interval, "How frequently the semi-sync monitor checks if the primary is blocked on semi-sync ACKs")
 
 	fs.BoolVar(&enableReplicationReporter, "enable_replication_reporter", false, "Use polling to track replication lag.")
 	fs.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
 	fs.BoolVar(&currentConfig.SanitizeLogMessages, "sanitize_log_messages", false, "Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.")
-	_ = fs.Bool("queryserver-enable-settings-pool", true, "Enable pooling of connections with modified system settings")
-	_ = fs.MarkDeprecated("queryserver-enable-settings-pool", "New pool implementation does it internally and at the api level this has been enabled since v17")
 
 	fs.Int64Var(&currentConfig.RowStreamer.MaxInnoDBTrxHistLen, "vreplication_copy_phase_max_innodb_history_list_length", 1000000, "The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 	fs.Int64Var(&currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
@@ -216,6 +216,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
 
 	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
+	fs.BoolVar(&currentConfig.SkipUserMetrics, "skip-user-metrics", defaultConfig.SkipUserMetrics, "If true, user based stats are not recorded.")
 
 	fs.BoolVar(&currentConfig.Unmanaged, "unmanaged", false, "Indicates an unmanaged tablet, i.e. using an external mysql-compatible database")
 }
@@ -278,6 +279,7 @@ func Init() {
 	currentConfig.Healthcheck.DegradedThreshold = degradedThreshold
 	currentConfig.Healthcheck.UnhealthyThreshold = unhealthyThreshold
 	currentConfig.GracePeriods.Transition = transitionGracePeriod
+	currentConfig.SemiSyncMonitor.Interval = semiSyncMonitorInterval
 
 	logFormat := streamlog.GetQueryLogConfig().Format
 	switch logFormat {
@@ -316,6 +318,8 @@ type TabletConfig struct {
 
 	Healthcheck  HealthcheckConfig  `json:"healthcheck,omitempty"`
 	GracePeriods GracePeriodsConfig `json:"gracePeriods,omitempty"`
+
+	SemiSyncMonitor SemiSyncMonitorConfig `json:"semiSyncMonitor,omitempty"`
 
 	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker,omitempty"`
 
@@ -367,6 +371,7 @@ type TabletConfig struct {
 	EnableViews bool `json:"-"`
 
 	EnablePerWorkloadTableMetrics bool `json:"-"`
+	SkipUserMetrics               bool `json:"-"`
 }
 
 func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {
@@ -611,6 +616,42 @@ type HotRowProtectionConfig struct {
 	MaxQueueSize       int    `json:"maxQueueSize,omitempty"`
 	MaxGlobalQueueSize int    `json:"maxGlobalQueueSize,omitempty"`
 	MaxConcurrency     int    `json:"maxConcurrency,omitempty"`
+}
+
+// SemiSyncMonitorConfig contains the config for the semi-sync monitor.
+type SemiSyncMonitorConfig struct {
+	Interval time.Duration
+}
+
+func (cfg *SemiSyncMonitorConfig) MarshalJSON() ([]byte, error) {
+	var tmp struct {
+		IntervalSeconds string `json:"intervalSeconds,omitempty"`
+	}
+
+	if d := cfg.Interval; d != 0 {
+		tmp.IntervalSeconds = d.String()
+	}
+
+	return json.Marshal(&tmp)
+}
+
+func (cfg *SemiSyncMonitorConfig) UnmarshalJSON(data []byte) (err error) {
+	var tmp struct {
+		Interval string `json:"intervalSeconds,omitempty"`
+	}
+
+	if err = json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	if tmp.Interval != "" {
+		cfg.Interval, err = time.ParseDuration(tmp.Interval)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // HealthcheckConfig contains the config for healthcheck.
@@ -890,7 +931,12 @@ func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
 		return errors.New("database app user not specified")
 	}
 	if c.DB.App.Password == "" {
-		return errors.New("database app user password not specified")
+		_, pass, err := dbconfigs.GetCredentialsServer().GetUserAndPassword(c.DB.App.User)
+		if err == nil && pass != "" {
+			c.DB.App.Password = pass
+		} else {
+			return errors.New("database app user password not specified")
+		}
 	}
 	// Replication fixes should be disabled for Unmanaged tablets.
 	mysqlctl.DisableActiveReparents = true
@@ -1007,6 +1053,9 @@ var defaultConfig = TabletConfig{
 		Interval:           20 * time.Second,
 		DegradedThreshold:  30 * time.Second,
 		UnhealthyThreshold: 2 * time.Hour,
+	},
+	SemiSyncMonitor: SemiSyncMonitorConfig{
+		Interval: 10 * time.Second,
 	},
 	ReplicationTracker: ReplicationTrackerConfig{
 		Mode:              Disable,

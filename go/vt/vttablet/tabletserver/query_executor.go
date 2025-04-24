@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
+	"vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -69,9 +70,10 @@ type QueryExecutor struct {
 }
 
 const (
-	streamRowsSize   = 256
-	resetLastIDQuery = "select last_insert_id(18446744073709547416)"
-	resetLastIDValue = 18446744073709547416
+	streamRowsSize    = 256
+	resetLastIDQuery  = "select last_insert_id(18446744073709547416)"
+	resetLastIDValue  = 18446744073709547416
+	userLabelDisabled = "UserLabelDisabled"
 )
 
 var (
@@ -303,6 +305,11 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execRollbackToSavepoint(conn, qre.query, qre.plan.FullStmt)
 	case p.PlanRelease:
 		return qre.execTxQuery(conn, qre.query, false)
+	case p.PlanSelectNoLimit:
+		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
+			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
+		}
+		return qre.txFetch(conn, false)
 	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
@@ -525,10 +532,14 @@ func (qre *QueryExecutor) checkPermissions() error {
 }
 
 func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName string, callerID *querypb.VTGateCallerID) error {
-	statsKey := []string{tableName, authorized.GroupName, qre.plan.PlanID.String(), callerID.Username}
+	var aclState acl.ACLState
+	defer func() {
+		statsKey := qre.generateACLStatsKey(tableName, authorized, callerID)
+		qre.recordACLStats(statsKey, aclState)
+	}()
 	if !authorized.IsMember(callerID) {
 		if qre.tsv.qe.enableTableACLDryRun {
-			qre.tsv.Stats().TableaclPseudoDenied.Add(statsKey, 1)
+			aclState = acl.ACLPseudoDenied
 			return nil
 		}
 
@@ -542,15 +553,35 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 			if len(callerID.Groups) > 0 {
 				groupStr = fmt.Sprintf(", in groups [%s],", strings.Join(callerID.Groups, ", "))
 			}
+			aclState = acl.ACLDenied
 			errStr := fmt.Sprintf("%s command denied to user '%s'%s for table '%s' (ACL check error)", qre.plan.PlanID.String(), callerID.Username, groupStr, tableName)
-			qre.tsv.Stats().TableaclDenied.Add(statsKey, 1)
 			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
 			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
 		}
 		return nil
 	}
-	qre.tsv.Stats().TableaclAllowed.Add(statsKey, 1)
+	aclState = acl.ACLAllow
 	return nil
+}
+
+func (qre *QueryExecutor) generateACLStatsKey(tableName string, authorized *tableacl.ACLResult, callerID *querypb.VTGateCallerID) []string {
+	if qre.tsv.Config().SkipUserMetrics {
+		return []string{tableName, authorized.GroupName, qre.plan.PlanID.String(), userLabelDisabled}
+	}
+	return []string{tableName, authorized.GroupName, qre.plan.PlanID.String(), callerID.Username}
+}
+
+func (qre *QueryExecutor) recordACLStats(key []string, aclState acl.ACLState) {
+	switch aclState {
+	case acl.ACLAllow:
+		qre.tsv.Stats().TableaclAllowed.Add(key, 1)
+	case acl.ACLDenied:
+		qre.tsv.Stats().TableaclDenied.Add(key, 1)
+	case acl.ACLPseudoDenied:
+		qre.tsv.Stats().TableaclPseudoDenied.Add(key, 1)
+	case acl.ACLUnknown:
+		// nothing to record here.
+	}
 }
 
 func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Result, err error) {
@@ -1158,7 +1189,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 		return nil, err
 	}
 
-	exec, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
+	exec, err := conn.Exec(ctx, sql, qre.getMaxResultSize(), wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -1168,6 +1199,13 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	}
 
 	return exec, nil
+}
+
+func (qre *QueryExecutor) getMaxResultSize() int {
+	if qre.plan.PlanID == p.PlanSelectNoLimit {
+		return mysql.FETCH_ALL_ROWS
+	}
+	return int(qre.tsv.qe.maxResultSize.Load())
 }
 
 func (qre *QueryExecutor) resetLastInsertIDIfNeeded(ctx context.Context, conn *connpool.Conn) error {
@@ -1262,9 +1300,14 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 }
 
 func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
-	username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
-	if username == "" {
-		username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
+	var username string
+	if qre.tsv.config.SkipUserMetrics {
+		username = userLabelDisabled
+	} else {
+		username = callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
+		if username == "" {
+			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
+		}
 	}
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)

@@ -64,9 +64,6 @@ var (
 // Policy defines the interface that needs to be satisfied by
 // ACL policy implementors.
 type Policy interface {
-	// CheckAccessActor can be called to verify if an actor
-	// has access to the role.
-	CheckAccessActor(actor, role string) error
 	// CheckAccessHTTP can be called to verify if an actor in
 	// the http request has access to the role.
 	CheckAccessHTTP(req *http.Request, role string) error
@@ -99,16 +96,6 @@ func savePolicy() {
 	}
 	log.Warningf("security_policy %q not found; using fallback policy (deny-all)", securityPolicy)
 	currentPolicy = denyAllPolicy{}
-}
-
-// CheckAccessActor uses the current security policy to
-// verify if an actor has access to the role.
-func CheckAccessActor(actor, role string) error {
-	once.Do(savePolicy)
-	if currentPolicy != nil {
-		return currentPolicy.CheckAccessActor(actor, role)
-	}
-	return nil
 }
 
 // CheckAccessHTTP uses the current security policy to

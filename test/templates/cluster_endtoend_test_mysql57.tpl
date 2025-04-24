@@ -10,6 +10,7 @@ env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
+{{if .GoPrivate}}  GOPRIVATE: "{{.GoPrivate}}"{{end}}
 {{if .InstallXtraBackup}}
   # This is used if we need to pin the xtrabackup version used in tests.
   # If this is NOT set then the latest version available will be used.
@@ -19,7 +20,7 @@ env:
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: {{if .Cores16}}gh-hosted-runners-16cores-1-24.04{{else}}ubuntu-24.04{{end}}
+    runs-on: {{.RunsOn}}
 
     steps:
     - name: Skip CI
@@ -97,6 +98,12 @@ jobs:
       with:
         go-version-file: go.mod
 
+{{if .GoPrivate}}
+    - name: Setup GitHub access token
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: git config --global url.https://${{`{{ secrets.GH_ACCESS_TOKEN }}`}}@github.com/.insteadOf https://github.com/
+{{end}}
+
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
@@ -114,15 +121,14 @@ jobs:
       run: |
         sudo apt-get update
 
-        # Uninstall any previously installed MySQL first
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
-        sudo systemctl stop apparmor
+        # sudo systemctl stop apparmor
         sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
         sudo apt-get -y autoremove
         sudo apt-get -y autoclean
-        sudo deluser mysql
+        # sudo deluser mysql
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
 
@@ -143,6 +149,7 @@ jobs:
         sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
 
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
+
         sudo service mysql stop
         sudo service etcd stop
 

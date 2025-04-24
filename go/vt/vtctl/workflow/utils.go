@@ -17,7 +17,6 @@ limitations under the License.
 package workflow
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -294,7 +293,7 @@ func forAllShards(shards []*topo.ShardInfo, f func(*topo.ShardInfo) error) error
 }
 
 func matchColInSelect(col sqlparser.IdentifierCI, sel *sqlparser.Select) (*sqlparser.ColName, error) {
-	for _, selExpr := range sel.SelectExprs {
+	for _, selExpr := range sel.GetColumns() {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
 			return &sqlparser.ColName{Name: col}, nil
@@ -461,11 +460,11 @@ func getSourceAndTargetKeyRanges(sourceShards, targetShards []string) (*topodata
 	sort.Strings(targetShards)
 	getFullKeyRange := func(shards []string) (*topodatapb.KeyRange, error) {
 		// Expect sorted shards.
-		kr1, err := getKeyRange(sourceShards[0])
+		kr1, err := getKeyRange(shards[0])
 		if err != nil {
 			return nil, err
 		}
-		kr2, err := getKeyRange(sourceShards[len(sourceShards)-1])
+		kr2, err := getKeyRange(shards[len(shards)-1])
 		if err != nil {
 			return nil, err
 		}
@@ -627,9 +626,7 @@ func ReverseWorkflowName(workflow string) string {
 // this public, but it doesn't belong in package workflow. Maybe package sqltypes,
 // or maybe package sqlescape?
 func encodeString(in string) string {
-	buf := bytes.NewBuffer(nil)
-	sqltypes.NewVarChar(in).EncodeSQL(buf)
-	return buf.String()
+	return sqltypes.EncodeStringSQL(in)
 }
 
 func getRenameFileName(tableName string) string {
@@ -638,12 +635,12 @@ func getRenameFileName(tableName string) string {
 
 func parseTabletTypes(tabletTypes []topodatapb.TabletType) (hasReplica, hasRdonly, hasPrimary bool, err error) {
 	for _, tabletType := range tabletTypes {
-		switch {
-		case tabletType == topodatapb.TabletType_REPLICA:
+		switch tabletType {
+		case topodatapb.TabletType_REPLICA:
 			hasReplica = true
-		case tabletType == topodatapb.TabletType_RDONLY:
+		case topodatapb.TabletType_RDONLY:
 			hasRdonly = true
-		case tabletType == topodatapb.TabletType_PRIMARY:
+		case topodatapb.TabletType_PRIMARY:
 			hasPrimary = true
 		default:
 			return false, false, false, fmt.Errorf("invalid tablet type passed %s", tabletType)
@@ -1065,4 +1062,12 @@ func getVindexAndVSchema(ctx context.Context, ts *topo.Server, keyspace string, 
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vindex %s not found in the %s keyspace", vindexName, keyspace)
 	}
 	return vindex, vschema, nil
+}
+
+func processWorkflowActionOptions(opts []WorkflowActionOption) workflowActionOptions {
+	var options workflowActionOptions
+	for _, o := range opts {
+		o.apply(&options)
+	}
+	return options
 }

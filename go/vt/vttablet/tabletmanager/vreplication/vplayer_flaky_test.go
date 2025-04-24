@@ -686,6 +686,8 @@ func TestPlayerStatementMode(t *testing.T) {
 func TestPlayerFilters(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
+	vttablet.DefaultVReplicationConfig.EnableHttpLog = true
+
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),

@@ -3,6 +3,7 @@
     "comment": "select bypass",
     "query": "select count(*), col from unsharded",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select count(*), col from unsharded",
       "Instructions": {
@@ -20,6 +21,7 @@
     "comment": "update bypass",
     "query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
       "Instructions": {
@@ -38,6 +40,7 @@
     "comment": "delete bypass",
     "query": "DELETE FROM USER WHERE ID = 42",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DELETE",
       "Original": "DELETE FROM USER WHERE ID = 42",
       "Instructions": {
@@ -56,6 +59,7 @@
     "comment": "insert bypass",
     "query": "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')",
       "Instructions": {
@@ -74,6 +78,7 @@
     "comment": "insert bypass with sequence: sequences ignored",
     "query": "insert into user(nonid) values (2)",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "insert into user(nonid) values (2)",
       "Instructions": {
@@ -92,6 +97,7 @@
     "comment": "bypass query for into outfile s3",
     "query": "select count(*), col from unsharded into outfile S3 'x.txt'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select count(*), col from unsharded into outfile S3 'x.txt'",
       "Instructions": {
@@ -109,6 +115,7 @@
     "comment": "Select outfile",
     "query": "select * from user into outfile S3 'x.txt'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select * from user into outfile S3 'x.txt'",
       "Instructions": {
@@ -126,6 +133,7 @@
     "comment": "load data from s3 'x.txt' into table x",
     "query": "load data from s3 'x.txt' into table x",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "OTHER",
       "Original": "load data from s3 'x.txt' into table x",
       "Instructions": {
@@ -145,6 +153,7 @@
     "comment": "load data from s3 'x.txt'",
     "query": "load data from s3 'x.txt'",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "OTHER",
       "Original": "load data from s3 'x.txt'",
       "Instructions": {
@@ -164,6 +173,7 @@
     "comment": "create table",
     "query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DDL",
       "Original": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
       "Instructions": {
@@ -181,6 +191,7 @@
     "comment": "select bypass with query timeout hint",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*), col from user",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*), col from user",
       "Instructions": {
@@ -199,6 +210,7 @@
     "comment": "update bypass with query timeout hint",
     "query": "update /*vt+ QUERY_TIMEOUT_MS=100 */ user set val = 1 where id = 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "UPDATE",
       "Original": "update /*vt+ QUERY_TIMEOUT_MS=100 */ user set val = 1 where id = 1",
       "Instructions": {
@@ -218,6 +230,7 @@
     "comment": "delete bypass with query timeout hint",
     "query": "DELETE /*vt+ QUERY_TIMEOUT_MS=100 */ FROM USER WHERE ID = 42",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "DELETE",
       "Original": "DELETE /*vt+ QUERY_TIMEOUT_MS=100 */ FROM USER WHERE ID = 42",
       "Instructions": {
@@ -237,6 +250,7 @@
     "comment": "insert bypass with query timeout hint",
     "query": "INSERT /*vt+ QUERY_TIMEOUT_MS=100 */ INTO USER (ID, NAME) VALUES (42, 'ms X')",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "INSERT",
       "Original": "INSERT /*vt+ QUERY_TIMEOUT_MS=100 */ INTO USER (ID, NAME) VALUES (42, 'ms X')",
       "Instructions": {
@@ -256,6 +270,7 @@
     "comment": "remove the matching keyspace from shard targeted query",
     "query": "select count(*), col from `main`.unsharded join vt_main.t1 where exists (select 1 from main.t2 join information_schema.tables where table_name = 't3')",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select count(*), col from `main`.unsharded join vt_main.t1 where exists (select 1 from main.t2 join information_schema.tables where table_name = 't3')",
       "Instructions": {
@@ -265,7 +280,7 @@
           "Sharded": false
         },
         "TargetDestination": "Shard(-80)",
-        "Query": "select count(*), col from unsharded join vt_main.t1 where exists (select 1 from t2 join information_schema.`tables` where table_name = 't3')"
+        "Query": "select count(*), col from unsharded join vt_main.t1 where exists (select 1 from t2 join information_schema.`tables` where `table_name` = 't3')"
       }
     }
   }

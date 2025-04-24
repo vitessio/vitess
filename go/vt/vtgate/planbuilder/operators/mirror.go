@@ -75,7 +75,7 @@ func (m *PercentBasedMirror) GetColumns(ctx *plancontext.PlanningContext) []*sql
 	return m.Operator().GetColumns(ctx)
 }
 
-func (m *PercentBasedMirror) GetSelectExprs(ctx *plancontext.PlanningContext) sqlparser.SelectExprs {
+func (m *PercentBasedMirror) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
 	return m.Operator().GetSelectExprs(ctx)
 }
 

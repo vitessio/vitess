@@ -3,6 +3,7 @@
     "comment": "Repair statement",
     "query": "repair table t1,t2 quick",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "OTHER",
       "Original": "repair table t1,t2 quick",
       "Instructions": {
@@ -21,6 +22,7 @@
     "comment": "Optimize statement",
     "query": "optimize table t1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "OTHER",
       "Original": "optimize table t1",
       "Instructions": {
@@ -39,6 +41,7 @@
     "comment": "DO statement",
     "query": "DO 1",
     "plan": {
+      "Type": "Passthrough",
       "QueryType": "OTHER",
       "Original": "DO 1",
       "Instructions": {

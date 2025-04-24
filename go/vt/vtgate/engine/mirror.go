@@ -58,18 +58,6 @@ func NewPercentBasedMirror(percentage float32, primitive Primitive, target Primi
 	return &percentBasedMirror{percent: percentage, primitive: primitive, target: target}
 }
 
-func (m *percentBasedMirror) RouteType() string {
-	return "Mirror"
-}
-
-func (m *percentBasedMirror) GetKeyspaceName() string {
-	return m.primitive.GetKeyspaceName()
-}
-
-func (m *percentBasedMirror) GetTableName() string {
-	return m.primitive.GetTableName()
-}
-
 func (m *percentBasedMirror) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return m.primitive.GetFields(ctx, vcursor, bindVars)
 }

@@ -74,21 +74,6 @@ func (code VindexOpcode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(vindexOpcodeName[code])
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (vf *VindexFunc) RouteType() string {
-	return vindexOpcodeName[vf.Opcode]
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (vf *VindexFunc) GetKeyspaceName() string {
-	return ""
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (vf *VindexFunc) GetTableName() string {
-	return ""
-}
-
 // TryExecute performs a non-streaming exec.
 func (vf *VindexFunc) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return vf.mapVindex(ctx, vcursor, bindVars)
@@ -156,7 +141,7 @@ func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars m
 					if vcursor.GetKeyspace() == "" {
 						return nil, vterrors.VT09005()
 					}
-					resolvedShards, _, err := vcursor.ResolveDestinations(ctx, vcursor.GetKeyspace(), nil, []key.Destination{d})
+					resolvedShards, _, err := vcursor.ResolveDestinations(ctx, vcursor.GetKeyspace(), nil, []key.ShardDestination{d})
 					if err != nil {
 						return nil, err
 					}

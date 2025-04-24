@@ -2155,6 +2155,16 @@ var aclJSON2 = `{
     }
   ]
 }`
+var aclJSONOverlapError = `{
+	"table_groups": [
+	  {
+		"name": "group02",
+		"table_names_or_prefixes": ["test_table2", "test_table2"],
+		"readers": ["vt2"],
+		"admins": ["vt2"]
+	  }
+	]
+  }`
 
 func TestACLHUP(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2168,12 +2178,23 @@ func TestACLHUP(t *testing.T) {
 	require.NoError(t, err)
 	defer os.Remove(f.Name())
 
+	// We need to confirm this ACL JSON is broken first, for later use.
+	_, err = io.WriteString(f, aclJSONOverlapError)
+	require.NoError(t, err)
+	err = f.Close()
+	require.NoError(t, err)
+	err = tsv.InitACL(f.Name(), 0)
+	require.Error(t, err)
+
+	f, err = os.Create(f.Name())
+	require.NoError(t, err)
 	_, err = io.WriteString(f, aclJSON1)
 	require.NoError(t, err)
 	err = f.Close()
 	require.NoError(t, err)
 
-	tsv.InitACL(f.Name(), true, 0)
+	err = tsv.InitACL(f.Name(), 0)
+	require.NoError(t, err)
 
 	groups1 := tableacl.GetCurrentConfig().TableGroups
 	if name1 := groups1[0].GetName(); name1 != "group01" {
@@ -2188,20 +2209,37 @@ func TestACLHUP(t *testing.T) {
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 	time.Sleep(100 * time.Millisecond) // wait for signal handler
 
-	groups2 := tableacl.GetCurrentConfig().TableGroups
-	if len(groups2) != 1 {
-		t.Fatalf("Expected only one table group")
+	test_loaded_acl := func() {
+		groups2 := tableacl.GetCurrentConfig().TableGroups
+		if len(groups2) != 1 {
+			t.Fatalf("Expected only one table group")
+		}
+		group2 := groups2[0]
+		if name2 := group2.GetName(); name2 != "group02" {
+			t.Fatalf("Expected name 'group02', got '%s'", name2)
+		}
+		if group2.GetAdmins() == nil {
+			t.Fatalf("Expected 'admins' to exist, but it didn't")
+		}
+		if group2.GetWriters() != nil {
+			t.Fatalf("Expected 'writers' to not exist, got '%s'", group2.GetWriters())
+		}
 	}
-	group2 := groups2[0]
-	if name2 := group2.GetName(); name2 != "group02" {
-		t.Fatalf("Expected name 'group02', got '%s'", name2)
-	}
-	if group2.GetAdmins() == nil {
-		t.Fatalf("Expected 'admins' to exist, but it didn't")
-	}
-	if group2.GetWriters() != nil {
-		t.Fatalf("Expected 'writers' to not exist, got '%s'", group2.GetWriters())
-	}
+
+	test_loaded_acl()
+
+	// Now try to reload an invalid ACL and see if we are still operating with the same ACL config as before.
+
+	f, err = os.Create(f.Name())
+	require.NoError(t, err)
+	_, err = io.WriteString(f, aclJSONOverlapError)
+	require.NoError(t, err)
+
+	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+	time.Sleep(100 * time.Millisecond) // wait for signal handler
+
+	test_loaded_acl()
+
 }
 
 func TestConfigChanges(t *testing.T) {
@@ -2302,14 +2340,14 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	defer tsv.StopService()
 	defer db.Close()
 
-	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	state, _, err := tsv.ReserveExecute(ctx, &target, nil, "set sql_mode = ''", nil, 0, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.NotEqual(t, int64(0), state.ReservedID, "reservedID should not be zero")
 	expected := []string{
-		"set @@sql_mode = ''",
+		"set sql_mode = ''",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")
 	for _, exp := range expected {
@@ -2326,7 +2364,7 @@ func TestReserveExecute_WithTx(t *testing.T) {
 	defer tsv.StopService()
 	defer db.Close()
 
-	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	beginState, err := tsv.Begin(ctx, &target, &querypb.ExecuteOptions{})
@@ -2339,7 +2377,7 @@ func TestReserveExecute_WithTx(t *testing.T) {
 	defer tsv.Release(ctx, &target, beginState.TransactionID, reserveState.ReservedID)
 	assert.Equal(t, beginState.TransactionID, reserveState.ReservedID, "reservedID should be equal to transactionID")
 	expected := []string{
-		"set @@sql_mode = ''",
+		"set sql_mode = ''",
 	}
 	splitOutput := strings.Split(db.QueryLog(), ";")
 	for _, exp := range expected {
@@ -2432,7 +2470,7 @@ func TestReserveStats(t *testing.T) {
 	defer tsv.StopService()
 	defer db.Close()
 
-	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	callerID := &querypb.VTGateCallerID{

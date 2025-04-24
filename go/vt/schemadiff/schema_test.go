@@ -119,10 +119,24 @@ func TestNewSchemaFromQueriesUnresolved(t *testing.T) {
 	)
 	schema, err := NewSchemaFromQueries(NewTestEnv(), queries)
 	assert.Error(t, err)
-	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7", MissingReferencedEntities: []string{"v8"}}).Error())
 	v := schema.sorted[len(schema.sorted)-1]
 	assert.IsType(t, &CreateViewEntity{}, v)
 	assert.Equal(t, "CREATE VIEW `v7` AS SELECT * FROM `v8`, `t2`", v.Create().CanonicalStatementString())
+}
+
+func TestNewSchemaFromQueriesUnresolvedMulti(t *testing.T) {
+	// v8 does not exist
+	queries := append(schemaTestCreateQueries,
+		"create view v7 as select * from v8, t2, t20, v21",
+	)
+	schema, err := NewSchemaFromQueries(NewTestEnv(), queries)
+	assert.Error(t, err)
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7", MissingReferencedEntities: []string{"v8", "t20", "v21"}}).Error())
+	assert.Equal(t, "view `v7` has unresolved/loop dependencies: `v8`, `t20`, `v21`", err.Error())
+	v := schema.sorted[len(schema.sorted)-1]
+	assert.IsType(t, &CreateViewEntity{}, v)
+	assert.Equal(t, "CREATE VIEW `v7` AS SELECT * FROM `v8`, `t2`, `t20`, `v21`", v.Create().CanonicalStatementString())
 }
 
 func TestNewSchemaFromQueriesWithSQLKeyword(t *testing.T) {
@@ -141,7 +155,7 @@ func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
 	)
 	_, err := NewSchemaFromQueries(NewTestEnv(), queries)
 	assert.Error(t, err)
-	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7", MissingReferencedEntities: []string{"something_else"}}).Error())
 }
 
 func TestNewSchemaFromQueriesViewFromDual(t *testing.T) {
@@ -171,7 +185,7 @@ func TestNewSchemaFromQueriesLoop(t *testing.T) {
 	_, err := NewSchemaFromQueries(NewTestEnv(), queries)
 	require.Error(t, err)
 	err = vterrors.UnwrapFirst(err)
-	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
+	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7", MissingReferencedEntities: []string{"v8"}}).Error())
 }
 
 func TestToSQL(t *testing.T) {
@@ -569,6 +583,20 @@ func TestInvalidSchema(t *testing.T) {
 			create table t2 (id int primary key, CONSTRAINT const_id FOREIGN KEY (id) REFERENCES t1 (id) ON DELETE CASCADE, CONSTRAINT const_id FOREIGN KEY (id) REFERENCES t1 (id) ON DELETE CASCADE);
 			`,
 			expectErr: &DuplicateForeignKeyConstraintNameError{Table: "t2", Constraint: "const_id"},
+		},
+		{
+			schema: `
+CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(255));
+CREATE VIEW user_earnings_ranking AS
+SELECT
+    u.id AS user_id,
+    e.total_earnings AS total_earnings,
+    ROW_NUMBER() OVER (
+        ORDER BY e.total_earnings DESC, u.id ASC
+    ) AS ranking
+FROM users AS u JOIN earnings AS e ON e.user_id = u.id;
+`,
+			expectErr: &ViewDependencyUnresolvedError{View: "user_earnings_ranking", MissingReferencedEntities: []string{"earnings"}},
 		},
 	}
 	for _, ts := range tt {
@@ -994,7 +1022,7 @@ func TestMassiveSchema(t *testing.T) {
 		"KEY workflow_idx (workflow(64)),\n",
 	} {
 		require.Contains(t, tableBase, s)
-		modifiedTable = strings.Replace(modifiedTable, s, "", -1)
+		modifiedTable = strings.ReplaceAll(modifiedTable, s, "")
 	}
 	require.NotEqual(t, tableBase, modifiedTable)
 
@@ -1021,11 +1049,11 @@ func TestMassiveSchema(t *testing.T) {
 		queries1 := make([]string, 0, numTables) // to be loaded into schema1
 		for i := 0; i < numTables; i++ {
 			tableName := fmt.Sprintf("tbl_%05d", i)
-			query := strings.Replace(tableBase, "placeholder", tableName, -1)
+			query := strings.ReplaceAll(tableBase, "placeholder", tableName)
 			queries0 = append(queries0, query)
 			if modifiedTableIndexes[i] {
 				// Some tables in schema1 are changed
-				query = strings.Replace(modifiedTable, "placeholder", tableName, -1)
+				query = strings.ReplaceAll(modifiedTable, "placeholder", tableName)
 				countModifiedTables++
 			}
 			queries1 = append(queries1, query)

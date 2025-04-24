@@ -233,10 +233,11 @@ func TestDestinationKeyRange(t *testing.T) {
 		allShards := initShardArray(t, testCase.keyspace)
 
 		var keyRange *topodatapb.KeyRange
-		if testCase.keyRange == "nil" {
-		} else if testCase.keyRange == "" {
+		switch testCase.keyRange {
+		case "nil":
+		case "":
 			keyRange = &topodatapb.KeyRange{}
-		} else {
+		default:
 			krArray, err := ParseShardingSpec(testCase.keyRange)
 			assert.NoError(t, err, "Got error while parsing sharding spec")
 			keyRange = krArray[0]
@@ -258,7 +259,7 @@ func TestDestinationsString(t *testing.T) {
 		End:   []byte{0x40},
 	}
 
-	got := DestinationsString([]Destination{
+	got := DestinationsString([]ShardDestination{
 		DestinationShard("2"),
 		DestinationShards{"2", "3"},
 		DestinationExactKeyRange{KeyRange: kr2040},

@@ -75,9 +75,9 @@ func (vind *Hash) NeedsVCursor() bool {
 	return false
 }
 
-// Map can map ids to key.Destination objects.
-func (vind *Hash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, len(ids))
+// Map can map ids to key.ShardDestination objects.
+func (vind *Hash) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, len(ids))
 	for i, id := range ids {
 		ksid, err := vind.Hash(id)
 		if err != nil {

@@ -46,6 +46,8 @@ type fakePrimitive struct {
 	allResultsInOneCall bool
 
 	async bool
+
+	useNewPrintBindVars bool
 }
 
 func (f *fakePrimitive) Inputs() ([]Primitive, []map[string]any) {
@@ -59,20 +61,13 @@ func (f *fakePrimitive) rewind() {
 	f.log = nil
 }
 
-func (f *fakePrimitive) RouteType() string {
-	return "Fake"
-}
-
-func (f *fakePrimitive) GetKeyspaceName() string {
-	return "fakeKs"
-}
-
-func (f *fakePrimitive) GetTableName() string {
-	return "fakeTable"
-}
-
 func (f *fakePrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))
+	if f.useNewPrintBindVars {
+		f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))
+	} else {
+		f.log = append(f.log, fmt.Sprintf("Execute %v %v", deprecatedPrintBindVars(bindVars), wantfields))
+	}
+
 	if f.results == nil {
 		return nil, f.sendErr
 	}
@@ -87,7 +82,7 @@ func (f *fakePrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 
 func (f *fakePrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	if !f.noLog {
-		f.log = append(f.log, fmt.Sprintf("StreamExecute %v %v", printBindVars(bindVars), wantfields))
+		f.log = append(f.log, fmt.Sprintf("StreamExecute %v %v", deprecatedPrintBindVars(bindVars), wantfields))
 	}
 	if f.results == nil {
 		return f.sendErr
@@ -171,7 +166,7 @@ func (f *fakePrimitive) asyncCall(callback func(*sqltypes.Result) error) error {
 }
 
 func (f *fakePrimitive) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	f.log = append(f.log, fmt.Sprintf("GetFields %v", printBindVars(bindVars)))
+	f.log = append(f.log, fmt.Sprintf("GetFields %v", deprecatedPrintBindVars(bindVars)))
 	return f.TryExecute(ctx, vcursor, bindVars, true /* wantfields */)
 }
 

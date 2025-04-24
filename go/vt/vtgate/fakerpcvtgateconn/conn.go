@@ -43,9 +43,10 @@ type queryExecute struct {
 }
 
 type queryResponse struct {
-	execQuery *queryExecute
-	reply     *sqltypes.Result
-	err       error
+	execQuery   *queryExecute
+	reply       *sqltypes.Result
+	paramsCount uint16
+	err         error
 }
 
 // FakeVTGateConn provides a fake implementation of vtgateconn.Impl
@@ -84,7 +85,13 @@ func (conn *FakeVTGateConn) AddQuery(
 }
 
 // Execute please see vtgateconn.Impl.Execute
-func (conn *FakeVTGateConn) Execute(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (conn *FakeVTGateConn) Execute(
+	ctx context.Context,
+	session *vtgatepb.Session,
+	sql string,
+	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
 	response, ok := conn.execMap[sql]
 	if !ok {
 		return nil, nil, fmt.Errorf("no match for: %s", sql)
@@ -105,6 +112,16 @@ func (conn *FakeVTGateConn) Execute(ctx context.Context, session *vtgatepb.Sessi
 
 // ExecuteBatch please see vtgateconn.Impl.ExecuteBatch
 func (conn *FakeVTGateConn) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVarsList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
+	panic("not implemented")
+}
+
+// ExecuteMulti please see vtgateconn.Impl.ExecuteBatch
+func (conn *FakeVTGateConn) ExecuteMulti(ctx context.Context, session *vtgatepb.Session, sqlString string) (*vtgatepb.Session, []*sqltypes.Result, error) {
+	panic("not implemented")
+}
+
+// StreamExecuteMulti please see vtgateconn.Impl.ExecuteBatch.
+func (conn *FakeVTGateConn) StreamExecuteMulti(ctx context.Context, session *vtgatepb.Session, sqlString string, processResponse func(response *vtgatepb.StreamExecuteMultiResponse)) (sqltypes.MultiResultStream, error) {
 	panic("not implemented")
 }
 
@@ -158,23 +175,22 @@ func (a *streamExecuteAdapter) Recv() (*sqltypes.Result, error) {
 }
 
 // Prepare please see vtgateconn.Impl.Prepare
-func (conn *FakeVTGateConn) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+func (conn *FakeVTGateConn) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
 	response, ok := conn.execMap[sql]
 	if !ok {
-		return nil, nil, fmt.Errorf("no match for: %s", sql)
+		return nil, nil, 0, fmt.Errorf("no match for: %s", sql)
 	}
 	query := &queryExecute{
-		SQL:           sql,
-		BindVariables: bindVars,
-		Session:       session,
+		SQL:     sql,
+		Session: session,
 	}
 	if !reflect.DeepEqual(query, response.execQuery) {
-		return nil, nil, fmt.Errorf(
+		return nil, nil, 0, fmt.Errorf(
 			"Prepare: %+v, want %+v", query, response.execQuery)
 	}
 	reply := *response.reply
 	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_PRIMARY)
-	return s, reply.Fields, nil
+	return s, reply.Fields, response.paramsCount, nil
 }
 
 // CloseSession please see vtgateconn.Impl.CloseSession

@@ -468,16 +468,6 @@ const (
 			migration_status='ready'
 		ORDER BY id
 	`
-	sqlSelectPTOSCMigrationTriggers = `SELECT
-			TRIGGER_SCHEMA as trigger_schema,
-			TRIGGER_NAME as trigger_name
-		FROM INFORMATION_SCHEMA.TRIGGERS
-		WHERE
-			EVENT_OBJECT_SCHEMA=%a
-			AND EVENT_OBJECT_TABLE=%a
-			AND ACTION_TIMING='AFTER'
-			AND LEFT(TRIGGER_NAME, 7)='pt_osc_'
-		`
 	selSelectCountFKParentConstraints = `
 		SELECT
 			COUNT(*) as num_fk_constraints
@@ -494,7 +484,6 @@ const (
 			TABLE_SCHEMA=%a AND TABLE_NAME=%a
 			AND REFERENCED_TABLE_NAME IS NOT NULL
 		`
-	sqlDropTrigger                         = "DROP TRIGGER IF EXISTS `%a`.`%a`"
 	sqlShowTablesLike                      = "SHOW TABLES LIKE '%a'"
 	sqlDropTable                           = "DROP TABLE `%a`"
 	sqlDropTableIfExists                   = "DROP TABLE IF EXISTS `%a`"
@@ -576,19 +565,4 @@ const (
 		where
 			metadata_locks.OBJECT_SCHEMA=database() AND metadata_locks.OBJECT_NAME=%a
 	`
-)
-
-var (
-	sqlCreateOnlineDDLUser = []string{
-		`CREATE USER IF NOT EXISTS %s IDENTIFIED BY '%s'`,
-		`ALTER USER %s IDENTIFIED BY '%s'`,
-	}
-	sqlGrantOnlineDDLSuper = []string{
-		`GRANT SUPER ON *.* TO %s`,
-	}
-	sqlGrantOnlineDDLUser = []string{
-		`GRANT PROCESS, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO %s`,
-		`GRANT ALTER, CREATE, CREATE VIEW, SHOW VIEW, DELETE, DROP, INDEX, INSERT, LOCK TABLES, SELECT, TRIGGER, UPDATE ON *.* TO %s`,
-	}
-	sqlDropOnlineDDLUser = `DROP USER IF EXISTS %s`
 )

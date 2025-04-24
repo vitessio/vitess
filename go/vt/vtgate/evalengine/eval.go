@@ -378,6 +378,16 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation, valu
 	}
 
 	switch tt := value.Type(); {
+	case tt == sqltypes.Tuple:
+		t := &evalTuple{}
+		err := value.ForEachValue(func(bv sqltypes.Value) {
+			e, err := valueToEval(bv, collation, values)
+			if err != nil {
+				return
+			}
+			t.t = append(t.t, e)
+		})
+		return t, wrap(err)
 	case sqltypes.IsSigned(tt):
 		ival, err := value.ToInt64()
 		return newEvalInt64(ival), wrap(err)
@@ -397,17 +407,18 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation, valu
 	case tt == sqltypes.Vector:
 		return newEvalVector(value.Raw()), nil
 	case sqltypes.IsText(tt):
-		if tt == sqltypes.HexNum {
+		switch tt {
+		case sqltypes.HexNum:
 			raw, err := parseHexNumber(value.Raw())
 			return newEvalBytesHex(raw), wrap(err)
-		} else if tt == sqltypes.HexVal {
+		case sqltypes.HexVal:
 			hex := value.Raw()
 			raw, err := parseHexLiteral(hex[2 : len(hex)-1])
 			return newEvalBytesHex(raw), wrap(err)
-		} else if tt == sqltypes.BitNum {
+		case sqltypes.BitNum:
 			raw, err := parseBitNum(value.Raw())
 			return newEvalBytesBit(raw), wrap(err)
-		} else {
+		default:
 			return newEvalText(value.Raw(), collation), nil
 		}
 	case sqltypes.IsBinary(tt):

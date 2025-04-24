@@ -6,10 +6,10 @@ interface ToggleParams {
     className?: string;
 }
 
-const Toggle: React.FC<ToggleParams> = ({ enabled, className, onChange }) => {
+const Toggle: React.FC<ToggleParams> = ({ enabled, className, onChange, ...props }) => {
     return (
         <div className={className}>
-            <Switch checked={enabled} onChange={onChange} className={enabled ? 'toggle on' : 'toggle off'}>
+            <Switch checked={enabled} onChange={onChange} className={enabled ? 'toggle on' : 'toggle off'} {...props}>
                 <span className="sr-only">Use setting</span>
                 <span aria-hidden="true" className={enabled ? 'toggle-button on' : 'toggle-button off'} />
             </Switch>

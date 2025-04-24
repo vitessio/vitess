@@ -58,7 +58,7 @@ func NewShard[K cachekey, V any](qsize uint, doorkeeper bool) *Shard[K, V] {
 	s := &Shard[K, V]{
 		hashmap: make(map[K]*Entry[K, V]),
 		qsize:   qsize,
-		deque:   deque.New[*Entry[K, V]](),
+		deque:   &deque.Deque[*Entry[K, V]]{},
 		group:   NewGroup[K, V](),
 	}
 	if doorkeeper {

@@ -82,9 +82,9 @@ func (vind *Numeric) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes
 	return out, nil
 }
 
-// Map can map ids to key.Destination objects.
-func (vind *Numeric) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	out := make([]key.Destination, 0, len(ids))
+// Map can map ids to key.ShardDestination objects.
+func (vind *Numeric) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	out := make([]key.ShardDestination, 0, len(ids))
 	for _, id := range ids {
 		ksid, err := vind.Hash(id)
 		if err != nil {
@@ -110,7 +110,7 @@ func (*Numeric) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error) 
 }
 
 // RangeMap implements Between.
-func (vind *Numeric) RangeMap(ctx context.Context, vcursor VCursor, startId sqltypes.Value, endId sqltypes.Value) ([]key.Destination, error) {
+func (vind *Numeric) RangeMap(ctx context.Context, vcursor VCursor, startId sqltypes.Value, endId sqltypes.Value) ([]key.ShardDestination, error) {
 	startKsId, err := vind.Hash(startId)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func (vind *Numeric) RangeMap(ctx context.Context, vcursor VCursor, startId sqlt
 	if err != nil {
 		return nil, err
 	}
-	out := []key.Destination{&key.DestinationKeyRange{KeyRange: key.NewKeyRange(startKsId, endKsId)}}
+	out := []key.ShardDestination{&key.DestinationKeyRange{KeyRange: key.NewKeyRange(startKsId, endKsId)}}
 	return out, nil
 }
 

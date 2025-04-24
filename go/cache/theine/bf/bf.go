@@ -19,16 +19,6 @@ func New(falsePositiveRate float64) *Bloomfilter {
 	return d
 }
 
-// create new bloomfilter with given size in bytes
-func NewWithSize(size uint32) *Bloomfilter {
-	d := &Bloomfilter{}
-	bits := size * 8
-	m := nextPowerOfTwo(uint32(bits))
-	d.M = m
-	d.Filter = newbv(m)
-	return d
-}
-
 func (d *Bloomfilter) EnsureCapacity(capacity int) {
 	if capacity <= d.Capacity {
 		return

@@ -102,8 +102,8 @@ var writeTopologyPathOptions = struct {
 }{}
 
 func commandWriteTopologyPath(cmd *cobra.Command, args []string) error {
-	file := cmd.Flags().Arg(0)
-	path := cmd.Flags().Arg(1)
+	path := cmd.Flags().Arg(0)
+	file := cmd.Flags().Arg(1)
 	ts, err := topo.OpenServer(topoOptions.implementation, strings.Join(topoOptions.globalServerAddresses, ","), topoOptions.globalRoot)
 	if err != nil {
 		return fmt.Errorf("failed to connect to the topology server: %v", err)

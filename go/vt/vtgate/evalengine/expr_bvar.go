@@ -125,37 +125,45 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 
 	switch tt := typ.Type; {
 	case sqltypes.IsSigned(tt):
+		typ.Type = sqltypes.Int64
 		c.asm.PushBVar_i(bvar.Key)
 	case sqltypes.IsUnsigned(tt):
+		typ.Type = sqltypes.Uint64
 		c.asm.PushBVar_u(bvar.Key)
 	case sqltypes.IsFloat(tt):
+		typ.Type = sqltypes.Float64
 		c.asm.PushBVar_f(bvar.Key)
 	case sqltypes.IsDecimal(tt):
 		c.asm.PushBVar_d(bvar.Key)
 	case sqltypes.IsText(tt):
-		if tt == sqltypes.HexNum {
+		switch tt {
+		case sqltypes.HexNum:
 			c.asm.PushBVar_hexnum(bvar.Key)
 			typ.Type = sqltypes.VarBinary
 			typ.Flag |= flagHex
-		} else if tt == sqltypes.HexVal {
+		case sqltypes.HexVal:
 			c.asm.PushBVar_hexval(bvar.Key)
 			typ.Type = sqltypes.VarBinary
 			typ.Flag |= flagHex
-		} else if tt == sqltypes.BitNum {
+		case sqltypes.BitNum:
 			c.asm.PushBVar_bitnum(bvar.Key)
 			typ.Type = sqltypes.VarBinary
 			typ.Flag |= flagBit
-		} else {
+		default:
+			typ.Type = sqltypes.VarChar
 			c.asm.PushBVar_text(bvar.Key, typ.Col)
 		}
 	case sqltypes.IsBinary(tt):
+		typ.Type = sqltypes.VarBinary
 		c.asm.PushBVar_bin(bvar.Key)
 	case sqltypes.IsNull(tt):
 		c.asm.PushNull()
 	case tt == sqltypes.TypeJSON:
 		c.asm.PushBVar_json(bvar.Key)
-	case tt == sqltypes.Datetime || tt == sqltypes.Timestamp:
+	case tt == sqltypes.Datetime:
 		c.asm.PushBVar_datetime(bvar.Key)
+	case tt == sqltypes.Timestamp:
+		c.asm.PushBVar_timestamp(bvar.Key)
 	case tt == sqltypes.Date:
 		c.asm.PushBVar_date(bvar.Key)
 	case tt == sqltypes.Time:

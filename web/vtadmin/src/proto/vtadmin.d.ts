@@ -31528,6 +31528,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest backup_engine */
         backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a BackupRequest. */
@@ -31553,6 +31556,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -35130,9 +35136,6 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest ok_if_not_exists */
         ok_if_not_exists?: (boolean|null);
-
-        /** CheckThrottlerRequest multi_metrics_enabled */
-        multi_metrics_enabled?: (boolean|null);
     }
 
     /** Represents a CheckThrottlerRequest. */
@@ -35155,9 +35158,6 @@ export namespace tabletmanagerdata {
 
         /** CheckThrottlerRequest ok_if_not_exists. */
         public ok_if_not_exists: boolean;
-
-        /** CheckThrottlerRequest multi_metrics_enabled. */
-        public multi_metrics_enabled: boolean;
 
         /**
          * Creates a new CheckThrottlerRequest instance using the specified properties.
@@ -35250,9 +35250,6 @@ export namespace tabletmanagerdata {
     /** Properties of a CheckThrottlerResponse. */
     interface ICheckThrottlerResponse {
 
-        /** CheckThrottlerResponse status_code */
-        status_code?: (number|null);
-
         /** CheckThrottlerResponse value */
         value?: (number|null);
 
@@ -35289,9 +35286,6 @@ export namespace tabletmanagerdata {
          * @param [properties] Properties to set
          */
         constructor(properties?: tabletmanagerdata.ICheckThrottlerResponse);
-
-        /** CheckThrottlerResponse status_code. */
-        public status_code: number;
 
         /** CheckThrottlerResponse value. */
         public value: number;
@@ -35406,9 +35400,6 @@ export namespace tabletmanagerdata {
             /** Metric name */
             name?: (string|null);
 
-            /** Metric status_code */
-            status_code?: (number|null);
-
             /** Metric value */
             value?: (number|null);
 
@@ -35439,9 +35430,6 @@ export namespace tabletmanagerdata {
 
             /** Metric name. */
             public name: string;
-
-            /** Metric status_code. */
-            public status_code: number;
 
             /** Metric value. */
             public value: number;
@@ -36044,9 +36032,6 @@ export namespace tabletmanagerdata {
             /** RecentApp checked_at */
             checked_at?: (vttime.ITime|null);
 
-            /** RecentApp status_code */
-            status_code?: (number|null);
-
             /** RecentApp response_code */
             response_code?: (tabletmanagerdata.CheckThrottlerResponseCode|null);
         }
@@ -36062,9 +36047,6 @@ export namespace tabletmanagerdata {
 
             /** RecentApp checked_at. */
             public checked_at?: (vttime.ITime|null);
-
-            /** RecentApp status_code. */
-            public status_code: number;
 
             /** RecentApp response_code. */
             public response_code: tabletmanagerdata.CheckThrottlerResponseCode;
@@ -41061,6 +41043,9 @@ export namespace query {
 
         /** ExecuteOptions fetch_last_insert_id */
         fetch_last_insert_id?: (boolean|null);
+
+        /** ExecuteOptions in_dml_execution */
+        in_dml_execution?: (boolean|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -41113,6 +41098,9 @@ export namespace query {
 
         /** ExecuteOptions fetch_last_insert_id. */
         public fetch_last_insert_id: boolean;
+
+        /** ExecuteOptions in_dml_execution. */
+        public in_dml_execution: boolean;
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";
@@ -48825,6 +48813,12 @@ export namespace replicationdata {
 
         /** FullStatus disk_stalled */
         disk_stalled?: (boolean|null);
+
+        /** FullStatus semi_sync_blocked */
+        semi_sync_blocked?: (boolean|null);
+
+        /** FullStatus tablet_type */
+        tablet_type?: (topodata.TabletType|null);
     }
 
     /** Represents a FullStatus. */
@@ -48904,6 +48898,12 @@ export namespace replicationdata {
 
         /** FullStatus disk_stalled. */
         public disk_stalled: boolean;
+
+        /** FullStatus semi_sync_blocked. */
+        public semi_sync_blocked: boolean;
+
+        /** FullStatus tablet_type. */
+        public tablet_type: topodata.TabletType;
 
         /**
          * Creates a new FullStatus instance using the specified properties.
@@ -51810,8 +51810,6 @@ export namespace vtctldata {
         enum Strategy {
             VITESS = 0,
             ONLINE = 0,
-            GHOST = 1,
-            PTOSC = 2,
             DIRECT = 3,
             MYSQL = 4
         }
@@ -54589,6 +54587,9 @@ export namespace vtctldata {
 
         /** BackupRequest backup_engine */
         backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a BackupRequest. */
@@ -54617,6 +54618,9 @@ export namespace vtctldata {
 
         /** BackupRequest backup_engine. */
         public backup_engine?: (string|null);
+
+        /** BackupRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -54831,6 +54835,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest incremental_from_pos */
         incremental_from_pos?: (string|null);
+
+        /** BackupShardRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents a BackupShardRequest. */
@@ -54859,6 +54866,9 @@ export namespace vtctldata {
 
         /** BackupShardRequest incremental_from_pos. */
         public incremental_from_pos: string;
+
+        /** BackupShardRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new BackupShardRequest instance using the specified properties.
@@ -54946,6 +54956,9 @@ export namespace vtctldata {
 
         /** CancelSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** CancelSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a CancelSchemaMigrationRequest. */
@@ -54962,6 +54975,9 @@ export namespace vtctldata {
 
         /** CancelSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** CancelSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new CancelSchemaMigrationRequest instance using the specified properties.
@@ -55800,6 +55816,9 @@ export namespace vtctldata {
 
         /** CleanupSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** CleanupSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a CleanupSchemaMigrationRequest. */
@@ -55816,6 +55835,9 @@ export namespace vtctldata {
 
         /** CleanupSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** CleanupSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new CleanupSchemaMigrationRequest instance using the specified properties.
@@ -56000,6 +56022,9 @@ export namespace vtctldata {
 
         /** CompleteSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** CompleteSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a CompleteSchemaMigrationRequest. */
@@ -56016,6 +56041,9 @@ export namespace vtctldata {
 
         /** CompleteSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** CompleteSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new CompleteSchemaMigrationRequest instance using the specified properties.
@@ -59356,6 +59384,9 @@ export namespace vtctldata {
 
         /** ForceCutOverSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** ForceCutOverSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a ForceCutOverSchemaMigrationRequest. */
@@ -59372,6 +59403,9 @@ export namespace vtctldata {
 
         /** ForceCutOverSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** ForceCutOverSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new ForceCutOverSchemaMigrationRequest instance using the specified properties.
@@ -66170,6 +66204,9 @@ export namespace vtctldata {
 
         /** LaunchSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** LaunchSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a LaunchSchemaMigrationRequest. */
@@ -66186,6 +66223,9 @@ export namespace vtctldata {
 
         /** LaunchSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** LaunchSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new LaunchSchemaMigrationRequest instance using the specified properties.
@@ -69052,6 +69092,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest shards */
         shards?: (string[]|null);
+
+        /** MoveTablesCompleteRequest ignore_source_keyspace */
+        ignore_source_keyspace?: (boolean|null);
     }
 
     /** Represents a MoveTablesCompleteRequest. */
@@ -69083,6 +69126,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteRequest shards. */
         public shards: string[];
+
+        /** MoveTablesCompleteRequest ignore_source_keyspace. */
+        public ignore_source_keyspace: boolean;
 
         /**
          * Creates a new MoveTablesCompleteRequest instance using the specified properties.
@@ -72356,6 +72402,9 @@ export namespace vtctldata {
 
         /** RetrySchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** RetrySchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a RetrySchemaMigrationRequest. */
@@ -72372,6 +72421,9 @@ export namespace vtctldata {
 
         /** RetrySchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** RetrySchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new RetrySchemaMigrationRequest instance using the specified properties.
@@ -79020,6 +79072,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest delete_batch_size */
         delete_batch_size?: (number|Long|null);
+
+        /** WorkflowDeleteRequest ignore_source_keyspace */
+        ignore_source_keyspace?: (boolean|null);
     }
 
     /** Represents a WorkflowDeleteRequest. */
@@ -79048,6 +79103,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteRequest delete_batch_size. */
         public delete_batch_size: (number|Long);
+
+        /** WorkflowDeleteRequest ignore_source_keyspace. */
+        public ignore_source_keyspace: boolean;
 
         /**
          * Creates a new WorkflowDeleteRequest instance using the specified properties.

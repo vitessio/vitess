@@ -336,7 +336,7 @@ func ParseFlagsForTests(cmd string) {
 // the given cobra command, then copies over the glog flags that otherwise
 // require manual transferring.
 func MoveFlagsToCobraCommand(cmd *cobra.Command) {
-	moveFlags(cmd.Use, cmd.Flags())
+	moveFlags(cmd.Name(), cmd.Flags())
 }
 
 // MovePersistentFlagsToCobraCommand functions exactly like MoveFlagsToCobraCommand,
@@ -347,7 +347,7 @@ func MoveFlagsToCobraCommand(cmd *cobra.Command) {
 // Useful for transferring flags to a parent command whose subcommands should
 // inherit the servenv-registered flags.
 func MovePersistentFlagsToCobraCommand(cmd *cobra.Command) {
-	moveFlags(cmd.Use, cmd.PersistentFlags())
+	moveFlags(cmd.Name(), cmd.PersistentFlags())
 }
 
 func moveFlags(name string, fs *pflag.FlagSet) {

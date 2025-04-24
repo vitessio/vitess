@@ -52,7 +52,7 @@ func BenchmarkOLTP(b *testing.B) {
 	oltpInitOnce.Do(func() {
 		b.Logf("seeding database for benchmark...")
 
-		var rows int = 1
+		rows := 1
 		for i := 0; i < MaxRows/10; i++ {
 			query.Reset()
 			query.WriteString("insert into oltp_test(id, k, c, pad) values ")

@@ -19,7 +19,6 @@ package sqlparser
 import (
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -89,15 +88,64 @@ func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 			case DDLStatement:
 				x.SetFullyParsed(false)
 			}
-			tokenizer.ParseTree = tokenizer.partialDDL
-			return tokenizer.ParseTree, tokenizer.BindVars, nil
+			tokenizer.ParseTrees = []Statement{tokenizer.partialDDL}
+			return tokenizer.ParseTrees[0], tokenizer.BindVars, nil
 		}
 		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
-	if tokenizer.ParseTree == nil {
-		return nil, nil, ErrEmpty
+	err := checkParseTreesError(tokenizer)
+	if err != nil {
+		return nil, nil, err
 	}
-	return tokenizer.ParseTree, tokenizer.BindVars, nil
+	return tokenizer.ParseTrees[0], tokenizer.BindVars, nil
+}
+
+// ParseMultiple parses the SQL in full and returns a list of Statements, which
+// are the AST representation of the query. This command is meant to parse more than
+// one SQL statement at a time.
+func (p *Parser) ParseMultiple(sql string) ([]Statement, error) {
+	tokenizer := p.NewStringTokenizer(sql)
+	if yyParsePooled(tokenizer) != 0 {
+		return nil, tokenizer.LastError
+	}
+	return tokenizer.ParseTrees, nil
+}
+
+// ParseMultipleIgnoreEmpty parses multiple statements, but ignores empty statements.
+func (p *Parser) ParseMultipleIgnoreEmpty(sql string) ([]Statement, error) {
+	stmts, err := p.ParseMultiple(sql)
+	if err != nil {
+		return nil, err
+	}
+	newStmts := make([]Statement, 0)
+	for _, stmt := range stmts {
+		// Only keep non-empty non comment only statements.
+		if _, isCommentOnly := stmt.(*CommentOnly); stmt != nil && !isCommentOnly {
+			newStmts = append(newStmts, stmt)
+		}
+	}
+	return newStmts, nil
+}
+
+// parse parses the SQL in full and returns a list of Statements, which
+// are the AST representation of the query. This command is meant to parse more than
+// one SQL statement at a time.
+func parse(tokenizer *Tokenizer) ([]Statement, error) {
+	if yyParsePooled(tokenizer) != 0 {
+		return nil, tokenizer.LastError
+	}
+	return tokenizer.ParseTrees, nil
+}
+
+// checkParseTreesError checks for errors that need to be sent based on the parseTrees generated.
+func checkParseTreesError(tokenizer *Tokenizer) error {
+	if len(tokenizer.ParseTrees) > 1 {
+		return ErrMultipleStatements
+	}
+	if len(tokenizer.ParseTrees) == 0 || tokenizer.ParseTrees[0] == nil {
+		return ErrEmpty
+	}
+	return nil
 }
 
 // ConvertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
@@ -144,7 +192,7 @@ func (p *Parser) ParseExpr(sql string) (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	aliasedExpr := stmt.(*Select).SelectExprs[0].(*AliasedExpr)
+	aliasedExpr := stmt.(*Select).SelectExprs.Exprs[0].(*AliasedExpr)
 	return aliasedExpr.Expr, err
 }
 
@@ -161,54 +209,18 @@ func (p *Parser) ParseStrictDDL(sql string) (Statement, error) {
 	if yyParsePooled(tokenizer) != 0 {
 		return nil, tokenizer.LastError
 	}
-	if tokenizer.ParseTree == nil {
-		return nil, ErrEmpty
+	err := checkParseTreesError(tokenizer)
+	if err != nil {
+		return nil, err
 	}
-	return tokenizer.ParseTree, nil
-}
-
-// ParseNext parses a single SQL statement from the tokenizer
-// returning a Statement which is the AST representation of the query.
-// The tokenizer will always read up to the end of the statement, allowing for
-// the next call to ParseNext to parse any subsequent SQL statements. When
-// there are no more statements to parse, an error of io.EOF is returned.
-func ParseNext(tokenizer *Tokenizer) (Statement, error) {
-	return parseNext(tokenizer, false)
-}
-
-// ParseNextStrictDDL is the same as ParseNext except it errors on
-// partially parsed DDL statements.
-func ParseNextStrictDDL(tokenizer *Tokenizer) (Statement, error) {
-	return parseNext(tokenizer, true)
-}
-
-func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
-	if tokenizer.cur() == ';' {
-		tokenizer.skip(1)
-		tokenizer.skipBlank()
-	}
-	if tokenizer.cur() == eofChar {
-		return nil, io.EOF
-	}
-
-	tokenizer.reset()
-	tokenizer.multi = true
-	if yyParsePooled(tokenizer) != 0 {
-		if tokenizer.partialDDL != nil && !strict {
-			tokenizer.ParseTree = tokenizer.partialDDL
-			return tokenizer.ParseTree, nil
-		}
-		return nil, tokenizer.LastError
-	}
-	_, isCommentOnly := tokenizer.ParseTree.(*CommentOnly)
-	if tokenizer.ParseTree == nil || isCommentOnly {
-		return ParseNext(tokenizer)
-	}
-	return tokenizer.ParseTree, nil
+	return tokenizer.ParseTrees[0], nil
 }
 
 // ErrEmpty is a sentinel error returned when parsing empty statements.
 var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "Query was empty")
+
+// ErrMultipleStatements is a sentinel error returned when we parsed multiple statements when we were expecting one.
+var ErrMultipleStatements = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "Expected a single statement")
 
 // SplitStatement returns the first sql statement up to either a ';' or EOF
 // and the remainder from the given buffer
@@ -230,24 +242,40 @@ func (p *Parser) SplitStatement(blob string) (string, string, error) {
 	return blob, "", nil
 }
 
-// SplitStatements splits a given blob into multiple SQL statements.
-func (p *Parser) SplitStatements(blob string) (statements []Statement, err error) {
-	tokenizer := p.NewStringTokenizer(blob)
-	for {
-		stmt, err := ParseNext(tokenizer)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, err
-		}
-		statements = append(statements, stmt)
-	}
-	return statements, nil
+var validCreatePrefixes = [][]int{
+	// These are the tokens (in order) for valid "create procedure" forms.
+	{CREATE, PROCEDURE},
+	{CREATE, DEFINER, '=', CURRENT_USER, PROCEDURE},
+	{CREATE, DEFINER, '=', CURRENT_USER, '(', ')', PROCEDURE},
+	{CREATE, DEFINER, '=', STRING, PROCEDURE},
+	{CREATE, DEFINER, '=', STRING, AT_ID, PROCEDURE},
+	{CREATE, DEFINER, '=', ID, PROCEDURE},
+	{CREATE, DEFINER, '=', ID, AT_ID, PROCEDURE},
 }
 
-// SplitStatementToPieces split raw sql statement that may have multi sql pieces to sql pieces
-// returns the sql pieces blob contains; or error if sql cannot be parsed
+// matchesCreateProcedurePrefix checks if the given token sequence
+// is a create procedure statement or not.
+func matchesCreateProcedurePrefix(tokens []int) bool {
+	// Check each candidate sequence.
+	for _, pattern := range validCreatePrefixes {
+		if len(tokens) >= len(pattern) {
+			match := true
+			for i, tok := range pattern {
+				if tokens[i] != tok {
+					match = false
+					break
+				}
+			}
+			if match {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// SplitStatementToPieces splits raw sql statement that may have multi sql pieces to sql pieces
+// returns the sql pieces blob contains; or error if sql cannot be parsed.
 func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error) {
 	// fast path: the vast majority of SQL statements do not have semicolons in them
 	if blob == "" {
@@ -261,24 +289,31 @@ func (p *Parser) SplitStatementToPieces(blob string) (pieces []string, err error
 	}
 
 	pieces = make([]string, 0, 16)
-	// It's safe here to not case about version specific tokenization
-	// because we are only interested in semicolons and splitting
-	// statements.
 	tokenizer := p.NewStringTokenizer(blob)
 
 	tkn := 0
 	var stmt string
 	stmtBegin := 0
 	emptyStatement := true
+	var startTokens []int // holds the first tokens of the current statement
+
 loop:
 	for {
 		tkn, _ = tokenizer.Scan()
 		switch tkn {
 		case ';':
+			// Potential end of the statement.
 			stmt = blob[stmtBegin : tokenizer.Pos-1]
+			// If it's a create procedure statement and is incomplete, skip appending.
+			if matchesCreateProcedurePrefix(startTokens) && p.IsStatementIncomplete(stmt) {
+				continue
+			}
 			if !emptyStatement {
 				pieces = append(pieces, stmt)
+				// We can now reset the variables for the next statement.
+				// It starts off as an empty statement.
 				emptyStatement = true
+				startTokens = startTokens[:0] // clear token slice
 			}
 			stmtBegin = tokenizer.Pos
 		case 0, eofChar:
@@ -290,13 +325,37 @@ loop:
 				}
 			}
 			break loop
+		case COMMENT:
+			// Skip comments entirely without altering the token list.
+			continue
 		default:
+			// If we're at the very start of a statement, or we haven't filled out enough tokens
+			// for our valid prefix match (assuming our longest valid sequence is 10 tokens),
+			// accumulate the token.
+			if len(startTokens) < 10 {
+				startTokens = append(startTokens, tkn)
+			}
 			emptyStatement = false
 		}
 	}
 
 	err = tokenizer.LastError
 	return
+}
+
+// IsStatementIncomplete returns true if the statement is incomplete.
+func (p *Parser) IsStatementIncomplete(stmt string) bool {
+	tkn := p.NewStringTokenizer(stmt)
+	yyParsePooled(tkn)
+	if tkn.LastError != nil {
+		var pe PositionedErr
+		isPe := errors.As(tkn.LastError, &pe)
+		if isPe && pe.Pos == len(stmt)+1 {
+			// The error is at the end of the statement, which means it is incomplete.
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Parser) IsMySQL80AndAbove() bool {

@@ -28,11 +28,24 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
-	plan = &Plan{
-		PlanID:    PlanSelect,
-		FullQuery: GenerateLimitQuery(sel),
+func analyzeUnion(stmt *sqlparser.Union, noRowslimit bool) *Plan {
+	if noRowslimit {
+		return &Plan{PlanID: PlanSelect, FullQuery: GenerateFullQuery(stmt)}
 	}
+	return &Plan{PlanID: PlanSelect, FullQuery: GenerateLimitQuery(stmt)}
+}
+
+func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[string]*schema.Table, noRowsLimit bool) (plan *Plan, err error) {
+	plan = &Plan{}
+
+	if noRowsLimit {
+		plan.PlanID = PlanSelectNoLimit
+		plan.FullQuery = GenerateFullQuery(sel)
+	} else {
+		plan.PlanID = PlanSelect
+		plan.FullQuery = GenerateLimitQuery(sel)
+	}
+
 	plan.Table = lookupTables(sel.From, tables)
 
 	if sel.Where != nil {
@@ -44,7 +57,7 @@ func analyzeSelect(env *vtenv.Environment, sel *sqlparser.Select, tables map[str
 	}
 
 	// Check if it's a NEXT VALUE statement.
-	if nextVal, ok := sel.SelectExprs[0].(*sqlparser.Nextval); ok {
+	if nextVal, ok := sel.GetColumns()[0].(*sqlparser.Nextval); ok {
 		if plan.Table == nil || plan.Table.Type != schema.Sequence {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.ToString(sel.From))
 		}

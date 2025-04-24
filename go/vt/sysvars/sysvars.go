@@ -87,6 +87,9 @@ var (
 	ReadAfterWriteTimeOut = SystemVariable{Name: "read_after_write_timeout"}
 	SessionTrackGTIDs     = SystemVariable{Name: "session_track_gtids", IdentifierAsString: true}
 
+	// Filled in from VitessAware, ReadOnly, IgnoreThese, NotSupported, UseReservedConn, CheckAndIgnore
+	AllSystemVariables map[string]SystemVariable
+
 	VitessAware = []SystemVariable{
 		Autocommit,
 		ClientFoundRows,
@@ -268,6 +271,31 @@ var (
 		{Name: "version_tokens_session"},
 	}
 )
+
+func init() {
+	AllSystemVariables = make(map[string]SystemVariable)
+	for _, set := range [][]SystemVariable{
+		VitessAware,
+		ReadOnly,
+		IgnoreThese,
+		NotSupported,
+		UseReservedConn,
+		CheckAndIgnore,
+	} {
+		for _, v := range set {
+			AllSystemVariables[v.Name] = v
+		}
+	}
+}
+
+func SupportsSetVar(name string) bool {
+	sys, ok := AllSystemVariables[name]
+	if !ok {
+		return false
+	}
+
+	return sys.SupportSetVar
+}
 
 // GetInterestingVariables is used to return all the variables that may be listed in a SHOW VARIABLES command.
 func GetInterestingVariables() []string {

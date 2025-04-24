@@ -100,7 +100,7 @@ func TestNullMap(t *testing.T) {
 		sqltypes.NULL,
 	})
 	require.NoError(t, err)
-	want := []key.Destination{
+	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte{0}),
 		key.DestinationKeyspaceID([]byte{0}),
 		key.DestinationKeyspaceID([]byte{0}),

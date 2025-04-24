@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -55,7 +54,7 @@ type (
 func newInsertSelect(
 	ignore bool,
 	keyspace *vindexes.Keyspace,
-	table *vindexes.Table,
+	table *vindexes.BaseTable,
 	prefix string,
 	suffix sqlparser.OnDup,
 	vv [][]int,
@@ -85,11 +84,6 @@ func newInsertSelect(
 
 func (ins *InsertSelect) Inputs() ([]Primitive, []map[string]any) {
 	return []Primitive{ins.Input}, nil
-}
-
-// RouteType returns a description of the query routing type used by the primitive
-func (ins *InsertSelect) RouteType() string {
-	return "InsertSelect"
 }
 
 // TryExecute performs a non-streaming exec.
@@ -235,7 +229,7 @@ func (ins *InsertSelect) getInsertShardedQueries(
 	}
 
 	var indexes []*querypb.Value
-	var destinations []key.Destination
+	var destinations []key.ShardDestination
 	for i, ksid := range keyspaceIDs {
 		if ksid != nil {
 			indexes = append(indexes, &querypb.Value{
@@ -320,7 +314,6 @@ func (ins *InsertSelect) execInsertSharded(ctx context.Context, vcursor VCursor,
 
 func (ins *InsertSelect) description() PrimitiveDescription {
 	other := ins.commonDesc()
-	other["TableName"] = ins.GetTableName()
 
 	if len(ins.VindexValueOffset) > 0 {
 		valuesOffsets := map[string]string{}
@@ -336,11 +329,10 @@ func (ins *InsertSelect) description() PrimitiveDescription {
 	}
 
 	return PrimitiveDescription{
-		OperatorType:     "Insert",
-		Keyspace:         ins.Keyspace,
-		Variant:          "Select",
-		TargetTabletType: topodatapb.TabletType_PRIMARY,
-		Other:            other,
+		OperatorType: "Insert",
+		Keyspace:     ins.Keyspace,
+		Variant:      "Select",
+		Other:        other,
 	}
 }
 

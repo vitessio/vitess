@@ -38,15 +38,15 @@ func tryMergeCTE(ctx *plancontext.PlanningContext, seed, term Operator, in *Recu
 
 	switch {
 	case a == dual:
-		return mergeCTE(ctx, seedRoute, termRoute, routingB, in)
+		return mergeCTE(ctx, seedRoute, termRoute, routingB, in, nil)
 	case b == dual:
-		return mergeCTE(ctx, seedRoute, termRoute, routingA, in)
+		return mergeCTE(ctx, seedRoute, termRoute, routingA, in, nil)
 	case !sameKeyspace:
 		return nil
 	case a == anyShard:
-		return mergeCTE(ctx, seedRoute, termRoute, routingB, in)
+		return mergeCTE(ctx, seedRoute, termRoute, routingB, in, nil)
 	case b == anyShard:
-		return mergeCTE(ctx, seedRoute, termRoute, routingA, in)
+		return mergeCTE(ctx, seedRoute, termRoute, routingA, in, nil)
 	case a == sharded && b == sharded:
 		return tryMergeCTESharded(ctx, seedRoute, termRoute, in)
 	default:
@@ -65,8 +65,11 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in 
 			bVdx := tblB.SelectedVindex()
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
-			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return mergeCTE(ctx, seed, term, tblA, in)
+			if aVdx == bVdx {
+				equal, conditions := gen4ValuesEqual(ctx, aExpr, bExpr)
+				if equal {
+					return mergeCTE(ctx, seed, term, tblA, in, conditions)
+				}
 			}
 		}
 	}
@@ -74,11 +77,17 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in 
 	return nil
 }
 
-func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in *RecurseCTE) *Route {
+func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in *RecurseCTE, conditions []engine.Condition) *Route {
 	in.Def.Merged = true
 	hz := in.Horizon
 	hz.Source = term.Source
 	newTerm, _ := expandHorizon(ctx, hz)
+	for _, predicate := range in.Predicates {
+		if predicate.JoinPredicateID != nil {
+			ctx.PredTracker.Set(*predicate.JoinPredicateID, predicate.Original)
+		}
+	}
+
 	cte := &RecurseCTE{
 		binaryOperator: newBinaryOp(seed.Source, newTerm),
 		Predicates:     in.Predicates,
@@ -91,5 +100,6 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 		Routing:       r,
 		unaryOperator: newUnaryOp(cte),
 		MergedWith:    []*Route{term},
+		Conditions:    conditions,
 	}
 }

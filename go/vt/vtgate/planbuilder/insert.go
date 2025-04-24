@@ -83,14 +83,14 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	return newPlanResult(plan, operators.TablesUsed(op)...), nil
 }
 
-func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vindexes.Table) error {
+func errOutIfPlanCannotBeConstructed(ctx *plancontext.PlanningContext, vTbl *vindexes.BaseTable) error {
 	if !vTbl.Keyspace.Sharded {
 		return nil
 	}
 	return ctx.SemTable.NotUnshardedErr
 }
 
-func insertUnshardedShortcut(ctx *plancontext.PlanningContext, stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.Table) engine.Primitive {
+func insertUnshardedShortcut(ctx *plancontext.PlanningContext, stmt *sqlparser.Insert, ks *vindexes.Keyspace, tables []*vindexes.BaseTable) engine.Primitive {
 	eIns := &engine.Insert{
 		InsertCommon: engine.InsertCommon{
 			Opcode:            engine.InsertUnsharded,

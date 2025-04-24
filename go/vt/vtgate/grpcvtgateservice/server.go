@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -56,7 +57,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&useEffective, "grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
 	fs.BoolVar(&useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
 	fs.BoolVar(&useStaticAuthenticationIdentity, "grpc-use-static-authentication-callerid", false, "If set, will set the immediate caller id to the username authenticated by the static auth plugin.")
-	fs.BoolVar(&sendSessionInStreaming, "grpc-send-session-in-streaming", false, "If set, will send the session as last packet in streaming api to support transactions in streaming")
+	fs.BoolVar(&sendSessionInStreaming, "grpc-send-session-in-streaming", true, "If set, will send the session as last packet in streaming api to support transactions in streaming")
+	_ = fs.MarkDeprecated("grpc-send-session-in-streaming", "This option is deprecated and will be deleted in a future release")
 }
 
 func init() {
@@ -145,12 +147,68 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 	if session == nil {
 		session = &vtgatepb.Session{Autocommit: true}
 	}
-	session, result, err := vtg.server.Execute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables)
+	session, result, err := vtg.server.Execute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, request.Prepared)
 	return &vtgatepb.ExecuteResponse{
 		Result:  sqltypes.ResultToProto3(result),
 		Session: session,
 		Error:   vterrors.ToVTRPC(err),
 	}, nil
+}
+
+// ExecuteMulti is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) ExecuteMulti(ctx context.Context, request *vtgatepb.ExecuteMultiRequest) (response *vtgatepb.ExecuteMultiResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = withCallerIDContext(ctx, request.CallerId)
+
+	// Handle backward compatibility.
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{Autocommit: true}
+	}
+	newSession, qrs, err := vtg.server.ExecuteMulti(ctx, nil, session, request.Sql)
+	return &vtgatepb.ExecuteMultiResponse{
+		Results: sqltypes.ResultsToProto3(qrs),
+		Session: newSession,
+		Error:   vterrors.ToVTRPC(err),
+	}, nil
+}
+
+func (vtg *VTGate) StreamExecuteMulti(request *vtgatepb.StreamExecuteMultiRequest, stream vtgateservicepb.Vitess_StreamExecuteMultiServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{Autocommit: true}
+	}
+
+	session, vtgErr := vtg.server.StreamExecuteMulti(ctx, nil, session, request.Sql, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		// Send is not safe to call concurrently, but vtgate
+		// guarantees that it's not.
+		return stream.Send(&vtgatepb.StreamExecuteMultiResponse{
+			Result:      sqltypes.QueryResponseToProto3(qr),
+			MoreResults: more,
+			NewResult:   firstPacket,
+		})
+	})
+
+	var errs []error
+	if vtgErr != nil {
+		errs = append(errs, vtgErr)
+	}
+
+	if sendSessionInStreaming {
+		// even if there is an error, session could have been modified.
+		// So, this needs to be sent back to the client. Session is sent in the last stream response.
+		lastErr := stream.Send(&vtgatepb.StreamExecuteMultiResponse{
+			Session: session,
+		})
+		if lastErr != nil {
+			errs = append(errs, lastErr)
+		}
+	}
+
+	return vterrors.ToGRPC(vterrors.Aggregate(errs))
 }
 
 // ExecuteBatch is the RPC version of vtgateservice.VTGateService method
@@ -224,11 +282,12 @@ func (vtg *VTGate) Prepare(ctx context.Context, request *vtgatepb.PrepareRequest
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	session, fields, err := vtg.server.Prepare(ctx, session, request.Query.Sql, request.Query.BindVariables)
+	session, fields, paramsCount, err := vtg.server.Prepare(ctx, session, request.Query.Sql)
 	return &vtgatepb.PrepareResponse{
-		Fields:  fields,
-		Session: session,
-		Error:   vterrors.ToVTRPC(err),
+		Session:     session,
+		Fields:      fields,
+		ParamsCount: uint32(paramsCount),
+		Error:       vterrors.ToVTRPC(err),
 	}, nil
 }
 
@@ -268,6 +327,9 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 				Events: events,
 			})
 		})
+	if vtgErr != nil {
+		log.Infof("VStream grpc error: %v", vtgErr)
+	}
 	return vterrors.ToGRPC(vtgErr)
 }
 

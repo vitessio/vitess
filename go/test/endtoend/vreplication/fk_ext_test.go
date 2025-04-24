@@ -86,7 +86,10 @@ func TestFKExt(t *testing.T) {
 	setSidecarDBName("_vt")
 
 	// Ensure that there are multiple copy phase cycles per table.
-	extraVTTabletArgs = append(extraVTTabletArgs, "--vstream_packet_size=256", "--queryserver-config-schema-change-signal")
+	extraVTTabletArgs = append(extraVTTabletArgs,
+		"--vstream_packet_size=256",
+		"--queryserver-config-schema-change-signal",
+		parallelInsertWorkers)
 	extraVTGateArgs = append(extraVTGateArgs, "--schema_change_signal=true", "--planner-version", "Gen4")
 	defer func() { extraVTTabletArgs = nil }()
 	initFKExtConfig(t)

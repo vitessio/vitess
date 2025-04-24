@@ -155,6 +155,21 @@ func TestMySQLVersionCapableOf(t *testing.T) {
 			isCapable:  false,
 		},
 		{
+			version:    "8.0.13",
+			capability: InnoDBParallelReadThreadsCapability,
+			isCapable:  false,
+		},
+		{
+			version:    "8.0.14",
+			capability: InnoDBParallelReadThreadsCapability,
+			isCapable:  true,
+		},
+		{
+			version:    "8.4.1",
+			capability: InnoDBParallelReadThreadsCapability,
+			isCapable:  true,
+		},
+		{
 			version:    "8.0.30",
 			capability: DynamicRedoLogCapacityFlavorCapability,
 			isCapable:  true,

@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"testing"
 
+	"vitess.io/vitess/go/slice"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -66,10 +68,8 @@ func TestConversion(t *testing.T) {
 	}
 }
 
-func extract(in sqlparser.SelectExprs) []sqlparser.Expr {
-	var result []sqlparser.Expr
-	for _, expr := range in {
-		result = append(result, expr.(*sqlparser.AliasedExpr).Expr)
-	}
-	return result
+func extract(in *sqlparser.SelectExprs) []sqlparser.Expr {
+	return slice.Map(in.Exprs, func(i sqlparser.SelectExpr) sqlparser.Expr {
+		return i.(*sqlparser.AliasedExpr).Expr
+	})
 }

@@ -62,25 +62,13 @@ func (ddl *DDL) description() PrimitiveDescription {
 	}
 }
 
-// RouteType implements the Primitive interface
-func (ddl *DDL) RouteType() string {
-	return "DDL"
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (ddl *DDL) GetKeyspaceName() string {
-	return ddl.Keyspace.Name
-}
-
-// GetTableName implements the Primitive interface
-func (ddl *DDL) GetTableName() string {
-	return ddl.DDL.GetTable().Name.String()
-}
-
 // IsOnlineSchemaDDL returns true if the query is an online schema change DDL
 func (ddl *DDL) isOnlineSchemaDDL() bool {
 	switch ddl.DDL.GetAction() {
 	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction, sqlparser.AlterDDLAction:
+		if ddl.OnlineDDL == nil || ddl.OnlineDDL.DDLStrategySetting == nil {
+			return false
+		}
 		return !ddl.OnlineDDL.DDLStrategySetting.Strategy.IsDirect()
 	}
 	return false

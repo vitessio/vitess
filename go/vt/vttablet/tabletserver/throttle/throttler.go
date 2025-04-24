@@ -47,7 +47,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
-	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -175,7 +174,6 @@ type Throttler struct {
 
 	customMetricsQuery atomic.Value
 	MetricsThreshold   atomic.Uint64
-	checkAsCheckSelf   atomic.Bool
 
 	metricThresholds  *cache.Cache
 	aggregatedMetrics *cache.Cache
@@ -437,14 +435,13 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		// require per-metric threshold.
 		throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
 	}
-	throttler.checkAsCheckSelf.Store(throttlerConfig.CheckAsCheckSelf)
 	{
 		// Throttled apps/rules
 		for _, appRule := range throttlerConfig.ThrottledApps {
 			throttler.ThrottleApp(appRule.Name, protoutil.TimeFromProto(appRule.ExpiresAt).UTC(), appRule.Ratio, appRule.Exempt)
 		}
 		for app := range throttler.throttledAppsSnapshot() {
-			if app == throttlerapp.TestingAlwaysThrottlerName.String() {
+			if app == throttlerapp.TestingAlwaysThrottledName.String() {
 				// Never remove this app
 				continue
 			}
@@ -628,7 +625,7 @@ func (throttler *Throttler) Open() error {
 	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 
-	throttler.ThrottleApp(throttlerapp.TestingAlwaysThrottlerName.String(), time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
+	throttler.ThrottleApp(throttlerapp.TestingAlwaysThrottledName.String(), time.Now().Add(time.Hour*24*365*10), DefaultThrottleRatio, false)
 
 	go throttler.retryReadAndApplyThrottlerConfig(ctx)
 
@@ -788,10 +785,7 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 					defer throttler.initMutex.Unlock()
 
 					// sparse
-					shouldBeLeader := false
-					if throttler.IsOpen() && throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
-						shouldBeLeader = true
-					}
+					shouldBeLeader := throttler.IsOpen() && throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY
 
 					isLeader := throttler.isLeader.Swap(shouldBeLeader)
 					transitionedIntoLeader := false
@@ -907,7 +901,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 		}
 		metrics := make(base.ThrottleMetrics)
 
-		req := &tabletmanagerdatapb.CheckThrottlerRequest{MultiMetricsEnabled: true} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
+		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 		resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req)
 		if gRPCErr != nil {
 			return metricsWithError(fmt.Errorf("gRPC error accessing tablet %v. Err=%v", probe.Alias, gRPCErr))
@@ -915,9 +909,6 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 		throttleMetric.Value = resp.Value
 		if resp.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR {
 			throttleMetric.Err = fmt.Errorf("response code: %d", resp.ResponseCode)
-		}
-		if resp.StatusCode == http.StatusInternalServerError {
-			throttleMetric.Err = fmt.Errorf("status code: %d", resp.StatusCode)
 		}
 		if resp.RecentlyChecked {
 			// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
@@ -1090,7 +1081,7 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 	}
 	throttler.convergeMetricThresholds()
 
-	var clusterSettingsCopy config.MySQLConfigurationSettings = throttler.configSettings.MySQLStore
+	var clusterSettingsCopy = throttler.configSettings.MySQLStore
 	// config may dynamically change, but internal structure (config.Settings().MySQLStore.Clusters in our case)
 	// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 	collect := func() error {
@@ -1402,8 +1393,8 @@ func (throttler *Throttler) ThrottledAppsMap() (result map[string](*base.AppThro
 }
 
 // markRecentApp takes note that an app has just asked about throttling, making it "recent"
-func (throttler *Throttler) markRecentApp(appName string, statusCode int, responseCode tabletmanagerdatapb.CheckThrottlerResponseCode) {
-	recentApp := base.NewRecentApp(appName, statusCode, responseCode)
+func (throttler *Throttler) markRecentApp(appName string, responseCode tabletmanagerdatapb.CheckThrottlerResponseCode) {
+	recentApp := base.NewRecentApp(appName, responseCode)
 	throttler.recentApps.Set(appName, recentApp, cache.DefaultExpiration)
 }
 
@@ -1539,9 +1530,6 @@ func (throttler *Throttler) Check(ctx context.Context, appName string, metricNam
 	scope := base.UndefinedScope
 	if flags != nil {
 		scope = flags.Scope
-	}
-	if scope == base.ShardScope && throttler.checkAsCheckSelf.Load() {
-		scope = base.SelfScope
 	}
 	return throttler.checkScope(ctx, appName, scope, metricNames, flags)
 }

@@ -756,13 +756,13 @@ public class VitessConnection extends ConnectionProperties implements Connection
 
       try (VitessStatement vitessStatement = new VitessStatement(
           this); ResultSet resultSet = vitessStatement.executeQuery(
-          "SHOW VARIABLES WHERE VARIABLE_NAME IN (\'tx_isolation\',\'INNODB_VERSION\', "
+          "SHOW VARIABLES WHERE VARIABLE_NAME IN (\'transaction_isolation\',\'INNODB_VERSION\', "
               + "\'lower_case_table_names\')")) {
         while (resultSet.next()) {
           dbVariables.put(resultSet.getString(1), resultSet.getString(2));
         }
         versionValue = dbVariables.get("innodb_version");
-        String transactionIsolation = dbVariables.get("tx_isolation");
+        String transactionIsolation = dbVariables.get("transaction_isolation");
         String lowerCaseTables = dbVariables.get("lower_case_table_names");
         String productVersion = "";
         String majorVersion = "";

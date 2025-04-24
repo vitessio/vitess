@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,13 +17,7 @@ limitations under the License.
 
 package collations
 
-import (
-	"math"
-	"reflect"
-	"unsafe"
-
-	hack "vitess.io/vitess/go/hack"
-)
+import hack "vitess.io/vitess/go/hack"
 
 //go:nocheckptr
 func (cached *Environment) CachedSize(alloc bool) int64 {
@@ -36,28 +30,14 @@ func (cached *Environment) CachedSize(alloc bool) int64 {
 	}
 	// field byName map[string]vitess.io/vitess/go/mysql/collations.ID
 	if cached.byName != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.byName)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 160))
-		if len(cached.byName) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 160))
-		}
+		size += hack.RuntimeMapSize(cached.byName)
 		for k := range cached.byName {
 			size += hack.RuntimeAllocSize(int64(len(k)))
 		}
 	}
 	// field byCharset map[string]*vitess.io/vitess/go/mysql/collations.colldefaults
 	if cached.byCharset != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.byCharset)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
-		if len(cached.byCharset) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
-		}
+		size += hack.RuntimeMapSize(cached.byCharset)
 		for k, v := range cached.byCharset {
 			size += hack.RuntimeAllocSize(int64(len(k)))
 			if v != nil {
@@ -67,42 +47,21 @@ func (cached *Environment) CachedSize(alloc bool) int64 {
 	}
 	// field byCharsetName map[vitess.io/vitess/go/mysql/collations.ID]string
 	if cached.byCharsetName != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.byCharsetName)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 160))
-		if len(cached.byCharsetName) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 160))
-		}
+		size += hack.RuntimeMapSize(cached.byCharsetName)
 		for _, v := range cached.byCharsetName {
 			size += hack.RuntimeAllocSize(int64(len(v)))
 		}
 	}
 	// field unsupported map[string]vitess.io/vitess/go/mysql/collations.ID
 	if cached.unsupported != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.unsupported)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 160))
-		if len(cached.unsupported) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 160))
-		}
+		size += hack.RuntimeMapSize(cached.unsupported)
 		for k := range cached.unsupported {
 			size += hack.RuntimeAllocSize(int64(len(k)))
 		}
 	}
 	// field byID map[vitess.io/vitess/go/mysql/collations.ID]string
 	if cached.byID != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.byID)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 160))
-		if len(cached.byID) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 160))
-		}
+		size += hack.RuntimeMapSize(cached.byID)
 		for _, v := range cached.byID {
 			size += hack.RuntimeAllocSize(int64(len(v)))
 		}

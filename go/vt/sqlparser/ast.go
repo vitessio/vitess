@@ -43,6 +43,12 @@ type (
 		SQLNode
 	}
 
+	// CompoundStatement represents a compound statement that can be part of a create procedure call.
+	CompoundStatement interface {
+		iCompoundStatement()
+		SQLNode
+	}
+
 	Commented interface {
 		SetComments(comments Comments)
 		GetParsedComments() *ParsedComments
@@ -75,7 +81,7 @@ type (
 
 	ColumnResults interface {
 		GetColumnCount() int
-		GetColumns() SelectExprs
+		GetColumns() []SelectExpr
 	}
 
 	Withable interface {
@@ -295,7 +301,7 @@ type (
 		With        *With
 		From        []TableExpr
 		Comments    *ParsedComments
-		SelectExprs SelectExprs
+		SelectExprs *SelectExprs
 		Where       *Where
 		GroupBy     *GroupBy
 		Having      *Where
@@ -309,6 +315,7 @@ type (
 	// SelectInto is a struct that represent the INTO part of a select query
 	SelectInto struct {
 		Type         SelectIntoType
+		VarList      []*Variable
 		FileName     string
 		Charset      ColumnCharset
 		FormatOption string
@@ -522,6 +529,16 @@ type (
 		Shards    string
 	}
 
+	// CreateProcedure represents a CREATE PROCEDURE statement.
+	CreateProcedure struct {
+		Name        TableName
+		Comments    *ParsedComments
+		IfNotExists bool
+		Definer     *Definer
+		Params      []*ProcParameter
+		Body        CompoundStatement
+	}
+
 	// AlterTable represents a ALTER TABLE statement.
 	AlterTable struct {
 		Table           TableName
@@ -546,6 +563,13 @@ type (
 		FromTables TableNames
 		IfExists   bool
 		Comments   *ParsedComments
+	}
+
+	// DropProcedure represents a DROP procedure statement.
+	DropProcedure struct {
+		Comments *ParsedComments
+		Name     TableName
+		IfExists bool
 	}
 
 	// CreateTable represents a CREATE TABLE statement.
@@ -645,7 +669,7 @@ type (
 	// CallProc represents a CALL statement
 	CallProc struct {
 		Name   TableName
-		Params Exprs
+		Params []Expr
 	}
 
 	// LockType is an enum for Lock Types
@@ -745,7 +769,123 @@ type (
 
 	// IndexType is the type of index in a DDL statement
 	IndexType int8
+
+	// HandlerAction is the type of action for the DeclareHandler statement
+	HandlerAction int8
 )
+
+// Compound Statements
+type (
+	// CompoundStatements represents a list of compound statements.
+	CompoundStatements struct {
+		Statements []CompoundStatement
+	}
+
+	// SingleStatement represents a single statement.
+	SingleStatement struct {
+		Statement Statement
+	}
+
+	// BeginEndStatement represents a BEGIN ... END block.
+	BeginEndStatement struct {
+		Statements *CompoundStatements
+	}
+
+	// IfStatement represents a IF ... ELSEIF ... ELSE ... END IF block.
+	IfStatement struct {
+		SearchCondition Expr
+		ThenStatements  *CompoundStatements
+		ElseIfBlocks    []*ElseIfBlock
+		ElseStatements  *CompoundStatements
+	}
+
+	// ElseIfBlock represents a ELSEIF block in an IF statement.
+	ElseIfBlock struct {
+		SearchCondition Expr
+		ThenStatements  *CompoundStatements
+	}
+
+	// DeclareVar represents a Local Variable DECLARE Statement
+	DeclareVar struct {
+		VarNames []IdentifierCI
+		Type     *ColumnType
+	}
+
+	// DeclareHandler represents a DECLARE...HANDLER statement
+	DeclareHandler struct {
+		Action     HandlerAction
+		Conditions []HandlerCondition
+		Statement  CompoundStatement
+	}
+
+	// DeclareCondition represents a DECLARE...CONDITION statement
+	DeclareCondition struct {
+		Name      IdentifierCI
+		Condition HandlerCondition
+	}
+
+	// Signal represents a SIGNAL statement
+	Signal struct {
+		Condition HandlerCondition
+		SetValues []*SignalSet
+	}
+)
+
+func (*SingleStatement) iCompoundStatement()   {}
+func (*BeginEndStatement) iCompoundStatement() {}
+func (*IfStatement) iCompoundStatement()       {}
+func (*DeclareVar) iCompoundStatement()        {}
+func (*DeclareHandler) iCompoundStatement()    {}
+func (*DeclareCondition) iCompoundStatement()  {}
+func (*Signal) iCompoundStatement()            {}
+
+// SignalConditionName is an enum for the name of the condition variable being set in SIGNAL statement
+type SignalConditionName int8
+
+// SignalSet represents a set condition in a SIGNAL statement
+type SignalSet struct {
+	ConditionName SignalConditionName
+	Value         Expr
+}
+
+// HandlerCondition represents a condition in a DECLARE HANDLER statement
+type (
+	HandlerCondition interface {
+		iHandlerCondition()
+		SQLNode
+	}
+
+	// HandlerConditionSQLState represents a SQLSTATE condition in a DECLARE HANDLER statement
+	HandlerConditionSQLState struct {
+		SQLStateValue *Literal
+	}
+
+	// HandlerConditionNamed represents a named condition in a DECLARE HANDLER statement
+	HandlerConditionNamed struct {
+		Name IdentifierCI
+	}
+
+	// HandlerConditionErrorCode represents an error code condition in a DECLARE HANDLER statement
+	HandlerConditionErrorCode struct {
+		ErrorCode int
+	}
+
+	// HandlerConditionSQLException represents a SQLEXCEPTION condition in a DECLARE HANDLER statement
+	HandlerConditionSQLException struct{}
+
+	// HandlerConditionSQLWarning represents a SQLWARNING condition in a DECLARE HANDLER statement
+	HandlerConditionSQLWarning struct{}
+
+	// HandlerConditionNotFound represents a NOT FOUND condition in a DECLARE HANDLER statement
+	HandlerConditionNotFound struct{}
+)
+
+func (*HandlerConditionSQLState) iHandlerCondition()     {}
+func (*HandlerConditionNamed) iHandlerCondition()        {}
+func (*HandlerConditionErrorCode) iHandlerCondition()    {}
+func (*HandlerConditionSQLException) iHandlerCondition() {}
+func (*HandlerConditionSQLWarning) iHandlerCondition()   {}
+func (*HandlerConditionNotFound) iHandlerCondition()     {}
 
 var _ OrderAndLimit = (*Select)(nil)
 var _ OrderAndLimit = (*Update)(nil)
@@ -790,6 +930,7 @@ func (*UnlockTables) iStatement()          {}
 func (*AlterTable) iStatement()            {}
 func (*AlterVschema) iStatement()          {}
 func (*AlterMigration) iStatement()        {}
+func (*CreateProcedure) iStatement()       {}
 func (*RevertMigration) iStatement()       {}
 func (*ShowMigrationLogs) iStatement()     {}
 func (*ShowThrottledApps) iStatement()     {}
@@ -807,15 +948,18 @@ func (*ExecuteStmt) iStatement()           {}
 func (*DeallocateStmt) iStatement()        {}
 func (*PurgeBinaryLogs) iStatement()       {}
 func (*Kill) iStatement()                  {}
+func (*DropProcedure) iStatement()         {}
 
-func (*CreateView) iDDLStatement()    {}
-func (*AlterView) iDDLStatement()     {}
-func (*CreateTable) iDDLStatement()   {}
-func (*DropTable) iDDLStatement()     {}
-func (*DropView) iDDLStatement()      {}
-func (*AlterTable) iDDLStatement()    {}
-func (*TruncateTable) iDDLStatement() {}
-func (*RenameTable) iDDLStatement()   {}
+func (*CreateView) iDDLStatement()      {}
+func (*AlterView) iDDLStatement()       {}
+func (*CreateTable) iDDLStatement()     {}
+func (*DropTable) iDDLStatement()       {}
+func (*DropView) iDDLStatement()        {}
+func (*AlterTable) iDDLStatement()      {}
+func (*TruncateTable) iDDLStatement()   {}
+func (*RenameTable) iDDLStatement()     {}
+func (*CreateProcedure) iDDLStatement() {}
+func (*DropProcedure) iDDLStatement()   {}
 
 func (*AddConstraintDefinition) iAlterOption() {}
 func (*AddIndexDefinition) iAlterOption()      {}
@@ -863,6 +1007,18 @@ func (*TruncateTable) SetFullyParsed(bool) {}
 func (*RenameTable) IsFullyParsed() bool {
 	return true
 }
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *CreateProcedure) IsFullyParsed() bool { return true }
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *DropProcedure) IsFullyParsed() bool { return true }
+
+// SetFullyParsed implements the DDL interface
+func (node *DropProcedure) SetFullyParsed(fullyParsed bool) {}
+
+// SetFullyParsed implements the DDLStatement interface
+func (node *CreateProcedure) SetFullyParsed(bool) {}
 
 // SetFullyParsed implements the DDLStatement interface
 func (node *RenameTable) SetFullyParsed(fullyParsed bool) {}
@@ -921,6 +1077,14 @@ func (node *AlterView) SetFullyParsed(fullyParsed bool) {}
 
 // IsTemporary implements the DDLStatement interface
 func (*TruncateTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *CreateProcedure) IsTemporary() bool { return false }
+
+// IsTemporary implements the DDL interface
+func (node *DropProcedure) IsTemporary() bool {
 	return false
 }
 
@@ -999,6 +1163,14 @@ func (node *RenameTable) GetTable() TableName {
 	return TableName{}
 }
 
+// GetTable implements the DDLStatement interface
+func (node *CreateProcedure) GetTable() TableName { return node.Name }
+
+// GetTable implements the DDL interface
+func (node *DropProcedure) GetTable() TableName {
+	return node.Name
+}
+
 // GetAction implements the DDLStatement interface
 func (node *TruncateTable) GetAction() DDLAction {
 	return TruncateDDLAction
@@ -1039,6 +1211,16 @@ func (node *DropView) GetAction() DDLAction {
 	return DropDDLAction
 }
 
+// GetAction implements the DDL interface
+func (node *DropProcedure) GetAction() DDLAction {
+	return DropDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *CreateProcedure) GetAction() DDLAction {
+	return CreateProcedureAction
+}
+
 // GetOptLike implements the DDLStatement interface
 func (node *CreateTable) GetOptLike() *OptLike {
 	return node.OptLike
@@ -1076,6 +1258,16 @@ func (node *DropTable) GetOptLike() *OptLike {
 
 // GetOptLike implements the DDLStatement interface
 func (node *DropView) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *CreateProcedure) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDL interface
+func (node *DropProcedure) GetOptLike() *OptLike {
 	return nil
 }
 
@@ -1119,6 +1311,16 @@ func (node *DropView) GetIfExists() bool {
 	return node.IfExists
 }
 
+// GetIfExists implements the DDL interface
+func (node *DropProcedure) GetIfExists() bool {
+	return node.IfExists
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *CreateProcedure) GetIfExists() bool {
+	return false
+}
+
 // GetIfNotExists implements the DDLStatement interface
 func (node *RenameTable) GetIfNotExists() bool {
 	return false
@@ -1156,6 +1358,16 @@ func (node *DropTable) GetIfNotExists() bool {
 
 // GetIfNotExists implements the DDLStatement interface
 func (node *DropView) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *CreateProcedure) GetIfNotExists() bool {
+	return node.IfNotExists
+}
+
+// GetIfNotExists implements the DDL interface
+func (node *DropProcedure) GetIfNotExists() bool {
 	return false
 }
 
@@ -1199,6 +1411,16 @@ func (node *DropView) GetIsReplace() bool {
 	return false
 }
 
+// GetIsReplace implements the DDLStatement interface
+func (node *CreateProcedure) GetIsReplace() bool {
+	return false
+}
+
+// GetIsReplace implements the DDL interface
+func (node *DropProcedure) GetIsReplace() bool {
+	return false
+}
+
 // GetTableSpec implements the DDLStatement interface
 func (node *CreateTable) GetTableSpec() *TableSpec {
 	return node.TableSpec
@@ -1236,6 +1458,16 @@ func (node *DropTable) GetTableSpec() *TableSpec {
 
 // GetTableSpec implements the DDLStatement interface
 func (node *DropView) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *CreateProcedure) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDL interface
+func (node *DropProcedure) GetTableSpec() *TableSpec {
 	return nil
 }
 
@@ -1283,6 +1515,16 @@ func (node *AlterView) GetFromTables() TableNames {
 	return nil
 }
 
+// GetFromTables implements the DDLStatement interface
+func (node *CreateProcedure) GetFromTables() TableNames {
+	return nil
+}
+
+// GetFromTables implements the DDL interface
+func (node *DropProcedure) GetFromTables() TableNames {
+	return nil
+}
+
 // SetFromTables implements DDLStatement.
 func (node *RenameTable) SetFromTables(tables TableNames) {
 	if len(node.TablePairs) != len(tables) {
@@ -1327,6 +1569,14 @@ func (node *DropView) SetFromTables(tables TableNames) {
 func (node *AlterView) SetFromTables(tables TableNames) {
 	// irrelevant
 }
+
+// SetFromTables implements the DDLStatement interface
+func (node *CreateProcedure) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements the DDL interface
+func (node *DropProcedure) SetFromTables(tables TableNames) {}
 
 // SetComments implements Commented interface.
 func (node *RenameTable) SetComments(comments Comments) {
@@ -1405,6 +1655,16 @@ func (node *Update) SetComments(comments Comments) {
 
 // SetComments for VStream
 func (node *VStream) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
+
+// SetComments for CreateProcedure
+func (node *CreateProcedure) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
+
+// SetComments implements the DDL interface
+func (node *DropProcedure) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
@@ -1493,6 +1753,14 @@ func (node *VStream) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
+// GetParsedComments implements Commented interface.
+func (node *CreateProcedure) GetParsedComments() *ParsedComments { return node.Comments }
+
+// GetParsedComments implements the DDL interface
+func (node *DropProcedure) GetParsedComments() *ParsedComments {
+	return node.Comments
+}
+
 // GetToTables implements the DDLStatement interface
 func (node *RenameTable) GetToTables() TableNames {
 	var toTables TableNames
@@ -1540,6 +1808,16 @@ func (node *DropTable) GetToTables() TableNames {
 
 // GetToTables implements the DDLStatement interface
 func (node *DropView) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *CreateProcedure) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDL interface
+func (node *DropProcedure) GetToTables() TableNames {
 	return nil
 }
 
@@ -1595,6 +1873,16 @@ func (node *DropView) AffectedTables() TableNames {
 	return node.FromTables
 }
 
+// AffectedTables implements the DDLStatement interface
+func (node *CreateProcedure) AffectedTables() TableNames {
+	return TableNames{node.GetTable()}
+}
+
+// AffectedTables implements the DDL interface
+func (node *DropProcedure) AffectedTables() TableNames {
+	return TableNames{node.GetTable()}
+}
+
 // SetTable implements DDLStatement.
 func (node *TruncateTable) SetTable(qualifier string, name string) {
 	node.Table.Qualifier = NewIdentifierCS(qualifier)
@@ -1633,6 +1921,18 @@ func (node *DropTable) SetTable(qualifier string, name string) {}
 
 // SetTable implements DDLStatement.
 func (node *DropView) SetTable(qualifier string, name string) {}
+
+// SetTable implements the DDLStatement interface
+func (node *CreateProcedure) SetTable(qualifier string, name string) {
+	node.Name.Qualifier = NewIdentifierCS(qualifier)
+	node.Name.Name = NewIdentifierCS(name)
+}
+
+// SetTable implements the DDL interface
+func (node *DropProcedure) SetTable(qualifier string, name string) {
+	node.Name.Qualifier = NewIdentifierCS(qualifier)
+	node.Name.Name = NewIdentifierCS(name)
+}
 
 func (*DropDatabase) iDBDDLStatement()   {}
 func (*CreateDatabase) iDBDDLStatement() {}
@@ -1739,6 +2039,16 @@ func (*ValuesStatement) iInsertRows() {}
 type OptLike struct {
 	LikeTable TableName
 }
+
+// ProcParameter represents a procedure parameter
+type ProcParameter struct {
+	Mode ProcParameterMode
+	Name IdentifierCI
+	Type *ColumnType
+}
+
+// ProcParameterMode is an enum for ProcParameter.Mode
+type ProcParameterMode int8
 
 // PartitionSpec describe partition actions (for alter statements)
 type PartitionSpec struct {
@@ -2039,8 +2349,9 @@ type ParsedComments struct {
 	_directives *CommentDirectives
 }
 
-// SelectExprs represents SELECT expressions.
-type SelectExprs []SelectExpr
+type SelectExprs struct {
+	Exprs []SelectExpr
+}
 
 type (
 	// SelectExpr represents a SELECT expression.
@@ -2209,7 +2520,7 @@ type (
 	// More information available here: https://dev.mysql.com/doc/refman/8.0/en/window-functions-usage.html
 	WindowSpecification struct {
 		Name            IdentifierCI
-		PartitionClause Exprs
+		PartitionClause []Expr
 		OrderClause     OrderBy
 		FrameClause     *FrameClause
 	}
@@ -2400,7 +2711,7 @@ type (
 	ListArg string
 
 	// ValTuple represents a tuple of actual values.
-	ValTuple Exprs
+	ValTuple []Expr
 
 	// BinaryExpr represents a binary value expression.
 	BinaryExpr struct {
@@ -2455,7 +2766,7 @@ type (
 	FuncExpr struct {
 		Qualifier IdentifierCS
 		Name      IdentifierCI
-		Exprs     Exprs
+		Exprs     []Expr
 	}
 
 	// ValuesFuncExpr represents a function call.
@@ -2524,7 +2835,7 @@ type (
 	// IntervalFuncExpr represents an INTERVAL function expression
 	IntervalFuncExpr struct {
 		Expr  Expr
-		Exprs Exprs
+		Exprs []Expr
 	}
 
 	// LocateExpr represents a LOCATE function expression
@@ -2536,7 +2847,7 @@ type (
 
 	// CharExpr represents a CHAR function expression
 	CharExpr struct {
-		Exprs   Exprs
+		Exprs   []Expr
 		Charset string
 	}
 
@@ -2586,7 +2897,7 @@ type (
 	// JSONArrayExpr represents JSON_ARRAY()
 	// More information on https://dev.mysql.com/doc/refman/8.0/en/json-creation-functions.html#function_json-array
 	JSONArrayExpr struct {
-		Params Exprs
+		Params []Expr
 	}
 
 	// JSONObjectExpr represents JSON_OBJECT()
@@ -2776,7 +3087,7 @@ type (
 	JSONValueMergeExpr struct {
 		Type        JSONValueMergeType
 		JSONDoc     Expr
-		JSONDocList Exprs
+		JSONDocList []Expr
 	}
 
 	// JSONValueModifierType is an enum to get types of TrimFunc.
@@ -2787,7 +3098,7 @@ type (
 	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/json-modification-functions.html#function_json-remove
 	JSONRemoveExpr struct {
 		JSONDoc  Expr
-		PathList Exprs
+		PathList []Expr
 	}
 
 	// JSONRemoveExpr represents the JSON_UNQUOTE()
@@ -2804,27 +3115,27 @@ type (
 
 	// LineString represents LineString(POINT(x,y), POINT(x,y), ..) expression
 	LineStringExpr struct {
-		PointParams Exprs
+		PointParams []Expr
 	}
 
 	// PolygonExpr represents Polygon(LineString(POINT(x,y), POINT(x,y), ..)) expressions
 	PolygonExpr struct {
-		LinestringParams Exprs
+		LinestringParams []Expr
 	}
 
 	// MultiPoint represents a geometry collection for points
 	MultiPointExpr struct {
-		PointParams Exprs
+		PointParams []Expr
 	}
 
 	// MultiPoint represents a geometry collection for linestrings
 	MultiLinestringExpr struct {
-		LinestringParams Exprs
+		LinestringParams []Expr
 	}
 
 	// MultiPolygon represents a geometry collection for polygons
 	MultiPolygonExpr struct {
-		PolygonParams Exprs
+		PolygonParams []Expr
 	}
 
 	// GeomFromWktType is an enum to get the types of wkt functions with possible values: GeometryFromText GeometryCollectionFromText PointFromText LineStringFromText PolygonFromText MultiPointFromText MultiPolygonFromText MultiLinestringFromText
@@ -2935,9 +3246,9 @@ type (
 	AggrFunc interface {
 		Expr
 		GetArg() Expr
-		GetArgs() Exprs
+		GetArgs() []Expr
 		SetArg(expr Expr)
-		SetArgs(exprs Exprs) error
+		SetArgs(exprs []Expr) error
 		// AggrName returns the lower case string representing this aggregation function
 		AggrName() string
 	}
@@ -2948,7 +3259,7 @@ type (
 	}
 
 	Count struct {
-		Args       Exprs
+		Args       []Expr
 		Distinct   bool
 		OverClause *OverClause
 	}
@@ -3061,7 +3372,7 @@ type (
 	// GroupConcatExpr represents a call to GROUP_CONCAT
 	GroupConcatExpr struct {
 		Distinct  bool
-		Exprs     Exprs
+		Exprs     []Expr
 		OrderBy   OrderBy
 		Separator string
 		Limit     *Limit
@@ -3450,34 +3761,34 @@ func (av *AnyValue) GetArg() Expr               { return av.Arg }
 func (jaa *JSONArrayAgg) GetArg() Expr          { return jaa.Expr }
 func (joa *JSONObjectAgg) GetArg() Expr         { return joa.Key }
 
-func (sum *Sum) GetArgs() Exprs                   { return Exprs{sum.Arg} }
-func (min *Min) GetArgs() Exprs                   { return Exprs{min.Arg} }
-func (max *Max) GetArgs() Exprs                   { return Exprs{max.Arg} }
-func (avg *Avg) GetArgs() Exprs                   { return Exprs{avg.Arg} }
-func (*CountStar) GetArgs() Exprs                 { return nil }
-func (count *Count) GetArgs() Exprs               { return count.Args }
-func (grpConcat *GroupConcatExpr) GetArgs() Exprs { return grpConcat.Exprs }
-func (bAnd *BitAnd) GetArgs() Exprs               { return Exprs{bAnd.Arg} }
-func (bOr *BitOr) GetArgs() Exprs                 { return Exprs{bOr.Arg} }
-func (bXor *BitXor) GetArgs() Exprs               { return Exprs{bXor.Arg} }
-func (std *Std) GetArgs() Exprs                   { return Exprs{std.Arg} }
-func (stdD *StdDev) GetArgs() Exprs               { return Exprs{stdD.Arg} }
-func (stdP *StdPop) GetArgs() Exprs               { return Exprs{stdP.Arg} }
-func (stdS *StdSamp) GetArgs() Exprs              { return Exprs{stdS.Arg} }
-func (varP *VarPop) GetArgs() Exprs               { return Exprs{varP.Arg} }
-func (varS *VarSamp) GetArgs() Exprs              { return Exprs{varS.Arg} }
-func (variance *Variance) GetArgs() Exprs         { return Exprs{variance.Arg} }
-func (av *AnyValue) GetArgs() Exprs               { return Exprs{av.Arg} }
-func (jaa *JSONArrayAgg) GetArgs() Exprs          { return Exprs{jaa.Expr} }
-func (joa *JSONObjectAgg) GetArgs() Exprs         { return Exprs{joa.Key, joa.Value} }
+func (sum *Sum) GetArgs() []Expr                   { return []Expr{sum.Arg} }
+func (min *Min) GetArgs() []Expr                   { return []Expr{min.Arg} }
+func (max *Max) GetArgs() []Expr                   { return []Expr{max.Arg} }
+func (avg *Avg) GetArgs() []Expr                   { return []Expr{avg.Arg} }
+func (*CountStar) GetArgs() []Expr                 { return nil }
+func (count *Count) GetArgs() []Expr               { return count.Args }
+func (grpConcat *GroupConcatExpr) GetArgs() []Expr { return grpConcat.Exprs }
+func (bAnd *BitAnd) GetArgs() []Expr               { return []Expr{bAnd.Arg} }
+func (bOr *BitOr) GetArgs() []Expr                 { return []Expr{bOr.Arg} }
+func (bXor *BitXor) GetArgs() []Expr               { return []Expr{bXor.Arg} }
+func (std *Std) GetArgs() []Expr                   { return []Expr{std.Arg} }
+func (stdD *StdDev) GetArgs() []Expr               { return []Expr{stdD.Arg} }
+func (stdP *StdPop) GetArgs() []Expr               { return []Expr{stdP.Arg} }
+func (stdS *StdSamp) GetArgs() []Expr              { return []Expr{stdS.Arg} }
+func (varP *VarPop) GetArgs() []Expr               { return []Expr{varP.Arg} }
+func (varS *VarSamp) GetArgs() []Expr              { return []Expr{varS.Arg} }
+func (variance *Variance) GetArgs() []Expr         { return []Expr{variance.Arg} }
+func (av *AnyValue) GetArgs() []Expr               { return []Expr{av.Arg} }
+func (jaa *JSONArrayAgg) GetArgs() []Expr          { return []Expr{jaa.Expr} }
+func (joa *JSONObjectAgg) GetArgs() []Expr         { return []Expr{joa.Key, joa.Value} }
 
 func (min *Min) SetArg(expr Expr)                   { min.Arg = expr }
 func (sum *Sum) SetArg(expr Expr)                   { sum.Arg = expr }
 func (max *Max) SetArg(expr Expr)                   { max.Arg = expr }
 func (avg *Avg) SetArg(expr Expr)                   { avg.Arg = expr }
 func (*CountStar) SetArg(expr Expr)                 {}
-func (count *Count) SetArg(expr Expr)               { count.Args = Exprs{expr} }
-func (grpConcat *GroupConcatExpr) SetArg(expr Expr) { grpConcat.Exprs = Exprs{expr} }
+func (count *Count) SetArg(expr Expr)               { count.Args = []Expr{expr} }
+func (grpConcat *GroupConcatExpr) SetArg(expr Expr) { grpConcat.Exprs = []Expr{expr} }
 func (bAnd *BitAnd) SetArg(expr Expr)               { bAnd.Arg = expr }
 func (bOr *BitOr) SetArg(expr Expr)                 { bOr.Arg = expr }
 func (bXor *BitXor) SetArg(expr Expr)               { bXor.Arg = expr }
@@ -3492,24 +3803,26 @@ func (av *AnyValue) SetArg(expr Expr)               { av.Arg = expr }
 func (jaa *JSONArrayAgg) SetArg(expr Expr)          { jaa.Expr = expr }
 func (joa *JSONObjectAgg) SetArg(expr Expr)         { joa.Key = expr }
 
-func (min *Min) SetArgs(exprs Exprs) error           { return setFuncArgs(min, exprs, "MIN") }
-func (sum *Sum) SetArgs(exprs Exprs) error           { return setFuncArgs(sum, exprs, "SUM") }
-func (max *Max) SetArgs(exprs Exprs) error           { return setFuncArgs(max, exprs, "MAX") }
-func (avg *Avg) SetArgs(exprs Exprs) error           { return setFuncArgs(avg, exprs, "AVG") }
-func (*CountStar) SetArgs(Exprs) error               { return nil }
-func (bAnd *BitAnd) SetArgs(exprs Exprs) error       { return setFuncArgs(bAnd, exprs, "BIT_AND") }
-func (bOr *BitOr) SetArgs(exprs Exprs) error         { return setFuncArgs(bOr, exprs, "BIT_OR") }
-func (bXor *BitXor) SetArgs(exprs Exprs) error       { return setFuncArgs(bXor, exprs, "BIT_XOR") }
-func (std *Std) SetArgs(exprs Exprs) error           { return setFuncArgs(std, exprs, "STD") }
-func (stdD *StdDev) SetArgs(exprs Exprs) error       { return setFuncArgs(stdD, exprs, "STDDEV") }
-func (stdP *StdPop) SetArgs(exprs Exprs) error       { return setFuncArgs(stdP, exprs, "STDDEV_POP") }
-func (stdS *StdSamp) SetArgs(exprs Exprs) error      { return setFuncArgs(stdS, exprs, "STDDEV_SAMP") }
-func (varP *VarPop) SetArgs(exprs Exprs) error       { return setFuncArgs(varP, exprs, "VAR_POP") }
-func (varS *VarSamp) SetArgs(exprs Exprs) error      { return setFuncArgs(varS, exprs, "VAR_SAMP") }
-func (variance *Variance) SetArgs(exprs Exprs) error { return setFuncArgs(variance, exprs, "VARIANCE") }
-func (av *AnyValue) SetArgs(exprs Exprs) error       { return setFuncArgs(av, exprs, "ANY_VALUE") }
-func (jaa *JSONArrayAgg) SetArgs(exprs Exprs) error  { return setFuncArgs(jaa, exprs, "JSON_ARRAYARG") }
-func (joa *JSONObjectAgg) SetArgs(exprs Exprs) error {
+func (min *Min) SetArgs(exprs []Expr) error      { return setFuncArgs(min, exprs, "MIN") }
+func (sum *Sum) SetArgs(exprs []Expr) error      { return setFuncArgs(sum, exprs, "SUM") }
+func (max *Max) SetArgs(exprs []Expr) error      { return setFuncArgs(max, exprs, "MAX") }
+func (avg *Avg) SetArgs(exprs []Expr) error      { return setFuncArgs(avg, exprs, "AVG") }
+func (*CountStar) SetArgs([]Expr) error          { return nil }
+func (bAnd *BitAnd) SetArgs(exprs []Expr) error  { return setFuncArgs(bAnd, exprs, "BIT_AND") }
+func (bOr *BitOr) SetArgs(exprs []Expr) error    { return setFuncArgs(bOr, exprs, "BIT_OR") }
+func (bXor *BitXor) SetArgs(exprs []Expr) error  { return setFuncArgs(bXor, exprs, "BIT_XOR") }
+func (std *Std) SetArgs(exprs []Expr) error      { return setFuncArgs(std, exprs, "STD") }
+func (stdD *StdDev) SetArgs(exprs []Expr) error  { return setFuncArgs(stdD, exprs, "STDDEV") }
+func (stdP *StdPop) SetArgs(exprs []Expr) error  { return setFuncArgs(stdP, exprs, "STDDEV_POP") }
+func (stdS *StdSamp) SetArgs(exprs []Expr) error { return setFuncArgs(stdS, exprs, "STDDEV_SAMP") }
+func (varP *VarPop) SetArgs(exprs []Expr) error  { return setFuncArgs(varP, exprs, "VAR_POP") }
+func (varS *VarSamp) SetArgs(exprs []Expr) error { return setFuncArgs(varS, exprs, "VAR_SAMP") }
+func (variance *Variance) SetArgs(exprs []Expr) error {
+	return setFuncArgs(variance, exprs, "VARIANCE")
+}
+func (av *AnyValue) SetArgs(exprs []Expr) error      { return setFuncArgs(av, exprs, "ANY_VALUE") }
+func (jaa *JSONArrayAgg) SetArgs(exprs []Expr) error { return setFuncArgs(jaa, exprs, "JSON_ARRAYARG") }
+func (joa *JSONObjectAgg) SetArgs(exprs []Expr) error {
 	if len(exprs) != 2 {
 		return vterrors.VT13001("JSONObjectAgg takes in 2 expressions")
 	}
@@ -3518,11 +3831,11 @@ func (joa *JSONObjectAgg) SetArgs(exprs Exprs) error {
 	return nil
 }
 
-func (count *Count) SetArgs(exprs Exprs) error {
+func (count *Count) SetArgs(exprs []Expr) error {
 	count.Args = exprs
 	return nil
 }
-func (grpConcat *GroupConcatExpr) SetArgs(exprs Exprs) error {
+func (grpConcat *GroupConcatExpr) SetArgs(exprs []Expr) error {
 	grpConcat.Exprs = exprs
 	return nil
 }
@@ -3564,7 +3877,9 @@ func (*JSONObjectAgg) AggrName() string   { return "json_objectagg" }
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.
-type Exprs []Expr
+type Exprs struct {
+	Exprs []Expr
+}
 
 func (ValTuple) iColTuple()  {}
 func (*Subquery) iColTuple() {}

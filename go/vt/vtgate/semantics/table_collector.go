@@ -174,7 +174,7 @@ func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
 	collations := tc.org.collationEnv()
 
 	err = sqlparser.VisitAllSelects(union, func(s *sqlparser.Select, idx int) error {
-		for i, expr := range s.SelectExprs {
+		for i, expr := range s.GetColumns() {
 			ae, ok := expr.(*sqlparser.AliasedExpr)
 			if !ok {
 				continue
@@ -346,7 +346,7 @@ func (etc *earlyTableCollector) getCTE(t sqlparser.TableName) *CTE {
 }
 
 func (etc *earlyTableCollector) getTableInfo(node *sqlparser.AliasedTableExpr, t sqlparser.TableName, sc *scoper) (TableInfo, error) {
-	var tbl *vindexes.Table
+	var tbl *vindexes.BaseTable
 	var vindex vindexes.Vindex
 	if cteDef := etc.getCTE(t); cteDef != nil {
 		cte, err := etc.buildRecursiveCTE(node, t, sc, cteDef)
@@ -450,11 +450,11 @@ func (tc *tableCollector) addSelectDerivedTable(
 	alias sqlparser.IdentifierCS,
 ) error {
 	tables := tc.scoper.wScope[sel]
-	size := len(sel.SelectExprs)
+	size := sel.GetColumnCount()
 	deps := make([]TableSet, size)
 	types := make([]evalengine.Type, size)
 	expanded := true
-	for i, expr := range sel.SelectExprs {
+	for i, expr := range sel.GetColumns() {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			expanded = false
@@ -463,7 +463,7 @@ func (tc *tableCollector) addSelectDerivedTable(
 		_, deps[i], types[i] = tc.org.depsForExpr(ae.Expr)
 	}
 
-	tableInfo := createDerivedTableForExpressions(sel.SelectExprs, columns, tables.tables, tc.org, expanded, deps, types)
+	tableInfo := createDerivedTableForExpressions(sel.GetColumns(), columns, tables.tables, tc.org, expanded, deps, types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}
@@ -504,7 +504,7 @@ func (tc *tableCollector) addUnionDerivedTable(
 	return scope.addTable(tableInfo)
 }
 
-func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
+func newVindexTable(t sqlparser.IdentifierCS) *vindexes.BaseTable {
 	vindexCols := []vindexes.Column{
 		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_VARBINARY},
 		{Name: sqlparser.NewIdentifierCI("keyspace_id"), Type: querypb.Type_VARBINARY},
@@ -514,7 +514,7 @@ func newVindexTable(t sqlparser.IdentifierCS) *vindexes.Table {
 		{Name: sqlparser.NewIdentifierCI("shard"), Type: querypb.Type_VARBINARY},
 	}
 
-	return &vindexes.Table{
+	return &vindexes.BaseTable{
 		Name:                    t,
 		Columns:                 vindexCols,
 		ColumnListAuthoritative: true,
@@ -544,7 +544,7 @@ func (tc *tableCollector) tableInfoFor(id TableSet) (TableInfo, error) {
 func (etc *earlyTableCollector) createTable(
 	t sqlparser.TableName,
 	alias *sqlparser.AliasedTableExpr,
-	tbl *vindexes.Table,
+	tbl *vindexes.BaseTable,
 	isInfSchema bool,
 	vindex vindexes.Vindex,
 ) (TableInfo, error) {
@@ -554,7 +554,11 @@ func (etc *earlyTableCollector) createTable(
 		return nil, err
 	}
 
-	mr, err := etc.si.FindMirrorRule(t)
+	tblName := t
+	if tbl != nil && tbl.Keyspace != nil {
+		tblName = tbl.GetTableName()
+	}
+	mr, err := etc.si.FindMirrorRule(tblName)
 	if err != nil {
 		// Mirroring is best effort. If we get an error while mirroring, keep going
 		// as if mirroring was disabled. We don't want to interrupt production work
@@ -591,7 +595,7 @@ func (etc *earlyTableCollector) createTable(
 	return table, nil
 }
 
-func checkValidVindexHints(hint *sqlparser.IndexHint, tbl *vindexes.Table) error {
+func checkValidVindexHints(hint *sqlparser.IndexHint, tbl *vindexes.BaseTable) error {
 	if hint == nil {
 		return nil
 	}

@@ -53,7 +53,7 @@ func (*cheapVindex) NeedsVCursor() bool { return false }
 func (*cheapVindex) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*cheapVindex) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*cheapVindex) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 
@@ -75,7 +75,7 @@ func (*stFU) NeedsVCursor() bool { return false }
 func (*stFU) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*stFU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*stFU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 
@@ -97,7 +97,7 @@ func (*stFN) NeedsVCursor() bool { return false }
 func (*stFN) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*stFN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*stFN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 
@@ -119,7 +119,7 @@ func (*stLN) NeedsVCursor() bool { return true }
 func (*stLN) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*stLN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*stLN) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*stLN) Create(context.Context, VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
@@ -147,7 +147,7 @@ func (*stLU) NeedsVCursor() bool { return true }
 func (*stLU) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*stLU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*stLU) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*stLU) Create(context.Context, VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
@@ -179,7 +179,7 @@ func (*stLO) NeedsVCursor() bool { return true }
 func (*stLO) Verify(context.Context, VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*stLO) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*stLO) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*stLO) Create(context.Context, VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
@@ -213,7 +213,7 @@ func (*mcFU) NeedsVCursor() bool { return false }
 func (*mcFU) Verify(context.Context, VCursor, [][]sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*mcFU) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func (*mcFU) Map(ctx context.Context, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.ShardDestination, error) {
 	return nil, nil
 }
 func (*mcFU) PartialVindex() bool { return false }
@@ -805,7 +805,7 @@ func TestVSchemaMirrorRules(t *testing.T) {
 					ToTable:   "ks4.ks4t1",
 					Percent:   50,
 				},
-				// Destination sharded table must be defined in VSchema.
+				// ShardDestination sharded table must be defined in VSchema.
 				{
 					FromTable: "ks1.ks1t8",
 					ToTable:   "ks4.ks4t2",
@@ -899,7 +899,7 @@ func TestVSchemaMirrorRules(t *testing.T) {
 		name: "stfu1",
 	}
 
-	ks3t1 := &Table{
+	ks3t1 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("ks3t1"),
 		Keyspace: ks3,
 		ColumnVindexes: []*ColumnVindex{{
@@ -915,7 +915,7 @@ func TestVSchemaMirrorRules(t *testing.T) {
 		ks3t1.ColumnVindexes[0],
 	}
 
-	ks4t1 := &Table{
+	ks4t1 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("ks4t1"),
 		Keyspace: ks4,
 		ColumnVindexes: []*ColumnVindex{{
@@ -946,7 +946,7 @@ func TestVSchemaMirrorRules(t *testing.T) {
 				Error: errors.New("to table: invalid table name: 'ks2.ks2t2.c', it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
 			},
 			"ks1.ks1t3": {
-				Table: &Table{
+				Table: &BaseTable{
 					Name: sqlparser.NewIdentifierCS("ks2t3"),
 				},
 				Percent: 50,
@@ -955,7 +955,7 @@ func TestVSchemaMirrorRules(t *testing.T) {
 				Error: errors.New("to table: tablet type may not be specified: 'ks2.ks2t4@replica'"),
 			},
 			"ks1.ks1t5@replica": {
-				Table: &Table{
+				Table: &BaseTable{
 					Name: sqlparser.NewIdentifierCS("ks2t5"),
 				},
 			},
@@ -985,19 +985,19 @@ func TestVSchemaMirrorRules(t *testing.T) {
 			"ks1": {
 				Keyspace:       ks1,
 				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
-				Tables:         map[string]*Table{},
+				Tables:         map[string]*BaseTable{},
 				Vindexes:       map[string]Vindex{},
 			},
 			"ks2": {
 				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 				Keyspace:       ks2,
-				Tables:         map[string]*Table{},
+				Tables:         map[string]*BaseTable{},
 				Vindexes:       map[string]Vindex{},
 			},
 			"ks3": {
 				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 				Keyspace:       ks3,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"ks3t1": ks3t1,
 				},
 				Vindexes: map[string]Vindex{
@@ -1007,7 +1007,7 @@ func TestVSchemaMirrorRules(t *testing.T) {
 			"ks4": {
 				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 				Keyspace:       ks4,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"ks4t1": ks4t1,
 				},
 				Vindexes: map[string]Vindex{
@@ -1224,7 +1224,7 @@ func TestFindVindexForSharding(t *testing.T) {
 	}
 	vindex1 := &stFU{name: "stfu1"}
 	vindex2 := &stLN{name: "stln1"}
-	t1 := &Table{
+	t1 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
@@ -1261,7 +1261,7 @@ func TestFindVindexForShardingError(t *testing.T) {
 	}
 	vindex1 := &stLU{name: "stlu1"}
 	vindex2 := &stLN{name: "stln1"}
-	t1 := &Table{
+	t1 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
@@ -1301,7 +1301,7 @@ func TestFindVindexForSharding2(t *testing.T) {
 	}
 	vindex1 := &stLU{name: "stlu1"}
 	vindex2 := &stFU{name: "stfu1"}
-	t1 := &Table{
+	t1 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
@@ -1356,7 +1356,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 		Sharded: true,
 	}
 	vindex1 := &stFU{name: "stfu1"}
-	t1 := &Table{
+	t1 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
@@ -1376,7 +1376,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 	want := &VSchema{
 		MirrorRules:  map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{},
-		globalTables: map[string]*Table{
+		globalTables: map[string]Table{
 			"t1": t1,
 		},
 		uniqueVindexes: map[string]Vindex{
@@ -1386,7 +1386,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 			"sharded": {
 				ForeignKeyMode: vschemapb.Keyspace_disallow,
 				Keyspace:       ks,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"t1": t1},
 				Vindexes: map[string]Vindex{
 					"stfu1": vindex1},
@@ -1427,7 +1427,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 	}
 	vindex1 := &stLU{name: "stlu1"}
 	vindex2 := &stFU{name: "stfu1"}
-	t1 := &Table{
+	t1 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 		ColumnVindexes: []*ColumnVindex{
@@ -1453,7 +1453,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 	want := &VSchema{
 		MirrorRules:  map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{},
-		globalTables: map[string]*Table{
+		globalTables: map[string]Table{
 			"t1": t1,
 		},
 		uniqueVindexes: map[string]Vindex{
@@ -1463,7 +1463,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 			"sharded": {
 				ForeignKeyMode: vschemapb.Keyspace_managed,
 				Keyspace:       ks,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"t1": t1,
 				},
 				Vindexes: map[string]Vindex{
@@ -1550,18 +1550,18 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 	ksb := &Keyspace{
 		Name: "ksb"}
 	got := buildVSchema(&good)
-	t1a := &Table{
+	t1a := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksa,
 		Type:     "sequence"}
-	t1b := &Table{
+	t1b := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksb,
 		Type:     "sequence"}
 	want := &VSchema{
 		MirrorRules:  map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{},
-		globalTables: map[string]*Table{
+		globalTables: map[string]Table{
 			"t1": nil,
 		},
 		uniqueVindexes: map[string]Vindex{},
@@ -1569,7 +1569,7 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 			"ksa": {
 				ForeignKeyMode: vschemapb.Keyspace_managed,
 				Keyspace:       ksa,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"t1": t1a,
 				},
 				Vindexes: map[string]Vindex{},
@@ -1577,7 +1577,7 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 			"ksb": {
 				ForeignKeyMode: vschemapb.Keyspace_managed,
 				Keyspace:       ksb,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"t1": t1b,
 				},
 				Vindexes: map[string]Vindex{}}}}
@@ -1609,21 +1609,21 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 	ksa := &Keyspace{
 		Name: "ksa",
 	}
-	t1a := &Table{
+	t1a := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksa,
 	}
 	ksb := &Keyspace{
 		Name: "ksb",
 	}
-	t1b := &Table{
+	t1b := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksb,
 	}
 	want := &VSchema{
 		MirrorRules:  map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{},
-		globalTables: map[string]*Table{
+		globalTables: map[string]Table{
 			"t1": nil,
 		},
 		uniqueVindexes: map[string]Vindex{},
@@ -1631,7 +1631,7 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 			"ksa": {
 				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 				Keyspace:       ksa,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"t1": t1a,
 				},
 				Vindexes: map[string]Vindex{},
@@ -1639,7 +1639,7 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 			"ksb": {
 				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 				Keyspace:       ksb,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"t1": t1b,
 				},
 				Vindexes: map[string]Vindex{},
@@ -1714,7 +1714,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		Sharded: true,
 	}
 	vindex1 := &stLU{name: "stlu1"}
-	t1 := &Table{
+	t1 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksa,
 		ColumnVindexes: []*ColumnVindex{
@@ -1732,7 +1732,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 	t1.Ordered = []*ColumnVindex{
 		t1.ColumnVindexes[0],
 	}
-	t2 := &Table{
+	t2 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksb,
 		ColumnVindexes: []*ColumnVindex{
@@ -1753,7 +1753,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 	want := &VSchema{
 		MirrorRules:  map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{},
-		globalTables: map[string]*Table{
+		globalTables: map[string]Table{
 			"t1": nil,
 		},
 		uniqueVindexes: map[string]Vindex{
@@ -1763,7 +1763,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 			"ksa": {
 				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 				Keyspace:       ksa,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"t1": t1,
 				},
 				Vindexes: map[string]Vindex{
@@ -1773,7 +1773,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 			"ksb": {
 				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 				Keyspace:       ksb,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"t1": t2,
 				},
 				Vindexes: map[string]Vindex{
@@ -2289,13 +2289,13 @@ func TestSequence(t *testing.T) {
 		Name:    "sharded",
 		Sharded: true,
 	}
-	seq := &Table{
+	seq := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("seq"),
 		Keyspace: ksu,
 		Type:     "sequence",
 	}
 	vindex1 := &stFU{name: "stfu1"}
-	t1 := &Table{
+	t1 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
@@ -2316,7 +2316,7 @@ func TestSequence(t *testing.T) {
 	t1.Ordered = []*ColumnVindex{
 		t1.ColumnVindexes[0],
 	}
-	t2 := &Table{
+	t2 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t2"),
 		Keyspace: kss,
 		ColumnVindexes: []*ColumnVindex{
@@ -2340,7 +2340,7 @@ func TestSequence(t *testing.T) {
 	want := &VSchema{
 		MirrorRules:  map[string]*MirrorRule{},
 		RoutingRules: map[string]*RoutingRule{},
-		globalTables: map[string]*Table{
+		globalTables: map[string]Table{
 			"seq": seq,
 			"t1":  t1,
 			"t2":  t2,
@@ -2352,7 +2352,7 @@ func TestSequence(t *testing.T) {
 			"unsharded": {
 				ForeignKeyMode: vschemapb.Keyspace_disallow,
 				Keyspace:       ksu,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"seq": seq,
 				},
 				Vindexes: map[string]Vindex{},
@@ -2360,7 +2360,7 @@ func TestSequence(t *testing.T) {
 			"sharded": {
 				ForeignKeyMode: vschemapb.Keyspace_unmanaged,
 				Keyspace:       kss,
-				Tables: map[string]*Table{
+				Tables: map[string]*BaseTable{
 					"t1": t1,
 					"t2": t2,
 				},
@@ -2553,7 +2553,7 @@ func TestFindTable(t *testing.T) {
 	_, err = vschema.FindTable("", "none")
 	require.EqualError(t, err, "table none not found")
 
-	ta := &Table{
+	ta := &BaseTable{
 		Name: sqlparser.NewIdentifierCS("ta"),
 		Keyspace: &Keyspace{
 			Name: "ksa",
@@ -2563,12 +2563,12 @@ func TestFindTable(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ta, got)
 
-	t2 := &Table{
+	t2 := &BaseTable{
 		Name: sqlparser.NewIdentifierCS("t2"),
 		Keyspace: &Keyspace{
 			Name: "ksa",
 		},
-		ReferencedBy: map[string]*Table{
+		ReferencedBy: map[string]*BaseTable{
 			"ksb": {
 				Type: "reference",
 				Name: sqlparser.NewIdentifierCS("t2"),
@@ -2592,7 +2592,7 @@ func TestFindTable(t *testing.T) {
 	got, _ = vschema.FindTable("ksa", "ta")
 	require.Equal(t, ta, got)
 
-	none := &Table{
+	none := &BaseTable{
 		Name: sqlparser.NewIdentifierCS("none"),
 		Keyspace: &Keyspace{
 			Name: "ksa",
@@ -2779,18 +2779,18 @@ func TestBuildKeyspaceSchema(t *testing.T) {
 	ks := &Keyspace{
 		Name: "ks",
 	}
-	t1 := &Table{
+	t1 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ks,
 	}
-	t2 := &Table{
+	t2 := &BaseTable{
 		Name:     sqlparser.NewIdentifierCS("t2"),
 		Keyspace: ks,
 	}
 	want := &KeyspaceSchema{
 		Keyspace:       ks,
 		ForeignKeyMode: vschemapb.Keyspace_unmanaged,
-		Tables: map[string]*Table{
+		Tables: map[string]*BaseTable{
 			"t1": t1,
 			"t2": t2,
 		},
@@ -2929,7 +2929,7 @@ func TestVSchemaJSON(t *testing.T) {
 			Keyspace: &Keyspace{
 				Name: "k1",
 			},
-			Tables: map[string]*Table{
+			Tables: map[string]*BaseTable{
 				"t1": {
 					Name: sqlparser.NewIdentifierCS("n1"),
 					Columns: []Column{{
@@ -2952,7 +2952,7 @@ func TestVSchemaJSON(t *testing.T) {
 				Name:    "k2",
 				Sharded: true,
 			},
-			Tables: map[string]*Table{
+			Tables: map[string]*BaseTable{
 				"t3": {
 					Name: sqlparser.NewIdentifierCS("n3"),
 					ColumnVindexes: []*ColumnVindex{{
@@ -3043,7 +3043,7 @@ func TestFindSingleKeyspace(t *testing.T) {
 		},
 	}
 	vschema := BuildVSchema(&input, sqlparser.NewTestParser())
-	none := &Table{
+	none := &BaseTable{
 		Name: sqlparser.NewIdentifierCS("none"),
 		Keyspace: &Keyspace{
 			Name: "ksa",
@@ -3194,7 +3194,7 @@ func TestSourceTableHasReferencedBy(t *testing.T) {
 	require.NoError(t, err)
 	src, err := vs.FindTable("unsharded", "src")
 	require.NoError(t, err)
-	require.Equal(t, src.ReferencedBy, map[string]*Table{
+	require.Equal(t, src.ReferencedBy, map[string]*BaseTable{
 		"sharded1": ref1,
 		"sharded2": ref2,
 	})
@@ -3413,6 +3413,94 @@ func TestGlobalTables(t *testing.T) {
 	tbl, err := got.findGlobalTable("user", false)
 	require.NoError(t, err)
 	assert.NotNil(t, tbl)
+}
+
+// TestAddingAdditionalTablesToGlobalRouting tests that views are added to the global routing which are unique.
+func TestAddingAdditionalTablesToGlobalRouting(t *testing.T) {
+	input := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables:  map[string]*vschemapb.Table{"t1": {}},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables:  map[string]*vschemapb.Table{"t1": {Type: "reference"}},
+			},
+		},
+	}
+
+	v1Stmt, err := sqlparser.NewTestParser().Parse("select 1 from t1")
+	require.NoError(t, err)
+
+	v2Stmt, err := sqlparser.NewTestParser().Parse("select 1 from t2")
+	require.NoError(t, err)
+
+	v3Stmt, err := sqlparser.NewTestParser().Parse("select 1 from t3")
+	require.NoError(t, err)
+
+	vs := BuildVSchema(input, sqlparser.NewTestParser())
+	vs.Keyspaces["unsharded"].Views = map[string]*View{
+		"v1": {
+			Name:      "v1",
+			Keyspace:  vs.Keyspaces["unsharded"].Keyspace,
+			Statement: v1Stmt.(*sqlparser.Select),
+		},
+		"v2": {
+			Name:      "v2",
+			Keyspace:  vs.Keyspaces["unsharded"].Keyspace,
+			Statement: v2Stmt.(*sqlparser.Select),
+		},
+	}
+	vs.Keyspaces["sharded"].Views = map[string]*View{
+		"v2": {
+			Name:      "v2",
+			Keyspace:  vs.Keyspaces["sharded"].Keyspace,
+			Statement: v2Stmt.(*sqlparser.Select),
+		},
+		"v3": {
+			Name:      "v3",
+			Keyspace:  vs.Keyspaces["sharded"].Keyspace,
+			Statement: v3Stmt.(*sqlparser.Select),
+		},
+	}
+
+	// before adding to global tables, the views should not be found.
+	require.Nil(t,
+		vs.FindView("", "v1"))
+	require.Nil(t,
+		vs.FindView("", "v2"))
+	require.Nil(t,
+		vs.FindView("", "v3"))
+
+	AddAdditionalGlobalTables(input, vs)
+
+	// without keyspace will be checked on global table.
+	// v1 and v3 are unique so they should be discovered using the global tables.
+	require.NotNil(t,
+		vs.FindView("", "v1"))
+	require.Nil(t,
+		vs.FindView("", "v2"))
+	require.NotNil(t,
+		vs.FindView("", "v3"))
+
+	// providing the keyspace qualifier will check the keyspace specific views.
+
+	// unsharded check
+	require.NotNil(t,
+		vs.FindView("unsharded", "v1"))
+	require.NotNil(t,
+		vs.FindView("unsharded", "v2"))
+	require.Nil(t,
+		vs.FindView("unsharded", "v3"))
+
+	// sharded check
+	require.Nil(t,
+		vs.FindView("sharded", "v1"))
+	require.NotNil(t,
+		vs.FindView("sharded", "v2"))
+	require.NotNil(t,
+		vs.FindView("sharded", "v3"))
 }
 
 func vindexNames(vindexes []*ColumnVindex) (result []string) {

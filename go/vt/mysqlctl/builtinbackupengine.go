@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -206,10 +207,10 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 		}
 	} else {
 		dir := path.Dir(name)
-		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		if err := os2.MkdirAll(dir); err != nil {
 			return nil, vterrors.Wrapf(err, "cannot create destination directory %v", dir)
 		}
-		if fd, err = os.Create(name); err != nil {
+		if fd, err = os2.Create(name); err != nil {
 			return nil, vterrors.Wrapf(err, "cannot create destination file %v", name)
 		}
 	}

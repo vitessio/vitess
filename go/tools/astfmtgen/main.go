@@ -207,8 +207,6 @@ func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr) 
 
 		token := format[i]
 		switch token {
-		case 'c':
-			cursor.InsertBefore(r.rewriteLiteral(callexpr.X, "WriteByte", expr.Args[2+fieldnum]))
 		case 's':
 			cursor.InsertBefore(r.rewriteLiteral(callexpr.X, "WriteString", expr.Args[2+fieldnum]))
 		case 'l', 'r', 'v':
@@ -249,6 +247,26 @@ func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr) 
 				Args: []ast.Expr{&ast.BasicLit{Value: `"%d"`, Kind: gotoken.STRING}, expr.Args[2+fieldnum]},
 			}
 			cursor.InsertBefore(r.rewriteLiteral(callexpr.X, "WriteString", call))
+		case 'n': // directive for slices of AST nodes checked at code generation time
+			inputExpr := expr.Args[2+fieldnum]
+			inputType := r.pkg.TypesInfo.Types[inputExpr].Type
+			sliceType, ok := inputType.(*types.Slice)
+			if !ok {
+				panic("'%n' directive requires a slice")
+			}
+			if types.Implements(sliceType.Elem(), r.astExpr) {
+				// Fast path: input is []Expr
+				call := &ast.CallExpr{
+					Fun: &ast.SelectorExpr{
+						X:   callexpr.X,
+						Sel: &ast.Ident{Name: "formatExprs"},
+					},
+					Args: []ast.Expr{inputExpr},
+				}
+				cursor.InsertBefore(&ast.ExprStmt{X: call})
+				break
+			}
+			panic("slow path for `n` directive for slice of type other than Expr")
 		default:
 			panic(fmt.Sprintf("unsupported escape %q", token))
 		}
@@ -258,4 +276,8 @@ func (r *Rewriter) rewriteAstPrintf(cursor *astutil.Cursor, expr *ast.CallExpr) 
 
 	cursor.Delete()
 	return true
+}
+
+var noQualifier = func(p *types.Package) string {
+	return ""
 }

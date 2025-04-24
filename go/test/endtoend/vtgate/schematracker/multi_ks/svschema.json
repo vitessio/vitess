@@ -1,0 +1,34 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "reverse_bits": {
+      "type": "reverse_bits"
+    }
+  },
+  "tables": {
+    "t": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "s": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    },
+    "cv2": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "reverse_bits"
+        }
+      ]
+    }
+  }
+}

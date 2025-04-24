@@ -35,9 +35,10 @@ type Tokenizer struct {
 	SkipSpecialComments bool
 	SkipToEnd           bool
 	LastError           error
-	ParseTree           Statement
+	ParseTrees          []Statement
 	BindVars            map[string]struct{}
 
+	lastTokenType  int
 	lastToken      string
 	posVarIndex    int
 	partialDDL     Statement
@@ -63,7 +64,15 @@ func (p *Parser) NewStringTokenizer(sql string) *Tokenizer {
 // This function is used by go yacc.
 func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	if tkn.SkipToEnd {
-		return tkn.skipStatement()
+		// We need to check the last token type to
+		// prevent us from skipping the next query in a multi
+		// parse mode. If we don't check the last token, we
+		// will skip the next query.
+		if tkn.lastTokenType == ';' {
+			tkn.SkipToEnd = false
+		} else {
+			return tkn.skipStatement()
+		}
 	}
 
 	typ, val := tkn.Scan()
@@ -81,6 +90,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		tkn.partialDDL = nil
 	}
 	lval.str = val
+	tkn.lastTokenType = typ
 	tkn.lastToken = val
 	return typ
 }
@@ -703,13 +713,9 @@ func (tkn *Tokenizer) peek(dist int) uint16 {
 	return uint16(tkn.buf[tkn.Pos+dist])
 }
 
-// reset clears any internal state.
+// reset clears posVarIndex to reset the index count we assign to variables for a new query.
 func (tkn *Tokenizer) reset() {
-	tkn.ParseTree = nil
-	tkn.partialDDL = nil
-	tkn.specialComment = nil
 	tkn.posVarIndex = 0
-	tkn.SkipToEnd = false
 }
 
 func isLetter(ch uint16) bool {

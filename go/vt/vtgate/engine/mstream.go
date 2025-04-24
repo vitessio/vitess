@@ -37,25 +37,10 @@ type MStream struct {
 	Keyspace *vindexes.Keyspace
 
 	// TargetDestination specifies an explicit target destination to stream messages from
-	TargetDestination key.Destination
+	TargetDestination key.ShardDestination
 
 	// TableName specifies the table on which stream will be executed.
 	TableName string
-}
-
-// RouteType implements the Primitive interface
-func (m *MStream) RouteType() string {
-	return "MStream"
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (m *MStream) GetKeyspaceName() string {
-	return m.Keyspace.Name
-}
-
-// GetTableName implements the Primitive interface
-func (m *MStream) GetTableName() string {
-	return m.TableName
 }
 
 // TryExecute implements the Primitive interface
@@ -65,7 +50,7 @@ func (m *MStream) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[
 
 // TryStreamExecute implements the Primitive interface
 func (m *MStream) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	rss, _, err := vcursor.ResolveDestinations(ctx, m.Keyspace.Name, nil, []key.Destination{m.TargetDestination})
+	rss, _, err := vcursor.ResolveDestinations(ctx, m.Keyspace.Name, nil, []key.ShardDestination{m.TargetDestination})
 	if err != nil {
 		return err
 	}

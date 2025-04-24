@@ -570,7 +570,7 @@ func (s *server) ReadReparentJournalInfo(ctx context.Context, request *tabletman
 	response = &tabletmanagerdatapb.ReadReparentJournalInfoResponse{}
 	length, err := s.tm.ReadReparentJournalInfo(ctx)
 	if err == nil {
-		response.Length = int32(length)
+		response.Length = length
 	}
 	return response, err
 }

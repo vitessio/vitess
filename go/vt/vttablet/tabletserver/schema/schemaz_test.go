@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSchamazHandler1(t *testing.T) {
+func TestSchemazHandler1(t *testing.T) {
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
 	tables := initialSchema()
@@ -50,7 +50,7 @@ func TestSchamazHandler1(t *testing.T) {
 		`<td>id: INT32<br>next_id: INT64<br>cache: INT64<br>increment: INT64<br></td>`,
 		`<td>id<br></td>`,
 		`<td>sequence</td>`,
-		`<td>{{0 0} 0 0}&lt;nil&gt;</td>`,
+		`<td>SequenceInfo: NextVal: 0, LastVal: 0&lt;nil&gt;</td>`,
 	}
 	matched, err = regexp.Match(strings.Join(seq, `\s*`), body)
 	require.NoError(t, err)

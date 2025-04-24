@@ -29,6 +29,7 @@ import (
 
 type compactable interface {
 	// Compact implement this interface for operators that have easy to see optimisations
+	// This is run after the normal planning phase and is used to optimise the operator tree
 	Compact(ctx *plancontext.PlanningContext) (Operator, *ApplyResult)
 }
 
@@ -57,13 +58,13 @@ func checkValid(op Operator) {
 	})
 }
 
-func Clone(op Operator) Operator {
+func Clone[K Operator](op K) K {
 	inputs := op.Inputs()
 	clones := make([]Operator, len(inputs))
 	for i, input := range inputs {
 		clones[i] = Clone(input)
 	}
-	return op.Clone(clones)
+	return op.Clone(clones).(K)
 }
 
 // tableIDIntroducer is used to signal that this operator introduces data from a new source
@@ -138,7 +139,7 @@ func QualifiedTableNames(ks *vindexes.Keyspace, ts []sqlparser.TableName) []stri
 	return collect()
 }
 
-func QualifiedTables(ks *vindexes.Keyspace, vts []*vindexes.Table) []string {
+func QualifiedTables(ks *vindexes.Keyspace, vts []*vindexes.BaseTable) []string {
 	add, collect := collectSortedUniqueStrings()
 	for _, vt := range vts {
 		add(QualifiedIdentifier(ks, vt.Name))

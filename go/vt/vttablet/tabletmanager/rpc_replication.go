@@ -187,8 +187,10 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SemiSyncPrimaryClients:      semiSyncClients,
 		SemiSyncPrimaryTimeout:      semiSyncTimeout,
 		SemiSyncWaitForReplicaCount: semiSyncNumReplicas,
+		SemiSyncBlocked:             tm.SemiSyncMonitor.AllWritesBlocked(),
 		SuperReadOnly:               superReadOnly,
 		ReplicationConfiguration:    replConfiguration,
+		TabletType:                  tm.Tablet().Type,
 	}, nil
 }
 
@@ -428,7 +430,7 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 }
 
 // ReadReparentJournalInfo reads the information from reparent journal.
-func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int, error) {
+func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int32, error) {
 	log.Infof("ReadReparentJournalInfo")
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return 0, err
@@ -442,7 +444,7 @@ func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int, erro
 	if len(res.Rows) != 1 {
 		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected rows when reading reparent journal, got %v", len(res.Rows))
 	}
-	return res.Rows[0][0].ToInt()
+	return res.Rows[0][0].ToInt32()
 }
 
 // InitReplica sets replication primary and position, and waits for the
@@ -535,6 +537,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		return nil, err
 	}
 	defer tm.unlock()
+	defer tm.QueryServiceControl.SetDemotePrimaryStalled(false)
 
 	finishCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -546,10 +549,16 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 			// We waited for over 10 times of remote operation timeout, but DemotePrimary is still not done.
 			// Collect more information and signal demote primary is indefinitely stalled.
 			log.Errorf("DemotePrimary seems to be stalled. Collecting more information.")
-			tm.QueryServiceControl.SetDemotePrimaryStalled()
+			tm.QueryServiceControl.SetDemotePrimaryStalled(true)
 			buf := make([]byte, 1<<16) // 64 KB buffer size
 			stackSize := runtime.Stack(buf, true)
 			log.Errorf("Stack trace:\n%s", string(buf[:stackSize]))
+			// This condition check is only to handle the race, where we start to set the demote primary stalled
+			// but then the function finishes. So, after we set demote primary stalled, we check if the
+			// function has finished and if it has, we clear the demote primary stalled.
+			if finishCtx.Err() != nil {
+				tm.QueryServiceControl.SetDemotePrimaryStalled(false)
+			}
 		}
 	}()
 
@@ -585,8 +594,14 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}()
 	}
 
-	// Now that we know no writes are in-flight and no new writes can occur,
-	// set MySQL to super_read_only mode. If we are already super_read_only because of a
+	// Now we know no writes are in-flight and no new writes can occur.
+	// We just need to wait for no write being blocked on semi-sync ACKs.
+	err = tm.SemiSyncMonitor.WaitUntilSemiSyncUnblocked(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// We can now set MySQL to super_read_only mode. If we are already super_read_only because of a
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true); err != nil {
@@ -659,13 +674,26 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 		return err
 	}
 
+	// Check the display state of the tablet
+	tablet := tm.Tablet()
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		// If the tablet display type isn't primary, then we should check the tablet record.
+		// If the tablet record type is primary, then we should change the tablet display type to primary.
+		ti, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
+		if err != nil {
+			return err
+		}
+		if ti.Tablet.Type == topodatapb.TabletType_PRIMARY {
+			return tm.tmState.updateTypeAndPublish(ctx, topodatapb.TabletType_PRIMARY, ti.PrimaryTermStartTime, DBActionSetReadWrite)
+		}
+	}
+
 	// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 	if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 		return err
 	}
 
 	// Update serving graph
-	tablet := tm.Tablet()
 	log.Infof("UndoDemotePrimary re-enabling query service")
 	if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
@@ -1045,10 +1073,24 @@ func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.
 	case SemiSyncActionNone:
 		return nil
 	case SemiSyncActionSet:
+		if tm.SemiSyncMonitor != nil {
+			// We want to enable the semi-sync monitor only if the tablet is going to start
+			// expecting semi-sync ACKs.
+			if tabletType == topodatapb.TabletType_PRIMARY {
+				tm.SemiSyncMonitor.Open()
+			} else {
+				tm.SemiSyncMonitor.Close()
+			}
+		}
 		// Always enable replica-side since it doesn't hurt to keep it on for a primary.
 		// The primary-side needs to be off for a replica, or else it will get stuck.
 		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, tabletType == topodatapb.TabletType_PRIMARY, true)
 	case SemiSyncActionUnset:
+		// The nil check is required for vtcombo, which doesn't run the semi-sync monitor
+		// but does try to turn off semi-sync.
+		if tm.SemiSyncMonitor != nil {
+			tm.SemiSyncMonitor.Close()
+		}
 		return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, false, false)
 	default:
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "Unknown SemiSyncAction - %v", semiSync)

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
@@ -33,20 +32,25 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
@@ -72,46 +76,14 @@ const (
 
 	merchantKeyspace            = "merchant-type"
 	maxWait                     = 60 * time.Second
-	BypassLagCheck              = true                         // temporary fix for flakiness seen only in CI when lag check is introduced
-	throttlerStatusThrottled    = http.StatusExpectationFailed // 417
-	throttlerStatusNotThrottled = http.StatusOK                // 200
+	BypassLagCheck              = true // temporary fix for flakiness seen only in CI when lag check is introduced
+	throttlerStatusThrottled    = tabletmanagerdatapb.CheckThrottlerResponseCode_APP_DENIED
+	throttlerStatusNotThrottled = tabletmanagerdatapb.CheckThrottlerResponseCode_OK
 )
 
 func init() {
 	defaultRdonly = 0
 	defaultReplicas = 1
-}
-
-func throttleResponse(tablet *cluster.VttabletProcess, path string) (respBody string, err error) {
-	apiURL := fmt.Sprintf("http://%s:%d/%s", tablet.TabletHostname, tablet.Port, path)
-	resp, err := httpClient.Get(apiURL)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	respBody = string(b)
-	return respBody, err
-}
-
-func throttleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", throttlerApp.String()))
-}
-
-func unthrottleApp(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", throttlerApp.String()))
-}
-
-func throttlerCheckSelf(tablet *cluster.VttabletProcess, throttlerApp throttlerapp.Name) (respBody string, err error) {
-	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, throttlerApp.String())
-	resp, err := httpClient.Get(apiURL)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	respBody = string(b)
-	return respBody, err
 }
 
 // TestVReplicationDDLHandling tests the DDL handling in
@@ -518,6 +490,140 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should still be 1")
 }
 
+// TestMoveTablesIgnoreSourceKeyspace confirms that we are able to
+// cancel/delete and complete a MoveTables workflow even if the source
+// keyspace is gone.
+func TestMoveTablesIgnoreSourceKeyspace(t *testing.T) {
+	defaultCellName := "zone1"
+	workflow := "mtnosource"
+	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
+	defaultShard := "0"
+	tables := []string{"customer"}
+	var defaultCell *Cell
+	unshardedVSchema := `
+{
+  "tables": {
+    "customer": {}
+  }
+}`
+	shardedVSchema := `
+{
+  "sharded": true,
+  "vindexes": {
+    "xxhash": {
+      "type": "xxhash"
+    }
+  },
+  "tables": {
+    "customer": {
+      "column_vindexes": [
+        {
+          "column": "customer_id",
+          "name": "xxhash"
+        }
+      ]
+    }
+  }
+}`
+
+	run := func(t *testing.T, sourceShards, targetShards string, createArgs, completeArgs []string, switchTraffic bool) {
+		vc = NewVitessCluster(t, nil)
+		require.NotNil(t, vc)
+		defaultCell = vc.Cells[defaultCellName]
+		t.Cleanup(vc.TearDown)
+
+		sourceVSchema, targetVSchema := unshardedVSchema, unshardedVSchema
+		if len(sourceShards) > 0 {
+			sourceVSchema = shardedVSchema
+		}
+		if len(targetShards) > 0 {
+			targetVSchema = shardedVSchema
+		}
+		targetShardNames := strings.Split(targetShards, ",")
+
+		_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, sourceShards, sourceVSchema, customerTable, 0, 0, 100, nil)
+		require.NoError(t, err)
+		_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, targetShards, targetVSchema, "", 0, 0, 500, nil)
+		require.NoError(t, err)
+		verifyClusterHealth(t, vc)
+
+		if len(sourceShards) == 0 {
+			insertInitialData(t)
+		}
+
+		moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, strings.Join(tables, ","), createArgs...)
+		// Wait until we get through the copy phase...
+		for _, targetShard := range targetShardNames {
+			catchup(t, vc.getPrimaryTablet(t, targetKs, targetShard), workflow, "MoveTables")
+		}
+
+		if switchTraffic {
+			switchReads(t, "MoveTables", defaultCellName, ksWorkflow, false)
+			switchWrites(t, "MoveTables", ksWorkflow, false)
+		}
+
+		// Decommission the source keyspace.
+		require.NotZero(t, len(vc.Cells[defaultCellName].Keyspaces))
+		require.NotNil(t, vc.Cells[defaultCellName].Keyspaces[sourceKs])
+		err = vc.TearDownKeyspace(vc.Cells[defaultCellName].Keyspaces[sourceKs])
+		require.NoError(t, err)
+		vc.DeleteKeyspace(t, sourceKs)
+
+		// The command should fail.
+		out, err := vc.VtctldClient.ExecuteCommandWithOutput(completeArgs...)
+		require.Error(t, err, out)
+
+		// But it should succeed if we ignore the source keyspace.
+		confirmRoutingRulesExist(t)
+		completeArgs = append(completeArgs, "--ignore-source-keyspace")
+		out, err = vc.VtctldClient.ExecuteCommandWithOutput(completeArgs...)
+		require.NoError(t, err, out)
+		confirmNoRoutingRules(t)
+		for _, table := range tables {
+			for _, targetShard := range targetShardNames {
+				tksShard := fmt.Sprintf("%s/%s", targetKs, targetShard)
+				validateTableInDenyList(t, vc, tksShard, table, false)
+			}
+		}
+
+		// Confirm that we cleaned up the proper shard routing rules.
+		out, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShardRoutingRules")
+		require.NoError(t, err, out)
+		var srr vschemapb.ShardRoutingRules
+		err = protojson.Unmarshal([]byte(out), &srr)
+		require.NoError(t, err)
+		srrMap := topotools.GetShardRoutingRulesMap(&srr)
+		for _, shard := range targetShardNames {
+			ksShard := fmt.Sprintf("%s.%s", targetKs, shard)
+			require.NotEqual(t, srrMap[ksShard], targetKs)
+		}
+
+		confirmNoWorkflows(t, targetKs)
+	}
+
+	t.Run("Workflow Delete", func(t *testing.T) {
+		args := []string{"Workflow", "--keyspace=" + targetKs, "delete", "--workflow=" + workflow}
+		run(t, defaultShard, defaultShard, nil, args, false)
+	})
+
+	t.Run("MoveTables Cancel", func(t *testing.T) {
+		args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, "cancel"}
+		run(t, defaultShard, defaultShard, nil, args, false)
+	})
+	t.Run("MoveTables Partial Cancel", func(t *testing.T) {
+		createArgs := []string{"--source-shards", "-80"}
+		args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, "cancel"}
+		run(t, "-80,80-", "-80,80-", createArgs, args, true)
+	})
+
+	t.Run("MoveTables Complete", func(t *testing.T) {
+		args := []string{"MoveTables", "--workflow=" + workflow, "--target-keyspace=" + targetKs, "complete"}
+		run(t, defaultShard, defaultShard, nil, args, true)
+	})
+	// You can't complete a partial MoveTables workflow. Well, only the
+	// last one which moves the last shard(s). So we don't test it here.
+}
+
 func testVStreamCellFlag(t *testing.T) {
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -826,6 +932,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			shardNames = append(shardNames, shardName)
 		}
 		testSwitchTrafficPermissionChecks(t, workflowType, sourceKs, shardNames, targetKs, workflow)
+
+		testSwitchWritesErrorHandling(t, []*cluster.VttabletProcess{productTab}, []*cluster.VttabletProcess{customerTab1, customerTab2},
+			workflow, workflowType)
+
+		// Now let's confirm that it works as expected with an error.
 		switchWrites(t, workflowType, ksWorkflow, false)
 
 		checkThatVDiffFails(t, targetKs, workflow)
@@ -1057,6 +1168,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		require.NoError(t, vc.AddShards(t, cells, keyspace, targetShards, defaultReplicas, defaultRdonly, tabletIDBase, targetKsOpts))
 
 		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "primary")
+		var sourceTablets, targetTablets []*cluster.VttabletProcess
 
 		// Test multi-primary setups, like a Galera cluster, which have auto increment steps > 1.
 		for _, tablet := range tablets {
@@ -1069,9 +1181,11 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		targetShards = "," + targetShards + ","
 		for _, tab := range tablets {
 			if strings.Contains(targetShards, ","+tab.Shard+",") {
+				targetTablets = append(targetTablets, tab)
 				log.Infof("Waiting for vrepl to catch up on %s since it IS a target shard", tab.Shard)
 				catchup(t, tab, workflow, "Reshard")
 			} else {
+				sourceTablets = append(sourceTablets, tab)
 				log.Infof("Not waiting for vrepl to catch up on %s since it is NOT a target shard", tab.Shard)
 				continue
 			}
@@ -1085,13 +1199,17 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		if dryRunResultSwitchWrites != nil {
 			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "primary", "--dry-run")
 		}
+		if tableName == "customer" {
+			testSwitchWritesErrorHandling(t, sourceTablets, targetTablets, workflow, "reshard")
+		}
+		// Now let's confirm that it works as expected with an error.
 		reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "primary")
 		reshardAction(t, "Complete", workflow, ksName, "", "", "", "")
 		for tabletName, count := range counts {
 			if tablets[tabletName] == nil {
 				continue
 			}
-			waitForRowCountInTablet(t, tablets[tabletName], ksName, tableName, count)
+			waitForRowCountInTablet(t, tablets[tabletName], ksName, tableName, int64(count))
 		}
 	})
 }
@@ -1225,15 +1343,28 @@ func materializeProduct(t *testing.T) {
 		productTablets := vc.getVttabletsInKeyspace(t, defaultCell, "product", "primary")
 		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the source side component (vstreamer), and insert some rows.
+			err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, "product", sourceThrottlerAppName)
+			assert.NoError(t, err)
 			for _, tab := range productTablets {
-				body, err := throttleApp(tab, sourceThrottlerAppName)
+				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
 				assert.NoError(t, err)
-				assert.Contains(t, body, sourceThrottlerAppName)
-
+				assert.Contains(t, status.ThrottledApps, sourceThrottlerAppName.String())
 				// Wait for throttling to take effect (caching will expire by this time):
-				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusThrottled)
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled)
+				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusThrottled) {
+					t.Logf("Throttler status: %v", status)
+				}
 			}
+			for _, tab := range customerTablets {
+				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+				assert.NoError(t, err)
+				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled) {
+					t.Logf("Throttler status: %v", status)
+				}
+			}
+			// Wait for any cached check values to be cleared and the new
+			// status value to be in effect everywhere before returning.
+			time.Sleep(500 * time.Millisecond)
+
 			insertMoreProductsForSourceThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes. We
 			// expect it to NOT get them in the first place, we expect the additional rows
@@ -1246,12 +1377,16 @@ func materializeProduct(t *testing.T) {
 		})
 		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// Unthrottle the vstreamer component, and expect the rows to show up.
+			err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, "product", sourceThrottlerAppName)
+			assert.NoError(t, err)
 			for _, tab := range productTablets {
-				body, err := unthrottleApp(tab, sourceThrottlerAppName)
-				assert.NoError(t, err)
-				assert.Contains(t, body, sourceThrottlerAppName)
 				// Give time for unthrottling to take effect and for targets to fetch data.
-				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
+				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled) {
+					status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+					assert.NoError(t, err)
+					assert.NotContains(t, status.ThrottledApps, sourceThrottlerAppName.String())
+					t.Logf("Throttler status: %v", status)
+				}
 			}
 			for _, tab := range customerTablets {
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 8)
@@ -1261,14 +1396,29 @@ func materializeProduct(t *testing.T) {
 		t.Run("throttle-app-customer", func(t *testing.T) {
 			// Now, throttle vreplication on the target side (vplayer), and insert some
 			// more rows.
+			err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
+			assert.NoError(t, err)
 			for _, tab := range customerTablets {
-				body, err := throttleApp(tab, targetThrottlerAppName)
+				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
 				assert.NoError(t, err)
-				assert.Contains(t, body, targetThrottlerAppName)
+				assert.Contains(t, status.ThrottledApps, targetThrottlerAppName.String())
 				// Wait for throttling to take effect (caching will expire by this time):
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusThrottled)
-				waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled)
+				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusThrottled) {
+					t.Logf("Throttler status: %v", status)
+				}
 			}
+			for _, tab := range productTablets {
+				// Give time for unthrottling to take effect and for targets to fetch data.
+				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+				assert.NoError(t, err)
+				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled) {
+					t.Logf("Throttler status: %v", status)
+				}
+			}
+			// Wait for any cached check values to be cleared and the new
+			// status value to be in effect everywhere before returning.
+			time.Sleep(500 * time.Millisecond)
+
 			insertMoreProductsForTargetThrottler(t)
 			// To be fair to the test, we give the target time to apply the new changes.
 			// We expect it to NOT get them in the first place, we expect the additional
@@ -1281,14 +1431,16 @@ func materializeProduct(t *testing.T) {
 		})
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
 			// unthrottle on target tablets, and expect the rows to show up
-			for _, tab := range customerTablets {
-				body, err := unthrottleApp(tab, targetThrottlerAppName)
-				assert.NoError(t, err)
-				assert.Contains(t, body, targetThrottlerAppName)
-			}
+			err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
+			assert.NoError(t, err)
 			// give time for unthrottling to take effect and for target to fetch data
 			for _, tab := range customerTablets {
-				waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled)
+				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled) {
+					status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
+					assert.NoError(t, err)
+					assert.NotContains(t, status.ThrottledApps, targetThrottlerAppName.String())
+					t.Logf("Throttler status: %v", status)
+				}
 				waitForRowCountInTablet(t, tab, keyspace, workflow, 11)
 			}
 		})
@@ -1366,7 +1518,7 @@ func materializeMerchantOrders(t *testing.T) {
 
 func checkVtgateHealth(t *testing.T, cell *Cell) {
 	for _, vtgate := range cell.Vtgates {
-		vtgateHealthURL := strings.Replace(vtgate.VerifyURL, "vars", "health", -1)
+		vtgateHealthURL := strings.ReplaceAll(vtgate.VerifyURL, "vars", "health")
 		if !checkHealth(t, vtgateHealthURL) {
 			assert.Fail(t, "Vtgate not healthy: ", vtgateHealthURL)
 		}
@@ -1374,7 +1526,7 @@ func checkVtgateHealth(t *testing.T, cell *Cell) {
 }
 
 func checkTabletHealth(t *testing.T, tablet *Tablet) {
-	vttabletHealthURL := strings.Replace(tablet.Vttablet.VerifyURL, "debug/vars", "healthz", -1)
+	vttabletHealthURL := strings.ReplaceAll(tablet.Vttablet.VerifyURL, "debug/vars", "healthz")
 	if !checkHealth(t, vttabletHealthURL) {
 		assert.Fail(t, "Vttablet not healthy: ", vttabletHealthURL)
 	}
@@ -1653,6 +1805,140 @@ func testSwitchTrafficPermissionChecks(t *testing.T, workflowType, sourceKeyspac
 				sidecarDBIdentifier))
 			runDryRunCmd(true)
 		})
+	})
+}
+
+// testSwitchWritesErrorHandling confirms that switching writes works as expected
+// in the face of vreplication lag (canSwitch() precheck) and when canceling the
+// switch due to replication failing to catch up in time.
+// The workflow MUST be migrating the customer table from the source to the
+// target keyspace AND the workflow must currently have reads switched but not
+// writes.
+func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []*cluster.VttabletProcess, workflow, workflowType string) {
+	t.Run("validate switch writes error handling", func(t *testing.T) {
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
+		require.NotZero(t, len(sourceTablets), "no source tablets provided")
+		require.NotZero(t, len(targetTablets), "no target tablets provided")
+		sourceKs := sourceTablets[0].Keyspace
+		targetKs := targetTablets[0].Keyspace
+		ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
+		var err error
+		sourceConns := make([]*mysql.Conn, len(sourceTablets))
+		for i, tablet := range sourceTablets {
+			sourceConns[i], err = tablet.TabletConn(tablet.Keyspace, true)
+			require.NoError(t, err)
+			defer sourceConns[i].Close()
+		}
+		targetConns := make([]*mysql.Conn, len(targetTablets))
+		for i, tablet := range targetTablets {
+			targetConns[i], err = tablet.TabletConn(tablet.Keyspace, true)
+			require.NoError(t, err)
+			defer targetConns[i].Close()
+		}
+		startingTestRowID := 10000000
+		numTestRows := 100
+		addTestRows := func() {
+			for i := 0; i < numTestRows; i++ {
+				execVtgateQuery(t, vtgateConn, sourceTablets[0].Keyspace, fmt.Sprintf("insert into customer (cid, name) values (%d, 'laggingCustomer')",
+					startingTestRowID+i))
+			}
+		}
+		deleteTestRows := func() {
+			execVtgateQuery(t, vtgateConn, sourceTablets[0].Keyspace, fmt.Sprintf("delete from customer where cid >= %d", startingTestRowID))
+		}
+		addIndex := func() {
+			for _, targetConn := range targetConns {
+				execQuery(t, targetConn, "set session sql_mode=''")
+				execQuery(t, targetConn, "alter table customer add unique index name_idx (name)")
+			}
+		}
+		dropIndex := func() {
+			for _, targetConn := range targetConns {
+				execQuery(t, targetConn, "alter table customer drop index name_idx")
+			}
+		}
+		lockTargetTable := func() {
+			for _, targetConn := range targetConns {
+				execQuery(t, targetConn, "lock table customer read")
+			}
+		}
+		unlockTargetTable := func() {
+			for _, targetConn := range targetConns {
+				execQuery(t, targetConn, "unlock tables")
+			}
+		}
+		cleanupTestData := func() {
+			dropIndex()
+			deleteTestRows()
+		}
+		restartWorkflow := func() {
+			err = vc.VtctldClient.ExecuteCommand("workflow", "--keyspace", targetKs, "start", "--workflow", workflow)
+			require.NoError(t, err, "failed to start workflow: %v", err)
+		}
+		waitForTargetToCatchup := func() {
+			waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+			waitForNoWorkflowLag(t, vc, targetKs, workflow)
+		}
+
+		// First let's test that the prechecks work as expected. We ALTER
+		// the table on the target shards to add a unique index on the name
+		// field.
+		addIndex()
+		// Then we replicate some test rows across the target shards by
+		// inserting them in the source keyspace.
+		addTestRows()
+		// Now the workflow should go into the error state and the lag should
+		// start to climb. So we sleep for twice the max lag duration that we
+		// will set for the SwitchTraffic call.
+		lagDuration := 3 * time.Second
+		time.Sleep(lagDuration * 3)
+		out, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKs,
+			"SwitchTraffic", "--tablet-types=primary", "--timeout=30s", "--max-replication-lag-allowed", lagDuration.String())
+		// It should fail in the canSwitch() precheck.
+		require.Error(t, err)
+		require.Regexp(t, fmt.Sprintf(".*cannot switch traffic for workflow %s at this time: replication lag [0-9]+s is higher than allowed lag %s.*",
+			workflow, lagDuration.String()), out)
+		require.NotContains(t, out, "cancel migration failed")
+		// Confirm that queries still work fine.
+		execVtgateQuery(t, vtgateConn, sourceKs, "select * from customer limit 1")
+		cleanupTestData()
+		// We have to restart the workflow again as the duplicate key error
+		// is a permanent/terminal one.
+		restartWorkflow()
+		waitForTargetToCatchup()
+
+		// Now let's test that the cancel works by setting the command timeout
+		// to a fraction (6s) of the default max repl lag duration (30s). First
+		// we lock the customer table on the target tablets so that we cannot
+		// apply the INSERTs and catch up.
+		lockTargetTable()
+		addTestRows()
+		timeout := lagDuration * 2 // 6s
+		// Use the default max-replication-lag-allowed value of 30s.
+		// We run the command in a goroutine so that we can unblock things
+		// after the timeout is reached -- as the vplayer query is blocking
+		// on the table lock in the MySQL layer.
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			out, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", targetKs,
+				"SwitchTraffic", "--tablet-types=primary", "--timeout", timeout.String())
+		}()
+		time.Sleep(timeout)
+		// Now we can unblock things and let it continue.
+		unlockTargetTable()
+		wg.Wait()
+		// It should fail due to the command context timeout and we should
+		// successfully cancel.
+		require.Error(t, err)
+		require.Contains(t, out, "failed to sync up replication between the source and target")
+		require.NotContains(t, out, "cancel migration failed")
+		// Confirm that queries still work fine.
+		execVtgateQuery(t, vtgateConn, sourceKs, "select * from customer limit 1")
+		deleteTestRows()
+		waitForTargetToCatchup()
 	})
 }
 

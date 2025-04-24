@@ -28,8 +28,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
-
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqltypes"
@@ -45,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -82,8 +81,8 @@ func (*keyRangeLookuper) NeedsVCursor() bool { return false }
 func (*keyRangeLookuper) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuper) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	return []key.Destination{
+func (*keyRangeLookuper) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	return []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{
 				End: []byte{0x10},
@@ -107,8 +106,8 @@ func (*keyRangeLookuperUnique) NeedsVCursor() bool { return false }
 func (*keyRangeLookuperUnique) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*keyRangeLookuperUnique) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	return []key.Destination{
+func (*keyRangeLookuperUnique) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	return []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{
 				End: []byte{0x10},
@@ -245,6 +244,7 @@ func createCustomExecutor(t testing.TB, vschema string, mysqlVersion string) (ex
 
 func createExecutorConfig() ExecutorConfig {
 	return ExecutorConfig{
+		Name:         "TestExecutor",
 		StreamSize:   10,
 		AllowScatter: true,
 	}
@@ -252,6 +252,7 @@ func createExecutorConfig() ExecutorConfig {
 
 func createExecutorConfigWithNormalizer() ExecutorConfig {
 	return ExecutorConfig{
+		Name:         "TestExecutor",
 		StreamSize:   10,
 		AllowScatter: true,
 		Normalize:    true,
@@ -320,27 +321,16 @@ func createExecutorEnvWithPrimaryReplicaConn(t testing.TB, ctx context.Context, 
 	return executor, primary, replica
 }
 
-func executorExecSession(ctx context.Context, executor *Executor, sql string, bv map[string]*querypb.BindVariable, session *vtgatepb.Session) (*sqltypes.Result, error) {
-	return executor.Execute(
-		ctx,
-		nil,
-		"TestExecute",
-		econtext.NewSafeSession(session),
-		sql,
-		bv)
+func executorExecSession(ctx context.Context, executor *Executor, session *econtext.SafeSession, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return executor.Execute(ctx, nil, "TestExecute", session, sql, bv, false)
 }
 
 func executorExec(ctx context.Context, executor *Executor, session *vtgatepb.Session, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return executorExecSession(ctx, executor, sql, bv, session)
+	return executorExecSession(ctx, executor, econtext.NewSafeSession(session), sql, bv)
 }
 
-func executorPrepare(ctx context.Context, executor *Executor, session *vtgatepb.Session, sql string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
-	return executor.Prepare(
-		ctx,
-		"TestExecute",
-		econtext.NewSafeSession(session),
-		sql,
-		bv)
+func executorPrepare(ctx context.Context, executor *Executor, session *vtgatepb.Session, sql string) ([]*querypb.Field, uint16, error) {
+	return executor.Prepare(ctx, "TestExecute", econtext.NewSafeSession(session), sql)
 }
 
 func executorStream(ctx context.Context, executor *Executor, sql string) (qr *sqltypes.Result, err error) {

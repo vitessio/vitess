@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -182,7 +183,7 @@ func createBackupDir(root string, dirs ...string) error {
 
 func createBackupFiles(root string, fileCount int, ext string) error {
 	for i := 0; i < fileCount; i++ {
-		f, err := os.Create(path.Join(root, fmt.Sprintf("%d.%s", i, ext)))
+		f, err := os2.Create(path.Join(root, fmt.Sprintf("%d.%s", i, ext)))
 		if err != nil {
 			return err
 		}

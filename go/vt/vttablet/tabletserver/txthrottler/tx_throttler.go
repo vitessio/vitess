@@ -46,6 +46,7 @@ type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64
 var (
 	healthCheckFactory healthCheckFactoryFunc
 	throttlerFactory   throttlerFactoryFunc
+	txThrottlerHcName  = "TxThrottler"
 )
 
 func resetTxThrottlerFactories() {
@@ -311,7 +312,7 @@ func (ts *txThrottlerStateImpl) initHealthCheckStream(topoServer *topo.Server, t
 	if err != nil {
 		return err
 	}
-	ts.healthCheckChan = ts.healthCheck.Subscribe()
+	ts.healthCheckChan = ts.healthCheck.Subscribe(txThrottlerHcName)
 	return nil
 }
 

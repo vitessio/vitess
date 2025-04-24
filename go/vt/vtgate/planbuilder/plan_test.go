@@ -229,17 +229,16 @@ func (s *planTestSuite) setFks(vschema *vindexes.VSchema) {
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_multicol_tbl2", createFkDefinition([]string{"cola", "colb"}, "u_multicol_tbl1", []string{"cola", "colb"}, sqlparser.SetNull, sqlparser.SetNull))
 		_ = vschema.AddForeignKey("unsharded_fk_allow", "u_multicol_tbl3", createFkDefinition([]string{"cola", "colb"}, "u_multicol_tbl2", []string{"cola", "colb"}, sqlparser.Cascade, sqlparser.Cascade))
 
-		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9")})
-		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{&sqlparser.BinaryExpr{Operator: sqlparser.MultOp, Left: sqlparser.NewColName("col9"), Right: sqlparser.NewColName("foo")}})
-		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("col9"), sqlparser.NewColName("foo")})
-		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("foo"), sqlparser.NewColName("bar")})
-		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", sqlparser.Exprs{sqlparser.NewColName("bar"), sqlparser.NewColName("col9")})
-		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl8", sqlparser.Exprs{sqlparser.NewColName("col8")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", []sqlparser.Expr{sqlparser.NewColName("col9")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", []sqlparser.Expr{&sqlparser.BinaryExpr{Operator: sqlparser.MultOp, Left: sqlparser.NewColName("col9"), Right: sqlparser.NewColName("foo")}})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", []sqlparser.Expr{sqlparser.NewColName("col9"), sqlparser.NewColName("foo")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", []sqlparser.Expr{sqlparser.NewColName("foo"), sqlparser.NewColName("bar")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl9", []sqlparser.Expr{sqlparser.NewColName("bar"), sqlparser.NewColName("col9")})
+		_ = vschema.AddUniqueKey("unsharded_fk_allow", "u_tbl8", []sqlparser.Expr{sqlparser.NewColName("col8")})
 
 		s.addPKs(vschema, "unsharded_fk_allow", []string{"u_tbl1", "u_tbl2", "u_tbl3", "u_tbl4", "u_tbl5", "u_tbl6", "u_tbl7", "u_tbl8", "u_tbl9", "u_tbl10", "u_tbl11",
 			"u_multicol_tbl1", "u_multicol_tbl2", "u_multicol_tbl3"})
 	}
-
 }
 
 func (s *planTestSuite) addPKs(vschema *vindexes.VSchema, ks string, tbls []string) {
@@ -379,7 +378,7 @@ func (s *planTestSuite) TestOneWithTPCHVSchema() {
 	defer reset()
 
 	env := vtenv.NewTestEnv()
-	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vschema := loadSchema(s.T(), "vschemas/tpch_schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
 	require.NoError(s.T(), err)
 
@@ -523,6 +522,15 @@ func (s *planTestSuite) TestWithDefaultKeyspaceFromFile() {
 	s.testFile("flush_cases.json", vw, false)
 	s.testFile("show_cases.json", vw, false)
 	s.testFile("call_cases.json", vw, false)
+}
+
+func (s *planTestSuite) TestSingleUnshardedKeyspace() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/unsharded_schema.json", false)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(s.T(), err)
+
+	s.testFile("unsharded_cases.json", vw, false)
 }
 
 func (s *planTestSuite) TestWithDefaultKeyspaceFromFileSharded() {

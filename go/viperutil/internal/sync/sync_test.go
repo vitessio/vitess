@@ -98,10 +98,10 @@ func TestWatchConfig(t *testing.T) {
 	// Check that default values are actually used
 	require.Equal(t, B.Get(), B.Default())
 
-	A.(*value.Dynamic[int]).Base.BoundGetFunc = vipersync.AdaptGetter("a", func(v *viper.Viper) func(key string) int {
+	A.(*value.Dynamic[int]).BoundGetFunc = vipersync.AdaptGetter("a", func(v *viper.Viper) func(key string) int {
 		return v.GetInt
 	}, sv)
-	B.(*value.Dynamic[int]).Base.BoundGetFunc = vipersync.AdaptGetter("b", func(v *viper.Viper) func(key string) int {
+	B.(*value.Dynamic[int]).BoundGetFunc = vipersync.AdaptGetter("b", func(v *viper.Viper) func(key string) int {
 		return v.GetInt
 	}, sv)
 

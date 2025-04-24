@@ -398,12 +398,18 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, lastPK *querypb.QueryResult, gtidch chan string) {
 	log.Infof("streamOneShard Start on %s using query: %s", participant.tablet.Alias.String(), query)
 	td.wgShardStreamers.Add(1)
+
 	defer func() {
 		log.Infof("streamOneShard End on %s", participant.tablet.Alias.String())
-		close(participant.result)
-		close(gtidch)
+		select {
+		case <-ctx.Done():
+		default:
+			close(participant.result)
+			close(gtidch)
+		}
 		td.wgShardStreamers.Done()
 	}()
+
 	participant.err = func() error {
 		conn, err := tabletconn.GetDialer()(ctx, participant.tablet, false)
 		if err != nil {
@@ -863,12 +869,12 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.
 // VReplication workflow would have converted the datetime columns expecting the
 // source to have been in the SourceTimeZone and target in TargetTimeZone. We need
 // to do the reverse conversion in VDiff before the comparison.
-func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.SelectExprs, fields map[string]querypb.Type) sqlparser.SelectExprs {
+func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.SelectExpr, fields map[string]querypb.Type) []sqlparser.SelectExpr {
 	if td.wd.ct.sourceTimeZone == "" {
 		return targetSelectExprs
 	}
 	log.Infof("source time zone specified: %s", td.wd.ct.sourceTimeZone)
-	var newSelectExprs sqlparser.SelectExprs
+	var newSelectExprs []sqlparser.SelectExpr
 	var modified bool
 	for _, expr := range targetSelectExprs {
 		converted := false
@@ -879,14 +885,11 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs sqlparser.Selec
 				colName := colAs.Name.Lowered()
 				fieldType := fields[colName]
 				if fieldType == querypb.Type_DATETIME {
-					convertTZFuncExpr = &sqlparser.FuncExpr{
-						Name: sqlparser.NewIdentifierCI("convert_tz"),
-						Exprs: sqlparser.Exprs{
-							selExpr.Expr,
-							sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone),
-							sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone),
-						},
-					}
+					convertTZFuncExpr = sqlparser.NewFuncExpr("convert_tz",
+						selExpr.Expr,
+						sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone),
+						sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone),
+					)
 					log.Infof("converting datetime column %s using convert_tz()", colName)
 					newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
 					converted = true
@@ -947,7 +950,7 @@ func (td *tableDiffer) getSourcePKCols() error {
 		executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 			res, err := td.wd.ct.tmc.ExecuteFetchAsApp(ctx, sourceTablet.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 				Query:   []byte(query),
-				MaxRows: 1,
+				MaxRows: uint64(maxrows),
 			})
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
@@ -961,9 +964,11 @@ func (td *tableDiffer) getSourcePKCols() error {
 				td.table.Name, topoproto.TabletAliasString(sourceTablet.Tablet.Alias))
 		}
 		if len(pkeCols) > 0 {
+			log.Infof("Using primary key equivalent columns %+v for table %s", pkeCols, td.table.Name)
 			sourceTable.PrimaryKeyColumns = pkeCols
 		} else {
 			// We use every column together as a substitute PK.
+			log.Infof("Using all columns as a substitute primary key for table %s", td.table.Name)
 			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, td.table.Columns...)
 		}
 	}

@@ -62,7 +62,7 @@ func (e *equalsGen) customComparatorField(t types.Type) string {
 	return printableTypeName(t) + "_"
 }
 
-func (e *equalsGen) genFile() (string, *jen.File) {
+func (e *equalsGen) genFile(generatorSPI) (string, *jen.File) {
 	e.file.Type().Id(Comparator).StructFunc(func(g *jen.Group) {
 		for tname, t := range e.comparators {
 			if t == nil {
@@ -303,6 +303,4 @@ func (e *equalsGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorS
 	return nil
 }
 
-func (e *equalsGen) basicMethod(types.Type, *types.Basic, generatorSPI) error {
-	return nil
-}
+func (*equalsGen) basicMethod(types.Type, *types.Basic, generatorSPI) error { return nil }

@@ -146,6 +146,8 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 		vde.resetControllers()
 	}
 
+	globalStats.initControllerStats()
+
 	// At this point the tablet has no controllers running. So
 	// we want to start any VDiffs that have not been explicitly
 	// stopped or otherwise finished.
@@ -153,12 +155,12 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	vde.ctx, vde.cancel = context.WithCancel(ctx)
 	vde.isOpen = true // now we are open and have things to close
 	if err := vde.initControllers(rows); err != nil {
 		return err
 	}
-	vde.updateStats()
 
 	// At this point we've fully and successfully opened so begin
 	// retrying error'd VDiffs until the engine is closed.
@@ -212,7 +214,7 @@ func (vde *Engine) retry(ctx context.Context, err error) {
 // addController creates a new controller using the given vdiff record and adds it to the engine.
 // You must already have the main engine mutex (mu) locked before calling this.
 func (vde *Engine) addController(row sqltypes.RowNamedValues, options *tabletmanagerdata.VDiffOptions) error {
-	ct, err := newController(vde.ctx, row, vde.dbClientFactoryDba, vde.ts, vde, options)
+	ct, err := newController(row, vde.dbClientFactoryDba, vde.ts, vde, options)
 	if err != nil {
 		return fmt.Errorf("controller could not be initialized for stream %+v on tablet %v",
 			row, vde.thisTablet.Alias)
@@ -221,6 +223,10 @@ func (vde *Engine) addController(row sqltypes.RowNamedValues, options *tabletman
 	globalStats.mu.Lock()
 	defer globalStats.mu.Unlock()
 	globalStats.controllers[ct.id] = ct
+
+	controllerCtx, cancel := context.WithCancel(vde.ctx)
+	ct.cancel = cancel
+	go ct.run(controllerCtx)
 	return nil
 }
 
@@ -395,16 +401,4 @@ func (vde *Engine) resetControllers() {
 		ct.Stop()
 	}
 	vde.controllers = make(map[int64]*controller)
-	vde.updateStats()
-}
-
-// updateStats must only be called while holding the engine lock.
-func (vre *Engine) updateStats() {
-	globalStats.mu.Lock()
-	defer globalStats.mu.Unlock()
-
-	globalStats.controllers = make(map[int64]*controller, len(vre.controllers))
-	for id, ct := range vre.controllers {
-		globalStats.controllers[id] = ct
-	}
 }

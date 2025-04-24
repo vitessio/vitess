@@ -55,21 +55,6 @@ type VindexLookup struct {
 	SendTo *Route
 }
 
-// RouteType implements the Primitive interface
-func (vr *VindexLookup) RouteType() string {
-	return "VindexLookup"
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (vr *VindexLookup) GetKeyspaceName() string {
-	return vr.SendTo.GetKeyspaceName()
-}
-
-// GetTableName implements the Primitive interface
-func (vr *VindexLookup) GetTableName() string {
-	return vr.SendTo.GetTableName()
-}
-
 // GetFields implements the Primitive interface
 func (vr *VindexLookup) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return vr.SendTo.GetFields(ctx, vcursor, bindVars)
@@ -99,7 +84,7 @@ func (vr *VindexLookup) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 	return vr.SendTo.executeAfterLookup(ctx, vcursor, bindVars, wantfields, ids, dest)
 }
 
-func (vr *VindexLookup) mapVindexToDestination(ids []sqltypes.Value, results []*sqltypes.Result, bindVars map[string]*querypb.BindVariable) ([]key.Destination, error) {
+func (vr *VindexLookup) mapVindexToDestination(ids []sqltypes.Value, results []*sqltypes.Result, bindVars map[string]*querypb.BindVariable) ([]key.ShardDestination, error) {
 	dest, err := vr.Vindex.MapResult(ids, results)
 	if err != nil {
 		return nil, err

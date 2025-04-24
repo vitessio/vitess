@@ -181,8 +181,8 @@ message SchemaMigration {
     // SchemaMigration_VITESS was also formerly called "ONLINE".
     VITESS = 0;
     ONLINE = 0;
-    GHOST = 1;
-    PTOSC = 2;
+    reserved 1; // Was GHOST
+    reserved 2; // Was PTOSC
     // SchemaMigration_DIRECT runs the migration directly against MySQL (e.g. `ALTER TABLE ...`),
     // meaning it is not actually an "online" DDL migration.
     DIRECT = 3;
@@ -461,6 +461,11 @@ message BackupRequest {
   bool upgrade_safe = 5;
   // BackupEngine specifies if we want to use a particular backup engine for this backup request
   optional string backup_engine = 6;
+
+  // MysqlShutdownTimeout is the duration to wait for mysqld to shutdown before
+  // starting the backup. This is available so we can override this for upgrade safe
+  // backups which might take longer to shut down.
+  vttime.Duration mysql_shutdown_timeout = 7;
 }
 
 message BackupResponse {
@@ -486,11 +491,18 @@ message BackupShardRequest {
   // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
   // then the backup becomes incremental and applies as of given position.
   string incremental_from_pos = 6;
+  // MysqlShutdownTimeout is the duration to wait for mysqld to shutdown before
+  // starting the backup. This is available so we can override this for upgrade safe
+  // backups which might take longer to shut down.
+  vttime.Duration mysql_shutdown_timeout = 7;
 }
 
 message CancelSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller. This is needed when strict table ACLs are enforced on the tablets.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message CancelSchemaMigrationResponse {
@@ -541,6 +553,9 @@ message CheckThrottlerResponse {
 message CleanupSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message CleanupSchemaMigrationResponse {
@@ -550,6 +565,9 @@ message CleanupSchemaMigrationResponse {
 message CompleteSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message CompleteSchemaMigrationResponse {
@@ -822,6 +840,9 @@ message FindAllShardsInKeyspaceResponse {
 message ForceCutOverSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message ForceCutOverSchemaMigrationResponse {
@@ -1225,6 +1246,9 @@ message InitShardPrimaryResponse {
 message LaunchSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message LaunchSchemaMigrationResponse {
@@ -1424,6 +1448,9 @@ message MoveTablesCompleteRequest {
   bool rename_tables = 6;
   bool dry_run = 7;
   repeated string shards = 8;
+  // Set to true if the you know that the source keyspace is no
+  // longer available but still want to complete the workflow.
+  bool ignore_source_keyspace = 9;
 }
 
 message MoveTablesCompleteResponse {
@@ -1669,6 +1696,9 @@ message RestoreFromBackupResponse {
 message RetrySchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message RetrySchemaMigrationResponse {
@@ -2110,6 +2140,10 @@ message WorkflowDeleteRequest {
   // up the migrated data. This is only used with multi-tenant
   // MoveTables migrations.
   int64 delete_batch_size = 6;
+  // Set to true if the you know that the source keyspace is no
+  // longer available but still want to clean everything up on the
+  // target keyspace.
+  bool ignore_source_keyspace = 7;
 }
 
 message WorkflowDeleteResponse {

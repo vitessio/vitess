@@ -45,7 +45,7 @@ type Lock struct {
 	Keyspace *vindexes.Keyspace
 
 	// TargetDestination specifies an explicit target destination to send the query to.
-	TargetDestination key.Destination
+	TargetDestination key.ShardDestination
 
 	FieldQuery string
 
@@ -57,28 +57,13 @@ type LockFunc struct {
 	Name evalengine.Expr
 }
 
-// RouteType is part of the Primitive interface
-func (l *Lock) RouteType() string {
-	return "lock"
-}
-
-// GetKeyspaceName is part of the Primitive interface
-func (l *Lock) GetKeyspaceName() string {
-	return l.Keyspace.Name
-}
-
-// GetTableName is part of the Primitive interface
-func (l *Lock) GetTableName() string {
-	return "dual"
-}
-
 // TryExecute is part of the Primitive interface
 func (l *Lock) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return l.execLock(ctx, vcursor, bindVars)
 }
 
 func (l *Lock) execLock(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(ctx, l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
+	rss, _, err := vcursor.ResolveDestinations(ctx, l.Keyspace.Name, nil, []key.ShardDestination{l.TargetDestination})
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +147,7 @@ func (l *Lock) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars m
 
 // GetFields is part of the Primitive interface
 func (l *Lock) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(ctx, l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
+	rss, _, err := vcursor.ResolveDestinations(ctx, l.Keyspace.Name, nil, []key.ShardDestination{l.TargetDestination})
 	if err != nil {
 		return nil, err
 	}

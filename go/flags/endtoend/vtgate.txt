@@ -68,7 +68,6 @@ Flags:
       --gate_query_cache_memory int                                      gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
       --gateway_initial_tablet_timeout duration                          At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type (default 30s)
       --grpc-dial-concurrency-limit int                                  Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
-      --grpc-send-session-in-streaming                                   If set, will send the session as last packet in streaming api to support transactions in streaming
       --grpc-use-effective-groups                                        If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.
       --grpc-use-static-authentication-callerid                          If set, will set the immediate caller id to the username authenticated by the static auth plugin.
       --grpc_auth_mode string                                            Which auth plugin implementation to use (eg: static)
@@ -124,6 +123,7 @@ Flags:
       --min_number_serving_vttablets int                                 The minimum number of vttablets for each replicating tablet_type (e.g. replica, rdonly) that will be continue to be used even with replication lag above discovery_low_replication_lag, but still below discovery_high_replication_lag_minimum_serving. (default 2)
       --mysql-server-drain-onterm                                        If set, the server waits for --onterm_timeout for already connected clients to complete their in flight work
       --mysql-server-keepalive-period duration                           TCP period between keep-alives
+      --mysql-server-multi-query-protocol                                If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.
       --mysql-server-pool-conn-read-buffers                              If set, the server will pool incoming connection read buffers
       --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql_auth_server_impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")

@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -70,6 +70,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAvg(in, f)
 	case *Begin:
 		return VisitRefOfBegin(in, f)
+	case *BeginEndStatement:
+		return VisitRefOfBeginEndStatement(in, f)
 	case *BetweenExpr:
 		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:
@@ -112,6 +114,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCommonTableExpr(in, f)
 	case *ComparisonExpr:
 		return VisitRefOfComparisonExpr(in, f)
+	case *CompoundStatements:
+		return VisitRefOfCompoundStatements(in, f)
 	case *ConstraintDefinition:
 		return VisitRefOfConstraintDefinition(in, f)
 	case *ConvertExpr:
@@ -126,6 +130,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCountStar(in, f)
 	case *CreateDatabase:
 		return VisitRefOfCreateDatabase(in, f)
+	case *CreateProcedure:
+		return VisitRefOfCreateProcedure(in, f)
 	case *CreateTable:
 		return VisitRefOfCreateTable(in, f)
 	case *CreateView:
@@ -134,6 +140,12 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfCurTimeFuncExpr(in, f)
 	case *DeallocateStmt:
 		return VisitRefOfDeallocateStmt(in, f)
+	case *DeclareCondition:
+		return VisitRefOfDeclareCondition(in, f)
+	case *DeclareHandler:
+		return VisitRefOfDeclareHandler(in, f)
+	case *DeclareVar:
+		return VisitRefOfDeclareVar(in, f)
 	case *Default:
 		return VisitRefOfDefault(in, f)
 	case *Definer:
@@ -148,10 +160,14 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfDropDatabase(in, f)
 	case *DropKey:
 		return VisitRefOfDropKey(in, f)
+	case *DropProcedure:
+		return VisitRefOfDropProcedure(in, f)
 	case *DropTable:
 		return VisitRefOfDropTable(in, f)
 	case *DropView:
 		return VisitRefOfDropView(in, f)
+	case *ElseIfBlock:
+		return VisitRefOfElseIfBlock(in, f)
 	case *ExecuteStmt:
 		return VisitRefOfExecuteStmt(in, f)
 	case *ExistsExpr:
@@ -160,8 +176,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfExplainStmt(in, f)
 	case *ExplainTab:
 		return VisitRefOfExplainTab(in, f)
-	case Exprs:
-		return VisitExprs(in, f)
+	case *Exprs:
+		return VisitRefOfExprs(in, f)
 	case *ExtractFuncExpr:
 		return VisitRefOfExtractFuncExpr(in, f)
 	case *ExtractValueExpr:
@@ -208,10 +224,24 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfGroupBy(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
+	case *HandlerConditionErrorCode:
+		return VisitRefOfHandlerConditionErrorCode(in, f)
+	case *HandlerConditionNamed:
+		return VisitRefOfHandlerConditionNamed(in, f)
+	case *HandlerConditionNotFound:
+		return VisitRefOfHandlerConditionNotFound(in, f)
+	case *HandlerConditionSQLException:
+		return VisitRefOfHandlerConditionSQLException(in, f)
+	case *HandlerConditionSQLState:
+		return VisitRefOfHandlerConditionSQLState(in, f)
+	case *HandlerConditionSQLWarning:
+		return VisitRefOfHandlerConditionSQLWarning(in, f)
 	case IdentifierCI:
 		return VisitIdentifierCI(in, f)
 	case IdentifierCS:
 		return VisitIdentifierCS(in, f)
+	case *IfStatement:
+		return VisitRefOfIfStatement(in, f)
 	case *IndexDefinition:
 		return VisitRefOfIndexDefinition(in, f)
 	case *IndexHint:
@@ -396,6 +426,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfPolygonPropertyFuncExpr(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
+	case *ProcParameter:
+		return VisitRefOfProcParameter(in, f)
 	case *PurgeBinaryLogs:
 		return VisitRefOfPurgeBinaryLogs(in, f)
 	case ReferenceAction:
@@ -434,8 +466,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfSavepoint(in, f)
 	case *Select:
 		return VisitRefOfSelect(in, f)
-	case SelectExprs:
-		return VisitSelectExprs(in, f)
+	case *SelectExprs:
+		return VisitRefOfSelectExprs(in, f)
 	case *SelectInto:
 		return VisitRefOfSelectInto(in, f)
 	case *Set:
@@ -462,6 +494,12 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowThrottlerStatus(in, f)
 	case *ShowTransactionStatus:
 		return VisitRefOfShowTransactionStatus(in, f)
+	case *Signal:
+		return VisitRefOfSignal(in, f)
+	case *SignalSet:
+		return VisitRefOfSignalSet(in, f)
+	case *SingleStatement:
+		return VisitRefOfSingleStatement(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
 	case *Std:
@@ -564,6 +602,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfWith(in, f)
 	case *XorExpr:
 		return VisitRefOfXorExpr(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -911,6 +951,18 @@ func VisitRefOfBegin(in *Begin, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfBeginEndStatement(in *BeginEndStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfCompoundStatements(in.Statements, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfBetweenExpr(in *BetweenExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -999,8 +1051,10 @@ func VisitRefOfCallProc(in *CallProc, f Visit) error {
 	if err := VisitTableName(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitExprs(in.Params, f); err != nil {
-		return err
+	for _, el := range in.Params {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1064,8 +1118,10 @@ func VisitRefOfCharExpr(in *CharExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Exprs, f); err != nil {
-		return err
+	for _, el := range in.Exprs {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1200,6 +1256,20 @@ func VisitRefOfComparisonExpr(in *ComparisonExpr, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfCompoundStatements(in *CompoundStatements, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.Statements {
+		if err := VisitCompoundStatement(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func VisitRefOfConstraintDefinition(in *ConstraintDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -1258,8 +1328,10 @@ func VisitRefOfCount(in *Count, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Args, f); err != nil {
-		return err
+	for _, el := range in.Args {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	if err := VisitRefOfOverClause(in.OverClause, f); err != nil {
 		return err
@@ -1289,6 +1361,32 @@ func VisitRefOfCreateDatabase(in *CreateDatabase, f Visit) error {
 		return err
 	}
 	if err := VisitIdentifierCS(in.DBName, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfCreateProcedure(in *CreateProcedure, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfDefiner(in.Definer, f); err != nil {
+		return err
+	}
+	for _, el := range in.Params {
+		if err := VisitRefOfProcParameter(el, f); err != nil {
+			return err
+		}
+	}
+	if err := VisitCompoundStatement(in.Body, f); err != nil {
 		return err
 	}
 	return nil
@@ -1361,6 +1459,55 @@ func VisitRefOfDeallocateStmt(in *DeallocateStmt, f Visit) error {
 		return err
 	}
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfDeclareCondition(in *DeclareCondition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitHandlerCondition(in.Condition, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfDeclareHandler(in *DeclareHandler, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.Conditions {
+		if err := VisitHandlerCondition(el, f); err != nil {
+			return err
+		}
+	}
+	if err := VisitCompoundStatement(in.Statement, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfDeclareVar(in *DeclareVar, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.VarNames {
+		if err := VisitIdentifierCI(el, f); err != nil {
+			return err
+		}
+	}
+	if err := VisitRefOfColumnType(in.Type, f); err != nil {
 		return err
 	}
 	return nil
@@ -1469,6 +1616,21 @@ func VisitRefOfDropKey(in *DropKey, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfDropProcedure(in *DropProcedure, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfDropTable(in *DropTable, f Visit) error {
 	if in == nil {
 		return nil
@@ -1495,6 +1657,21 @@ func VisitRefOfDropView(in *DropView, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfElseIfBlock(in *ElseIfBlock, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.SearchCondition, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfCompoundStatements(in.ThenStatements, f); err != nil {
 		return err
 	}
 	return nil
@@ -1558,14 +1735,14 @@ func VisitRefOfExplainTab(in *ExplainTab, f Visit) error {
 	}
 	return nil
 }
-func VisitExprs(in Exprs, f Visit) error {
+func VisitRefOfExprs(in *Exprs, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in {
+	for _, el := range in.Exprs {
 		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
@@ -1705,8 +1882,10 @@ func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitExprs(in.Exprs, f); err != nil {
-		return err
+	for _, el := range in.Exprs {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1914,13 +2093,75 @@ func VisitRefOfGroupConcatExpr(in *GroupConcatExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Exprs, f); err != nil {
-		return err
+	for _, el := range in.Exprs {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfHandlerConditionErrorCode(in *HandlerConditionErrorCode, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfHandlerConditionNamed(in *HandlerConditionNamed, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfHandlerConditionNotFound(in *HandlerConditionNotFound, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfHandlerConditionSQLException(in *HandlerConditionSQLException, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfHandlerConditionSQLState(in *HandlerConditionSQLState, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.SQLStateValue, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfHandlerConditionSQLWarning(in *HandlerConditionSQLWarning, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
@@ -1933,6 +2174,29 @@ func VisitIdentifierCI(in IdentifierCI, f Visit) error {
 }
 func VisitIdentifierCS(in IdentifierCS, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfIfStatement(in *IfStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.SearchCondition, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfCompoundStatements(in.ThenStatements, f); err != nil {
+		return err
+	}
+	for _, el := range in.ElseIfBlocks {
+		if err := VisitRefOfElseIfBlock(el, f); err != nil {
+			return err
+		}
+	}
+	if err := VisitRefOfCompoundStatements(in.ElseStatements, f); err != nil {
 		return err
 	}
 	return nil
@@ -2068,8 +2332,10 @@ func VisitRefOfIntervalFuncExpr(in *IntervalFuncExpr, f Visit) error {
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
-	if err := VisitExprs(in.Exprs, f); err != nil {
-		return err
+	for _, el := range in.Exprs {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2119,8 +2385,10 @@ func VisitRefOfJSONArrayExpr(in *JSONArrayExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.Params, f); err != nil {
-		return err
+	for _, el := range in.Params {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2307,8 +2575,10 @@ func VisitRefOfJSONRemoveExpr(in *JSONRemoveExpr, f Visit) error {
 	if err := VisitExpr(in.JSONDoc, f); err != nil {
 		return err
 	}
-	if err := VisitExprs(in.PathList, f); err != nil {
-		return err
+	for _, el := range in.PathList {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2461,8 +2731,10 @@ func VisitRefOfJSONValueMergeExpr(in *JSONValueMergeExpr, f Visit) error {
 	if err := VisitExpr(in.JSONDoc, f); err != nil {
 		return err
 	}
-	if err := VisitExprs(in.JSONDocList, f); err != nil {
-		return err
+	for _, el := range in.JSONDocList {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2601,8 +2873,10 @@ func VisitRefOfLineStringExpr(in *LineStringExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.PointParams, f); err != nil {
-		return err
+	for _, el := range in.PointParams {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2774,8 +3048,10 @@ func VisitRefOfMultiLinestringExpr(in *MultiLinestringExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.LinestringParams, f); err != nil {
-		return err
+	for _, el := range in.LinestringParams {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2786,8 +3062,10 @@ func VisitRefOfMultiPointExpr(in *MultiPointExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.PointParams, f); err != nil {
-		return err
+	for _, el := range in.PointParams {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2798,8 +3076,10 @@ func VisitRefOfMultiPolygonExpr(in *MultiPolygonExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.PolygonParams, f); err != nil {
-		return err
+	for _, el := range in.PolygonParams {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -3218,8 +3498,10 @@ func VisitRefOfPolygonExpr(in *PolygonExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitExprs(in.LinestringParams, f); err != nil {
-		return err
+	for _, el := range in.LinestringParams {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -3252,6 +3534,21 @@ func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfProcParameter(in *ProcParameter, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfColumnType(in.Type, f); err != nil {
 		return err
 	}
 	return nil
@@ -3535,7 +3832,7 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitSelectExprs(in.SelectExprs, f); err != nil {
+	if err := VisitRefOfSelectExprs(in.SelectExprs, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
@@ -3561,14 +3858,14 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	}
 	return nil
 }
-func VisitSelectExprs(in SelectExprs, f Visit) error {
+func VisitRefOfSelectExprs(in *SelectExprs, f Visit) error {
 	if in == nil {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in {
+	for _, el := range in.Exprs {
 		if err := VisitSelectExpr(el, f); err != nil {
 			return err
 		}
@@ -3581,6 +3878,11 @@ func VisitRefOfSelectInto(in *SelectInto, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	for _, el := range in.VarList {
+		if err := VisitRefOfVariable(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -3726,6 +4028,47 @@ func VisitRefOfShowTransactionStatus(in *ShowTransactionStatus, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfSignal(in *Signal, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitHandlerCondition(in.Condition, f); err != nil {
+		return err
+	}
+	for _, el := range in.SetValues {
+		if err := VisitRefOfSignalSet(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func VisitRefOfSignalSet(in *SignalSet, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Value, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfSingleStatement(in *SingleStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitStatement(in.Statement, f); err != nil {
 		return err
 	}
 	return nil
@@ -4476,8 +4819,10 @@ func VisitRefOfWindowSpecification(in *WindowSpecification, f Visit) error {
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitExprs(in.PartitionClause, f); err != nil {
-		return err
+	for _, el := range in.PartitionClause {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
 	}
 	if err := VisitOrderBy(in.OrderClause, f); err != nil {
 		return err
@@ -4561,6 +4906,8 @@ func VisitAggrFunc(in AggrFunc, f Visit) error {
 		return VisitRefOfVarSamp(in, f)
 	case *Variance:
 		return VisitRefOfVariance(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4615,6 +4962,8 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 		return VisitRefOfTablespaceOperation(in, f)
 	case *Validation:
 		return VisitRefOfValidation(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4781,6 +5130,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfValuesFuncExpr(in, f)
 	case *WeightStringFuncExpr:
 		return VisitRefOfWeightStringFuncExpr(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4797,6 +5148,34 @@ func VisitColTuple(in ColTuple, f Visit) error {
 		return VisitRefOfSubquery(in, f)
 	case ValTuple:
 		return VisitValTuple(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+func VisitCompoundStatement(in CompoundStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *BeginEndStatement:
+		return VisitRefOfBeginEndStatement(in, f)
+	case *DeclareCondition:
+		return VisitRefOfDeclareCondition(in, f)
+	case *DeclareHandler:
+		return VisitRefOfDeclareHandler(in, f)
+	case *DeclareVar:
+		return VisitRefOfDeclareVar(in, f)
+	case *IfStatement:
+		return VisitRefOfIfStatement(in, f)
+	case *Signal:
+		return VisitRefOfSignal(in, f)
+	case *SingleStatement:
+		return VisitRefOfSingleStatement(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4811,6 +5190,8 @@ func VisitConstraintInfo(in ConstraintInfo, f Visit) error {
 		return VisitRefOfCheckConstraintDefinition(in, f)
 	case *ForeignKeyDefinition:
 		return VisitRefOfForeignKeyDefinition(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4827,6 +5208,8 @@ func VisitDBDDLStatement(in DBDDLStatement, f Visit) error {
 		return VisitRefOfCreateDatabase(in, f)
 	case *DropDatabase:
 		return VisitRefOfDropDatabase(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4841,10 +5224,14 @@ func VisitDDLStatement(in DDLStatement, f Visit) error {
 		return VisitRefOfAlterTable(in, f)
 	case *AlterView:
 		return VisitRefOfAlterView(in, f)
+	case *CreateProcedure:
+		return VisitRefOfCreateProcedure(in, f)
 	case *CreateTable:
 		return VisitRefOfCreateTable(in, f)
 	case *CreateView:
 		return VisitRefOfCreateView(in, f)
+	case *DropProcedure:
+		return VisitRefOfDropProcedure(in, f)
 	case *DropTable:
 		return VisitRefOfDropTable(in, f)
 	case *DropView:
@@ -4853,6 +5240,8 @@ func VisitDDLStatement(in DDLStatement, f Visit) error {
 		return VisitRefOfRenameTable(in, f)
 	case *TruncateTable:
 		return VisitRefOfTruncateTable(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4867,6 +5256,8 @@ func VisitExplain(in Explain, f Visit) error {
 		return VisitRefOfExplainStmt(in, f)
 	case *ExplainTab:
 		return VisitRefOfExplainTab(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5111,6 +5502,32 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfWeightStringFuncExpr(in, f)
 	case *XorExpr:
 		return VisitRefOfXorExpr(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+func VisitHandlerCondition(in HandlerCondition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *HandlerConditionErrorCode:
+		return VisitRefOfHandlerConditionErrorCode(in, f)
+	case *HandlerConditionNamed:
+		return VisitRefOfHandlerConditionNamed(in, f)
+	case *HandlerConditionNotFound:
+		return VisitRefOfHandlerConditionNotFound(in, f)
+	case *HandlerConditionSQLException:
+		return VisitRefOfHandlerConditionSQLException(in, f)
+	case *HandlerConditionSQLState:
+		return VisitRefOfHandlerConditionSQLState(in, f)
+	case *HandlerConditionSQLWarning:
+		return VisitRefOfHandlerConditionSQLWarning(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5129,6 +5546,8 @@ func VisitInsertRows(in InsertRows, f Visit) error {
 		return VisitValues(in, f)
 	case *ValuesStatement:
 		return VisitRefOfValuesStatement(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5145,6 +5564,8 @@ func VisitSelectExpr(in SelectExpr, f Visit) error {
 		return VisitRefOfNextval(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5159,6 +5580,8 @@ func VisitSelectStatement(in SelectStatement, f Visit) error {
 		return VisitRefOfSelect(in, f)
 	case *Union:
 		return VisitRefOfUnion(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5177,6 +5600,8 @@ func VisitShowInternal(in ShowInternal, f Visit) error {
 		return VisitRefOfShowOther(in, f)
 	case *ShowTransactionStatus:
 		return VisitRefOfShowTransactionStatus(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5191,6 +5616,8 @@ func VisitSimpleTableExpr(in SimpleTableExpr, f Visit) error {
 		return VisitRefOfDerivedTable(in, f)
 	case TableName:
 		return VisitTableName(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5223,6 +5650,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfCommit(in, f)
 	case *CreateDatabase:
 		return VisitRefOfCreateDatabase(in, f)
+	case *CreateProcedure:
+		return VisitRefOfCreateProcedure(in, f)
 	case *CreateTable:
 		return VisitRefOfCreateTable(in, f)
 	case *CreateView:
@@ -5233,6 +5662,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfDelete(in, f)
 	case *DropDatabase:
 		return VisitRefOfDropDatabase(in, f)
+	case *DropProcedure:
+		return VisitRefOfDropProcedure(in, f)
 	case *DropTable:
 		return VisitRefOfDropTable(in, f)
 	case *DropView:
@@ -5301,6 +5732,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfVStream(in, f)
 	case *ValuesStatement:
 		return VisitRefOfValuesStatement(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5319,6 +5752,8 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 		return VisitRefOfJoinTableExpr(in, f)
 	case *ParenTableExpr:
 		return VisitRefOfParenTableExpr(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5335,6 +5770,8 @@ func VisitTableStatement(in TableStatement, f Visit) error {
 		return VisitRefOfUnion(in, f)
 	case *ValuesStatement:
 		return VisitRefOfValuesStatement(in, f)
+	case Visitable:
+		return VisitVisitable(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5413,6 +5850,15 @@ func VisitRefOfVindexParam(in *VindexParam, f Visit) error {
 		return err
 	}
 	if err := VisitIdentifierCI(in.Key, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitVisitable(in Visitable, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSQLNode(in.VisitThis(), f); err != nil {
 		return err
 	}
 	return nil

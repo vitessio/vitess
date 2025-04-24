@@ -36,6 +36,20 @@ import (
 )
 
 func transformToPrimitive(ctx *plancontext.PlanningContext, op operators.Operator) (engine.Primitive, error) {
+	prim, err := recursiveTransform(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+	if len(ctx.Conditions) > 0 {
+		prim = &engine.PlanSwitcher{
+			Conditions: ctx.Conditions,
+			Optimized:  prim,
+		}
+	}
+	return prim, nil
+}
+
+func recursiveTransform(ctx *plancontext.PlanningContext, op operators.Operator) (engine.Primitive, error) {
 	switch op := op.(type) {
 	case *operators.Route:
 		return transformRoutePlan(ctx, op)
@@ -523,16 +537,10 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 }
 
 func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, hints *queryHints) (*engine.Route, error) {
-	tableNames, err := getAllTableNames(op)
-	if err != nil {
-		return nil, err
-	}
-
 	rp := newRoutingParams(ctx, op.Routing.OpCode())
 	op.Routing.UpdateRoutingParams(ctx, rp)
 
 	e := &engine.Route{
-		TableName:           strings.Join(tableNames, ", "),
 		RoutingParameters:   rp,
 		TruncateColumnCount: op.ResultColumns,
 		FetchLastInsertID:   ctx.SemTable.ShouldFetchLastInsertID(),
@@ -579,6 +587,8 @@ func getHints(cmt *sqlparser.ParsedComments) *queryHints {
 }
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (engine.Primitive, error) {
+	ctx.CollectConditions(op.Conditions)
+
 	stmt, dmlOp, err := operators.ToSQL(ctx, op.Source)
 	if err != nil {
 		return nil, err
@@ -689,9 +699,9 @@ func autoIncGenerate(gen *operators.Generate) *engine.Generate {
 		return nil
 	}
 	selNext := &sqlparser.Select{
-		From:        []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: gen.TableName}},
-		SelectExprs: sqlparser.SelectExprs{&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}}},
+		From: []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: gen.TableName}},
 	}
+	selNext.AddSelectExpr(&sqlparser.Nextval{Expr: &sqlparser.Argument{Name: "n", Type: sqltypes.Int64}})
 	return &engine.Generate{
 		Keyspace: gen.Keyspace,
 		Query:    sqlparser.String(selNext),
@@ -783,7 +793,7 @@ func buildDeletePrimitive(ctx *plancontext.PlanningContext, rb *operators.Route,
 	return &engine.Delete{DML: edml}, nil
 }
 
-func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, hints *queryHints, vTbl *vindexes.Table, query string, colVindexes []*vindexes.ColumnVindex, vindexQuery string) *engine.DML {
+func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, hints *queryHints, vTbl *vindexes.BaseTable, query string, colVindexes []*vindexes.ColumnVindex, vindexQuery string) *engine.DML {
 	rp := newRoutingParams(ctx, rb.Routing.OpCode())
 	rb.Routing.UpdateRoutingParams(ctx, rp)
 	edml := &engine.DML{

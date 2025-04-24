@@ -32,6 +32,7 @@ import (
 	"github.com/spf13/viper"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
@@ -50,7 +51,9 @@ import (
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
@@ -61,8 +64,10 @@ import (
 )
 
 var (
-	normalizeQueries = true
-	streamBufferSize = 32 * 1024
+	normalizeQueries    = true
+	streamBufferSize    = 32 * 1024
+	schemaTrackerHcName = "SchemaTracker"
+	txResolverHcName    = "TxResolver"
 
 	terseErrors      bool
 	truncateErrorLen int
@@ -289,6 +294,27 @@ func Init(
 	tabletTypesToWait []topodatapb.TabletType,
 	pv plancontext.PlannerVersion,
 ) *VTGate {
+	ts, err := serv.GetTopoServer()
+	if err != nil {
+		log.Fatalf("Unable to get Topo server: %v", err)
+	}
+
+	// We need to get the keyspaces and rebuild the keyspace graphs
+	// before we make the topo-server read-only incase we are filtering by
+	// keyspaces.
+	var keyspaces []string
+	if discovery.FilteringKeyspaces() {
+		keyspaces = discovery.KeyspacesToWatch
+	} else {
+		keyspaces, err = ts.GetSrvKeyspaceNames(ctx, cell)
+		if err != nil {
+			log.Fatalf("Unable to get all keyspaces: %v", err)
+		}
+	}
+	// executor sets a watch on SrvVSchema, so let's rebuild these before creating it
+	if err := rebuildTopoGraphs(ctx, ts, cell, keyspaces); err != nil {
+		log.Fatalf("rebuildTopoGraphs failed: %v", err)
+	}
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
@@ -332,15 +358,11 @@ OuterLoop:
 	// ScatterConn depends on TxConn to perform forced rollbacks.
 	sc := NewScatterConn("VttabletCall", tc, gw)
 	// TxResolver depends on TxConn to complete distributed transaction.
-	tr := txresolver.NewTxResolver(gw.hc.Subscribe(), tc)
+	tr := txresolver.NewTxResolver(gw.hc.Subscribe(txResolverHcName), tc)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
 
-	ts, err := serv.GetTopoServer()
-	if err != nil {
-		log.Fatalf("Unable to get Topo server: %v", err)
-	}
 	// Create a global cache to use for lookups of the sidecar database
 	// identifier in use by each keyspace.
 	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
@@ -358,7 +380,7 @@ OuterLoop:
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(), enableViews, enableUdfs, env.Parser())
+		st = vtschema.NewTracker(gw.hc.Subscribe(schemaTrackerHcName), enableViews, enableUdfs, env.Parser())
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
@@ -383,8 +405,6 @@ OuterLoop:
 	if enableSchemaChangeSignal {
 		st.RegisterSignalReceiver(executor.vm.Rebuild)
 	}
-
-	// TODO: call serv.WatchSrvVSchema here
 
 	vtgateInst := newVTGate(executor, resolver, vsm, tc, gw)
 	_ = stats.NewRates("QPSByOperation", stats.CounterForDimension(vtgateInst.timings, "Operation"), 15, 1*time.Minute)
@@ -422,6 +442,46 @@ OuterLoop:
 
 	initAPI(gw.hc)
 	return vtgateInst
+}
+
+func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string, keyspaces []string) error {
+	for _, ks := range keyspaces {
+		_, err := topoServer.GetSrvKeyspace(ctx, cell, ks)
+		switch {
+		case err == nil:
+		case topo.IsErrType(err, topo.NoNode):
+			log.Infof("Rebuilding Serving Keyspace %v", ks)
+			if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), topoServer, ks, []string{cell}, false); err != nil {
+				return vterrors.Wrap(err, "vtgate Init: failed to RebuildKeyspace")
+			}
+		default:
+			return vterrors.Wrap(err, "vtgate Init: failed to read SrvKeyspace")
+		}
+	}
+
+	srvVSchema, err := topoServer.GetSrvVSchema(ctx, cell)
+	switch {
+	case err == nil:
+		for _, ks := range keyspaces {
+			if _, exists := srvVSchema.GetKeyspaces()[ks]; !exists {
+				log.Infof("Rebuilding Serving Vschema")
+				if err := topoServer.RebuildSrvVSchema(ctx, []string{cell}); err != nil {
+					return vterrors.Wrap(err, "vtgate Init: failed to RebuildSrvVSchema")
+				}
+				// we only need to rebuild the SrvVSchema once, because it is per-cell, not per-keyspace
+				break
+			}
+		}
+	case topo.IsErrType(err, topo.NoNode):
+		log.Infof("Rebuilding Serving Vschema")
+		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
+		if err := topoServer.RebuildSrvVSchema(ctx, []string{cell}); err != nil {
+			return vterrors.Wrap(err, "vtgate Init: failed to RebuildSrvVSchema")
+		}
+	default:
+		return vterrors.Wrap(err, "vtgate Init: failed to read SrvVSchema")
+	}
+	return nil
 }
 
 func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
@@ -501,7 +561,14 @@ func (vtg *VTGate) Gateway() *TabletGateway {
 }
 
 // Execute executes a non-streaming query.
-func (vtg *VTGate) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
+func (vtg *VTGate) Execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
@@ -511,7 +578,7 @@ func (vtg *VTGate) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
 		safeSession := econtext.NewSafeSession(session)
-		qr, err = vtg.executor.Execute(ctx, mysqlCtx, "Execute", safeSession, sql, bindVariables)
+		qr, err = vtg.executor.Execute(ctx, mysqlCtx, "Execute", safeSession, sql, bindVariables, prepared)
 		safeSession.RemoveInternalSavepoint()
 	}
 	if err == nil {
@@ -528,6 +595,38 @@ func (vtg *VTGate) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConn
 	}
 	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute, vtg.executor.vm.parser)
 	return session, nil, err
+}
+
+// ExecuteMulti executes multiple non-streaming queries.
+func (vtg *VTGate) ExecuteMulti(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sqlString string,
+) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
+	queries, err := vtg.executor.Environment().Parser().SplitStatementToPieces(sqlString)
+	if err != nil {
+		return session, nil, err
+	}
+	if len(queries) == 0 {
+		return session, nil, sqlparser.ErrEmpty
+	}
+	var qr *sqltypes.Result
+	var cancel context.CancelFunc
+	for _, query := range queries {
+		func() {
+			if mysqlQueryTimeout != 0 {
+				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
+				defer cancel()
+			}
+			session, qr, err = vtg.Execute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false)
+		}()
+		if err != nil {
+			return session, qrs, err
+		}
+		qrs = append(qrs, qr)
+	}
+	return session, qrs, nil
 }
 
 // ExecuteBatch executes a batch of queries.
@@ -549,7 +648,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 		if len(bindVariablesList) != 0 {
 			bv = bindVariablesList[i]
 		}
-		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, nil, session, sql, bv)
+		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, nil, session, sql, bv, false)
 		if qr := qrl[i].QueryResult; qr != nil {
 			vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 			vtg.rowsAffected.Add(statsKey, int64(qr.RowsAffected))
@@ -597,6 +696,47 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 	return safeSession.Session, nil
 }
 
+// StreamExecuteMulti executes a streaming query.
+// Note we guarantee the callback will not be called concurrently by multiple go routines.
+func (vtg *VTGate) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
+	queries, err := vtg.executor.Environment().Parser().SplitStatementToPieces(sqlString)
+	if err != nil {
+		return session, err
+	}
+	if len(queries) == 0 {
+		return session, sqlparser.ErrEmpty
+	}
+	var cancel context.CancelFunc
+	firstPacket := true
+	more := true
+	for idx, query := range queries {
+		firstPacket = true
+		more = idx < len(queries)-1
+		func() {
+			if mysqlQueryTimeout != 0 {
+				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
+				defer cancel()
+			}
+			session, err = vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+				defer func() {
+					firstPacket = false
+				}()
+				return callback(sqltypes.QueryResponse{QueryResult: result}, more, firstPacket)
+			})
+		}()
+		if err != nil {
+			// We got an error before we sent a single packet. So it must be an error
+			// because of the query itself. We should return the error in the packet and stop
+			// processing any more queries.
+			if firstPacket {
+				return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
+			}
+			return session, err
+		}
+	}
+	return session, nil
+}
+
 // CloseSession closes the session, rolling back any implicit transactions. This has the
 // same effect as if a "rollback" statement was executed, but does not affect the query
 // statistics.
@@ -605,30 +745,23 @@ func (vtg *VTGate) CloseSession(ctx context.Context, session *vtgatepb.Session) 
 }
 
 // Prepare supports non-streaming prepare statement query with multi shards
-func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
+func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (newSession *vtgatepb.Session, fld []*querypb.Field, paramsCount uint16, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Prepare", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
-	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
-		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
-		goto handleError
-	}
-
-	fld, err = vtg.executor.Prepare(ctx, "Prepare", econtext.NewSafeSession(session), sql, bindVariables)
+	fld, paramsCount, err = vtg.executor.Prepare(ctx, "Prepare", econtext.NewSafeSession(session), sql)
 	if err == nil {
-		return session, fld, nil
+		return session, fld, paramsCount, nil
 	}
 
-handleError:
 	query := map[string]any{
-		"Sql":           sql,
-		"BindVariables": bindVariables,
-		"Session":       session,
+		"Sql":     sql,
+		"Session": session,
 	}
 	err = recordAndAnnotateError(err, statsKey, query, vtg.logPrepare, vtg.executor.vm.parser)
-	return session, nil, err
+	return session, nil, 0, err
 }
 
 // VStream streams binlog events.

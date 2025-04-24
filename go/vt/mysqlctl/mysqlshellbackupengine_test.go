@@ -53,25 +53,25 @@ func TestMySQLShellBackupBackupPreCheck(t *testing.T) {
 			"empty flags",
 			"",
 			`{}`,
-			MySQLShellPreCheckError,
+			ErrMySQLShellPreCheck,
 		},
 		{
 			"only location",
 			"/dev/null",
 			"",
-			MySQLShellPreCheckError,
+			ErrMySQLShellPreCheck,
 		},
 		{
 			"only flags",
 			"",
 			"--js",
-			MySQLShellPreCheckError,
+			ErrMySQLShellPreCheck,
 		},
 		{
 			"both values present but without --js",
 			"",
 			"-h localhost",
-			MySQLShellPreCheckError,
+			ErrMySQLShellPreCheck,
 		},
 		{
 			"supported values",
@@ -106,25 +106,25 @@ func TestMySQLShellBackupRestorePreCheck(t *testing.T) {
 		{
 			"empty load flags",
 			`{}`,
-			MySQLShellPreCheckError,
+			ErrMySQLShellPreCheck,
 			false,
 		},
 		{
 			"only updateGtidSet",
 			`{"updateGtidSet": "replace"}`,
-			MySQLShellPreCheckError,
+			ErrMySQLShellPreCheck,
 			false,
 		},
 		{
 			"only progressFile",
 			`{"progressFile": ""}`,
-			MySQLShellPreCheckError,
+			ErrMySQLShellPreCheck,
 			false,
 		},
 		{
 			"both values but unsupported values",
 			`{"updateGtidSet": "append", "progressFile": "/tmp/test1"}`,
-			MySQLShellPreCheckError,
+			ErrMySQLShellPreCheck,
 			false,
 		},
 		{
@@ -176,7 +176,7 @@ func TestMySQLShellBackupRestorePreCheckDisableRedolog(t *testing.T) {
 	fakeMysqld.Version = "8.0.20"
 
 	_, err = engine.restorePreCheck(context.Background(), params)
-	require.ErrorIs(t, err, MySQLShellPreCheckError)
+	require.ErrorIs(t, err, ErrMySQLShellPreCheck)
 	require.ErrorContains(t, err, "doesn't support disabling the redo log")
 }
 

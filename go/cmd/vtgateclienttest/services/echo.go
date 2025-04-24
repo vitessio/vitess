@@ -98,7 +98,14 @@ func echoQueryResult(vals map[string]any) *sqltypes.Result {
 	return qr
 }
 
-func (c *echoClient) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
+func (c *echoClient) Execute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	session *vtgatepb.Session,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	prepared bool,
+) (*vtgatepb.Session, *sqltypes.Result, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		return session, echoQueryResult(map[string]any{
 			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
@@ -107,7 +114,7 @@ func (c *echoClient) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLCo
 			"session":  session,
 		}), nil
 	}
-	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables)
+	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables, prepared)
 }
 
 func (c *echoClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
@@ -121,6 +128,18 @@ func (c *echoClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.M
 		return session, nil
 	}
 	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
+}
+
+// ExecuteMulti is part of the VTGateService interface
+func (c *echoClient) ExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
+	// Look at https://github.com/vitessio/vitess/pull/18059 for details on how to implement this.
+	panic("unimplemented")
+}
+
+// StreamExecuteMulti is part of the VTGateService interface
+func (c *echoClient) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
+	// Look at https://github.com/vitessio/vitess/pull/18059 for details on how to implement this.
+	panic("unimplemented")
 }
 
 func (c *echoClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
@@ -173,14 +192,13 @@ func (c *echoClient) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 	return c.fallbackClient.VStream(ctx, tabletType, vgtid, filter, flags, callback)
 }
 
-func (c *echoClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (*vtgatepb.Session, []*querypb.Field, error) {
+func (c *echoClient) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		return session, echoQueryResult(map[string]any{
 			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
 			"query":    sql,
-			"bindVars": bindVariables,
 			"session":  session,
-		}).Fields, nil
+		}).Fields, 0, nil
 	}
-	return c.fallbackClient.Prepare(ctx, session, sql, bindVariables)
+	return c.fallbackClient.Prepare(ctx, session, sql)
 }

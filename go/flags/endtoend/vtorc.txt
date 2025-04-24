@@ -21,6 +21,8 @@ Flags:
       --audit-purge-duration duration                               Duration for which audit logs are held before being purged. Should be in multiples of days (default 168h0m0s)
       --audit-to-backend                                            Whether to store the audit log in the VTOrc database
       --audit-to-syslog                                             Whether to store the audit log in the syslog
+      --backend-read-concurrency int                                Maximum concurrency for reads to the backend (default 32)
+      --backend-write-concurrency int                               Maximum concurrency for writes to the backend (default 24)
       --bind-address string                                         Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --catch-sigpipe                                               catch and ignore SIGPIPE on stdout and stderr if specified
       --change-tablets-with-errant-gtid-to-drained                  Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED
@@ -32,6 +34,7 @@ Flags:
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul_auth_static_file string                              JSON File to read the topos/tokens from.
+      --discovery-workers int                                       Number of workers used for tablet discovery (default 300)
       --emit_stats                                                  If set, emit stats to push-based monitoring and stats backends
       --enable-primary-disk-stalled-recovery                        Whether VTOrc should detect a stalled disk on the primary and failover
       --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)

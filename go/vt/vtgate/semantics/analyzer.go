@@ -44,6 +44,7 @@ type analyzer struct {
 	inProjection int
 
 	notSingleRouteErr       error
+	notSingleShardErr       error
 	unshardedErr            error
 	warning                 string
 	canShortcut             bool
@@ -144,12 +145,13 @@ func (a *analyzer) newSemTable(
 			Collation:                 coll,
 			ExprTypes:                 map[sqlparser.Expr]evalengine.Type{},
 			NotSingleRouteErr:         a.notSingleRouteErr,
+			NotSingleShardErr:         a.notSingleShardErr,
 			NotUnshardedErr:           a.unshardedErr,
 			Recursive:                 ExprDependencies{},
 			Direct:                    ExprDependencies{},
-			ColumnEqualities:          map[columnName][]sqlparser.Expr{},
+			ExprEqualities:            NewTransitiveClosures(),
 			ExpandedColumns:           map[sqlparser.TableName][]*sqlparser.ColName{},
-			columns:                   map[*sqlparser.Union]sqlparser.SelectExprs{},
+			columns:                   map[*sqlparser.Union][]sqlparser.SelectExpr{},
 			StatementIDs:              a.scoper.statementIDs,
 			QuerySignature:            a.sig,
 			childForeignKeysInvolved:  map[TableSet][]vindexes.ChildFKInfo{},
@@ -159,7 +161,7 @@ func (a *analyzer) newSemTable(
 		}, nil
 	}
 
-	columns := map[*sqlparser.Union]sqlparser.SelectExprs{}
+	columns := map[*sqlparser.Union][]sqlparser.SelectExpr{}
 	for union, info := range a.tables.unionInfo {
 		columns[union] = info.exprs
 	}
@@ -177,9 +179,10 @@ func (a *analyzer) newSemTable(
 		DMLTargets:                a.binder.targets,
 		NotSingleRouteErr:         a.notSingleRouteErr,
 		NotUnshardedErr:           a.unshardedErr,
+		NotSingleShardErr:         a.notSingleShardErr,
 		Warning:                   a.warning,
 		Comments:                  comments,
-		ColumnEqualities:          map[columnName][]sqlparser.Expr{},
+		ExprEqualities:            NewTransitiveClosures(),
 		Collation:                 coll,
 		ExpandedColumns:           a.rewriter.expandedColumns,
 		columns:                   columns,
@@ -198,6 +201,8 @@ func (a *analyzer) setError(err error) {
 		a.notSingleRouteErr = err.Inner
 	case ShardedError:
 		a.unshardedErr = err.Inner
+	case NotSingleShardError:
+		a.notSingleShardErr = err.Inner
 	default:
 		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
 			a.notSingleRouteErr = err
@@ -275,7 +280,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	return a.shouldContinue()
 }
 
-func containsStar(s sqlparser.SelectExprs) bool {
+func containsStar(s []sqlparser.SelectExpr) bool {
 	for _, expr := range s {
 		_, isStar := expr.(*sqlparser.StarExpr)
 		if isStar {
@@ -306,8 +311,10 @@ func checkUnionColumns(union *sqlparser.Union) error {
 		return nil
 	}
 
-	if len(secondProj) != len(firstProj) {
-		return &UnionColumnsDoNotMatchError{FirstProj: len(firstProj), SecondProj: len(secondProj)}
+	secondSize := len(secondProj)
+	firstSize := len(firstProj)
+	if secondSize != firstSize {
+		return &UnionColumnsDoNotMatchError{FirstProj: firstSize, SecondProj: secondSize}
 	}
 
 	return nil
@@ -318,14 +325,14 @@ errors that happen when we are evaluating SELECT expressions are saved until we 
 if we can merge everything into a single route or not
 */
 func (a *analyzer) enterProjection(cursor *sqlparser.Cursor) {
-	_, ok := cursor.Node().(sqlparser.SelectExprs)
+	_, ok := cursor.Node().(*sqlparser.SelectExprs)
 	if ok && isParentSelect(cursor) {
 		a.inProjection++
 	}
 }
 
 func (a *analyzer) leaveProjection(cursor *sqlparser.Cursor) {
-	_, ok := cursor.Node().(sqlparser.SelectExprs)
+	_, ok := cursor.Node().(*sqlparser.SelectExprs)
 	if ok && isParentSelect(cursor) {
 		a.inProjection--
 	}
@@ -489,26 +496,37 @@ func (a *analyzer) getError() error {
 	return a.err
 }
 
-// NotSingleRouteErr is used to mark an error as something that should only be returned
-// if the planner fails to merge everything down to a single route
-type NotSingleRouteErr struct {
-	Inner error
-}
+type (
+	// NotSingleRouteErr is used to mark an error as something that should only be returned
+	// if the planner fails to merge everything down to a single route
+	NotSingleRouteErr struct {
+		Inner error
+	}
+	// ShardedError is used to mark an error as something that should only be returned
+	// if the query is not unsharded
+	ShardedError struct {
+		Inner error
+	}
+	// NotSingleShardError is used to mark an error as something that should only be returned
+	// if the query fails to be planned into a single shard query
+	NotSingleShardError struct {
+		Inner error
+	}
+)
 
 func (p NotSingleRouteErr) Error() string {
 	return p.Inner.Error()
 }
-
-// ShardedError is used to mark an error as something that should only be returned
-// if the query is not unsharded
-type ShardedError struct {
-	Inner error
-}
-
-func (p ShardedError) Unwrap() error {
-	return p.Inner
-}
+func (p NotSingleRouteErr) Unwrap() error { return p.Inner }
 
 func (p ShardedError) Error() string {
 	return p.Inner.Error()
 }
+func (p ShardedError) Unwrap() error {
+	return p.Inner
+}
+
+func (p NotSingleShardError) Error() string {
+	return p.Inner.Error()
+}
+func (p NotSingleShardError) Unwrap() error { return p.Inner }

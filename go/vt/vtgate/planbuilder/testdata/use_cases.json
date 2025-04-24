@@ -3,6 +3,7 @@
     "comment": "use db",
     "query": "use ks",
     "plan": {
+      "Type": "Local",
       "QueryType": "USE",
       "Original": "use ks",
       "Instructions": {
@@ -15,6 +16,7 @@
     "comment": "use db tablet",
     "query": "use ks@replica",
     "plan": {
+      "Type": "Local",
       "QueryType": "USE",
       "Original": "use ks@replica",
       "Instructions": {
@@ -27,6 +29,7 @@
     "comment": "use db target with :",
     "query": "use `ks:-80@replica`",
     "plan": {
+      "Type": "Local",
       "QueryType": "USE",
       "Original": "use `ks:-80@replica`",
       "Instructions": {
@@ -39,6 +42,7 @@
     "comment": "use db target with /",
     "query": "use `ks/80-@replica`",
     "plan": {
+      "Type": "Local",
       "QueryType": "USE",
       "Original": "use `ks/80-@replica`",
       "Instructions": {
@@ -51,6 +55,7 @@
     "comment": "reset db",
     "query": "use",
     "plan": {
+      "Type": "Local",
       "QueryType": "USE",
       "Original": "use",
       "Instructions": {

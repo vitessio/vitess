@@ -18,7 +18,10 @@ package operators
 
 import (
 	"fmt"
+	"io"
 	"slices"
+
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
@@ -51,7 +54,7 @@ type ShardedRouting struct {
 
 var _ Routing = (*ShardedRouting)(nil)
 
-func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.Table, id semantics.TableSet) Routing {
+func newShardedRouting(ctx *plancontext.PlanningContext, vtable *vindexes.BaseTable, id semantics.TableSet) Routing {
 	routing := &ShardedRouting{
 		RouteOpCode: engine.Scatter,
 		keyspace:    vtable.Keyspace,
@@ -221,6 +224,10 @@ func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Ro
 }
 
 func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool) {
+	jp, ok := predicate.(*predicates.JoinPredicate)
+	if ok {
+		predicate = jp.Current()
+	}
 	newVindexFound := false
 	switch node := predicate.(type) {
 	case *sqlparser.BetweenExpr:
@@ -242,7 +249,7 @@ func (tr *ShardedRouting) planBetweenOp(ctx *plancontext.PlanningContext, node *
 	if !ok {
 		return nil, false
 	}
-	var vdValue sqlparser.ValTuple = sqlparser.ValTuple([]sqlparser.Expr{node.From, node.To})
+	vdValue := sqlparser.ValTuple([]sqlparser.Expr{node.From, node.To})
 
 	opcode := func(vindex *vindexes.ColumnVindex) engine.Opcode {
 		if _, ok := vindex.Vindex.(vindexes.Sequential); ok {
@@ -613,7 +620,6 @@ func (tr *ShardedRouting) planCompositeInOpArg(
 			Index: idx,
 		}
 		if typ, found := ctx.TypeForExpr(col); found {
-			value.Type = typ.Type()
 			value.Collation = typ.Collation()
 		}
 
@@ -665,10 +671,11 @@ func (tr *ShardedRouting) extraInfo() string {
 		)
 	}
 
+	valueExprs := tr.Selected.ValueExprs
 	return fmt.Sprintf(
 		"Vindex[%s] Values[%s] Seen:[%s]",
 		tr.Selected.FoundVindex.String(),
-		sqlparser.String(sqlparser.Exprs(tr.Selected.ValueExprs)),
+		sqlparser.SliceString(valueExprs),
 		sqlparser.String(sqlparser.AndExpressions(tr.SeenPredicates...)),
 	)
 }
@@ -693,8 +700,13 @@ func tryMergeShardedRouting(
 			bVdx := tblB.SelectedVindex()
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
-			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB)
+			if aVdx == bVdx {
+				equal, conditions := gen4ValuesEqual(ctx, aExpr, bExpr)
+				if equal {
+					allCond := append(routeA.Conditions, routeB.Conditions...)
+					allCond = append(allCond, conditions...)
+					return m.mergeShardedRouting(ctx, tblA, tblB, routeA, routeB, allCond...)
+				}
 			}
 		}
 
@@ -721,16 +733,20 @@ func tryMergeShardedRouting(
 
 // makeEvalEngineExpr transforms the given sqlparser.Expr into an evalengine expression
 func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) evalengine.Expr {
-	for _, expr := range ctx.SemTable.GetExprAndEqualities(n) {
-		ee, _ := evalengine.Translate(expr, &evalengine.Config{
-			Collation:   ctx.SemTable.Collation,
-			ResolveType: ctx.TypeForExpr,
-			Environment: ctx.VSchema.Environment(),
-		})
-		if ee != nil {
-			return ee
-		}
+	var ee evalengine.Expr
+	cfg := &evalengine.Config{
+		Collation:   ctx.SemTable.Collation,
+		ResolveType: ctx.TypeForExpr,
+		Environment: ctx.VSchema.Environment(),
 	}
 
-	return nil
+	_ = ctx.SemTable.ForeachExprEquality(n, func(expr sqlparser.Expr) error {
+		ee, _ = evalengine.Translate(expr, cfg)
+		if ee != nil {
+			return io.EOF
+		}
+		return nil
+	})
+
+	return ee
 }

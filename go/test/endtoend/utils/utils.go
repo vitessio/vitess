@@ -118,6 +118,17 @@ func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string)
 	assert.ErrorContains(t, err, expected, "actual error: %s", err.Error())
 }
 
+// AssertContainsMultipleErrors acts the same way as AssertContainsError, but it will assert that
+// multiple sub-strings are present in the error
+func AssertContainsMultipleErrors(t *testing.T, conn *mysql.Conn, query string, expected ...string) {
+	t.Helper()
+	_, err := ExecAllowError(t, conn, query)
+	require.Error(t, err)
+	for _, s := range expected {
+		assert.ErrorContains(t, err, s, "actual error: %s", err.Error())
+	}
+}
+
 // AssertMatchesNoOrder executes the given query and makes sure it matches the given `expected` string.
 // The order applied to the results or expectation is ignored. They are both re-sorted.
 func AssertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
@@ -145,6 +156,7 @@ func AssertSingleRowIsReturned(t *testing.T, conn *mysql.Conn, predicate string,
 }
 
 func AssertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
+	t.Helper()
 	t.Run(pre, func(t *testing.T) {
 		qr, err := conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE "+pre, 1000, true)
 		require.NoError(t, err)
@@ -195,7 +207,7 @@ func ExecCompareMySQL(t *testing.T, vtConn, mysqlConn *mysql.Conn, query string)
 
 	mysqlQr, err := mysqlConn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "[MySQL Error] for query: "+query)
-	compareVitessAndMySQLResults(t, query, vtConn, vtQr, mysqlQr, CompareOptions{})
+	CompareVitessAndMySQLResults(t, query, vtConn, vtQr, mysqlQr, CompareOptions{})
 	return vtQr
 }
 

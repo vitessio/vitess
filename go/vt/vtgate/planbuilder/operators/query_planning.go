@@ -21,6 +21,9 @@ import (
 	"io"
 	"strconv"
 
+	"vitess.io/vitess/go/slice"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -30,10 +33,10 @@ import (
 )
 
 func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
-	var selExpr sqlparser.SelectExprs
+	var selExpr []sqlparser.SelectExpr
 	if horizon, isHorizon := root.(*Horizon); isHorizon {
 		sel := getFirstSelect(horizon.Query)
-		selExpr = sqlparser.Clone(sel.SelectExprs)
+		selExpr = sqlparser.Clone(sel.SelectExprs).Exprs
 	}
 
 	output := runPhases(ctx, root)
@@ -65,7 +68,6 @@ func runPhases(ctx *plancontext.PlanningContext, root Operator) Operator {
 
 		op = phase.act(ctx, op)
 		op = runRewriters(ctx, op)
-		op = compact(ctx, op)
 	}
 
 	return addGroupByOnRHSOfJoin(op)
@@ -76,6 +78,8 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		switch in := in.(type) {
 		case *Horizon:
 			return pushOrExpandHorizon(ctx, in)
+		case *ApplyJoin:
+			return tryMergeApplyJoin(in, ctx)
 		case *Join:
 			return optimizeJoin(ctx, in)
 		case *Projection:
@@ -104,7 +108,6 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 			return tryPushUpdate(in)
 		case *RecurseCTE:
 			return tryMergeRecurse(ctx, in)
-
 		default:
 			return in, NoRewrite
 		}
@@ -118,6 +121,75 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 	}
 
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
+}
+
+func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Operator, res *ApplyResult) {
+	preds := slice.Map(in.JoinPredicates.columns, func(col applyJoinColumn) sqlparser.Expr {
+		return col.Original
+	})
+
+	jm := newJoinMerge(preds, in.JoinType)
+	r := jm.mergeJoinInputs(ctx, in.LHS, in.RHS)
+	if r == nil {
+		return in, NoRewrite
+	}
+	aj, ok := r.Source.(*ApplyJoin)
+	if !ok {
+		panic(vterrors.VT13001("expected apply join"))
+	}
+
+	// Copy the join predicates from the original ApplyJoin to the new one.
+	aj.JoinPredicates = in.JoinPredicates
+
+	//  - Rewrite join predicates already pushed down &&
+	//  - Save original join predicates if we have to bail out of the rewrite
+	original := map[predicates.ID]sqlparser.Expr{}
+	for _, col := range aj.JoinPredicates.columns {
+		if col.JoinPredicateID != nil {
+			// if we have pushed down a join predicate, we need to restore it to its original shape, without the argument from the LHS
+			id := *col.JoinPredicateID
+			oldExpr, err := ctx.PredTracker.Get(id)
+			if err != nil {
+				panic(err)
+			}
+			original[id] = oldExpr
+			ctx.PredTracker.Set(id, col.Original)
+		}
+	}
+
+	// Defer restoration of original predicates if no successful rewrite happens.
+	defer func() {
+		if res == NoRewrite {
+			for id, expr := range original {
+				ctx.PredTracker.Set(id, expr)
+			}
+		}
+	}()
+
+	// After merging joins, routing logic may have changed. Re-evaluate routing decisions.
+	// Example scenario:
+	// Before merge: routing based on predicates like ':lhs_col = rhs.col'.
+	// After merge: predicate rewritten to 'lhs.col = rhs.col', making this predicate invalid for routing.
+	r.Routing = r.Routing.resetRoutingLogic(ctx)
+
+	// Verify if the LHS is a Route operator, which is required for this rewrite.
+	rb, ok := in.LHS.(*Route)
+	success := "pushed ApplyJoin under Route"
+	if !ok {
+		// Unexpected scenario: LHS is not a Route; abort rewrite.
+		return in, NoRewrite
+	}
+
+	// Special case: If LHS is a DualRouting AND the join isn't INNER or targeting a single shard,
+	// we cannot safely perform this rewrite.
+	if _, isDual := rb.Routing.(*DualRouting); isDual &&
+		!(jm.joinType.IsInner() || r.Routing.OpCode().IsSingleShard()) {
+		// to check the resulting opcode, we've used the original predicates.
+		// Since we are not using them, we need to restore the argument versions of the predicates
+		return in, NoRewrite
+	}
+
+	return r, Rewrote(success)
 }
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
@@ -699,6 +771,18 @@ func tryPushFilter(ctx *plancontext.PlanningContext, in *Filter) (Operator, *App
 		}
 		src.Outer, in.Source = in, src.Outer
 		return src, Rewrote("push filter to outer query in subquery container")
+	case *Filter:
+		if len(in.Predicates) == 0 {
+			return in.Source, Rewrote("filter with no predicates removed")
+		}
+
+		other, isFilter := in.Source.(*Filter)
+		if !isFilter {
+			return in, NoRewrite
+		}
+		in.Source = other.Source
+		in.Predicates = append(in.Predicates, other.Predicates...)
+		return in, Rewrote("two filters merged into one")
 	}
 
 	return in, NoRewrite
@@ -805,7 +889,7 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 	}
 
 	var sources []Operator
-	var selects []sqlparser.SelectExprs
+	var selects [][]sqlparser.SelectExpr
 
 	if op.distinct {
 		sources, selects = mergeUnionInputInAnyOrder(ctx, op)
@@ -829,7 +913,7 @@ func tryPushUnion(ctx *plancontext.PlanningContext, op *Union) (Operator, *Apply
 }
 
 // addTruncationOrProjectionToReturnOutput uses the original Horizon to make sure that the output columns line up with what the user asked for
-func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, selExprs sqlparser.SelectExprs, output Operator) Operator {
+func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, selExprs []sqlparser.SelectExpr, output Operator) Operator {
 	if len(selExprs) == 0 {
 		return output
 	}
@@ -843,7 +927,7 @@ func addTruncationOrProjectionToReturnOutput(ctx *plancontext.PlanningContext, s
 	return createSimpleProjection(ctx, selExprs, output)
 }
 
-func colNamesAlign(expected, actual sqlparser.SelectExprs) bool {
+func colNamesAlign(expected, actual []sqlparser.SelectExpr) bool {
 	if len(expected) > len(actual) {
 		// if we expect more columns than we have, we can't align
 		return false

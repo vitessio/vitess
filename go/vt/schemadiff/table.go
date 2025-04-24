@@ -772,6 +772,40 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			}
 		}
 	}
+	for _, colEntity := range c.ColumnDefinitionEntities() {
+		col := colEntity.ColumnDefinition
+		if col.Type.Length == nil {
+			continue
+		}
+		colLength := *col.Type.Length
+		if col.Type.Type == "blob" {
+			if colLength <= TinyBlogStorageLength {
+				col.Type.Type = "tinyblob"
+			} else if colLength <= BlobStorageLength {
+				col.Type.Type = "blob"
+			} else if colLength <= MediumBlobStorageLength {
+				col.Type.Type = "mediumblob"
+			} else {
+				col.Type.Type = "longblob"
+			}
+			col.Type.Length = nil
+		}
+		if col.Type.Type == "text" {
+			if _, _, maxWidth, _, err := colEntity.InferCharsetCollate(); err == nil {
+				lengthByCharset := colLength * maxWidth
+				if lengthByCharset <= TinyBlogStorageLength {
+					col.Type.Type = "tinytext"
+				} else if lengthByCharset <= BlobStorageLength {
+					col.Type.Type = "text"
+				} else if lengthByCharset <= MediumBlobStorageLength {
+					col.Type.Type = "mediumtext"
+				} else {
+					col.Type.Type = "longtext"
+				}
+				col.Type.Length = nil
+			}
+		}
+	}
 }
 
 func (c *CreateTableEntity) normalizeIndexOptions() {
@@ -1097,16 +1131,6 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	}
 
 	return parentAlterTableEntityDiff, nil
-}
-
-func (c *CreateTableEntity) diffTableCharset(
-	t1cc *charsetCollate,
-	t2cc *charsetCollate,
-) string {
-	if t1cc.charset != t2cc.charset {
-		return t2cc.charset
-	}
-	return ""
 }
 
 // isDefaultTableOptionValue sees if the value for a TableOption is also its default value
@@ -1689,6 +1713,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 						NewName: t2Key.Info.Name,
 					}
 					alterTable.AlterOptions = append(alterTable.AlterOptions, renameIndex)
+					annotations.MarkAdded(sqlparser.CanonicalString(t2Key))
 					convertedToRename = true
 				}
 			}
@@ -2698,6 +2723,11 @@ func (c *CreateTableEntity) validate() error {
 			return &ApplyDuplicateColumnError{Table: c.Name(), Column: col.Name.String()}
 		}
 		columnExists[colName] = true
+	}
+	for _, colEntity := range c.ColumnDefinitionEntities() {
+		if _, _, _, _, err := colEntity.InferCharsetCollate(); err != nil {
+			return err
+		}
 	}
 	// validate all columns used by foreign key constraints do in fact exist,
 	// and that there exists an index over those columns

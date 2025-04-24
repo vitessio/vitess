@@ -159,6 +159,8 @@ message Session {
 
   // MigrationContext
   string migration_context = 27;
+
+  bool error_until_rollback = 28;
 }
 
 // PrepareData keeps the prepared statement and other information related for execution of it.
@@ -173,6 +175,34 @@ message ReadAfterWrite {
   string read_after_write_gtid = 1;
   double read_after_write_timeout = 2;
   bool session_track_gtids = 3;
+}
+
+// ExecuteMultiRequest is the payload to ExecuteMulti.
+message ExecuteMultiRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // sql contains the set of queries to execute.
+  string sql = 2;
+
+  // session carries the session state.
+  Session session = 3;
+}
+
+// ExecuteMultiResponse is the returned value from ExecuteMulti.
+message ExecuteMultiResponse {
+  // error contains an application level error if necessary. Note the
+  // session may have changed, even when an error is returned (for
+  // instance if a database integrity error happened).
+  vtrpc.RPCError error = 1;
+
+  // session is the updated session information.
+  Session session = 2;
+
+  // results contain the query results. There can be some results even if the
+  // error is set.
+  repeated query.QueryResult results = 3;
 }
 
 // ExecuteRequest is the payload to Execute.
@@ -194,6 +224,8 @@ message ExecuteRequest {
   // Deprecated: use session.in_transaction instead
   // bool not_in_transaction = 5;
   reserved 4, 5, 6, 7;
+
+  bool prepared = 8;
 }
 
 // ExecuteResponse is the returned value from Execute.
@@ -278,6 +310,34 @@ message StreamExecuteResponse {
   Session session = 2;
 }
 
+// StreamExecuteMultiRequest is the payload to StreamExecuteMulti.
+message StreamExecuteMultiRequest {
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 1;
+
+  // sql contains the set of queries to execute.
+  string sql = 2;
+
+  // session carries the session state.
+  Session session = 3;
+}
+
+// StreamExecuteMultiResponse is the returned value from StreamExecuteMulti.
+message StreamExecuteMultiResponse {
+  // result contains the result set or an error if one occurred while executing the query.
+  query.ResultWithError result = 1;
+
+  // more_results is set to true if there are more results to follow after this one has concluded.
+  bool more_results = 2;
+
+  // new_result signifies a new result has started with this packet.
+  bool new_result = 3;
+
+  // session is the updated session information.
+  Session session = 4;
+}
+
 // ResolveTransactionRequest is the payload to ResolveTransaction.
 message ResolveTransactionRequest {
   // caller_id identifies the caller. This is the effective caller ID,
@@ -354,6 +414,8 @@ message PrepareResponse {
 
   // fields contains the fields, only set if error is unset.
   repeated query.Field fields = 3;
+
+  uint32 params_count = 4;
 }
 
 // CloseSessionRequest is the payload to CloseSession.

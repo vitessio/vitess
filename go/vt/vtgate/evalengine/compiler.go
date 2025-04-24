@@ -335,7 +335,7 @@ func (c *compiler) compileToDecimal(ct ctype, offset int) ctype {
 		c.asm.Convert_id(offset)
 	case sqltypes.Uint64:
 		c.asm.Convert_ud(offset)
-	case sqltypes.Datetime, sqltypes.Time:
+	case sqltypes.Datetime, sqltypes.Time, sqltypes.Timestamp:
 		scale = ct.Size
 		size = ct.Size + decimalSizeBase
 		fallthrough
@@ -343,6 +343,28 @@ func (c *compiler) compileToDecimal(ct ctype, offset int) ctype {
 		c.asm.Convert_xd(offset, 0, 0)
 	}
 	return ctype{Type: sqltypes.Decimal, Flag: ct.Flag, Col: collationNumeric, Scale: scale, Size: size}
+}
+
+func (c *compiler) compileToTemporal(doct ctype, typ sqltypes.Type, offset, prec int) ctype {
+	switch doct.Type {
+	case typ:
+		if int(doct.Size) == prec {
+			return doct
+		}
+		fallthrough
+	default:
+		switch typ {
+		case sqltypes.Date:
+			c.asm.Convert_xD(offset, c.sqlmode.AllowZeroDate())
+		case sqltypes.Datetime:
+			c.asm.Convert_xDT(offset, prec, c.sqlmode.AllowZeroDate())
+		case sqltypes.Timestamp:
+			c.asm.Convert_xDTs(offset, prec, c.sqlmode.AllowZeroDate())
+		case sqltypes.Time:
+			c.asm.Convert_xT(offset, prec)
+		}
+	}
+	return ctype{Type: typ, Col: collationBinary, Flag: flagNullable}
 }
 
 func (c *compiler) compileToDate(doct ctype, offset int) ctype {
@@ -364,6 +386,17 @@ func (c *compiler) compileToDateTime(doct ctype, offset, prec int) ctype {
 		c.asm.Convert_xDT(offset, prec, c.sqlmode.AllowZeroDate())
 	}
 	return ctype{Type: sqltypes.Datetime, Size: int32(prec), Col: collationBinary, Flag: flagNullable}
+}
+
+func (c *compiler) compileToTimestamp(doct ctype, offset, prec int) ctype {
+	switch doct.Type {
+	case sqltypes.Timestamp:
+		c.asm.Convert_tp(offset, prec)
+		return doct
+	default:
+		c.asm.Convert_xDTs(offset, prec, c.sqlmode.AllowZeroDate())
+	}
+	return ctype{Type: sqltypes.Timestamp, Size: int32(prec), Col: collationBinary, Flag: flagNullable}
 }
 
 func (c *compiler) compileToTime(doct ctype, offset, prec int) ctype {

@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Vitess Authors.
+Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -71,6 +71,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAvg(in)
 	case *Begin:
 		return CloneRefOfBegin(in)
+	case *BeginEndStatement:
+		return CloneRefOfBeginEndStatement(in)
 	case *BetweenExpr:
 		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:
@@ -113,6 +115,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCommonTableExpr(in)
 	case *ComparisonExpr:
 		return CloneRefOfComparisonExpr(in)
+	case *CompoundStatements:
+		return CloneRefOfCompoundStatements(in)
 	case *ConstraintDefinition:
 		return CloneRefOfConstraintDefinition(in)
 	case *ConvertExpr:
@@ -127,6 +131,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCountStar(in)
 	case *CreateDatabase:
 		return CloneRefOfCreateDatabase(in)
+	case *CreateProcedure:
+		return CloneRefOfCreateProcedure(in)
 	case *CreateTable:
 		return CloneRefOfCreateTable(in)
 	case *CreateView:
@@ -135,6 +141,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfCurTimeFuncExpr(in)
 	case *DeallocateStmt:
 		return CloneRefOfDeallocateStmt(in)
+	case *DeclareCondition:
+		return CloneRefOfDeclareCondition(in)
+	case *DeclareHandler:
+		return CloneRefOfDeclareHandler(in)
+	case *DeclareVar:
+		return CloneRefOfDeclareVar(in)
 	case *Default:
 		return CloneRefOfDefault(in)
 	case *Definer:
@@ -149,10 +161,14 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfDropDatabase(in)
 	case *DropKey:
 		return CloneRefOfDropKey(in)
+	case *DropProcedure:
+		return CloneRefOfDropProcedure(in)
 	case *DropTable:
 		return CloneRefOfDropTable(in)
 	case *DropView:
 		return CloneRefOfDropView(in)
+	case *ElseIfBlock:
+		return CloneRefOfElseIfBlock(in)
 	case *ExecuteStmt:
 		return CloneRefOfExecuteStmt(in)
 	case *ExistsExpr:
@@ -161,8 +177,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:
 		return CloneRefOfExplainTab(in)
-	case Exprs:
-		return CloneExprs(in)
+	case *Exprs:
+		return CloneRefOfExprs(in)
 	case *ExtractFuncExpr:
 		return CloneRefOfExtractFuncExpr(in)
 	case *ExtractValueExpr:
@@ -209,10 +225,24 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfGroupBy(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
+	case *HandlerConditionErrorCode:
+		return CloneRefOfHandlerConditionErrorCode(in)
+	case *HandlerConditionNamed:
+		return CloneRefOfHandlerConditionNamed(in)
+	case *HandlerConditionNotFound:
+		return CloneRefOfHandlerConditionNotFound(in)
+	case *HandlerConditionSQLException:
+		return CloneRefOfHandlerConditionSQLException(in)
+	case *HandlerConditionSQLState:
+		return CloneRefOfHandlerConditionSQLState(in)
+	case *HandlerConditionSQLWarning:
+		return CloneRefOfHandlerConditionSQLWarning(in)
 	case IdentifierCI:
 		return CloneIdentifierCI(in)
 	case IdentifierCS:
 		return CloneIdentifierCS(in)
+	case *IfStatement:
+		return CloneRefOfIfStatement(in)
 	case *IndexDefinition:
 		return CloneRefOfIndexDefinition(in)
 	case *IndexHint:
@@ -397,6 +427,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPolygonPropertyFuncExpr(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
+	case *ProcParameter:
+		return CloneRefOfProcParameter(in)
 	case *PurgeBinaryLogs:
 		return CloneRefOfPurgeBinaryLogs(in)
 	case ReferenceAction:
@@ -435,8 +467,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfSavepoint(in)
 	case *Select:
 		return CloneRefOfSelect(in)
-	case SelectExprs:
-		return CloneSelectExprs(in)
+	case *SelectExprs:
+		return CloneRefOfSelectExprs(in)
 	case *SelectInto:
 		return CloneRefOfSelectInto(in)
 	case *Set:
@@ -463,6 +495,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowThrottlerStatus(in)
 	case *ShowTransactionStatus:
 		return CloneRefOfShowTransactionStatus(in)
+	case *Signal:
+		return CloneRefOfSignal(in)
+	case *SignalSet:
+		return CloneRefOfSignalSet(in)
+	case *SingleStatement:
+		return CloneRefOfSingleStatement(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
 	case *Std:
@@ -824,6 +862,16 @@ func CloneRefOfBegin(n *Begin) *Begin {
 	return &out
 }
 
+// CloneRefOfBeginEndStatement creates a deep clone of the input.
+func CloneRefOfBeginEndStatement(n *BeginEndStatement) *BeginEndStatement {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Statements = CloneRefOfCompoundStatements(n.Statements)
+	return &out
+}
+
 // CloneRefOfBetweenExpr creates a deep clone of the input.
 func CloneRefOfBetweenExpr(n *BetweenExpr) *BetweenExpr {
 	if n == nil {
@@ -887,7 +935,7 @@ func CloneRefOfCallProc(n *CallProc) *CallProc {
 	}
 	out := *n
 	out.Name = CloneTableName(n.Name)
-	out.Params = CloneExprs(n.Params)
+	out.Params = CloneSliceOfExpr(n.Params)
 	return &out
 }
 
@@ -932,7 +980,7 @@ func CloneRefOfCharExpr(n *CharExpr) *CharExpr {
 		return nil
 	}
 	out := *n
-	out.Exprs = CloneExprs(n.Exprs)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }
 
@@ -1041,6 +1089,16 @@ func CloneRefOfComparisonExpr(n *ComparisonExpr) *ComparisonExpr {
 	return &out
 }
 
+// CloneRefOfCompoundStatements creates a deep clone of the input.
+func CloneRefOfCompoundStatements(n *CompoundStatements) *CompoundStatements {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Statements = CloneSliceOfCompoundStatement(n.Statements)
+	return &out
+}
+
 // CloneRefOfConstraintDefinition creates a deep clone of the input.
 func CloneRefOfConstraintDefinition(n *ConstraintDefinition) *ConstraintDefinition {
 	if n == nil {
@@ -1091,7 +1149,7 @@ func CloneRefOfCount(n *Count) *Count {
 		return nil
 	}
 	out := *n
-	out.Args = CloneExprs(n.Args)
+	out.Args = CloneSliceOfExpr(n.Args)
 	out.OverClause = CloneRefOfOverClause(n.OverClause)
 	return &out
 }
@@ -1115,6 +1173,20 @@ func CloneRefOfCreateDatabase(n *CreateDatabase) *CreateDatabase {
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.DBName = CloneIdentifierCS(n.DBName)
 	out.CreateOptions = CloneSliceOfDatabaseOption(n.CreateOptions)
+	return &out
+}
+
+// CloneRefOfCreateProcedure creates a deep clone of the input.
+func CloneRefOfCreateProcedure(n *CreateProcedure) *CreateProcedure {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneTableName(n.Name)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
+	out.Definer = CloneRefOfDefiner(n.Definer)
+	out.Params = CloneSliceOfRefOfProcParameter(n.Params)
+	out.Body = CloneCompoundStatement(n.Body)
 	return &out
 }
 
@@ -1163,6 +1235,39 @@ func CloneRefOfDeallocateStmt(n *DeallocateStmt) *DeallocateStmt {
 	out := *n
 	out.Comments = CloneRefOfParsedComments(n.Comments)
 	out.Name = CloneIdentifierCI(n.Name)
+	return &out
+}
+
+// CloneRefOfDeclareCondition creates a deep clone of the input.
+func CloneRefOfDeclareCondition(n *DeclareCondition) *DeclareCondition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneIdentifierCI(n.Name)
+	out.Condition = CloneHandlerCondition(n.Condition)
+	return &out
+}
+
+// CloneRefOfDeclareHandler creates a deep clone of the input.
+func CloneRefOfDeclareHandler(n *DeclareHandler) *DeclareHandler {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Conditions = CloneSliceOfHandlerCondition(n.Conditions)
+	out.Statement = CloneCompoundStatement(n.Statement)
+	return &out
+}
+
+// CloneRefOfDeclareVar creates a deep clone of the input.
+func CloneRefOfDeclareVar(n *DeclareVar) *DeclareVar {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.VarNames = CloneSliceOfIdentifierCI(n.VarNames)
+	out.Type = CloneRefOfColumnType(n.Type)
 	return &out
 }
 
@@ -1242,6 +1347,17 @@ func CloneRefOfDropKey(n *DropKey) *DropKey {
 	return &out
 }
 
+// CloneRefOfDropProcedure creates a deep clone of the input.
+func CloneRefOfDropProcedure(n *DropProcedure) *DropProcedure {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Comments = CloneRefOfParsedComments(n.Comments)
+	out.Name = CloneTableName(n.Name)
+	return &out
+}
+
 // CloneRefOfDropTable creates a deep clone of the input.
 func CloneRefOfDropTable(n *DropTable) *DropTable {
 	if n == nil {
@@ -1261,6 +1377,17 @@ func CloneRefOfDropView(n *DropView) *DropView {
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
+	return &out
+}
+
+// CloneRefOfElseIfBlock creates a deep clone of the input.
+func CloneRefOfElseIfBlock(n *ElseIfBlock) *ElseIfBlock {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.SearchCondition = CloneExpr(n.SearchCondition)
+	out.ThenStatements = CloneRefOfCompoundStatements(n.ThenStatements)
 	return &out
 }
 
@@ -1307,16 +1434,14 @@ func CloneRefOfExplainTab(n *ExplainTab) *ExplainTab {
 	return &out
 }
 
-// CloneExprs creates a deep clone of the input.
-func CloneExprs(n Exprs) Exprs {
+// CloneRefOfExprs creates a deep clone of the input.
+func CloneRefOfExprs(n *Exprs) *Exprs {
 	if n == nil {
 		return nil
 	}
-	res := make(Exprs, len(n))
-	for i, x := range n {
-		res[i] = CloneExpr(x)
-	}
-	return res
+	out := *n
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
+	return &out
 }
 
 // CloneRefOfExtractFuncExpr creates a deep clone of the input.
@@ -1422,7 +1547,7 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	out := *n
 	out.Qualifier = CloneIdentifierCS(n.Qualifier)
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Exprs = CloneExprs(n.Exprs)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }
 
@@ -1569,9 +1694,65 @@ func CloneRefOfGroupConcatExpr(n *GroupConcatExpr) *GroupConcatExpr {
 		return nil
 	}
 	out := *n
-	out.Exprs = CloneExprs(n.Exprs)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
+	return &out
+}
+
+// CloneRefOfHandlerConditionErrorCode creates a deep clone of the input.
+func CloneRefOfHandlerConditionErrorCode(n *HandlerConditionErrorCode) *HandlerConditionErrorCode {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfHandlerConditionNamed creates a deep clone of the input.
+func CloneRefOfHandlerConditionNamed(n *HandlerConditionNamed) *HandlerConditionNamed {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneIdentifierCI(n.Name)
+	return &out
+}
+
+// CloneRefOfHandlerConditionNotFound creates a deep clone of the input.
+func CloneRefOfHandlerConditionNotFound(n *HandlerConditionNotFound) *HandlerConditionNotFound {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfHandlerConditionSQLException creates a deep clone of the input.
+func CloneRefOfHandlerConditionSQLException(n *HandlerConditionSQLException) *HandlerConditionSQLException {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfHandlerConditionSQLState creates a deep clone of the input.
+func CloneRefOfHandlerConditionSQLState(n *HandlerConditionSQLState) *HandlerConditionSQLState {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.SQLStateValue = CloneRefOfLiteral(n.SQLStateValue)
+	return &out
+}
+
+// CloneRefOfHandlerConditionSQLWarning creates a deep clone of the input.
+func CloneRefOfHandlerConditionSQLWarning(n *HandlerConditionSQLWarning) *HandlerConditionSQLWarning {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	return &out
 }
 
@@ -1583,6 +1764,19 @@ func CloneIdentifierCI(n IdentifierCI) IdentifierCI {
 // CloneIdentifierCS creates a deep clone of the input.
 func CloneIdentifierCS(n IdentifierCS) IdentifierCS {
 	return *CloneRefOfIdentifierCS(&n)
+}
+
+// CloneRefOfIfStatement creates a deep clone of the input.
+func CloneRefOfIfStatement(n *IfStatement) *IfStatement {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.SearchCondition = CloneExpr(n.SearchCondition)
+	out.ThenStatements = CloneRefOfCompoundStatements(n.ThenStatements)
+	out.ElseIfBlocks = CloneSliceOfRefOfElseIfBlock(n.ElseIfBlocks)
+	out.ElseStatements = CloneRefOfCompoundStatements(n.ElseStatements)
+	return &out
 }
 
 // CloneRefOfIndexDefinition creates a deep clone of the input.
@@ -1677,7 +1871,7 @@ func CloneRefOfIntervalFuncExpr(n *IntervalFuncExpr) *IntervalFuncExpr {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
-	out.Exprs = CloneExprs(n.Exprs)
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }
 
@@ -1718,7 +1912,7 @@ func CloneRefOfJSONArrayExpr(n *JSONArrayExpr) *JSONArrayExpr {
 		return nil
 	}
 	out := *n
-	out.Params = CloneExprs(n.Params)
+	out.Params = CloneSliceOfExpr(n.Params)
 	return &out
 }
 
@@ -1850,7 +2044,7 @@ func CloneRefOfJSONRemoveExpr(n *JSONRemoveExpr) *JSONRemoveExpr {
 	}
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
-	out.PathList = CloneExprs(n.PathList)
+	out.PathList = CloneSliceOfExpr(n.PathList)
 	return &out
 }
 
@@ -1954,7 +2148,7 @@ func CloneRefOfJSONValueMergeExpr(n *JSONValueMergeExpr) *JSONValueMergeExpr {
 	}
 	out := *n
 	out.JSONDoc = CloneExpr(n.JSONDoc)
-	out.JSONDocList = CloneExprs(n.JSONDocList)
+	out.JSONDocList = CloneSliceOfExpr(n.JSONDocList)
 	return &out
 }
 
@@ -2063,7 +2257,7 @@ func CloneRefOfLineStringExpr(n *LineStringExpr) *LineStringExpr {
 		return nil
 	}
 	out := *n
-	out.PointParams = CloneExprs(n.PointParams)
+	out.PointParams = CloneSliceOfExpr(n.PointParams)
 	return &out
 }
 
@@ -2199,7 +2393,7 @@ func CloneRefOfMultiLinestringExpr(n *MultiLinestringExpr) *MultiLinestringExpr 
 		return nil
 	}
 	out := *n
-	out.LinestringParams = CloneExprs(n.LinestringParams)
+	out.LinestringParams = CloneSliceOfExpr(n.LinestringParams)
 	return &out
 }
 
@@ -2209,7 +2403,7 @@ func CloneRefOfMultiPointExpr(n *MultiPointExpr) *MultiPointExpr {
 		return nil
 	}
 	out := *n
-	out.PointParams = CloneExprs(n.PointParams)
+	out.PointParams = CloneSliceOfExpr(n.PointParams)
 	return &out
 }
 
@@ -2219,7 +2413,7 @@ func CloneRefOfMultiPolygonExpr(n *MultiPolygonExpr) *MultiPolygonExpr {
 		return nil
 	}
 	out := *n
-	out.PolygonParams = CloneExprs(n.PolygonParams)
+	out.PolygonParams = CloneSliceOfExpr(n.PolygonParams)
 	return &out
 }
 
@@ -2546,7 +2740,7 @@ func CloneRefOfPolygonExpr(n *PolygonExpr) *PolygonExpr {
 		return nil
 	}
 	out := *n
-	out.LinestringParams = CloneExprs(n.LinestringParams)
+	out.LinestringParams = CloneSliceOfExpr(n.LinestringParams)
 	return &out
 }
 
@@ -2570,6 +2764,17 @@ func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 	out.Name = CloneIdentifierCI(n.Name)
 	out.Statement = CloneExpr(n.Statement)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
+	return &out
+}
+
+// CloneRefOfProcParameter creates a deep clone of the input.
+func CloneRefOfProcParameter(n *ProcParameter) *ProcParameter {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Name = CloneIdentifierCI(n.Name)
+	out.Type = CloneRefOfColumnType(n.Type)
 	return &out
 }
 
@@ -2766,7 +2971,7 @@ func CloneRefOfSelect(n *Select) *Select {
 	out.With = CloneRefOfWith(n.With)
 	out.From = CloneSliceOfTableExpr(n.From)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
-	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
+	out.SelectExprs = CloneRefOfSelectExprs(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
 	out.GroupBy = CloneRefOfGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
@@ -2777,16 +2982,14 @@ func CloneRefOfSelect(n *Select) *Select {
 	return &out
 }
 
-// CloneSelectExprs creates a deep clone of the input.
-func CloneSelectExprs(n SelectExprs) SelectExprs {
+// CloneRefOfSelectExprs creates a deep clone of the input.
+func CloneRefOfSelectExprs(n *SelectExprs) *SelectExprs {
 	if n == nil {
 		return nil
 	}
-	res := make(SelectExprs, len(n))
-	for i, x := range n {
-		res[i] = CloneSelectExpr(x)
-	}
-	return res
+	out := *n
+	out.Exprs = CloneSliceOfSelectExpr(n.Exprs)
+	return &out
 }
 
 // CloneRefOfSelectInto creates a deep clone of the input.
@@ -2795,6 +2998,7 @@ func CloneRefOfSelectInto(n *SelectInto) *SelectInto {
 		return nil
 	}
 	out := *n
+	out.VarList = CloneSliceOfRefOfVariable(n.VarList)
 	out.Charset = CloneColumnCharset(n.Charset)
 	return &out
 }
@@ -2920,6 +3124,37 @@ func CloneRefOfShowTransactionStatus(n *ShowTransactionStatus) *ShowTransactionS
 		return nil
 	}
 	out := *n
+	return &out
+}
+
+// CloneRefOfSignal creates a deep clone of the input.
+func CloneRefOfSignal(n *Signal) *Signal {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Condition = CloneHandlerCondition(n.Condition)
+	out.SetValues = CloneSliceOfRefOfSignalSet(n.SetValues)
+	return &out
+}
+
+// CloneRefOfSignalSet creates a deep clone of the input.
+func CloneRefOfSignalSet(n *SignalSet) *SignalSet {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Value = CloneExpr(n.Value)
+	return &out
+}
+
+// CloneRefOfSingleStatement creates a deep clone of the input.
+func CloneRefOfSingleStatement(n *SingleStatement) *SingleStatement {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Statement = CloneStatement(n.Statement)
 	return &out
 }
 
@@ -3466,7 +3701,7 @@ func CloneRefOfWindowSpecification(n *WindowSpecification) *WindowSpecification 
 	}
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
-	out.PartitionClause = CloneExprs(n.PartitionClause)
+	out.PartitionClause = CloneSliceOfExpr(n.PartitionClause)
 	out.OrderClause = CloneOrderBy(n.OrderClause)
 	out.FrameClause = CloneRefOfFrameClause(n.FrameClause)
 	return &out
@@ -3787,6 +4022,32 @@ func CloneColTuple(in ColTuple) ColTuple {
 	}
 }
 
+// CloneCompoundStatement creates a deep clone of the input.
+func CloneCompoundStatement(in CompoundStatement) CompoundStatement {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *BeginEndStatement:
+		return CloneRefOfBeginEndStatement(in)
+	case *DeclareCondition:
+		return CloneRefOfDeclareCondition(in)
+	case *DeclareHandler:
+		return CloneRefOfDeclareHandler(in)
+	case *DeclareVar:
+		return CloneRefOfDeclareVar(in)
+	case *IfStatement:
+		return CloneRefOfIfStatement(in)
+	case *Signal:
+		return CloneRefOfSignal(in)
+	case *SingleStatement:
+		return CloneRefOfSingleStatement(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // CloneConstraintInfo creates a deep clone of the input.
 func CloneConstraintInfo(in ConstraintInfo) ConstraintInfo {
 	if in == nil {
@@ -3831,10 +4092,14 @@ func CloneDDLStatement(in DDLStatement) DDLStatement {
 		return CloneRefOfAlterTable(in)
 	case *AlterView:
 		return CloneRefOfAlterView(in)
+	case *CreateProcedure:
+		return CloneRefOfCreateProcedure(in)
 	case *CreateTable:
 		return CloneRefOfCreateTable(in)
 	case *CreateView:
 		return CloneRefOfCreateView(in)
+	case *DropProcedure:
+		return CloneRefOfDropProcedure(in)
 	case *DropTable:
 		return CloneRefOfDropTable(in)
 	case *DropView:
@@ -4111,6 +4376,30 @@ func CloneExpr(in Expr) Expr {
 	}
 }
 
+// CloneHandlerCondition creates a deep clone of the input.
+func CloneHandlerCondition(in HandlerCondition) HandlerCondition {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *HandlerConditionErrorCode:
+		return CloneRefOfHandlerConditionErrorCode(in)
+	case *HandlerConditionNamed:
+		return CloneRefOfHandlerConditionNamed(in)
+	case *HandlerConditionNotFound:
+		return CloneRefOfHandlerConditionNotFound(in)
+	case *HandlerConditionSQLException:
+		return CloneRefOfHandlerConditionSQLException(in)
+	case *HandlerConditionSQLState:
+		return CloneRefOfHandlerConditionSQLState(in)
+	case *HandlerConditionSQLWarning:
+		return CloneRefOfHandlerConditionSQLWarning(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // CloneInsertRows creates a deep clone of the input.
 func CloneInsertRows(in InsertRows) InsertRows {
 	if in == nil {
@@ -4229,6 +4518,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfCommit(in)
 	case *CreateDatabase:
 		return CloneRefOfCreateDatabase(in)
+	case *CreateProcedure:
+		return CloneRefOfCreateProcedure(in)
 	case *CreateTable:
 		return CloneRefOfCreateTable(in)
 	case *CreateView:
@@ -4239,6 +4530,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfDelete(in)
 	case *DropDatabase:
 		return CloneRefOfDropDatabase(in)
+	case *DropProcedure:
+		return CloneRefOfDropProcedure(in)
 	case *DropTable:
 		return CloneRefOfDropTable(in)
 	case *DropView:
@@ -4418,6 +4711,18 @@ func CloneSliceOfTxAccessMode(n []TxAccessMode) []TxAccessMode {
 	return res
 }
 
+// CloneSliceOfExpr creates a deep clone of the input.
+func CloneSliceOfExpr(n []Expr) []Expr {
+	if n == nil {
+		return nil
+	}
+	res := make([]Expr, len(n))
+	for i, x := range n {
+		res[i] = CloneExpr(x)
+	}
+	return res
+}
+
 // CloneSliceOfRefOfWhen creates a deep clone of the input.
 func CloneSliceOfRefOfWhen(n []*When) []*When {
 	if n == nil {
@@ -4473,6 +4778,42 @@ func CloneSliceOfString(n []string) []string {
 	return res
 }
 
+// CloneSliceOfCompoundStatement creates a deep clone of the input.
+func CloneSliceOfCompoundStatement(n []CompoundStatement) []CompoundStatement {
+	if n == nil {
+		return nil
+	}
+	res := make([]CompoundStatement, len(n))
+	for i, x := range n {
+		res[i] = CloneCompoundStatement(x)
+	}
+	return res
+}
+
+// CloneSliceOfRefOfProcParameter creates a deep clone of the input.
+func CloneSliceOfRefOfProcParameter(n []*ProcParameter) []*ProcParameter {
+	if n == nil {
+		return nil
+	}
+	res := make([]*ProcParameter, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfProcParameter(x)
+	}
+	return res
+}
+
+// CloneSliceOfHandlerCondition creates a deep clone of the input.
+func CloneSliceOfHandlerCondition(n []HandlerCondition) []HandlerCondition {
+	if n == nil {
+		return nil
+	}
+	res := make([]HandlerCondition, len(n))
+	for i, x := range n {
+		res[i] = CloneHandlerCondition(x)
+	}
+	return res
+}
+
 // CloneSliceOfTableExpr creates a deep clone of the input.
 func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
 	if n == nil {
@@ -4497,18 +4838,6 @@ func CloneSliceOfRefOfVariable(n []*Variable) []*Variable {
 	return res
 }
 
-// CloneSliceOfExpr creates a deep clone of the input.
-func CloneSliceOfExpr(n []Expr) []Expr {
-	if n == nil {
-		return nil
-	}
-	res := make([]Expr, len(n))
-	for i, x := range n {
-		res[i] = CloneExpr(x)
-	}
-	return res
-}
-
 // CloneRefOfIdentifierCI creates a deep clone of the input.
 func CloneRefOfIdentifierCI(n *IdentifierCI) *IdentifierCI {
 	if n == nil {
@@ -4525,6 +4854,18 @@ func CloneRefOfIdentifierCS(n *IdentifierCS) *IdentifierCS {
 	}
 	out := *n
 	return &out
+}
+
+// CloneSliceOfRefOfElseIfBlock creates a deep clone of the input.
+func CloneSliceOfRefOfElseIfBlock(n []*ElseIfBlock) []*ElseIfBlock {
+	if n == nil {
+		return nil
+	}
+	res := make([]*ElseIfBlock, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfElseIfBlock(x)
+	}
+	return res
 }
 
 // CloneSliceOfRefOfIndexColumn creates a deep clone of the input.
@@ -4678,6 +5019,30 @@ func CloneRefOfRootNode(n *RootNode) *RootNode {
 	out := *n
 	out.SQLNode = CloneSQLNode(n.SQLNode)
 	return &out
+}
+
+// CloneSliceOfSelectExpr creates a deep clone of the input.
+func CloneSliceOfSelectExpr(n []SelectExpr) []SelectExpr {
+	if n == nil {
+		return nil
+	}
+	res := make([]SelectExpr, len(n))
+	for i, x := range n {
+		res[i] = CloneSelectExpr(x)
+	}
+	return res
+}
+
+// CloneSliceOfRefOfSignalSet creates a deep clone of the input.
+func CloneSliceOfRefOfSignalSet(n []*SignalSet) []*SignalSet {
+	if n == nil {
+		return nil
+	}
+	res := make([]*SignalSet, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfSignalSet(x)
+	}
+	return res
 }
 
 // CloneRefOfTableName creates a deep clone of the input.

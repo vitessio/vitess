@@ -203,12 +203,15 @@ func (sm *StreamMigrator) Templates() []*VReplicationStream {
 }
 
 // CancelStreamMigrations cancels the stream migrations.
-func (sm *StreamMigrator) CancelStreamMigrations(ctx context.Context) {
+func (sm *StreamMigrator) CancelStreamMigrations(ctx context.Context) error {
 	if sm.streams == nil {
-		return
+		return nil
 	}
+	errs := &concurrency.AllErrorRecorder{}
 
-	_ = sm.deleteTargetStreams(ctx)
+	if err := sm.deleteTargetStreams(ctx); err != nil {
+		errs.RecordError(fmt.Errorf("could not delete target streams: %v", err))
+	}
 
 	// Restart the source streams, but leave the Reshard workflow's reverse
 	// variant stopped.
@@ -221,8 +224,13 @@ func (sm *StreamMigrator) CancelStreamMigrations(ctx context.Context) {
 		return err
 	})
 	if err != nil {
+		errs.RecordError(fmt.Errorf("could not restart source streams: %v", err))
 		sm.logger.Errorf("Cancel stream migrations failed: could not restart source streams: %v", err)
 	}
+	if errs.HasErrors() {
+		return errs.AggrError(vterrors.Aggregate)
+	}
+	return nil
 }
 
 // MigrateStreams migrates N streams
@@ -1187,14 +1195,10 @@ func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogda
 
 	// There was no in_keyrange expression. Create a new one.
 	vtable := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
-	inkr := &sqlparser.FuncExpr{
-		Name: sqlparser.NewIdentifierCI("in_keyrange"),
-		Exprs: sqlparser.Exprs{
-			&sqlparser.ColName{Name: vtable.ColumnVindexes[0].Columns[0]},
-			sqlparser.NewStrLiteral(vtable.ColumnVindexes[0].Type),
-			sqlparser.NewStrLiteral("{{.}}"),
-		},
-	}
+	inkr := sqlparser.NewFuncExpr("in_keyrange",
+		sqlparser.NewColName(vtable.ColumnVindexes[0].Columns[0].String()),
+		sqlparser.NewStrLiteral(vtable.ColumnVindexes[0].Type),
+		sqlparser.NewStrLiteral("{{.}}"))
 	sel.AddWhere(inkr)
 	rule.Filter = sqlparser.String(statement)
 	return nil

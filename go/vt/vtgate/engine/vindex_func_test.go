@@ -43,8 +43,8 @@ func (*uvindex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]
 	panic("unimplemented")
 }
 
-func (v *uvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	destinations := make([]key.Destination, 0, len(ids))
+func (v *uvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	destinations := make([]key.ShardDestination, 0, len(ids))
 	dkid := []byte("foo")
 	for i := 0; i < len(ids); i++ {
 		if v.matchkr {
@@ -75,12 +75,12 @@ func (*nvindex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]
 	panic("unimplemented")
 }
 
-func (v *nvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
-	destinations := make([]key.Destination, 0)
+func (v *nvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqltypes.Value) ([]key.ShardDestination, error) {
+	destinations := make([]key.ShardDestination, 0)
 	for i := 0; i < len(ids); i++ {
 		if v.matchid {
 			destinations = append(destinations,
-				[]key.Destination{
+				[]key.ShardDestination{
 					key.DestinationKeyspaceIDs([][]byte{
 						[]byte("foo"),
 						[]byte("bar"),
@@ -88,7 +88,7 @@ func (v *nvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqlty
 				}...)
 		} else if v.matchkr {
 			destinations = append(destinations,
-				[]key.Destination{
+				[]key.ShardDestination{
 					key.DestinationKeyRange{
 						KeyRange: &topodatapb.KeyRange{
 							Start: []byte{0x40},
@@ -97,7 +97,7 @@ func (v *nvindex) Map(ctx context.Context, vcursor vindexes.VCursor, ids []sqlty
 					},
 				}...)
 		} else {
-			destinations = append(destinations, []key.Destination{key.DestinationNone{}}...)
+			destinations = append(destinations, []key.ShardDestination{key.DestinationNone{}}...)
 		}
 	}
 	return destinations, nil
