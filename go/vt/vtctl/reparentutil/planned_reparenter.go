@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
+	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -51,9 +52,10 @@ var (
 
 // PlannedReparenter performs PlannedReparentShard operations.
 type PlannedReparenter struct {
-	ts     *topo.Server
-	tmc    tmclient.TabletManagerClient
-	logger logutil.Logger
+	ts       *topo.Server
+	tmc      tmclient.TabletManagerClient
+	logger   logutil.Logger
+	evSource *eventsdatapb.Source
 }
 
 // PlannedReparentOptions provides optional parameters to PlannedReparentShard
@@ -80,11 +82,12 @@ type PlannedReparentOptions struct {
 // TabletManagerClient, and logger.
 //
 // Providing a nil logger instance is allowed.
-func NewPlannedReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger) *PlannedReparenter {
+func NewPlannedReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, evSource *eventsdatapb.Source) *PlannedReparenter {
 	pr := PlannedReparenter{
-		ts:     ts,
-		tmc:    tmc,
-		logger: logger,
+		ts:       ts,
+		tmc:      tmc,
+		logger:   logger,
+		evSource: evSource,
 	}
 
 	if pr.logger == nil {
@@ -114,8 +117,9 @@ func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string,
 		defer unlock(&err)
 	}
 
+	var shardInfo *topo.ShardInfo
 	if opts.NewPrimaryAlias == nil && opts.AvoidPrimaryAlias == nil {
-		shardInfo, err := pr.ts.GetShard(ctx, keyspace, shard)
+		shardInfo, err = pr.ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			prsCounter.Add(append(statsLabels, failureResult), 1)
 			return nil, err
@@ -125,16 +129,17 @@ func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string,
 	}
 
 	startTime := time.Now()
-	ev := &events.Reparent{}
+	ev := events.NewReparent(shardInfo, pr.evSource, eventsdatapb.ReparentType_PlannedReparentShard, nil, nil)
 	defer func() {
 		reparentShardOpTimings.Add("PlannedReparentShard", time.Since(startTime))
 		switch err {
 		case nil:
 			prsCounter.Add(append(statsLabels, successResult), 1)
-			event.DispatchUpdate(ev, "finished PlannedReparentShard")
+			event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_Finished)
 		default:
 			prsCounter.Add(append(statsLabels, failureResult), 1)
-			event.DispatchUpdate(ev, "failed PlannedReparentShard: "+err.Error())
+			ev.Error = err.Error()
+			event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_Failed)
 		}
 	}()
 

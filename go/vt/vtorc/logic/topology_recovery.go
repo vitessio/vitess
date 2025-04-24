@@ -22,12 +22,14 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"os"
 	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -51,6 +53,8 @@ const (
 )
 
 var (
+	evSource *eventsdatapb.Source
+
 	actionableRecoveriesNames = []string{
 		RecoverDeadPrimaryRecoveryName,
 		RecoverPrimaryHasPrimaryRecoveryName,
@@ -159,6 +163,15 @@ func init() {
 		return atomic.LoadInt64(&shardsLockCounter)
 	})
 	go initializeTopologyRecoveryPostConfiguration()
+
+	var err error
+	evSource = &eventsdatapb.Source{
+		Type: eventsdatapb.SourceType_Vtorc,
+	}
+	evSource.Hostname, err = os.Hostname()
+	if err != nil {
+		log.Errorf("Failed to get hostname: %+v", err)
+	}
 }
 
 func initializeTopologyRecoveryPostConfiguration() {
@@ -782,7 +795,7 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysi
 			logger.Errorf("PRS - %s", value)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, value)
-	})).ReparentShard(ctx,
+	}), evSource).ReparentShard(ctx,
 		analyzedTablet.Keyspace,
 		analyzedTablet.Shard,
 		reparentutil.PlannedReparentOptions{

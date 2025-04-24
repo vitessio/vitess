@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime/debug"
 	"sort"
@@ -54,6 +55,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlproto"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -92,19 +94,29 @@ const (
 // VtctldServer implements the Vtctld RPC service protocol.
 type VtctldServer struct {
 	vtctlservicepb.UnimplementedVtctldServer
-	ts  *topo.Server
-	tmc tmclient.TabletManagerClient
-	ws  *workflow.Server
+	ts       *topo.Server
+	tmc      tmclient.TabletManagerClient
+	ws       *workflow.Server
+	evSource *eventsdatapb.Source
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
 func NewVtctldServer(env *vtenv.Environment, ts *topo.Server) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
 
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Warningf("Failed to get vtctld hostname: %+v", err)
+	}
+
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
 		ws:  workflow.NewServer(env, ts, tmc),
+		evSource: &eventsdatapb.Source{
+			Type:     eventsdatapb.SourceType_Vtctld,
+			Hostname: hostname,
+		},
 	}
 }
 
@@ -3295,7 +3307,7 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		logstream = append(logstream, e)
 	})
 
-	ev, err := reparentutil.NewPlannedReparenter(s.ts, s.tmc, logger).ReparentShard(ctx,
+	ev, err := reparentutil.NewPlannedReparenter(s.ts, s.tmc, logger, s.evSource).ReparentShard(ctx,
 		req.Keyspace,
 		req.Shard,
 		reparentutil.PlannedReparentOptions{
@@ -4477,7 +4489,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	}
 
 	log.Infof("TabletExternallyReparented: executing tablet type change %v -> PRIMARY on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
-	ev := events.NewReparent(shardInfo, tablet.Tablet.CloneVT(), &topodatapb.Tablet{
+	ev := events.NewReparent(shardInfo, s.evSource, eventsdatapb.ReparentType_TabletExternallyReparented, tablet.Tablet.CloneVT(), &topodatapb.Tablet{
 		Alias: shardInfo.PrimaryAlias,
 		Type:  topodatapb.TabletType_PRIMARY,
 	})

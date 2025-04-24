@@ -168,9 +168,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 	ev.ShardInfo = &topodatapb.ShardInfo{
-		Shard:     shardInfo.Shard,
 		Keyspace:  shardInfo.Keyspace(),
 		ShardName: shardInfo.ShardName(),
+		Shard:     shardInfo.Shard,
 	}
 
 	if opts.ExpectedPrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.ExpectedPrimaryAlias, shardInfo.PrimaryAlias) {

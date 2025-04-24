@@ -35,15 +35,17 @@ type Reparent struct {
 }
 
 // NewReparent inits a new Reparent object.
-func NewReparent(si *topo.ShardInfo, newPrimary, oldPrimary *topodatapb.Tablet) *Reparent {
+func NewReparent(si *topo.ShardInfo, src *eventsdatapb.Source, reparentType eventsdatapb.ReparentType, newPrimary, oldPrimary *topodatapb.Tablet) *Reparent {
 	eventData := eventsdatapb.ReparentEvent{
 		Id:        uuid.NewString(),
 		Timestamp: protoutil.TimeToProto(time.Now()),
+		Source:    src,
 		ShardInfo: &topodatapb.ShardInfo{
 			Keyspace:  si.Keyspace(),
 			ShardName: si.ShardName(),
 			Shard:     si.Shard,
 		},
+		Type:       reparentType,
 		NewPrimary: newPrimary,
 		OldPrimary: oldPrimary,
 	}
@@ -51,7 +53,9 @@ func NewReparent(si *topo.ShardInfo, newPrimary, oldPrimary *topodatapb.Tablet) 
 }
 
 // Update updates the status of the reparent event.
-func (r *Reparent) Update(status any) {
-	r.Status = status.(string)
-	r.Timestamp = protoutil.TimeToProto(time.Now())
+func (r *Reparent) Update(phase any) {
+	if phase, ok := phase.(eventsdatapb.ReparentPhase); ok {
+		r.Phase = phase
+		r.Timestamp = protoutil.TimeToProto(time.Now())
+	}
 }

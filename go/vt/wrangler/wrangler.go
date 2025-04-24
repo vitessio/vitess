@@ -20,10 +20,12 @@ package wrangler
 
 import (
 	"context"
+	"os"
 
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -31,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
@@ -60,11 +63,17 @@ type Wrangler struct {
 	VExecFunc func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error)
 	// Limt the number of concurrent background goroutines if needed.
 	sem            *semaphore.Weighted
+	evSource       *eventsdatapb.Source
 	WorkflowParams *VReplicationWorkflowParams
 }
 
 // New creates a new Wrangler object.
 func New(env *vtenv.Environment, logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Warningf("Failed to get hostname: %+v", err)
+	}
+
 	return &Wrangler{
 		env:      env,
 		logger:   logger,
@@ -72,6 +81,10 @@ func New(env *vtenv.Environment, logger logutil.Logger, ts *topo.Server, tmc tmc
 		tmc:      tmc,
 		vtctld:   grpcvtctldserver.NewVtctldServer(env, ts),
 		sourceTs: ts,
+		evSource: &eventsdatapb.Source{
+			Type:     eventsdatapb.SourceType_Vtctld,
+			Hostname: hostname,
+		},
 	}
 }
 

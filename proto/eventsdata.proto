@@ -29,11 +29,68 @@ package eventsdata;
 import "topodata.proto";
 import "vttime.proto";
 
+enum SourceType {
+  Vtctld = 0;
+  Vtorc = 1;
+}
+
+message Source {
+  SourceType type = 1;
+  string hostname = 2;
+}
+
+enum ReparentType {
+  // PlannedReparentShard
+  PlannedReparentShard = 0;
+
+  // EmergencyReparentShard
+  EmergencyReparentShard = 1;
+
+  // TabletExternallyReparented
+  TabletExternallyReparented = 2;
+}
+
+// ReparentPhase represents the phase of a reparent.
+enum ReparentPhase {
+  Pending = 0;
+ 
+  // Finished is...TODO
+  Finished = 1;
+
+  // Failed is...TODO
+  Failed = 2;
+
+  // Skip is...TODO
+  Skip = 3;
+
+  // PrimaryElection is...TODO
+  PrimaryElection = 4;
+
+  // PrimaryElected is...TODO
+  PrimaryElected = 5;
+
+  // DemoteOldPrimary is...TODO
+  DemoteOldPrimary = 6;
+
+  // ReadTabletMap is...TODO
+  ReadTabletMap = 7;
+
+  // ReadAllTablets is...TODO
+  ReadAllTablets = 8;
+
+  // ReparentAllTablets is...TODO
+  ReparentAllTablets = 9;
+}
+
+// ReparentEvent...
 message ReparentEvent {
   string id = 1;
-  vttime.Time timestamp = 2;
-  topodata.ShardInfo shard_info = 3;
-  topodata.Tablet new_primary = 4;
-  topodata.Tablet old_primary = 5;
-  string status = 6;
+  Source source = 2;
+  vttime.Time timestamp = 3;
+  topodata.ShardInfo shard_info = 4;
+  topodata.Tablet new_primary = 5;
+  topodata.Tablet old_primary = 6;
+  ReparentType type = 7;
+  ReparentPhase phase = 8;
+  string error = 9;
 }
