@@ -601,7 +601,10 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 			Match: "/customer.*",
 		}},
 	}
-	flags := &vtgatepb.VStreamFlags{}
+	flags := &vtgatepb.VStreamFlags{
+		IncludeReshardJournalEvents: true,
+	}
+	journalEvents := 0
 
 	// Stream events but stop once we have a VGTID with positions for the old/original shards.
 	var newVGTID *binlogdatapb.VGtid
@@ -683,6 +686,9 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 						default:
 							require.FailNow(t, fmt.Sprintf("received event for unexpected shard: %s", shard))
 						}
+					case binlogdatapb.VEventType_JOURNAL:
+						require.True(t, ev.Journal.MigrationType == binlogdatapb.MigrationType_SHARDS)
+						journalEvents++
 					}
 				}
 			default:
@@ -699,6 +705,8 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	// We should have a mix of events across the old and new shards.
 	require.Greater(t, oldShardRowEvents, 0)
 	require.Greater(t, newShardRowEvents, 0)
+	// We should have seen a reshard journal event.
+	require.Greater(t, journalEvents, 0)
 
 	// The number of row events streamed by the VStream API should match the number of rows inserted.
 	customerResult := execVtgateQuery(t, vtgateConn, ks, "select count(*) from customer")

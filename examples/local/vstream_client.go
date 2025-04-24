@@ -75,6 +75,7 @@ func main() {
 	flags := &vtgatepb.VStreamFlags{
 		// MinimizeSkew:      false,
 		// HeartbeatInterval: 60, //seconds
+		// IncludeReshardJournalEvents: true,
 		// StopOnReshard: true,
 	}
 	reader, err := conn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
