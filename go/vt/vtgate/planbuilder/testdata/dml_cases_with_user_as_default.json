@@ -13,8 +13,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update ambiguous_ref_with_source set done = true where id = 1",
-        "Table": "ambiguous_ref_with_source"
+        "Query": "update ambiguous_ref_with_source set done = true where id = 1"
       },
       "TablesUsed": [
         "main.ambiguous_ref_with_source"

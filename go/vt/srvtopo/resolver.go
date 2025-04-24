@@ -106,7 +106,7 @@ func (r *Resolver) GetKeyspaceShards(ctx context.Context, keyspace string, table
 
 	partition := topoproto.SrvKeyspaceGetPartition(srvKeyspace, tabletType)
 	if partition == nil {
-		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No partition found for tabletType %v in keyspace %v", topoproto.TabletTypeLString(tabletType), keyspace)
+		return "", nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No partition found for tabletType %v in keyspace %v", topoproto.TabletTypeLString(tabletType), keyspace)
 	}
 	return keyspace, srvKeyspace, partition.ShardReferences, nil
 }

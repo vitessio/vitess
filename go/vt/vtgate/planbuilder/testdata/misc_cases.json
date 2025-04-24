@@ -91,7 +91,6 @@
             },
             "FieldQuery": "select 1 from `user` where 1 != 1",
             "Query": "select 1 from `user` where id = :v1",
-            "Table": "`user`",
             "Values": [
               ":v1"
             ],
@@ -127,7 +126,6 @@
             },
             "FieldQuery": "select 1 from `user` where 1 != 1",
             "Query": "select 1 from `user` where id in ::__vals",
-            "Table": "`user`",
             "Values": [
               "(:v1, :v2)"
             ],
@@ -159,8 +157,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user`",
-            "Table": "`user`"
+            "Query": "select 1 from `user`"
           }
         ]
       },

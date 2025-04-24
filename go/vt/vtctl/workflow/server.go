@@ -949,10 +949,7 @@ func (s *Server) WorkflowAddTables(ctx context.Context, req *vtctldatapb.Workflo
 
 		// This is similar to what we follow while creating workflow streams.
 		sourceShards := mz.filterSourceShards(target)
-		streamKeyRangesEqual := false
-		if len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange) {
-			streamKeyRangesEqual = true
-		}
+		streamKeyRangesEqual := len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange)
 
 		var rules []*binlogdatapb.Rule
 		for _, ts := range req.TableSettings {
@@ -2184,7 +2181,7 @@ func (s *Server) dropTargets(ctx context.Context, ts *trafficSwitcher, keepData,
 				return nil, err
 			}
 		case binlogdatapb.MigrationType_SHARDS:
-			if err := sw.dropTargetShards(ctx); err != nil {
+			if err := sw.removeTargetTables(ctx); err != nil {
 				return nil, err
 			}
 		}

@@ -31,12 +31,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/streamlog"
-
 	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/streamlog"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -58,7 +57,7 @@ func TestTxExecutorEmptyPrepare(t *testing.T) {
 	// taint the connection.
 	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
 	require.NoError(t, err)
-	sc.Taint(ctx, nil)
+	sc.Taint(ctx, tsv.te.reservedConnStats)
 	sc.Unlock()
 
 	err = txe.Prepare(txid, "aa")
@@ -80,7 +79,7 @@ func TestExecutorPrepareFailure(t *testing.T) {
 	// taint the connection.
 	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
 	require.NoError(t, err)
-	sc.Taint(ctx, nil)
+	sc.Taint(ctx, tsv.te.reservedConnStats)
 	sc.Unlock()
 
 	// try 2pc commit of Metadata Manager.
@@ -374,7 +373,7 @@ func TestExecutorStartCommitFailure(t *testing.T) {
 	// taint the connection.
 	sc, err := tsv.te.txPool.GetAndLock(txid, "taint")
 	require.NoError(t, err)
-	sc.Taint(ctx, nil)
+	sc.Taint(ctx, tsv.te.reservedConnStats)
 	sc.Unlock()
 
 	// add rollback state update expectation

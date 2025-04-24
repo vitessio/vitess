@@ -115,24 +115,6 @@ func (jv *ValuesJoin) Inputs() ([]Primitive, []map[string]any) {
 	return []Primitive{jv.Left, jv.Right}, nil
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (jv *ValuesJoin) RouteType() string {
-	return "ValuesJoin"
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (jv *ValuesJoin) GetKeyspaceName() string {
-	if jv.Left.GetKeyspaceName() == jv.Right.GetKeyspaceName() {
-		return jv.Left.GetKeyspaceName()
-	}
-	return jv.Left.GetKeyspaceName() + "_" + jv.Right.GetKeyspaceName()
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (jv *ValuesJoin) GetTableName() string {
-	return jv.Left.GetTableName() + "_" + jv.Right.GetTableName()
-}
-
 // NeedsTransaction implements the Primitive interface
 func (jv *ValuesJoin) NeedsTransaction() bool {
 	return jv.Right.NeedsTransaction() || jv.Left.NeedsTransaction()

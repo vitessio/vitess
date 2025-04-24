@@ -79,21 +79,6 @@ func (gbp GroupByParams) String() string {
 	return out
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (oa *OrderedAggregate) RouteType() string {
-	return oa.Input.RouteType()
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (oa *OrderedAggregate) GetKeyspaceName() string {
-	return oa.Input.GetKeyspaceName()
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (oa *OrderedAggregate) GetTableName() string {
-	return oa.Input.GetTableName()
-}
-
 // TryExecute is a Primitive function.
 func (oa *OrderedAggregate) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	qr, err := oa.execute(ctx, vcursor, bindVars)

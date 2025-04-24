@@ -45,21 +45,6 @@ type VStream struct {
 	Limit             int
 }
 
-// RouteType implements the Primitive interface
-func (v *VStream) RouteType() string {
-	return "VStream"
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (v *VStream) GetKeyspaceName() string {
-	return v.Keyspace.Name
-}
-
-// GetTableName implements the Primitive interface
-func (v *VStream) GetTableName() string {
-	return v.TableName
-}
-
 // TryExecute implements the Primitive interface
 func (v *VStream) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.VT13001("TryExecute is not supported for VStream")

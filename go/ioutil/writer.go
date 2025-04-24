@@ -68,7 +68,7 @@ func NewMeteredWriteCloser(wc io.WriteCloser, fns ...func(int, time.Duration)) M
 // and calls any registered callbacks with the amount of time spent and bytes
 // written in this Write call.
 func (twc *meteredWriteCloser) Write(p []byte) (int, error) {
-	return twc.meter.measure(twc.WriteCloser.Write, p)
+	return twc.measure(twc.WriteCloser.Write, p)
 }
 
 // NewMeteredWriter creates a MeteredWriter which tracks the amount of time spent
@@ -86,7 +86,7 @@ func NewMeteredWriter(tw io.Writer, fns ...func(int, time.Duration)) MeteredWrit
 // calls any registered callbacks with the amount of time spent and bytes
 // written in this Write call.
 func (tw *meteredWriter) Write(p []byte) (int, error) {
-	return tw.meter.measure(tw.Writer.Write, p)
+	return tw.measure(tw.Writer.Write, p)
 }
 
 // BytesBufferWriter implements io.WriteCloser using an in-memory buffer.

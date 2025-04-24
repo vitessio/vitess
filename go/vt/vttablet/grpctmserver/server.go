@@ -535,6 +535,20 @@ func (s *server) VDiff(ctx context.Context, request *tabletmanagerdatapb.VDiffRe
 	return response, err
 }
 
+func (s *server) UpdateSequenceTables(ctx context.Context, request *tabletmanagerdatapb.UpdateSequenceTablesRequest) (response *tabletmanagerdatapb.UpdateSequenceTablesResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "UpdateSequenceTables", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response, err = s.tm.UpdateSequenceTables(ctx, request)
+	return response, err
+}
+
+func (s *server) GetMaxValueForSequences(ctx context.Context, request *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (response *tabletmanagerdatapb.GetMaxValueForSequencesResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "GetMaxValueForSequences", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response, err = s.tm.GetMaxValueForSequences(ctx, request)
+	return response, err
+}
+
 //
 // Reparenting related functions
 //

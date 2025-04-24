@@ -351,6 +351,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 
 	send := func(evs []*binlogdatapb.VEvent) error {
 		if err := vs.send(evs); err != nil {
+			log.Infof("Error in vstream send (wrapper) to client: %v", err)
 			vs.once.Do(func() {
 				vs.setError(err, "error sending events")
 			})
@@ -361,12 +362,14 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Infof("vstream context canceled")
 			vs.once.Do(func() {
 				vs.setError(ctx.Err(), "context ended while sending events")
 			})
 			return
 		case evs := <-vs.eventCh:
 			if err := send(evs); err != nil {
+				log.Infof("Error in vstream send events to client: %v", err)
 				vs.once.Do(func() {
 					vs.setError(err, "error sending events")
 				})
@@ -381,6 +384,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 				CurrentTime: now,
 			}}
 			if err := send(evs); err != nil {
+				log.Infof("Error in vstream sending heartbeat to client: %v", err)
 				vs.once.Do(func() {
 					vs.setError(err, "error sending heartbeat")
 				})
@@ -406,7 +410,7 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 
 		// Set the error on exit. First one wins.
 		if err != nil {
-			log.Errorf("Error in vstream for %+v: %s", sgtid, err)
+			log.Errorf("Error in vstream for %+v: %v", sgtid, err)
 			// Get the original/base error.
 			uerr := vterrors.UnwrapAll(err)
 			if !errors.Is(uerr, context.Canceled) && !errors.Is(uerr, context.DeadlineExceeded) {
@@ -656,6 +660,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				return vterrors.Wrapf(ctx.Err(), "context ended while streaming from tablet %s in %s/%s",
 					tabletAliasString, sgtid.Keyspace, sgtid.Shard)
 			case streamErr := <-errCh:
+				log.Infof("vstream for %s/%s ended due to health check, should retry: %v", sgtid.Keyspace, sgtid.Shard, streamErr)
 				// You must return Code_UNAVAILABLE here to trigger a restart.
 				return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "error streaming from tablet %s in %s/%s: %s",
 					tabletAliasString, sgtid.Keyspace, sgtid.Shard, streamErr.Error())
@@ -663,6 +668,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				// Unreachable.
 				// This can happen if a server misbehaves and does not end
 				// the stream after we return an error.
+				log.Infof("vstream for %s/%s ended due to journal event, returning io.EOF", sgtid.Keyspace, sgtid.Shard)
 				return io.EOF
 			default:
 			}
@@ -694,6 +700,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					}
 
 					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
+						log.Infof("vstream for %s/%s, error in sendAll: %v", sgtid.Keyspace, sgtid.Shard, err)
 						return vterrors.Wrap(err, sendingEventsErr)
 					}
 					eventss = nil
@@ -710,6 +717,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					}
 
 					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
+						log.Infof("vstream for %s/%s, error in sendAll, on copy completed event: %v", sgtid.Keyspace, sgtid.Shard, err)
 						return vterrors.Wrap(err, sendingEventsErr)
 					}
 					eventss = nil
@@ -740,6 +748,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						}
 						eventss = append(eventss, sendevents)
 						if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
+							log.Infof("vstream for %s/%s, error in sendAll, on journal event: %v", sgtid.Keyspace, sgtid.Shard, err)
 							return vterrors.Wrap(err, sendingEventsErr)
 						}
 						eventss = nil
@@ -774,6 +783,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 							if endTimer != nil {
 								<-endTimer.C
 							}
+							log.Infof("vstream for %s/%s ended due to journal event, returning io.EOF", sgtid.Keyspace, sgtid.Shard)
 							return io.EOF
 						}
 					}
@@ -802,7 +812,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		retry, ignoreTablet := vs.shouldRetry(err)
 		if !retry {
-			log.Errorf("vstream for %s/%s error: %v", sgtid.Keyspace, sgtid.Shard, err)
+			log.Infof("vstream for %s/%s error, no retry: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return vterrors.Wrapf(err, "error in vstream for %s/%s on tablet %s",
 				sgtid.Keyspace, sgtid.Shard, tabletAliasString)
 		}

@@ -43,21 +43,6 @@ type MStream struct {
 	TableName string
 }
 
-// RouteType implements the Primitive interface
-func (m *MStream) RouteType() string {
-	return "MStream"
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (m *MStream) GetKeyspaceName() string {
-	return m.Keyspace.Name
-}
-
-// GetTableName implements the Primitive interface
-func (m *MStream) GetTableName() string {
-	return m.TableName
-}
-
 // TryExecute implements the Primitive interface
 func (m *MStream) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.VT13001("TryExecute is not supported for MStream")

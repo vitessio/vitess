@@ -1244,7 +1244,7 @@ func getPort() int {
 
 	portFile.Truncate(0)
 	portFile.Seek(0, 0)
-	portFile.WriteString(fmt.Sprintf("%v", port+200))
+	fmt.Fprintf(portFile, "%v", port+200)
 	portFile.Close()
 	return port
 }

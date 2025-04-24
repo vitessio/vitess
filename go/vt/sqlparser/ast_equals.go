@@ -170,6 +170,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfBegin(a, b)
+	case *BeginEndStatement:
+		b, ok := inB.(*BeginEndStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfBeginEndStatement(a, b)
 	case *BetweenExpr:
 		b, ok := inB.(*BetweenExpr)
 		if !ok {
@@ -296,6 +302,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfComparisonExpr(a, b)
+	case *CompoundStatements:
+		b, ok := inB.(*CompoundStatements)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfCompoundStatements(a, b)
 	case *ConstraintDefinition:
 		b, ok := inB.(*ConstraintDefinition)
 		if !ok {
@@ -338,6 +350,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfCreateDatabase(a, b)
+	case *CreateProcedure:
+		b, ok := inB.(*CreateProcedure)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfCreateProcedure(a, b)
 	case *CreateTable:
 		b, ok := inB.(*CreateTable)
 		if !ok {
@@ -362,6 +380,24 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfDeallocateStmt(a, b)
+	case *DeclareCondition:
+		b, ok := inB.(*DeclareCondition)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDeclareCondition(a, b)
+	case *DeclareHandler:
+		b, ok := inB.(*DeclareHandler)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDeclareHandler(a, b)
+	case *DeclareVar:
+		b, ok := inB.(*DeclareVar)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDeclareVar(a, b)
 	case *Default:
 		b, ok := inB.(*Default)
 		if !ok {
@@ -404,6 +440,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfDropKey(a, b)
+	case *DropProcedure:
+		b, ok := inB.(*DropProcedure)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDropProcedure(a, b)
 	case *DropTable:
 		b, ok := inB.(*DropTable)
 		if !ok {
@@ -416,6 +458,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfDropView(a, b)
+	case *ElseIfBlock:
+		b, ok := inB.(*ElseIfBlock)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfElseIfBlock(a, b)
 	case *ExecuteStmt:
 		b, ok := inB.(*ExecuteStmt)
 		if !ok {
@@ -584,6 +632,42 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfGroupConcatExpr(a, b)
+	case *HandlerConditionErrorCode:
+		b, ok := inB.(*HandlerConditionErrorCode)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionErrorCode(a, b)
+	case *HandlerConditionNamed:
+		b, ok := inB.(*HandlerConditionNamed)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionNamed(a, b)
+	case *HandlerConditionNotFound:
+		b, ok := inB.(*HandlerConditionNotFound)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionNotFound(a, b)
+	case *HandlerConditionSQLException:
+		b, ok := inB.(*HandlerConditionSQLException)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionSQLException(a, b)
+	case *HandlerConditionSQLState:
+		b, ok := inB.(*HandlerConditionSQLState)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionSQLState(a, b)
+	case *HandlerConditionSQLWarning:
+		b, ok := inB.(*HandlerConditionSQLWarning)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionSQLWarning(a, b)
 	case IdentifierCI:
 		b, ok := inB.(IdentifierCI)
 		if !ok {
@@ -596,6 +680,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.IdentifierCS(a, b)
+	case *IfStatement:
+		b, ok := inB.(*IfStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfIfStatement(a, b)
 	case *IndexDefinition:
 		b, ok := inB.(*IndexDefinition)
 		if !ok {
@@ -1148,6 +1238,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfPrepareStmt(a, b)
+	case *ProcParameter:
+		b, ok := inB.(*ProcParameter)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfProcParameter(a, b)
 	case *PurgeBinaryLogs:
 		b, ok := inB.(*PurgeBinaryLogs)
 		if !ok {
@@ -1346,6 +1442,24 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfShowTransactionStatus(a, b)
+	case *Signal:
+		b, ok := inB.(*Signal)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSignal(a, b)
+	case *SignalSet:
+		b, ok := inB.(*SignalSet)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSignalSet(a, b)
+	case *SingleStatement:
+		b, ok := inB.(*SingleStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSingleStatement(a, b)
 	case *StarExpr:
 		b, ok := inB.(*StarExpr)
 		if !ok {
@@ -1960,6 +2074,17 @@ func (cmp *Comparator) RefOfBegin(a, b *Begin) bool {
 	return cmp.SliceOfTxAccessMode(a.TxAccessModes, b.TxAccessModes)
 }
 
+// RefOfBeginEndStatement does deep equals between the two objects.
+func (cmp *Comparator) RefOfBeginEndStatement(a, b *BeginEndStatement) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.RefOfCompoundStatements(a.Statements, b.Statements)
+}
+
 // RefOfBetweenExpr does deep equals between the two objects.
 func (cmp *Comparator) RefOfBetweenExpr(a, b *BetweenExpr) bool {
 	if a == b {
@@ -2219,6 +2344,17 @@ func (cmp *Comparator) RefOfComparisonExpr(a, b *ComparisonExpr) bool {
 		cmp.Expr(a.Escape, b.Escape)
 }
 
+// RefOfCompoundStatements does deep equals between the two objects.
+func (cmp *Comparator) RefOfCompoundStatements(a, b *CompoundStatements) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.SliceOfCompoundStatement(a.Statements, b.Statements)
+}
+
 // RefOfConstraintDefinition does deep equals between the two objects.
 func (cmp *Comparator) RefOfConstraintDefinition(a, b *ConstraintDefinition) bool {
 	if a == b {
@@ -2308,6 +2444,22 @@ func (cmp *Comparator) RefOfCreateDatabase(a, b *CreateDatabase) bool {
 		cmp.SliceOfDatabaseOption(a.CreateOptions, b.CreateOptions)
 }
 
+// RefOfCreateProcedure does deep equals between the two objects.
+func (cmp *Comparator) RefOfCreateProcedure(a, b *CreateProcedure) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IfNotExists == b.IfNotExists &&
+		cmp.TableName(a.Name, b.Name) &&
+		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
+		cmp.RefOfDefiner(a.Definer, b.Definer) &&
+		cmp.SliceOfRefOfProcParameter(a.Params, b.Params) &&
+		cmp.CompoundStatement(a.Body, b.Body)
+}
+
 // RefOfCreateTable does deep equals between the two objects.
 func (cmp *Comparator) RefOfCreateTable(a, b *CreateTable) bool {
 	if a == b {
@@ -2366,6 +2518,43 @@ func (cmp *Comparator) RefOfDeallocateStmt(a, b *DeallocateStmt) bool {
 	}
 	return cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCI(a.Name, b.Name)
+}
+
+// RefOfDeclareCondition does deep equals between the two objects.
+func (cmp *Comparator) RefOfDeclareCondition(a, b *DeclareCondition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.IdentifierCI(a.Name, b.Name) &&
+		cmp.HandlerCondition(a.Condition, b.Condition)
+}
+
+// RefOfDeclareHandler does deep equals between the two objects.
+func (cmp *Comparator) RefOfDeclareHandler(a, b *DeclareHandler) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Action == b.Action &&
+		cmp.SliceOfHandlerCondition(a.Conditions, b.Conditions) &&
+		cmp.CompoundStatement(a.Statement, b.Statement)
+}
+
+// RefOfDeclareVar does deep equals between the two objects.
+func (cmp *Comparator) RefOfDeclareVar(a, b *DeclareVar) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.SliceOfIdentifierCI(a.VarNames, b.VarNames) &&
+		cmp.RefOfColumnType(a.Type, b.Type)
 }
 
 // RefOfDefault does deep equals between the two objects.
@@ -2458,6 +2647,19 @@ func (cmp *Comparator) RefOfDropKey(a, b *DropKey) bool {
 		cmp.IdentifierCI(a.Name, b.Name)
 }
 
+// RefOfDropProcedure does deep equals between the two objects.
+func (cmp *Comparator) RefOfDropProcedure(a, b *DropProcedure) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IfExists == b.IfExists &&
+		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
+		cmp.TableName(a.Name, b.Name)
+}
+
 // RefOfDropTable does deep equals between the two objects.
 func (cmp *Comparator) RefOfDropTable(a, b *DropTable) bool {
 	if a == b {
@@ -2483,6 +2685,18 @@ func (cmp *Comparator) RefOfDropView(a, b *DropView) bool {
 	return a.IfExists == b.IfExists &&
 		cmp.TableNames(a.FromTables, b.FromTables) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments)
+}
+
+// RefOfElseIfBlock does deep equals between the two objects.
+func (cmp *Comparator) RefOfElseIfBlock(a, b *ElseIfBlock) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.SearchCondition, b.SearchCondition) &&
+		cmp.RefOfCompoundStatements(a.ThenStatements, b.ThenStatements)
 }
 
 // RefOfExecuteStmt does deep equals between the two objects.
@@ -2844,6 +3058,72 @@ func (cmp *Comparator) RefOfGroupConcatExpr(a, b *GroupConcatExpr) bool {
 		cmp.RefOfLimit(a.Limit, b.Limit)
 }
 
+// RefOfHandlerConditionErrorCode does deep equals between the two objects.
+func (cmp *Comparator) RefOfHandlerConditionErrorCode(a, b *HandlerConditionErrorCode) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.ErrorCode == b.ErrorCode
+}
+
+// RefOfHandlerConditionNamed does deep equals between the two objects.
+func (cmp *Comparator) RefOfHandlerConditionNamed(a, b *HandlerConditionNamed) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.IdentifierCI(a.Name, b.Name)
+}
+
+// RefOfHandlerConditionNotFound does deep equals between the two objects.
+func (cmp *Comparator) RefOfHandlerConditionNotFound(a, b *HandlerConditionNotFound) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
+}
+
+// RefOfHandlerConditionSQLException does deep equals between the two objects.
+func (cmp *Comparator) RefOfHandlerConditionSQLException(a, b *HandlerConditionSQLException) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
+}
+
+// RefOfHandlerConditionSQLState does deep equals between the two objects.
+func (cmp *Comparator) RefOfHandlerConditionSQLState(a, b *HandlerConditionSQLState) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.RefOfLiteral(a.SQLStateValue, b.SQLStateValue)
+}
+
+// RefOfHandlerConditionSQLWarning does deep equals between the two objects.
+func (cmp *Comparator) RefOfHandlerConditionSQLWarning(a, b *HandlerConditionSQLWarning) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
+}
+
 // IdentifierCI does deep equals between the two objects.
 func (cmp *Comparator) IdentifierCI(a, b IdentifierCI) bool {
 	return a.val == b.val &&
@@ -2853,6 +3133,20 @@ func (cmp *Comparator) IdentifierCI(a, b IdentifierCI) bool {
 // IdentifierCS does deep equals between the two objects.
 func (cmp *Comparator) IdentifierCS(a, b IdentifierCS) bool {
 	return a.v == b.v
+}
+
+// RefOfIfStatement does deep equals between the two objects.
+func (cmp *Comparator) RefOfIfStatement(a, b *IfStatement) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.SearchCondition, b.SearchCondition) &&
+		cmp.RefOfCompoundStatements(a.ThenStatements, b.ThenStatements) &&
+		cmp.SliceOfRefOfElseIfBlock(a.ElseIfBlocks, b.ElseIfBlocks) &&
+		cmp.RefOfCompoundStatements(a.ElseStatements, b.ElseStatements)
 }
 
 // RefOfIndexDefinition does deep equals between the two objects.
@@ -3981,6 +4275,19 @@ func (cmp *Comparator) RefOfPrepareStmt(a, b *PrepareStmt) bool {
 		cmp.RefOfParsedComments(a.Comments, b.Comments)
 }
 
+// RefOfProcParameter does deep equals between the two objects.
+func (cmp *Comparator) RefOfProcParameter(a, b *ProcParameter) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Mode == b.Mode &&
+		cmp.IdentifierCI(a.Name, b.Name) &&
+		cmp.RefOfColumnType(a.Type, b.Type)
+}
+
 // RefOfPurgeBinaryLogs does deep equals between the two objects.
 func (cmp *Comparator) RefOfPurgeBinaryLogs(a, b *PurgeBinaryLogs) bool {
 	if a == b {
@@ -4242,6 +4549,7 @@ func (cmp *Comparator) RefOfSelectInto(a, b *SelectInto) bool {
 		a.Manifest == b.Manifest &&
 		a.Overwrite == b.Overwrite &&
 		a.Type == b.Type &&
+		cmp.SliceOfRefOfVariable(a.VarList, b.VarList) &&
 		cmp.ColumnCharset(a.Charset, b.Charset)
 }
 
@@ -4387,6 +4695,41 @@ func (cmp *Comparator) RefOfShowTransactionStatus(a, b *ShowTransactionStatus) b
 	}
 	return a.Keyspace == b.Keyspace &&
 		a.TransactionID == b.TransactionID
+}
+
+// RefOfSignal does deep equals between the two objects.
+func (cmp *Comparator) RefOfSignal(a, b *Signal) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.HandlerCondition(a.Condition, b.Condition) &&
+		cmp.SliceOfRefOfSignalSet(a.SetValues, b.SetValues)
+}
+
+// RefOfSignalSet does deep equals between the two objects.
+func (cmp *Comparator) RefOfSignalSet(a, b *SignalSet) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.ConditionName == b.ConditionName &&
+		cmp.Expr(a.Value, b.Value)
+}
+
+// RefOfSingleStatement does deep equals between the two objects.
+func (cmp *Comparator) RefOfSingleStatement(a, b *SingleStatement) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Statement(a.Statement, b.Statement)
 }
 
 // RefOfStarExpr does deep equals between the two objects.
@@ -5829,6 +6172,63 @@ func (cmp *Comparator) ColTuple(inA, inB ColTuple) bool {
 	}
 }
 
+// CompoundStatement does deep equals between the two objects.
+func (cmp *Comparator) CompoundStatement(inA, inB CompoundStatement) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *BeginEndStatement:
+		b, ok := inB.(*BeginEndStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfBeginEndStatement(a, b)
+	case *DeclareCondition:
+		b, ok := inB.(*DeclareCondition)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDeclareCondition(a, b)
+	case *DeclareHandler:
+		b, ok := inB.(*DeclareHandler)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDeclareHandler(a, b)
+	case *DeclareVar:
+		b, ok := inB.(*DeclareVar)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDeclareVar(a, b)
+	case *IfStatement:
+		b, ok := inB.(*IfStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfIfStatement(a, b)
+	case *Signal:
+		b, ok := inB.(*Signal)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSignal(a, b)
+	case *SingleStatement:
+		b, ok := inB.(*SingleStatement)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfSingleStatement(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // ConstraintInfo does deep equals between the two objects.
 func (cmp *Comparator) ConstraintInfo(inA, inB ConstraintInfo) bool {
 	if inA == nil && inB == nil {
@@ -5910,6 +6310,12 @@ func (cmp *Comparator) DDLStatement(inA, inB DDLStatement) bool {
 			return false
 		}
 		return cmp.RefOfAlterView(a, b)
+	case *CreateProcedure:
+		b, ok := inB.(*CreateProcedure)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfCreateProcedure(a, b)
 	case *CreateTable:
 		b, ok := inB.(*CreateTable)
 		if !ok {
@@ -5922,6 +6328,12 @@ func (cmp *Comparator) DDLStatement(inA, inB DDLStatement) bool {
 			return false
 		}
 		return cmp.RefOfCreateView(a, b)
+	case *DropProcedure:
+		b, ok := inB.(*DropProcedure)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDropProcedure(a, b)
 	case *DropTable:
 		b, ok := inB.(*DropTable)
 		if !ok {
@@ -6696,6 +7108,57 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 	}
 }
 
+// HandlerCondition does deep equals between the two objects.
+func (cmp *Comparator) HandlerCondition(inA, inB HandlerCondition) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *HandlerConditionErrorCode:
+		b, ok := inB.(*HandlerConditionErrorCode)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionErrorCode(a, b)
+	case *HandlerConditionNamed:
+		b, ok := inB.(*HandlerConditionNamed)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionNamed(a, b)
+	case *HandlerConditionNotFound:
+		b, ok := inB.(*HandlerConditionNotFound)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionNotFound(a, b)
+	case *HandlerConditionSQLException:
+		b, ok := inB.(*HandlerConditionSQLException)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionSQLException(a, b)
+	case *HandlerConditionSQLState:
+		b, ok := inB.(*HandlerConditionSQLState)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionSQLState(a, b)
+	case *HandlerConditionSQLWarning:
+		b, ok := inB.(*HandlerConditionSQLWarning)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfHandlerConditionSQLWarning(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // InsertRows does deep equals between the two objects.
 func (cmp *Comparator) InsertRows(inA, inB InsertRows) bool {
 	if inA == nil && inB == nil {
@@ -6936,6 +7399,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfCreateDatabase(a, b)
+	case *CreateProcedure:
+		b, ok := inB.(*CreateProcedure)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfCreateProcedure(a, b)
 	case *CreateTable:
 		b, ok := inB.(*CreateTable)
 		if !ok {
@@ -6966,6 +7435,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfDropDatabase(a, b)
+	case *DropProcedure:
+		b, ok := inB.(*DropProcedure)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfDropProcedure(a, b)
 	case *DropTable:
 		b, ok := inB.(*DropTable)
 		if !ok {
@@ -7406,6 +7881,45 @@ func (cmp *Comparator) SliceOfString(a, b []string) bool {
 	return true
 }
 
+// SliceOfCompoundStatement does deep equals between the two objects.
+func (cmp *Comparator) SliceOfCompoundStatement(a, b []CompoundStatement) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.CompoundStatement(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// SliceOfRefOfProcParameter does deep equals between the two objects.
+func (cmp *Comparator) SliceOfRefOfProcParameter(a, b []*ProcParameter) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.RefOfProcParameter(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// SliceOfHandlerCondition does deep equals between the two objects.
+func (cmp *Comparator) SliceOfHandlerCondition(a, b []HandlerCondition) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.HandlerCondition(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // SliceOfTableExpr does deep equals between the two objects.
 func (cmp *Comparator) SliceOfTableExpr(a, b []TableExpr) bool {
 	if len(a) != len(b) {
@@ -7453,6 +7967,19 @@ func (cmp *Comparator) RefOfIdentifierCS(a, b *IdentifierCS) bool {
 		return false
 	}
 	return a.v == b.v
+}
+
+// SliceOfRefOfElseIfBlock does deep equals between the two objects.
+func (cmp *Comparator) SliceOfRefOfElseIfBlock(a, b []*ElseIfBlock) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.RefOfElseIfBlock(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // SliceOfRefOfIndexColumn does deep equals between the two objects.
@@ -7629,6 +8156,19 @@ func (cmp *Comparator) SliceOfSelectExpr(a, b []SelectExpr) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !cmp.SelectExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// SliceOfRefOfSignalSet does deep equals between the two objects.
+func (cmp *Comparator) SliceOfRefOfSignalSet(a, b []*SignalSet) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !cmp.RefOfSignalSet(a[i], b[i]) {
 			return false
 		}
 	}

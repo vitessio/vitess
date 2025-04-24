@@ -72,12 +72,6 @@ import (
 var (
 	defaultTabletType = topodatapb.TabletType_PRIMARY
 
-	// TODO: @harshit/@systay - Remove these deprecated stats once we have a replacement in a released version.
-	queriesProcessed        = stats.NewCountersWithSingleLabel("QueriesProcessed", "Deprecated: Queries processed at vtgate by plan type", "Plan")
-	queriesRouted           = stats.NewCountersWithSingleLabel("QueriesRouted", "Deprecated: Queries routed from vtgate to vttablet by plan type", "Plan")
-	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Deprecated: Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
-	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Deprecated: Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
-
 	queryExecutions        = stats.NewCountersWithMultiLabels("QueryExecutions", "Counts queries executed at VTGate by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
 	queryRoutes            = stats.NewCountersWithMultiLabels("QueryRoutes", "Counts queries routed from VTGate to VTTablet by query type, plan type, and tablet type.", []string{"Query", "Plan", "Tablet"})
 	queryExecutionsByTable = stats.NewCountersWithMultiLabels("QueryExecutionsByTable", "Counts queries executed at VTGate per table by query type and table.", []string{"Query", "Table"})
@@ -111,6 +105,7 @@ func init() {
 // the abilities of the underlying vttablets.
 type (
 	ExecutorConfig struct {
+		Name       string
 		Normalize  bool
 		StreamSize int
 		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
@@ -120,7 +115,8 @@ type (
 	}
 
 	Executor struct {
-		config ExecutorConfig
+		config   ExecutorConfig
+		exporter *servenv.Exporter
 
 		env         *vtenv.Environment
 		serv        srvtopo.Server
@@ -128,6 +124,7 @@ type (
 		resolver    *Resolver
 		scatterConn *ScatterConn
 		txConn      *TxConn
+		metrics     econtext.Metrics
 
 		mu           sync.Mutex
 		vschema      *vindexes.VSchema
@@ -146,6 +143,10 @@ type (
 
 		vConfig   econtext.VCursorConfig
 		ddlConfig dynamicconfig.DDL
+	}
+
+	Metrics struct {
+		engineMetrics *engine.Metrics
 	}
 )
 
@@ -180,6 +181,7 @@ func NewExecutor(
 ) *Executor {
 	e := &Executor{
 		config:      eConfig,
+		exporter:    servenv.NewExporter(eConfig.Name, ""),
 		env:         env,
 		serv:        serv,
 		cell:        cell,
@@ -194,6 +196,9 @@ func NewExecutor(
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
+	e.metrics = &Metrics{
+		engineMetrics: engine.InitMetrics(e.exporter),
+	}
 
 	// we subscribe to update from the VSchemaManager
 	e.vm = &VSchemaManager{
@@ -386,7 +391,6 @@ func (e *Executor) StreamExecute(
 		logStats.ExecuteTime = time.Since(execStart)
 		logStats.ActiveKeyspace = vc.GetKeyspace()
 
-		e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 		e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
 
 		return err
@@ -603,7 +607,6 @@ func ifReadAfterWriteExist(session *econtext.SafeSession, f func(*vtgatepb.ReadA
 func (e *Executor) handleBegin(ctx context.Context, vcursor *econtext.VCursorImpl, safeSession *econtext.SafeSession, logStats *logstats.LogStats, stmt sqlparser.Statement) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	e.updateQueryCounts(sqlparser.StmtBegin.String(), "", "", 0)
 	e.updateQueryStats(sqlparser.StmtBegin.String(), engine.PlanTransaction.String(), vcursor.TabletType().String(), 0, nil)
 
 	begin := stmt.(*sqlparser.Begin)
@@ -616,7 +619,6 @@ func (e *Executor) handleCommit(ctx context.Context, vcursor *econtext.VCursorIm
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
-	e.updateQueryCounts(sqlparser.StmtCommit.String(), "", "", int64(logStats.ShardQueries))
 	e.updateQueryStats(sqlparser.StmtCommit.String(), engine.PlanTransaction.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), nil)
 
 	err := e.txConn.Commit(ctx, safeSession)
@@ -633,7 +635,6 @@ func (e *Executor) handleRollback(ctx context.Context, vcursor *econtext.VCursor
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
-	e.updateQueryCounts(sqlparser.StmtRollback.String(), "", "", int64(logStats.ShardQueries))
 	e.updateQueryStats(sqlparser.StmtRollback.String(), engine.PlanTransaction.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), nil)
 
 	err := e.txConn.Rollback(ctx, safeSession)
@@ -645,7 +646,6 @@ func (e *Executor) handleSavepoint(ctx context.Context, vcursor *econtext.VCurso
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
-	e.updateQueryCounts(queryType, "", "", int64(logStats.ShardQueries))
 	e.updateQueryStats(queryType, engine.PlanTransaction.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), nil)
 
 	defer func() {
@@ -708,7 +708,6 @@ func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *econ
 func (e *Executor) handleKill(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, logStats *logstats.LogStats) (result *sqltypes.Result, err error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	e.updateQueryCounts("Kill", "", "", 0)
 	e.updateQueryStats("Kill", engine.PlanLocal.String(), vcursor.TabletType().String(), 0, nil)
 
 	defer func() {
@@ -849,10 +848,10 @@ func (e *Executor) ShowShards(ctx context.Context, filter *sqlparser.ShowFilter,
 		}
 
 		_, _, shards, err := e.resolver.resolver.GetKeyspaceShards(ctx, keyspace, destTabletType)
-		if err != nil {
-			// There might be a misconfigured keyspace or no shards in the keyspace.
-			// Skip any errors and move on.
-			continue
+		if err != nil && vterrors.Code(err) != vtrpcpb.Code_INVALID_ARGUMENT {
+			// We only ignore invalid argument errors, as they mean the keyspace
+			// doesn't have any shards for the given tablet type.
+			return nil, err
 		}
 
 		for _, shard := range shards {
@@ -1104,19 +1103,20 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 func (e *Executor) fetchOrCreatePlan(
 	ctx context.Context,
 	safeSession *econtext.SafeSession,
-	sql string,
+	queryString string,
 	bindVars map[string]*querypb.BindVariable,
 	parameterize bool,
 	preparedPlan bool,
 	logStats *logstats.LogStats,
+	isExecutePath bool, // this means we are trying to execute the query - this is not a PREPARE call
 ) (
 	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, err error) {
 	if e.VSchema() == nil {
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
-	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ = econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig)
+	query, comments := sqlparser.SplitMarginComments(queryString)
+	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
 	var setVarComment string
 	if e.vConfig.SetVarEnabled {
@@ -1130,23 +1130,87 @@ func (e *Executor) fetchOrCreatePlan(
 	}
 
 	if plan == nil {
-		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey)
-		if err != nil {
-			return nil, nil, nil, err
+		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
+		if err != nil && preparedPlan && isExecutePath {
+			// The baseline plan failed to build, try to build an optimized plan
+			plan, err = e.tryOptimizedPlan(ctx, vcursor, bindVars, query, setVarComment, parameterize, planKey, plan, err)
+		}
+	}
+	if err != nil {
+		return nil, nil, stmt, err
+	}
+
+	if shouldOptimizePlan(preparedPlan, isExecutePath, plan) {
+		vcursor.SetBindVars(bindVars)
+		optimizedPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
+		if err == nil {
+			if sp, ok := optimizedPlan.Instructions.(*engine.PlanSwitcher); ok {
+				sp.Baseline = plan.Instructions
+				optimizedPlan.Optimized.Store(true)
+				e.plans.Set(planKey.Hash(), optimizedPlan, 0, e.epoch.Load())
+				plan = optimizedPlan
+			}
 		}
 	}
 
+	// Apply query hints
+	e.applyQueryHints(vcursor, plan)
+
+	logStats.SQL = comments.Leading + plan.Original + comments.Trailing
+	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
+
+	return plan, vcursor, stmt, nil
+}
+
+func (e *Executor) newVCursor(safeSession *econtext.SafeSession, comments sqlparser.MarginComments, logStats *logstats.LogStats) (*econtext.VCursorImpl, error) {
+	return econtext.NewVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, nullResultsObserver{}, e.vConfig, e.metrics)
+}
+
+func (e *Executor) tryOptimizedPlan(
+	ctx context.Context,
+	vcursor *econtext.VCursorImpl,
+	bindVars map[string]*querypb.BindVariable,
+	baseQuery string,
+	setVarComment string,
+	parameterize bool,
+	planKey engine.PlanKey,
+	fallbackPlan *engine.Plan,
+	prevErr error,
+) (*engine.Plan, error) {
+	vcursor.SetBindVars(bindVars)
+	sPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
+	if err == nil {
+		if sp, ok := sPlan.Instructions.(*engine.PlanSwitcher); ok {
+			sp.BaselineErr = prevErr
+			sPlan.Optimized.Store(true)
+			e.plans.Set(planKey.Hash(), sPlan, 0, e.epoch.Load())
+			return sPlan, nil
+		}
+	}
+	return fallbackPlan, prevErr
+}
+
+// shouldOptimizePlan checks if the plan should be optimized.
+// Conditions:
+// - preparedPlan and isExecutePath must be true (indicating this is an execution path, after PREPARE).
+// - plan.Optimized.Swap(true) must be false (ensuring the plan hasn’t been optimized yet).
+// - plan.Type must be either PlanJoinOp or PlanComplex (only these types can produce an optimized plan).
+// This ensures that we only attempt optimization when the query is executed and the plan type supports optimization.
+func shouldOptimizePlan(preparedPlan, isExecutePath bool, plan *engine.Plan) bool {
+	return preparedPlan &&
+		isExecutePath &&
+		plan.Optimized.CompareAndSwap(false, true) &&
+		(plan.Type == engine.PlanJoinOp || plan.Type == engine.PlanComplex)
+}
+
+// applyQueryHints applies query hints to the vcursor
+func (e *Executor) applyQueryHints(vcursor *econtext.VCursorImpl, plan *engine.Plan) {
 	qh := plan.QueryHints
 	vcursor.SetIgnoreMaxMemoryRows(qh.IgnoreMaxMemoryRows)
 	vcursor.SetConsolidator(qh.Consolidator)
 	vcursor.SetWorkloadName(qh.Workload)
 	vcursor.SetPriority(qh.Priority)
 	vcursor.SetExecQueryTimeout(qh.Timeout)
-
-	logStats.SQL = comments.Leading + plan.Original + comments.Trailing
-	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
-
-	return plan, vcursor, stmt, nil
 }
 
 func (e *Executor) getCachedOrBuildPlan(
@@ -1157,6 +1221,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	setVarComment string,
 	parameterize bool,
 	planKey engine.PlanKey,
+	ignoreCache bool,
 ) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
@@ -1212,7 +1277,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	}
 
 	planCachable := sqlparser.CachePlan(stmt) && vcursor.CachePlan()
-	if planCachable {
+	if planCachable && !ignoreCache {
 		if !preparedPlan {
 			// build Plan key
 			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
@@ -1231,6 +1296,7 @@ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query stri
 
 	return engine.PlanKey{
 		CurrentKeyspace: vcursor.GetKeyspace(),
+		TabletType:      vcursor.TabletType(),
 		Destination:     strings.Join(allDest, ","),
 		Query:           query,
 		SetVarComment:   setVarComment,
@@ -1341,15 +1407,6 @@ func (e *Executor) ForEachPlan(each func(plan *engine.Plan) bool) {
 
 func (e *Executor) ClearPlans() {
 	e.epoch.Add(1)
-}
-
-func (e *Executor) updateQueryCounts(planType, keyspace, tableName string, shardQueries int64) {
-	queriesProcessed.Add(planType, 1)
-	queriesRouted.Add(planType, shardQueries)
-	if tableName != "" {
-		queriesProcessedByTable.Add([]string{planType, keyspace, tableName}, 1)
-		queriesRoutedByTable.Add([]string{planType, keyspace, tableName}, shardQueries)
-	}
 }
 
 func (e *Executor) updateQueryStats(queryType, planType, tabletType string, shards int64, tables []string) {
@@ -1514,11 +1571,20 @@ func prepareBindVars(paramsCount uint16) map[string]*querypb.BindVariable {
 }
 
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.SafeSession, sql string, logStats *logstats.LogStats) ([]*querypb.Field, uint16, error) {
-	plan, vcursor, _, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats)
+	plan, vcursor, stmt, err := e.fetchOrCreatePlan(ctx, safeSession, sql, nil, false, true, logStats, false)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
 	if err != nil {
+		if stmt != nil {
+			// Attempt to build NULL field types for the statement in case planning fails,
+			// allowing the client to proceed with preparing the statement even without a valid execution plan.
+			// Hoping that an optimized plan can be built later when parameter values are available.
+			flds, paramCount, success := buildNullFieldTypes(stmt)
+			if success {
+				return flds, paramCount, nil
+			}
+		}
 		logStats.Error = err
 		return nil, 0, err
 	}
@@ -1543,6 +1609,27 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), errCount)
 
 	return qr.Fields, plan.ParamsCount, err
+}
+
+// buildNullFieldTypes builds a list of NULL field types for the given statement.
+func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bool) {
+	sel, ok := stmt.(sqlparser.SelectStatement)
+	if !ok {
+		return nil, countArguments(stmt), true
+	}
+	var fields []*querypb.Field
+	for _, expr := range sel.GetColumns() {
+		// *sqlparser.StarExpr is not supported in this context.
+		if ae, ok := expr.(*sqlparser.AliasedExpr); ok {
+			fields = append(fields, &querypb.Field{
+				Name: ae.ColumnName(),
+				Type: querypb.Type_NULL_TYPE,
+			})
+			continue
+		}
+		return nil, 0, false
+	}
+	return fields, countArguments(stmt), true
 }
 
 func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
@@ -1686,7 +1773,7 @@ func (e *Executor) ReleaseLock(ctx context.Context, session *econtext.SafeSessio
 func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.SafeSession, query string) (*engine.Plan, error) {
 	// creating this log stats to not interfere with the original log stats.
 	lStats := logstats.NewLogStats(ctx, "prepare", query, safeSession.GetSessionUUID(), nil, streamlog.GetQueryLogConfig())
-	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats)
+	plan, _, _, err := e.fetchOrCreatePlan(ctx, safeSession, query, nil, false, true, lStats, false)
 	return plan, err
 }
 
@@ -1738,4 +1825,8 @@ func fkMode(foreignkey string) vschemapb.Keyspace_ForeignKeyMode {
 
 	}
 	return vschemapb.Keyspace_unspecified
+}
+
+func (m *Metrics) GetExecutionMetrics() *engine.Metrics {
+	return m.engineMetrics
 }

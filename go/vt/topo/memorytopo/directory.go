@@ -43,10 +43,7 @@ func (c *Conn) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.D
 		return nil, err
 	}
 
-	isRoot := false
-	if dirPath == "" || dirPath == "/" {
-		isRoot = true
-	}
+	isRoot := dirPath == "" || dirPath == "/"
 
 	// Get the node to list.
 	n := c.factory.nodeByPath(c.cell, dirPath)

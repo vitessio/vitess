@@ -62,21 +62,6 @@ type FkCascade struct {
 	Parent Primitive
 }
 
-// RouteType implements the Primitive interface.
-func (fkc *FkCascade) RouteType() string {
-	return "FkCascade"
-}
-
-// GetKeyspaceName implements the Primitive interface.
-func (fkc *FkCascade) GetKeyspaceName() string {
-	return fkc.Parent.GetKeyspaceName()
-}
-
-// GetTableName implements the Primitive interface.
-func (fkc *FkCascade) GetTableName() string {
-	return fkc.Parent.GetTableName()
-}
-
 // TryExecute implements the Primitive interface.
 func (fkc *FkCascade) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	// Execute the Selection primitive to find the rows that are going to modified.
@@ -226,7 +211,7 @@ func (fkc *FkCascade) Inputs() ([]Primitive, []map[string]any) {
 }
 
 func (fkc *FkCascade) description() PrimitiveDescription {
-	return PrimitiveDescription{OperatorType: fkc.RouteType()}
+	return PrimitiveDescription{OperatorType: "FkCascade"}
 }
 
 var _ Primitive = (*FkCascade)(nil)

@@ -4757,6 +4757,11 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 		return resp, err
 	}
 
+	if len(shards) == 0 {
+		resp.Results = append(resp.Results, fmt.Sprintf("no shards found in keyspace %v", req.Keyspace))
+		return resp, err
+	}
+
 	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
 
 	var (
@@ -4767,6 +4772,7 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
+
 			shardResp, err := s.ValidateShard(ctx, &vtctldatapb.ValidateShardRequest{
 				Keyspace:    req.Keyspace,
 				Shard:       shard,
@@ -4786,6 +4792,7 @@ func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.Va
 	}
 
 	wg.Wait()
+
 	return resp, err
 }
 
@@ -5086,8 +5093,17 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 
 	var (
 		wg      sync.WaitGroup
-		results = make(chan string, len(aliases))
+		results = make(chan string, len(aliases)+1)
 	)
+	// Start processing results immediately, so that we
+	// don't end up blocking on writes.
+	done := make(chan bool)
+	go func() {
+		for result := range results {
+			resp.Results = append(resp.Results, result)
+		}
+		done <- true
+	}()
 
 	for _, alias := range aliases {
 		wg.Add(1)
@@ -5191,14 +5207,6 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 		validateReplication(ctx, si, tabletMap, results) // done synchronously
 		pingTablets(ctx, tabletMap, results)             // done async, using the waitgroup declared above in the main method body.
 	}
-
-	done := make(chan bool)
-	go func() {
-		for result := range results {
-			resp.Results = append(resp.Results, result)
-		}
-		done <- true
-	}()
 
 	wg.Wait()
 	close(results)

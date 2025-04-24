@@ -61,18 +61,6 @@ func (f *fakePrimitive) rewind() {
 	f.log = nil
 }
 
-func (f *fakePrimitive) RouteType() string {
-	return "Fake"
-}
-
-func (f *fakePrimitive) GetKeyspaceName() string {
-	return "fakeKs"
-}
-
-func (f *fakePrimitive) GetTableName() string {
-	return "fakeTable"
-}
-
 func (f *fakePrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if f.useNewPrintBindVars {
 		f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))

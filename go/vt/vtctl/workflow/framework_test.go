@@ -17,6 +17,7 @@ limitations under the License.
 package workflow
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -270,6 +271,8 @@ type testTMClient struct {
 	mu                                 sync.Mutex
 	vrQueries                          map[int][]*queryResult
 	createVReplicationWorkflowRequests map[uint32]*createVReplicationWorkflowRequestResponse
+	getMaxValueForSequencesRequests    map[uint32]*getMaxValueForSequencesRequestResponse
+	updateSequenceTablesRequests       map[uint32]*tabletmanagerdatapb.UpdateSequenceTablesRequest
 	readVReplicationWorkflowRequests   map[uint32]*readVReplicationWorkflowRequestResponse
 	updateVReplicationWorklowsRequests map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest
 	updateVReplicationWorklowRequests  map[uint32][]*updateVReplicationWorkflowRequestResponse
@@ -296,6 +299,8 @@ func newTestTMClient(env *testEnv) *testTMClient {
 		schema:                             make(map[string]*tabletmanagerdatapb.SchemaDefinition),
 		vrQueries:                          make(map[int][]*queryResult),
 		createVReplicationWorkflowRequests: make(map[uint32]*createVReplicationWorkflowRequestResponse),
+		getMaxValueForSequencesRequests:    make(map[uint32]*getMaxValueForSequencesRequestResponse),
+		updateSequenceTablesRequests:       make(map[uint32]*tabletmanagerdatapb.UpdateSequenceTablesRequest),
 		readVReplicationWorkflowRequests:   make(map[uint32]*readVReplicationWorkflowRequestResponse),
 		updateVReplicationWorklowsRequests: make(map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest),
 		updateVReplicationWorklowRequests:  make(map[uint32][]*updateVReplicationWorkflowRequestResponse),
@@ -423,6 +428,20 @@ func (tmc *testTMClient) GetSchema(ctx context.Context, tablet *topodatapb.Table
 		}
 	}
 	return schemaDefn, nil
+}
+
+func (tmc *testTMClient) expectUpdateSequenceTablesRequest(tabletID uint32, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	tmc.updateSequenceTablesRequests[tabletID] = req
+}
+
+func (tmc *testTMClient) expectGetMaxValueForSequencesRequest(tabletID uint32, reqres *getMaxValueForSequencesRequestResponse) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	tmc.getMaxValueForSequencesRequests[tabletID] = reqres
 }
 
 func (tmc *testTMClient) expectVRQuery(tabletID int, query string, result *sqltypes.Result) {
@@ -608,6 +627,12 @@ type applySchemaRequestResponse struct {
 type updateVReplicationWorkflowRequestResponse struct {
 	req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest
 	res *tabletmanagerdatapb.UpdateVReplicationWorkflowResponse
+	err error
+}
+
+type getMaxValueForSequencesRequestResponse struct {
+	req *tabletmanagerdatapb.GetMaxValueForSequencesRequest
+	res *tabletmanagerdatapb.GetMaxValueForSequencesResponse
 	err error
 }
 
@@ -852,6 +877,46 @@ func (tmc *testTMClient) getVReplicationWorkflowsResponse(key string) *tabletman
 
 func (tmc *testTMClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
 	return nil
+}
+
+func (tmc *testTMClient) UpdateSequenceTables(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+	expect := tmc.updateSequenceTablesRequests[tablet.Alias.Uid]
+	if expect == nil {
+		return nil, nil
+	}
+	slices.SortFunc(expect.Sequences, func(x, y *tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata) int {
+		return cmp.Compare(x.BackingTableName, y.BackingTableName)
+	})
+	slices.SortFunc(req.Sequences, func(x, y *tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata) int {
+		return cmp.Compare(x.BackingTableName, y.BackingTableName)
+	})
+	if !proto.Equal(expect, req) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected UpdateSequenceTables request on tablet %s: got %+v, want %+v",
+			topoproto.TabletAliasString(tablet.Alias), req, expect)
+	}
+	delete(tmc.updateSequenceTablesRequests, tablet.Alias.Uid)
+	return &tabletmanagerdatapb.UpdateSequenceTablesResponse{}, nil
+}
+
+func (tmc *testTMClient) GetMaxValueForSequences(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (*tabletmanagerdatapb.GetMaxValueForSequencesResponse, error) {
+	expect := tmc.getMaxValueForSequencesRequests[tablet.Alias.Uid]
+	if expect == nil {
+		return &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
+			MaxValuesBySequenceTable: map[string]int64{},
+		}, nil
+	}
+	slices.SortFunc(expect.req.Sequences, func(x, y *tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata) int {
+		return cmp.Compare(x.BackingTableName, y.BackingTableName)
+	})
+	slices.SortFunc(req.Sequences, func(x, y *tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata) int {
+		return cmp.Compare(x.BackingTableName, y.BackingTableName)
+	})
+	if !proto.Equal(expect.req, req) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected GetMaxValueForSequences request on tablet %s: got %+v, want %+v",
+			topoproto.TabletAliasString(tablet.Alias), req, expect.req)
+	}
+	delete(tmc.getMaxValueForSequencesRequests, tablet.Alias.Uid)
+	return expect.res, expect.err
 }
 
 //

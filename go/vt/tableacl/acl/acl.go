@@ -47,3 +47,12 @@ type AcceptAllACL struct{}
 func (acl AcceptAllACL) IsMember(principal *querypb.VTGateCallerID) bool {
 	return true
 }
+
+type ACLState int8
+
+const (
+	ACLUnknown ACLState = iota
+	ACLAllow
+	ACLDenied
+	ACLPseudoDenied
+)

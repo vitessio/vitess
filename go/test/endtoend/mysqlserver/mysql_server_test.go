@@ -63,7 +63,7 @@ func TestMultiStatement(t *testing.T) {
 
 	_, err = db.QueryContext(ctx, "SELECT 1; SELECT 2; SELECT 3")
 	require.NotNilf(t, err, "error expected, got nil error")
-	assert.Containsf(t, err.Error(), "syntax error", "expected syntax error, got %v", err)
+	assert.Containsf(t, err.Error(), "Error 1149 (42000): Expected a single statement", "expected error, got %v", err)
 }
 
 // TestLargeComment add large comment in insert stmt and validate the insert process.
