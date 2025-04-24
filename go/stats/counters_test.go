@@ -101,9 +101,9 @@ func TestMultiCountersDot(t *testing.T) {
 	c.Add([]string{"c2a", "c2.b"}, 1)
 	c.Add([]string{"c2a", "c2.b"}, 1)
 	c1a := safeLabel("c1.a")
-	c1aJSON := strings.Replace(c1a, "\\", "\\\\", -1)
+	c1aJSON := strings.ReplaceAll(c1a, "\\", "\\\\")
 	c2b := safeLabel("c2.b")
-	c2bJSON := strings.Replace(c2b, "\\", "\\\\", -1)
+	c2bJSON := strings.ReplaceAll(c2b, "\\", "\\\\")
 	want1 := `{"` + c1aJSON + `.c1b": 1, "c2a.` + c2bJSON + `": 2}`
 	want2 := `{"c2a.` + c2bJSON + `": 2, "` + c1aJSON + `.c1b": 1}`
 	if s := c.String(); s != want1 && s != want2 {

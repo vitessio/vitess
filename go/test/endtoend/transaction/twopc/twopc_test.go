@@ -96,7 +96,7 @@ func TestDTCommit(t *testing.T) {
 	utils.Exec(t, conn, "begin")
 	utils.Exec(t, conn, "insert into twopc_user(id, name) values(7,'foo')")
 	utils.Exec(t, conn, "insert into twopc_user(id, name) values(8,'bar')")
-	utils.Exec(t, conn, `set @@time_zone="+10:30"`)
+	utils.Exec(t, conn, `set time_zone="+10:30"`)
 	utils.Exec(t, conn, "insert into twopc_user(id, name) values(9,'baz')")
 	utils.Exec(t, conn, "insert into twopc_user(id, name) values(10,'apa')")
 	utils.Exec(t, conn, "commit")
@@ -125,16 +125,16 @@ func TestDTCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-1\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:-40": {
-			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"set @@time_zone = '+10:30'\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
 			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"set @@time_zone = '+10:30'\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"insert into twopc_user(id, `name`) values (10, 'apa')\")]",
 		},
 		"ks.redo_statement:40-80": {
 			"insert:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"set @@time_zone = '+10:30'\")]",
+			"insert:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"set time_zone = '+10:30'\")]",
 			"delete:[VARCHAR(\"dtid-1\") INT64(1) BLOB(\"insert into twopc_user(id, `name`) values (8, 'bar')\")]",
-			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"set @@time_zone = '+10:30'\")]",
+			"delete:[VARCHAR(\"dtid-1\") INT64(2) BLOB(\"set time_zone = '+10:30'\")]",
 		},
 		"ks.twopc_user:-40": {
 			`insert:[INT64(10) VARCHAR("apa")]`,
@@ -172,9 +172,9 @@ func TestDTCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-2\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:40-80": {
-			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"set @@time_zone = '+10:30'\")]",
+			"insert:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
 			"insert:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
-			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"set @@time_zone = '+10:30'\")]",
+			"delete:[VARCHAR(\"dtid-2\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
 			"delete:[VARCHAR(\"dtid-2\") INT64(2) BLOB(\"update twopc_user set `name` = 'newfoo' where id = 8 limit 10001 /* INT64 */\")]",
 		},
 		"ks.twopc_user:40-80": {"update:[INT64(8) VARCHAR(\"newfoo\")]"},
@@ -205,9 +205,9 @@ func TestDTCommit(t *testing.T) {
 			"delete:[VARCHAR(\"dtid-3\") VARCHAR(\"PREPARE\")]",
 		},
 		"ks.redo_statement:-40": {
-			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"set @@time_zone = '+10:30'\")]",
+			"insert:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
 			"insert:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
-			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"set @@time_zone = '+10:30'\")]",
+			"delete:[VARCHAR(\"dtid-3\") INT64(1) BLOB(\"set time_zone = '+10:30'\")]",
 			"delete:[VARCHAR(\"dtid-3\") INT64(2) BLOB(\"delete from twopc_user where id = 10 limit 10001 /* INT64 */\")]",
 		},
 		"ks.twopc_user:-40": {"delete:[INT64(10) VARCHAR(\"apa\")]"},

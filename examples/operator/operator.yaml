@@ -1430,6 +1430,24 @@ spec:
                       type: object
                     sidecarContainers:
                       x-kubernetes-preserve-unknown-fields: true
+                    strategy:
+                      properties:
+                        rollingUpdate:
+                          properties:
+                            maxSurge:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              x-kubernetes-int-or-string: true
+                            maxUnavailable:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              x-kubernetes-int-or-string: true
+                          type: object
+                        type:
+                          type: string
+                      type: object
                     terminationGracePeriodSeconds:
                       format: int64
                       type: integer
@@ -2811,6 +2829,24 @@ spec:
                             type: object
                           sidecarContainers:
                             x-kubernetes-preserve-unknown-fields: true
+                          strategy:
+                            properties:
+                              rollingUpdate:
+                                properties:
+                                  maxSurge:
+                                    anyOf:
+                                      - type: integer
+                                      - type: string
+                                    x-kubernetes-int-or-string: true
+                                  maxUnavailable:
+                                    anyOf:
+                                      - type: integer
+                                      - type: string
+                                    x-kubernetes-int-or-string: true
+                                type: object
+                              type:
+                                type: string
+                            type: object
                           terminationGracePeriodSeconds:
                             format: int64
                             type: integer

@@ -59,10 +59,10 @@ func commandTouch(cmd *cobra.Command, args []string) error {
 	)
 
 	data, stat, err := fs.Conn.Get(cmd.Context(), zkPath)
-	switch {
-	case err == nil:
+	switch err {
+	case nil:
 		version = stat.Version
-	case err == zk.ErrNoNode:
+	case zk.ErrNoNode:
 		create = true
 	default:
 		return fmt.Errorf("touch: cannot access %v: %v", zkPath, err)

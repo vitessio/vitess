@@ -38,6 +38,7 @@ const (
 	RefOfValueSliceContainerASTElementsOffset
 	RefOfValueSliceContainerASTImplementationElements
 	RefOfOptionsl
+	VisitableInner
 )
 
 func (s ASTStep) DebugString() string {
@@ -78,6 +79,8 @@ func (s ASTStep) DebugString() string {
 		return "(*ValueSliceContainer).ASTImplementationElements"
 	case RefOfOptionsl:
 		return "(*Options).l"
+	case VisitableInner:
+		return "VisitableInner"
 	}
 	panic("unknown ASTStep")
 }
@@ -128,6 +131,8 @@ func GetNodeFromPath(node AST, path ASTPath) AST {
 			node = node.(*ValueSliceContainer).ASTElements[idx]
 		case RefOfValueSliceContainerASTImplementationElements:
 			node = node.(*ValueSliceContainer).ASTImplementationElements
+		case VisitableInner:
+			node = node.(Visitable).VisitThis()
 		default:
 			return nil
 		}

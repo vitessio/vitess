@@ -19,6 +19,7 @@ package theine
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,7 +30,7 @@ func TestList(t *testing.T) {
 	require.Equal(t, uint(5), l.capacity)
 	require.Equal(t, LIST_PROBATION, l.listType)
 	for i := range 5 {
-		evicted := l.PushFront(NewEntry(StringKey(fmt.Sprintf("%d", i)), "", 1))
+		evicted := l.PushFront(NewEntry(StringKey(strconv.Itoa(i)), "", 1))
 		require.Nil(t, evicted)
 	}
 	require.Equal(t, 5, l.len)
@@ -51,7 +52,7 @@ func TestList(t *testing.T) {
 
 	var entries []*Entry[StringKey, string]
 	for i := range 5 {
-		new := NewEntry(StringKey(fmt.Sprintf("%d", i)), "", 1)
+		new := NewEntry(StringKey(strconv.Itoa(i)), "", 1)
 		evicted := l.PushFront(new)
 		entries = append(entries, new)
 		require.Nil(t, evicted)
@@ -77,7 +78,7 @@ func TestListCountCost(t *testing.T) {
 	require.Equal(t, uint(100), l.capacity)
 	require.Equal(t, LIST_PROBATION, l.listType)
 	for i := range 5 {
-		evicted := l.PushFront(NewEntry(StringKey(fmt.Sprintf("%d", i)), "", 20))
+		evicted := l.PushFront(NewEntry(StringKey(strconv.Itoa(i)), "", 20))
 		require.Nil(t, evicted)
 	}
 	require.Equal(t, 100, l.len)

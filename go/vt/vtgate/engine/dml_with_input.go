@@ -40,24 +40,15 @@ type DMLWithInput struct {
 	BVList     []map[string]int
 }
 
-func (dml *DMLWithInput) RouteType() string {
-	return "DMLWithInput"
-}
-
-func (dml *DMLWithInput) GetKeyspaceName() string {
-	return dml.Input.GetKeyspaceName()
-}
-
-func (dml *DMLWithInput) GetTableName() string {
-	return dml.Input.GetTableName()
-}
-
 func (dml *DMLWithInput) Inputs() ([]Primitive, []map[string]any) {
 	return append([]Primitive{dml.Input}, dml.DMLs...), nil
 }
 
 // TryExecute performs a non-streaming exec.
 func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+	vcursor.Session().SetInDMLExecution(true)
+	defer vcursor.Session().SetInDMLExecution(false)
+
 	inputRes, err := vcursor.ExecutePrimitive(ctx, dml.Input, bindVars, false)
 	if err != nil {
 		return nil, err

@@ -305,7 +305,7 @@ func TestSetAndResetReplication(t *testing.T) {
 	require.NoError(t, err)
 	host := "localhost"
 
-	var heartbeatInterval float64 = 5.4
+	var heartbeatInterval = 5.4
 	err = mysqld.SetReplicationSource(context.Background(), host, port, heartbeatInterval, true, true)
 	assert.NoError(t, err)
 

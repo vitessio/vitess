@@ -146,7 +146,6 @@
         "JoinVars": {
           "u_foo": 2
         },
-        "TableName": "`user`_music",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -156,8 +155,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.col, u.bar, u.foo from `user` as u where 1 != 1",
-            "Query": "select u.col, u.bar, u.foo from `user` as u for update nowait",
-            "Table": "`user`"
+            "Query": "select u.col, u.bar, u.foo from `user` as u for update nowait"
           },
           {
             "OperatorType": "Route",
@@ -167,8 +165,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from music as m where 1 != 1",
-            "Query": "select 1 from music as m where m.foo = :u_foo for update nowait",
-            "Table": "music"
+            "Query": "select 1 from music as m where m.foo = :u_foo for update nowait"
           }
         ]
       },
@@ -192,7 +189,6 @@
         "JoinVars": {
           "u_foo": 2
         },
-        "TableName": "`user`_music",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -202,8 +198,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u.col, u.bar, u.foo from `user` as u where 1 != 1",
-            "Query": "select u.col, u.bar, u.foo from `user` as u for share skip locked",
-            "Table": "`user`"
+            "Query": "select u.col, u.bar, u.foo from `user` as u for share skip locked"
           },
           {
             "OperatorType": "Route",
@@ -213,8 +208,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from music as m where 1 != 1",
-            "Query": "select 1 from music as m where m.foo = :u_foo for share skip locked",
-            "Table": "music"
+            "Query": "select 1 from music as m where m.foo = :u_foo for share skip locked"
           }
         ]
       },

@@ -19,6 +19,8 @@ package tabletconn
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -48,8 +50,6 @@ func TestTabletErrorFromRPCError(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		got := vterrors.Code(ErrorFromVTRPC(tcase.in))
-		if got != tcase.want {
-			t.Errorf("FromVtRPCError(%v):\n%v, want\n%v", tcase.in, got, tcase.want)
-		}
+		require.Equal(t, tcase.want, got)
 	}
 }

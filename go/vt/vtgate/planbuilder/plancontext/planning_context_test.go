@@ -376,4 +376,9 @@ func (v *vschema) FindMirrorRule(tablename sqlparser.TableName) (*vindexes.Mirro
 	panic("unimplemented")
 }
 
+func (v *vschema) GetBindVars() map[string]*querypb.BindVariable {
+	// TODO implement me
+	panic("implement me")
+}
+
 var _ VSchema = (*vschema)(nil)

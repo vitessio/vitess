@@ -60,9 +60,6 @@ type Route struct {
 	// Query specifies the query to be executed.
 	Query string
 
-	// TableName specifies the tables to send the query to.
-	TableName string
-
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
 
@@ -109,21 +106,6 @@ func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery stri
 var (
 	partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
 )
-
-// RouteType returns a description of the query routing type used by the primitive
-func (route *Route) RouteType() string {
-	return route.Opcode.String()
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (route *Route) GetKeyspaceName() string {
-	return route.Keyspace.Name
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (route *Route) GetTableName() string {
-	return route.TableName
-}
 
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -196,7 +178,7 @@ func (route *Route) executeShards(
 		}
 	}
 
-	if len(route.OrderBy) != 0 {
+	if len(route.OrderBy) > 0 && len(rss) > 1 {
 		var err error
 		result, err = route.sort(result)
 		if err != nil {
@@ -274,7 +256,7 @@ func (route *Route) streamExecuteShards(
 		}
 	}
 
-	if len(route.OrderBy) == 0 {
+	if len(route.OrderBy) == 0 || len(rss) == 1 {
 		errs := vcursor.StreamExecuteMulti(ctx, route, route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, route.FetchLastInsertID, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
@@ -293,6 +275,21 @@ func (route *Route) streamExecuteShards(
 
 	// There is an order by. We have to merge-sort.
 	return route.mergeSort(ctx, vcursor, bindVars, wantfields, callback, rss, bvs)
+}
+
+// this is used to make mergeSort easy to test
+var createMergeSort = func(
+	prims []StreamExecutor,
+	orderBy evalengine.Comparison,
+	scatterErrorsAsWarnings bool,
+	fetchLastInsertID bool,
+) *MergeSort {
+	return &MergeSort{
+		Primitives:              prims,
+		OrderBy:                 orderBy,
+		ScatterErrorsAsWarnings: scatterErrorsAsWarnings,
+		FetchLastInsertID:       fetchLastInsertID,
+	}
 }
 
 func (route *Route) mergeSort(
@@ -314,13 +311,8 @@ func (route *Route) mergeSort(
 		})
 	}
 
-	ms := MergeSort{
-		Primitives:              prims,
-		OrderBy:                 route.OrderBy,
-		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
-		FetchLastInsertID:       route.FetchLastInsertID,
-	}
-	return vcursor.StreamExecutePrimitive(ctx, &ms, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	ms := createMergeSort(prims, route.OrderBy, route.ScatterErrorsAsWarnings, route.FetchLastInsertID)
+	return vcursor.StreamExecutePrimitive(ctx, ms, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
 }
@@ -370,7 +362,6 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 func (route *Route) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query":      route.Query,
-		"Table":      route.GetTableName(),
 		"FieldQuery": route.FieldQuery,
 	}
 	if route.FetchLastInsertID {

@@ -332,6 +332,10 @@ func getQueryService(ctx context.Context, rs *srvtopo.ResolvedShard, info *shard
 		return rs.Gateway, nil
 	}
 	qs, err := rs.Gateway.QueryServiceByAlias(ctx, info.alias, rs.Target)
+	if err != nil && info.transactionID != 0 {
+		err = vterrors.VT15001(vterrors.Code(err), err.Error())
+	}
+
 	if err == nil || skipReset {
 		return qs, err
 	}

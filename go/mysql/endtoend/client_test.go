@@ -24,12 +24,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/mysql/sqlerror"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 )
 
 // TestKill opens a connection, issues a command that
@@ -404,4 +402,52 @@ func TestBaseShowTablesFilePos(t *testing.T) {
 	// makes sure there aren't any errors.
 	_, err = conn.ExecuteFetch(sql, -1, true)
 	require.NoError(t, err)
+}
+
+// TestMaxRows tests the maxRows parameter of ExecuteFetch.
+func TestMaxRows(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &connParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	tcases := []struct {
+		name    string
+		maxRows int
+		expRows int
+		expErr  string
+	}{
+		{
+			name:    "no rows",
+			maxRows: mysql.FETCH_NO_ROWS,
+			expRows: 0,
+		},
+		{
+			name:    "all rows",
+			maxRows: mysql.FETCH_ALL_ROWS,
+			expRows: 5,
+		},
+		{
+			name:    "exceed max rows",
+			maxRows: 2,
+			expErr:  "Row count exceeded 2",
+		},
+		{
+			name:    "exact rows count",
+			maxRows: 5,
+			expRows: 5,
+		},
+	}
+
+	sql := "select table_schema, count(*) as table_count from information_schema.tables where table_schema != '_vt' group by table_schema"
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			qr, err := conn.ExecuteFetch(sql, tcase.maxRows, true)
+			if tcase.expErr != "" {
+				require.ErrorContains(t, err, tcase.expErr)
+			} else {
+				require.NoError(t, err)
+				require.Len(t, qr.Rows, tcase.expRows)
+			}
+		})
+	}
 }

@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -48,6 +49,7 @@ type (
 		TablesUsed   []string                // TablesUsed enumerates the tables this query accesses.
 		QueryHints   sqlparser.QueryHints    // QueryHints stores any SET_VAR hints that influenced plan generation.
 		ParamsCount  uint16                  // ParamsCount is the total number of bind parameters (?) in the query.
+		Optimized    atomic.Bool             // Prepared queries need to be optimized before the first execution
 
 		ExecCount    uint64 // ExecCount is how many times this plan has been executed.
 		ExecTime     uint64 // ExecTime is the total accumulated execution time in nanoseconds.
@@ -60,11 +62,12 @@ type (
 	// PlanKey identifies a plan uniquely based on keyspace, destination, query,
 	// SET_VAR comment, and collation. It is primarily used as a cache key.
 	PlanKey struct {
-		CurrentKeyspace string        // CurrentKeyspace is the name of the keyspace associated with the plan.
-		Destination     string        // Destination specifies the shard or routing destination for the plan.
-		Query           string        // Query is the original or normalized SQL statement used to build the plan.
-		SetVarComment   string        // SetVarComment holds any embedded SET_VAR hints within the query.
-		Collation       collations.ID // Collation is the character collation ID that governs string comparison.
+		CurrentKeyspace string                // CurrentKeyspace is the name of the keyspace associated with the plan.
+		TabletType      topodatapb.TabletType // TabletType is the type of tablet (primary, replica, etc.) for the plan.
+		Destination     string                // Destination specifies the shard or routing destination for the plan.
+		Query           string                // Query is the original or normalized SQL statement used to build the plan.
+		SetVarComment   string                // SetVarComment holds any embedded SET_VAR hints within the query.
+		Collation       collations.ID         // Collation is the character collation ID that governs string comparison.
 	}
 )
 
@@ -252,12 +255,13 @@ func getPlanTypeForUpsert(prim *Upsert) PlanType {
 }
 
 func (pk PlanKey) DebugString() string {
-	return fmt.Sprintf("CurrentKeyspace: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
+	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
 }
 
 func (pk PlanKey) Hash() theine.HashKey256 {
 	hasher := vthash.New256()
 	_, _ = hasher.WriteUint16(uint16(pk.Collation))
+	_, _ = hasher.WriteUint16(uint16(pk.TabletType))
 	_, _ = hasher.WriteString(pk.CurrentKeyspace)
 	_, _ = hasher.WriteString(pk.Destination)
 	_, _ = hasher.WriteString(pk.SetVarComment)

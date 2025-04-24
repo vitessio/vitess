@@ -36329,6 +36329,618 @@ export namespace tabletmanagerdata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of an UpdateSequenceTablesRequest. */
+    interface IUpdateSequenceTablesRequest {
+
+        /** UpdateSequenceTablesRequest sequences */
+        sequences?: (tabletmanagerdata.UpdateSequenceTablesRequest.ISequenceMetadata[]|null);
+    }
+
+    /** Represents an UpdateSequenceTablesRequest. */
+    class UpdateSequenceTablesRequest implements IUpdateSequenceTablesRequest {
+
+        /**
+         * Constructs a new UpdateSequenceTablesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IUpdateSequenceTablesRequest);
+
+        /** UpdateSequenceTablesRequest sequences. */
+        public sequences: tabletmanagerdata.UpdateSequenceTablesRequest.ISequenceMetadata[];
+
+        /**
+         * Creates a new UpdateSequenceTablesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateSequenceTablesRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IUpdateSequenceTablesRequest): tabletmanagerdata.UpdateSequenceTablesRequest;
+
+        /**
+         * Encodes the specified UpdateSequenceTablesRequest message. Does not implicitly {@link tabletmanagerdata.UpdateSequenceTablesRequest.verify|verify} messages.
+         * @param message UpdateSequenceTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IUpdateSequenceTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateSequenceTablesRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.UpdateSequenceTablesRequest.verify|verify} messages.
+         * @param message UpdateSequenceTablesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IUpdateSequenceTablesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateSequenceTablesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateSequenceTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.UpdateSequenceTablesRequest;
+
+        /**
+         * Decodes an UpdateSequenceTablesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateSequenceTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.UpdateSequenceTablesRequest;
+
+        /**
+         * Verifies an UpdateSequenceTablesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateSequenceTablesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateSequenceTablesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.UpdateSequenceTablesRequest;
+
+        /**
+         * Creates a plain object from an UpdateSequenceTablesRequest message. Also converts values to other types if specified.
+         * @param message UpdateSequenceTablesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.UpdateSequenceTablesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateSequenceTablesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateSequenceTablesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace UpdateSequenceTablesRequest {
+
+        /** Properties of a SequenceMetadata. */
+        interface ISequenceMetadata {
+
+            /** SequenceMetadata backing_table_name */
+            backing_table_name?: (string|null);
+
+            /** SequenceMetadata backing_table_db_name */
+            backing_table_db_name?: (string|null);
+
+            /** SequenceMetadata max_value */
+            max_value?: (number|Long|null);
+        }
+
+        /** Represents a SequenceMetadata. */
+        class SequenceMetadata implements ISequenceMetadata {
+
+            /**
+             * Constructs a new SequenceMetadata.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: tabletmanagerdata.UpdateSequenceTablesRequest.ISequenceMetadata);
+
+            /** SequenceMetadata backing_table_name. */
+            public backing_table_name: string;
+
+            /** SequenceMetadata backing_table_db_name. */
+            public backing_table_db_name: string;
+
+            /** SequenceMetadata max_value. */
+            public max_value: (number|Long);
+
+            /**
+             * Creates a new SequenceMetadata instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns SequenceMetadata instance
+             */
+            public static create(properties?: tabletmanagerdata.UpdateSequenceTablesRequest.ISequenceMetadata): tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata;
+
+            /**
+             * Encodes the specified SequenceMetadata message. Does not implicitly {@link tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata.verify|verify} messages.
+             * @param message SequenceMetadata message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: tabletmanagerdata.UpdateSequenceTablesRequest.ISequenceMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified SequenceMetadata message, length delimited. Does not implicitly {@link tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata.verify|verify} messages.
+             * @param message SequenceMetadata message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: tabletmanagerdata.UpdateSequenceTablesRequest.ISequenceMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a SequenceMetadata message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns SequenceMetadata
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata;
+
+            /**
+             * Decodes a SequenceMetadata message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns SequenceMetadata
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata;
+
+            /**
+             * Verifies a SequenceMetadata message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a SequenceMetadata message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns SequenceMetadata
+             */
+            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata;
+
+            /**
+             * Creates a plain object from a SequenceMetadata message. Also converts values to other types if specified.
+             * @param message SequenceMetadata
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this SequenceMetadata to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for SequenceMetadata
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
+    /** Properties of an UpdateSequenceTablesResponse. */
+    interface IUpdateSequenceTablesResponse {
+    }
+
+    /** Represents an UpdateSequenceTablesResponse. */
+    class UpdateSequenceTablesResponse implements IUpdateSequenceTablesResponse {
+
+        /**
+         * Constructs a new UpdateSequenceTablesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IUpdateSequenceTablesResponse);
+
+        /**
+         * Creates a new UpdateSequenceTablesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns UpdateSequenceTablesResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IUpdateSequenceTablesResponse): tabletmanagerdata.UpdateSequenceTablesResponse;
+
+        /**
+         * Encodes the specified UpdateSequenceTablesResponse message. Does not implicitly {@link tabletmanagerdata.UpdateSequenceTablesResponse.verify|verify} messages.
+         * @param message UpdateSequenceTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IUpdateSequenceTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified UpdateSequenceTablesResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.UpdateSequenceTablesResponse.verify|verify} messages.
+         * @param message UpdateSequenceTablesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IUpdateSequenceTablesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an UpdateSequenceTablesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns UpdateSequenceTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.UpdateSequenceTablesResponse;
+
+        /**
+         * Decodes an UpdateSequenceTablesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns UpdateSequenceTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.UpdateSequenceTablesResponse;
+
+        /**
+         * Verifies an UpdateSequenceTablesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an UpdateSequenceTablesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns UpdateSequenceTablesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.UpdateSequenceTablesResponse;
+
+        /**
+         * Creates a plain object from an UpdateSequenceTablesResponse message. Also converts values to other types if specified.
+         * @param message UpdateSequenceTablesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.UpdateSequenceTablesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this UpdateSequenceTablesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for UpdateSequenceTablesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a GetMaxValueForSequencesRequest. */
+    interface IGetMaxValueForSequencesRequest {
+
+        /** GetMaxValueForSequencesRequest sequences */
+        sequences?: (tabletmanagerdata.GetMaxValueForSequencesRequest.ISequenceMetadata[]|null);
+    }
+
+    /** Represents a GetMaxValueForSequencesRequest. */
+    class GetMaxValueForSequencesRequest implements IGetMaxValueForSequencesRequest {
+
+        /**
+         * Constructs a new GetMaxValueForSequencesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IGetMaxValueForSequencesRequest);
+
+        /** GetMaxValueForSequencesRequest sequences. */
+        public sequences: tabletmanagerdata.GetMaxValueForSequencesRequest.ISequenceMetadata[];
+
+        /**
+         * Creates a new GetMaxValueForSequencesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetMaxValueForSequencesRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IGetMaxValueForSequencesRequest): tabletmanagerdata.GetMaxValueForSequencesRequest;
+
+        /**
+         * Encodes the specified GetMaxValueForSequencesRequest message. Does not implicitly {@link tabletmanagerdata.GetMaxValueForSequencesRequest.verify|verify} messages.
+         * @param message GetMaxValueForSequencesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IGetMaxValueForSequencesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetMaxValueForSequencesRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.GetMaxValueForSequencesRequest.verify|verify} messages.
+         * @param message GetMaxValueForSequencesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IGetMaxValueForSequencesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetMaxValueForSequencesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetMaxValueForSequencesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetMaxValueForSequencesRequest;
+
+        /**
+         * Decodes a GetMaxValueForSequencesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetMaxValueForSequencesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetMaxValueForSequencesRequest;
+
+        /**
+         * Verifies a GetMaxValueForSequencesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetMaxValueForSequencesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetMaxValueForSequencesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetMaxValueForSequencesRequest;
+
+        /**
+         * Creates a plain object from a GetMaxValueForSequencesRequest message. Also converts values to other types if specified.
+         * @param message GetMaxValueForSequencesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.GetMaxValueForSequencesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetMaxValueForSequencesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetMaxValueForSequencesRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace GetMaxValueForSequencesRequest {
+
+        /** Properties of a SequenceMetadata. */
+        interface ISequenceMetadata {
+
+            /** SequenceMetadata backing_table_name */
+            backing_table_name?: (string|null);
+
+            /** SequenceMetadata using_col_escaped */
+            using_col_escaped?: (string|null);
+
+            /** SequenceMetadata using_table_name_escaped */
+            using_table_name_escaped?: (string|null);
+
+            /** SequenceMetadata using_table_db_name_escaped */
+            using_table_db_name_escaped?: (string|null);
+        }
+
+        /** Represents a SequenceMetadata. */
+        class SequenceMetadata implements ISequenceMetadata {
+
+            /**
+             * Constructs a new SequenceMetadata.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: tabletmanagerdata.GetMaxValueForSequencesRequest.ISequenceMetadata);
+
+            /** SequenceMetadata backing_table_name. */
+            public backing_table_name: string;
+
+            /** SequenceMetadata using_col_escaped. */
+            public using_col_escaped: string;
+
+            /** SequenceMetadata using_table_name_escaped. */
+            public using_table_name_escaped: string;
+
+            /** SequenceMetadata using_table_db_name_escaped. */
+            public using_table_db_name_escaped: string;
+
+            /**
+             * Creates a new SequenceMetadata instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns SequenceMetadata instance
+             */
+            public static create(properties?: tabletmanagerdata.GetMaxValueForSequencesRequest.ISequenceMetadata): tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata;
+
+            /**
+             * Encodes the specified SequenceMetadata message. Does not implicitly {@link tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata.verify|verify} messages.
+             * @param message SequenceMetadata message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: tabletmanagerdata.GetMaxValueForSequencesRequest.ISequenceMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified SequenceMetadata message, length delimited. Does not implicitly {@link tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata.verify|verify} messages.
+             * @param message SequenceMetadata message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: tabletmanagerdata.GetMaxValueForSequencesRequest.ISequenceMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a SequenceMetadata message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns SequenceMetadata
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata;
+
+            /**
+             * Decodes a SequenceMetadata message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns SequenceMetadata
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata;
+
+            /**
+             * Verifies a SequenceMetadata message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a SequenceMetadata message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns SequenceMetadata
+             */
+            public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata;
+
+            /**
+             * Creates a plain object from a SequenceMetadata message. Also converts values to other types if specified.
+             * @param message SequenceMetadata
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this SequenceMetadata to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for SequenceMetadata
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
+    /** Properties of a GetMaxValueForSequencesResponse. */
+    interface IGetMaxValueForSequencesResponse {
+
+        /** GetMaxValueForSequencesResponse max_values_by_sequence_table */
+        max_values_by_sequence_table?: ({ [k: string]: (number|Long) }|null);
+    }
+
+    /** Represents a GetMaxValueForSequencesResponse. */
+    class GetMaxValueForSequencesResponse implements IGetMaxValueForSequencesResponse {
+
+        /**
+         * Constructs a new GetMaxValueForSequencesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IGetMaxValueForSequencesResponse);
+
+        /** GetMaxValueForSequencesResponse max_values_by_sequence_table. */
+        public max_values_by_sequence_table: { [k: string]: (number|Long) };
+
+        /**
+         * Creates a new GetMaxValueForSequencesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetMaxValueForSequencesResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IGetMaxValueForSequencesResponse): tabletmanagerdata.GetMaxValueForSequencesResponse;
+
+        /**
+         * Encodes the specified GetMaxValueForSequencesResponse message. Does not implicitly {@link tabletmanagerdata.GetMaxValueForSequencesResponse.verify|verify} messages.
+         * @param message GetMaxValueForSequencesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IGetMaxValueForSequencesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetMaxValueForSequencesResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.GetMaxValueForSequencesResponse.verify|verify} messages.
+         * @param message GetMaxValueForSequencesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IGetMaxValueForSequencesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetMaxValueForSequencesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetMaxValueForSequencesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.GetMaxValueForSequencesResponse;
+
+        /**
+         * Decodes a GetMaxValueForSequencesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetMaxValueForSequencesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.GetMaxValueForSequencesResponse;
+
+        /**
+         * Verifies a GetMaxValueForSequencesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetMaxValueForSequencesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetMaxValueForSequencesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.GetMaxValueForSequencesResponse;
+
+        /**
+         * Creates a plain object from a GetMaxValueForSequencesResponse message. Also converts values to other types if specified.
+         * @param message GetMaxValueForSequencesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.GetMaxValueForSequencesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetMaxValueForSequencesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for GetMaxValueForSequencesResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }
 
 /** Namespace binlogdata. */
@@ -41043,6 +41655,9 @@ export namespace query {
 
         /** ExecuteOptions fetch_last_insert_id */
         fetch_last_insert_id?: (boolean|null);
+
+        /** ExecuteOptions in_dml_execution */
+        in_dml_execution?: (boolean|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -41095,6 +41710,9 @@ export namespace query {
 
         /** ExecuteOptions fetch_last_insert_id. */
         public fetch_last_insert_id: boolean;
+
+        /** ExecuteOptions in_dml_execution. */
+        public in_dml_execution: boolean;
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";
@@ -48810,6 +49428,9 @@ export namespace replicationdata {
 
         /** FullStatus semi_sync_blocked */
         semi_sync_blocked?: (boolean|null);
+
+        /** FullStatus tablet_type */
+        tablet_type?: (topodata.TabletType|null);
     }
 
     /** Represents a FullStatus. */
@@ -48892,6 +49513,9 @@ export namespace replicationdata {
 
         /** FullStatus semi_sync_blocked. */
         public semi_sync_blocked: boolean;
+
+        /** FullStatus tablet_type. */
+        public tablet_type: topodata.TabletType;
 
         /**
          * Creates a new FullStatus instance using the specified properties.
@@ -54950,6 +55574,9 @@ export namespace vtctldata {
 
         /** CancelSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** CancelSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a CancelSchemaMigrationRequest. */
@@ -54966,6 +55593,9 @@ export namespace vtctldata {
 
         /** CancelSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** CancelSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new CancelSchemaMigrationRequest instance using the specified properties.
@@ -55804,6 +56434,9 @@ export namespace vtctldata {
 
         /** CleanupSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** CleanupSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a CleanupSchemaMigrationRequest. */
@@ -55820,6 +56453,9 @@ export namespace vtctldata {
 
         /** CleanupSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** CleanupSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new CleanupSchemaMigrationRequest instance using the specified properties.
@@ -56004,6 +56640,9 @@ export namespace vtctldata {
 
         /** CompleteSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** CompleteSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a CompleteSchemaMigrationRequest. */
@@ -56020,6 +56659,9 @@ export namespace vtctldata {
 
         /** CompleteSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** CompleteSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new CompleteSchemaMigrationRequest instance using the specified properties.
@@ -59360,6 +60002,9 @@ export namespace vtctldata {
 
         /** ForceCutOverSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** ForceCutOverSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a ForceCutOverSchemaMigrationRequest. */
@@ -59376,6 +60021,9 @@ export namespace vtctldata {
 
         /** ForceCutOverSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** ForceCutOverSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new ForceCutOverSchemaMigrationRequest instance using the specified properties.
@@ -66174,6 +66822,9 @@ export namespace vtctldata {
 
         /** LaunchSchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** LaunchSchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a LaunchSchemaMigrationRequest. */
@@ -66190,6 +66841,9 @@ export namespace vtctldata {
 
         /** LaunchSchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** LaunchSchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new LaunchSchemaMigrationRequest instance using the specified properties.
@@ -72366,6 +73020,9 @@ export namespace vtctldata {
 
         /** RetrySchemaMigrationRequest uuid */
         uuid?: (string|null);
+
+        /** RetrySchemaMigrationRequest caller_id */
+        caller_id?: (vtrpc.ICallerID|null);
     }
 
     /** Represents a RetrySchemaMigrationRequest. */
@@ -72382,6 +73039,9 @@ export namespace vtctldata {
 
         /** RetrySchemaMigrationRequest uuid. */
         public uuid: string;
+
+        /** RetrySchemaMigrationRequest caller_id. */
+        public caller_id?: (vtrpc.ICallerID|null);
 
         /**
          * Creates a new RetrySchemaMigrationRequest instance using the specified properties.

@@ -236,7 +236,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 		resetCmd,
 		"RESET REPLICA",
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
-		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
+		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
 	}
 	utils.RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[0])
 
@@ -250,7 +250,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 		"STOP REPLICA",
 		resetCmd,
 		fmt.Sprintf("SET GLOBAL gtid_purged = '%s'", gtID),
-		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', SOURCE_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
+		fmt.Sprintf("CHANGE REPLICATION SOURCE TO SOURCE_HOST='%s', SOURCE_PORT=%d, SOURCE_USER='vt_repl', GET_SOURCE_PUBLIC_KEY = 1, SOURCE_AUTO_POSITION = 1", utils.Hostname, tablets[1].MySQLPort),
 		"START REPLICA",
 	}
 	utils.RunSQLs(ctx, t, changeReplicationSourceCommands, tablets[2])

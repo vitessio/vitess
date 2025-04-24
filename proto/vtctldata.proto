@@ -502,6 +502,9 @@ message BackupShardRequest {
 message CancelSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller. This is needed when strict table ACLs are enforced on the tablets.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message CancelSchemaMigrationResponse {
@@ -552,6 +555,9 @@ message CheckThrottlerResponse {
 message CleanupSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message CleanupSchemaMigrationResponse {
@@ -561,6 +567,9 @@ message CleanupSchemaMigrationResponse {
 message CompleteSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message CompleteSchemaMigrationResponse {
@@ -833,6 +842,9 @@ message FindAllShardsInKeyspaceResponse {
 message ForceCutOverSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message ForceCutOverSchemaMigrationResponse {
@@ -1236,6 +1248,9 @@ message InitShardPrimaryResponse {
 message LaunchSchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message LaunchSchemaMigrationResponse {
@@ -1683,6 +1698,9 @@ message RestoreFromBackupResponse {
 message RetrySchemaMigrationRequest {
   string keyspace = 1;
   string uuid = 2;
+  // caller_id identifies the caller. This is the effective caller ID,
+  // set by the application to further identify the caller.
+  vtrpc.CallerID caller_id = 3;
 }
 
 message RetrySchemaMigrationResponse {
