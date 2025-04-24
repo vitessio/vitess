@@ -989,5 +989,6 @@ message GetMaxValueForSequencesRequest {
 }
 
 message GetMaxValueForSequencesResponse {
+  // Max used sequence value mapped with the backing sequence table.
   map<string, int64> max_values_by_sequence_table = 1;
 }

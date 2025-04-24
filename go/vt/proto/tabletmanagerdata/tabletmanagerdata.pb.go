@@ -7760,8 +7760,9 @@ func (x *GetMaxValueForSequencesRequest) GetSequences() []*GetMaxValueForSequenc
 }
 
 type GetMaxValueForSequencesResponse struct {
-	state                    protoimpl.MessageState `protogen:"open.v1"`
-	MaxValuesBySequenceTable map[string]int64       `protobuf:"bytes,1,rep,name=max_values_by_sequence_table,json=maxValuesBySequenceTable,proto3" json:"max_values_by_sequence_table,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Max used sequence value mapped with the backing sequence table.
+	MaxValuesBySequenceTable map[string]int64 `protobuf:"bytes,1,rep,name=max_values_by_sequence_table,json=maxValuesBySequenceTable,proto3" json:"max_values_by_sequence_table,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
