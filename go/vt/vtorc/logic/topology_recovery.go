@@ -361,7 +361,6 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.R
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		_ = inst.AuditOperation(recoveryName, analysisEntry.AnalyzedInstanceAlias, message)
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%v: successfully promoted %+v", recoveryName, promotedReplica.InstanceAlias))
-		vtopsExec.RaiseProblem(analysisEntry, topologyRecovery.SuccessorAlias, "orc-dead-tablet")
 	}
 }
 
