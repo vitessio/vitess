@@ -1582,7 +1582,7 @@ func TestPlayerPartialImages(t *testing.T) {
 		testCases = append(testCases, testCase{
 			input: "insert into src (id, jd, bd) values (1,'{\"key1\": \"val1\"}','blob data'), (2,'{\"key2\": \"val2\"}','blob data2'), (3,'{\"key3\": \"val3\"}','blob data3')",
 			output: []string{
-				"insert into dst(id,jd,bd) values (1,JSON_OBJECT(_utf8mb4'key1', _utf8mb4'val1'),_binary'blob data'), (2,JSON_OBJECT(_utf8mb4'key2', _utf8mb4'val2'),_binary'blob data2'), (3,JSON_OBJECT(_utf8mb4'key3', _utf8mb4'val3'),_binary'blob data3')",
+				"insert into dst(id,jd,bd) values (1,JSON_OBJECT(_utf8mb4'key1', _utf8mb4'val1'),'blob data'), (2,JSON_OBJECT(_utf8mb4'key2', _utf8mb4'val2'),'blob data2'), (3,JSON_OBJECT(_utf8mb4'key3', _utf8mb4'val3'),'blob data3')",
 			},
 			data: [][]string{
 				{"1", "{\"key1\": \"val1\"}", "blob data"},
