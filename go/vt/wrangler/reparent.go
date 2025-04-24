@@ -95,7 +95,7 @@ func (wr *Wrangler) PlannedReparentShard(
 // EmergencyReparentShard will make the provided tablet the primary for
 // the shard, when the old primary is completely unreachable.
 func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, opts reparentutil.EmergencyReparentOptions) (err error) {
-	_, err = reparentutil.NewEmergencyReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
+	_, err = reparentutil.NewEmergencyReparenter(wr.ts, wr.tmc, wr.logger, wr.evSource).ReparentShard(
 		ctx,
 		keyspace,
 		shard,

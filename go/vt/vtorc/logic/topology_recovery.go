@@ -168,9 +168,8 @@ func init() {
 	evSource = &eventsdatapb.Source{
 		Type: eventsdatapb.SourceType_Vtorc,
 	}
-	evSource.Hostname, err = os.Hostname()
-	if err != nil {
-		log.Errorf("Failed to get hostname: %+v", err)
+	if evSource.Hostname, err = os.Hostname(); err != nil {
+		log.Errorf("Failed to get vtorc hostname: %+v", err)
 	}
 }
 
@@ -302,7 +301,7 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.Replication
 			logger.Infof("ERS - %s", value)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, value)
-	})).ReparentShard(ctx,
+	}), evSource).ReparentShard(ctx,
 		tablet.Keyspace,
 		tablet.Shard,
 		reparentutil.EmergencyReparentOptions{
