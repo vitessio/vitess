@@ -1127,6 +1127,15 @@ func (client *gRPCVtctldClient) ValidateVersionShard(ctx context.Context, in *vt
 	return client.c.ValidateVersionShard(ctx, in, opts...)
 }
 
+// WorkflowAddTables is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) WorkflowAddTables(ctx context.Context, in *vtctldatapb.WorkflowAddTablesRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowAddTablesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.WorkflowAddTables(ctx, in, opts...)
+}
+
 // WorkflowDelete is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) WorkflowDelete(ctx context.Context, in *vtctldatapb.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldatapb.WorkflowDeleteResponse, error) {
 	if client.c == nil {
