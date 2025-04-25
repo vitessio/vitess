@@ -24,19 +24,17 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
@@ -498,7 +496,8 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				AssertReparentEventsEqual(t, tt.expectedEvent, ev)
 
 				if ev != nil {
-					assert.Equal(t, ev.Phase, eventsdatapb.ReparentPhase_Failed, "expected event status to indicate failed PRS")
+					assert.Equal(t, eventsdatapb.ReparentPhaseType_Failed, ev.Phase, "expected event status to indicate failed PRS")
+					assert.Equal(t, "failed PlannedReparentShard: primary-elect tablet zone1-0000000100 is the same as the tablet to avoid", ev.Status)
 					assert.NotEmpty(t, ev.Error)
 				}
 
@@ -507,7 +506,8 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 
 			assert.NoError(t, err)
 			AssertReparentEventsEqual(t, tt.expectedEvent, ev)
-			assert.Equal(t, ev.Phase, eventsdatapb.ReparentPhase_Finished, "expected event status to indicate successful PRS")
+			assert.Equal(t, ev.Phase, eventsdatapb.ReparentPhaseType_Finished, "expected event status to indicate successful PRS")
+			assert.Equal(t, "finished PlannedReparentShard", ev.Status)
 		})
 	}
 }

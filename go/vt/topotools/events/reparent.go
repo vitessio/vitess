@@ -68,7 +68,7 @@ func (r *Reparent) Update(phaseType any) {
 
 	switch reparentPhase {
 	case eventsdatapb.ReparentPhaseType_Failed:
-		r.Status = fmt.Sprintf("finished %s: %s", r.Type, r.Error)
+		r.Status = fmt.Sprintf("failed %s: %s", r.Type, r.Error)
 	case eventsdatapb.ReparentPhaseType_Finished:
 		r.Status = fmt.Sprintf("finished %s", r.Type)
 	case eventsdatapb.ReparentPhaseType_ReadAllTablets:
