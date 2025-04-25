@@ -50,8 +50,8 @@ enum ReparentType {
   TabletExternallyReparented = 2;
 }
 
-// ReparentPhase represents the phase of a reparent.
-enum ReparentPhase {
+// ReparentPhaseType represents the type of phase of a reparent.
+enum ReparentPhaseType {
   Pending = 0;
  
   // Finished is...TODO
@@ -82,6 +82,14 @@ enum ReparentPhase {
   ReparentAllTablets = 9;
 }
 
+// ReparentPhaseEvent represents a phase event.
+message ReparentPhaseEvent {
+  ReparentPhaseType phase = 1;
+  vttime.Time timestamp = 2;
+  string status = 3;
+  string error = 4;
+}
+
 // ReparentEvent...
 message ReparentEvent {
   string id = 1;
@@ -91,6 +99,7 @@ message ReparentEvent {
   topodata.Tablet new_primary = 5;
   topodata.Tablet old_primary = 6;
   ReparentType type = 7;
-  ReparentPhase phase = 8;
-  string error = 9;
+  ReparentPhaseType phase = 8;
+  string status = 9;
+  string error = 10;
 }

@@ -43,7 +43,7 @@ func (r *Reparent) Syslog() (syslog.Priority, string) {
 		r.ShardInfo.GetKeyspace(), r.ShardInfo.GetShardName(),
 		topoproto.TabletAliasString(oldAlias),
 		topoproto.TabletAliasString(newAlias),
-		r.GetPhase().String(), r.GetId())
+		r.GetStatus(), r.GetId())
 }
 
 var _ syslogger.Syslogger = (*Reparent)(nil) // compile-time interface check

@@ -135,11 +135,11 @@ func (pr *PlannedReparenter) ReparentShard(ctx context.Context, keyspace string,
 		switch err {
 		case nil:
 			prsCounter.Add(append(statsLabels, successResult), 1)
-			event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_Finished)
+			event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_Finished)
 		default:
 			prsCounter.Add(append(statsLabels, failureResult), 1)
 			ev.Error = err.Error()
-			event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_Failed)
+			event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_Failed)
 		}
 	}()
 
@@ -183,19 +183,20 @@ func (pr *PlannedReparenter) preflightChecks(
 		// We don't want to fail when both ShardInfo.PrimaryAlias and AvoidPrimaryAlias are nil.
 		// This happens when we are using PRS to initialize the cluster without specifying the NewPrimaryAlias
 		if ev.ShardInfo.Shard.PrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.AvoidPrimaryAlias, ev.ShardInfo.Shard.PrimaryAlias) {
-			event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_Skip)
+			ev.Status = "current primary is different than tablet to avoid, nothing to do"
+			event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_Skip)
 			return true, nil
 		}
 	}
 
-	event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_PrimaryElection)
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_PrimaryElection)
 	opts.NewPrimaryAlias, err = ElectNewPrimary(ctx, pr.tmc, ev.ShardInfo.Shard, tabletMap, innodbBufferPoolData, opts, pr.logger)
 	if err != nil {
 		return true, err
 	}
 
 	pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
-	event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_PrimaryElected)
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_PrimaryElected)
 
 	primaryElectAliasStr := topoproto.TabletAliasString(opts.NewPrimaryAlias)
 
@@ -275,7 +276,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	// It's fine if the current primary was already demoted, since DemotePrimary
 	// is idempotent.
 	pr.logger.Infof("demoting current primary: %v", currentPrimary.AliasString())
-	event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_DemoteOldPrimary)
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_DemoteOldPrimary)
 
 	demoteCtx, demoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer demoteCancel()
@@ -538,7 +539,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		Shard:     shardInfo.Shard,
 	}
 
-	event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_ReadTabletMap)
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_ReadTabletMap)
 
 	tabletMap, err := pr.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
@@ -670,7 +671,7 @@ func (pr *PlannedReparenter) reparentTablets(
 	// - New primary: populate the reparent journal.
 	// - Everybody else: reparent to the new primary; wait for the reparent
 	//	 journal row.
-	event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_ReparentAllTablets)
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_ReparentAllTablets)
 
 	// We add a (hopefully) unique record to the reparent journal table on the
 	// new primary, so we can check if replicas got it through replication.

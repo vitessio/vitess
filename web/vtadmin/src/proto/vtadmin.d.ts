@@ -5102,7 +5102,7 @@ export namespace vtadmin {
         promoted_primary?: (topodata.ITabletAlias|null);
 
         /** EmergencyFailoverShardResponse events */
-        events?: (logutil.IEvent[]|null);
+        events?: (eventsdata.IReparentPhaseEvent[]|null);
     }
 
     /** Represents an EmergencyFailoverShardResponse. */
@@ -5127,7 +5127,7 @@ export namespace vtadmin {
         public promoted_primary?: (topodata.ITabletAlias|null);
 
         /** EmergencyFailoverShardResponse events. */
-        public events: logutil.IEvent[];
+        public events: eventsdata.IReparentPhaseEvent[];
 
         /**
          * Creates a new EmergencyFailoverShardResponse instance using the specified properties.
@@ -10746,7 +10746,7 @@ export namespace vtadmin {
         promoted_primary?: (topodata.ITabletAlias|null);
 
         /** PlannedFailoverShardResponse events */
-        events?: (logutil.IEvent[]|null);
+        events?: (eventsdata.IReparentPhaseEvent[]|null);
     }
 
     /** Represents a PlannedFailoverShardResponse. */
@@ -10771,7 +10771,7 @@ export namespace vtadmin {
         public promoted_primary?: (topodata.ITabletAlias|null);
 
         /** PlannedFailoverShardResponse events. */
-        public events: logutil.IEvent[];
+        public events: eventsdata.IReparentPhaseEvent[];
 
         /**
          * Creates a new PlannedFailoverShardResponse instance using the specified properties.
@@ -15610,2542 +15610,403 @@ export namespace vtadmin {
     }
 }
 
-/** Namespace logutil. */
-export namespace logutil {
+/** Namespace eventsdata. */
+export namespace eventsdata {
 
-    /** Level enum. */
-    enum Level {
-        INFO = 0,
-        WARNING = 1,
-        ERROR = 2,
-        CONSOLE = 3
+    /** SourceType enum. */
+    enum SourceType {
+        Vtctld = 0,
+        Vtorc = 1
     }
 
-    /** Properties of an Event. */
-    interface IEvent {
+    /** Properties of a Source. */
+    interface ISource {
 
-        /** Event time */
-        time?: (vttime.ITime|null);
+        /** Source type */
+        type?: (eventsdata.SourceType|null);
 
-        /** Event level */
-        level?: (logutil.Level|null);
-
-        /** Event file */
-        file?: (string|null);
-
-        /** Event line */
-        line?: (number|Long|null);
-
-        /** Event value */
-        value?: (string|null);
+        /** Source hostname */
+        hostname?: (string|null);
     }
 
-    /** Represents an Event. */
-    class Event implements IEvent {
+    /** Represents a Source. */
+    class Source implements ISource {
 
         /**
-         * Constructs a new Event.
+         * Constructs a new Source.
          * @param [properties] Properties to set
          */
-        constructor(properties?: logutil.IEvent);
+        constructor(properties?: eventsdata.ISource);
 
-        /** Event time. */
-        public time?: (vttime.ITime|null);
+        /** Source type. */
+        public type: eventsdata.SourceType;
 
-        /** Event level. */
-        public level: logutil.Level;
-
-        /** Event file. */
-        public file: string;
-
-        /** Event line. */
-        public line: (number|Long);
-
-        /** Event value. */
-        public value: string;
+        /** Source hostname. */
+        public hostname: string;
 
         /**
-         * Creates a new Event instance using the specified properties.
+         * Creates a new Source instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns Event instance
+         * @returns Source instance
          */
-        public static create(properties?: logutil.IEvent): logutil.Event;
+        public static create(properties?: eventsdata.ISource): eventsdata.Source;
 
         /**
-         * Encodes the specified Event message. Does not implicitly {@link logutil.Event.verify|verify} messages.
-         * @param message Event message or plain object to encode
+         * Encodes the specified Source message. Does not implicitly {@link eventsdata.Source.verify|verify} messages.
+         * @param message Source message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: logutil.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: eventsdata.ISource, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified Event message, length delimited. Does not implicitly {@link logutil.Event.verify|verify} messages.
-         * @param message Event message or plain object to encode
+         * Encodes the specified Source message, length delimited. Does not implicitly {@link eventsdata.Source.verify|verify} messages.
+         * @param message Source message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: logutil.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: eventsdata.ISource, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes an Event message from the specified reader or buffer.
+         * Decodes a Source message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns Event
+         * @returns Source
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): logutil.Event;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): eventsdata.Source;
 
         /**
-         * Decodes an Event message from the specified reader or buffer, length delimited.
+         * Decodes a Source message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns Event
+         * @returns Source
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): logutil.Event;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): eventsdata.Source;
 
         /**
-         * Verifies an Event message.
+         * Verifies a Source message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates an Event message from a plain object. Also converts values to their respective internal types.
+         * Creates a Source message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns Event
+         * @returns Source
          */
-        public static fromObject(object: { [k: string]: any }): logutil.Event;
+        public static fromObject(object: { [k: string]: any }): eventsdata.Source;
 
         /**
-         * Creates a plain object from an Event message. Also converts values to other types if specified.
-         * @param message Event
+         * Creates a plain object from a Source message. Also converts values to other types if specified.
+         * @param message Source
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: logutil.Event, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: eventsdata.Source, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this Event to JSON.
+         * Converts this Source to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for Event
+         * Gets the default type url for Source
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
-}
 
-/** Namespace vttime. */
-export namespace vttime {
-
-    /** Properties of a Time. */
-    interface ITime {
-
-        /** Time seconds */
-        seconds?: (number|Long|null);
-
-        /** Time nanoseconds */
-        nanoseconds?: (number|null);
+    /** ReparentType enum. */
+    enum ReparentType {
+        PlannedReparentShard = 0,
+        EmergencyReparentShard = 1,
+        TabletExternallyReparented = 2
     }
 
-    /** Represents a Time. */
-    class Time implements ITime {
+    /** ReparentPhaseType enum. */
+    enum ReparentPhaseType {
+        Pending = 0,
+        Finished = 1,
+        Failed = 2,
+        Skip = 3,
+        PrimaryElection = 4,
+        PrimaryElected = 5,
+        DemoteOldPrimary = 6,
+        ReadTabletMap = 7,
+        ReadAllTablets = 8,
+        ReparentAllTablets = 9
+    }
+
+    /** Properties of a ReparentPhaseEvent. */
+    interface IReparentPhaseEvent {
+
+        /** ReparentPhaseEvent phase */
+        phase?: (eventsdata.ReparentPhaseType|null);
+
+        /** ReparentPhaseEvent timestamp */
+        timestamp?: (vttime.ITime|null);
+
+        /** ReparentPhaseEvent status */
+        status?: (string|null);
+
+        /** ReparentPhaseEvent error */
+        error?: (string|null);
+    }
+
+    /** Represents a ReparentPhaseEvent. */
+    class ReparentPhaseEvent implements IReparentPhaseEvent {
 
         /**
-         * Constructs a new Time.
+         * Constructs a new ReparentPhaseEvent.
          * @param [properties] Properties to set
          */
-        constructor(properties?: vttime.ITime);
+        constructor(properties?: eventsdata.IReparentPhaseEvent);
 
-        /** Time seconds. */
-        public seconds: (number|Long);
+        /** ReparentPhaseEvent phase. */
+        public phase: eventsdata.ReparentPhaseType;
 
-        /** Time nanoseconds. */
-        public nanoseconds: number;
+        /** ReparentPhaseEvent timestamp. */
+        public timestamp?: (vttime.ITime|null);
+
+        /** ReparentPhaseEvent status. */
+        public status: string;
+
+        /** ReparentPhaseEvent error. */
+        public error: string;
 
         /**
-         * Creates a new Time instance using the specified properties.
+         * Creates a new ReparentPhaseEvent instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns Time instance
+         * @returns ReparentPhaseEvent instance
          */
-        public static create(properties?: vttime.ITime): vttime.Time;
+        public static create(properties?: eventsdata.IReparentPhaseEvent): eventsdata.ReparentPhaseEvent;
 
         /**
-         * Encodes the specified Time message. Does not implicitly {@link vttime.Time.verify|verify} messages.
-         * @param message Time message or plain object to encode
+         * Encodes the specified ReparentPhaseEvent message. Does not implicitly {@link eventsdata.ReparentPhaseEvent.verify|verify} messages.
+         * @param message ReparentPhaseEvent message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: vttime.ITime, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: eventsdata.IReparentPhaseEvent, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified Time message, length delimited. Does not implicitly {@link vttime.Time.verify|verify} messages.
-         * @param message Time message or plain object to encode
+         * Encodes the specified ReparentPhaseEvent message, length delimited. Does not implicitly {@link eventsdata.ReparentPhaseEvent.verify|verify} messages.
+         * @param message ReparentPhaseEvent message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: vttime.ITime, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: eventsdata.IReparentPhaseEvent, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a Time message from the specified reader or buffer.
+         * Decodes a ReparentPhaseEvent message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns Time
+         * @returns ReparentPhaseEvent
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vttime.Time;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): eventsdata.ReparentPhaseEvent;
 
         /**
-         * Decodes a Time message from the specified reader or buffer, length delimited.
+         * Decodes a ReparentPhaseEvent message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns Time
+         * @returns ReparentPhaseEvent
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vttime.Time;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): eventsdata.ReparentPhaseEvent;
 
         /**
-         * Verifies a Time message.
+         * Verifies a ReparentPhaseEvent message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a Time message from a plain object. Also converts values to their respective internal types.
+         * Creates a ReparentPhaseEvent message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns Time
+         * @returns ReparentPhaseEvent
          */
-        public static fromObject(object: { [k: string]: any }): vttime.Time;
+        public static fromObject(object: { [k: string]: any }): eventsdata.ReparentPhaseEvent;
 
         /**
-         * Creates a plain object from a Time message. Also converts values to other types if specified.
-         * @param message Time
+         * Creates a plain object from a ReparentPhaseEvent message. Also converts values to other types if specified.
+         * @param message ReparentPhaseEvent
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: vttime.Time, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: eventsdata.ReparentPhaseEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this Time to JSON.
+         * Converts this ReparentPhaseEvent to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for Time
+         * Gets the default type url for ReparentPhaseEvent
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
-    /** Properties of a Duration. */
-    interface IDuration {
+    /** Properties of a ReparentEvent. */
+    interface IReparentEvent {
 
-        /** Duration seconds */
-        seconds?: (number|Long|null);
+        /** ReparentEvent id */
+        id?: (string|null);
 
-        /** Duration nanos */
-        nanos?: (number|null);
+        /** ReparentEvent source */
+        source?: (eventsdata.ISource|null);
+
+        /** ReparentEvent timestamp */
+        timestamp?: (vttime.ITime|null);
+
+        /** ReparentEvent shard_info */
+        shard_info?: (topodata.IShardInfo|null);
+
+        /** ReparentEvent new_primary */
+        new_primary?: (topodata.ITablet|null);
+
+        /** ReparentEvent old_primary */
+        old_primary?: (topodata.ITablet|null);
+
+        /** ReparentEvent type */
+        type?: (eventsdata.ReparentType|null);
+
+        /** ReparentEvent phase */
+        phase?: (eventsdata.ReparentPhaseType|null);
+
+        /** ReparentEvent status */
+        status?: (string|null);
+
+        /** ReparentEvent error */
+        error?: (string|null);
     }
 
-    /** Represents a Duration. */
-    class Duration implements IDuration {
+    /** Represents a ReparentEvent. */
+    class ReparentEvent implements IReparentEvent {
 
         /**
-         * Constructs a new Duration.
+         * Constructs a new ReparentEvent.
          * @param [properties] Properties to set
          */
-        constructor(properties?: vttime.IDuration);
+        constructor(properties?: eventsdata.IReparentEvent);
 
-        /** Duration seconds. */
-        public seconds: (number|Long);
+        /** ReparentEvent id. */
+        public id: string;
 
-        /** Duration nanos. */
-        public nanos: number;
+        /** ReparentEvent source. */
+        public source?: (eventsdata.ISource|null);
+
+        /** ReparentEvent timestamp. */
+        public timestamp?: (vttime.ITime|null);
+
+        /** ReparentEvent shard_info. */
+        public shard_info?: (topodata.IShardInfo|null);
+
+        /** ReparentEvent new_primary. */
+        public new_primary?: (topodata.ITablet|null);
+
+        /** ReparentEvent old_primary. */
+        public old_primary?: (topodata.ITablet|null);
+
+        /** ReparentEvent type. */
+        public type: eventsdata.ReparentType;
+
+        /** ReparentEvent phase. */
+        public phase: eventsdata.ReparentPhaseType;
+
+        /** ReparentEvent status. */
+        public status: string;
+
+        /** ReparentEvent error. */
+        public error: string;
 
         /**
-         * Creates a new Duration instance using the specified properties.
+         * Creates a new ReparentEvent instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns Duration instance
+         * @returns ReparentEvent instance
          */
-        public static create(properties?: vttime.IDuration): vttime.Duration;
+        public static create(properties?: eventsdata.IReparentEvent): eventsdata.ReparentEvent;
 
         /**
-         * Encodes the specified Duration message. Does not implicitly {@link vttime.Duration.verify|verify} messages.
-         * @param message Duration message or plain object to encode
+         * Encodes the specified ReparentEvent message. Does not implicitly {@link eventsdata.ReparentEvent.verify|verify} messages.
+         * @param message ReparentEvent message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: vttime.IDuration, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: eventsdata.IReparentEvent, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified Duration message, length delimited. Does not implicitly {@link vttime.Duration.verify|verify} messages.
-         * @param message Duration message or plain object to encode
+         * Encodes the specified ReparentEvent message, length delimited. Does not implicitly {@link eventsdata.ReparentEvent.verify|verify} messages.
+         * @param message ReparentEvent message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: vttime.IDuration, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: eventsdata.IReparentEvent, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes a Duration message from the specified reader or buffer.
+         * Decodes a ReparentEvent message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns Duration
+         * @returns ReparentEvent
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vttime.Duration;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): eventsdata.ReparentEvent;
 
         /**
-         * Decodes a Duration message from the specified reader or buffer, length delimited.
+         * Decodes a ReparentEvent message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns Duration
+         * @returns ReparentEvent
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vttime.Duration;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): eventsdata.ReparentEvent;
 
         /**
-         * Verifies a Duration message.
+         * Verifies a ReparentEvent message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates a Duration message from a plain object. Also converts values to their respective internal types.
+         * Creates a ReparentEvent message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns Duration
+         * @returns ReparentEvent
          */
-        public static fromObject(object: { [k: string]: any }): vttime.Duration;
+        public static fromObject(object: { [k: string]: any }): eventsdata.ReparentEvent;
 
         /**
-         * Creates a plain object from a Duration message. Also converts values to other types if specified.
-         * @param message Duration
+         * Creates a plain object from a ReparentEvent message. Also converts values to other types if specified.
+         * @param message ReparentEvent
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: vttime.Duration, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: eventsdata.ReparentEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this Duration to JSON.
+         * Converts this ReparentEvent to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for Duration
+         * Gets the default type url for ReparentEvent
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-}
-
-/** Namespace mysqlctl. */
-export namespace mysqlctl {
-
-    /** Properties of a StartRequest. */
-    interface IStartRequest {
-
-        /** StartRequest mysqld_args */
-        mysqld_args?: (string[]|null);
-    }
-
-    /** Represents a StartRequest. */
-    class StartRequest implements IStartRequest {
-
-        /**
-         * Constructs a new StartRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IStartRequest);
-
-        /** StartRequest mysqld_args. */
-        public mysqld_args: string[];
-
-        /**
-         * Creates a new StartRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns StartRequest instance
-         */
-        public static create(properties?: mysqlctl.IStartRequest): mysqlctl.StartRequest;
-
-        /**
-         * Encodes the specified StartRequest message. Does not implicitly {@link mysqlctl.StartRequest.verify|verify} messages.
-         * @param message StartRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IStartRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified StartRequest message, length delimited. Does not implicitly {@link mysqlctl.StartRequest.verify|verify} messages.
-         * @param message StartRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IStartRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a StartRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns StartRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.StartRequest;
-
-        /**
-         * Decodes a StartRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns StartRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.StartRequest;
-
-        /**
-         * Verifies a StartRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a StartRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns StartRequest
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.StartRequest;
-
-        /**
-         * Creates a plain object from a StartRequest message. Also converts values to other types if specified.
-         * @param message StartRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.StartRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this StartRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for StartRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a StartResponse. */
-    interface IStartResponse {
-    }
-
-    /** Represents a StartResponse. */
-    class StartResponse implements IStartResponse {
-
-        /**
-         * Constructs a new StartResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IStartResponse);
-
-        /**
-         * Creates a new StartResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns StartResponse instance
-         */
-        public static create(properties?: mysqlctl.IStartResponse): mysqlctl.StartResponse;
-
-        /**
-         * Encodes the specified StartResponse message. Does not implicitly {@link mysqlctl.StartResponse.verify|verify} messages.
-         * @param message StartResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IStartResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified StartResponse message, length delimited. Does not implicitly {@link mysqlctl.StartResponse.verify|verify} messages.
-         * @param message StartResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IStartResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a StartResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns StartResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.StartResponse;
-
-        /**
-         * Decodes a StartResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns StartResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.StartResponse;
-
-        /**
-         * Verifies a StartResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a StartResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns StartResponse
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.StartResponse;
-
-        /**
-         * Creates a plain object from a StartResponse message. Also converts values to other types if specified.
-         * @param message StartResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.StartResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this StartResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for StartResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ShutdownRequest. */
-    interface IShutdownRequest {
-
-        /** ShutdownRequest wait_for_mysqld */
-        wait_for_mysqld?: (boolean|null);
-
-        /** ShutdownRequest mysql_shutdown_timeout */
-        mysql_shutdown_timeout?: (vttime.IDuration|null);
-    }
-
-    /** Represents a ShutdownRequest. */
-    class ShutdownRequest implements IShutdownRequest {
-
-        /**
-         * Constructs a new ShutdownRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IShutdownRequest);
-
-        /** ShutdownRequest wait_for_mysqld. */
-        public wait_for_mysqld: boolean;
-
-        /** ShutdownRequest mysql_shutdown_timeout. */
-        public mysql_shutdown_timeout?: (vttime.IDuration|null);
-
-        /**
-         * Creates a new ShutdownRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ShutdownRequest instance
-         */
-        public static create(properties?: mysqlctl.IShutdownRequest): mysqlctl.ShutdownRequest;
-
-        /**
-         * Encodes the specified ShutdownRequest message. Does not implicitly {@link mysqlctl.ShutdownRequest.verify|verify} messages.
-         * @param message ShutdownRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IShutdownRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ShutdownRequest message, length delimited. Does not implicitly {@link mysqlctl.ShutdownRequest.verify|verify} messages.
-         * @param message ShutdownRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IShutdownRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ShutdownRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ShutdownRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ShutdownRequest;
-
-        /**
-         * Decodes a ShutdownRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ShutdownRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ShutdownRequest;
-
-        /**
-         * Verifies a ShutdownRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ShutdownRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ShutdownRequest
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.ShutdownRequest;
-
-        /**
-         * Creates a plain object from a ShutdownRequest message. Also converts values to other types if specified.
-         * @param message ShutdownRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.ShutdownRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ShutdownRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ShutdownRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ShutdownResponse. */
-    interface IShutdownResponse {
-    }
-
-    /** Represents a ShutdownResponse. */
-    class ShutdownResponse implements IShutdownResponse {
-
-        /**
-         * Constructs a new ShutdownResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IShutdownResponse);
-
-        /**
-         * Creates a new ShutdownResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ShutdownResponse instance
-         */
-        public static create(properties?: mysqlctl.IShutdownResponse): mysqlctl.ShutdownResponse;
-
-        /**
-         * Encodes the specified ShutdownResponse message. Does not implicitly {@link mysqlctl.ShutdownResponse.verify|verify} messages.
-         * @param message ShutdownResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IShutdownResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ShutdownResponse message, length delimited. Does not implicitly {@link mysqlctl.ShutdownResponse.verify|verify} messages.
-         * @param message ShutdownResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IShutdownResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ShutdownResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ShutdownResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ShutdownResponse;
-
-        /**
-         * Decodes a ShutdownResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ShutdownResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ShutdownResponse;
-
-        /**
-         * Verifies a ShutdownResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ShutdownResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ShutdownResponse
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.ShutdownResponse;
-
-        /**
-         * Creates a plain object from a ShutdownResponse message. Also converts values to other types if specified.
-         * @param message ShutdownResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.ShutdownResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ShutdownResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ShutdownResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a RunMysqlUpgradeRequest. */
-    interface IRunMysqlUpgradeRequest {
-    }
-
-    /** Represents a RunMysqlUpgradeRequest. */
-    class RunMysqlUpgradeRequest implements IRunMysqlUpgradeRequest {
-
-        /**
-         * Constructs a new RunMysqlUpgradeRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IRunMysqlUpgradeRequest);
-
-        /**
-         * Creates a new RunMysqlUpgradeRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RunMysqlUpgradeRequest instance
-         */
-        public static create(properties?: mysqlctl.IRunMysqlUpgradeRequest): mysqlctl.RunMysqlUpgradeRequest;
-
-        /**
-         * Encodes the specified RunMysqlUpgradeRequest message. Does not implicitly {@link mysqlctl.RunMysqlUpgradeRequest.verify|verify} messages.
-         * @param message RunMysqlUpgradeRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IRunMysqlUpgradeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RunMysqlUpgradeRequest message, length delimited. Does not implicitly {@link mysqlctl.RunMysqlUpgradeRequest.verify|verify} messages.
-         * @param message RunMysqlUpgradeRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IRunMysqlUpgradeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RunMysqlUpgradeRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RunMysqlUpgradeRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.RunMysqlUpgradeRequest;
-
-        /**
-         * Decodes a RunMysqlUpgradeRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RunMysqlUpgradeRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.RunMysqlUpgradeRequest;
-
-        /**
-         * Verifies a RunMysqlUpgradeRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RunMysqlUpgradeRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RunMysqlUpgradeRequest
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.RunMysqlUpgradeRequest;
-
-        /**
-         * Creates a plain object from a RunMysqlUpgradeRequest message. Also converts values to other types if specified.
-         * @param message RunMysqlUpgradeRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.RunMysqlUpgradeRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RunMysqlUpgradeRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for RunMysqlUpgradeRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a RunMysqlUpgradeResponse. */
-    interface IRunMysqlUpgradeResponse {
-    }
-
-    /** Represents a RunMysqlUpgradeResponse. */
-    class RunMysqlUpgradeResponse implements IRunMysqlUpgradeResponse {
-
-        /**
-         * Constructs a new RunMysqlUpgradeResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IRunMysqlUpgradeResponse);
-
-        /**
-         * Creates a new RunMysqlUpgradeResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RunMysqlUpgradeResponse instance
-         */
-        public static create(properties?: mysqlctl.IRunMysqlUpgradeResponse): mysqlctl.RunMysqlUpgradeResponse;
-
-        /**
-         * Encodes the specified RunMysqlUpgradeResponse message. Does not implicitly {@link mysqlctl.RunMysqlUpgradeResponse.verify|verify} messages.
-         * @param message RunMysqlUpgradeResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IRunMysqlUpgradeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RunMysqlUpgradeResponse message, length delimited. Does not implicitly {@link mysqlctl.RunMysqlUpgradeResponse.verify|verify} messages.
-         * @param message RunMysqlUpgradeResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IRunMysqlUpgradeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RunMysqlUpgradeResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RunMysqlUpgradeResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.RunMysqlUpgradeResponse;
-
-        /**
-         * Decodes a RunMysqlUpgradeResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RunMysqlUpgradeResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.RunMysqlUpgradeResponse;
-
-        /**
-         * Verifies a RunMysqlUpgradeResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RunMysqlUpgradeResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RunMysqlUpgradeResponse
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.RunMysqlUpgradeResponse;
-
-        /**
-         * Creates a plain object from a RunMysqlUpgradeResponse message. Also converts values to other types if specified.
-         * @param message RunMysqlUpgradeResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.RunMysqlUpgradeResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RunMysqlUpgradeResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for RunMysqlUpgradeResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of an ApplyBinlogFileRequest. */
-    interface IApplyBinlogFileRequest {
-
-        /** ApplyBinlogFileRequest binlog_file_name */
-        binlog_file_name?: (string|null);
-
-        /** ApplyBinlogFileRequest binlog_restore_position */
-        binlog_restore_position?: (string|null);
-
-        /** ApplyBinlogFileRequest binlog_restore_datetime */
-        binlog_restore_datetime?: (vttime.ITime|null);
-    }
-
-    /** Represents an ApplyBinlogFileRequest. */
-    class ApplyBinlogFileRequest implements IApplyBinlogFileRequest {
-
-        /**
-         * Constructs a new ApplyBinlogFileRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IApplyBinlogFileRequest);
-
-        /** ApplyBinlogFileRequest binlog_file_name. */
-        public binlog_file_name: string;
-
-        /** ApplyBinlogFileRequest binlog_restore_position. */
-        public binlog_restore_position: string;
-
-        /** ApplyBinlogFileRequest binlog_restore_datetime. */
-        public binlog_restore_datetime?: (vttime.ITime|null);
-
-        /**
-         * Creates a new ApplyBinlogFileRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ApplyBinlogFileRequest instance
-         */
-        public static create(properties?: mysqlctl.IApplyBinlogFileRequest): mysqlctl.ApplyBinlogFileRequest;
-
-        /**
-         * Encodes the specified ApplyBinlogFileRequest message. Does not implicitly {@link mysqlctl.ApplyBinlogFileRequest.verify|verify} messages.
-         * @param message ApplyBinlogFileRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IApplyBinlogFileRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ApplyBinlogFileRequest message, length delimited. Does not implicitly {@link mysqlctl.ApplyBinlogFileRequest.verify|verify} messages.
-         * @param message ApplyBinlogFileRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IApplyBinlogFileRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an ApplyBinlogFileRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ApplyBinlogFileRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ApplyBinlogFileRequest;
-
-        /**
-         * Decodes an ApplyBinlogFileRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ApplyBinlogFileRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ApplyBinlogFileRequest;
-
-        /**
-         * Verifies an ApplyBinlogFileRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an ApplyBinlogFileRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ApplyBinlogFileRequest
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.ApplyBinlogFileRequest;
-
-        /**
-         * Creates a plain object from an ApplyBinlogFileRequest message. Also converts values to other types if specified.
-         * @param message ApplyBinlogFileRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.ApplyBinlogFileRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ApplyBinlogFileRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ApplyBinlogFileRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of an ApplyBinlogFileResponse. */
-    interface IApplyBinlogFileResponse {
-    }
-
-    /** Represents an ApplyBinlogFileResponse. */
-    class ApplyBinlogFileResponse implements IApplyBinlogFileResponse {
-
-        /**
-         * Constructs a new ApplyBinlogFileResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IApplyBinlogFileResponse);
-
-        /**
-         * Creates a new ApplyBinlogFileResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ApplyBinlogFileResponse instance
-         */
-        public static create(properties?: mysqlctl.IApplyBinlogFileResponse): mysqlctl.ApplyBinlogFileResponse;
-
-        /**
-         * Encodes the specified ApplyBinlogFileResponse message. Does not implicitly {@link mysqlctl.ApplyBinlogFileResponse.verify|verify} messages.
-         * @param message ApplyBinlogFileResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IApplyBinlogFileResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ApplyBinlogFileResponse message, length delimited. Does not implicitly {@link mysqlctl.ApplyBinlogFileResponse.verify|verify} messages.
-         * @param message ApplyBinlogFileResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IApplyBinlogFileResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an ApplyBinlogFileResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ApplyBinlogFileResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ApplyBinlogFileResponse;
-
-        /**
-         * Decodes an ApplyBinlogFileResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ApplyBinlogFileResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ApplyBinlogFileResponse;
-
-        /**
-         * Verifies an ApplyBinlogFileResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an ApplyBinlogFileResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ApplyBinlogFileResponse
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.ApplyBinlogFileResponse;
-
-        /**
-         * Creates a plain object from an ApplyBinlogFileResponse message. Also converts values to other types if specified.
-         * @param message ApplyBinlogFileResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.ApplyBinlogFileResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ApplyBinlogFileResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ApplyBinlogFileResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ReadBinlogFilesTimestampsRequest. */
-    interface IReadBinlogFilesTimestampsRequest {
-
-        /** ReadBinlogFilesTimestampsRequest binlog_file_names */
-        binlog_file_names?: (string[]|null);
-    }
-
-    /** Represents a ReadBinlogFilesTimestampsRequest. */
-    class ReadBinlogFilesTimestampsRequest implements IReadBinlogFilesTimestampsRequest {
-
-        /**
-         * Constructs a new ReadBinlogFilesTimestampsRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IReadBinlogFilesTimestampsRequest);
-
-        /** ReadBinlogFilesTimestampsRequest binlog_file_names. */
-        public binlog_file_names: string[];
-
-        /**
-         * Creates a new ReadBinlogFilesTimestampsRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ReadBinlogFilesTimestampsRequest instance
-         */
-        public static create(properties?: mysqlctl.IReadBinlogFilesTimestampsRequest): mysqlctl.ReadBinlogFilesTimestampsRequest;
-
-        /**
-         * Encodes the specified ReadBinlogFilesTimestampsRequest message. Does not implicitly {@link mysqlctl.ReadBinlogFilesTimestampsRequest.verify|verify} messages.
-         * @param message ReadBinlogFilesTimestampsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IReadBinlogFilesTimestampsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ReadBinlogFilesTimestampsRequest message, length delimited. Does not implicitly {@link mysqlctl.ReadBinlogFilesTimestampsRequest.verify|verify} messages.
-         * @param message ReadBinlogFilesTimestampsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IReadBinlogFilesTimestampsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ReadBinlogFilesTimestampsRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ReadBinlogFilesTimestampsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ReadBinlogFilesTimestampsRequest;
-
-        /**
-         * Decodes a ReadBinlogFilesTimestampsRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ReadBinlogFilesTimestampsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ReadBinlogFilesTimestampsRequest;
-
-        /**
-         * Verifies a ReadBinlogFilesTimestampsRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ReadBinlogFilesTimestampsRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ReadBinlogFilesTimestampsRequest
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.ReadBinlogFilesTimestampsRequest;
-
-        /**
-         * Creates a plain object from a ReadBinlogFilesTimestampsRequest message. Also converts values to other types if specified.
-         * @param message ReadBinlogFilesTimestampsRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.ReadBinlogFilesTimestampsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ReadBinlogFilesTimestampsRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ReadBinlogFilesTimestampsRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ReadBinlogFilesTimestampsResponse. */
-    interface IReadBinlogFilesTimestampsResponse {
-
-        /** ReadBinlogFilesTimestampsResponse first_timestamp */
-        first_timestamp?: (vttime.ITime|null);
-
-        /** ReadBinlogFilesTimestampsResponse first_timestamp_binlog */
-        first_timestamp_binlog?: (string|null);
-
-        /** ReadBinlogFilesTimestampsResponse last_timestamp */
-        last_timestamp?: (vttime.ITime|null);
-
-        /** ReadBinlogFilesTimestampsResponse last_timestamp_binlog */
-        last_timestamp_binlog?: (string|null);
-    }
-
-    /** Represents a ReadBinlogFilesTimestampsResponse. */
-    class ReadBinlogFilesTimestampsResponse implements IReadBinlogFilesTimestampsResponse {
-
-        /**
-         * Constructs a new ReadBinlogFilesTimestampsResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IReadBinlogFilesTimestampsResponse);
-
-        /** ReadBinlogFilesTimestampsResponse first_timestamp. */
-        public first_timestamp?: (vttime.ITime|null);
-
-        /** ReadBinlogFilesTimestampsResponse first_timestamp_binlog. */
-        public first_timestamp_binlog: string;
-
-        /** ReadBinlogFilesTimestampsResponse last_timestamp. */
-        public last_timestamp?: (vttime.ITime|null);
-
-        /** ReadBinlogFilesTimestampsResponse last_timestamp_binlog. */
-        public last_timestamp_binlog: string;
-
-        /**
-         * Creates a new ReadBinlogFilesTimestampsResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ReadBinlogFilesTimestampsResponse instance
-         */
-        public static create(properties?: mysqlctl.IReadBinlogFilesTimestampsResponse): mysqlctl.ReadBinlogFilesTimestampsResponse;
-
-        /**
-         * Encodes the specified ReadBinlogFilesTimestampsResponse message. Does not implicitly {@link mysqlctl.ReadBinlogFilesTimestampsResponse.verify|verify} messages.
-         * @param message ReadBinlogFilesTimestampsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IReadBinlogFilesTimestampsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ReadBinlogFilesTimestampsResponse message, length delimited. Does not implicitly {@link mysqlctl.ReadBinlogFilesTimestampsResponse.verify|verify} messages.
-         * @param message ReadBinlogFilesTimestampsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IReadBinlogFilesTimestampsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ReadBinlogFilesTimestampsResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ReadBinlogFilesTimestampsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ReadBinlogFilesTimestampsResponse;
-
-        /**
-         * Decodes a ReadBinlogFilesTimestampsResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ReadBinlogFilesTimestampsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ReadBinlogFilesTimestampsResponse;
-
-        /**
-         * Verifies a ReadBinlogFilesTimestampsResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ReadBinlogFilesTimestampsResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ReadBinlogFilesTimestampsResponse
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.ReadBinlogFilesTimestampsResponse;
-
-        /**
-         * Creates a plain object from a ReadBinlogFilesTimestampsResponse message. Also converts values to other types if specified.
-         * @param message ReadBinlogFilesTimestampsResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.ReadBinlogFilesTimestampsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ReadBinlogFilesTimestampsResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ReadBinlogFilesTimestampsResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ReinitConfigRequest. */
-    interface IReinitConfigRequest {
-    }
-
-    /** Represents a ReinitConfigRequest. */
-    class ReinitConfigRequest implements IReinitConfigRequest {
-
-        /**
-         * Constructs a new ReinitConfigRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IReinitConfigRequest);
-
-        /**
-         * Creates a new ReinitConfigRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ReinitConfigRequest instance
-         */
-        public static create(properties?: mysqlctl.IReinitConfigRequest): mysqlctl.ReinitConfigRequest;
-
-        /**
-         * Encodes the specified ReinitConfigRequest message. Does not implicitly {@link mysqlctl.ReinitConfigRequest.verify|verify} messages.
-         * @param message ReinitConfigRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IReinitConfigRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ReinitConfigRequest message, length delimited. Does not implicitly {@link mysqlctl.ReinitConfigRequest.verify|verify} messages.
-         * @param message ReinitConfigRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IReinitConfigRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ReinitConfigRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ReinitConfigRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ReinitConfigRequest;
-
-        /**
-         * Decodes a ReinitConfigRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ReinitConfigRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ReinitConfigRequest;
-
-        /**
-         * Verifies a ReinitConfigRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ReinitConfigRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ReinitConfigRequest
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.ReinitConfigRequest;
-
-        /**
-         * Creates a plain object from a ReinitConfigRequest message. Also converts values to other types if specified.
-         * @param message ReinitConfigRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.ReinitConfigRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ReinitConfigRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ReinitConfigRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ReinitConfigResponse. */
-    interface IReinitConfigResponse {
-    }
-
-    /** Represents a ReinitConfigResponse. */
-    class ReinitConfigResponse implements IReinitConfigResponse {
-
-        /**
-         * Constructs a new ReinitConfigResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IReinitConfigResponse);
-
-        /**
-         * Creates a new ReinitConfigResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ReinitConfigResponse instance
-         */
-        public static create(properties?: mysqlctl.IReinitConfigResponse): mysqlctl.ReinitConfigResponse;
-
-        /**
-         * Encodes the specified ReinitConfigResponse message. Does not implicitly {@link mysqlctl.ReinitConfigResponse.verify|verify} messages.
-         * @param message ReinitConfigResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IReinitConfigResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ReinitConfigResponse message, length delimited. Does not implicitly {@link mysqlctl.ReinitConfigResponse.verify|verify} messages.
-         * @param message ReinitConfigResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IReinitConfigResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ReinitConfigResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ReinitConfigResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ReinitConfigResponse;
-
-        /**
-         * Decodes a ReinitConfigResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ReinitConfigResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ReinitConfigResponse;
-
-        /**
-         * Verifies a ReinitConfigResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ReinitConfigResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ReinitConfigResponse
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.ReinitConfigResponse;
-
-        /**
-         * Creates a plain object from a ReinitConfigResponse message. Also converts values to other types if specified.
-         * @param message ReinitConfigResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.ReinitConfigResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ReinitConfigResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ReinitConfigResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a RefreshConfigRequest. */
-    interface IRefreshConfigRequest {
-    }
-
-    /** Represents a RefreshConfigRequest. */
-    class RefreshConfigRequest implements IRefreshConfigRequest {
-
-        /**
-         * Constructs a new RefreshConfigRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IRefreshConfigRequest);
-
-        /**
-         * Creates a new RefreshConfigRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RefreshConfigRequest instance
-         */
-        public static create(properties?: mysqlctl.IRefreshConfigRequest): mysqlctl.RefreshConfigRequest;
-
-        /**
-         * Encodes the specified RefreshConfigRequest message. Does not implicitly {@link mysqlctl.RefreshConfigRequest.verify|verify} messages.
-         * @param message RefreshConfigRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IRefreshConfigRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RefreshConfigRequest message, length delimited. Does not implicitly {@link mysqlctl.RefreshConfigRequest.verify|verify} messages.
-         * @param message RefreshConfigRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IRefreshConfigRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RefreshConfigRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RefreshConfigRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.RefreshConfigRequest;
-
-        /**
-         * Decodes a RefreshConfigRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RefreshConfigRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.RefreshConfigRequest;
-
-        /**
-         * Verifies a RefreshConfigRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RefreshConfigRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RefreshConfigRequest
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.RefreshConfigRequest;
-
-        /**
-         * Creates a plain object from a RefreshConfigRequest message. Also converts values to other types if specified.
-         * @param message RefreshConfigRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.RefreshConfigRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RefreshConfigRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for RefreshConfigRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a RefreshConfigResponse. */
-    interface IRefreshConfigResponse {
-    }
-
-    /** Represents a RefreshConfigResponse. */
-    class RefreshConfigResponse implements IRefreshConfigResponse {
-
-        /**
-         * Constructs a new RefreshConfigResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IRefreshConfigResponse);
-
-        /**
-         * Creates a new RefreshConfigResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RefreshConfigResponse instance
-         */
-        public static create(properties?: mysqlctl.IRefreshConfigResponse): mysqlctl.RefreshConfigResponse;
-
-        /**
-         * Encodes the specified RefreshConfigResponse message. Does not implicitly {@link mysqlctl.RefreshConfigResponse.verify|verify} messages.
-         * @param message RefreshConfigResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IRefreshConfigResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RefreshConfigResponse message, length delimited. Does not implicitly {@link mysqlctl.RefreshConfigResponse.verify|verify} messages.
-         * @param message RefreshConfigResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IRefreshConfigResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RefreshConfigResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RefreshConfigResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.RefreshConfigResponse;
-
-        /**
-         * Decodes a RefreshConfigResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RefreshConfigResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.RefreshConfigResponse;
-
-        /**
-         * Verifies a RefreshConfigResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RefreshConfigResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RefreshConfigResponse
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.RefreshConfigResponse;
-
-        /**
-         * Creates a plain object from a RefreshConfigResponse message. Also converts values to other types if specified.
-         * @param message RefreshConfigResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.RefreshConfigResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RefreshConfigResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for RefreshConfigResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a VersionStringRequest. */
-    interface IVersionStringRequest {
-    }
-
-    /** Represents a VersionStringRequest. */
-    class VersionStringRequest implements IVersionStringRequest {
-
-        /**
-         * Constructs a new VersionStringRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IVersionStringRequest);
-
-        /**
-         * Creates a new VersionStringRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VersionStringRequest instance
-         */
-        public static create(properties?: mysqlctl.IVersionStringRequest): mysqlctl.VersionStringRequest;
-
-        /**
-         * Encodes the specified VersionStringRequest message. Does not implicitly {@link mysqlctl.VersionStringRequest.verify|verify} messages.
-         * @param message VersionStringRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IVersionStringRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VersionStringRequest message, length delimited. Does not implicitly {@link mysqlctl.VersionStringRequest.verify|verify} messages.
-         * @param message VersionStringRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IVersionStringRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VersionStringRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VersionStringRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.VersionStringRequest;
-
-        /**
-         * Decodes a VersionStringRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VersionStringRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.VersionStringRequest;
-
-        /**
-         * Verifies a VersionStringRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VersionStringRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VersionStringRequest
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.VersionStringRequest;
-
-        /**
-         * Creates a plain object from a VersionStringRequest message. Also converts values to other types if specified.
-         * @param message VersionStringRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.VersionStringRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VersionStringRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for VersionStringRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a VersionStringResponse. */
-    interface IVersionStringResponse {
-
-        /** VersionStringResponse version */
-        version?: (string|null);
-    }
-
-    /** Represents a VersionStringResponse. */
-    class VersionStringResponse implements IVersionStringResponse {
-
-        /**
-         * Constructs a new VersionStringResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IVersionStringResponse);
-
-        /** VersionStringResponse version. */
-        public version: string;
-
-        /**
-         * Creates a new VersionStringResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns VersionStringResponse instance
-         */
-        public static create(properties?: mysqlctl.IVersionStringResponse): mysqlctl.VersionStringResponse;
-
-        /**
-         * Encodes the specified VersionStringResponse message. Does not implicitly {@link mysqlctl.VersionStringResponse.verify|verify} messages.
-         * @param message VersionStringResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IVersionStringResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified VersionStringResponse message, length delimited. Does not implicitly {@link mysqlctl.VersionStringResponse.verify|verify} messages.
-         * @param message VersionStringResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IVersionStringResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a VersionStringResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns VersionStringResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.VersionStringResponse;
-
-        /**
-         * Decodes a VersionStringResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns VersionStringResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.VersionStringResponse;
-
-        /**
-         * Verifies a VersionStringResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a VersionStringResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns VersionStringResponse
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.VersionStringResponse;
-
-        /**
-         * Creates a plain object from a VersionStringResponse message. Also converts values to other types if specified.
-         * @param message VersionStringResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.VersionStringResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this VersionStringResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for VersionStringResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a HostMetricsRequest. */
-    interface IHostMetricsRequest {
-    }
-
-    /** Represents a HostMetricsRequest. */
-    class HostMetricsRequest implements IHostMetricsRequest {
-
-        /**
-         * Constructs a new HostMetricsRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IHostMetricsRequest);
-
-        /**
-         * Creates a new HostMetricsRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns HostMetricsRequest instance
-         */
-        public static create(properties?: mysqlctl.IHostMetricsRequest): mysqlctl.HostMetricsRequest;
-
-        /**
-         * Encodes the specified HostMetricsRequest message. Does not implicitly {@link mysqlctl.HostMetricsRequest.verify|verify} messages.
-         * @param message HostMetricsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IHostMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified HostMetricsRequest message, length delimited. Does not implicitly {@link mysqlctl.HostMetricsRequest.verify|verify} messages.
-         * @param message HostMetricsRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IHostMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a HostMetricsRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns HostMetricsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.HostMetricsRequest;
-
-        /**
-         * Decodes a HostMetricsRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns HostMetricsRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.HostMetricsRequest;
-
-        /**
-         * Verifies a HostMetricsRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a HostMetricsRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns HostMetricsRequest
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.HostMetricsRequest;
-
-        /**
-         * Creates a plain object from a HostMetricsRequest message. Also converts values to other types if specified.
-         * @param message HostMetricsRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.HostMetricsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this HostMetricsRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for HostMetricsRequest
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a HostMetricsResponse. */
-    interface IHostMetricsResponse {
-
-        /** HostMetricsResponse metrics */
-        metrics?: ({ [k: string]: mysqlctl.HostMetricsResponse.IMetric }|null);
-    }
-
-    /** Represents a HostMetricsResponse. */
-    class HostMetricsResponse implements IHostMetricsResponse {
-
-        /**
-         * Constructs a new HostMetricsResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IHostMetricsResponse);
-
-        /** HostMetricsResponse metrics. */
-        public metrics: { [k: string]: mysqlctl.HostMetricsResponse.IMetric };
-
-        /**
-         * Creates a new HostMetricsResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns HostMetricsResponse instance
-         */
-        public static create(properties?: mysqlctl.IHostMetricsResponse): mysqlctl.HostMetricsResponse;
-
-        /**
-         * Encodes the specified HostMetricsResponse message. Does not implicitly {@link mysqlctl.HostMetricsResponse.verify|verify} messages.
-         * @param message HostMetricsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IHostMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified HostMetricsResponse message, length delimited. Does not implicitly {@link mysqlctl.HostMetricsResponse.verify|verify} messages.
-         * @param message HostMetricsResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IHostMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a HostMetricsResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns HostMetricsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.HostMetricsResponse;
-
-        /**
-         * Decodes a HostMetricsResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns HostMetricsResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.HostMetricsResponse;
-
-        /**
-         * Verifies a HostMetricsResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a HostMetricsResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns HostMetricsResponse
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.HostMetricsResponse;
-
-        /**
-         * Creates a plain object from a HostMetricsResponse message. Also converts values to other types if specified.
-         * @param message HostMetricsResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.HostMetricsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this HostMetricsResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for HostMetricsResponse
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    namespace HostMetricsResponse {
-
-        /** Properties of a Metric. */
-        interface IMetric {
-
-            /** Metric name */
-            name?: (string|null);
-
-            /** Metric value */
-            value?: (number|null);
-
-            /** Metric error */
-            error?: (vtrpc.IRPCError|null);
-        }
-
-        /** Represents a Metric. */
-        class Metric implements IMetric {
-
-            /**
-             * Constructs a new Metric.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: mysqlctl.HostMetricsResponse.IMetric);
-
-            /** Metric name. */
-            public name: string;
-
-            /** Metric value. */
-            public value: number;
-
-            /** Metric error. */
-            public error?: (vtrpc.IRPCError|null);
-
-            /**
-             * Creates a new Metric instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns Metric instance
-             */
-            public static create(properties?: mysqlctl.HostMetricsResponse.IMetric): mysqlctl.HostMetricsResponse.Metric;
-
-            /**
-             * Encodes the specified Metric message. Does not implicitly {@link mysqlctl.HostMetricsResponse.Metric.verify|verify} messages.
-             * @param message Metric message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: mysqlctl.HostMetricsResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified Metric message, length delimited. Does not implicitly {@link mysqlctl.HostMetricsResponse.Metric.verify|verify} messages.
-             * @param message Metric message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: mysqlctl.HostMetricsResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a Metric message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns Metric
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.HostMetricsResponse.Metric;
-
-            /**
-             * Decodes a Metric message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns Metric
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.HostMetricsResponse.Metric;
-
-            /**
-             * Verifies a Metric message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a Metric message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns Metric
-             */
-            public static fromObject(object: { [k: string]: any }): mysqlctl.HostMetricsResponse.Metric;
-
-            /**
-             * Creates a plain object from a Metric message. Also converts values to other types if specified.
-             * @param message Metric
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: mysqlctl.HostMetricsResponse.Metric, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this Metric to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for Metric
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
-    }
-
-    /** Represents a MysqlCtl */
-    class MysqlCtl extends $protobuf.rpc.Service {
-
-        /**
-         * Constructs a new MysqlCtl service.
-         * @param rpcImpl RPC implementation
-         * @param [requestDelimited=false] Whether requests are length-delimited
-         * @param [responseDelimited=false] Whether responses are length-delimited
-         */
-        constructor(rpcImpl: $protobuf.RPCImpl, requestDelimited?: boolean, responseDelimited?: boolean);
-
-        /**
-         * Creates new MysqlCtl service using the specified rpc implementation.
-         * @param rpcImpl RPC implementation
-         * @param [requestDelimited=false] Whether requests are length-delimited
-         * @param [responseDelimited=false] Whether responses are length-delimited
-         * @returns RPC service. Useful where requests and/or responses are streamed.
-         */
-        public static create(rpcImpl: $protobuf.RPCImpl, requestDelimited?: boolean, responseDelimited?: boolean): MysqlCtl;
-
-        /**
-         * Calls Start.
-         * @param request StartRequest message or plain object
-         * @param callback Node-style callback called with the error, if any, and StartResponse
-         */
-        public start(request: mysqlctl.IStartRequest, callback: mysqlctl.MysqlCtl.StartCallback): void;
-
-        /**
-         * Calls Start.
-         * @param request StartRequest message or plain object
-         * @returns Promise
-         */
-        public start(request: mysqlctl.IStartRequest): Promise<mysqlctl.StartResponse>;
-
-        /**
-         * Calls Shutdown.
-         * @param request ShutdownRequest message or plain object
-         * @param callback Node-style callback called with the error, if any, and ShutdownResponse
-         */
-        public shutdown(request: mysqlctl.IShutdownRequest, callback: mysqlctl.MysqlCtl.ShutdownCallback): void;
-
-        /**
-         * Calls Shutdown.
-         * @param request ShutdownRequest message or plain object
-         * @returns Promise
-         */
-        public shutdown(request: mysqlctl.IShutdownRequest): Promise<mysqlctl.ShutdownResponse>;
-
-        /**
-         * Calls RunMysqlUpgrade.
-         * @param request RunMysqlUpgradeRequest message or plain object
-         * @param callback Node-style callback called with the error, if any, and RunMysqlUpgradeResponse
-         */
-        public runMysqlUpgrade(request: mysqlctl.IRunMysqlUpgradeRequest, callback: mysqlctl.MysqlCtl.RunMysqlUpgradeCallback): void;
-
-        /**
-         * Calls RunMysqlUpgrade.
-         * @param request RunMysqlUpgradeRequest message or plain object
-         * @returns Promise
-         */
-        public runMysqlUpgrade(request: mysqlctl.IRunMysqlUpgradeRequest): Promise<mysqlctl.RunMysqlUpgradeResponse>;
-
-        /**
-         * Calls ApplyBinlogFile.
-         * @param request ApplyBinlogFileRequest message or plain object
-         * @param callback Node-style callback called with the error, if any, and ApplyBinlogFileResponse
-         */
-        public applyBinlogFile(request: mysqlctl.IApplyBinlogFileRequest, callback: mysqlctl.MysqlCtl.ApplyBinlogFileCallback): void;
-
-        /**
-         * Calls ApplyBinlogFile.
-         * @param request ApplyBinlogFileRequest message or plain object
-         * @returns Promise
-         */
-        public applyBinlogFile(request: mysqlctl.IApplyBinlogFileRequest): Promise<mysqlctl.ApplyBinlogFileResponse>;
-
-        /**
-         * Calls ReadBinlogFilesTimestamps.
-         * @param request ReadBinlogFilesTimestampsRequest message or plain object
-         * @param callback Node-style callback called with the error, if any, and ReadBinlogFilesTimestampsResponse
-         */
-        public readBinlogFilesTimestamps(request: mysqlctl.IReadBinlogFilesTimestampsRequest, callback: mysqlctl.MysqlCtl.ReadBinlogFilesTimestampsCallback): void;
-
-        /**
-         * Calls ReadBinlogFilesTimestamps.
-         * @param request ReadBinlogFilesTimestampsRequest message or plain object
-         * @returns Promise
-         */
-        public readBinlogFilesTimestamps(request: mysqlctl.IReadBinlogFilesTimestampsRequest): Promise<mysqlctl.ReadBinlogFilesTimestampsResponse>;
-
-        /**
-         * Calls ReinitConfig.
-         * @param request ReinitConfigRequest message or plain object
-         * @param callback Node-style callback called with the error, if any, and ReinitConfigResponse
-         */
-        public reinitConfig(request: mysqlctl.IReinitConfigRequest, callback: mysqlctl.MysqlCtl.ReinitConfigCallback): void;
-
-        /**
-         * Calls ReinitConfig.
-         * @param request ReinitConfigRequest message or plain object
-         * @returns Promise
-         */
-        public reinitConfig(request: mysqlctl.IReinitConfigRequest): Promise<mysqlctl.ReinitConfigResponse>;
-
-        /**
-         * Calls RefreshConfig.
-         * @param request RefreshConfigRequest message or plain object
-         * @param callback Node-style callback called with the error, if any, and RefreshConfigResponse
-         */
-        public refreshConfig(request: mysqlctl.IRefreshConfigRequest, callback: mysqlctl.MysqlCtl.RefreshConfigCallback): void;
-
-        /**
-         * Calls RefreshConfig.
-         * @param request RefreshConfigRequest message or plain object
-         * @returns Promise
-         */
-        public refreshConfig(request: mysqlctl.IRefreshConfigRequest): Promise<mysqlctl.RefreshConfigResponse>;
-
-        /**
-         * Calls VersionString.
-         * @param request VersionStringRequest message or plain object
-         * @param callback Node-style callback called with the error, if any, and VersionStringResponse
-         */
-        public versionString(request: mysqlctl.IVersionStringRequest, callback: mysqlctl.MysqlCtl.VersionStringCallback): void;
-
-        /**
-         * Calls VersionString.
-         * @param request VersionStringRequest message or plain object
-         * @returns Promise
-         */
-        public versionString(request: mysqlctl.IVersionStringRequest): Promise<mysqlctl.VersionStringResponse>;
-
-        /**
-         * Calls HostMetrics.
-         * @param request HostMetricsRequest message or plain object
-         * @param callback Node-style callback called with the error, if any, and HostMetricsResponse
-         */
-        public hostMetrics(request: mysqlctl.IHostMetricsRequest, callback: mysqlctl.MysqlCtl.HostMetricsCallback): void;
-
-        /**
-         * Calls HostMetrics.
-         * @param request HostMetricsRequest message or plain object
-         * @returns Promise
-         */
-        public hostMetrics(request: mysqlctl.IHostMetricsRequest): Promise<mysqlctl.HostMetricsResponse>;
-    }
-
-    namespace MysqlCtl {
-
-        /**
-         * Callback as used by {@link mysqlctl.MysqlCtl#start}.
-         * @param error Error, if any
-         * @param [response] StartResponse
-         */
-        type StartCallback = (error: (Error|null), response?: mysqlctl.StartResponse) => void;
-
-        /**
-         * Callback as used by {@link mysqlctl.MysqlCtl#shutdown}.
-         * @param error Error, if any
-         * @param [response] ShutdownResponse
-         */
-        type ShutdownCallback = (error: (Error|null), response?: mysqlctl.ShutdownResponse) => void;
-
-        /**
-         * Callback as used by {@link mysqlctl.MysqlCtl#runMysqlUpgrade}.
-         * @param error Error, if any
-         * @param [response] RunMysqlUpgradeResponse
-         */
-        type RunMysqlUpgradeCallback = (error: (Error|null), response?: mysqlctl.RunMysqlUpgradeResponse) => void;
-
-        /**
-         * Callback as used by {@link mysqlctl.MysqlCtl#applyBinlogFile}.
-         * @param error Error, if any
-         * @param [response] ApplyBinlogFileResponse
-         */
-        type ApplyBinlogFileCallback = (error: (Error|null), response?: mysqlctl.ApplyBinlogFileResponse) => void;
-
-        /**
-         * Callback as used by {@link mysqlctl.MysqlCtl#readBinlogFilesTimestamps}.
-         * @param error Error, if any
-         * @param [response] ReadBinlogFilesTimestampsResponse
-         */
-        type ReadBinlogFilesTimestampsCallback = (error: (Error|null), response?: mysqlctl.ReadBinlogFilesTimestampsResponse) => void;
-
-        /**
-         * Callback as used by {@link mysqlctl.MysqlCtl#reinitConfig}.
-         * @param error Error, if any
-         * @param [response] ReinitConfigResponse
-         */
-        type ReinitConfigCallback = (error: (Error|null), response?: mysqlctl.ReinitConfigResponse) => void;
-
-        /**
-         * Callback as used by {@link mysqlctl.MysqlCtl#refreshConfig}.
-         * @param error Error, if any
-         * @param [response] RefreshConfigResponse
-         */
-        type RefreshConfigCallback = (error: (Error|null), response?: mysqlctl.RefreshConfigResponse) => void;
-
-        /**
-         * Callback as used by {@link mysqlctl.MysqlCtl#versionString}.
-         * @param error Error, if any
-         * @param [response] VersionStringResponse
-         */
-        type VersionStringCallback = (error: (Error|null), response?: mysqlctl.VersionStringResponse) => void;
-
-        /**
-         * Callback as used by {@link mysqlctl.MysqlCtl#hostMetrics}.
-         * @param error Error, if any
-         * @param [response] HostMetricsResponse
-         */
-        type HostMetricsCallback = (error: (Error|null), response?: mysqlctl.HostMetricsResponse) => void;
-    }
-
-    /** Properties of a BackupInfo. */
-    interface IBackupInfo {
-
-        /** BackupInfo name */
-        name?: (string|null);
-
-        /** BackupInfo directory */
-        directory?: (string|null);
-
-        /** BackupInfo keyspace */
-        keyspace?: (string|null);
-
-        /** BackupInfo shard */
-        shard?: (string|null);
-
-        /** BackupInfo tablet_alias */
-        tablet_alias?: (topodata.ITabletAlias|null);
-
-        /** BackupInfo time */
-        time?: (vttime.ITime|null);
-
-        /** BackupInfo engine */
-        engine?: (string|null);
-
-        /** BackupInfo status */
-        status?: (mysqlctl.BackupInfo.Status|null);
-    }
-
-    /** Represents a BackupInfo. */
-    class BackupInfo implements IBackupInfo {
-
-        /**
-         * Constructs a new BackupInfo.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: mysqlctl.IBackupInfo);
-
-        /** BackupInfo name. */
-        public name: string;
-
-        /** BackupInfo directory. */
-        public directory: string;
-
-        /** BackupInfo keyspace. */
-        public keyspace: string;
-
-        /** BackupInfo shard. */
-        public shard: string;
-
-        /** BackupInfo tablet_alias. */
-        public tablet_alias?: (topodata.ITabletAlias|null);
-
-        /** BackupInfo time. */
-        public time?: (vttime.ITime|null);
-
-        /** BackupInfo engine. */
-        public engine: string;
-
-        /** BackupInfo status. */
-        public status: mysqlctl.BackupInfo.Status;
-
-        /**
-         * Creates a new BackupInfo instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns BackupInfo instance
-         */
-        public static create(properties?: mysqlctl.IBackupInfo): mysqlctl.BackupInfo;
-
-        /**
-         * Encodes the specified BackupInfo message. Does not implicitly {@link mysqlctl.BackupInfo.verify|verify} messages.
-         * @param message BackupInfo message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: mysqlctl.IBackupInfo, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified BackupInfo message, length delimited. Does not implicitly {@link mysqlctl.BackupInfo.verify|verify} messages.
-         * @param message BackupInfo message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: mysqlctl.IBackupInfo, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a BackupInfo message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns BackupInfo
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.BackupInfo;
-
-        /**
-         * Decodes a BackupInfo message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns BackupInfo
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.BackupInfo;
-
-        /**
-         * Verifies a BackupInfo message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a BackupInfo message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns BackupInfo
-         */
-        public static fromObject(object: { [k: string]: any }): mysqlctl.BackupInfo;
-
-        /**
-         * Creates a plain object from a BackupInfo message. Also converts values to other types if specified.
-         * @param message BackupInfo
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: mysqlctl.BackupInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this BackupInfo to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for BackupInfo
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    namespace BackupInfo {
-
-        /** Status enum. */
-        enum Status {
-            UNKNOWN = 0,
-            INCOMPLETE = 1,
-            COMPLETE = 2,
-            INVALID = 3,
-            VALID = 4
-        }
     }
 }
 
@@ -20736,6 +18597,2545 @@ export namespace topodata {
          * @returns The default type url
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace vttime. */
+export namespace vttime {
+
+    /** Properties of a Time. */
+    interface ITime {
+
+        /** Time seconds */
+        seconds?: (number|Long|null);
+
+        /** Time nanoseconds */
+        nanoseconds?: (number|null);
+    }
+
+    /** Represents a Time. */
+    class Time implements ITime {
+
+        /**
+         * Constructs a new Time.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vttime.ITime);
+
+        /** Time seconds. */
+        public seconds: (number|Long);
+
+        /** Time nanoseconds. */
+        public nanoseconds: number;
+
+        /**
+         * Creates a new Time instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Time instance
+         */
+        public static create(properties?: vttime.ITime): vttime.Time;
+
+        /**
+         * Encodes the specified Time message. Does not implicitly {@link vttime.Time.verify|verify} messages.
+         * @param message Time message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vttime.ITime, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Time message, length delimited. Does not implicitly {@link vttime.Time.verify|verify} messages.
+         * @param message Time message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vttime.ITime, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Time message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Time
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vttime.Time;
+
+        /**
+         * Decodes a Time message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Time
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vttime.Time;
+
+        /**
+         * Verifies a Time message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Time message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Time
+         */
+        public static fromObject(object: { [k: string]: any }): vttime.Time;
+
+        /**
+         * Creates a plain object from a Time message. Also converts values to other types if specified.
+         * @param message Time
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vttime.Time, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Time to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Time
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a Duration. */
+    interface IDuration {
+
+        /** Duration seconds */
+        seconds?: (number|Long|null);
+
+        /** Duration nanos */
+        nanos?: (number|null);
+    }
+
+    /** Represents a Duration. */
+    class Duration implements IDuration {
+
+        /**
+         * Constructs a new Duration.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vttime.IDuration);
+
+        /** Duration seconds. */
+        public seconds: (number|Long);
+
+        /** Duration nanos. */
+        public nanos: number;
+
+        /**
+         * Creates a new Duration instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Duration instance
+         */
+        public static create(properties?: vttime.IDuration): vttime.Duration;
+
+        /**
+         * Encodes the specified Duration message. Does not implicitly {@link vttime.Duration.verify|verify} messages.
+         * @param message Duration message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vttime.IDuration, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Duration message, length delimited. Does not implicitly {@link vttime.Duration.verify|verify} messages.
+         * @param message Duration message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vttime.IDuration, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Duration message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Duration
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vttime.Duration;
+
+        /**
+         * Decodes a Duration message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Duration
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vttime.Duration;
+
+        /**
+         * Verifies a Duration message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Duration message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Duration
+         */
+        public static fromObject(object: { [k: string]: any }): vttime.Duration;
+
+        /**
+         * Creates a plain object from a Duration message. Also converts values to other types if specified.
+         * @param message Duration
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vttime.Duration, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Duration to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Duration
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace logutil. */
+export namespace logutil {
+
+    /** Level enum. */
+    enum Level {
+        INFO = 0,
+        WARNING = 1,
+        ERROR = 2,
+        CONSOLE = 3
+    }
+
+    /** Properties of an Event. */
+    interface IEvent {
+
+        /** Event time */
+        time?: (vttime.ITime|null);
+
+        /** Event level */
+        level?: (logutil.Level|null);
+
+        /** Event file */
+        file?: (string|null);
+
+        /** Event line */
+        line?: (number|Long|null);
+
+        /** Event value */
+        value?: (string|null);
+    }
+
+    /** Represents an Event. */
+    class Event implements IEvent {
+
+        /**
+         * Constructs a new Event.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: logutil.IEvent);
+
+        /** Event time. */
+        public time?: (vttime.ITime|null);
+
+        /** Event level. */
+        public level: logutil.Level;
+
+        /** Event file. */
+        public file: string;
+
+        /** Event line. */
+        public line: (number|Long);
+
+        /** Event value. */
+        public value: string;
+
+        /**
+         * Creates a new Event instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Event instance
+         */
+        public static create(properties?: logutil.IEvent): logutil.Event;
+
+        /**
+         * Encodes the specified Event message. Does not implicitly {@link logutil.Event.verify|verify} messages.
+         * @param message Event message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: logutil.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Event message, length delimited. Does not implicitly {@link logutil.Event.verify|verify} messages.
+         * @param message Event message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: logutil.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an Event message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Event
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): logutil.Event;
+
+        /**
+         * Decodes an Event message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Event
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): logutil.Event;
+
+        /**
+         * Verifies an Event message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an Event message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Event
+         */
+        public static fromObject(object: { [k: string]: any }): logutil.Event;
+
+        /**
+         * Creates a plain object from an Event message. Also converts values to other types if specified.
+         * @param message Event
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: logutil.Event, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Event to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Event
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace mysqlctl. */
+export namespace mysqlctl {
+
+    /** Properties of a StartRequest. */
+    interface IStartRequest {
+
+        /** StartRequest mysqld_args */
+        mysqld_args?: (string[]|null);
+    }
+
+    /** Represents a StartRequest. */
+    class StartRequest implements IStartRequest {
+
+        /**
+         * Constructs a new StartRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IStartRequest);
+
+        /** StartRequest mysqld_args. */
+        public mysqld_args: string[];
+
+        /**
+         * Creates a new StartRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StartRequest instance
+         */
+        public static create(properties?: mysqlctl.IStartRequest): mysqlctl.StartRequest;
+
+        /**
+         * Encodes the specified StartRequest message. Does not implicitly {@link mysqlctl.StartRequest.verify|verify} messages.
+         * @param message StartRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IStartRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StartRequest message, length delimited. Does not implicitly {@link mysqlctl.StartRequest.verify|verify} messages.
+         * @param message StartRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IStartRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StartRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StartRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.StartRequest;
+
+        /**
+         * Decodes a StartRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StartRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.StartRequest;
+
+        /**
+         * Verifies a StartRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StartRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StartRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.StartRequest;
+
+        /**
+         * Creates a plain object from a StartRequest message. Also converts values to other types if specified.
+         * @param message StartRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.StartRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StartRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a StartResponse. */
+    interface IStartResponse {
+    }
+
+    /** Represents a StartResponse. */
+    class StartResponse implements IStartResponse {
+
+        /**
+         * Constructs a new StartResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IStartResponse);
+
+        /**
+         * Creates a new StartResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns StartResponse instance
+         */
+        public static create(properties?: mysqlctl.IStartResponse): mysqlctl.StartResponse;
+
+        /**
+         * Encodes the specified StartResponse message. Does not implicitly {@link mysqlctl.StartResponse.verify|verify} messages.
+         * @param message StartResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IStartResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified StartResponse message, length delimited. Does not implicitly {@link mysqlctl.StartResponse.verify|verify} messages.
+         * @param message StartResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IStartResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a StartResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns StartResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.StartResponse;
+
+        /**
+         * Decodes a StartResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns StartResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.StartResponse;
+
+        /**
+         * Verifies a StartResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a StartResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns StartResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.StartResponse;
+
+        /**
+         * Creates a plain object from a StartResponse message. Also converts values to other types if specified.
+         * @param message StartResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.StartResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this StartResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for StartResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ShutdownRequest. */
+    interface IShutdownRequest {
+
+        /** ShutdownRequest wait_for_mysqld */
+        wait_for_mysqld?: (boolean|null);
+
+        /** ShutdownRequest mysql_shutdown_timeout */
+        mysql_shutdown_timeout?: (vttime.IDuration|null);
+    }
+
+    /** Represents a ShutdownRequest. */
+    class ShutdownRequest implements IShutdownRequest {
+
+        /**
+         * Constructs a new ShutdownRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IShutdownRequest);
+
+        /** ShutdownRequest wait_for_mysqld. */
+        public wait_for_mysqld: boolean;
+
+        /** ShutdownRequest mysql_shutdown_timeout. */
+        public mysql_shutdown_timeout?: (vttime.IDuration|null);
+
+        /**
+         * Creates a new ShutdownRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShutdownRequest instance
+         */
+        public static create(properties?: mysqlctl.IShutdownRequest): mysqlctl.ShutdownRequest;
+
+        /**
+         * Encodes the specified ShutdownRequest message. Does not implicitly {@link mysqlctl.ShutdownRequest.verify|verify} messages.
+         * @param message ShutdownRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IShutdownRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShutdownRequest message, length delimited. Does not implicitly {@link mysqlctl.ShutdownRequest.verify|verify} messages.
+         * @param message ShutdownRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IShutdownRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShutdownRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShutdownRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ShutdownRequest;
+
+        /**
+         * Decodes a ShutdownRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShutdownRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ShutdownRequest;
+
+        /**
+         * Verifies a ShutdownRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShutdownRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShutdownRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ShutdownRequest;
+
+        /**
+         * Creates a plain object from a ShutdownRequest message. Also converts values to other types if specified.
+         * @param message ShutdownRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ShutdownRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShutdownRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShutdownRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ShutdownResponse. */
+    interface IShutdownResponse {
+    }
+
+    /** Represents a ShutdownResponse. */
+    class ShutdownResponse implements IShutdownResponse {
+
+        /**
+         * Constructs a new ShutdownResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IShutdownResponse);
+
+        /**
+         * Creates a new ShutdownResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShutdownResponse instance
+         */
+        public static create(properties?: mysqlctl.IShutdownResponse): mysqlctl.ShutdownResponse;
+
+        /**
+         * Encodes the specified ShutdownResponse message. Does not implicitly {@link mysqlctl.ShutdownResponse.verify|verify} messages.
+         * @param message ShutdownResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IShutdownResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShutdownResponse message, length delimited. Does not implicitly {@link mysqlctl.ShutdownResponse.verify|verify} messages.
+         * @param message ShutdownResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IShutdownResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShutdownResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShutdownResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ShutdownResponse;
+
+        /**
+         * Decodes a ShutdownResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShutdownResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ShutdownResponse;
+
+        /**
+         * Verifies a ShutdownResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShutdownResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShutdownResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ShutdownResponse;
+
+        /**
+         * Creates a plain object from a ShutdownResponse message. Also converts values to other types if specified.
+         * @param message ShutdownResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ShutdownResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShutdownResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShutdownResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a RunMysqlUpgradeRequest. */
+    interface IRunMysqlUpgradeRequest {
+    }
+
+    /** Represents a RunMysqlUpgradeRequest. */
+    class RunMysqlUpgradeRequest implements IRunMysqlUpgradeRequest {
+
+        /**
+         * Constructs a new RunMysqlUpgradeRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IRunMysqlUpgradeRequest);
+
+        /**
+         * Creates a new RunMysqlUpgradeRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RunMysqlUpgradeRequest instance
+         */
+        public static create(properties?: mysqlctl.IRunMysqlUpgradeRequest): mysqlctl.RunMysqlUpgradeRequest;
+
+        /**
+         * Encodes the specified RunMysqlUpgradeRequest message. Does not implicitly {@link mysqlctl.RunMysqlUpgradeRequest.verify|verify} messages.
+         * @param message RunMysqlUpgradeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IRunMysqlUpgradeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RunMysqlUpgradeRequest message, length delimited. Does not implicitly {@link mysqlctl.RunMysqlUpgradeRequest.verify|verify} messages.
+         * @param message RunMysqlUpgradeRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IRunMysqlUpgradeRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RunMysqlUpgradeRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RunMysqlUpgradeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.RunMysqlUpgradeRequest;
+
+        /**
+         * Decodes a RunMysqlUpgradeRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RunMysqlUpgradeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.RunMysqlUpgradeRequest;
+
+        /**
+         * Verifies a RunMysqlUpgradeRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RunMysqlUpgradeRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RunMysqlUpgradeRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.RunMysqlUpgradeRequest;
+
+        /**
+         * Creates a plain object from a RunMysqlUpgradeRequest message. Also converts values to other types if specified.
+         * @param message RunMysqlUpgradeRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.RunMysqlUpgradeRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RunMysqlUpgradeRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RunMysqlUpgradeRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a RunMysqlUpgradeResponse. */
+    interface IRunMysqlUpgradeResponse {
+    }
+
+    /** Represents a RunMysqlUpgradeResponse. */
+    class RunMysqlUpgradeResponse implements IRunMysqlUpgradeResponse {
+
+        /**
+         * Constructs a new RunMysqlUpgradeResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IRunMysqlUpgradeResponse);
+
+        /**
+         * Creates a new RunMysqlUpgradeResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RunMysqlUpgradeResponse instance
+         */
+        public static create(properties?: mysqlctl.IRunMysqlUpgradeResponse): mysqlctl.RunMysqlUpgradeResponse;
+
+        /**
+         * Encodes the specified RunMysqlUpgradeResponse message. Does not implicitly {@link mysqlctl.RunMysqlUpgradeResponse.verify|verify} messages.
+         * @param message RunMysqlUpgradeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IRunMysqlUpgradeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RunMysqlUpgradeResponse message, length delimited. Does not implicitly {@link mysqlctl.RunMysqlUpgradeResponse.verify|verify} messages.
+         * @param message RunMysqlUpgradeResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IRunMysqlUpgradeResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RunMysqlUpgradeResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RunMysqlUpgradeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.RunMysqlUpgradeResponse;
+
+        /**
+         * Decodes a RunMysqlUpgradeResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RunMysqlUpgradeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.RunMysqlUpgradeResponse;
+
+        /**
+         * Verifies a RunMysqlUpgradeResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RunMysqlUpgradeResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RunMysqlUpgradeResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.RunMysqlUpgradeResponse;
+
+        /**
+         * Creates a plain object from a RunMysqlUpgradeResponse message. Also converts values to other types if specified.
+         * @param message RunMysqlUpgradeResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.RunMysqlUpgradeResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RunMysqlUpgradeResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RunMysqlUpgradeResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ApplyBinlogFileRequest. */
+    interface IApplyBinlogFileRequest {
+
+        /** ApplyBinlogFileRequest binlog_file_name */
+        binlog_file_name?: (string|null);
+
+        /** ApplyBinlogFileRequest binlog_restore_position */
+        binlog_restore_position?: (string|null);
+
+        /** ApplyBinlogFileRequest binlog_restore_datetime */
+        binlog_restore_datetime?: (vttime.ITime|null);
+    }
+
+    /** Represents an ApplyBinlogFileRequest. */
+    class ApplyBinlogFileRequest implements IApplyBinlogFileRequest {
+
+        /**
+         * Constructs a new ApplyBinlogFileRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IApplyBinlogFileRequest);
+
+        /** ApplyBinlogFileRequest binlog_file_name. */
+        public binlog_file_name: string;
+
+        /** ApplyBinlogFileRequest binlog_restore_position. */
+        public binlog_restore_position: string;
+
+        /** ApplyBinlogFileRequest binlog_restore_datetime. */
+        public binlog_restore_datetime?: (vttime.ITime|null);
+
+        /**
+         * Creates a new ApplyBinlogFileRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyBinlogFileRequest instance
+         */
+        public static create(properties?: mysqlctl.IApplyBinlogFileRequest): mysqlctl.ApplyBinlogFileRequest;
+
+        /**
+         * Encodes the specified ApplyBinlogFileRequest message. Does not implicitly {@link mysqlctl.ApplyBinlogFileRequest.verify|verify} messages.
+         * @param message ApplyBinlogFileRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IApplyBinlogFileRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyBinlogFileRequest message, length delimited. Does not implicitly {@link mysqlctl.ApplyBinlogFileRequest.verify|verify} messages.
+         * @param message ApplyBinlogFileRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IApplyBinlogFileRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyBinlogFileRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyBinlogFileRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ApplyBinlogFileRequest;
+
+        /**
+         * Decodes an ApplyBinlogFileRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyBinlogFileRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ApplyBinlogFileRequest;
+
+        /**
+         * Verifies an ApplyBinlogFileRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyBinlogFileRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyBinlogFileRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ApplyBinlogFileRequest;
+
+        /**
+         * Creates a plain object from an ApplyBinlogFileRequest message. Also converts values to other types if specified.
+         * @param message ApplyBinlogFileRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ApplyBinlogFileRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyBinlogFileRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyBinlogFileRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ApplyBinlogFileResponse. */
+    interface IApplyBinlogFileResponse {
+    }
+
+    /** Represents an ApplyBinlogFileResponse. */
+    class ApplyBinlogFileResponse implements IApplyBinlogFileResponse {
+
+        /**
+         * Constructs a new ApplyBinlogFileResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IApplyBinlogFileResponse);
+
+        /**
+         * Creates a new ApplyBinlogFileResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ApplyBinlogFileResponse instance
+         */
+        public static create(properties?: mysqlctl.IApplyBinlogFileResponse): mysqlctl.ApplyBinlogFileResponse;
+
+        /**
+         * Encodes the specified ApplyBinlogFileResponse message. Does not implicitly {@link mysqlctl.ApplyBinlogFileResponse.verify|verify} messages.
+         * @param message ApplyBinlogFileResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IApplyBinlogFileResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ApplyBinlogFileResponse message, length delimited. Does not implicitly {@link mysqlctl.ApplyBinlogFileResponse.verify|verify} messages.
+         * @param message ApplyBinlogFileResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IApplyBinlogFileResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ApplyBinlogFileResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ApplyBinlogFileResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ApplyBinlogFileResponse;
+
+        /**
+         * Decodes an ApplyBinlogFileResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ApplyBinlogFileResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ApplyBinlogFileResponse;
+
+        /**
+         * Verifies an ApplyBinlogFileResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ApplyBinlogFileResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ApplyBinlogFileResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ApplyBinlogFileResponse;
+
+        /**
+         * Creates a plain object from an ApplyBinlogFileResponse message. Also converts values to other types if specified.
+         * @param message ApplyBinlogFileResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ApplyBinlogFileResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ApplyBinlogFileResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ApplyBinlogFileResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReadBinlogFilesTimestampsRequest. */
+    interface IReadBinlogFilesTimestampsRequest {
+
+        /** ReadBinlogFilesTimestampsRequest binlog_file_names */
+        binlog_file_names?: (string[]|null);
+    }
+
+    /** Represents a ReadBinlogFilesTimestampsRequest. */
+    class ReadBinlogFilesTimestampsRequest implements IReadBinlogFilesTimestampsRequest {
+
+        /**
+         * Constructs a new ReadBinlogFilesTimestampsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IReadBinlogFilesTimestampsRequest);
+
+        /** ReadBinlogFilesTimestampsRequest binlog_file_names. */
+        public binlog_file_names: string[];
+
+        /**
+         * Creates a new ReadBinlogFilesTimestampsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadBinlogFilesTimestampsRequest instance
+         */
+        public static create(properties?: mysqlctl.IReadBinlogFilesTimestampsRequest): mysqlctl.ReadBinlogFilesTimestampsRequest;
+
+        /**
+         * Encodes the specified ReadBinlogFilesTimestampsRequest message. Does not implicitly {@link mysqlctl.ReadBinlogFilesTimestampsRequest.verify|verify} messages.
+         * @param message ReadBinlogFilesTimestampsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IReadBinlogFilesTimestampsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadBinlogFilesTimestampsRequest message, length delimited. Does not implicitly {@link mysqlctl.ReadBinlogFilesTimestampsRequest.verify|verify} messages.
+         * @param message ReadBinlogFilesTimestampsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IReadBinlogFilesTimestampsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadBinlogFilesTimestampsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadBinlogFilesTimestampsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ReadBinlogFilesTimestampsRequest;
+
+        /**
+         * Decodes a ReadBinlogFilesTimestampsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadBinlogFilesTimestampsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ReadBinlogFilesTimestampsRequest;
+
+        /**
+         * Verifies a ReadBinlogFilesTimestampsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadBinlogFilesTimestampsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadBinlogFilesTimestampsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ReadBinlogFilesTimestampsRequest;
+
+        /**
+         * Creates a plain object from a ReadBinlogFilesTimestampsRequest message. Also converts values to other types if specified.
+         * @param message ReadBinlogFilesTimestampsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ReadBinlogFilesTimestampsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadBinlogFilesTimestampsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadBinlogFilesTimestampsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReadBinlogFilesTimestampsResponse. */
+    interface IReadBinlogFilesTimestampsResponse {
+
+        /** ReadBinlogFilesTimestampsResponse first_timestamp */
+        first_timestamp?: (vttime.ITime|null);
+
+        /** ReadBinlogFilesTimestampsResponse first_timestamp_binlog */
+        first_timestamp_binlog?: (string|null);
+
+        /** ReadBinlogFilesTimestampsResponse last_timestamp */
+        last_timestamp?: (vttime.ITime|null);
+
+        /** ReadBinlogFilesTimestampsResponse last_timestamp_binlog */
+        last_timestamp_binlog?: (string|null);
+    }
+
+    /** Represents a ReadBinlogFilesTimestampsResponse. */
+    class ReadBinlogFilesTimestampsResponse implements IReadBinlogFilesTimestampsResponse {
+
+        /**
+         * Constructs a new ReadBinlogFilesTimestampsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IReadBinlogFilesTimestampsResponse);
+
+        /** ReadBinlogFilesTimestampsResponse first_timestamp. */
+        public first_timestamp?: (vttime.ITime|null);
+
+        /** ReadBinlogFilesTimestampsResponse first_timestamp_binlog. */
+        public first_timestamp_binlog: string;
+
+        /** ReadBinlogFilesTimestampsResponse last_timestamp. */
+        public last_timestamp?: (vttime.ITime|null);
+
+        /** ReadBinlogFilesTimestampsResponse last_timestamp_binlog. */
+        public last_timestamp_binlog: string;
+
+        /**
+         * Creates a new ReadBinlogFilesTimestampsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReadBinlogFilesTimestampsResponse instance
+         */
+        public static create(properties?: mysqlctl.IReadBinlogFilesTimestampsResponse): mysqlctl.ReadBinlogFilesTimestampsResponse;
+
+        /**
+         * Encodes the specified ReadBinlogFilesTimestampsResponse message. Does not implicitly {@link mysqlctl.ReadBinlogFilesTimestampsResponse.verify|verify} messages.
+         * @param message ReadBinlogFilesTimestampsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IReadBinlogFilesTimestampsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReadBinlogFilesTimestampsResponse message, length delimited. Does not implicitly {@link mysqlctl.ReadBinlogFilesTimestampsResponse.verify|verify} messages.
+         * @param message ReadBinlogFilesTimestampsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IReadBinlogFilesTimestampsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReadBinlogFilesTimestampsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReadBinlogFilesTimestampsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ReadBinlogFilesTimestampsResponse;
+
+        /**
+         * Decodes a ReadBinlogFilesTimestampsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReadBinlogFilesTimestampsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ReadBinlogFilesTimestampsResponse;
+
+        /**
+         * Verifies a ReadBinlogFilesTimestampsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReadBinlogFilesTimestampsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReadBinlogFilesTimestampsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ReadBinlogFilesTimestampsResponse;
+
+        /**
+         * Creates a plain object from a ReadBinlogFilesTimestampsResponse message. Also converts values to other types if specified.
+         * @param message ReadBinlogFilesTimestampsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ReadBinlogFilesTimestampsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReadBinlogFilesTimestampsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReadBinlogFilesTimestampsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReinitConfigRequest. */
+    interface IReinitConfigRequest {
+    }
+
+    /** Represents a ReinitConfigRequest. */
+    class ReinitConfigRequest implements IReinitConfigRequest {
+
+        /**
+         * Constructs a new ReinitConfigRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IReinitConfigRequest);
+
+        /**
+         * Creates a new ReinitConfigRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReinitConfigRequest instance
+         */
+        public static create(properties?: mysqlctl.IReinitConfigRequest): mysqlctl.ReinitConfigRequest;
+
+        /**
+         * Encodes the specified ReinitConfigRequest message. Does not implicitly {@link mysqlctl.ReinitConfigRequest.verify|verify} messages.
+         * @param message ReinitConfigRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IReinitConfigRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReinitConfigRequest message, length delimited. Does not implicitly {@link mysqlctl.ReinitConfigRequest.verify|verify} messages.
+         * @param message ReinitConfigRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IReinitConfigRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReinitConfigRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReinitConfigRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ReinitConfigRequest;
+
+        /**
+         * Decodes a ReinitConfigRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReinitConfigRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ReinitConfigRequest;
+
+        /**
+         * Verifies a ReinitConfigRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReinitConfigRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReinitConfigRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ReinitConfigRequest;
+
+        /**
+         * Creates a plain object from a ReinitConfigRequest message. Also converts values to other types if specified.
+         * @param message ReinitConfigRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ReinitConfigRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReinitConfigRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReinitConfigRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReinitConfigResponse. */
+    interface IReinitConfigResponse {
+    }
+
+    /** Represents a ReinitConfigResponse. */
+    class ReinitConfigResponse implements IReinitConfigResponse {
+
+        /**
+         * Constructs a new ReinitConfigResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IReinitConfigResponse);
+
+        /**
+         * Creates a new ReinitConfigResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReinitConfigResponse instance
+         */
+        public static create(properties?: mysqlctl.IReinitConfigResponse): mysqlctl.ReinitConfigResponse;
+
+        /**
+         * Encodes the specified ReinitConfigResponse message. Does not implicitly {@link mysqlctl.ReinitConfigResponse.verify|verify} messages.
+         * @param message ReinitConfigResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IReinitConfigResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReinitConfigResponse message, length delimited. Does not implicitly {@link mysqlctl.ReinitConfigResponse.verify|verify} messages.
+         * @param message ReinitConfigResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IReinitConfigResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReinitConfigResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReinitConfigResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.ReinitConfigResponse;
+
+        /**
+         * Decodes a ReinitConfigResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReinitConfigResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.ReinitConfigResponse;
+
+        /**
+         * Verifies a ReinitConfigResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReinitConfigResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReinitConfigResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.ReinitConfigResponse;
+
+        /**
+         * Creates a plain object from a ReinitConfigResponse message. Also converts values to other types if specified.
+         * @param message ReinitConfigResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.ReinitConfigResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReinitConfigResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReinitConfigResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a RefreshConfigRequest. */
+    interface IRefreshConfigRequest {
+    }
+
+    /** Represents a RefreshConfigRequest. */
+    class RefreshConfigRequest implements IRefreshConfigRequest {
+
+        /**
+         * Constructs a new RefreshConfigRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IRefreshConfigRequest);
+
+        /**
+         * Creates a new RefreshConfigRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RefreshConfigRequest instance
+         */
+        public static create(properties?: mysqlctl.IRefreshConfigRequest): mysqlctl.RefreshConfigRequest;
+
+        /**
+         * Encodes the specified RefreshConfigRequest message. Does not implicitly {@link mysqlctl.RefreshConfigRequest.verify|verify} messages.
+         * @param message RefreshConfigRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IRefreshConfigRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RefreshConfigRequest message, length delimited. Does not implicitly {@link mysqlctl.RefreshConfigRequest.verify|verify} messages.
+         * @param message RefreshConfigRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IRefreshConfigRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RefreshConfigRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RefreshConfigRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.RefreshConfigRequest;
+
+        /**
+         * Decodes a RefreshConfigRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RefreshConfigRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.RefreshConfigRequest;
+
+        /**
+         * Verifies a RefreshConfigRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RefreshConfigRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RefreshConfigRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.RefreshConfigRequest;
+
+        /**
+         * Creates a plain object from a RefreshConfigRequest message. Also converts values to other types if specified.
+         * @param message RefreshConfigRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.RefreshConfigRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RefreshConfigRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshConfigRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a RefreshConfigResponse. */
+    interface IRefreshConfigResponse {
+    }
+
+    /** Represents a RefreshConfigResponse. */
+    class RefreshConfigResponse implements IRefreshConfigResponse {
+
+        /**
+         * Constructs a new RefreshConfigResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IRefreshConfigResponse);
+
+        /**
+         * Creates a new RefreshConfigResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RefreshConfigResponse instance
+         */
+        public static create(properties?: mysqlctl.IRefreshConfigResponse): mysqlctl.RefreshConfigResponse;
+
+        /**
+         * Encodes the specified RefreshConfigResponse message. Does not implicitly {@link mysqlctl.RefreshConfigResponse.verify|verify} messages.
+         * @param message RefreshConfigResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IRefreshConfigResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RefreshConfigResponse message, length delimited. Does not implicitly {@link mysqlctl.RefreshConfigResponse.verify|verify} messages.
+         * @param message RefreshConfigResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IRefreshConfigResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RefreshConfigResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RefreshConfigResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.RefreshConfigResponse;
+
+        /**
+         * Decodes a RefreshConfigResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RefreshConfigResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.RefreshConfigResponse;
+
+        /**
+         * Verifies a RefreshConfigResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RefreshConfigResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RefreshConfigResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.RefreshConfigResponse;
+
+        /**
+         * Creates a plain object from a RefreshConfigResponse message. Also converts values to other types if specified.
+         * @param message RefreshConfigResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.RefreshConfigResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RefreshConfigResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for RefreshConfigResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VersionStringRequest. */
+    interface IVersionStringRequest {
+    }
+
+    /** Represents a VersionStringRequest. */
+    class VersionStringRequest implements IVersionStringRequest {
+
+        /**
+         * Constructs a new VersionStringRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IVersionStringRequest);
+
+        /**
+         * Creates a new VersionStringRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VersionStringRequest instance
+         */
+        public static create(properties?: mysqlctl.IVersionStringRequest): mysqlctl.VersionStringRequest;
+
+        /**
+         * Encodes the specified VersionStringRequest message. Does not implicitly {@link mysqlctl.VersionStringRequest.verify|verify} messages.
+         * @param message VersionStringRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IVersionStringRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VersionStringRequest message, length delimited. Does not implicitly {@link mysqlctl.VersionStringRequest.verify|verify} messages.
+         * @param message VersionStringRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IVersionStringRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VersionStringRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VersionStringRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.VersionStringRequest;
+
+        /**
+         * Decodes a VersionStringRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VersionStringRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.VersionStringRequest;
+
+        /**
+         * Verifies a VersionStringRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VersionStringRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VersionStringRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.VersionStringRequest;
+
+        /**
+         * Creates a plain object from a VersionStringRequest message. Also converts values to other types if specified.
+         * @param message VersionStringRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.VersionStringRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VersionStringRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VersionStringRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a VersionStringResponse. */
+    interface IVersionStringResponse {
+
+        /** VersionStringResponse version */
+        version?: (string|null);
+    }
+
+    /** Represents a VersionStringResponse. */
+    class VersionStringResponse implements IVersionStringResponse {
+
+        /**
+         * Constructs a new VersionStringResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IVersionStringResponse);
+
+        /** VersionStringResponse version. */
+        public version: string;
+
+        /**
+         * Creates a new VersionStringResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VersionStringResponse instance
+         */
+        public static create(properties?: mysqlctl.IVersionStringResponse): mysqlctl.VersionStringResponse;
+
+        /**
+         * Encodes the specified VersionStringResponse message. Does not implicitly {@link mysqlctl.VersionStringResponse.verify|verify} messages.
+         * @param message VersionStringResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IVersionStringResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VersionStringResponse message, length delimited. Does not implicitly {@link mysqlctl.VersionStringResponse.verify|verify} messages.
+         * @param message VersionStringResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IVersionStringResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VersionStringResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VersionStringResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.VersionStringResponse;
+
+        /**
+         * Decodes a VersionStringResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VersionStringResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.VersionStringResponse;
+
+        /**
+         * Verifies a VersionStringResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VersionStringResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VersionStringResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.VersionStringResponse;
+
+        /**
+         * Creates a plain object from a VersionStringResponse message. Also converts values to other types if specified.
+         * @param message VersionStringResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.VersionStringResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VersionStringResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for VersionStringResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a HostMetricsRequest. */
+    interface IHostMetricsRequest {
+    }
+
+    /** Represents a HostMetricsRequest. */
+    class HostMetricsRequest implements IHostMetricsRequest {
+
+        /**
+         * Constructs a new HostMetricsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IHostMetricsRequest);
+
+        /**
+         * Creates a new HostMetricsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns HostMetricsRequest instance
+         */
+        public static create(properties?: mysqlctl.IHostMetricsRequest): mysqlctl.HostMetricsRequest;
+
+        /**
+         * Encodes the specified HostMetricsRequest message. Does not implicitly {@link mysqlctl.HostMetricsRequest.verify|verify} messages.
+         * @param message HostMetricsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IHostMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified HostMetricsRequest message, length delimited. Does not implicitly {@link mysqlctl.HostMetricsRequest.verify|verify} messages.
+         * @param message HostMetricsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IHostMetricsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a HostMetricsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns HostMetricsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.HostMetricsRequest;
+
+        /**
+         * Decodes a HostMetricsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns HostMetricsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.HostMetricsRequest;
+
+        /**
+         * Verifies a HostMetricsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a HostMetricsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns HostMetricsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.HostMetricsRequest;
+
+        /**
+         * Creates a plain object from a HostMetricsRequest message. Also converts values to other types if specified.
+         * @param message HostMetricsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.HostMetricsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this HostMetricsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for HostMetricsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a HostMetricsResponse. */
+    interface IHostMetricsResponse {
+
+        /** HostMetricsResponse metrics */
+        metrics?: ({ [k: string]: mysqlctl.HostMetricsResponse.IMetric }|null);
+    }
+
+    /** Represents a HostMetricsResponse. */
+    class HostMetricsResponse implements IHostMetricsResponse {
+
+        /**
+         * Constructs a new HostMetricsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IHostMetricsResponse);
+
+        /** HostMetricsResponse metrics. */
+        public metrics: { [k: string]: mysqlctl.HostMetricsResponse.IMetric };
+
+        /**
+         * Creates a new HostMetricsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns HostMetricsResponse instance
+         */
+        public static create(properties?: mysqlctl.IHostMetricsResponse): mysqlctl.HostMetricsResponse;
+
+        /**
+         * Encodes the specified HostMetricsResponse message. Does not implicitly {@link mysqlctl.HostMetricsResponse.verify|verify} messages.
+         * @param message HostMetricsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IHostMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified HostMetricsResponse message, length delimited. Does not implicitly {@link mysqlctl.HostMetricsResponse.verify|verify} messages.
+         * @param message HostMetricsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IHostMetricsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a HostMetricsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns HostMetricsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.HostMetricsResponse;
+
+        /**
+         * Decodes a HostMetricsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns HostMetricsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.HostMetricsResponse;
+
+        /**
+         * Verifies a HostMetricsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a HostMetricsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns HostMetricsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.HostMetricsResponse;
+
+        /**
+         * Creates a plain object from a HostMetricsResponse message. Also converts values to other types if specified.
+         * @param message HostMetricsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.HostMetricsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this HostMetricsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for HostMetricsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace HostMetricsResponse {
+
+        /** Properties of a Metric. */
+        interface IMetric {
+
+            /** Metric name */
+            name?: (string|null);
+
+            /** Metric value */
+            value?: (number|null);
+
+            /** Metric error */
+            error?: (vtrpc.IRPCError|null);
+        }
+
+        /** Represents a Metric. */
+        class Metric implements IMetric {
+
+            /**
+             * Constructs a new Metric.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: mysqlctl.HostMetricsResponse.IMetric);
+
+            /** Metric name. */
+            public name: string;
+
+            /** Metric value. */
+            public value: number;
+
+            /** Metric error. */
+            public error?: (vtrpc.IRPCError|null);
+
+            /**
+             * Creates a new Metric instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns Metric instance
+             */
+            public static create(properties?: mysqlctl.HostMetricsResponse.IMetric): mysqlctl.HostMetricsResponse.Metric;
+
+            /**
+             * Encodes the specified Metric message. Does not implicitly {@link mysqlctl.HostMetricsResponse.Metric.verify|verify} messages.
+             * @param message Metric message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: mysqlctl.HostMetricsResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified Metric message, length delimited. Does not implicitly {@link mysqlctl.HostMetricsResponse.Metric.verify|verify} messages.
+             * @param message Metric message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: mysqlctl.HostMetricsResponse.IMetric, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a Metric message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns Metric
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.HostMetricsResponse.Metric;
+
+            /**
+             * Decodes a Metric message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns Metric
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.HostMetricsResponse.Metric;
+
+            /**
+             * Verifies a Metric message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a Metric message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns Metric
+             */
+            public static fromObject(object: { [k: string]: any }): mysqlctl.HostMetricsResponse.Metric;
+
+            /**
+             * Creates a plain object from a Metric message. Also converts values to other types if specified.
+             * @param message Metric
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: mysqlctl.HostMetricsResponse.Metric, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this Metric to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Metric
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
+    /** Represents a MysqlCtl */
+    class MysqlCtl extends $protobuf.rpc.Service {
+
+        /**
+         * Constructs a new MysqlCtl service.
+         * @param rpcImpl RPC implementation
+         * @param [requestDelimited=false] Whether requests are length-delimited
+         * @param [responseDelimited=false] Whether responses are length-delimited
+         */
+        constructor(rpcImpl: $protobuf.RPCImpl, requestDelimited?: boolean, responseDelimited?: boolean);
+
+        /**
+         * Creates new MysqlCtl service using the specified rpc implementation.
+         * @param rpcImpl RPC implementation
+         * @param [requestDelimited=false] Whether requests are length-delimited
+         * @param [responseDelimited=false] Whether responses are length-delimited
+         * @returns RPC service. Useful where requests and/or responses are streamed.
+         */
+        public static create(rpcImpl: $protobuf.RPCImpl, requestDelimited?: boolean, responseDelimited?: boolean): MysqlCtl;
+
+        /**
+         * Calls Start.
+         * @param request StartRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and StartResponse
+         */
+        public start(request: mysqlctl.IStartRequest, callback: mysqlctl.MysqlCtl.StartCallback): void;
+
+        /**
+         * Calls Start.
+         * @param request StartRequest message or plain object
+         * @returns Promise
+         */
+        public start(request: mysqlctl.IStartRequest): Promise<mysqlctl.StartResponse>;
+
+        /**
+         * Calls Shutdown.
+         * @param request ShutdownRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ShutdownResponse
+         */
+        public shutdown(request: mysqlctl.IShutdownRequest, callback: mysqlctl.MysqlCtl.ShutdownCallback): void;
+
+        /**
+         * Calls Shutdown.
+         * @param request ShutdownRequest message or plain object
+         * @returns Promise
+         */
+        public shutdown(request: mysqlctl.IShutdownRequest): Promise<mysqlctl.ShutdownResponse>;
+
+        /**
+         * Calls RunMysqlUpgrade.
+         * @param request RunMysqlUpgradeRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and RunMysqlUpgradeResponse
+         */
+        public runMysqlUpgrade(request: mysqlctl.IRunMysqlUpgradeRequest, callback: mysqlctl.MysqlCtl.RunMysqlUpgradeCallback): void;
+
+        /**
+         * Calls RunMysqlUpgrade.
+         * @param request RunMysqlUpgradeRequest message or plain object
+         * @returns Promise
+         */
+        public runMysqlUpgrade(request: mysqlctl.IRunMysqlUpgradeRequest): Promise<mysqlctl.RunMysqlUpgradeResponse>;
+
+        /**
+         * Calls ApplyBinlogFile.
+         * @param request ApplyBinlogFileRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ApplyBinlogFileResponse
+         */
+        public applyBinlogFile(request: mysqlctl.IApplyBinlogFileRequest, callback: mysqlctl.MysqlCtl.ApplyBinlogFileCallback): void;
+
+        /**
+         * Calls ApplyBinlogFile.
+         * @param request ApplyBinlogFileRequest message or plain object
+         * @returns Promise
+         */
+        public applyBinlogFile(request: mysqlctl.IApplyBinlogFileRequest): Promise<mysqlctl.ApplyBinlogFileResponse>;
+
+        /**
+         * Calls ReadBinlogFilesTimestamps.
+         * @param request ReadBinlogFilesTimestampsRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ReadBinlogFilesTimestampsResponse
+         */
+        public readBinlogFilesTimestamps(request: mysqlctl.IReadBinlogFilesTimestampsRequest, callback: mysqlctl.MysqlCtl.ReadBinlogFilesTimestampsCallback): void;
+
+        /**
+         * Calls ReadBinlogFilesTimestamps.
+         * @param request ReadBinlogFilesTimestampsRequest message or plain object
+         * @returns Promise
+         */
+        public readBinlogFilesTimestamps(request: mysqlctl.IReadBinlogFilesTimestampsRequest): Promise<mysqlctl.ReadBinlogFilesTimestampsResponse>;
+
+        /**
+         * Calls ReinitConfig.
+         * @param request ReinitConfigRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and ReinitConfigResponse
+         */
+        public reinitConfig(request: mysqlctl.IReinitConfigRequest, callback: mysqlctl.MysqlCtl.ReinitConfigCallback): void;
+
+        /**
+         * Calls ReinitConfig.
+         * @param request ReinitConfigRequest message or plain object
+         * @returns Promise
+         */
+        public reinitConfig(request: mysqlctl.IReinitConfigRequest): Promise<mysqlctl.ReinitConfigResponse>;
+
+        /**
+         * Calls RefreshConfig.
+         * @param request RefreshConfigRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and RefreshConfigResponse
+         */
+        public refreshConfig(request: mysqlctl.IRefreshConfigRequest, callback: mysqlctl.MysqlCtl.RefreshConfigCallback): void;
+
+        /**
+         * Calls RefreshConfig.
+         * @param request RefreshConfigRequest message or plain object
+         * @returns Promise
+         */
+        public refreshConfig(request: mysqlctl.IRefreshConfigRequest): Promise<mysqlctl.RefreshConfigResponse>;
+
+        /**
+         * Calls VersionString.
+         * @param request VersionStringRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VersionStringResponse
+         */
+        public versionString(request: mysqlctl.IVersionStringRequest, callback: mysqlctl.MysqlCtl.VersionStringCallback): void;
+
+        /**
+         * Calls VersionString.
+         * @param request VersionStringRequest message or plain object
+         * @returns Promise
+         */
+        public versionString(request: mysqlctl.IVersionStringRequest): Promise<mysqlctl.VersionStringResponse>;
+
+        /**
+         * Calls HostMetrics.
+         * @param request HostMetricsRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and HostMetricsResponse
+         */
+        public hostMetrics(request: mysqlctl.IHostMetricsRequest, callback: mysqlctl.MysqlCtl.HostMetricsCallback): void;
+
+        /**
+         * Calls HostMetrics.
+         * @param request HostMetricsRequest message or plain object
+         * @returns Promise
+         */
+        public hostMetrics(request: mysqlctl.IHostMetricsRequest): Promise<mysqlctl.HostMetricsResponse>;
+    }
+
+    namespace MysqlCtl {
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#start}.
+         * @param error Error, if any
+         * @param [response] StartResponse
+         */
+        type StartCallback = (error: (Error|null), response?: mysqlctl.StartResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#shutdown}.
+         * @param error Error, if any
+         * @param [response] ShutdownResponse
+         */
+        type ShutdownCallback = (error: (Error|null), response?: mysqlctl.ShutdownResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#runMysqlUpgrade}.
+         * @param error Error, if any
+         * @param [response] RunMysqlUpgradeResponse
+         */
+        type RunMysqlUpgradeCallback = (error: (Error|null), response?: mysqlctl.RunMysqlUpgradeResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#applyBinlogFile}.
+         * @param error Error, if any
+         * @param [response] ApplyBinlogFileResponse
+         */
+        type ApplyBinlogFileCallback = (error: (Error|null), response?: mysqlctl.ApplyBinlogFileResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#readBinlogFilesTimestamps}.
+         * @param error Error, if any
+         * @param [response] ReadBinlogFilesTimestampsResponse
+         */
+        type ReadBinlogFilesTimestampsCallback = (error: (Error|null), response?: mysqlctl.ReadBinlogFilesTimestampsResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#reinitConfig}.
+         * @param error Error, if any
+         * @param [response] ReinitConfigResponse
+         */
+        type ReinitConfigCallback = (error: (Error|null), response?: mysqlctl.ReinitConfigResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#refreshConfig}.
+         * @param error Error, if any
+         * @param [response] RefreshConfigResponse
+         */
+        type RefreshConfigCallback = (error: (Error|null), response?: mysqlctl.RefreshConfigResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#versionString}.
+         * @param error Error, if any
+         * @param [response] VersionStringResponse
+         */
+        type VersionStringCallback = (error: (Error|null), response?: mysqlctl.VersionStringResponse) => void;
+
+        /**
+         * Callback as used by {@link mysqlctl.MysqlCtl#hostMetrics}.
+         * @param error Error, if any
+         * @param [response] HostMetricsResponse
+         */
+        type HostMetricsCallback = (error: (Error|null), response?: mysqlctl.HostMetricsResponse) => void;
+    }
+
+    /** Properties of a BackupInfo. */
+    interface IBackupInfo {
+
+        /** BackupInfo name */
+        name?: (string|null);
+
+        /** BackupInfo directory */
+        directory?: (string|null);
+
+        /** BackupInfo keyspace */
+        keyspace?: (string|null);
+
+        /** BackupInfo shard */
+        shard?: (string|null);
+
+        /** BackupInfo tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BackupInfo time */
+        time?: (vttime.ITime|null);
+
+        /** BackupInfo engine */
+        engine?: (string|null);
+
+        /** BackupInfo status */
+        status?: (mysqlctl.BackupInfo.Status|null);
+    }
+
+    /** Represents a BackupInfo. */
+    class BackupInfo implements IBackupInfo {
+
+        /**
+         * Constructs a new BackupInfo.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: mysqlctl.IBackupInfo);
+
+        /** BackupInfo name. */
+        public name: string;
+
+        /** BackupInfo directory. */
+        public directory: string;
+
+        /** BackupInfo keyspace. */
+        public keyspace: string;
+
+        /** BackupInfo shard. */
+        public shard: string;
+
+        /** BackupInfo tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** BackupInfo time. */
+        public time?: (vttime.ITime|null);
+
+        /** BackupInfo engine. */
+        public engine: string;
+
+        /** BackupInfo status. */
+        public status: mysqlctl.BackupInfo.Status;
+
+        /**
+         * Creates a new BackupInfo instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BackupInfo instance
+         */
+        public static create(properties?: mysqlctl.IBackupInfo): mysqlctl.BackupInfo;
+
+        /**
+         * Encodes the specified BackupInfo message. Does not implicitly {@link mysqlctl.BackupInfo.verify|verify} messages.
+         * @param message BackupInfo message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: mysqlctl.IBackupInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BackupInfo message, length delimited. Does not implicitly {@link mysqlctl.BackupInfo.verify|verify} messages.
+         * @param message BackupInfo message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: mysqlctl.IBackupInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BackupInfo message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BackupInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): mysqlctl.BackupInfo;
+
+        /**
+         * Decodes a BackupInfo message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BackupInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): mysqlctl.BackupInfo;
+
+        /**
+         * Verifies a BackupInfo message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BackupInfo message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BackupInfo
+         */
+        public static fromObject(object: { [k: string]: any }): mysqlctl.BackupInfo;
+
+        /**
+         * Creates a plain object from a BackupInfo message. Also converts values to other types if specified.
+         * @param message BackupInfo
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: mysqlctl.BackupInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BackupInfo to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BackupInfo
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace BackupInfo {
+
+        /** Status enum. */
+        enum Status {
+            UNKNOWN = 0,
+            INCOMPLETE = 1,
+            COMPLETE = 2,
+            INVALID = 3,
+            VALID = 4
+        }
     }
 }
 
@@ -58341,7 +58741,7 @@ export namespace vtctldata {
         promoted_primary?: (topodata.ITabletAlias|null);
 
         /** EmergencyReparentShardResponse events */
-        events?: (logutil.IEvent[]|null);
+        events?: (eventsdata.IReparentPhaseEvent[]|null);
     }
 
     /** Represents an EmergencyReparentShardResponse. */
@@ -58363,7 +58763,7 @@ export namespace vtctldata {
         public promoted_primary?: (topodata.ITabletAlias|null);
 
         /** EmergencyReparentShardResponse events. */
-        public events: logutil.IEvent[];
+        public events: eventsdata.IReparentPhaseEvent[];
 
         /**
          * Creates a new EmergencyReparentShardResponse instance using the specified properties.
@@ -69760,7 +70160,7 @@ export namespace vtctldata {
         promoted_primary?: (topodata.ITabletAlias|null);
 
         /** PlannedReparentShardResponse events */
-        events?: (logutil.IEvent[]|null);
+        events?: (eventsdata.IReparentPhaseEvent[]|null);
     }
 
     /** Represents a PlannedReparentShardResponse. */
@@ -69782,7 +70182,7 @@ export namespace vtctldata {
         public promoted_primary?: (topodata.ITabletAlias|null);
 
         /** PlannedReparentShardResponse events. */
-        public events: logutil.IEvent[];
+        public events: eventsdata.IReparentPhaseEvent[];
 
         /**
          * Creates a new PlannedReparentShardResponse instance using the specified properties.

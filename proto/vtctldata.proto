@@ -23,6 +23,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtctldata";
 package vtctldata;
 
 import "binlogdata.proto";
+import 'eventsdata.proto';
 import "logutil.proto";
 import "mysqlctl.proto";
 import "query.proto";
@@ -754,7 +755,7 @@ message EmergencyReparentShardResponse {
   // alias. Otherwise, it will be the alias of the tablet found to be most
   // up-to-date.
   topodata.TabletAlias promoted_primary = 3;
-  repeated logutil.Event events = 4;
+  repeated eventsdata.ReparentPhaseEvent events = 4;
 }
 
 message ExecuteFetchAsAppRequest {
@@ -1509,7 +1510,7 @@ message PlannedReparentShardResponse {
   // alias. Otherwise, it will be the alias of the tablet found to be most
   // up-to-date.
   topodata.TabletAlias promoted_primary = 3;
-  repeated logutil.Event events = 4;
+  repeated eventsdata.ReparentPhaseEvent events = 4;
 }
 
 message RebuildKeyspaceGraphRequest {

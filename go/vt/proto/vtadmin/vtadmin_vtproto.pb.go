@@ -12,6 +12,7 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	math "math"
+	eventsdata "vitess.io/vitess/go/vt/proto/eventsdata"
 	logutil "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctl "vitess.io/vitess/go/vt/proto/mysqlctl"
 	tabletmanagerdata "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -698,7 +699,7 @@ func (m *EmergencyFailoverShardResponse) CloneVT() *EmergencyFailoverShardRespon
 	r.Shard = m.Shard
 	r.PromotedPrimary = m.PromotedPrimary.CloneVT()
 	if rhs := m.Events; rhs != nil {
-		tmpContainer := make([]*logutil.Event, len(rhs))
+		tmpContainer := make([]*eventsdata.ReparentPhaseEvent, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
@@ -1890,7 +1891,7 @@ func (m *PlannedFailoverShardResponse) CloneVT() *PlannedFailoverShardResponse {
 	r.Shard = m.Shard
 	r.PromotedPrimary = m.PromotedPrimary.CloneVT()
 	if rhs := m.Events; rhs != nil {
-		tmpContainer := make([]*logutil.Event, len(rhs))
+		tmpContainer := make([]*eventsdata.ReparentPhaseEvent, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
@@ -17790,7 +17791,7 @@ func (m *EmergencyFailoverShardResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Events = append(m.Events, &logutil.Event{})
+			m.Events = append(m.Events, &eventsdata.ReparentPhaseEvent{})
 			if err := m.Events[len(m.Events)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -24206,7 +24207,7 @@ func (m *PlannedFailoverShardResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Events = append(m.Events, &logutil.Event{})
+			m.Events = append(m.Events, &eventsdata.ReparentPhaseEvent{})
 			if err := m.Events[len(m.Events)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}

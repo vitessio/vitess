@@ -125,11 +125,11 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace stri
 		switch err {
 		case nil:
 			ersCounter.Add(append(statsLabels, successResult), 1)
-			event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_Finished)
+			event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_Finished)
 		default:
 			ersCounter.Add(append(statsLabels, failureResult), 1)
 			ev.Error = err.Error()
-			event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_Failed)
+			event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_Failed)
 		}
 	}()
 
@@ -208,7 +208,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	ev.OldPrimary = prevPrimary
 
 	// read all the tablets and their information
-	event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_ReadAllTablets)
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_ReadAllTablets)
 	tabletMap, err = erp.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", keyspace, shard, err)
@@ -523,7 +523,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	primaryCtx, primaryCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer primaryCancel()
 
-	event.DispatchUpdate(ev, eventsdatapb.ReparentPhase_ReparentAllTablets)
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_ReparentAllTablets)
 
 	// Create a context and cancel function to watch for the first successful
 	// SetReplicationSource call on a replica. We use a background context so that this

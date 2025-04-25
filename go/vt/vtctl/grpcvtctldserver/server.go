@@ -1336,6 +1336,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	resp = &vtctldatapb.EmergencyReparentShardResponse{
 		Keyspace: req.Keyspace,
 		Shard:    req.Shard,
+		Events:   ev.GetPhaseEvents(),
 	}
 
 	if ev != nil {
@@ -1347,11 +1348,13 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		}
 	}
 
-	m.RLock()
-	defer m.RUnlock()
+	/*
+		m.RLock()
+		defer m.RUnlock()
 
-	resp.Events = make([]*logutilpb.Event, len(logstream))
-	copy(resp.Events, logstream)
+		resp.Events = make([]*logutilpb.Event, len(logstream))
+		copy(resp.Events, logstream)
+	*/
 
 	return resp, err
 }
@@ -3323,6 +3326,7 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 	resp = &vtctldatapb.PlannedReparentShardResponse{
 		Keyspace: req.Keyspace,
 		Shard:    req.Shard,
+		Events:   ev.GetPhaseEvents(),
 	}
 
 	if ev != nil {
@@ -3334,11 +3338,13 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		}
 	}
 
-	m.RLock()
-	defer m.RUnlock()
+	/*
+		m.RLock()
+		defer m.RUnlock()
 
-	resp.Events = make([]*logutilpb.Event, len(logstream))
-	copy(resp.Events, logstream)
+		resp.Events = make([]*logutilpb.Event, len(logstream))
+		copy(resp.Events, logstream)
+	*/
 
 	return resp, err
 }

@@ -28,7 +28,7 @@ import (
 )
 
 func TestReparentSyslog(t *testing.T) {
-	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [reparent cell-0000012345 -> cell-0000054321] PrimaryElected (123-456-789)"
+	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [reparent cell-0000012345 -> cell-0000054321] elected new primary candidate (123-456-789)"
 	tc := NewReparent(
 		topo.NewShardInfo("keyspace-123", "shard-123", nil, nil),
 		&eventsdatapb.Source{},
@@ -47,7 +47,7 @@ func TestReparentSyslog(t *testing.T) {
 		},
 	)
 	tc.Id = "123-456-789"
-	tc.Update(eventsdatapb.ReparentPhase_PrimaryElected)
+	tc.Update(eventsdatapb.ReparentPhaseType_PrimaryElected)
 	gotSev, gotMsg := tc.Syslog()
 
 	if gotSev != wantSev {

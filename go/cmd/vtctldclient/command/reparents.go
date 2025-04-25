@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -150,7 +149,7 @@ func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, event := range resp.Events {
-		fmt.Println(logutil.EventString(event))
+		fmt.Println(event.String())
 	}
 
 	return nil
@@ -251,7 +250,7 @@ func commandPlannedReparentShard(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, event := range resp.Events {
-		fmt.Println(logutil.EventString(event))
+		fmt.Println(event.String())
 	}
 
 	return nil
