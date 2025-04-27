@@ -425,9 +425,8 @@ func (set Mysql56GTIDSet) AddGTIDInPlace(gtid GTID) GTIDSet {
 			// Can't be merged.
 			newIntervals = append(newIntervals, iv)
 		}
-
-		set[gtid56.Server] = newIntervals
 	}
+	set[gtid56.Server] = newIntervals
 
 	if !added {
 		// There wasn't any place to insert the new GTID, so just append it
