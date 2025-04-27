@@ -143,7 +143,7 @@ func AppendGTIDSetInPlace(rp Position, gtidSet GTIDSet) Position {
 	if rp.GTIDSet == nil {
 		return AppendGTIDSet(rp, gtidSet)
 	}
-	rp.GTIDSet = rp.GTIDSet.InPlaceUnion(gtidSet)
+	rp.GTIDSet = rp.GTIDSet.UnionInPlace(gtidSet)
 	return rp
 }
 

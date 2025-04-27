@@ -157,7 +157,7 @@ func (gtid FilePosGTID) Union(other GTIDSet) GTIDSet {
 }
 
 // Union implements GTIDSet.Union().
-func (gtid FilePosGTID) InPlaceUnion(other GTIDSet) GTIDSet {
+func (gtid FilePosGTID) UnionInPlace(other GTIDSet) GTIDSet {
 	gtid = gtid.Union(other).(FilePosGTID)
 
 	return gtid

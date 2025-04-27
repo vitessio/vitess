@@ -508,7 +508,7 @@ func (set Mysql56GTIDSet) Union(other GTIDSet) GTIDSet {
 }
 
 // Union implements GTIDSet.Union().
-func (set Mysql56GTIDSet) InPlaceUnion(other GTIDSet) GTIDSet {
+func (set Mysql56GTIDSet) UnionInPlace(other GTIDSet) GTIDSet {
 	if other == nil {
 		return set
 	}

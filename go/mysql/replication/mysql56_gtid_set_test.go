@@ -529,7 +529,7 @@ func TestMysql56GTIDSetInPlaceUnion(t *testing.T) {
 		sid3: []interval{{1, 45}},
 	}
 
-	got := set1.InPlaceUnion(set2)
+	got := set1.UnionInPlace(set2)
 
 	want := Mysql56GTIDSet{
 		sid1: []interval{{20, 31}, {35, 46}},
@@ -596,7 +596,7 @@ func BenchmarkMysql56GTIDSetUnion(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		for _, p := range positions {
-			pos.GTIDSet = p.GTIDSet.InPlaceUnion(pos.GTIDSet)
+			pos.GTIDSet = p.GTIDSet.UnionInPlace(pos.GTIDSet)
 		}
 	}
 }
@@ -622,7 +622,7 @@ func BenchmarkMysql56GTIDSetUnionHappyPath(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		for _, p := range positions {
-			pos.GTIDSet = pos.GTIDSet.InPlaceUnion(p.GTIDSet)
+			pos.GTIDSet = pos.GTIDSet.UnionInPlace(p.GTIDSet)
 		}
 	}
 }
