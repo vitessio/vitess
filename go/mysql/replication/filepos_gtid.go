@@ -141,7 +141,7 @@ func (gtid FilePosGTID) AddGTID(other GTID) GTIDSet {
 	return filePosOther
 }
 
-// AddGTID implements GTIDSet.AddGTID().
+// AddGTIDInPlace implements GTIDSet.AddGTIDInPlace().
 func (gtid FilePosGTID) AddGTIDInPlace(other GTID) GTIDSet {
 	return gtid.AddGTID(other)
 }
