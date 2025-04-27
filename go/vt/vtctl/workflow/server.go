@@ -27,6 +27,7 @@ import (
 	"text/template"
 	"time"
 
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
@@ -36,6 +37,7 @@ import (
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -545,18 +547,18 @@ func (s *Server) LookupVindexComplete(ctx context.Context, req *vtctldatapb.Look
 	span.Annotate("name", req.Name)
 	span.Annotate("table_keyspace", req.TableKeyspace)
 
-	vindex, _, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
-	if err != nil {
-		return nil, err
-	}
-
 	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
 	if err != nil {
 		return nil, err
 	}
 
 	lv := newLookupVindex(s)
-	if err = lv.validateExternalized(ctx, vindex, req.Name, targetShards); err != nil {
+	vindexByName, _, err := lv.getVindexesAndVSchema(ctx, req.Keyspace, req.Name, targetShards)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = lv.validateExternalized(ctx, vindexByName, req.Name, targetShards); err != nil {
 		return nil, err
 	}
 
@@ -590,6 +592,17 @@ func (s *Server) LookupVindexCreate(ctx context.Context, req *vtctldatapb.Lookup
 	ms, sourceVSchema, targetVSchema, cancelFunc, err := lv.prepareCreate(ctx, req.Workflow, req.Keyspace, req.Vindex, req.ContinueAfterCopyWithOwner)
 	if err != nil {
 		return nil, err
+	}
+
+	// We are including lookup vindexes names in the workflow options so that
+	// this can be used later in externalize, internalize or complete to fetch
+	// lookup vindexes names that the workflow is backfilling.
+	if ms.WorkflowOptions == nil {
+		ms.WorkflowOptions = &vtctldatapb.WorkflowOptions{
+			LookupVindexes: maps.Keys(req.Vindex.Vindexes),
+		}
+	} else {
+		ms.WorkflowOptions.LookupVindexes = maps.Keys(req.Vindex.Vindexes)
 	}
 
 	if err := s.ts.SaveVSchema(ctx, targetVSchema); err != nil {
@@ -633,56 +646,28 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("table_keyspace", req.TableKeyspace)
 	span.Annotate("delete_workflow", req.DeleteWorkflow)
 
-	vindex, sourceKsVS, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
-	if err != nil {
-		return nil, err
-	}
-
 	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
 	if err != nil {
 		return nil, err
 	}
 
-	err = forAllShards(targetShards, func(targetShard *topo.ShardInfo) error {
-		targetPrimary, err := s.ts.GetTablet(ctx, targetShard.PrimaryAlias)
-		if err != nil {
-			return err
-		}
-		res, err := s.tmc.ReadVReplicationWorkflow(ctx, targetPrimary.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
-			Workflow: req.Name,
-		})
-		if err != nil {
-			return err
-		}
-		if res == nil || res.Workflow == "" {
-			return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "workflow %s not found on %v", req.Name, topoproto.TabletAliasString(targetPrimary.Alias))
-		}
-		for _, stream := range res.Streams {
-			if stream.Bls.Filter == nil || len(stream.Bls.Filter.Rules) != 1 {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid binlog source")
-			}
-			if vindex.Owner == "" || !stream.Bls.StopAfterCopy {
-				// If there's no owner or we've requested that the workflow NOT be stopped
-				// after the copy phase completes, then all streams need to be running.
-				if stream.State != binlogdatapb.VReplicationWorkflowState_Running {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Running state: %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State)
-				}
-			} else {
-				// If there is an owner, all streams need to be stopped after copy.
-				if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped || !strings.Contains(stream.Message, "Stopped after copy") {
-					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream %d for %v.%v is not in Stopped after copy state: %v, %v", stream.Id, targetShard.Keyspace(), targetShard.ShardName(), stream.State, stream.Message)
-				}
-			}
-		}
-		return nil
-	})
+	lv := newLookupVindex(s)
+	vindexByName, sourceKsVS, err := lv.getVindexesAndVSchema(ctx, req.Keyspace, req.Name, targetShards)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &vtctldatapb.LookupVindexExternalizeResponse{}
+	isBackfillingOwned, err := IsBackfillingOwnedVindexes(vindexByName)
+	if err != nil {
+		return nil, err
+	}
 
-	if vindex.Owner != "" {
+	if err := lv.validateInternalizedState(ctx, req.Name, isBackfillingOwned, targetShards); err != nil {
+		return nil, err
+	}
+
+	resp := &vtctldatapb.LookupVindexExternalizeResponse{}
+	if isBackfillingOwned {
 		// If there is an owner, we have to stop/delete the streams. Once we
 		// externalize it the VTGate will now be responsible for keeping the
 		// lookup table up to date with the owner table.
@@ -721,8 +706,12 @@ func (s *Server) LookupVindexExternalize(ctx context.Context, req *vtctldatapb.L
 		}
 	}
 
-	// Remove the write_only param and save the source vschema.
-	delete(vindex.Params, "write_only")
+	for _, vindex := range vindexByName {
+		// Remove the write_only param from each vindex.
+		delete(vindex.Params, "write_only")
+	}
+
+	// Save the source vschema.
 	if err := s.ts.SaveVSchema(ctx, sourceKsVS); err != nil {
 		return nil, err
 	}
@@ -738,23 +727,25 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 	span.Annotate("name", req.Name)
 	span.Annotate("table_keyspace", req.TableKeyspace)
 
-	vindex, sourceKsVS, err := getVindexAndVSchema(ctx, s.ts, req.Keyspace, req.Name)
-	if err != nil {
-		return nil, err
-	}
-
 	targetShards, err := s.ts.GetServingShards(ctx, req.TableKeyspace)
 	if err != nil {
 		return nil, err
 	}
 
 	lv := newLookupVindex(s)
-	if err = lv.validateExternalized(ctx, vindex, req.Name, targetShards); err != nil {
+	vindexByName, sourceKsVS, err := lv.getVindexesAndVSchema(ctx, req.Keyspace, req.Name, targetShards)
+	if err != nil {
 		return nil, err
 	}
 
-	// Make the vindex back to write_only and save the source vschema.
-	vindex.Params["write_only"] = "true"
+	if err = lv.validateExternalized(ctx, vindexByName, req.Name, targetShards); err != nil {
+		return nil, err
+	}
+
+	// Make the vindexes back to write_only and save the source vschema.
+	for _, vindex := range vindexByName {
+		vindex.Params["write_only"] = "true"
+	}
 	if err := s.ts.SaveVSchema(ctx, sourceKsVS); err != nil {
 		return nil, err
 	}
@@ -830,6 +821,196 @@ func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSet
 		return err
 	}
 	return mz.startStreams(ctx)
+}
+
+// WorkflowAddTables adds specified tables to the existing workflow.
+func (s *Server) WorkflowAddTables(ctx context.Context, req *vtctldatapb.WorkflowAddTablesRequest) error {
+	if len(req.TableSettings) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tables found in the request")
+	}
+
+	targetShardInfos, err := s.ts.GetServingShards(ctx, req.Keyspace)
+	if err != nil {
+		return err
+	}
+
+	lockName := fmt.Sprintf("%s/%s", req.Keyspace, req.Workflow)
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "MaterializeAddTables")
+	if lockErr != nil {
+		return vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
+	}
+	defer workflowUnlock(&err)
+
+	ctx, targetUnlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "MaterializeAddTables")
+	if lockErr != nil {
+		return vterrors.Wrapf(lockErr, "failed to lock the %s keyspace", req.Keyspace)
+	}
+	defer targetUnlock(&err)
+
+	streamsByTargetShard, sourceKeyspace, workflowType, err := s.validateAndGetStreamsAndSourceKeyspace(ctx, targetShardInfos, req.TableSettings, req.Workflow)
+	if err != nil {
+		return err
+	}
+	if sourceKeyspace == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "source keyspace not found for workflow %s", req.Workflow)
+	}
+
+	// We only allow adding tables for MoveTables and Materialize workflows.
+	if workflowType != binlogdatapb.VReplicationWorkflowType_Materialize &&
+		workflowType != binlogdatapb.VReplicationWorkflowType_MoveTables {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot add tables for workflow type %s", workflowType)
+	}
+
+	// Stop the streams
+	err = forAllShards(targetShardInfos, func(target *topo.ShardInfo) error {
+		tablet, err := s.ts.GetTablet(ctx, target.PrimaryAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
+		}
+		if _, err := s.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow: req.Workflow,
+			State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+		}); err != nil {
+			return vterrors.Wrapf(err, "failed to stop workflow %s on shard %s/%s", req.Workflow, req.Keyspace, tablet.Shard)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if req.MaterializationIntent == vtctldatapb.MaterializationIntent_REFERENCE {
+		// If SourceExpression is empty or CreateDdl is empty we set it to
+		// values corresponding to a reference table.
+		for _, ts := range req.TableSettings {
+			if ts.SourceExpression == "" {
+				ts.SourceExpression = fmt.Sprintf("select * from %s", ts.TargetTable)
+			}
+			if ts.CreateDdl == "" {
+				ts.CreateDdl = createDDLAsCopyDropForeignKeys
+			}
+		}
+	}
+
+	materializationIntent := vtctldatapb.MaterializationIntent_CUSTOM
+	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables {
+		materializationIntent = vtctldatapb.MaterializationIntent_MOVETABLES
+	}
+
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:              req.Workflow,
+		MaterializationIntent: materializationIntent,
+		TargetKeyspace:        req.Keyspace,
+		SourceKeyspace:        sourceKeyspace,
+		TableSettings:         req.TableSettings,
+	}
+	mz := &materializer{
+		ctx:          ctx,
+		ts:           s.ts,
+		sourceTs:     s.ts,
+		tmc:          s.tmc,
+		env:          s.env,
+		ms:           ms,
+		workflowType: workflowType,
+	}
+	if err := mz.buildMaterializer(); err != nil {
+		return err
+	}
+	if err := mz.deploySchema(); err != nil {
+		// If there was an error while deploying schema, we should restart the
+		// streams before returning the error.
+		if startStreamsErr := mz.startStreams(ctx); startStreamsErr != nil {
+			return vterrors.Wrapf(startStreamsErr, "unable to restart workflow %s and failed to deploy schema: %v", req.Workflow, err)
+		}
+		return vterrors.Wrapf(err, "failed to deploy schema")
+	}
+
+	if err := mz.insertTablesInCopyStateTable(ctx, streamsByTargetShard); err != nil {
+		return err
+	}
+
+	// Generate the rules using TableSettings, append the binglogsource filter
+	// rules and start the streams.
+	return forAllShards(targetShardInfos, func(target *topo.ShardInfo) error {
+		tablet, err := s.ts.GetTablet(ctx, target.PrimaryAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.PrimaryAlias)
+		}
+
+		// This is similar to what we follow while creating workflow streams.
+		sourceShards := mz.filterSourceShards(target)
+		streamKeyRangesEqual := len(sourceShards) == 1 && key.KeyRangeEqual(sourceShards[0].KeyRange, target.KeyRange)
+
+		var rules []*binlogdatapb.Rule
+		for _, ts := range req.TableSettings {
+			rule, err := mz.generateRule(ts, target, nil, streamKeyRangesEqual)
+			if err != nil {
+				return err
+			}
+			rules = append(rules, rule)
+		}
+
+		if _, err := s.tmc.UpdateVReplicationWorkflow(ctx, tablet.Tablet, &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow:    req.Workflow,
+			FilterRules: rules,
+			State:       ptr.Of(binlogdatapb.VReplicationWorkflowState_Running),
+		}); err != nil {
+			return vterrors.Wrapf(err, "failed to update workflow %s on shard %s/%s", req.Workflow, req.Keyspace, tablet.Shard)
+		}
+		return nil
+	})
+}
+
+// validateAndGetStreamsAndSourceKeyspace validates that there are no duplicate
+// tables, and returns streamsByTargetShard, source keyspace and workflow type.
+func (s *Server) validateAndGetStreamsAndSourceKeyspace(ctx context.Context, targetShardInfos []*topo.ShardInfo, tableSettings []*vtctldatapb.TableMaterializeSettings, workflowName string,
+) (map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream, string, binlogdatapb.VReplicationWorkflowType, error) {
+	tableSet := sets.New[string]()
+	for _, ts := range tableSettings {
+		tableSet.Insert(ts.TargetTable)
+	}
+
+	streamsByTargetShard := make(map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream)
+
+	var (
+		mu             sync.Mutex
+		sourceKeyspace string
+		workflowType   binlogdatapb.VReplicationWorkflowType
+	)
+
+	// Validation for duplicate tables.
+	err := forAllShards(targetShardInfos, func(si *topo.ShardInfo) error {
+		tablet, err := s.ts.GetTablet(ctx, si.PrimaryAlias)
+		if err != nil {
+			return err
+		}
+		res, err := s.tmc.ReadVReplicationWorkflow(ctx, tablet.Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: workflowName,
+		})
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to read workflow %s on shard %s/%s", workflowName, tablet.Keyspace, tablet.Shard)
+		}
+
+		func() {
+			mu.Lock()
+			defer mu.Unlock()
+			if len(res.Streams) > 0 && sourceKeyspace == "" {
+				sourceKeyspace = res.Streams[0].Bls.Keyspace
+			}
+			workflowType = res.WorkflowType
+			streamsByTargetShard[tablet.Shard] = res.Streams
+		}()
+
+		for _, stream := range res.Streams {
+			for _, rule := range stream.Bls.Filter.Rules {
+				if tableSet.Has(rule.Match) {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "rule for table %s already exists", rule.Match)
+				}
+			}
+		}
+		return nil
+	})
+	return streamsByTargetShard, sourceKeyspace, workflowType, err
 }
 
 func validateMaterializeSettings(ms *vtctldatapb.MaterializeSettings) error {
