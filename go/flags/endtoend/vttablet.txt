@@ -313,6 +313,7 @@ Flags:
       --restore_from_backup_ts string                                    (init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'
       --retain_online_ddl_tables duration                                How long should vttablet keep an old migrated table before purging it (default 24h0m0s)
       --s3_backup_aws_endpoint string                                    endpoint of the S3 backend (region must be provided).
+      --s3_backup_aws_min_partsize int                                   Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size. (default 5242880)
       --s3_backup_aws_region string                                      AWS region to use. (default "us-east-1")
       --s3_backup_aws_retries int                                        AWS request retries. (default -1)
       --s3_backup_force_path_style                                       force the s3 path style.

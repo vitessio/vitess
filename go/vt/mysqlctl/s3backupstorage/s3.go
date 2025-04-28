@@ -28,6 +28,7 @@ import (
 	"crypto/md5"
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -45,6 +46,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -52,6 +54,11 @@ import (
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/servenv"
+)
+
+const (
+	sseCustomerPrefix = "sse_c:"
+	MaxPartSize       = 1024 * 1024 * 1024 * 5 // 5GiB - limited by AWS https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
 )
 
 var (
@@ -83,6 +90,11 @@ var (
 
 	// path component delimiter
 	delimiter = "/"
+
+	// minimum part size
+	minPartSize int64
+
+	ErrPartSize = errors.New("minimum S3 part size must be between 5MiB and 5GiB")
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -95,6 +107,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&tlsSkipVerifyCert, "s3_backup_tls_skip_verify_cert", false, "skip the 'certificate is valid' check for SSL connections.")
 	fs.StringVar(&requiredLogLevel, "s3_backup_log_level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors.")
 	fs.StringVar(&sse, "s3_backup_server_side_encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).")
+	fs.Int64Var(&minPartSize, "s3_backup_aws_min_partsize", s3manager.MinUploadPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
 }
 
 func init() {
@@ -107,8 +120,6 @@ func init() {
 type logNameToLogLevel map[string]aws.LogLevelType
 
 var logNameMap logNameToLogLevel
-
-const sseCustomerPrefix = "sse_c:"
 
 // S3BackupHandle implements the backupstorage.BackupHandle interface.
 type S3BackupHandle struct {
@@ -153,15 +164,12 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 	}
 
 	// Calculate s3 upload part size using the source filesize
-	partSizeBytes := s3manager.DefaultUploadPartSize
-	if filesize > 0 {
-		minimumPartSize := float64(filesize) / float64(s3manager.MaxUploadParts)
-		// Round up to ensure large enough partsize
-		calculatedPartSizeBytes := int64(math.Ceil(minimumPartSize))
-		if calculatedPartSizeBytes > partSizeBytes {
-			partSizeBytes = calculatedPartSizeBytes
-		}
+	partSizeBytes, err := calculateUploadPartSize(filesize)
+	if err != nil {
+		return nil, err
 	}
+
+	bh.bs.params.Logger.Infof("Using S3 upload part size: %s", humanize.IBytes(uint64(partSizeBytes)))
 
 	reader, writer := io.Pipe()
 	bh.waitGroup.Add(1)
@@ -194,6 +202,32 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 	}()
 
 	return writer, nil
+}
+
+// calculateUploadPartSize is a helper to calculate the part size, taking into consideration the minimum part size
+// passed in by an operator.
+func calculateUploadPartSize(filesize int64) (partSizeBytes int64, err error) {
+	// Calculate s3 upload part size using the source filesize
+	partSizeBytes = s3manager.DefaultUploadPartSize
+	if filesize > 0 {
+		minimumPartSize := float64(filesize) / float64(s3manager.MaxUploadParts)
+		// Round up to ensure large enough partsize
+		calculatedPartSizeBytes := int64(math.Ceil(minimumPartSize))
+		if calculatedPartSizeBytes > partSizeBytes {
+			partSizeBytes = calculatedPartSizeBytes
+		}
+	}
+
+	if minPartSize != 0 && partSizeBytes < minPartSize {
+		if minPartSize > MaxPartSize || minPartSize < s3manager.MinUploadPartSize { // 5GiB and 5MiB respectively
+			return 0, fmt.Errorf("%w, currently set to %s",
+				ErrPartSize, humanize.IBytes(uint64(minPartSize)),
+			)
+		}
+		partSizeBytes = int64(minPartSize)
+	}
+
+	return
 }
 
 // EndBackup is part of the backupstorage.BackupHandle interface.
@@ -412,7 +446,7 @@ func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) e
 		}
 
 		for _, objError := range out.Errors {
-			return fmt.Errorf(objError.String())
+			return fmt.Errorf(objError.String()) //nolint:govet,staticcheck
 		}
 
 		if objs.NextContinuationToken == nil {

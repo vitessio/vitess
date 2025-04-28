@@ -93,6 +93,7 @@ require (
 require (
 	github.com/Shopify/toxiproxy/v2 v2.8.0
 	github.com/bndr/gotabulate v1.1.2
+	github.com/dustin/go-humanize v1.0.1
 	github.com/gammazero/deque v0.2.1
 	github.com/google/safehtml v0.1.0
 	github.com/hashicorp/go-cleanhttp v0.5.2
@@ -133,7 +134,6 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.6.1 // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect

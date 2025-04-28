@@ -196,6 +196,7 @@ Flags:
       --remote_operation_timeout duration                           time to wait for a remote operation (default 15s)
       --restart_before_backup                                       Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.
       --s3_backup_aws_endpoint string                               endpoint of the S3 backend (region must be provided).
+      --s3_backup_aws_min_partsize int                              Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size. (default 5242880)
       --s3_backup_aws_region string                                 AWS region to use. (default "us-east-1")
       --s3_backup_aws_retries int                                   AWS request retries. (default -1)
       --s3_backup_force_path_style                                  force the s3 path style.
