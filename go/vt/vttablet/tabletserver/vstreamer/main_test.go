@@ -269,6 +269,10 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				if !testRowEventFlags && evs[i].Type == binlogdatapb.VEventType_ROW {
 					evs[i].RowEvent.Flags = 0
 				}
+				// cleanup indeterministic fields:
+				evs[i].SequenceNumber = 0
+				evs[i].CommitParent = 0
+				evs[i].EventGtid = ""
 				want = env.RemoveAnyDeprecatedDisplayWidths(want)
 				if got := fmt.Sprintf("%v", evs[i]); got != want {
 					log.Errorf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
