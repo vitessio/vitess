@@ -19,7 +19,6 @@ package vstreamer
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -242,8 +241,13 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		vevent.Shard = vs.vse.shard
 
 		switch vevent.Type {
+		case binlogdatapb.VEventType_PREVIOUS_GTIDS:
+			// At this time do nothing. Ideally we would issue a `bufferedEvents = append(bufferedEvents, vevent)`,
+			// ie merged into the `case` clause below.
+			// But at this time the tests will fail as this event is unexpected. This is a TODO for the earliest
+			// opportunity to work on this.
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD,
-			binlogdatapb.VEventType_PREVIOUS_GTIDS, binlogdatapb.VEventType_JOURNAL:
+			binlogdatapb.VEventType_JOURNAL:
 			// We never have to send GTID, BEGIN, FIELD events on their own.
 			// A JOURNAL event is always preceded by a BEGIN and followed by a COMMIT.
 			// So, we don't have to send it right away.
@@ -389,7 +393,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			for _, vevent := range vevents {
 				if err := bufferAndTransmit(vevent); err != nil {
-					if errors.Is(vterrors.UnwrapAll(err), io.EOF) {
+					if err == io.EOF {
 						return nil
 					}
 					vs.vse.errorCounts.Add("BufferAndTransmit", 1)
@@ -414,7 +418,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case <-hbTimer.C:
 			checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOK(ctx, vs.throttlerApp)
 			if err := injectHeartbeat(!ok, checkResult.Summary()); err != nil {
-				if errors.Is(vterrors.UnwrapAll(err), io.EOF) {
+				if err == io.EOF {
 					return nil
 				}
 				vs.vse.errorCounts.Add("Send", 1)
@@ -440,10 +444,10 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 	if ev.IsFormatDescription() {
 		var err error
 		vs.format, err = ev.Format()
-		vs.eventGTID = nil
 		if err != nil {
 			return nil, fmt.Errorf("can't parse FORMAT_DESCRIPTION_EVENT: %v, event data: %#v", err, ev)
 		}
+		vs.eventGTID = nil
 		return nil, nil
 	}
 
@@ -695,7 +699,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		for {
 			tpevent, err := tp.GetNextEvent()
 			if err != nil {
-				if errors.Is(vterrors.UnwrapAll(err), io.EOF) {
+				if err == io.EOF {
 					break
 				}
 				return nil, err
