@@ -4766,6 +4766,7 @@
     "comment": "case statement in join condition for evaluation - tuple‐expr simplification in CASE",
     "query": "select 1 from user u1 join user u2 on u1.col = (case when u2.col = 2 then 0 when u2.col in (1, 2) then 1 else 2 end)",
     "plan": {
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select 1 from user u1 join user u2 on u1.col = (case when u2.col = 2 then 0 when u2.col in (1, 2) then 1 else 2 end)",
       "Instructions": {
@@ -4775,7 +4776,6 @@
         "JoinVars": {
           "u1_col": 1
         },
-        "TableName": "`user`_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -4785,8 +4785,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1, u1.col from `user` as u1 where 1 != 1",
-            "Query": "select 1, u1.col from `user` as u1",
-            "Table": "`user`"
+            "Query": "select 1, u1.col from `user` as u1"
           },
           {
             "OperatorType": "Route",
@@ -4796,8 +4795,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-            "Query": "select 1 from `user` as u2 where :u1_col /* INT16 */ = case when u2.col = 2 then 0 when u2.col in (1, 2) then 1 else 2 end",
-            "Table": "`user`"
+            "Query": "select 1 from `user` as u2 where :u1_col /* INT16 */ = case when u2.col = 2 then 0 when u2.col in (1, 2) then 1 else 2 end"
           }
         ]
       },
