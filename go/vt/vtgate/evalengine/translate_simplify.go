@@ -138,7 +138,7 @@ func simplifyExpr(env *ExpressionEnv, e IR) (IR, error) {
 		if err != nil {
 			return nil, err
 		}
-		return convertToIR(simplified), nil
+		return evalToIR(simplified), nil
 	}
 	if err := e.simplify(env); err != nil {
 		return nil, err
@@ -146,11 +146,14 @@ func simplifyExpr(env *ExpressionEnv, e IR) (IR, error) {
 	return e, nil
 }
 
-func convertToIR(simplified eval) IR {
-	if x, isTuple := simplified.(*evalTuple); isTuple {
-		var te TupleExpr
-		for _, t := range x.t {
-			te = append(te, convertToIR(t))
+// evalToIR turns an internal eval result into an IR:
+//   - if it’s an evalTuple, it recurses into a TupleExpr
+//   - otherwise it wraps the single value in a Literal
+func evalToIR(simplified eval) IR {
+	if tuple, isTuple := simplified.(*evalTuple); isTuple {
+		te := make(TupleExpr, len(tuple.t))
+		for i, t := range tuple.t {
+			te[i] = evalToIR(t)
 		}
 		return te
 	}
