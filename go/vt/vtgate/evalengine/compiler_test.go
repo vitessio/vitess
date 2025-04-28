@@ -151,33 +151,41 @@ func testCompilerCase(t *testing.T, query string, venv *vtenv.Environment, schem
 		NoConstantFolding: true,
 	}
 
-	converted, err := evalengine.Translate(stmt, cfg)
-	if err != nil {
-		return
-	}
+	for _, compiled := range []bool{false, true} {
+		cfg.NoCompilation = !compiled
+		for _, constantFolding := range []bool{false, true} {
+			cfg.NoConstantFolding = !constantFolding
+			t.Run(fmt.Sprintf("compiled=%t constantFolding=%t", compiled, constantFolding), func(t *testing.T) {
+				converted, err := evalengine.Translate(stmt, cfg)
+				if err != nil {
+					return
+				}
 
-	var expected evalengine.EvalResult
-	var evalErr error
-	assert.NotPanics(t, func() {
-		expected, evalErr = env.EvaluateAST(converted)
-	})
-	var res evalengine.EvalResult
-	var vmErr error
-	assert.NotPanics(t, func() {
-		res, vmErr = env.Evaluate(converted)
-	})
-	switch {
-	case vmErr == nil && evalErr == nil:
-		eval := expected.String()
-		comp := res.String()
-		assert.Equalf(t, eval, comp, "bad evaluation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, eval, comp)
-		assert.Equalf(t, expected.Collation(), res.Collation(), "bad collation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, colldata.Lookup(expected.Collation()).Name(), colldata.Lookup(res.Collation()).Name())
-	case vmErr == nil:
-		t.Errorf("failed evaluation from evalengine:\nSQL:  %s\nError: %s", query, evalErr)
-	case evalErr == nil:
-		t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, vmErr)
-	case evalErr.Error() != vmErr.Error():
-		t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, vmErr)
+				var expected evalengine.EvalResult
+				var evalErr error
+				assert.NotPanics(t, func() {
+					expected, evalErr = env.EvaluateAST(converted)
+				})
+				var res evalengine.EvalResult
+				var vmErr error
+				assert.NotPanics(t, func() {
+					res, vmErr = env.Evaluate(converted)
+				})
+				switch {
+				case vmErr == nil && evalErr == nil:
+					eval := expected.String()
+					comp := res.String()
+					assert.Equalf(t, eval, comp, "bad evaluation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, eval, comp)
+					assert.Equalf(t, expected.Collation(), res.Collation(), "bad collation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, colldata.Lookup(expected.Collation()).Name(), colldata.Lookup(res.Collation()).Name())
+				case vmErr == nil:
+					t.Errorf("failed evaluation from evalengine:\nSQL:  %s\nError: %s", query, evalErr)
+				case evalErr == nil:
+					t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, vmErr)
+				case evalErr.Error() != vmErr.Error():
+					t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, vmErr)
+				}
+			})
+		}
 	}
 }
 
