@@ -138,10 +138,21 @@ func simplifyExpr(env *ExpressionEnv, e IR) (IR, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &Literal{inner: simplified}, nil
+		return convertToIR(simplified), nil
 	}
 	if err := e.simplify(env); err != nil {
 		return nil, err
 	}
 	return e, nil
+}
+
+func convertToIR(simplified eval) IR {
+	if x, isTuple := simplified.(*evalTuple); isTuple {
+		var te TupleExpr
+		for _, t := range x.t {
+			te = append(te, convertToIR(t))
+		}
+		return te
+	}
+	return &Literal{inner: simplified}
 }
