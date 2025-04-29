@@ -101,7 +101,8 @@ func (p Phase) shouldRun(ctx *plancontext.PlanningContext) bool {
 // This is only done for two table queries with no aggregation,
 // and the tables are not info_schema tables or derived tables
 func (p Phase) shouldUseBlockJoins(ctx *plancontext.PlanningContext) bool {
-	if ctx.Statement == nil {
+	if ctx.Statement == nil ||
+		(!ctx.VSchema.AreBlockJoinsEnabled() && !ctx.IsCommentDirectiveSet(sqlparser.DirectiveAllowBlockJoin)) {
 		return false
 	}
 
@@ -127,7 +128,7 @@ func (p Phase) shouldUseBlockJoins(ctx *plancontext.PlanningContext) bool {
 		}
 	}
 
-	return ctx.VSchema.AreBlockJoinsEnabled() || ctx.IsCommentDirectiveSet(sqlparser.DirectiveAllowBlockJoin)
+	return true
 }
 
 func (p Phase) act(ctx *plancontext.PlanningContext, op Operator) Operator {
