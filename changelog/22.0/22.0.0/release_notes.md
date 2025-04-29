@@ -376,7 +376,7 @@ Full details on the node v20.12.2 release can be found at https://nodejs.org/en/
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/22.0/22.0.0/changelog.md).
 
-The release includes 474 merged Pull Requests.
+The release includes 475 merged Pull Requests.
 
 Thanks to all our contributors: @GrahamCampbell, @GuptaManan100, @L3o-pold, @akagami-harsh, @anirbanmu, @app/dependabot, @app/vitess-bot, @arthmis, @arthurschreiber, @beingnoble03, @c-r-dev, @corbantek, @dbussink, @deepthi, @derekperkins, @ejortegau, @frouioui, @garfthoffman, @gmpify, @gopoto, @harshit-gangal, @huochexizhan, @jeefy, @jwangace, @kbutz, @lmorduch, @mattlord, @mattrobenolt, @maxenglander, @mcrauwel, @mounicasruthi, @niladrix719, @notfelineit, @rafer, @rohit-nayak-ps, @rvrangel, @shailpujan88, @shanth96, @shlomi-noach, @siadat, @systay, @timvaillancourt, @twthorn, @vitess-bot, @vmg, @wiebeytec, @wukuai
 
