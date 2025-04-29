@@ -4125,7 +4125,7 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqlty
 	return result, nil
 }
 
-// PostponeCompleteMigration set the postpone_completion flag for a given migration, assuming it was clear in the first place
+// PostponeCompleteMigration sets the postpone_completion flag for a given migration, assuming it was not set in the first place
 func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
