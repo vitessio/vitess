@@ -787,6 +787,8 @@ message UpdateVReplicationWorkflowRequest {
   repeated string shards = 7;
   map<string, string> config_overrides = 8;
   optional string message = 9;
+  // Specify filter rules which need to be appended in the existing binlogsource filter rules.
+  repeated binlogdata.Rule filter_rules = 10;
 }
 
 message UpdateVReplicationWorkflowResponse {
@@ -956,4 +958,39 @@ message ChangeTagsRequest {
 
 message ChangeTagsResponse {
   map<string, string> tags = 1;
+}
+
+message UpdateSequenceTablesRequest {
+  message SequenceMetadata {
+    // The name of the sequence table.
+    string backing_table_name = 1;
+    // The dbName in use by the keyspace where the backing table lives.
+    string backing_table_db_name = 2;
+    // The maximum used sequence value.
+    int64 max_value = 3;
+  }
+  repeated SequenceMetadata sequences = 1;
+}
+
+message UpdateSequenceTablesResponse {
+}
+
+message GetMaxValueForSequencesRequest {
+  message SequenceMetadata {
+    // The name of the sequence table. This will be used for mapping max value
+    // with table in the response.
+    string backing_table_name = 1;
+    // Escaped column name specified for sequence in table.
+    string using_col_escaped = 2;
+    // Escaped name of the table using the sequence.
+    string using_table_name_escaped = 3;
+    // Escaped db name in use by the keyspace where the using table lives.
+    string using_table_db_name_escaped = 4;
+  }
+  repeated SequenceMetadata sequences = 1;
+}
+
+message GetMaxValueForSequencesResponse {
+  // Max used sequence value mapped with the backing sequence table.
+  map<string, int64> max_values_by_sequence_table = 1;
 }

@@ -354,7 +354,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE FORCE_CUTOVER CUTOVER_THRESHOLD EXPIRE RATIO
+%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE FORCE_CUTOVER CUTOVER_THRESHOLD EXPIRE RATIO POSTPONE
 // Throttler tokens
 %token <str> VITESS_THROTTLER
 
@@ -3726,6 +3726,19 @@ alter_statement:
   {
     $$ = &AlterMigration{
       Type: CompleteAllMigrationType,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION STRING POSTPONE COMPLETE
+  {
+    $$ = &AlterMigration{
+      Type: PostponeCompleteMigrationType,
+      UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION POSTPONE COMPLETE ALL
+  {
+    $$ = &AlterMigration{
+      Type: PostponeCompleteAllMigrationType,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING CANCEL

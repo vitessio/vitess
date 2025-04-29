@@ -21,24 +21,30 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/movetables"
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -87,6 +93,9 @@ where u.user = %a
   )
 limit 1
 `
+	sqlGetMaxSequenceVal   = "select max(%a) as maxval from %a.%a"
+	sqlInitSequenceTable   = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
+	sqlCreateSequenceTable = "create table if not exists %a (id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence'"
 )
 
 var (
@@ -585,6 +594,7 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		if req.OnDdl != nil && *req.OnDdl != binlogdatapb.OnDDLAction(textutil.SimulatedNullInt) {
 			bls.OnDdl = *req.OnDdl
 		}
+		bls.Filter.Rules = append(bls.Filter.Rules, req.FilterRules...)
 		source, err = prototext.Marshal(bls)
 		if err != nil {
 			return nil, err
@@ -700,6 +710,130 @@ func (tm *TabletManager) UpdateVReplicationWorkflows(ctx context.Context, req *t
 			RowsAffected: res.RowsAffected,
 		},
 	}, nil
+}
+
+func (tm *TabletManager) GetMaxValueForSequences(ctx context.Context, req *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (*tabletmanagerdatapb.GetMaxValueForSequencesResponse, error) {
+	maxValues := make(map[string]int64, len(req.Sequences))
+	mu := sync.Mutex{}
+	initGroup, gctx := errgroup.WithContext(ctx)
+	for _, sm := range req.Sequences {
+		initGroup.Go(func() error {
+			maxId, err := tm.getMaxSequenceValue(gctx, sm)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			maxValues[sm.BackingTableName] = maxId
+			return nil
+		})
+	}
+	errs := initGroup.Wait()
+	if errs != nil {
+		return nil, errs
+	}
+	return &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
+		MaxValuesBySequenceTable: maxValues,
+	}, nil
+}
+
+func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, sm *tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata) (int64, error) {
+	query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
+		sm.UsingColEscaped,
+		sm.UsingTableDbNameEscaped,
+		sm.UsingTableNameEscaped,
+	)
+	qr, err := tm.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		Query:   []byte(query.Query),
+		MaxRows: 1,
+	})
+	if err != nil || len(qr.Rows) != 1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			"failed to get the max used sequence value for target table %s in order to initialize the backing sequence table: %v", sm.UsingTableNameEscaped, err)
+	}
+	rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
+	maxID := int64(0)
+	if !rawVal.IsNull() { // If it's NULL then there are no rows and 0 remains the max
+		maxID, err = rawVal.ToInt64()
+		if err != nil {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s in order to initialize the backing sequence table: %v", sm.UsingTableNameEscaped, err)
+		}
+	}
+	return maxID, nil
+}
+
+func (tm *TabletManager) UpdateSequenceTables(ctx context.Context, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+	for _, sm := range req.Sequences {
+		if err := tm.updateSequenceValue(ctx, sm); err != nil {
+			return nil, err
+		}
+	}
+	return &tabletmanagerdatapb.UpdateSequenceTablesResponse{}, nil
+}
+
+func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata) error {
+	nextVal := seq.MaxValue + 1
+	if tm.Tablet().DbNameOverride != "" {
+		seq.BackingTableDbName = tm.Tablet().DbNameOverride
+	}
+	backingTableNameEscaped, err := sqlescape.EnsureEscaped(seq.BackingTableName)
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name %s specified for sequence backing table: %v",
+			seq.BackingTableName, err)
+	}
+	log.Infof("Updating sequence %s.%s to %d", seq.BackingTableDbName, seq.BackingTableName, nextVal)
+	initQuery := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
+		seq.BackingTableDbName,
+		seq.BackingTableName,
+		nextVal,
+		nextVal,
+		nextVal,
+	)
+	const maxTries = 2
+
+	for i := 0; i < maxTries; i++ {
+		// Attempt to initialize the sequence.
+		_, err = tm.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+			Query:   []byte(initQuery.Query),
+			MaxRows: 1,
+		})
+		if err == nil {
+			return nil
+		}
+
+		// If the table doesn't exist, try creating it.
+		sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+		if !ok || (sqlErr.Num != sqlerror.ERNoSuchTable && sqlErr.Num != sqlerror.ERBadTable) {
+			return vterrors.Errorf(
+				vtrpcpb.Code_INTERNAL,
+				"failed to initialize the backing sequence table %s.%s: %v",
+				seq.BackingTableDbName, seq.BackingTableName, err,
+			)
+		}
+
+		if err := tm.createSequenceTable(ctx, backingTableNameEscaped); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"failed to create the backing sequence table %s in the global-keyspace %s: %v",
+				backingTableNameEscaped, tm.Tablet().Keyspace, err)
+		}
+		// Table has been created, so we fall through and try again on the next loop iteration.
+	}
+
+	return vterrors.Errorf(
+		vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s after retries. Last error: %v",
+		seq.BackingTableDbName, backingTableNameEscaped, err)
+}
+
+func (tm *TabletManager) createSequenceTable(ctx context.Context, escapedTableName string) error {
+	stmt := sqlparser.BuildParsedQuery(sqlCreateSequenceTable, escapedTableName)
+	_, err := tm.ApplySchema(ctx, &tmutils.SchemaChange{
+		SQL:                     stmt.Query,
+		Force:                   false,
+		AllowReplication:        true,
+		SQLMode:                 vreplication.SQLMode,
+		DisableForeignKeyChecks: true,
+	})
+	return err
 }
 
 // ValidateVReplicationPermissions validates that the --db_filtered_user has
