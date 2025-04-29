@@ -452,6 +452,9 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 			evs[i].Timestamp = 0
 			evs[i].Keyspace = ""
 			evs[i].Shard = ""
+			evs[i].SequenceNumber = 0
+			evs[i].CommitParent = 0
+			evs[i].EventGtid = ""
 			if evs[i].Type == binlogdatapb.VEventType_FIELD {
 				for j := range evs[i].FieldEvent.Fields {
 					evs[i].FieldEvent.Fields[j].Flags = 0
