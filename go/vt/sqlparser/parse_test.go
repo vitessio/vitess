@@ -2582,6 +2582,10 @@ var (
 	}, {
 		input: "alter vitess_migration complete all",
 	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' postpone complete",
+	}, {
+		input: "alter vitess_migration postpone complete all",
+	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
 	}, {
 		input: "alter vitess_migration force_cutover all",

@@ -4184,6 +4184,60 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqlty
 	return result, nil
 }
 
+// PostponeCompleteMigration sets the postpone_completion flag for a given migration, assuming it was not set in the first place
+func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if atomic.LoadInt64(&e.isOpen) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
+	}
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in POSTPONE COMPLETE: %s", uuid)
+	}
+	log.Infof("PostponeCompleteMigration: request to postpone complete migration %s", uuid)
+
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	query, err := sqlparser.ParseAndBind(sqlPostponeCompletion,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer e.triggerNextCheckInterval()
+	rs, err := e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("PostponeCompleteMigration: migration %s marked as postponed", uuid)
+	return rs, nil
+}
+
+// PostponeCompletePendingMigrations sets postpone_completion for all pending migrations (that are expected to run or are running)
+// for this keyspace
+func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	if atomic.LoadInt64(&e.isOpen) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
+	}
+
+	uuids, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return result, err
+	}
+	log.Infof("PostponeCompletePendingMigrations: iterating %v migrations %s", len(uuids))
+
+	result = &sqltypes.Result{}
+	for _, uuid := range uuids {
+		log.Infof("PostponeCompletePendingMigrations: postpone completion of %s", uuid)
+		res, err := e.PostponeCompleteMigration(ctx, uuid)
+		if err != nil {
+			return result, err
+		}
+		result.AppendResult(res)
+	}
+	log.Infof("PostponeCompletePendingMigrations: done iterating %v migrations %s", len(uuids))
+	return result, nil
+}
+
 // LaunchMigration clears the postpone_launch flag for a given migration, assuming it was set in the first place
 func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {

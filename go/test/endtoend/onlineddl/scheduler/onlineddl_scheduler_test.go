@@ -603,6 +603,60 @@ func testScheduler(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("Delayed postpone completion ALTER", func(t *testing.T) {
+		onlineddl.ThrottleAllMigrations(t, &vtParams)
+		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
+
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
+
+		t.Run("wait for t1 running", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		})
+
+		t.Run("check postpone_completion", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeCompletion := row.AsInt64("postpone_completion", 0)
+				assert.EqualValues(t, 0, postponeCompletion)
+			}
+		})
+		t.Run("postpone", func(t *testing.T) {
+			onlineddl.CheckPostponeCompleteMigration(t, &vtParams, shards, t1uuid, true)
+		})
+		t.Run("check postpone_completion set", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeCompletion := row.AsInt64("postpone_completion", 0)
+				assert.EqualValues(t, 1, postponeCompletion)
+			}
+		})
+		onlineddl.UnthrottleAllMigrations(t, &vtParams)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
+
+		t.Run("wait for ready_to_complete", func(t *testing.T) {
+			waitForReadyToComplete(t, t1uuid, true)
+		})
+		t.Run("complete", func(t *testing.T) {
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("check no postpone_completion", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeCompletion := row.AsInt64("postpone_completion", 0)
+				assert.EqualValues(t, 0, postponeCompletion)
+			}
+		})
+	})
+
 	t.Run("show vitess_migrations in transaction", func(t *testing.T) {
 		// The function validates there is no error
 		rs := onlineddl.VtgateExecQueryInTransaction(t, &vtParams, "show vitess_migrations", "")
