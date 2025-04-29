@@ -235,8 +235,7 @@
  * Feature Request: Change varbinary to varchar in schemas used in examples folder [#17318](https://github.com/vitessio/vitess/pull/17318) 
 #### General
  * MySQL errors: `ERWrongParamcountToNativeFct` [#16914](https://github.com/vitessio/vitess/pull/16914)
- * Standardize topo flags to use hyphen-based naming [#17975](https://github.com/vitessio/vitess/pull/17975)
- * Refactor flags - Part 4 [#18095](https://github.com/vitessio/vitess/pull/18095) 
+ * Standardize topo flags to use hyphen-based naming [#17975](https://github.com/vitessio/vitess/pull/17975) 
 #### Observability
  * Improve vtgate logging for buffering [#17654](https://github.com/vitessio/vitess/pull/17654)
  * Add more vstream metrics for vstream manager [#17858](https://github.com/vitessio/vitess/pull/17858) 
@@ -537,6 +536,8 @@
  * [release-22.0] Bump to `v22.0.0-SNAPSHOT` after the `v22.0.0-RC1` release [#18134](https://github.com/vitessio/vitess/pull/18134)
  * [release-22.0] Release of `v22.0.0-RC2` [#18168](https://github.com/vitessio/vitess/pull/18168)
  * [release-22.0] Bump to `v22.0.0-SNAPSHOT` after the `v22.0.0-RC2` release [#18170](https://github.com/vitessio/vitess/pull/18170)
+ * [release-22.0] Release of `v22.0.0-RC3` [#18204](https://github.com/vitessio/vitess/pull/18204)
+ * [release-22.0] Bump to `v22.0.0-SNAPSHOT` after the `v22.0.0-RC3` release [#18206](https://github.com/vitessio/vitess/pull/18206)
 ### Testing 
 #### Backup and Restore
  * fix flaky test on mysqlshell backup engine [#17037](https://github.com/vitessio/vitess/pull/17037)
