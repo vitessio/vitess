@@ -32,6 +32,7 @@ func TestE2ECases(t *testing.T) {
 	e2eTestCaseFiles := []string{
 		"select_cases.json",
 		"filter_cases.json",
+		"from_cases.json",
 		"dml_cases.json",
 		"reference_cases.json",
 	}

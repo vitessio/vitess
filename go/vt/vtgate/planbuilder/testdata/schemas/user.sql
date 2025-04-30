@@ -46,7 +46,7 @@ CREATE TABLE music
 
 CREATE TABLE name_user_vdx
 (
-    name        INT,
+    name        VARCHAR(255),
     keyspace_id VARBINARY(10),
     primary key (name)
 );

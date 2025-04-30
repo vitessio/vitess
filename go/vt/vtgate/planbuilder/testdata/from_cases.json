@@ -518,11 +518,11 @@
   },
   {
     "comment": "Query using BLOCK JOIN",
-    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user.foo, user_extra.user_id from user, user_extra where user.id = user_extra.toto and user.foo = 1 and user_extra.bar = 2",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user.bar, user_extra.user_id from user, user_extra where user.id = user_extra.extra_id and user.bar = 1 and user_extra.col = 2",
     "plan": {
       "Type": "Join",
       "QueryType": "SELECT",
-      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user.foo, user_extra.user_id from user, user_extra where user.id = user_extra.toto and user.foo = 1 and user_extra.bar = 2",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user.bar, user_extra.user_id from user, user_extra where user.id = user_extra.extra_id and user.bar = 1 and user_extra.col = 2",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Block",
@@ -535,8 +535,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select user_extra.user_id, user_extra.toto from user_extra where 1 != 1",
-            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user_extra.toto from user_extra where user_extra.bar = 2"
+            "FieldQuery": "select user_extra.user_id, user_extra.extra_id from user_extra where 1 != 1",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user_extra.extra_id from user_extra where user_extra.col = 2"
           },
           {
             "OperatorType": "Route",
@@ -545,8 +545,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.foo, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_toto), `user` where 1 != 1",
-            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.foo, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_toto), `user` where `user`.foo = 1 and `user`.id = `values`.user_extra_toto",
+            "FieldQuery": "select `user`.bar, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_extra_id), `user` where 1 != 1",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.bar, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_extra_id), `user` where `user`.bar = 1 and `user`.id = `values`.user_extra_extra_id",
             "Values": [
               "values:1"
             ],
@@ -558,16 +558,15 @@
         "user.user",
         "user.user_extra"
       ]
-    },
-    "skip_e2e": true
+    }
   },
   {
     "comment": "Block join for a query with a simple projection",
-    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user.id1 + user.id2 as mas from user join music where user.id2 = music.id4 order by mas asc",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user.id1 + user.id2 as mas from user join music where user.id2 = music.id order by mas asc",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user.id1 + user.id2 as mas from user join music where user.id2 = music.id4 order by mas asc",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user.id1 + user.id2 as mas from user join music where user.id2 = music.id order by mas asc",
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
@@ -591,14 +590,42 @@
                 "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.id1 + `user`.id2 as mas, `user`.id2, weight_string(`user`.id1 + `user`.id2) from `user` order by `user`.id1 + `user`.id2 asc"
               },
               {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
+                "OperatorType": "VindexLookup",
+                "Variant": "MultiEqual",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `values`.x_x as ```user``.id1 + ``user``.id2` from (values ::values) as `values`(x_x, user_id2), music where 1 != 1",
-                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `values`.x_x as ```user``.id1 + ``user``.id2` from (values ::values) as `values`(x_x, user_id2), music where `values`.user_id2 = music.id4"
+                "Values": [
+                  "values:1"
+                ],
+                "Vindex": "music_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_md5_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `values`.x_x as ```user``.id1 + ``user``.id2` from (values ::values) as `values`(x_x, user_id2), music where 1 != 1",
+                    "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `values`.x_x as ```user``.id1 + ``user``.id2` from (values ::values) as `values`(x_x, user_id2), music where `values`.user_id2 = music.id"
+                  }
+                ]
               }
             ]
           }
@@ -3470,7 +3497,7 @@
             "Values": [
               "::name"
             ],
-            "Vindex": "user_index"
+            "Vindex": "user_md5_index"
           },
           {
             "OperatorType": "Route",
@@ -3521,7 +3548,7 @@
             "Values": [
               "::name"
             ],
-            "Vindex": "user_index"
+            "Vindex": "user_md5_index"
           },
           {
             "OperatorType": "Route",
@@ -4847,7 +4874,7 @@
                 "Values": [
                   "::name"
                 ],
-                "Vindex": "user_index"
+                "Vindex": "user_md5_index"
               },
               {
                 "OperatorType": "Route",
@@ -4885,7 +4912,7 @@
                 "Values": [
                   "::name"
                 ],
-                "Vindex": "user_index"
+                "Vindex": "user_md5_index"
               },
               {
                 "OperatorType": "Route",
@@ -5002,19 +5029,19 @@
   },
   {
     "comment": "Block Join with using",
-    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ u.tcol1, u.id, u.tcol2, ue.id, ue.tcol2 from user u join user_extra ue using (col)",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ u.textcol1, u.id, u.textcol2, ue.id, ue.email from user u join user_extra ue using (col)",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ u.tcol1, u.id, u.tcol2, ue.id, ue.tcol2 from user u join user_extra ue using (col)",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ u.textcol1, u.id, u.textcol2, ue.id, ue.email from user u join user_extra ue using (col)",
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
-          "0:tcol1",
+          "0:textcol1",
           "1:id",
-          "2:tcol2",
+          "2:textcol2",
           "3:id",
-          "4:tcol2"
+          "4:email"
         ],
         "Columns": "2,3,4,0,1",
         "Inputs": [
@@ -5030,8 +5057,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select u.tcol1, u.id, u.tcol2, u.col from `user` as u where 1 != 1",
-                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ u.tcol1, u.id, u.tcol2, u.col from `user` as u"
+                "FieldQuery": "select u.textcol1, u.id, u.textcol2, u.col from `user` as u where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ u.textcol1, u.id, u.textcol2, u.col from `user` as u"
               },
               {
                 "OperatorType": "Route",
@@ -5040,8 +5067,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select ue.id, ue.tcol2, `values`.u_tcol1 as tcol1, `values`.u_id as id, `values`.u_tcol2 as tcol2 from (values ::values) as `values`(u_tcol1, u_id, u_tcol2, u_col), user_extra as ue where 1 != 1",
-                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ ue.id, ue.tcol2, `values`.u_tcol1 as tcol1, `values`.u_id as id, `values`.u_tcol2 as tcol2 from (values ::values) as `values`(u_tcol1, u_id, u_tcol2, u_col), user_extra as ue where `values`.u_col = ue.col"
+                "FieldQuery": "select ue.id, ue.email, `values`.u_textcol1 as textcol1, `values`.u_id as id, `values`.u_textcol2 as textcol2 from (values ::values) as `values`(u_textcol1, u_id, u_textcol2, u_col), user_extra as ue where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ ue.id, ue.email, `values`.u_textcol1 as textcol1, `values`.u_id as id, `values`.u_textcol2 as textcol2 from (values ::values) as `values`(u_textcol1, u_id, u_textcol2, u_col), user_extra as ue where `values`.u_col = ue.col"
               }
             ]
           }
@@ -5056,11 +5083,11 @@
   },
   {
     "comment": "Block joins two select expressions with same column name needing a simple projection",
-    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user.user_id from user_extra join user on user_extra.hello = user.textcol2 where user_extra.hello = 'B'",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user.user_id from user_extra join user on user_extra.email = user.textcol2 where user_extra.email = 'B'",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user.user_id from user_extra join user on user_extra.hello = user.textcol2 where user_extra.hello = 'B'",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user.user_id from user_extra join user on user_extra.email = user.textcol2 where user_extra.email = 'B'",
       "Instructions": {
         "OperatorType": "SimpleProjection",
         "ColumnNames": [
@@ -5081,8 +5108,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select user_extra.user_id, user_extra.hello from user_extra where 1 != 1",
-                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user_extra.hello from user_extra where user_extra.hello = 'B'"
+                "FieldQuery": "select user_extra.user_id, user_extra.email from user_extra where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user_extra.email from user_extra where user_extra.email = 'B'"
               },
               {
                 "OperatorType": "Route",
@@ -5091,8 +5118,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_hello), `user` where 1 != 1",
-                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_hello), `user` where `values`.user_extra_hello = `user`.textcol2"
+                "FieldQuery": "select `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_email), `user` where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_email), `user` where `values`.user_extra_email = `user`.textcol2"
               }
             ]
           }
@@ -5107,11 +5134,11 @@
   },
   {
     "comment": "Block joins two select expressions with same column name not needing a simple projection",
-    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user.user_id, user_extra.user_id from user_extra join user on user_extra.hello = user.textcol2 where user_extra.hello = 'B'",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user.user_id, user_extra.user_id from user_extra join user on user_extra.email = user.textcol2 where user_extra.email = 'B'",
     "plan": {
       "Type": "Join",
       "QueryType": "SELECT",
-      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user.user_id, user_extra.user_id from user_extra join user on user_extra.hello = user.textcol2 where user_extra.hello = 'B'",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user.user_id, user_extra.user_id from user_extra join user on user_extra.email = user.textcol2 where user_extra.email = 'B'",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Block",
@@ -5124,8 +5151,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select user_extra.user_id, user_extra.hello from user_extra where 1 != 1",
-            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user_extra.hello from user_extra where user_extra.hello = 'B'"
+            "FieldQuery": "select user_extra.user_id, user_extra.email from user_extra where 1 != 1",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user_extra.email from user_extra where user_extra.email = 'B'"
           },
           {
             "OperatorType": "Route",
@@ -5134,8 +5161,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_hello), `user` where 1 != 1",
-            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_hello), `user` where `values`.user_extra_hello = `user`.textcol2"
+            "FieldQuery": "select `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_email), `user` where 1 != 1",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_email), `user` where `values`.user_extra_email = `user`.textcol2"
           }
         ]
       },

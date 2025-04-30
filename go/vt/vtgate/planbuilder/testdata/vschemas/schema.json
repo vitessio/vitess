@@ -126,7 +126,8 @@
             "table": "costly_map",
             "from": "costly",
             "to": "keyspace_id",
-            "cost": "100"
+            "cost": "100",
+            "ignore_nulls": "true"
           }
         },
         "hash_dup": {
@@ -501,7 +502,7 @@
           "column_vindexes": [
             {
               "column": "name",
-              "name": "user_index"
+              "name": "user_md5_index"
             }
           ]
         },

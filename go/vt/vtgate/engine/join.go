@@ -101,22 +101,29 @@ func bindvarForType(field *querypb.Field) *querypb.BindVariable {
 		Type:  field.Type,
 		Value: nil,
 	}
-	switch field.Type {
-	case querypb.Type_INT8, querypb.Type_UINT8, querypb.Type_INT16, querypb.Type_UINT16,
-		querypb.Type_INT32, querypb.Type_UINT32, querypb.Type_INT64, querypb.Type_UINT64:
-		bv.Value = []byte("0")
-	case querypb.Type_FLOAT32, querypb.Type_FLOAT64:
-		bv.Value = []byte("0e0")
-	case querypb.Type_DECIMAL:
-		size := max(1, int(field.ColumnLength-field.Decimals))
-		scale := max(1, int(field.Decimals))
-		bv.Value = append(append(bytes.Repeat([]byte{'0'}, size), byte('.')), bytes.Repeat([]byte{'0'}, scale)...)
-	case querypb.Type_JSON:
-		bv.Value = []byte(`""`) // empty json object
-	default:
+	bv.Value = valueForType(field)
+	if bv.Value == nil {
 		return sqltypes.NullBindVariable
 	}
 	return bv
+}
+
+func valueForType(field *querypb.Field) []byte {
+	switch field.Type {
+	case querypb.Type_INT8, querypb.Type_UINT8, querypb.Type_INT16, querypb.Type_UINT16,
+		querypb.Type_INT32, querypb.Type_UINT32, querypb.Type_INT64, querypb.Type_UINT64:
+		return []byte("0")
+	case querypb.Type_FLOAT32, querypb.Type_FLOAT64:
+		return []byte("0e0")
+	case querypb.Type_DECIMAL:
+		size := max(1, int(field.ColumnLength-field.Decimals))
+		scale := max(1, int(field.Decimals))
+		return append(append(bytes.Repeat([]byte{'0'}, size), byte('.')), bytes.Repeat([]byte{'0'}, scale)...)
+	case querypb.Type_JSON:
+		return []byte(`""`) // empty json object
+	default:
+		return nil
+	}
 }
 
 // TryStreamExecute performs a streaming exec.

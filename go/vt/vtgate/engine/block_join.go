@@ -52,7 +52,7 @@ func (jv *BlockJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		// It will be used to execute the field query to provide the output fields.
 		var vals []sqltypes.Value
 		for _, field := range lresult.Fields {
-			val, _ := sqltypes.NewValue(field.Type, nil)
+			val, _ := sqltypes.NewValue(field.Type, valueForType(field))
 			vals = append(vals, val)
 		}
 		bv.Values = append(bv.Values, sqltypes.TupleToProto(vals))
