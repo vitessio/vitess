@@ -59,6 +59,12 @@ type VSchemaWrapper struct {
 	Env                   *vtenv.Environment
 }
 
+type executorConfig struct{}
+
+func (e *executorConfig) DefaultTabletType() topodatapb.TabletType {
+	return topodatapb.TabletType_PRIMARY
+}
+
 func NewVschemaWrapper(
 	env *vtenv.Environment,
 	vschema *vindexes.VSchema,
@@ -66,9 +72,9 @@ func NewVschemaWrapper(
 ) (*VSchemaWrapper, error) {
 	ss := econtext.NewAutocommitSession(&vtgatepb.Session{})
 	vcursor, err := econtext.NewVCursorImpl(ss, sqlparser.MarginComments{}, nil, nil, nil, vschema, nil, nil, nil, econtext.VCursorConfig{
-		Collation:         env.CollationEnv().DefaultConnectionCharset(),
-		DefaultTabletType: topodatapb.TabletType_PRIMARY,
-		SetVarEnabled:     true,
+		Collation:     env.CollationEnv().DefaultConnectionCharset(),
+		TabletType:    &executorConfig{},
+		SetVarEnabled: true,
 	}, nil)
 	if err != nil {
 		return nil, err

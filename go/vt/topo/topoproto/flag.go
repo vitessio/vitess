@@ -19,6 +19,8 @@ package topoproto
 import (
 	"strings"
 
+	"github.com/spf13/pflag"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -44,6 +46,15 @@ func (ttlv *TabletTypeListFlag) Type() string {
 
 // TabletTypeFlag implements the pflag.Value interface, for parsing a command-line value into a TabletType.
 type TabletTypeFlag topodatapb.TabletType
+
+var _ pflag.Value = (*TabletTypeFlag)(nil)
+
+// NewTabletTypeFlag creates a TabletTypeFlag with a default value.
+func NewTabletTypeFlag(defaultVal topodatapb.TabletType) *TabletTypeFlag {
+	p := new(topodatapb.TabletType)
+	*p = defaultVal
+	return (*TabletTypeFlag)(p)
+}
 
 // String is part of the pflag.Value interfaces.
 func (ttf *TabletTypeFlag) String() string {
