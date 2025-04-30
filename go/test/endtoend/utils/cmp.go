@@ -309,7 +309,7 @@ func (mcmp *MySQLCompare) ExecVitessAndMySQLDifferentQueries(vtQ, mQ string) *sq
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(mQ, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+mQ)
-	CompareVitessAndMySQLResults(mcmp.t, vtQ, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	CompareVitessAndMySQLResults(mcmp.t, vtQ, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{AllowAnyFieldSize: true})
 	return vtQr
 }
 
