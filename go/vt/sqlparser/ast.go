@@ -6082,13 +6082,11 @@ func (node BoolVal) replace(from, to Expr) bool {
 
 // ColName represents a column name.
 type ColName struct {
-	// Metadata is not populated by the parser.
-	// It's a placeholder for analyzers to store
-	// additional data, typically info about which
-	// table or column this node references.
-	Metadata  interface{}
 	Name      ColIdent
 	Qualifier TableName
+
+	// Hacky solution for stored procedures
+	StoredProcVal Expr
 }
 
 // NewColName returns a simple ColName with no table qualifier
