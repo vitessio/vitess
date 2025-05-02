@@ -38,4 +38,4 @@ exec /vt/bin/vtorc \
 $TOPOLOGY_FLAGS \
 --logtostderr=true \
 --port $web_port \
---config $config
+--config-path $config
