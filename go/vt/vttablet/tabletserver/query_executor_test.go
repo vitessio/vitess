@@ -1544,7 +1544,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 		cfg.TwoPCAbandonAge = 10 * time.Second
 	}
 	if flags&smallResultSize > 0 {
-		cfg.Oltp.MaxRows = 2
+		cfg.Oltp.MaxRows.Set(2)
 	}
 	if flags&enableConsolidator > 0 {
 		cfg.Consolidator = tabletenv.Enable
