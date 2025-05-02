@@ -553,9 +553,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 
 	// Prioritise primary recovery.
 	// If we are performing some other action, first ensure that it is not because of primary issues.
-	log.Infof("CheckAndRecover: Analysis: %v, Tablet: %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
-	err = checkIfLeaderMitigationRequired(analysisEntry, DiscoverInstance, checkIfAlreadyFixed)
-	if err != nil {
+	if err = recheckPrimaryHealth(analysisEntry, DiscoverInstance, checkIfAlreadyFixed); err != nil {
 		return err
 	}
 
@@ -679,8 +677,8 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	return err
 }
 
-// checkIfLeaderMitigationRequired check the health of the primary node if the original analysis is not a primary failure issue.
-func checkIfLeaderMitigationRequired(analysisEntry *inst.ReplicationAnalysis, discoveryFunc func(string, bool), checkIfRecoveryRequired func(*inst.ReplicationAnalysis) (bool, error)) error {
+// recheckPrimaryHealth check the health of the primary node if the original analysis is not a primary failure issue.
+func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc func(string, bool), checkIfRecoveryRequired func(*inst.ReplicationAnalysis) (bool, error)) error {
 	originalAnalysisEntry := analysisEntry.Analysis
 	if !analysisEntry.PrimaryFailures() {
 		primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)

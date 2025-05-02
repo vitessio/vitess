@@ -353,7 +353,7 @@ func TestCheckIfLeaderMitigationRequired(t *testing.T) {
 			err := inst.SaveTablet(tablet)
 			require.NoError(t, err)
 
-			gotErr := checkIfLeaderMitigationRequired(&inst.ReplicationAnalysis{
+			gotErr := recheckPrimaryHealth(&inst.ReplicationAnalysis{
 				Analysis:         inst.ReplicationStopped,
 				AnalyzedKeyspace: "ks",
 				AnalyzedShard:    "-80",
