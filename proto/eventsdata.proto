@@ -1,0 +1,118 @@
+/*
+Copyright 2025 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// This file contains the Vitess topology related data structures.
+// Very few of these structures are exchanged over the wire (only
+// TabletType and KeyRange), but they are all used by the topology
+// service.
+
+syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/eventsdata";
+
+option java_package="io.vitess.proto";
+
+package eventsdata;
+
+import "topodata.proto";
+import "vttime.proto";
+
+enum SourceType {
+  Vtctld = 0;
+  Vtorc = 1;
+}
+
+message Source {
+  SourceType type = 1;
+  string hostname = 2;
+}
+
+message Metadata {
+  string id = 1;
+  Source source = 2;
+  vttime.Time timestamp = 3;
+}
+
+enum ReparentType {
+  // PlannedReparentShard
+  PlannedReparentShard = 0;
+
+  // EmergencyReparentShard
+  EmergencyReparentShard = 1;
+
+  // TabletExternallyReparented
+  TabletExternallyReparented = 2;
+}
+
+// ReparentPhaseType represents the type of phase of a reparent.
+enum ReparentPhaseType {
+  Pending = 0;
+ 
+  // Finished is...TODO
+  Finished = 1;
+
+  // Failed is...TODO
+  Failed = 2;
+
+  // Skip is...TODO
+  Skip = 3;
+
+  // PrimaryElection is...TODO
+  PrimaryElection = 4;
+
+  // PrimaryElected is...TODO
+  PrimaryElected = 5;
+
+  // DemoteOldPrimary is...TODO
+  DemoteOldPrimary = 6;
+
+  // ReadTabletMap is...TODO
+  ReadTabletMap = 7;
+
+  // ReadAllTablets is...TODO
+  ReadAllTablets = 8;
+
+  // ReparentAllTablets is...TODO
+  ReparentAllTablets = 9;
+}
+
+// ReparentPhaseEvent represents a phase event.
+message ReparentPhaseEvent {
+  ReparentPhaseType phase = 1;
+  vttime.Time timestamp = 2;
+  string status = 3;
+  string error = 4;
+}
+
+// ReparentEvent...
+message ReparentEvent {
+  Metadata meta = 1;
+  topodata.ShardInfo shard_info = 2;
+  topodata.Tablet new_primary = 3;
+  topodata.Tablet old_primary = 4;
+  ReparentType type = 5;
+  ReparentPhaseType phase = 6;
+  string status = 7;
+  string error = 8;
+}
+
+// KeyspaceChangeEvent is an event that describes changes to a keyspace.
+message KeyspaceChangeEvent {
+  Metadata meta = 1;
+  string keyspace_name = 2;
+  topodata.Keyspace new_keyspace = 3;
+  topodata.Keyspace old_keyspace = 4;
+  string status = 5;
+}

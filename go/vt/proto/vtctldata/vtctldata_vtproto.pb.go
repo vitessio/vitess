@@ -13,6 +13,7 @@ import (
 	io "io"
 	math "math"
 	binlogdata "vitess.io/vitess/go/vt/proto/binlogdata"
+	eventsdata "vitess.io/vitess/go/vt/proto/eventsdata"
 	logutil "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctl "vitess.io/vitess/go/vt/proto/mysqlctl"
 	query "vitess.io/vitess/go/vt/proto/query"
@@ -1519,7 +1520,7 @@ func (m *EmergencyReparentShardResponse) CloneVT() *EmergencyReparentShardRespon
 	r.Shard = m.Shard
 	r.PromotedPrimary = m.PromotedPrimary.CloneVT()
 	if rhs := m.Events; rhs != nil {
-		tmpContainer := make([]*logutil.Event, len(rhs))
+		tmpContainer := make([]*eventsdata.ReparentPhaseEvent, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
@@ -3792,7 +3793,7 @@ func (m *PlannedReparentShardResponse) CloneVT() *PlannedReparentShardResponse {
 	r.Shard = m.Shard
 	r.PromotedPrimary = m.PromotedPrimary.CloneVT()
 	if rhs := m.Events; rhs != nil {
-		tmpContainer := make([]*logutil.Event, len(rhs))
+		tmpContainer := make([]*eventsdata.ReparentPhaseEvent, len(rhs))
 		for k, v := range rhs {
 			tmpContainer[k] = v.CloneVT()
 		}
@@ -40739,7 +40740,7 @@ func (m *EmergencyReparentShardResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Events = append(m.Events, &logutil.Event{})
+			m.Events = append(m.Events, &eventsdata.ReparentPhaseEvent{})
 			if err := m.Events[len(m.Events)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
@@ -54720,7 +54721,7 @@ func (m *PlannedReparentShardResponse) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Events = append(m.Events, &logutil.Event{})
+			m.Events = append(m.Events, &eventsdata.ReparentPhaseEvent{})
 			if err := m.Events[len(m.Events)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}

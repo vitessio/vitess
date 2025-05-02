@@ -1137,7 +1137,7 @@ zone1-0000000100 is not a replica`,
 				AllowCrossCellPromotion: tt.allowCrossCellPromotion,
 				WaitReplicasTimeout:     time.Millisecond * 50,
 			}
-			actual, err := ElectNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.innodbBufferPoolData, options, logger)
+			actual, err := ElectNewPrimary(ctx, tt.tmc, tt.shardInfo.Shard, tt.tabletMap, tt.innodbBufferPoolData, options, logger)
 			if len(tt.errContains) > 0 {
 				for _, errC := range tt.errContains {
 					assert.ErrorContains(t, err, errC)

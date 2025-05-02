@@ -27,8 +27,9 @@ import (
 
 // Syslog writes the event to syslog.
 func (kc *KeyspaceChange) Syslog() (syslog.Priority, string) {
-	return syslog.LOG_INFO, fmt.Sprintf("%s [keyspace] %s value: %s",
-		kc.KeyspaceName, kc.Status, kc.Keyspace.String())
+	return syslog.LOG_INFO, fmt.Sprintf("%s [keyspace] %s value: %s -> %s",
+		kc.GetKeyspaceName(), kc.GetStatus(), kc.GetOldKeyspace(),
+		kc.GetNewKeyspace())
 }
 
 var _ syslogger.Syslogger = (*KeyspaceChange)(nil) // compile-time interface check

@@ -68,7 +68,7 @@ const (
 func ElectNewPrimary(
 	ctx context.Context,
 	tmc tmclient.TabletManagerClient,
-	shardInfo *topo.ShardInfo,
+	shard *topodatapb.Shard,
 	tabletMap map[string]*topo.TabletInfo,
 	innodbBufferPoolData map[string]int,
 	opts *PlannedReparentOptions,
@@ -77,8 +77,8 @@ func ElectNewPrimary(
 ) (*topodatapb.TabletAlias, error) {
 
 	var primaryCell string
-	if shardInfo.PrimaryAlias != nil {
-		primaryCell = shardInfo.PrimaryAlias.Cell
+	if shard.PrimaryAlias != nil {
+		primaryCell = shard.PrimaryAlias.Cell
 	}
 
 	var (

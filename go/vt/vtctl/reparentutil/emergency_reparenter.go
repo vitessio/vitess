@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -46,9 +47,10 @@ import (
 
 // EmergencyReparenter performs EmergencyReparentShard operations.
 type EmergencyReparenter struct {
-	ts     *topo.Server
-	tmc    tmclient.TabletManagerClient
-	logger logutil.Logger
+	ts       *topo.Server
+	tmc      tmclient.TabletManagerClient
+	logger   logutil.Logger
+	evSource *eventsdatapb.Source
 }
 
 // EmergencyReparentOptions provides optional parameters to
@@ -80,11 +82,12 @@ var ersCounter = stats.NewCountersWithMultiLabels("EmergencyReparentCounts", "Nu
 // TabletManagerClient, and logger.
 //
 // Providing a nil logger instance is allowed.
-func NewEmergencyReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger) *EmergencyReparenter {
+func NewEmergencyReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, evSource *eventsdatapb.Source) *EmergencyReparenter {
 	erp := EmergencyReparenter{
-		ts:     ts,
-		tmc:    tmc,
-		logger: logger,
+		ts:       ts,
+		tmc:      tmc,
+		logger:   logger,
+		evSource: evSource,
 	}
 
 	if erp.logger == nil {
@@ -116,16 +119,17 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace stri
 
 	// dispatch success or failure of ERS
 	startTime := time.Now()
-	ev := &events.Reparent{}
+	ev := events.NewReparent(nil, erp.evSource, eventsdatapb.ReparentType_EmergencyReparentShard, nil, nil)
 	defer func() {
 		reparentShardOpTimings.Add("EmergencyReparentShard", time.Since(startTime))
 		switch err {
 		case nil:
 			ersCounter.Add(append(statsLabels, successResult), 1)
-			event.DispatchUpdate(ev, "finished EmergencyReparentShard")
+			event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_Finished)
 		default:
 			ersCounter.Add(append(statsLabels, failureResult), 1)
-			event.DispatchUpdate(ev, "failed EmergencyReparentShard: "+err.Error())
+			ev.Error = err.Error()
+			event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_Failed)
 		}
 	}()
 
@@ -167,7 +171,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
-	ev.ShardInfo = *shardInfo
+	ev.ShardInfo = &topodatapb.ShardInfo{
+		Keyspace:  shardInfo.Keyspace(),
+		ShardName: shardInfo.ShardName(),
+		Shard:     shardInfo.Shard,
+	}
 
 	if opts.ExpectedPrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.ExpectedPrimaryAlias, shardInfo.PrimaryAlias) {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %s is not equal to expected alias %s",
@@ -197,9 +205,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 		prevPrimary = prevPrimaryInfo.Tablet
 	}
+	ev.OldPrimary = prevPrimary
 
 	// read all the tablets and their information
-	event.DispatchUpdate(ev, "reading all tablets")
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_ReadAllTablets)
 	tabletMap, err = erp.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", keyspace, shard, err)
@@ -514,7 +523,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	primaryCtx, primaryCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer primaryCancel()
 
-	event.DispatchUpdate(ev, "reparenting all tablets")
+	event.DispatchUpdate(ev, eventsdatapb.ReparentPhaseType_ReparentAllTablets)
 
 	// Create a context and cancel function to watch for the first successful
 	// SetReplicationSource call on a replica. We use a background context so that this
@@ -537,7 +546,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		if !intermediateReparent {
 			var position string
 			var err error
-			if ev.ShardInfo.PrimaryAlias == nil {
+			if ev.ShardInfo.Shard.PrimaryAlias == nil {
 				erp.logger.Infof("setting up %v as new primary for an uninitialized cluster", alias)
 				// we call InitPrimary when the PrimaryAlias in the ShardInfo is empty. This happens when we have an uninitialized cluster.
 				position, err = erp.tmc.InitPrimary(primaryCtx, tablet, policy.SemiSyncAckers(opts.durability, tablet) > 0)

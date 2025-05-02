@@ -27,11 +27,8 @@ import (
 
 func TestKeyspaceChangeSyslog(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123 [keyspace] status value: "
-	kc := &KeyspaceChange{
-		KeyspaceName: "keyspace-123",
-		Keyspace:     &topodatapb.Keyspace{},
-		Status:       "status",
-	}
+	kc := NewKeyspaceChange("keyspace-123", &topodatapb.Keyspace{})
+	kc.Update("status")
 	gotSev, gotMsg := kc.Syslog()
 
 	if gotSev != wantSev {

@@ -5102,7 +5102,7 @@ export namespace vtadmin {
         promoted_primary?: (topodata.ITabletAlias|null);
 
         /** EmergencyFailoverShardResponse events */
-        events?: (logutil.IEvent[]|null);
+        events?: (eventsdata.IReparentPhaseEvent[]|null);
     }
 
     /** Represents an EmergencyFailoverShardResponse. */
@@ -5127,7 +5127,7 @@ export namespace vtadmin {
         public promoted_primary?: (topodata.ITabletAlias|null);
 
         /** EmergencyFailoverShardResponse events. */
-        public events: logutil.IEvent[];
+        public events: eventsdata.IReparentPhaseEvent[];
 
         /**
          * Creates a new EmergencyFailoverShardResponse instance using the specified properties.
@@ -10746,7 +10746,7 @@ export namespace vtadmin {
         promoted_primary?: (topodata.ITabletAlias|null);
 
         /** PlannedFailoverShardResponse events */
-        events?: (logutil.IEvent[]|null);
+        events?: (eventsdata.IReparentPhaseEvent[]|null);
     }
 
     /** Represents a PlannedFailoverShardResponse. */
@@ -10771,7 +10771,7 @@ export namespace vtadmin {
         public promoted_primary?: (topodata.ITabletAlias|null);
 
         /** PlannedFailoverShardResponse events. */
-        public events: logutil.IEvent[];
+        public events: eventsdata.IReparentPhaseEvent[];
 
         /**
          * Creates a new PlannedFailoverShardResponse instance using the specified properties.
@@ -15610,132 +15610,3207 @@ export namespace vtadmin {
     }
 }
 
-/** Namespace logutil. */
-export namespace logutil {
+/** Namespace eventsdata. */
+export namespace eventsdata {
 
-    /** Level enum. */
-    enum Level {
-        INFO = 0,
-        WARNING = 1,
-        ERROR = 2,
-        CONSOLE = 3
+    /** SourceType enum. */
+    enum SourceType {
+        Vtctld = 0,
+        Vtorc = 1
     }
 
-    /** Properties of an Event. */
-    interface IEvent {
+    /** Properties of a Source. */
+    interface ISource {
 
-        /** Event time */
-        time?: (vttime.ITime|null);
+        /** Source type */
+        type?: (eventsdata.SourceType|null);
 
-        /** Event level */
-        level?: (logutil.Level|null);
-
-        /** Event file */
-        file?: (string|null);
-
-        /** Event line */
-        line?: (number|Long|null);
-
-        /** Event value */
-        value?: (string|null);
+        /** Source hostname */
+        hostname?: (string|null);
     }
 
-    /** Represents an Event. */
-    class Event implements IEvent {
+    /** Represents a Source. */
+    class Source implements ISource {
 
         /**
-         * Constructs a new Event.
+         * Constructs a new Source.
          * @param [properties] Properties to set
          */
-        constructor(properties?: logutil.IEvent);
+        constructor(properties?: eventsdata.ISource);
 
-        /** Event time. */
-        public time?: (vttime.ITime|null);
+        /** Source type. */
+        public type: eventsdata.SourceType;
 
-        /** Event level. */
-        public level: logutil.Level;
-
-        /** Event file. */
-        public file: string;
-
-        /** Event line. */
-        public line: (number|Long);
-
-        /** Event value. */
-        public value: string;
+        /** Source hostname. */
+        public hostname: string;
 
         /**
-         * Creates a new Event instance using the specified properties.
+         * Creates a new Source instance using the specified properties.
          * @param [properties] Properties to set
-         * @returns Event instance
+         * @returns Source instance
          */
-        public static create(properties?: logutil.IEvent): logutil.Event;
+        public static create(properties?: eventsdata.ISource): eventsdata.Source;
 
         /**
-         * Encodes the specified Event message. Does not implicitly {@link logutil.Event.verify|verify} messages.
-         * @param message Event message or plain object to encode
+         * Encodes the specified Source message. Does not implicitly {@link eventsdata.Source.verify|verify} messages.
+         * @param message Source message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encode(message: logutil.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encode(message: eventsdata.ISource, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Encodes the specified Event message, length delimited. Does not implicitly {@link logutil.Event.verify|verify} messages.
-         * @param message Event message or plain object to encode
+         * Encodes the specified Source message, length delimited. Does not implicitly {@link eventsdata.Source.verify|verify} messages.
+         * @param message Source message or plain object to encode
          * @param [writer] Writer to encode to
          * @returns Writer
          */
-        public static encodeDelimited(message: logutil.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+        public static encodeDelimited(message: eventsdata.ISource, writer?: $protobuf.Writer): $protobuf.Writer;
 
         /**
-         * Decodes an Event message from the specified reader or buffer.
+         * Decodes a Source message from the specified reader or buffer.
          * @param reader Reader or buffer to decode from
          * @param [length] Message length if known beforehand
-         * @returns Event
+         * @returns Source
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): logutil.Event;
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): eventsdata.Source;
 
         /**
-         * Decodes an Event message from the specified reader or buffer, length delimited.
+         * Decodes a Source message from the specified reader or buffer, length delimited.
          * @param reader Reader or buffer to decode from
-         * @returns Event
+         * @returns Source
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): logutil.Event;
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): eventsdata.Source;
 
         /**
-         * Verifies an Event message.
+         * Verifies a Source message.
          * @param message Plain object to verify
          * @returns `null` if valid, otherwise the reason why it is not
          */
         public static verify(message: { [k: string]: any }): (string|null);
 
         /**
-         * Creates an Event message from a plain object. Also converts values to their respective internal types.
+         * Creates a Source message from a plain object. Also converts values to their respective internal types.
          * @param object Plain object
-         * @returns Event
+         * @returns Source
          */
-        public static fromObject(object: { [k: string]: any }): logutil.Event;
+        public static fromObject(object: { [k: string]: any }): eventsdata.Source;
 
         /**
-         * Creates a plain object from an Event message. Also converts values to other types if specified.
-         * @param message Event
+         * Creates a plain object from a Source message. Also converts values to other types if specified.
+         * @param message Source
          * @param [options] Conversion options
          * @returns Plain object
          */
-        public static toObject(message: logutil.Event, options?: $protobuf.IConversionOptions): { [k: string]: any };
+        public static toObject(message: eventsdata.Source, options?: $protobuf.IConversionOptions): { [k: string]: any };
 
         /**
-         * Converts this Event to JSON.
+         * Converts this Source to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
 
         /**
-         * Gets the default type url for Event
+         * Gets the default type url for Source
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a Metadata. */
+    interface IMetadata {
+
+        /** Metadata id */
+        id?: (string|null);
+
+        /** Metadata source */
+        source?: (eventsdata.ISource|null);
+
+        /** Metadata timestamp */
+        timestamp?: (vttime.ITime|null);
+    }
+
+    /** Represents a Metadata. */
+    class Metadata implements IMetadata {
+
+        /**
+         * Constructs a new Metadata.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: eventsdata.IMetadata);
+
+        /** Metadata id. */
+        public id: string;
+
+        /** Metadata source. */
+        public source?: (eventsdata.ISource|null);
+
+        /** Metadata timestamp. */
+        public timestamp?: (vttime.ITime|null);
+
+        /**
+         * Creates a new Metadata instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Metadata instance
+         */
+        public static create(properties?: eventsdata.IMetadata): eventsdata.Metadata;
+
+        /**
+         * Encodes the specified Metadata message. Does not implicitly {@link eventsdata.Metadata.verify|verify} messages.
+         * @param message Metadata message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: eventsdata.IMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Metadata message, length delimited. Does not implicitly {@link eventsdata.Metadata.verify|verify} messages.
+         * @param message Metadata message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: eventsdata.IMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Metadata message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Metadata
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): eventsdata.Metadata;
+
+        /**
+         * Decodes a Metadata message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Metadata
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): eventsdata.Metadata;
+
+        /**
+         * Verifies a Metadata message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Metadata message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Metadata
+         */
+        public static fromObject(object: { [k: string]: any }): eventsdata.Metadata;
+
+        /**
+         * Creates a plain object from a Metadata message. Also converts values to other types if specified.
+         * @param message Metadata
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: eventsdata.Metadata, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Metadata to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Metadata
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** ReparentType enum. */
+    enum ReparentType {
+        PlannedReparentShard = 0,
+        EmergencyReparentShard = 1,
+        TabletExternallyReparented = 2
+    }
+
+    /** ReparentPhaseType enum. */
+    enum ReparentPhaseType {
+        Pending = 0,
+        Finished = 1,
+        Failed = 2,
+        Skip = 3,
+        PrimaryElection = 4,
+        PrimaryElected = 5,
+        DemoteOldPrimary = 6,
+        ReadTabletMap = 7,
+        ReadAllTablets = 8,
+        ReparentAllTablets = 9
+    }
+
+    /** Properties of a ReparentPhaseEvent. */
+    interface IReparentPhaseEvent {
+
+        /** ReparentPhaseEvent phase */
+        phase?: (eventsdata.ReparentPhaseType|null);
+
+        /** ReparentPhaseEvent timestamp */
+        timestamp?: (vttime.ITime|null);
+
+        /** ReparentPhaseEvent status */
+        status?: (string|null);
+
+        /** ReparentPhaseEvent error */
+        error?: (string|null);
+    }
+
+    /** Represents a ReparentPhaseEvent. */
+    class ReparentPhaseEvent implements IReparentPhaseEvent {
+
+        /**
+         * Constructs a new ReparentPhaseEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: eventsdata.IReparentPhaseEvent);
+
+        /** ReparentPhaseEvent phase. */
+        public phase: eventsdata.ReparentPhaseType;
+
+        /** ReparentPhaseEvent timestamp. */
+        public timestamp?: (vttime.ITime|null);
+
+        /** ReparentPhaseEvent status. */
+        public status: string;
+
+        /** ReparentPhaseEvent error. */
+        public error: string;
+
+        /**
+         * Creates a new ReparentPhaseEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReparentPhaseEvent instance
+         */
+        public static create(properties?: eventsdata.IReparentPhaseEvent): eventsdata.ReparentPhaseEvent;
+
+        /**
+         * Encodes the specified ReparentPhaseEvent message. Does not implicitly {@link eventsdata.ReparentPhaseEvent.verify|verify} messages.
+         * @param message ReparentPhaseEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: eventsdata.IReparentPhaseEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReparentPhaseEvent message, length delimited. Does not implicitly {@link eventsdata.ReparentPhaseEvent.verify|verify} messages.
+         * @param message ReparentPhaseEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: eventsdata.IReparentPhaseEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReparentPhaseEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReparentPhaseEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): eventsdata.ReparentPhaseEvent;
+
+        /**
+         * Decodes a ReparentPhaseEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReparentPhaseEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): eventsdata.ReparentPhaseEvent;
+
+        /**
+         * Verifies a ReparentPhaseEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReparentPhaseEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReparentPhaseEvent
+         */
+        public static fromObject(object: { [k: string]: any }): eventsdata.ReparentPhaseEvent;
+
+        /**
+         * Creates a plain object from a ReparentPhaseEvent message. Also converts values to other types if specified.
+         * @param message ReparentPhaseEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: eventsdata.ReparentPhaseEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReparentPhaseEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReparentPhaseEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ReparentEvent. */
+    interface IReparentEvent {
+
+        /** ReparentEvent meta */
+        meta?: (eventsdata.IMetadata|null);
+
+        /** ReparentEvent shard_info */
+        shard_info?: (topodata.IShardInfo|null);
+
+        /** ReparentEvent new_primary */
+        new_primary?: (topodata.ITablet|null);
+
+        /** ReparentEvent old_primary */
+        old_primary?: (topodata.ITablet|null);
+
+        /** ReparentEvent type */
+        type?: (eventsdata.ReparentType|null);
+
+        /** ReparentEvent phase */
+        phase?: (eventsdata.ReparentPhaseType|null);
+
+        /** ReparentEvent status */
+        status?: (string|null);
+
+        /** ReparentEvent error */
+        error?: (string|null);
+    }
+
+    /** Represents a ReparentEvent. */
+    class ReparentEvent implements IReparentEvent {
+
+        /**
+         * Constructs a new ReparentEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: eventsdata.IReparentEvent);
+
+        /** ReparentEvent meta. */
+        public meta?: (eventsdata.IMetadata|null);
+
+        /** ReparentEvent shard_info. */
+        public shard_info?: (topodata.IShardInfo|null);
+
+        /** ReparentEvent new_primary. */
+        public new_primary?: (topodata.ITablet|null);
+
+        /** ReparentEvent old_primary. */
+        public old_primary?: (topodata.ITablet|null);
+
+        /** ReparentEvent type. */
+        public type: eventsdata.ReparentType;
+
+        /** ReparentEvent phase. */
+        public phase: eventsdata.ReparentPhaseType;
+
+        /** ReparentEvent status. */
+        public status: string;
+
+        /** ReparentEvent error. */
+        public error: string;
+
+        /**
+         * Creates a new ReparentEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReparentEvent instance
+         */
+        public static create(properties?: eventsdata.IReparentEvent): eventsdata.ReparentEvent;
+
+        /**
+         * Encodes the specified ReparentEvent message. Does not implicitly {@link eventsdata.ReparentEvent.verify|verify} messages.
+         * @param message ReparentEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: eventsdata.IReparentEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReparentEvent message, length delimited. Does not implicitly {@link eventsdata.ReparentEvent.verify|verify} messages.
+         * @param message ReparentEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: eventsdata.IReparentEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReparentEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReparentEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): eventsdata.ReparentEvent;
+
+        /**
+         * Decodes a ReparentEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReparentEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): eventsdata.ReparentEvent;
+
+        /**
+         * Verifies a ReparentEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReparentEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReparentEvent
+         */
+        public static fromObject(object: { [k: string]: any }): eventsdata.ReparentEvent;
+
+        /**
+         * Creates a plain object from a ReparentEvent message. Also converts values to other types if specified.
+         * @param message ReparentEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: eventsdata.ReparentEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReparentEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReparentEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a KeyspaceChangeEvent. */
+    interface IKeyspaceChangeEvent {
+
+        /** KeyspaceChangeEvent meta */
+        meta?: (eventsdata.IMetadata|null);
+
+        /** KeyspaceChangeEvent keyspace_name */
+        keyspace_name?: (string|null);
+
+        /** KeyspaceChangeEvent new_keyspace */
+        new_keyspace?: (topodata.IKeyspace|null);
+
+        /** KeyspaceChangeEvent old_keyspace */
+        old_keyspace?: (topodata.IKeyspace|null);
+
+        /** KeyspaceChangeEvent status */
+        status?: (string|null);
+    }
+
+    /** Represents a KeyspaceChangeEvent. */
+    class KeyspaceChangeEvent implements IKeyspaceChangeEvent {
+
+        /**
+         * Constructs a new KeyspaceChangeEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: eventsdata.IKeyspaceChangeEvent);
+
+        /** KeyspaceChangeEvent meta. */
+        public meta?: (eventsdata.IMetadata|null);
+
+        /** KeyspaceChangeEvent keyspace_name. */
+        public keyspace_name: string;
+
+        /** KeyspaceChangeEvent new_keyspace. */
+        public new_keyspace?: (topodata.IKeyspace|null);
+
+        /** KeyspaceChangeEvent old_keyspace. */
+        public old_keyspace?: (topodata.IKeyspace|null);
+
+        /** KeyspaceChangeEvent status. */
+        public status: string;
+
+        /**
+         * Creates a new KeyspaceChangeEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns KeyspaceChangeEvent instance
+         */
+        public static create(properties?: eventsdata.IKeyspaceChangeEvent): eventsdata.KeyspaceChangeEvent;
+
+        /**
+         * Encodes the specified KeyspaceChangeEvent message. Does not implicitly {@link eventsdata.KeyspaceChangeEvent.verify|verify} messages.
+         * @param message KeyspaceChangeEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: eventsdata.IKeyspaceChangeEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified KeyspaceChangeEvent message, length delimited. Does not implicitly {@link eventsdata.KeyspaceChangeEvent.verify|verify} messages.
+         * @param message KeyspaceChangeEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: eventsdata.IKeyspaceChangeEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a KeyspaceChangeEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns KeyspaceChangeEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): eventsdata.KeyspaceChangeEvent;
+
+        /**
+         * Decodes a KeyspaceChangeEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns KeyspaceChangeEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): eventsdata.KeyspaceChangeEvent;
+
+        /**
+         * Verifies a KeyspaceChangeEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a KeyspaceChangeEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns KeyspaceChangeEvent
+         */
+        public static fromObject(object: { [k: string]: any }): eventsdata.KeyspaceChangeEvent;
+
+        /**
+         * Creates a plain object from a KeyspaceChangeEvent message. Also converts values to other types if specified.
+         * @param message KeyspaceChangeEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: eventsdata.KeyspaceChangeEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this KeyspaceChangeEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for KeyspaceChangeEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace topodata. */
+export namespace topodata {
+
+    /** Properties of a KeyRange. */
+    interface IKeyRange {
+
+        /** KeyRange start */
+        start?: (Uint8Array|null);
+
+        /** KeyRange end */
+        end?: (Uint8Array|null);
+    }
+
+    /** Represents a KeyRange. */
+    class KeyRange implements IKeyRange {
+
+        /**
+         * Constructs a new KeyRange.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IKeyRange);
+
+        /** KeyRange start. */
+        public start: Uint8Array;
+
+        /** KeyRange end. */
+        public end: Uint8Array;
+
+        /**
+         * Creates a new KeyRange instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns KeyRange instance
+         */
+        public static create(properties?: topodata.IKeyRange): topodata.KeyRange;
+
+        /**
+         * Encodes the specified KeyRange message. Does not implicitly {@link topodata.KeyRange.verify|verify} messages.
+         * @param message KeyRange message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IKeyRange, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified KeyRange message, length delimited. Does not implicitly {@link topodata.KeyRange.verify|verify} messages.
+         * @param message KeyRange message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IKeyRange, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a KeyRange message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns KeyRange
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.KeyRange;
+
+        /**
+         * Decodes a KeyRange message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns KeyRange
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.KeyRange;
+
+        /**
+         * Verifies a KeyRange message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a KeyRange message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns KeyRange
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.KeyRange;
+
+        /**
+         * Creates a plain object from a KeyRange message. Also converts values to other types if specified.
+         * @param message KeyRange
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.KeyRange, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this KeyRange to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for KeyRange
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** KeyspaceType enum. */
+    enum KeyspaceType {
+        NORMAL = 0,
+        SNAPSHOT = 1
+    }
+
+    /** Properties of a TabletAlias. */
+    interface ITabletAlias {
+
+        /** TabletAlias cell */
+        cell?: (string|null);
+
+        /** TabletAlias uid */
+        uid?: (number|null);
+    }
+
+    /** Represents a TabletAlias. */
+    class TabletAlias implements ITabletAlias {
+
+        /**
+         * Constructs a new TabletAlias.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.ITabletAlias);
+
+        /** TabletAlias cell. */
+        public cell: string;
+
+        /** TabletAlias uid. */
+        public uid: number;
+
+        /**
+         * Creates a new TabletAlias instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TabletAlias instance
+         */
+        public static create(properties?: topodata.ITabletAlias): topodata.TabletAlias;
+
+        /**
+         * Encodes the specified TabletAlias message. Does not implicitly {@link topodata.TabletAlias.verify|verify} messages.
+         * @param message TabletAlias message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.ITabletAlias, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TabletAlias message, length delimited. Does not implicitly {@link topodata.TabletAlias.verify|verify} messages.
+         * @param message TabletAlias message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.ITabletAlias, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TabletAlias message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TabletAlias
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.TabletAlias;
+
+        /**
+         * Decodes a TabletAlias message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TabletAlias
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.TabletAlias;
+
+        /**
+         * Verifies a TabletAlias message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TabletAlias message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TabletAlias
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.TabletAlias;
+
+        /**
+         * Creates a plain object from a TabletAlias message. Also converts values to other types if specified.
+         * @param message TabletAlias
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.TabletAlias, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TabletAlias to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TabletAlias
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** TabletType enum. */
+    enum TabletType {
+        UNKNOWN = 0,
+        PRIMARY = 1,
+        MASTER = 1,
+        REPLICA = 2,
+        RDONLY = 3,
+        BATCH = 3,
+        SPARE = 4,
+        EXPERIMENTAL = 5,
+        BACKUP = 6,
+        RESTORE = 7,
+        DRAINED = 8
+    }
+
+    /** Properties of a Tablet. */
+    interface ITablet {
+
+        /** Tablet alias */
+        alias?: (topodata.ITabletAlias|null);
+
+        /** Tablet hostname */
+        hostname?: (string|null);
+
+        /** Tablet port_map */
+        port_map?: ({ [k: string]: number }|null);
+
+        /** Tablet keyspace */
+        keyspace?: (string|null);
+
+        /** Tablet shard */
+        shard?: (string|null);
+
+        /** Tablet key_range */
+        key_range?: (topodata.IKeyRange|null);
+
+        /** Tablet type */
+        type?: (topodata.TabletType|null);
+
+        /** Tablet db_name_override */
+        db_name_override?: (string|null);
+
+        /** Tablet tags */
+        tags?: ({ [k: string]: string }|null);
+
+        /** Tablet mysql_hostname */
+        mysql_hostname?: (string|null);
+
+        /** Tablet mysql_port */
+        mysql_port?: (number|null);
+
+        /** Tablet primary_term_start_time */
+        primary_term_start_time?: (vttime.ITime|null);
+
+        /** Tablet default_conn_collation */
+        default_conn_collation?: (number|null);
+    }
+
+    /** Represents a Tablet. */
+    class Tablet implements ITablet {
+
+        /**
+         * Constructs a new Tablet.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.ITablet);
+
+        /** Tablet alias. */
+        public alias?: (topodata.ITabletAlias|null);
+
+        /** Tablet hostname. */
+        public hostname: string;
+
+        /** Tablet port_map. */
+        public port_map: { [k: string]: number };
+
+        /** Tablet keyspace. */
+        public keyspace: string;
+
+        /** Tablet shard. */
+        public shard: string;
+
+        /** Tablet key_range. */
+        public key_range?: (topodata.IKeyRange|null);
+
+        /** Tablet type. */
+        public type: topodata.TabletType;
+
+        /** Tablet db_name_override. */
+        public db_name_override: string;
+
+        /** Tablet tags. */
+        public tags: { [k: string]: string };
+
+        /** Tablet mysql_hostname. */
+        public mysql_hostname: string;
+
+        /** Tablet mysql_port. */
+        public mysql_port: number;
+
+        /** Tablet primary_term_start_time. */
+        public primary_term_start_time?: (vttime.ITime|null);
+
+        /** Tablet default_conn_collation. */
+        public default_conn_collation: number;
+
+        /**
+         * Creates a new Tablet instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Tablet instance
+         */
+        public static create(properties?: topodata.ITablet): topodata.Tablet;
+
+        /**
+         * Encodes the specified Tablet message. Does not implicitly {@link topodata.Tablet.verify|verify} messages.
+         * @param message Tablet message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.ITablet, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Tablet message, length delimited. Does not implicitly {@link topodata.Tablet.verify|verify} messages.
+         * @param message Tablet message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.ITablet, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Tablet message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Tablet
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Tablet;
+
+        /**
+         * Decodes a Tablet message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Tablet
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Tablet;
+
+        /**
+         * Verifies a Tablet message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Tablet message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Tablet
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.Tablet;
+
+        /**
+         * Creates a plain object from a Tablet message. Also converts values to other types if specified.
+         * @param message Tablet
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.Tablet, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Tablet to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Tablet
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a Shard. */
+    interface IShard {
+
+        /** Shard primary_alias */
+        primary_alias?: (topodata.ITabletAlias|null);
+
+        /** Shard primary_term_start_time */
+        primary_term_start_time?: (vttime.ITime|null);
+
+        /** Shard key_range */
+        key_range?: (topodata.IKeyRange|null);
+
+        /** Shard source_shards */
+        source_shards?: (topodata.Shard.ISourceShard[]|null);
+
+        /** Shard tablet_controls */
+        tablet_controls?: (topodata.Shard.ITabletControl[]|null);
+
+        /** Shard is_primary_serving */
+        is_primary_serving?: (boolean|null);
+    }
+
+    /** Represents a Shard. */
+    class Shard implements IShard {
+
+        /**
+         * Constructs a new Shard.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IShard);
+
+        /** Shard primary_alias. */
+        public primary_alias?: (topodata.ITabletAlias|null);
+
+        /** Shard primary_term_start_time. */
+        public primary_term_start_time?: (vttime.ITime|null);
+
+        /** Shard key_range. */
+        public key_range?: (topodata.IKeyRange|null);
+
+        /** Shard source_shards. */
+        public source_shards: topodata.Shard.ISourceShard[];
+
+        /** Shard tablet_controls. */
+        public tablet_controls: topodata.Shard.ITabletControl[];
+
+        /** Shard is_primary_serving. */
+        public is_primary_serving: boolean;
+
+        /**
+         * Creates a new Shard instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Shard instance
+         */
+        public static create(properties?: topodata.IShard): topodata.Shard;
+
+        /**
+         * Encodes the specified Shard message. Does not implicitly {@link topodata.Shard.verify|verify} messages.
+         * @param message Shard message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IShard, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Shard message, length delimited. Does not implicitly {@link topodata.Shard.verify|verify} messages.
+         * @param message Shard message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IShard, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Shard message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Shard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Shard;
+
+        /**
+         * Decodes a Shard message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Shard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Shard;
+
+        /**
+         * Verifies a Shard message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Shard message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Shard
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.Shard;
+
+        /**
+         * Creates a plain object from a Shard message. Also converts values to other types if specified.
+         * @param message Shard
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.Shard, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Shard to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Shard
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace Shard {
+
+        /** Properties of a SourceShard. */
+        interface ISourceShard {
+
+            /** SourceShard uid */
+            uid?: (number|null);
+
+            /** SourceShard keyspace */
+            keyspace?: (string|null);
+
+            /** SourceShard shard */
+            shard?: (string|null);
+
+            /** SourceShard key_range */
+            key_range?: (topodata.IKeyRange|null);
+
+            /** SourceShard tables */
+            tables?: (string[]|null);
+        }
+
+        /** Represents a SourceShard. */
+        class SourceShard implements ISourceShard {
+
+            /**
+             * Constructs a new SourceShard.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: topodata.Shard.ISourceShard);
+
+            /** SourceShard uid. */
+            public uid: number;
+
+            /** SourceShard keyspace. */
+            public keyspace: string;
+
+            /** SourceShard shard. */
+            public shard: string;
+
+            /** SourceShard key_range. */
+            public key_range?: (topodata.IKeyRange|null);
+
+            /** SourceShard tables. */
+            public tables: string[];
+
+            /**
+             * Creates a new SourceShard instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns SourceShard instance
+             */
+            public static create(properties?: topodata.Shard.ISourceShard): topodata.Shard.SourceShard;
+
+            /**
+             * Encodes the specified SourceShard message. Does not implicitly {@link topodata.Shard.SourceShard.verify|verify} messages.
+             * @param message SourceShard message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: topodata.Shard.ISourceShard, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified SourceShard message, length delimited. Does not implicitly {@link topodata.Shard.SourceShard.verify|verify} messages.
+             * @param message SourceShard message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: topodata.Shard.ISourceShard, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a SourceShard message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns SourceShard
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Shard.SourceShard;
+
+            /**
+             * Decodes a SourceShard message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns SourceShard
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Shard.SourceShard;
+
+            /**
+             * Verifies a SourceShard message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a SourceShard message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns SourceShard
+             */
+            public static fromObject(object: { [k: string]: any }): topodata.Shard.SourceShard;
+
+            /**
+             * Creates a plain object from a SourceShard message. Also converts values to other types if specified.
+             * @param message SourceShard
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: topodata.Shard.SourceShard, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this SourceShard to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for SourceShard
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+
+        /** Properties of a TabletControl. */
+        interface ITabletControl {
+
+            /** TabletControl tablet_type */
+            tablet_type?: (topodata.TabletType|null);
+
+            /** TabletControl cells */
+            cells?: (string[]|null);
+
+            /** TabletControl denied_tables */
+            denied_tables?: (string[]|null);
+
+            /** TabletControl frozen */
+            frozen?: (boolean|null);
+        }
+
+        /** Represents a TabletControl. */
+        class TabletControl implements ITabletControl {
+
+            /**
+             * Constructs a new TabletControl.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: topodata.Shard.ITabletControl);
+
+            /** TabletControl tablet_type. */
+            public tablet_type: topodata.TabletType;
+
+            /** TabletControl cells. */
+            public cells: string[];
+
+            /** TabletControl denied_tables. */
+            public denied_tables: string[];
+
+            /** TabletControl frozen. */
+            public frozen: boolean;
+
+            /**
+             * Creates a new TabletControl instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns TabletControl instance
+             */
+            public static create(properties?: topodata.Shard.ITabletControl): topodata.Shard.TabletControl;
+
+            /**
+             * Encodes the specified TabletControl message. Does not implicitly {@link topodata.Shard.TabletControl.verify|verify} messages.
+             * @param message TabletControl message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: topodata.Shard.ITabletControl, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified TabletControl message, length delimited. Does not implicitly {@link topodata.Shard.TabletControl.verify|verify} messages.
+             * @param message TabletControl message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: topodata.Shard.ITabletControl, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a TabletControl message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns TabletControl
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Shard.TabletControl;
+
+            /**
+             * Decodes a TabletControl message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns TabletControl
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Shard.TabletControl;
+
+            /**
+             * Verifies a TabletControl message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a TabletControl message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns TabletControl
+             */
+            public static fromObject(object: { [k: string]: any }): topodata.Shard.TabletControl;
+
+            /**
+             * Creates a plain object from a TabletControl message. Also converts values to other types if specified.
+             * @param message TabletControl
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: topodata.Shard.TabletControl, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this TabletControl to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for TabletControl
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
+    /** Properties of a ShardInfo. */
+    interface IShardInfo {
+
+        /** ShardInfo keyspace */
+        keyspace?: (string|null);
+
+        /** ShardInfo shard_name */
+        shard_name?: (string|null);
+
+        /** ShardInfo shard */
+        shard?: (topodata.IShard|null);
+    }
+
+    /** Represents a ShardInfo. */
+    class ShardInfo implements IShardInfo {
+
+        /**
+         * Constructs a new ShardInfo.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IShardInfo);
+
+        /** ShardInfo keyspace. */
+        public keyspace: string;
+
+        /** ShardInfo shard_name. */
+        public shard_name: string;
+
+        /** ShardInfo shard. */
+        public shard?: (topodata.IShard|null);
+
+        /**
+         * Creates a new ShardInfo instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardInfo instance
+         */
+        public static create(properties?: topodata.IShardInfo): topodata.ShardInfo;
+
+        /**
+         * Encodes the specified ShardInfo message. Does not implicitly {@link topodata.ShardInfo.verify|verify} messages.
+         * @param message ShardInfo message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IShardInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardInfo message, length delimited. Does not implicitly {@link topodata.ShardInfo.verify|verify} messages.
+         * @param message ShardInfo message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IShardInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardInfo message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardInfo;
+
+        /**
+         * Decodes a ShardInfo message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardInfo;
+
+        /**
+         * Verifies a ShardInfo message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardInfo message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardInfo
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ShardInfo;
+
+        /**
+         * Creates a plain object from a ShardInfo message. Also converts values to other types if specified.
+         * @param message ShardInfo
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ShardInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardInfo to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardInfo
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a Keyspace. */
+    interface IKeyspace {
+
+        /** Keyspace keyspace_type */
+        keyspace_type?: (topodata.KeyspaceType|null);
+
+        /** Keyspace base_keyspace */
+        base_keyspace?: (string|null);
+
+        /** Keyspace snapshot_time */
+        snapshot_time?: (vttime.ITime|null);
+
+        /** Keyspace durability_policy */
+        durability_policy?: (string|null);
+
+        /** Keyspace throttler_config */
+        throttler_config?: (topodata.IThrottlerConfig|null);
+
+        /** Keyspace sidecar_db_name */
+        sidecar_db_name?: (string|null);
+    }
+
+    /** Represents a Keyspace. */
+    class Keyspace implements IKeyspace {
+
+        /**
+         * Constructs a new Keyspace.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IKeyspace);
+
+        /** Keyspace keyspace_type. */
+        public keyspace_type: topodata.KeyspaceType;
+
+        /** Keyspace base_keyspace. */
+        public base_keyspace: string;
+
+        /** Keyspace snapshot_time. */
+        public snapshot_time?: (vttime.ITime|null);
+
+        /** Keyspace durability_policy. */
+        public durability_policy: string;
+
+        /** Keyspace throttler_config. */
+        public throttler_config?: (topodata.IThrottlerConfig|null);
+
+        /** Keyspace sidecar_db_name. */
+        public sidecar_db_name: string;
+
+        /**
+         * Creates a new Keyspace instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Keyspace instance
+         */
+        public static create(properties?: topodata.IKeyspace): topodata.Keyspace;
+
+        /**
+         * Encodes the specified Keyspace message. Does not implicitly {@link topodata.Keyspace.verify|verify} messages.
+         * @param message Keyspace message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Keyspace message, length delimited. Does not implicitly {@link topodata.Keyspace.verify|verify} messages.
+         * @param message Keyspace message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Keyspace;
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Keyspace;
+
+        /**
+         * Verifies a Keyspace message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Keyspace
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.Keyspace;
+
+        /**
+         * Creates a plain object from a Keyspace message. Also converts values to other types if specified.
+         * @param message Keyspace
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.Keyspace, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Keyspace to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Keyspace
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ShardReplication. */
+    interface IShardReplication {
+
+        /** ShardReplication nodes */
+        nodes?: (topodata.ShardReplication.INode[]|null);
+    }
+
+    /** Represents a ShardReplication. */
+    class ShardReplication implements IShardReplication {
+
+        /**
+         * Constructs a new ShardReplication.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IShardReplication);
+
+        /** ShardReplication nodes. */
+        public nodes: topodata.ShardReplication.INode[];
+
+        /**
+         * Creates a new ShardReplication instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardReplication instance
+         */
+        public static create(properties?: topodata.IShardReplication): topodata.ShardReplication;
+
+        /**
+         * Encodes the specified ShardReplication message. Does not implicitly {@link topodata.ShardReplication.verify|verify} messages.
+         * @param message ShardReplication message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IShardReplication, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardReplication message, length delimited. Does not implicitly {@link topodata.ShardReplication.verify|verify} messages.
+         * @param message ShardReplication message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IShardReplication, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardReplication message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardReplication
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReplication;
+
+        /**
+         * Decodes a ShardReplication message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardReplication
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReplication;
+
+        /**
+         * Verifies a ShardReplication message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardReplication message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardReplication
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ShardReplication;
+
+        /**
+         * Creates a plain object from a ShardReplication message. Also converts values to other types if specified.
+         * @param message ShardReplication
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ShardReplication, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardReplication to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReplication
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace ShardReplication {
+
+        /** Properties of a Node. */
+        interface INode {
+
+            /** Node tablet_alias */
+            tablet_alias?: (topodata.ITabletAlias|null);
+        }
+
+        /** Represents a Node. */
+        class Node implements INode {
+
+            /**
+             * Constructs a new Node.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: topodata.ShardReplication.INode);
+
+            /** Node tablet_alias. */
+            public tablet_alias?: (topodata.ITabletAlias|null);
+
+            /**
+             * Creates a new Node instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns Node instance
+             */
+            public static create(properties?: topodata.ShardReplication.INode): topodata.ShardReplication.Node;
+
+            /**
+             * Encodes the specified Node message. Does not implicitly {@link topodata.ShardReplication.Node.verify|verify} messages.
+             * @param message Node message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: topodata.ShardReplication.INode, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified Node message, length delimited. Does not implicitly {@link topodata.ShardReplication.Node.verify|verify} messages.
+             * @param message Node message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: topodata.ShardReplication.INode, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a Node message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns Node
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReplication.Node;
+
+            /**
+             * Decodes a Node message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns Node
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReplication.Node;
+
+            /**
+             * Verifies a Node message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a Node message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns Node
+             */
+            public static fromObject(object: { [k: string]: any }): topodata.ShardReplication.Node;
+
+            /**
+             * Creates a plain object from a Node message. Also converts values to other types if specified.
+             * @param message Node
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: topodata.ShardReplication.Node, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this Node to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for Node
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
+    /** Properties of a ShardReplicationError. */
+    interface IShardReplicationError {
+
+        /** ShardReplicationError type */
+        type?: (topodata.ShardReplicationError.Type|null);
+
+        /** ShardReplicationError tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a ShardReplicationError. */
+    class ShardReplicationError implements IShardReplicationError {
+
+        /**
+         * Constructs a new ShardReplicationError.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IShardReplicationError);
+
+        /** ShardReplicationError type. */
+        public type: topodata.ShardReplicationError.Type;
+
+        /** ShardReplicationError tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new ShardReplicationError instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardReplicationError instance
+         */
+        public static create(properties?: topodata.IShardReplicationError): topodata.ShardReplicationError;
+
+        /**
+         * Encodes the specified ShardReplicationError message. Does not implicitly {@link topodata.ShardReplicationError.verify|verify} messages.
+         * @param message ShardReplicationError message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IShardReplicationError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardReplicationError message, length delimited. Does not implicitly {@link topodata.ShardReplicationError.verify|verify} messages.
+         * @param message ShardReplicationError message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IShardReplicationError, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardReplicationError message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardReplicationError
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReplicationError;
+
+        /**
+         * Decodes a ShardReplicationError message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardReplicationError
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReplicationError;
+
+        /**
+         * Verifies a ShardReplicationError message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardReplicationError message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardReplicationError
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ShardReplicationError;
+
+        /**
+         * Creates a plain object from a ShardReplicationError message. Also converts values to other types if specified.
+         * @param message ShardReplicationError
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ShardReplicationError, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardReplicationError to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReplicationError
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace ShardReplicationError {
+
+        /** Type enum. */
+        enum Type {
+            UNKNOWN = 0,
+            NOT_FOUND = 1,
+            TOPOLOGY_MISMATCH = 2
+        }
+    }
+
+    /** Properties of a ShardReference. */
+    interface IShardReference {
+
+        /** ShardReference name */
+        name?: (string|null);
+
+        /** ShardReference key_range */
+        key_range?: (topodata.IKeyRange|null);
+    }
+
+    /** Represents a ShardReference. */
+    class ShardReference implements IShardReference {
+
+        /**
+         * Constructs a new ShardReference.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IShardReference);
+
+        /** ShardReference name. */
+        public name: string;
+
+        /** ShardReference key_range. */
+        public key_range?: (topodata.IKeyRange|null);
+
+        /**
+         * Creates a new ShardReference instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardReference instance
+         */
+        public static create(properties?: topodata.IShardReference): topodata.ShardReference;
+
+        /**
+         * Encodes the specified ShardReference message. Does not implicitly {@link topodata.ShardReference.verify|verify} messages.
+         * @param message ShardReference message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IShardReference, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardReference message, length delimited. Does not implicitly {@link topodata.ShardReference.verify|verify} messages.
+         * @param message ShardReference message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IShardReference, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardReference message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardReference
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReference;
+
+        /**
+         * Decodes a ShardReference message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardReference
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReference;
+
+        /**
+         * Verifies a ShardReference message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardReference message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardReference
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ShardReference;
+
+        /**
+         * Creates a plain object from a ShardReference message. Also converts values to other types if specified.
+         * @param message ShardReference
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ShardReference, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardReference to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardReference
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ShardTabletControl. */
+    interface IShardTabletControl {
+
+        /** ShardTabletControl name */
+        name?: (string|null);
+
+        /** ShardTabletControl key_range */
+        key_range?: (topodata.IKeyRange|null);
+
+        /** ShardTabletControl query_service_disabled */
+        query_service_disabled?: (boolean|null);
+    }
+
+    /** Represents a ShardTabletControl. */
+    class ShardTabletControl implements IShardTabletControl {
+
+        /**
+         * Constructs a new ShardTabletControl.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IShardTabletControl);
+
+        /** ShardTabletControl name. */
+        public name: string;
+
+        /** ShardTabletControl key_range. */
+        public key_range?: (topodata.IKeyRange|null);
+
+        /** ShardTabletControl query_service_disabled. */
+        public query_service_disabled: boolean;
+
+        /**
+         * Creates a new ShardTabletControl instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardTabletControl instance
+         */
+        public static create(properties?: topodata.IShardTabletControl): topodata.ShardTabletControl;
+
+        /**
+         * Encodes the specified ShardTabletControl message. Does not implicitly {@link topodata.ShardTabletControl.verify|verify} messages.
+         * @param message ShardTabletControl message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IShardTabletControl, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardTabletControl message, length delimited. Does not implicitly {@link topodata.ShardTabletControl.verify|verify} messages.
+         * @param message ShardTabletControl message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IShardTabletControl, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardTabletControl message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardTabletControl
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardTabletControl;
+
+        /**
+         * Decodes a ShardTabletControl message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardTabletControl
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardTabletControl;
+
+        /**
+         * Verifies a ShardTabletControl message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardTabletControl message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardTabletControl
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ShardTabletControl;
+
+        /**
+         * Creates a plain object from a ShardTabletControl message. Also converts values to other types if specified.
+         * @param message ShardTabletControl
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ShardTabletControl, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardTabletControl to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardTabletControl
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ThrottledAppRule. */
+    interface IThrottledAppRule {
+
+        /** ThrottledAppRule name */
+        name?: (string|null);
+
+        /** ThrottledAppRule ratio */
+        ratio?: (number|null);
+
+        /** ThrottledAppRule expires_at */
+        expires_at?: (vttime.ITime|null);
+
+        /** ThrottledAppRule exempt */
+        exempt?: (boolean|null);
+    }
+
+    /** Represents a ThrottledAppRule. */
+    class ThrottledAppRule implements IThrottledAppRule {
+
+        /**
+         * Constructs a new ThrottledAppRule.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IThrottledAppRule);
+
+        /** ThrottledAppRule name. */
+        public name: string;
+
+        /** ThrottledAppRule ratio. */
+        public ratio: number;
+
+        /** ThrottledAppRule expires_at. */
+        public expires_at?: (vttime.ITime|null);
+
+        /** ThrottledAppRule exempt. */
+        public exempt: boolean;
+
+        /**
+         * Creates a new ThrottledAppRule instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ThrottledAppRule instance
+         */
+        public static create(properties?: topodata.IThrottledAppRule): topodata.ThrottledAppRule;
+
+        /**
+         * Encodes the specified ThrottledAppRule message. Does not implicitly {@link topodata.ThrottledAppRule.verify|verify} messages.
+         * @param message ThrottledAppRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IThrottledAppRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ThrottledAppRule message, length delimited. Does not implicitly {@link topodata.ThrottledAppRule.verify|verify} messages.
+         * @param message ThrottledAppRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IThrottledAppRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ThrottledAppRule message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ThrottledAppRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ThrottledAppRule;
+
+        /**
+         * Decodes a ThrottledAppRule message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ThrottledAppRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ThrottledAppRule;
+
+        /**
+         * Verifies a ThrottledAppRule message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ThrottledAppRule message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ThrottledAppRule
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ThrottledAppRule;
+
+        /**
+         * Creates a plain object from a ThrottledAppRule message. Also converts values to other types if specified.
+         * @param message ThrottledAppRule
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ThrottledAppRule, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ThrottledAppRule to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ThrottledAppRule
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ThrottlerConfig. */
+    interface IThrottlerConfig {
+
+        /** ThrottlerConfig enabled */
+        enabled?: (boolean|null);
+
+        /** ThrottlerConfig threshold */
+        threshold?: (number|null);
+
+        /** ThrottlerConfig custom_query */
+        custom_query?: (string|null);
+
+        /** ThrottlerConfig check_as_check_self */
+        check_as_check_self?: (boolean|null);
+
+        /** ThrottlerConfig throttled_apps */
+        throttled_apps?: ({ [k: string]: topodata.IThrottledAppRule }|null);
+
+        /** ThrottlerConfig app_checked_metrics */
+        app_checked_metrics?: ({ [k: string]: topodata.ThrottlerConfig.IMetricNames }|null);
+
+        /** ThrottlerConfig metric_thresholds */
+        metric_thresholds?: ({ [k: string]: number }|null);
+    }
+
+    /** Represents a ThrottlerConfig. */
+    class ThrottlerConfig implements IThrottlerConfig {
+
+        /**
+         * Constructs a new ThrottlerConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IThrottlerConfig);
+
+        /** ThrottlerConfig enabled. */
+        public enabled: boolean;
+
+        /** ThrottlerConfig threshold. */
+        public threshold: number;
+
+        /** ThrottlerConfig custom_query. */
+        public custom_query: string;
+
+        /** ThrottlerConfig check_as_check_self. */
+        public check_as_check_self: boolean;
+
+        /** ThrottlerConfig throttled_apps. */
+        public throttled_apps: { [k: string]: topodata.IThrottledAppRule };
+
+        /** ThrottlerConfig app_checked_metrics. */
+        public app_checked_metrics: { [k: string]: topodata.ThrottlerConfig.IMetricNames };
+
+        /** ThrottlerConfig metric_thresholds. */
+        public metric_thresholds: { [k: string]: number };
+
+        /**
+         * Creates a new ThrottlerConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ThrottlerConfig instance
+         */
+        public static create(properties?: topodata.IThrottlerConfig): topodata.ThrottlerConfig;
+
+        /**
+         * Encodes the specified ThrottlerConfig message. Does not implicitly {@link topodata.ThrottlerConfig.verify|verify} messages.
+         * @param message ThrottlerConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ThrottlerConfig message, length delimited. Does not implicitly {@link topodata.ThrottlerConfig.verify|verify} messages.
+         * @param message ThrottlerConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ThrottlerConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ThrottlerConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ThrottlerConfig;
+
+        /**
+         * Decodes a ThrottlerConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ThrottlerConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ThrottlerConfig;
+
+        /**
+         * Verifies a ThrottlerConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ThrottlerConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ThrottlerConfig
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ThrottlerConfig;
+
+        /**
+         * Creates a plain object from a ThrottlerConfig message. Also converts values to other types if specified.
+         * @param message ThrottlerConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ThrottlerConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ThrottlerConfig to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ThrottlerConfig
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace ThrottlerConfig {
+
+        /** Properties of a MetricNames. */
+        interface IMetricNames {
+
+            /** MetricNames names */
+            names?: (string[]|null);
+        }
+
+        /** Represents a MetricNames. */
+        class MetricNames implements IMetricNames {
+
+            /**
+             * Constructs a new MetricNames.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: topodata.ThrottlerConfig.IMetricNames);
+
+            /** MetricNames names. */
+            public names: string[];
+
+            /**
+             * Creates a new MetricNames instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns MetricNames instance
+             */
+            public static create(properties?: topodata.ThrottlerConfig.IMetricNames): topodata.ThrottlerConfig.MetricNames;
+
+            /**
+             * Encodes the specified MetricNames message. Does not implicitly {@link topodata.ThrottlerConfig.MetricNames.verify|verify} messages.
+             * @param message MetricNames message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: topodata.ThrottlerConfig.IMetricNames, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified MetricNames message, length delimited. Does not implicitly {@link topodata.ThrottlerConfig.MetricNames.verify|verify} messages.
+             * @param message MetricNames message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: topodata.ThrottlerConfig.IMetricNames, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a MetricNames message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns MetricNames
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ThrottlerConfig.MetricNames;
+
+            /**
+             * Decodes a MetricNames message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns MetricNames
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ThrottlerConfig.MetricNames;
+
+            /**
+             * Verifies a MetricNames message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a MetricNames message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns MetricNames
+             */
+            public static fromObject(object: { [k: string]: any }): topodata.ThrottlerConfig.MetricNames;
+
+            /**
+             * Creates a plain object from a MetricNames message. Also converts values to other types if specified.
+             * @param message MetricNames
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: topodata.ThrottlerConfig.MetricNames, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this MetricNames to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for MetricNames
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
+    /** Properties of a SrvKeyspace. */
+    interface ISrvKeyspace {
+
+        /** SrvKeyspace partitions */
+        partitions?: (topodata.SrvKeyspace.IKeyspacePartition[]|null);
+
+        /** SrvKeyspace throttler_config */
+        throttler_config?: (topodata.IThrottlerConfig|null);
+    }
+
+    /** Represents a SrvKeyspace. */
+    class SrvKeyspace implements ISrvKeyspace {
+
+        /**
+         * Constructs a new SrvKeyspace.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.ISrvKeyspace);
+
+        /** SrvKeyspace partitions. */
+        public partitions: topodata.SrvKeyspace.IKeyspacePartition[];
+
+        /** SrvKeyspace throttler_config. */
+        public throttler_config?: (topodata.IThrottlerConfig|null);
+
+        /**
+         * Creates a new SrvKeyspace instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SrvKeyspace instance
+         */
+        public static create(properties?: topodata.ISrvKeyspace): topodata.SrvKeyspace;
+
+        /**
+         * Encodes the specified SrvKeyspace message. Does not implicitly {@link topodata.SrvKeyspace.verify|verify} messages.
+         * @param message SrvKeyspace message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.ISrvKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SrvKeyspace message, length delimited. Does not implicitly {@link topodata.SrvKeyspace.verify|verify} messages.
+         * @param message SrvKeyspace message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.ISrvKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SrvKeyspace message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SrvKeyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.SrvKeyspace;
+
+        /**
+         * Decodes a SrvKeyspace message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SrvKeyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.SrvKeyspace;
+
+        /**
+         * Verifies a SrvKeyspace message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SrvKeyspace message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SrvKeyspace
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.SrvKeyspace;
+
+        /**
+         * Creates a plain object from a SrvKeyspace message. Also converts values to other types if specified.
+         * @param message SrvKeyspace
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.SrvKeyspace, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SrvKeyspace to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SrvKeyspace
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace SrvKeyspace {
+
+        /** Properties of a KeyspacePartition. */
+        interface IKeyspacePartition {
+
+            /** KeyspacePartition served_type */
+            served_type?: (topodata.TabletType|null);
+
+            /** KeyspacePartition shard_references */
+            shard_references?: (topodata.IShardReference[]|null);
+
+            /** KeyspacePartition shard_tablet_controls */
+            shard_tablet_controls?: (topodata.IShardTabletControl[]|null);
+        }
+
+        /** Represents a KeyspacePartition. */
+        class KeyspacePartition implements IKeyspacePartition {
+
+            /**
+             * Constructs a new KeyspacePartition.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: topodata.SrvKeyspace.IKeyspacePartition);
+
+            /** KeyspacePartition served_type. */
+            public served_type: topodata.TabletType;
+
+            /** KeyspacePartition shard_references. */
+            public shard_references: topodata.IShardReference[];
+
+            /** KeyspacePartition shard_tablet_controls. */
+            public shard_tablet_controls: topodata.IShardTabletControl[];
+
+            /**
+             * Creates a new KeyspacePartition instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns KeyspacePartition instance
+             */
+            public static create(properties?: topodata.SrvKeyspace.IKeyspacePartition): topodata.SrvKeyspace.KeyspacePartition;
+
+            /**
+             * Encodes the specified KeyspacePartition message. Does not implicitly {@link topodata.SrvKeyspace.KeyspacePartition.verify|verify} messages.
+             * @param message KeyspacePartition message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: topodata.SrvKeyspace.IKeyspacePartition, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified KeyspacePartition message, length delimited. Does not implicitly {@link topodata.SrvKeyspace.KeyspacePartition.verify|verify} messages.
+             * @param message KeyspacePartition message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: topodata.SrvKeyspace.IKeyspacePartition, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a KeyspacePartition message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns KeyspacePartition
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.SrvKeyspace.KeyspacePartition;
+
+            /**
+             * Decodes a KeyspacePartition message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns KeyspacePartition
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.SrvKeyspace.KeyspacePartition;
+
+            /**
+             * Verifies a KeyspacePartition message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a KeyspacePartition message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns KeyspacePartition
+             */
+            public static fromObject(object: { [k: string]: any }): topodata.SrvKeyspace.KeyspacePartition;
+
+            /**
+             * Creates a plain object from a KeyspacePartition message. Also converts values to other types if specified.
+             * @param message KeyspacePartition
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: topodata.SrvKeyspace.KeyspacePartition, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this KeyspacePartition to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the default type url for KeyspacePartition
+             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+             * @returns The default type url
+             */
+            public static getTypeUrl(typeUrlPrefix?: string): string;
+        }
+    }
+
+    /** Properties of a CellInfo. */
+    interface ICellInfo {
+
+        /** CellInfo server_address */
+        server_address?: (string|null);
+
+        /** CellInfo root */
+        root?: (string|null);
+    }
+
+    /** Represents a CellInfo. */
+    class CellInfo implements ICellInfo {
+
+        /**
+         * Constructs a new CellInfo.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.ICellInfo);
+
+        /** CellInfo server_address. */
+        public server_address: string;
+
+        /** CellInfo root. */
+        public root: string;
+
+        /**
+         * Creates a new CellInfo instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CellInfo instance
+         */
+        public static create(properties?: topodata.ICellInfo): topodata.CellInfo;
+
+        /**
+         * Encodes the specified CellInfo message. Does not implicitly {@link topodata.CellInfo.verify|verify} messages.
+         * @param message CellInfo message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.ICellInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CellInfo message, length delimited. Does not implicitly {@link topodata.CellInfo.verify|verify} messages.
+         * @param message CellInfo message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.ICellInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CellInfo message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CellInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.CellInfo;
+
+        /**
+         * Decodes a CellInfo message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CellInfo
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.CellInfo;
+
+        /**
+         * Verifies a CellInfo message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CellInfo message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CellInfo
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.CellInfo;
+
+        /**
+         * Creates a plain object from a CellInfo message. Also converts values to other types if specified.
+         * @param message CellInfo
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.CellInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CellInfo to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CellInfo
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a CellsAlias. */
+    interface ICellsAlias {
+
+        /** CellsAlias cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents a CellsAlias. */
+    class CellsAlias implements ICellsAlias {
+
+        /**
+         * Constructs a new CellsAlias.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.ICellsAlias);
+
+        /** CellsAlias cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new CellsAlias instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CellsAlias instance
+         */
+        public static create(properties?: topodata.ICellsAlias): topodata.CellsAlias;
+
+        /**
+         * Encodes the specified CellsAlias message. Does not implicitly {@link topodata.CellsAlias.verify|verify} messages.
+         * @param message CellsAlias message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.ICellsAlias, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CellsAlias message, length delimited. Does not implicitly {@link topodata.CellsAlias.verify|verify} messages.
+         * @param message CellsAlias message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.ICellsAlias, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CellsAlias message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CellsAlias
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.CellsAlias;
+
+        /**
+         * Decodes a CellsAlias message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CellsAlias
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.CellsAlias;
+
+        /**
+         * Verifies a CellsAlias message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CellsAlias message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CellsAlias
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.CellsAlias;
+
+        /**
+         * Creates a plain object from a CellsAlias message. Also converts values to other types if specified.
+         * @param message CellsAlias
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.CellsAlias, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CellsAlias to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for CellsAlias
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a TopoConfig. */
+    interface ITopoConfig {
+
+        /** TopoConfig topo_type */
+        topo_type?: (string|null);
+
+        /** TopoConfig server */
+        server?: (string|null);
+
+        /** TopoConfig root */
+        root?: (string|null);
+    }
+
+    /** Represents a TopoConfig. */
+    class TopoConfig implements ITopoConfig {
+
+        /**
+         * Constructs a new TopoConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.ITopoConfig);
+
+        /** TopoConfig topo_type. */
+        public topo_type: string;
+
+        /** TopoConfig server. */
+        public server: string;
+
+        /** TopoConfig root. */
+        public root: string;
+
+        /**
+         * Creates a new TopoConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TopoConfig instance
+         */
+        public static create(properties?: topodata.ITopoConfig): topodata.TopoConfig;
+
+        /**
+         * Encodes the specified TopoConfig message. Does not implicitly {@link topodata.TopoConfig.verify|verify} messages.
+         * @param message TopoConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.ITopoConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TopoConfig message, length delimited. Does not implicitly {@link topodata.TopoConfig.verify|verify} messages.
+         * @param message TopoConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.ITopoConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TopoConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TopoConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.TopoConfig;
+
+        /**
+         * Decodes a TopoConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TopoConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.TopoConfig;
+
+        /**
+         * Verifies a TopoConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TopoConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TopoConfig
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.TopoConfig;
+
+        /**
+         * Creates a plain object from a TopoConfig message. Also converts values to other types if specified.
+         * @param message TopoConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.TopoConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TopoConfig to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for TopoConfig
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ExternalVitessCluster. */
+    interface IExternalVitessCluster {
+
+        /** ExternalVitessCluster topo_config */
+        topo_config?: (topodata.ITopoConfig|null);
+    }
+
+    /** Represents an ExternalVitessCluster. */
+    class ExternalVitessCluster implements IExternalVitessCluster {
+
+        /**
+         * Constructs a new ExternalVitessCluster.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IExternalVitessCluster);
+
+        /** ExternalVitessCluster topo_config. */
+        public topo_config?: (topodata.ITopoConfig|null);
+
+        /**
+         * Creates a new ExternalVitessCluster instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExternalVitessCluster instance
+         */
+        public static create(properties?: topodata.IExternalVitessCluster): topodata.ExternalVitessCluster;
+
+        /**
+         * Encodes the specified ExternalVitessCluster message. Does not implicitly {@link topodata.ExternalVitessCluster.verify|verify} messages.
+         * @param message ExternalVitessCluster message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IExternalVitessCluster, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExternalVitessCluster message, length delimited. Does not implicitly {@link topodata.ExternalVitessCluster.verify|verify} messages.
+         * @param message ExternalVitessCluster message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IExternalVitessCluster, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExternalVitessCluster message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExternalVitessCluster
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ExternalVitessCluster;
+
+        /**
+         * Decodes an ExternalVitessCluster message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExternalVitessCluster
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ExternalVitessCluster;
+
+        /**
+         * Verifies an ExternalVitessCluster message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExternalVitessCluster message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExternalVitessCluster
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ExternalVitessCluster;
+
+        /**
+         * Creates a plain object from an ExternalVitessCluster message. Also converts values to other types if specified.
+         * @param message ExternalVitessCluster
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ExternalVitessCluster, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExternalVitessCluster to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExternalVitessCluster
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of an ExternalClusters. */
+    interface IExternalClusters {
+
+        /** ExternalClusters vitess_cluster */
+        vitess_cluster?: (topodata.IExternalVitessCluster[]|null);
+    }
+
+    /** Represents an ExternalClusters. */
+    class ExternalClusters implements IExternalClusters {
+
+        /**
+         * Constructs a new ExternalClusters.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IExternalClusters);
+
+        /** ExternalClusters vitess_cluster. */
+        public vitess_cluster: topodata.IExternalVitessCluster[];
+
+        /**
+         * Creates a new ExternalClusters instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExternalClusters instance
+         */
+        public static create(properties?: topodata.IExternalClusters): topodata.ExternalClusters;
+
+        /**
+         * Encodes the specified ExternalClusters message. Does not implicitly {@link topodata.ExternalClusters.verify|verify} messages.
+         * @param message ExternalClusters message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IExternalClusters, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExternalClusters message, length delimited. Does not implicitly {@link topodata.ExternalClusters.verify|verify} messages.
+         * @param message ExternalClusters message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IExternalClusters, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExternalClusters message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExternalClusters
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ExternalClusters;
+
+        /**
+         * Decodes an ExternalClusters message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExternalClusters
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ExternalClusters;
+
+        /**
+         * Verifies an ExternalClusters message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExternalClusters message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExternalClusters
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ExternalClusters;
+
+        /**
+         * Creates a plain object from an ExternalClusters message. Also converts values to other types if specified.
+         * @param message ExternalClusters
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ExternalClusters, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExternalClusters to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ExternalClusters
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -15946,6 +19021,139 @@ export namespace vttime {
 
         /**
          * Gets the default type url for Duration
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace logutil. */
+export namespace logutil {
+
+    /** Level enum. */
+    enum Level {
+        INFO = 0,
+        WARNING = 1,
+        ERROR = 2,
+        CONSOLE = 3
+    }
+
+    /** Properties of an Event. */
+    interface IEvent {
+
+        /** Event time */
+        time?: (vttime.ITime|null);
+
+        /** Event level */
+        level?: (logutil.Level|null);
+
+        /** Event file */
+        file?: (string|null);
+
+        /** Event line */
+        line?: (number|Long|null);
+
+        /** Event value */
+        value?: (string|null);
+    }
+
+    /** Represents an Event. */
+    class Event implements IEvent {
+
+        /**
+         * Constructs a new Event.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: logutil.IEvent);
+
+        /** Event time. */
+        public time?: (vttime.ITime|null);
+
+        /** Event level. */
+        public level: logutil.Level;
+
+        /** Event file. */
+        public file: string;
+
+        /** Event line. */
+        public line: (number|Long);
+
+        /** Event value. */
+        public value: string;
+
+        /**
+         * Creates a new Event instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Event instance
+         */
+        public static create(properties?: logutil.IEvent): logutil.Event;
+
+        /**
+         * Encodes the specified Event message. Does not implicitly {@link logutil.Event.verify|verify} messages.
+         * @param message Event message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: logutil.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Event message, length delimited. Does not implicitly {@link logutil.Event.verify|verify} messages.
+         * @param message Event message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: logutil.IEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an Event message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Event
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): logutil.Event;
+
+        /**
+         * Decodes an Event message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Event
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): logutil.Event;
+
+        /**
+         * Verifies an Event message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an Event message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Event
+         */
+        public static fromObject(object: { [k: string]: any }): logutil.Event;
+
+        /**
+         * Creates a plain object from an Event message. Also converts values to other types if specified.
+         * @param message Event
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: logutil.Event, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Event to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Event
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -18146,2487 +21354,6 @@ export namespace mysqlctl {
             INVALID = 3,
             VALID = 4
         }
-    }
-}
-
-/** Namespace topodata. */
-export namespace topodata {
-
-    /** Properties of a KeyRange. */
-    interface IKeyRange {
-
-        /** KeyRange start */
-        start?: (Uint8Array|null);
-
-        /** KeyRange end */
-        end?: (Uint8Array|null);
-    }
-
-    /** Represents a KeyRange. */
-    class KeyRange implements IKeyRange {
-
-        /**
-         * Constructs a new KeyRange.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IKeyRange);
-
-        /** KeyRange start. */
-        public start: Uint8Array;
-
-        /** KeyRange end. */
-        public end: Uint8Array;
-
-        /**
-         * Creates a new KeyRange instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns KeyRange instance
-         */
-        public static create(properties?: topodata.IKeyRange): topodata.KeyRange;
-
-        /**
-         * Encodes the specified KeyRange message. Does not implicitly {@link topodata.KeyRange.verify|verify} messages.
-         * @param message KeyRange message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IKeyRange, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified KeyRange message, length delimited. Does not implicitly {@link topodata.KeyRange.verify|verify} messages.
-         * @param message KeyRange message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IKeyRange, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a KeyRange message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns KeyRange
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.KeyRange;
-
-        /**
-         * Decodes a KeyRange message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns KeyRange
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.KeyRange;
-
-        /**
-         * Verifies a KeyRange message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a KeyRange message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns KeyRange
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.KeyRange;
-
-        /**
-         * Creates a plain object from a KeyRange message. Also converts values to other types if specified.
-         * @param message KeyRange
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.KeyRange, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this KeyRange to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for KeyRange
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** KeyspaceType enum. */
-    enum KeyspaceType {
-        NORMAL = 0,
-        SNAPSHOT = 1
-    }
-
-    /** Properties of a TabletAlias. */
-    interface ITabletAlias {
-
-        /** TabletAlias cell */
-        cell?: (string|null);
-
-        /** TabletAlias uid */
-        uid?: (number|null);
-    }
-
-    /** Represents a TabletAlias. */
-    class TabletAlias implements ITabletAlias {
-
-        /**
-         * Constructs a new TabletAlias.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.ITabletAlias);
-
-        /** TabletAlias cell. */
-        public cell: string;
-
-        /** TabletAlias uid. */
-        public uid: number;
-
-        /**
-         * Creates a new TabletAlias instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns TabletAlias instance
-         */
-        public static create(properties?: topodata.ITabletAlias): topodata.TabletAlias;
-
-        /**
-         * Encodes the specified TabletAlias message. Does not implicitly {@link topodata.TabletAlias.verify|verify} messages.
-         * @param message TabletAlias message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.ITabletAlias, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified TabletAlias message, length delimited. Does not implicitly {@link topodata.TabletAlias.verify|verify} messages.
-         * @param message TabletAlias message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.ITabletAlias, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a TabletAlias message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns TabletAlias
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.TabletAlias;
-
-        /**
-         * Decodes a TabletAlias message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns TabletAlias
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.TabletAlias;
-
-        /**
-         * Verifies a TabletAlias message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a TabletAlias message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns TabletAlias
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.TabletAlias;
-
-        /**
-         * Creates a plain object from a TabletAlias message. Also converts values to other types if specified.
-         * @param message TabletAlias
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.TabletAlias, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this TabletAlias to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for TabletAlias
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** TabletType enum. */
-    enum TabletType {
-        UNKNOWN = 0,
-        PRIMARY = 1,
-        MASTER = 1,
-        REPLICA = 2,
-        RDONLY = 3,
-        BATCH = 3,
-        SPARE = 4,
-        EXPERIMENTAL = 5,
-        BACKUP = 6,
-        RESTORE = 7,
-        DRAINED = 8
-    }
-
-    /** Properties of a Tablet. */
-    interface ITablet {
-
-        /** Tablet alias */
-        alias?: (topodata.ITabletAlias|null);
-
-        /** Tablet hostname */
-        hostname?: (string|null);
-
-        /** Tablet port_map */
-        port_map?: ({ [k: string]: number }|null);
-
-        /** Tablet keyspace */
-        keyspace?: (string|null);
-
-        /** Tablet shard */
-        shard?: (string|null);
-
-        /** Tablet key_range */
-        key_range?: (topodata.IKeyRange|null);
-
-        /** Tablet type */
-        type?: (topodata.TabletType|null);
-
-        /** Tablet db_name_override */
-        db_name_override?: (string|null);
-
-        /** Tablet tags */
-        tags?: ({ [k: string]: string }|null);
-
-        /** Tablet mysql_hostname */
-        mysql_hostname?: (string|null);
-
-        /** Tablet mysql_port */
-        mysql_port?: (number|null);
-
-        /** Tablet primary_term_start_time */
-        primary_term_start_time?: (vttime.ITime|null);
-
-        /** Tablet default_conn_collation */
-        default_conn_collation?: (number|null);
-    }
-
-    /** Represents a Tablet. */
-    class Tablet implements ITablet {
-
-        /**
-         * Constructs a new Tablet.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.ITablet);
-
-        /** Tablet alias. */
-        public alias?: (topodata.ITabletAlias|null);
-
-        /** Tablet hostname. */
-        public hostname: string;
-
-        /** Tablet port_map. */
-        public port_map: { [k: string]: number };
-
-        /** Tablet keyspace. */
-        public keyspace: string;
-
-        /** Tablet shard. */
-        public shard: string;
-
-        /** Tablet key_range. */
-        public key_range?: (topodata.IKeyRange|null);
-
-        /** Tablet type. */
-        public type: topodata.TabletType;
-
-        /** Tablet db_name_override. */
-        public db_name_override: string;
-
-        /** Tablet tags. */
-        public tags: { [k: string]: string };
-
-        /** Tablet mysql_hostname. */
-        public mysql_hostname: string;
-
-        /** Tablet mysql_port. */
-        public mysql_port: number;
-
-        /** Tablet primary_term_start_time. */
-        public primary_term_start_time?: (vttime.ITime|null);
-
-        /** Tablet default_conn_collation. */
-        public default_conn_collation: number;
-
-        /**
-         * Creates a new Tablet instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Tablet instance
-         */
-        public static create(properties?: topodata.ITablet): topodata.Tablet;
-
-        /**
-         * Encodes the specified Tablet message. Does not implicitly {@link topodata.Tablet.verify|verify} messages.
-         * @param message Tablet message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.ITablet, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Tablet message, length delimited. Does not implicitly {@link topodata.Tablet.verify|verify} messages.
-         * @param message Tablet message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.ITablet, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Tablet message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Tablet
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Tablet;
-
-        /**
-         * Decodes a Tablet message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Tablet
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Tablet;
-
-        /**
-         * Verifies a Tablet message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Tablet message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Tablet
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.Tablet;
-
-        /**
-         * Creates a plain object from a Tablet message. Also converts values to other types if specified.
-         * @param message Tablet
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.Tablet, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Tablet to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for Tablet
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a Shard. */
-    interface IShard {
-
-        /** Shard primary_alias */
-        primary_alias?: (topodata.ITabletAlias|null);
-
-        /** Shard primary_term_start_time */
-        primary_term_start_time?: (vttime.ITime|null);
-
-        /** Shard key_range */
-        key_range?: (topodata.IKeyRange|null);
-
-        /** Shard source_shards */
-        source_shards?: (topodata.Shard.ISourceShard[]|null);
-
-        /** Shard tablet_controls */
-        tablet_controls?: (topodata.Shard.ITabletControl[]|null);
-
-        /** Shard is_primary_serving */
-        is_primary_serving?: (boolean|null);
-    }
-
-    /** Represents a Shard. */
-    class Shard implements IShard {
-
-        /**
-         * Constructs a new Shard.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IShard);
-
-        /** Shard primary_alias. */
-        public primary_alias?: (topodata.ITabletAlias|null);
-
-        /** Shard primary_term_start_time. */
-        public primary_term_start_time?: (vttime.ITime|null);
-
-        /** Shard key_range. */
-        public key_range?: (topodata.IKeyRange|null);
-
-        /** Shard source_shards. */
-        public source_shards: topodata.Shard.ISourceShard[];
-
-        /** Shard tablet_controls. */
-        public tablet_controls: topodata.Shard.ITabletControl[];
-
-        /** Shard is_primary_serving. */
-        public is_primary_serving: boolean;
-
-        /**
-         * Creates a new Shard instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Shard instance
-         */
-        public static create(properties?: topodata.IShard): topodata.Shard;
-
-        /**
-         * Encodes the specified Shard message. Does not implicitly {@link topodata.Shard.verify|verify} messages.
-         * @param message Shard message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IShard, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Shard message, length delimited. Does not implicitly {@link topodata.Shard.verify|verify} messages.
-         * @param message Shard message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IShard, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Shard message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Shard
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Shard;
-
-        /**
-         * Decodes a Shard message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Shard
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Shard;
-
-        /**
-         * Verifies a Shard message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Shard message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Shard
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.Shard;
-
-        /**
-         * Creates a plain object from a Shard message. Also converts values to other types if specified.
-         * @param message Shard
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.Shard, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Shard to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for Shard
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    namespace Shard {
-
-        /** Properties of a SourceShard. */
-        interface ISourceShard {
-
-            /** SourceShard uid */
-            uid?: (number|null);
-
-            /** SourceShard keyspace */
-            keyspace?: (string|null);
-
-            /** SourceShard shard */
-            shard?: (string|null);
-
-            /** SourceShard key_range */
-            key_range?: (topodata.IKeyRange|null);
-
-            /** SourceShard tables */
-            tables?: (string[]|null);
-        }
-
-        /** Represents a SourceShard. */
-        class SourceShard implements ISourceShard {
-
-            /**
-             * Constructs a new SourceShard.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: topodata.Shard.ISourceShard);
-
-            /** SourceShard uid. */
-            public uid: number;
-
-            /** SourceShard keyspace. */
-            public keyspace: string;
-
-            /** SourceShard shard. */
-            public shard: string;
-
-            /** SourceShard key_range. */
-            public key_range?: (topodata.IKeyRange|null);
-
-            /** SourceShard tables. */
-            public tables: string[];
-
-            /**
-             * Creates a new SourceShard instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns SourceShard instance
-             */
-            public static create(properties?: topodata.Shard.ISourceShard): topodata.Shard.SourceShard;
-
-            /**
-             * Encodes the specified SourceShard message. Does not implicitly {@link topodata.Shard.SourceShard.verify|verify} messages.
-             * @param message SourceShard message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: topodata.Shard.ISourceShard, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified SourceShard message, length delimited. Does not implicitly {@link topodata.Shard.SourceShard.verify|verify} messages.
-             * @param message SourceShard message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: topodata.Shard.ISourceShard, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a SourceShard message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns SourceShard
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Shard.SourceShard;
-
-            /**
-             * Decodes a SourceShard message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns SourceShard
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Shard.SourceShard;
-
-            /**
-             * Verifies a SourceShard message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a SourceShard message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns SourceShard
-             */
-            public static fromObject(object: { [k: string]: any }): topodata.Shard.SourceShard;
-
-            /**
-             * Creates a plain object from a SourceShard message. Also converts values to other types if specified.
-             * @param message SourceShard
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: topodata.Shard.SourceShard, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this SourceShard to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for SourceShard
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
-
-        /** Properties of a TabletControl. */
-        interface ITabletControl {
-
-            /** TabletControl tablet_type */
-            tablet_type?: (topodata.TabletType|null);
-
-            /** TabletControl cells */
-            cells?: (string[]|null);
-
-            /** TabletControl denied_tables */
-            denied_tables?: (string[]|null);
-
-            /** TabletControl frozen */
-            frozen?: (boolean|null);
-        }
-
-        /** Represents a TabletControl. */
-        class TabletControl implements ITabletControl {
-
-            /**
-             * Constructs a new TabletControl.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: topodata.Shard.ITabletControl);
-
-            /** TabletControl tablet_type. */
-            public tablet_type: topodata.TabletType;
-
-            /** TabletControl cells. */
-            public cells: string[];
-
-            /** TabletControl denied_tables. */
-            public denied_tables: string[];
-
-            /** TabletControl frozen. */
-            public frozen: boolean;
-
-            /**
-             * Creates a new TabletControl instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns TabletControl instance
-             */
-            public static create(properties?: topodata.Shard.ITabletControl): topodata.Shard.TabletControl;
-
-            /**
-             * Encodes the specified TabletControl message. Does not implicitly {@link topodata.Shard.TabletControl.verify|verify} messages.
-             * @param message TabletControl message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: topodata.Shard.ITabletControl, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified TabletControl message, length delimited. Does not implicitly {@link topodata.Shard.TabletControl.verify|verify} messages.
-             * @param message TabletControl message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: topodata.Shard.ITabletControl, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a TabletControl message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns TabletControl
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Shard.TabletControl;
-
-            /**
-             * Decodes a TabletControl message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns TabletControl
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Shard.TabletControl;
-
-            /**
-             * Verifies a TabletControl message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a TabletControl message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns TabletControl
-             */
-            public static fromObject(object: { [k: string]: any }): topodata.Shard.TabletControl;
-
-            /**
-             * Creates a plain object from a TabletControl message. Also converts values to other types if specified.
-             * @param message TabletControl
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: topodata.Shard.TabletControl, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this TabletControl to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for TabletControl
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
-    }
-
-    /** Properties of a Keyspace. */
-    interface IKeyspace {
-
-        /** Keyspace keyspace_type */
-        keyspace_type?: (topodata.KeyspaceType|null);
-
-        /** Keyspace base_keyspace */
-        base_keyspace?: (string|null);
-
-        /** Keyspace snapshot_time */
-        snapshot_time?: (vttime.ITime|null);
-
-        /** Keyspace durability_policy */
-        durability_policy?: (string|null);
-
-        /** Keyspace throttler_config */
-        throttler_config?: (topodata.IThrottlerConfig|null);
-
-        /** Keyspace sidecar_db_name */
-        sidecar_db_name?: (string|null);
-    }
-
-    /** Represents a Keyspace. */
-    class Keyspace implements IKeyspace {
-
-        /**
-         * Constructs a new Keyspace.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IKeyspace);
-
-        /** Keyspace keyspace_type. */
-        public keyspace_type: topodata.KeyspaceType;
-
-        /** Keyspace base_keyspace. */
-        public base_keyspace: string;
-
-        /** Keyspace snapshot_time. */
-        public snapshot_time?: (vttime.ITime|null);
-
-        /** Keyspace durability_policy. */
-        public durability_policy: string;
-
-        /** Keyspace throttler_config. */
-        public throttler_config?: (topodata.IThrottlerConfig|null);
-
-        /** Keyspace sidecar_db_name. */
-        public sidecar_db_name: string;
-
-        /**
-         * Creates a new Keyspace instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Keyspace instance
-         */
-        public static create(properties?: topodata.IKeyspace): topodata.Keyspace;
-
-        /**
-         * Encodes the specified Keyspace message. Does not implicitly {@link topodata.Keyspace.verify|verify} messages.
-         * @param message Keyspace message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Keyspace message, length delimited. Does not implicitly {@link topodata.Keyspace.verify|verify} messages.
-         * @param message Keyspace message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Keyspace message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Keyspace
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.Keyspace;
-
-        /**
-         * Decodes a Keyspace message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Keyspace
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.Keyspace;
-
-        /**
-         * Verifies a Keyspace message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Keyspace
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.Keyspace;
-
-        /**
-         * Creates a plain object from a Keyspace message. Also converts values to other types if specified.
-         * @param message Keyspace
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.Keyspace, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Keyspace to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for Keyspace
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ShardReplication. */
-    interface IShardReplication {
-
-        /** ShardReplication nodes */
-        nodes?: (topodata.ShardReplication.INode[]|null);
-    }
-
-    /** Represents a ShardReplication. */
-    class ShardReplication implements IShardReplication {
-
-        /**
-         * Constructs a new ShardReplication.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IShardReplication);
-
-        /** ShardReplication nodes. */
-        public nodes: topodata.ShardReplication.INode[];
-
-        /**
-         * Creates a new ShardReplication instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ShardReplication instance
-         */
-        public static create(properties?: topodata.IShardReplication): topodata.ShardReplication;
-
-        /**
-         * Encodes the specified ShardReplication message. Does not implicitly {@link topodata.ShardReplication.verify|verify} messages.
-         * @param message ShardReplication message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IShardReplication, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ShardReplication message, length delimited. Does not implicitly {@link topodata.ShardReplication.verify|verify} messages.
-         * @param message ShardReplication message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IShardReplication, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ShardReplication message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ShardReplication
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReplication;
-
-        /**
-         * Decodes a ShardReplication message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ShardReplication
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReplication;
-
-        /**
-         * Verifies a ShardReplication message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ShardReplication message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ShardReplication
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.ShardReplication;
-
-        /**
-         * Creates a plain object from a ShardReplication message. Also converts values to other types if specified.
-         * @param message ShardReplication
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.ShardReplication, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ShardReplication to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ShardReplication
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    namespace ShardReplication {
-
-        /** Properties of a Node. */
-        interface INode {
-
-            /** Node tablet_alias */
-            tablet_alias?: (topodata.ITabletAlias|null);
-        }
-
-        /** Represents a Node. */
-        class Node implements INode {
-
-            /**
-             * Constructs a new Node.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: topodata.ShardReplication.INode);
-
-            /** Node tablet_alias. */
-            public tablet_alias?: (topodata.ITabletAlias|null);
-
-            /**
-             * Creates a new Node instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns Node instance
-             */
-            public static create(properties?: topodata.ShardReplication.INode): topodata.ShardReplication.Node;
-
-            /**
-             * Encodes the specified Node message. Does not implicitly {@link topodata.ShardReplication.Node.verify|verify} messages.
-             * @param message Node message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: topodata.ShardReplication.INode, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified Node message, length delimited. Does not implicitly {@link topodata.ShardReplication.Node.verify|verify} messages.
-             * @param message Node message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: topodata.ShardReplication.INode, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a Node message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns Node
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReplication.Node;
-
-            /**
-             * Decodes a Node message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns Node
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReplication.Node;
-
-            /**
-             * Verifies a Node message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a Node message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns Node
-             */
-            public static fromObject(object: { [k: string]: any }): topodata.ShardReplication.Node;
-
-            /**
-             * Creates a plain object from a Node message. Also converts values to other types if specified.
-             * @param message Node
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: topodata.ShardReplication.Node, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this Node to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for Node
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
-    }
-
-    /** Properties of a ShardReplicationError. */
-    interface IShardReplicationError {
-
-        /** ShardReplicationError type */
-        type?: (topodata.ShardReplicationError.Type|null);
-
-        /** ShardReplicationError tablet_alias */
-        tablet_alias?: (topodata.ITabletAlias|null);
-    }
-
-    /** Represents a ShardReplicationError. */
-    class ShardReplicationError implements IShardReplicationError {
-
-        /**
-         * Constructs a new ShardReplicationError.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IShardReplicationError);
-
-        /** ShardReplicationError type. */
-        public type: topodata.ShardReplicationError.Type;
-
-        /** ShardReplicationError tablet_alias. */
-        public tablet_alias?: (topodata.ITabletAlias|null);
-
-        /**
-         * Creates a new ShardReplicationError instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ShardReplicationError instance
-         */
-        public static create(properties?: topodata.IShardReplicationError): topodata.ShardReplicationError;
-
-        /**
-         * Encodes the specified ShardReplicationError message. Does not implicitly {@link topodata.ShardReplicationError.verify|verify} messages.
-         * @param message ShardReplicationError message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IShardReplicationError, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ShardReplicationError message, length delimited. Does not implicitly {@link topodata.ShardReplicationError.verify|verify} messages.
-         * @param message ShardReplicationError message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IShardReplicationError, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ShardReplicationError message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ShardReplicationError
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReplicationError;
-
-        /**
-         * Decodes a ShardReplicationError message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ShardReplicationError
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReplicationError;
-
-        /**
-         * Verifies a ShardReplicationError message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ShardReplicationError message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ShardReplicationError
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.ShardReplicationError;
-
-        /**
-         * Creates a plain object from a ShardReplicationError message. Also converts values to other types if specified.
-         * @param message ShardReplicationError
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.ShardReplicationError, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ShardReplicationError to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ShardReplicationError
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    namespace ShardReplicationError {
-
-        /** Type enum. */
-        enum Type {
-            UNKNOWN = 0,
-            NOT_FOUND = 1,
-            TOPOLOGY_MISMATCH = 2
-        }
-    }
-
-    /** Properties of a ShardReference. */
-    interface IShardReference {
-
-        /** ShardReference name */
-        name?: (string|null);
-
-        /** ShardReference key_range */
-        key_range?: (topodata.IKeyRange|null);
-    }
-
-    /** Represents a ShardReference. */
-    class ShardReference implements IShardReference {
-
-        /**
-         * Constructs a new ShardReference.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IShardReference);
-
-        /** ShardReference name. */
-        public name: string;
-
-        /** ShardReference key_range. */
-        public key_range?: (topodata.IKeyRange|null);
-
-        /**
-         * Creates a new ShardReference instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ShardReference instance
-         */
-        public static create(properties?: topodata.IShardReference): topodata.ShardReference;
-
-        /**
-         * Encodes the specified ShardReference message. Does not implicitly {@link topodata.ShardReference.verify|verify} messages.
-         * @param message ShardReference message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IShardReference, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ShardReference message, length delimited. Does not implicitly {@link topodata.ShardReference.verify|verify} messages.
-         * @param message ShardReference message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IShardReference, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ShardReference message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ShardReference
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardReference;
-
-        /**
-         * Decodes a ShardReference message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ShardReference
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardReference;
-
-        /**
-         * Verifies a ShardReference message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ShardReference message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ShardReference
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.ShardReference;
-
-        /**
-         * Creates a plain object from a ShardReference message. Also converts values to other types if specified.
-         * @param message ShardReference
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.ShardReference, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ShardReference to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ShardReference
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ShardTabletControl. */
-    interface IShardTabletControl {
-
-        /** ShardTabletControl name */
-        name?: (string|null);
-
-        /** ShardTabletControl key_range */
-        key_range?: (topodata.IKeyRange|null);
-
-        /** ShardTabletControl query_service_disabled */
-        query_service_disabled?: (boolean|null);
-    }
-
-    /** Represents a ShardTabletControl. */
-    class ShardTabletControl implements IShardTabletControl {
-
-        /**
-         * Constructs a new ShardTabletControl.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IShardTabletControl);
-
-        /** ShardTabletControl name. */
-        public name: string;
-
-        /** ShardTabletControl key_range. */
-        public key_range?: (topodata.IKeyRange|null);
-
-        /** ShardTabletControl query_service_disabled. */
-        public query_service_disabled: boolean;
-
-        /**
-         * Creates a new ShardTabletControl instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ShardTabletControl instance
-         */
-        public static create(properties?: topodata.IShardTabletControl): topodata.ShardTabletControl;
-
-        /**
-         * Encodes the specified ShardTabletControl message. Does not implicitly {@link topodata.ShardTabletControl.verify|verify} messages.
-         * @param message ShardTabletControl message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IShardTabletControl, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ShardTabletControl message, length delimited. Does not implicitly {@link topodata.ShardTabletControl.verify|verify} messages.
-         * @param message ShardTabletControl message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IShardTabletControl, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ShardTabletControl message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ShardTabletControl
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardTabletControl;
-
-        /**
-         * Decodes a ShardTabletControl message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ShardTabletControl
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardTabletControl;
-
-        /**
-         * Verifies a ShardTabletControl message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ShardTabletControl message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ShardTabletControl
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.ShardTabletControl;
-
-        /**
-         * Creates a plain object from a ShardTabletControl message. Also converts values to other types if specified.
-         * @param message ShardTabletControl
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.ShardTabletControl, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ShardTabletControl to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ShardTabletControl
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ThrottledAppRule. */
-    interface IThrottledAppRule {
-
-        /** ThrottledAppRule name */
-        name?: (string|null);
-
-        /** ThrottledAppRule ratio */
-        ratio?: (number|null);
-
-        /** ThrottledAppRule expires_at */
-        expires_at?: (vttime.ITime|null);
-
-        /** ThrottledAppRule exempt */
-        exempt?: (boolean|null);
-    }
-
-    /** Represents a ThrottledAppRule. */
-    class ThrottledAppRule implements IThrottledAppRule {
-
-        /**
-         * Constructs a new ThrottledAppRule.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IThrottledAppRule);
-
-        /** ThrottledAppRule name. */
-        public name: string;
-
-        /** ThrottledAppRule ratio. */
-        public ratio: number;
-
-        /** ThrottledAppRule expires_at. */
-        public expires_at?: (vttime.ITime|null);
-
-        /** ThrottledAppRule exempt. */
-        public exempt: boolean;
-
-        /**
-         * Creates a new ThrottledAppRule instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ThrottledAppRule instance
-         */
-        public static create(properties?: topodata.IThrottledAppRule): topodata.ThrottledAppRule;
-
-        /**
-         * Encodes the specified ThrottledAppRule message. Does not implicitly {@link topodata.ThrottledAppRule.verify|verify} messages.
-         * @param message ThrottledAppRule message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IThrottledAppRule, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ThrottledAppRule message, length delimited. Does not implicitly {@link topodata.ThrottledAppRule.verify|verify} messages.
-         * @param message ThrottledAppRule message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IThrottledAppRule, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ThrottledAppRule message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ThrottledAppRule
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ThrottledAppRule;
-
-        /**
-         * Decodes a ThrottledAppRule message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ThrottledAppRule
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ThrottledAppRule;
-
-        /**
-         * Verifies a ThrottledAppRule message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ThrottledAppRule message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ThrottledAppRule
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.ThrottledAppRule;
-
-        /**
-         * Creates a plain object from a ThrottledAppRule message. Also converts values to other types if specified.
-         * @param message ThrottledAppRule
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.ThrottledAppRule, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ThrottledAppRule to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ThrottledAppRule
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ThrottlerConfig. */
-    interface IThrottlerConfig {
-
-        /** ThrottlerConfig enabled */
-        enabled?: (boolean|null);
-
-        /** ThrottlerConfig threshold */
-        threshold?: (number|null);
-
-        /** ThrottlerConfig custom_query */
-        custom_query?: (string|null);
-
-        /** ThrottlerConfig check_as_check_self */
-        check_as_check_self?: (boolean|null);
-
-        /** ThrottlerConfig throttled_apps */
-        throttled_apps?: ({ [k: string]: topodata.IThrottledAppRule }|null);
-
-        /** ThrottlerConfig app_checked_metrics */
-        app_checked_metrics?: ({ [k: string]: topodata.ThrottlerConfig.IMetricNames }|null);
-
-        /** ThrottlerConfig metric_thresholds */
-        metric_thresholds?: ({ [k: string]: number }|null);
-    }
-
-    /** Represents a ThrottlerConfig. */
-    class ThrottlerConfig implements IThrottlerConfig {
-
-        /**
-         * Constructs a new ThrottlerConfig.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IThrottlerConfig);
-
-        /** ThrottlerConfig enabled. */
-        public enabled: boolean;
-
-        /** ThrottlerConfig threshold. */
-        public threshold: number;
-
-        /** ThrottlerConfig custom_query. */
-        public custom_query: string;
-
-        /** ThrottlerConfig check_as_check_self. */
-        public check_as_check_self: boolean;
-
-        /** ThrottlerConfig throttled_apps. */
-        public throttled_apps: { [k: string]: topodata.IThrottledAppRule };
-
-        /** ThrottlerConfig app_checked_metrics. */
-        public app_checked_metrics: { [k: string]: topodata.ThrottlerConfig.IMetricNames };
-
-        /** ThrottlerConfig metric_thresholds. */
-        public metric_thresholds: { [k: string]: number };
-
-        /**
-         * Creates a new ThrottlerConfig instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ThrottlerConfig instance
-         */
-        public static create(properties?: topodata.IThrottlerConfig): topodata.ThrottlerConfig;
-
-        /**
-         * Encodes the specified ThrottlerConfig message. Does not implicitly {@link topodata.ThrottlerConfig.verify|verify} messages.
-         * @param message ThrottlerConfig message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ThrottlerConfig message, length delimited. Does not implicitly {@link topodata.ThrottlerConfig.verify|verify} messages.
-         * @param message ThrottlerConfig message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ThrottlerConfig message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ThrottlerConfig
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ThrottlerConfig;
-
-        /**
-         * Decodes a ThrottlerConfig message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ThrottlerConfig
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ThrottlerConfig;
-
-        /**
-         * Verifies a ThrottlerConfig message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ThrottlerConfig message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ThrottlerConfig
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.ThrottlerConfig;
-
-        /**
-         * Creates a plain object from a ThrottlerConfig message. Also converts values to other types if specified.
-         * @param message ThrottlerConfig
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.ThrottlerConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ThrottlerConfig to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ThrottlerConfig
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    namespace ThrottlerConfig {
-
-        /** Properties of a MetricNames. */
-        interface IMetricNames {
-
-            /** MetricNames names */
-            names?: (string[]|null);
-        }
-
-        /** Represents a MetricNames. */
-        class MetricNames implements IMetricNames {
-
-            /**
-             * Constructs a new MetricNames.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: topodata.ThrottlerConfig.IMetricNames);
-
-            /** MetricNames names. */
-            public names: string[];
-
-            /**
-             * Creates a new MetricNames instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns MetricNames instance
-             */
-            public static create(properties?: topodata.ThrottlerConfig.IMetricNames): topodata.ThrottlerConfig.MetricNames;
-
-            /**
-             * Encodes the specified MetricNames message. Does not implicitly {@link topodata.ThrottlerConfig.MetricNames.verify|verify} messages.
-             * @param message MetricNames message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: topodata.ThrottlerConfig.IMetricNames, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified MetricNames message, length delimited. Does not implicitly {@link topodata.ThrottlerConfig.MetricNames.verify|verify} messages.
-             * @param message MetricNames message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: topodata.ThrottlerConfig.IMetricNames, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a MetricNames message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns MetricNames
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ThrottlerConfig.MetricNames;
-
-            /**
-             * Decodes a MetricNames message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns MetricNames
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ThrottlerConfig.MetricNames;
-
-            /**
-             * Verifies a MetricNames message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a MetricNames message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns MetricNames
-             */
-            public static fromObject(object: { [k: string]: any }): topodata.ThrottlerConfig.MetricNames;
-
-            /**
-             * Creates a plain object from a MetricNames message. Also converts values to other types if specified.
-             * @param message MetricNames
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: topodata.ThrottlerConfig.MetricNames, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this MetricNames to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for MetricNames
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
-    }
-
-    /** Properties of a SrvKeyspace. */
-    interface ISrvKeyspace {
-
-        /** SrvKeyspace partitions */
-        partitions?: (topodata.SrvKeyspace.IKeyspacePartition[]|null);
-
-        /** SrvKeyspace throttler_config */
-        throttler_config?: (topodata.IThrottlerConfig|null);
-    }
-
-    /** Represents a SrvKeyspace. */
-    class SrvKeyspace implements ISrvKeyspace {
-
-        /**
-         * Constructs a new SrvKeyspace.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.ISrvKeyspace);
-
-        /** SrvKeyspace partitions. */
-        public partitions: topodata.SrvKeyspace.IKeyspacePartition[];
-
-        /** SrvKeyspace throttler_config. */
-        public throttler_config?: (topodata.IThrottlerConfig|null);
-
-        /**
-         * Creates a new SrvKeyspace instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns SrvKeyspace instance
-         */
-        public static create(properties?: topodata.ISrvKeyspace): topodata.SrvKeyspace;
-
-        /**
-         * Encodes the specified SrvKeyspace message. Does not implicitly {@link topodata.SrvKeyspace.verify|verify} messages.
-         * @param message SrvKeyspace message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.ISrvKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified SrvKeyspace message, length delimited. Does not implicitly {@link topodata.SrvKeyspace.verify|verify} messages.
-         * @param message SrvKeyspace message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.ISrvKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a SrvKeyspace message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns SrvKeyspace
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.SrvKeyspace;
-
-        /**
-         * Decodes a SrvKeyspace message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns SrvKeyspace
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.SrvKeyspace;
-
-        /**
-         * Verifies a SrvKeyspace message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a SrvKeyspace message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns SrvKeyspace
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.SrvKeyspace;
-
-        /**
-         * Creates a plain object from a SrvKeyspace message. Also converts values to other types if specified.
-         * @param message SrvKeyspace
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.SrvKeyspace, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this SrvKeyspace to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for SrvKeyspace
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    namespace SrvKeyspace {
-
-        /** Properties of a KeyspacePartition. */
-        interface IKeyspacePartition {
-
-            /** KeyspacePartition served_type */
-            served_type?: (topodata.TabletType|null);
-
-            /** KeyspacePartition shard_references */
-            shard_references?: (topodata.IShardReference[]|null);
-
-            /** KeyspacePartition shard_tablet_controls */
-            shard_tablet_controls?: (topodata.IShardTabletControl[]|null);
-        }
-
-        /** Represents a KeyspacePartition. */
-        class KeyspacePartition implements IKeyspacePartition {
-
-            /**
-             * Constructs a new KeyspacePartition.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: topodata.SrvKeyspace.IKeyspacePartition);
-
-            /** KeyspacePartition served_type. */
-            public served_type: topodata.TabletType;
-
-            /** KeyspacePartition shard_references. */
-            public shard_references: topodata.IShardReference[];
-
-            /** KeyspacePartition shard_tablet_controls. */
-            public shard_tablet_controls: topodata.IShardTabletControl[];
-
-            /**
-             * Creates a new KeyspacePartition instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns KeyspacePartition instance
-             */
-            public static create(properties?: topodata.SrvKeyspace.IKeyspacePartition): topodata.SrvKeyspace.KeyspacePartition;
-
-            /**
-             * Encodes the specified KeyspacePartition message. Does not implicitly {@link topodata.SrvKeyspace.KeyspacePartition.verify|verify} messages.
-             * @param message KeyspacePartition message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: topodata.SrvKeyspace.IKeyspacePartition, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified KeyspacePartition message, length delimited. Does not implicitly {@link topodata.SrvKeyspace.KeyspacePartition.verify|verify} messages.
-             * @param message KeyspacePartition message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: topodata.SrvKeyspace.IKeyspacePartition, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a KeyspacePartition message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns KeyspacePartition
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.SrvKeyspace.KeyspacePartition;
-
-            /**
-             * Decodes a KeyspacePartition message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns KeyspacePartition
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.SrvKeyspace.KeyspacePartition;
-
-            /**
-             * Verifies a KeyspacePartition message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a KeyspacePartition message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns KeyspacePartition
-             */
-            public static fromObject(object: { [k: string]: any }): topodata.SrvKeyspace.KeyspacePartition;
-
-            /**
-             * Creates a plain object from a KeyspacePartition message. Also converts values to other types if specified.
-             * @param message KeyspacePartition
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: topodata.SrvKeyspace.KeyspacePartition, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this KeyspacePartition to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-
-            /**
-             * Gets the default type url for KeyspacePartition
-             * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-             * @returns The default type url
-             */
-            public static getTypeUrl(typeUrlPrefix?: string): string;
-        }
-    }
-
-    /** Properties of a CellInfo. */
-    interface ICellInfo {
-
-        /** CellInfo server_address */
-        server_address?: (string|null);
-
-        /** CellInfo root */
-        root?: (string|null);
-    }
-
-    /** Represents a CellInfo. */
-    class CellInfo implements ICellInfo {
-
-        /**
-         * Constructs a new CellInfo.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.ICellInfo);
-
-        /** CellInfo server_address. */
-        public server_address: string;
-
-        /** CellInfo root. */
-        public root: string;
-
-        /**
-         * Creates a new CellInfo instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns CellInfo instance
-         */
-        public static create(properties?: topodata.ICellInfo): topodata.CellInfo;
-
-        /**
-         * Encodes the specified CellInfo message. Does not implicitly {@link topodata.CellInfo.verify|verify} messages.
-         * @param message CellInfo message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.ICellInfo, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified CellInfo message, length delimited. Does not implicitly {@link topodata.CellInfo.verify|verify} messages.
-         * @param message CellInfo message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.ICellInfo, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a CellInfo message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns CellInfo
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.CellInfo;
-
-        /**
-         * Decodes a CellInfo message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns CellInfo
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.CellInfo;
-
-        /**
-         * Verifies a CellInfo message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a CellInfo message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns CellInfo
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.CellInfo;
-
-        /**
-         * Creates a plain object from a CellInfo message. Also converts values to other types if specified.
-         * @param message CellInfo
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.CellInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this CellInfo to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for CellInfo
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a CellsAlias. */
-    interface ICellsAlias {
-
-        /** CellsAlias cells */
-        cells?: (string[]|null);
-    }
-
-    /** Represents a CellsAlias. */
-    class CellsAlias implements ICellsAlias {
-
-        /**
-         * Constructs a new CellsAlias.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.ICellsAlias);
-
-        /** CellsAlias cells. */
-        public cells: string[];
-
-        /**
-         * Creates a new CellsAlias instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns CellsAlias instance
-         */
-        public static create(properties?: topodata.ICellsAlias): topodata.CellsAlias;
-
-        /**
-         * Encodes the specified CellsAlias message. Does not implicitly {@link topodata.CellsAlias.verify|verify} messages.
-         * @param message CellsAlias message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.ICellsAlias, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified CellsAlias message, length delimited. Does not implicitly {@link topodata.CellsAlias.verify|verify} messages.
-         * @param message CellsAlias message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.ICellsAlias, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a CellsAlias message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns CellsAlias
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.CellsAlias;
-
-        /**
-         * Decodes a CellsAlias message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns CellsAlias
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.CellsAlias;
-
-        /**
-         * Verifies a CellsAlias message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a CellsAlias message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns CellsAlias
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.CellsAlias;
-
-        /**
-         * Creates a plain object from a CellsAlias message. Also converts values to other types if specified.
-         * @param message CellsAlias
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.CellsAlias, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this CellsAlias to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for CellsAlias
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a TopoConfig. */
-    interface ITopoConfig {
-
-        /** TopoConfig topo_type */
-        topo_type?: (string|null);
-
-        /** TopoConfig server */
-        server?: (string|null);
-
-        /** TopoConfig root */
-        root?: (string|null);
-    }
-
-    /** Represents a TopoConfig. */
-    class TopoConfig implements ITopoConfig {
-
-        /**
-         * Constructs a new TopoConfig.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.ITopoConfig);
-
-        /** TopoConfig topo_type. */
-        public topo_type: string;
-
-        /** TopoConfig server. */
-        public server: string;
-
-        /** TopoConfig root. */
-        public root: string;
-
-        /**
-         * Creates a new TopoConfig instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns TopoConfig instance
-         */
-        public static create(properties?: topodata.ITopoConfig): topodata.TopoConfig;
-
-        /**
-         * Encodes the specified TopoConfig message. Does not implicitly {@link topodata.TopoConfig.verify|verify} messages.
-         * @param message TopoConfig message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.ITopoConfig, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified TopoConfig message, length delimited. Does not implicitly {@link topodata.TopoConfig.verify|verify} messages.
-         * @param message TopoConfig message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.ITopoConfig, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a TopoConfig message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns TopoConfig
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.TopoConfig;
-
-        /**
-         * Decodes a TopoConfig message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns TopoConfig
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.TopoConfig;
-
-        /**
-         * Verifies a TopoConfig message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a TopoConfig message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns TopoConfig
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.TopoConfig;
-
-        /**
-         * Creates a plain object from a TopoConfig message. Also converts values to other types if specified.
-         * @param message TopoConfig
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.TopoConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this TopoConfig to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for TopoConfig
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of an ExternalVitessCluster. */
-    interface IExternalVitessCluster {
-
-        /** ExternalVitessCluster topo_config */
-        topo_config?: (topodata.ITopoConfig|null);
-    }
-
-    /** Represents an ExternalVitessCluster. */
-    class ExternalVitessCluster implements IExternalVitessCluster {
-
-        /**
-         * Constructs a new ExternalVitessCluster.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IExternalVitessCluster);
-
-        /** ExternalVitessCluster topo_config. */
-        public topo_config?: (topodata.ITopoConfig|null);
-
-        /**
-         * Creates a new ExternalVitessCluster instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ExternalVitessCluster instance
-         */
-        public static create(properties?: topodata.IExternalVitessCluster): topodata.ExternalVitessCluster;
-
-        /**
-         * Encodes the specified ExternalVitessCluster message. Does not implicitly {@link topodata.ExternalVitessCluster.verify|verify} messages.
-         * @param message ExternalVitessCluster message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IExternalVitessCluster, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ExternalVitessCluster message, length delimited. Does not implicitly {@link topodata.ExternalVitessCluster.verify|verify} messages.
-         * @param message ExternalVitessCluster message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IExternalVitessCluster, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an ExternalVitessCluster message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ExternalVitessCluster
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ExternalVitessCluster;
-
-        /**
-         * Decodes an ExternalVitessCluster message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ExternalVitessCluster
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ExternalVitessCluster;
-
-        /**
-         * Verifies an ExternalVitessCluster message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an ExternalVitessCluster message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ExternalVitessCluster
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.ExternalVitessCluster;
-
-        /**
-         * Creates a plain object from an ExternalVitessCluster message. Also converts values to other types if specified.
-         * @param message ExternalVitessCluster
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.ExternalVitessCluster, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ExternalVitessCluster to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ExternalVitessCluster
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of an ExternalClusters. */
-    interface IExternalClusters {
-
-        /** ExternalClusters vitess_cluster */
-        vitess_cluster?: (topodata.IExternalVitessCluster[]|null);
-    }
-
-    /** Represents an ExternalClusters. */
-    class ExternalClusters implements IExternalClusters {
-
-        /**
-         * Constructs a new ExternalClusters.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IExternalClusters);
-
-        /** ExternalClusters vitess_cluster. */
-        public vitess_cluster: topodata.IExternalVitessCluster[];
-
-        /**
-         * Creates a new ExternalClusters instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ExternalClusters instance
-         */
-        public static create(properties?: topodata.IExternalClusters): topodata.ExternalClusters;
-
-        /**
-         * Encodes the specified ExternalClusters message. Does not implicitly {@link topodata.ExternalClusters.verify|verify} messages.
-         * @param message ExternalClusters message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IExternalClusters, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ExternalClusters message, length delimited. Does not implicitly {@link topodata.ExternalClusters.verify|verify} messages.
-         * @param message ExternalClusters message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IExternalClusters, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an ExternalClusters message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ExternalClusters
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ExternalClusters;
-
-        /**
-         * Decodes an ExternalClusters message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ExternalClusters
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ExternalClusters;
-
-        /**
-         * Verifies an ExternalClusters message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an ExternalClusters message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ExternalClusters
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.ExternalClusters;
-
-        /**
-         * Creates a plain object from an ExternalClusters message. Also converts values to other types if specified.
-         * @param message ExternalClusters
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.ExternalClusters, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ExternalClusters to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ExternalClusters
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 }
 
@@ -58857,7 +59584,7 @@ export namespace vtctldata {
         promoted_primary?: (topodata.ITabletAlias|null);
 
         /** EmergencyReparentShardResponse events */
-        events?: (logutil.IEvent[]|null);
+        events?: (eventsdata.IReparentPhaseEvent[]|null);
     }
 
     /** Represents an EmergencyReparentShardResponse. */
@@ -58879,7 +59606,7 @@ export namespace vtctldata {
         public promoted_primary?: (topodata.ITabletAlias|null);
 
         /** EmergencyReparentShardResponse events. */
-        public events: logutil.IEvent[];
+        public events: eventsdata.IReparentPhaseEvent[];
 
         /**
          * Creates a new EmergencyReparentShardResponse instance using the specified properties.
@@ -70482,7 +71209,7 @@ export namespace vtctldata {
         promoted_primary?: (topodata.ITabletAlias|null);
 
         /** PlannedReparentShardResponse events */
-        events?: (logutil.IEvent[]|null);
+        events?: (eventsdata.IReparentPhaseEvent[]|null);
     }
 
     /** Represents a PlannedReparentShardResponse. */
@@ -70504,7 +71231,7 @@ export namespace vtctldata {
         public promoted_primary?: (topodata.ITabletAlias|null);
 
         /** PlannedReparentShardResponse events. */
-        public events: logutil.IEvent[];
+        public events: eventsdata.IReparentPhaseEvent[];
 
         /**
          * Creates a new PlannedReparentShardResponse instance using the specified properties.

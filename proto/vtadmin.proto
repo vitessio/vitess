@@ -21,6 +21,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtadmin";
 
 package vtadmin;
 
+import "eventsdata.proto";
 import "logutil.proto";
 import "mysqlctl.proto";
 import "tabletmanagerdata.proto";
@@ -467,7 +468,7 @@ message EmergencyFailoverShardResponse {
     // same tablet alias. Otherwise, it will be the alias of the tablet found
     // to be most up-to-date in the shard.
     topodata.TabletAlias promoted_primary = 4;
-    repeated logutil.Event events = 5;
+    repeated eventsdata.ReparentPhaseEvent events = 5;
 }
 
 message FindSchemaRequest {
@@ -798,7 +799,7 @@ message PlannedFailoverShardResponse {
     // same tablet alias. Otherwise, it will be the alias of the tablet found
     // to be most up-to-date in the shard.
     topodata.TabletAlias promoted_primary = 4;
-    repeated logutil.Event events = 5;
+    repeated eventsdata.ReparentPhaseEvent events = 5;
 }
 
 message RebuildKeyspaceGraphRequest {

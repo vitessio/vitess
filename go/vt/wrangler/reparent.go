@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
+	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -81,7 +82,7 @@ func (wr *Wrangler) PlannedReparentShard(
 	keyspace, shard string,
 	opts reparentutil.PlannedReparentOptions,
 ) (err error) {
-	_, err = reparentutil.NewPlannedReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
+	_, err = reparentutil.NewPlannedReparenter(wr.ts, wr.tmc, wr.logger, wr.evSource).ReparentShard(
 		ctx,
 		keyspace,
 		shard,
@@ -94,7 +95,7 @@ func (wr *Wrangler) PlannedReparentShard(
 // EmergencyReparentShard will make the provided tablet the primary for
 // the shard, when the old primary is completely unreachable.
 func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, opts reparentutil.EmergencyReparentOptions) (err error) {
-	_, err = reparentutil.NewEmergencyReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
+	_, err = reparentutil.NewEmergencyReparenter(wr.ts, wr.tmc, wr.logger, wr.evSource).ReparentShard(
 		ctx,
 		keyspace,
 		shard,
@@ -138,14 +139,10 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 		}
 
 		// Create a reusable Reparent event with available info.
-		ev := &events.Reparent{
-			ShardInfo:  *si,
-			NewPrimary: tablet,
-			OldPrimary: &topodatapb.Tablet{
-				Alias: si.PrimaryAlias,
-				Type:  topodatapb.TabletType_PRIMARY,
-			},
-		}
+		ev := events.NewReparent(si, wr.evSource, eventsdatapb.ReparentType_TabletExternallyReparented, tablet, &topodatapb.Tablet{
+			Alias: si.PrimaryAlias,
+			Type:  topodatapb.TabletType_PRIMARY,
+		})
 		defer func() {
 			if err != nil {
 				event.DispatchUpdate(ev, "failed: "+err.Error())
