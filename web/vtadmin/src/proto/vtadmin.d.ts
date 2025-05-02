@@ -15722,6 +15722,115 @@ export namespace eventsdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a Metadata. */
+    interface IMetadata {
+
+        /** Metadata id */
+        id?: (string|null);
+
+        /** Metadata source */
+        source?: (eventsdata.ISource|null);
+
+        /** Metadata timestamp */
+        timestamp?: (vttime.ITime|null);
+    }
+
+    /** Represents a Metadata. */
+    class Metadata implements IMetadata {
+
+        /**
+         * Constructs a new Metadata.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: eventsdata.IMetadata);
+
+        /** Metadata id. */
+        public id: string;
+
+        /** Metadata source. */
+        public source?: (eventsdata.ISource|null);
+
+        /** Metadata timestamp. */
+        public timestamp?: (vttime.ITime|null);
+
+        /**
+         * Creates a new Metadata instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Metadata instance
+         */
+        public static create(properties?: eventsdata.IMetadata): eventsdata.Metadata;
+
+        /**
+         * Encodes the specified Metadata message. Does not implicitly {@link eventsdata.Metadata.verify|verify} messages.
+         * @param message Metadata message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: eventsdata.IMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Metadata message, length delimited. Does not implicitly {@link eventsdata.Metadata.verify|verify} messages.
+         * @param message Metadata message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: eventsdata.IMetadata, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Metadata message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Metadata
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): eventsdata.Metadata;
+
+        /**
+         * Decodes a Metadata message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Metadata
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): eventsdata.Metadata;
+
+        /**
+         * Verifies a Metadata message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Metadata message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Metadata
+         */
+        public static fromObject(object: { [k: string]: any }): eventsdata.Metadata;
+
+        /**
+         * Creates a plain object from a Metadata message. Also converts values to other types if specified.
+         * @param message Metadata
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: eventsdata.Metadata, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Metadata to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for Metadata
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** ReparentType enum. */
     enum ReparentType {
         PlannedReparentShard = 0,
@@ -15861,14 +15970,8 @@ export namespace eventsdata {
     /** Properties of a ReparentEvent. */
     interface IReparentEvent {
 
-        /** ReparentEvent id */
-        id?: (string|null);
-
-        /** ReparentEvent source */
-        source?: (eventsdata.ISource|null);
-
-        /** ReparentEvent timestamp */
-        timestamp?: (vttime.ITime|null);
+        /** ReparentEvent meta */
+        meta?: (eventsdata.IMetadata|null);
 
         /** ReparentEvent shard_info */
         shard_info?: (topodata.IShardInfo|null);
@@ -15901,14 +16004,8 @@ export namespace eventsdata {
          */
         constructor(properties?: eventsdata.IReparentEvent);
 
-        /** ReparentEvent id. */
-        public id: string;
-
-        /** ReparentEvent source. */
-        public source?: (eventsdata.ISource|null);
-
-        /** ReparentEvent timestamp. */
-        public timestamp?: (vttime.ITime|null);
+        /** ReparentEvent meta. */
+        public meta?: (eventsdata.IMetadata|null);
 
         /** ReparentEvent shard_info. */
         public shard_info?: (topodata.IShardInfo|null);
@@ -16003,6 +16100,127 @@ export namespace eventsdata {
 
         /**
          * Gets the default type url for ReparentEvent
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a KeyspaceChangeEvent. */
+    interface IKeyspaceChangeEvent {
+
+        /** KeyspaceChangeEvent meta */
+        meta?: (eventsdata.IMetadata|null);
+
+        /** KeyspaceChangeEvent keyspace_name */
+        keyspace_name?: (string|null);
+
+        /** KeyspaceChangeEvent new_keyspace */
+        new_keyspace?: (topodata.IKeyspace|null);
+
+        /** KeyspaceChangeEvent old_keyspace */
+        old_keyspace?: (topodata.IKeyspace|null);
+
+        /** KeyspaceChangeEvent status */
+        status?: (string|null);
+    }
+
+    /** Represents a KeyspaceChangeEvent. */
+    class KeyspaceChangeEvent implements IKeyspaceChangeEvent {
+
+        /**
+         * Constructs a new KeyspaceChangeEvent.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: eventsdata.IKeyspaceChangeEvent);
+
+        /** KeyspaceChangeEvent meta. */
+        public meta?: (eventsdata.IMetadata|null);
+
+        /** KeyspaceChangeEvent keyspace_name. */
+        public keyspace_name: string;
+
+        /** KeyspaceChangeEvent new_keyspace. */
+        public new_keyspace?: (topodata.IKeyspace|null);
+
+        /** KeyspaceChangeEvent old_keyspace. */
+        public old_keyspace?: (topodata.IKeyspace|null);
+
+        /** KeyspaceChangeEvent status. */
+        public status: string;
+
+        /**
+         * Creates a new KeyspaceChangeEvent instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns KeyspaceChangeEvent instance
+         */
+        public static create(properties?: eventsdata.IKeyspaceChangeEvent): eventsdata.KeyspaceChangeEvent;
+
+        /**
+         * Encodes the specified KeyspaceChangeEvent message. Does not implicitly {@link eventsdata.KeyspaceChangeEvent.verify|verify} messages.
+         * @param message KeyspaceChangeEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: eventsdata.IKeyspaceChangeEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified KeyspaceChangeEvent message, length delimited. Does not implicitly {@link eventsdata.KeyspaceChangeEvent.verify|verify} messages.
+         * @param message KeyspaceChangeEvent message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: eventsdata.IKeyspaceChangeEvent, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a KeyspaceChangeEvent message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns KeyspaceChangeEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): eventsdata.KeyspaceChangeEvent;
+
+        /**
+         * Decodes a KeyspaceChangeEvent message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns KeyspaceChangeEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): eventsdata.KeyspaceChangeEvent;
+
+        /**
+         * Verifies a KeyspaceChangeEvent message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a KeyspaceChangeEvent message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns KeyspaceChangeEvent
+         */
+        public static fromObject(object: { [k: string]: any }): eventsdata.KeyspaceChangeEvent;
+
+        /**
+         * Creates a plain object from a KeyspaceChangeEvent message. Also converts values to other types if specified.
+         * @param message KeyspaceChangeEvent
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: eventsdata.KeyspaceChangeEvent, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this KeyspaceChangeEvent to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for KeyspaceChangeEvent
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

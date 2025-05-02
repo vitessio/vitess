@@ -17,12 +17,42 @@ limitations under the License.
 package events
 
 import (
+	"time"
+
+	"github.com/google/uuid"
+
+	"vitess.io/vitess/go/protoutil"
+	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // KeyspaceChange is an event that describes changes to a keyspace.
 type KeyspaceChange struct {
-	KeyspaceName string
-	Keyspace     *topodatapb.Keyspace
-	Status       string
+	eventsdatapb.KeyspaceChangeEvent
+}
+
+// NewKeyspaceChange inits a KeyspaceChange event.
+func NewKeyspaceChange(src *eventsdatapb.Source, keyspaceName string, newKeyspace, oldKeyspace *topodatapb.Keyspace) *KeyspaceChange {
+	return &KeyspaceChange{
+		eventsdatapb.KeyspaceChangeEvent{
+			Meta: &eventsdatapb.Metadata{
+				Id:        uuid.NewString(),
+				Source:    src,
+				Timestamp: protoutil.TimeToProto(time.Now()),
+			},
+			KeyspaceName: keyspaceName,
+			NewKeyspace:  newKeyspace,
+			OldKeyspace:  oldKeyspace,
+		},
+	}
+}
+
+// Update updates the status of the event.
+func (kc *KeyspaceChange) Update(update any) {
+	status, ok := update.(string)
+	if !ok {
+		return
+	}
+	kc.Meta.Timestamp = protoutil.TimeToProto(time.Now())
+	kc.Status = status
 }

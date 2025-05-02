@@ -39,9 +39,11 @@ type Reparent struct {
 // NewReparent inits a new Reparent object.
 func NewReparent(si *topo.ShardInfo, src *eventsdatapb.Source, reparentType eventsdatapb.ReparentType, newPrimary, oldPrimary *topodatapb.Tablet) *Reparent {
 	eventData := eventsdatapb.ReparentEvent{
-		Id:         uuid.NewString(),
-		Timestamp:  protoutil.TimeToProto(time.Now()),
-		Source:     src,
+		Meta: &eventsdatapb.Metadata{
+			Id:        uuid.NewString(),
+			Source:    src,
+			Timestamp: protoutil.TimeToProto(time.Now()),
+		},
 		Type:       reparentType,
 		NewPrimary: newPrimary,
 		OldPrimary: oldPrimary,
@@ -86,10 +88,10 @@ func (r *Reparent) Update(phaseType any) {
 	}
 
 	r.Phase = reparentPhase
-	r.Timestamp = protoutil.TimeToProto(time.Now())
+	r.Meta.Timestamp = protoutil.TimeToProto(time.Now())
 	r.phaseEvents = append(r.phaseEvents, &eventsdatapb.ReparentPhaseEvent{
 		Phase:     r.Phase,
-		Timestamp: r.Timestamp,
+		Timestamp: r.Meta.Timestamp,
 		Status:    r.Status,
 		Error:     r.Error,
 	})

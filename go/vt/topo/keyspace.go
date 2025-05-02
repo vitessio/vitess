@@ -29,9 +29,9 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	eventsdatapb "vitess.io/vitess/go/vt/proto/eventsdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/topo/events"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -88,9 +88,9 @@ func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *to
 		return err
 	}
 
-	event.Dispatch(&events.KeyspaceChange{
+	event.Dispatch(&eventsdatapb.KeyspaceChangeEvent{
 		KeyspaceName: keyspace,
-		Keyspace:     value,
+		NewKeyspace:  value,
 		Status:       "created",
 	})
 	return nil
@@ -168,6 +168,11 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 		return err
 	}
 
+	oldKi, err := ts.GetKeyspace(ctx, ki.keyspace)
+	if err != nil {
+		return err
+	}
+
 	data, err := ki.Keyspace.MarshalVT()
 	if err != nil {
 		return err
@@ -179,9 +184,10 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 	}
 	ki.version = version
 
-	event.Dispatch(&events.KeyspaceChange{
+	event.Dispatch(&eventsdatapb.KeyspaceChangeEvent{
 		KeyspaceName: ki.keyspace,
-		Keyspace:     ki.Keyspace,
+		NewKeyspace:  ki.Keyspace,
+		OldKeyspace:  oldKi.Keyspace,
 		Status:       "updated",
 	})
 	return nil
@@ -374,6 +380,11 @@ func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 		return ctx.Err()
 	}
 
+	oldKi, err := ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
 	keyspacePath := path.Join(KeyspacesPath, keyspace, KeyspaceFile)
 	if err := ts.globalCell.Delete(ctx, keyspacePath, nil); err != nil {
 		return err
@@ -385,9 +396,10 @@ func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 		return err
 	}
 
-	event.Dispatch(&events.KeyspaceChange{
+	event.Dispatch(&eventsdatapb.KeyspaceChangeEvent{
 		KeyspaceName: keyspace,
-		Keyspace:     nil,
+		NewKeyspace:  nil,
+		OldKeyspace:  oldKi.Keyspace,
 		Status:       "deleted",
 	})
 	return nil

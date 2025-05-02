@@ -39,6 +39,12 @@ message Source {
   string hostname = 2;
 }
 
+message Metadata {
+  string id = 1;
+  Source source = 2;
+  vttime.Time timestamp = 3;
+}
+
 enum ReparentType {
   // PlannedReparentShard
   PlannedReparentShard = 0;
@@ -92,14 +98,21 @@ message ReparentPhaseEvent {
 
 // ReparentEvent...
 message ReparentEvent {
-  string id = 1;
-  Source source = 2;
-  vttime.Time timestamp = 3;
-  topodata.ShardInfo shard_info = 4;
-  topodata.Tablet new_primary = 5;
-  topodata.Tablet old_primary = 6;
-  ReparentType type = 7;
-  ReparentPhaseType phase = 8;
-  string status = 9;
-  string error = 10;
+  Metadata meta = 1;
+  topodata.ShardInfo shard_info = 2;
+  topodata.Tablet new_primary = 3;
+  topodata.Tablet old_primary = 4;
+  ReparentType type = 5;
+  ReparentPhaseType phase = 6;
+  string status = 7;
+  string error = 8;
+}
+
+// KeyspaceChangeEvent is an event that describes changes to a keyspace.
+message KeyspaceChangeEvent {
+  Metadata meta = 1;
+  string keyspace_name = 2;
+  topodata.Keyspace new_keyspace = 3;
+  topodata.Keyspace old_keyspace = 4;
+  string status = 5;
 }
