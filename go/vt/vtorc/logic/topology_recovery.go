@@ -551,6 +551,14 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		return err
 	}
 
+	// Prioritise primary recovery.
+	// If we are performing some other action, first ensure that it is not because of primary issues.
+	log.Infof("CheckAndRecover: Analysis: %v, Tablet: %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceAlias)
+	err = checkIfLeaderMitigationRequired(analysisEntry, DiscoverInstance, checkIfAlreadyFixed)
+	if err != nil {
+		return err
+	}
+
 	// We lock the shard here and then refresh the tablets information
 	ctx, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
 		getLockAction(analysisEntry.AnalyzedInstanceAlias, analysisEntry.Analysis),
@@ -669,6 +677,35 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		DiscoverInstance(analysisEntry.AnalyzedInstanceAlias, true)
 	}
 	return err
+}
+
+// checkIfLeaderMitigationRequired check the health of the primary node if the original analysis is not a primary failure issue.
+func checkIfLeaderMitigationRequired(analysisEntry *inst.ReplicationAnalysis, discoveryFunc func(string, bool), checkIfRecoveryRequired func(*inst.ReplicationAnalysis) (bool, error)) error {
+	originalAnalysisEntry := analysisEntry.Analysis
+	if !analysisEntry.PrimaryFailures() {
+		primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+		if err != nil {
+			return err
+		}
+		primaryTabletAlias := topoproto.TabletAliasString(primaryTablet.Alias)
+		// re-check if there are any mitigation required for the leader node.
+		discoveryFunc(primaryTabletAlias, true)
+
+		recoveryRequired, err := checkIfRecoveryRequired(analysisEntry)
+		if err != nil {
+			log.Infof("CheckAndRecover: Checking if recovery is required returned err: %v", err)
+			return err
+		}
+		// primary recovery is required, abort the current mitigation.
+		if recoveryRequired && analysisEntry.PrimaryFailures() {
+			log.Infof("CheckAndRecover: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
+			// this recovery instance was going for a different recovery, but we found that the leader is not healthy.
+			// so abort this recovery and start a new one. The new recovery should pick the dead primary action first.
+			return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
+		}
+	}
+
+	return nil
 }
 
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not

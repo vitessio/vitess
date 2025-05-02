@@ -18,6 +18,7 @@ package logic
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/vt/log"
@@ -310,4 +311,65 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
 		})
 	}
+}
+
+func TestCheckIfLeaderMitigationRequired(t *testing.T) {
+	tests := []struct {
+		name              string
+		analysisCode      inst.AnalysisCode
+		wantErr           string
+		wantAnalysisError error
+	}{
+		{
+			name:         "error if leader mitigation is required",
+			analysisCode: inst.DeadPrimary,
+			wantErr:      "aborting ReplicationStopped, primary mitigation is required",
+		},
+		{
+			name:         "no error if leader mitigation is not required",
+			analysisCode: inst.ReplicaMisconfigured,
+		},
+		{
+			name:              "return error of leader analysis fails",
+			wantAnalysisError: fmt.Errorf("mocked error"),
+			wantErr:           "mocked error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tablet := &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Hostname:      "localhost",
+				MysqlHostname: "localhost",
+				MysqlPort:     1200,
+				Keyspace:      "ks",
+				Shard:         "-80",
+				Type:          topodatapb.TabletType_PRIMARY,
+			}
+			err := inst.SaveTablet(tablet)
+			require.NoError(t, err)
+
+			gotErr := checkIfLeaderMitigationRequired(&inst.ReplicationAnalysis{
+				Analysis:         inst.ReplicationStopped,
+				AnalyzedKeyspace: "ks",
+				AnalyzedShard:    "-80",
+			}, func(s string, b bool) {
+			}, func(analysis *inst.ReplicationAnalysis) (bool, error) {
+				analysis.Analysis = tt.analysisCode
+				return true, tt.wantAnalysisError
+			})
+
+			if tt.wantErr != "" {
+				require.EqualError(t, gotErr, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, gotErr)
+		})
+	}
+
 }

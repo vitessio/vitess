@@ -151,3 +151,12 @@ func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 func ValidSecondsFromSeenToLastAttemptedCheck() uint {
 	return config.GetInstancePollSeconds()
 }
+
+// PrimaryFailures is the list of all analysis which could mean leader un-availability.
+func (replicationAnalysis *ReplicationAnalysis) PrimaryFailures() bool {
+	return replicationAnalysis.Analysis == DeadPrimary ||
+		replicationAnalysis.Analysis == DeadPrimaryAndReplicas ||
+		replicationAnalysis.Analysis == DeadPrimaryAndSomeReplicas ||
+		replicationAnalysis.Analysis == ClusterHasNoPrimary ||
+		replicationAnalysis.Analysis == PrimaryIsReadOnly
+}
