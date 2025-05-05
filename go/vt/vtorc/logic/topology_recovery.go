@@ -691,12 +691,12 @@ func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc
 
 		recoveryRequired, err := checkIfRecoveryRequired(analysisEntry)
 		if err != nil {
-			log.Infof("CheckAndRecover: Checking if recovery is required returned err: %v", err)
+			log.Infof("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err)
 			return err
 		}
 		// primary recovery is required, abort the current mitigation.
 		if recoveryRequired && analysisEntry.PrimaryFailures() {
-			log.Infof("CheckAndRecover: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
+			log.Infof("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
 			// this recovery instance was going for a different recovery, but we found that the leader is not healthy.
 			// so abort this recovery and start a new one. The new recovery should pick the dead primary action first.
 			return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
