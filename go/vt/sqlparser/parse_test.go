@@ -42,6 +42,8 @@ var (
 		partialDDL           bool
 		ignoreNormalizerTest bool
 	}{{
+		input: "select a and b member of (c) from dual",
+	}, {
 		input: "select * from foo limit 5 + 5",
 	}, {
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
