@@ -29,10 +29,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/mysql"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -189,6 +194,21 @@ func TestInitThrottler(t *testing.T) {
 	assert.Equal(t, 5*time.Second, throttler.dormantPeriod)
 	assert.EqualValues(t, 5, throttler.recentCheckDormantDiff)
 	assert.EqualValues(t, 3, throttler.recentCheckDiff)
+}
+
+func TestIsDialTCPError(t *testing.T) {
+	// Verify that IsDialTCPError actually recognizes grpc dial errors
+	cc, err := grpcclient.DialContext(context.Background(), ":0", true, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	defer cc.Close()
+
+	err = cc.Invoke(context.Background(), "/Fail", nil, nil)
+
+	require.True(t, base.IsDialTCPError(err))
+	require.True(t, base.IsDialTCPError(fmt.Errorf("wrapped: %w", err)))
+
+	nonDialErr := fmt.Errorf("rpc error: code = NotFound desc = method not found")
+	require.False(t, base.IsDialTCPError(nonDialErr))
 }
 
 func TestIsAppThrottled(t *testing.T) {
