@@ -96,21 +96,37 @@ func (wd *workflowDiffer) reconcileExtraRows(dr *DiffReport, maxExtraRowsToCompa
 			dr.TableName, maxRows, wd.ct.uuid)
 	} else {
 		// Now remove the matching extra rows
+		log.Infof("Found %d matching extra rows for table %s in vdiff %s, checked %d rows, new extra source rows %d, new extra target rows %d",
+			matchedDiffs, dr.TableName, wd.ct.uuid, maxRows, dr.ExtraRowsSource-matchedDiffs, dr.ExtraRowsTarget-matchedDiffs)
 		newExtraRowsSourceDiffs := make([]*RowDiff, 0, dr.ExtraRowsSource-matchedDiffs)
 		newExtraRowsTargetDiffs := make([]*RowDiff, 0, dr.ExtraRowsTarget-matchedDiffs)
 		for i := 0; i < int(dr.ExtraRowsSource); i++ {
+			if i >= len(dr.ExtraRowsSourceDiffs) {
+				log.Infof("No more extra source rows to check for table %s in vdiff %s, checked %d rows",
+					dr.TableName, wd.ct.uuid, len(dr.ExtraRowsSourceDiffs))
+				break
+			}
 			if !matchedSourceDiffs[i] {
 				newExtraRowsSourceDiffs = append(newExtraRowsSourceDiffs, dr.ExtraRowsSourceDiffs[i])
 			}
 			if len(newExtraRowsSourceDiffs) >= maxRows {
+				log.Infof("Reached maxRows to check for table %s in vdiff %s, checked %d rows",
+					dr.TableName, wd.ct.uuid, maxRows)
 				break
 			}
 		}
 		for i := 0; i < int(dr.ExtraRowsTarget); i++ {
+			if i >= len(dr.ExtraRowsTargetDiffs) {
+				log.Infof("No more extra target rows to check for table %s in vdiff %s, checked %d rows",
+					dr.TableName, wd.ct.uuid, len(dr.ExtraRowsTargetDiffs))
+				break
+			}
 			if !matchedTargetDiffs[i] {
 				newExtraRowsTargetDiffs = append(newExtraRowsTargetDiffs, dr.ExtraRowsTargetDiffs[i])
 			}
 			if len(newExtraRowsTargetDiffs) >= maxRows {
+				log.Infof("Reached maxRows to check for table %s in vdiff %s, checked %d rows",
+					dr.TableName, wd.ct.uuid, maxRows)
 				break
 			}
 		}
@@ -171,7 +187,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		log.Errorf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err)
 		return err
 	}
-	log.Infof("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, dr)
+	log.Infof("Table diff done on table %s for vdiff %s with report: %s", td.table.Name, wd.ct.uuid, dr)
 	if dr.ExtraRowsSource > 0 || dr.ExtraRowsTarget > 0 {
 		wd.reconcileExtraRows(dr, wd.opts.CoreOptions.MaxExtraRowsToCompare)
 	}
