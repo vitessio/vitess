@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"golang.org/x/exp/maps"
-	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -79,12 +78,12 @@ func ElectNewPrimary(
 	}
 
 	var (
+		wg sync.WaitGroup
 		// mutex to secure the next two fields from concurrent access
 		mu sync.Mutex
 		// tablets that are possible candidates to be the new primary and their positions
-		validTablets         []*topodatapb.Tablet
-		tabletPositions      []replication.Position
-		errorGroup, groupCtx = errgroup.WithContext(ctx)
+		validTablets    []*topodatapb.Tablet
+		tabletPositions []replication.Position
 	)
 
 	// candidates are the list of tablets that can be potentially promoted after filtering out based on preliminary checks.
@@ -116,10 +115,12 @@ func ElectNewPrimary(
 	}
 
 	for _, tablet := range candidates {
+		wg.Add(1)
 		tb := tablet
-		errorGroup.Go(func() error {
+		go func(tablet *topodatapb.Tablet) {
+			defer wg.Done()
 			// find and store the positions for the tablet
-			pos, replLag, takingBackup, err := findTabletPositionLagBackupStatus(groupCtx, tb, logger, tmc, waitReplicasTimeout)
+			pos, replLag, takingBackup, err := findTabletPositionLagBackupStatus(ctx, tb, logger, tmc, waitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil && (tolerableReplLag == 0 || tolerableReplLag >= replLag) {
@@ -132,14 +133,10 @@ func ElectNewPrimary(
 			} else {
 				log.Infof("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag)
 			}
-			return err
-		})
+		}(tb)
 	}
 
-	err := errorGroup.Wait()
-	if err != nil {
-		return nil, err
-	}
+	wg.Wait()
 
 	// return an error if there are no valid tablets available
 	if len(validTablets) == 0 {
@@ -147,7 +144,7 @@ func ElectNewPrimary(
 	}
 
 	// sort the tablets for finding the best primary
-	err = sortTabletsForReparent(validTablets, tabletPositions, durability)
+	err := sortTabletsForReparent(validTablets, tabletPositions, durability)
 	if err != nil {
 		return nil, err
 	}

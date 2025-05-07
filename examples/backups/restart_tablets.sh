@@ -35,7 +35,7 @@ for i in 300 301 302; do
 done
 sleep 5
 
-# Wait for all the tablets to be in the serving state before initiating
+# Wait for all the replica tablets to be in the serving state before initiating
 # PlannedReparentShard. This is essential, since we want the RESTORE phase to be
 # complete before we start PlannedReparentShard, otherwise we end up reading the
 # tablet type to RESTORE and do not set semi-sync, which leads to the primary
@@ -50,27 +50,11 @@ for i in 101 201 301; do
   done
 done
 
-for i in 102 202 302; do
-  while [ $totalTime -gt 0 ]; do
-    status=$(curl "http://$hostname:15$i/debug/status_details")
-    echo "$status" | grep "RDONLY: Serving" && break
-    totalTime=$((totalTime-1))
-    sleep 0.1
-  done
-done
-
 # Check that all the replica tablets have reached REPLICA: Serving state
 for i in 101 201 301; do
   status=$(curl "http://$hostname:15$i/debug/status_details")
   echo "$status" | grep "REPLICA: Serving" && continue
   echo "tablet-$i did not reach REPLICA: Serving state. Exiting due to failure."
-  exit 1
-done
-# Check that all the rdonly tablets have reached RDONLY: Serving state
-for i in 102 202 302; do
-  status=$(curl "http://$hostname:15$i/debug/status_details")
-  echo "$status" | grep "RDONLY: Serving" && continue
-  echo "tablet-$i did not reach RDONLY: Serving state. Exiting due to failure."
   exit 1
 done
 

@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/stats"
@@ -535,11 +533,6 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
-	err = pr.verifyAllTabletsReachable(ctx, tabletMap)
-	if err != nil {
-		return err
-	}
-
 	// Check invariants that PlannedReparentShard depends on.
 	if isNoop, err := pr.preflightChecks(ctx, ev, keyspace, shard, tabletMap, &opts); err != nil {
 		return err
@@ -594,12 +587,12 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	// inserted in the new primary's journal, so we can use it below to check
 	// that all the replicas have attached to new primary successfully.
 	switch {
-	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime == nil:
+	case currentPrimary == nil && ev.ShardInfo.PrimaryAlias == nil:
 		// Case (1): no primary has been elected ever. Initialize
 		// the primary-elect tablet
 		reparentJournalPos, err = pr.performInitialPromotion(ctx, ev.NewPrimary, opts)
 		needsRefresh = true
-	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
+	case currentPrimary == nil && ev.ShardInfo.PrimaryAlias != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
 		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, opts)
@@ -734,21 +727,4 @@ func (pr *PlannedReparenter) reparentTablets(
 	}
 
 	return nil
-}
-
-// verifyAllTabletsReachable verifies that all the tablets are reachable when running PRS.
-func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabletMap map[string]*topo.TabletInfo) error {
-	// Create a cancellable context for the entire set of RPCs to verify reachability.
-	verifyCtx, verifyCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	defer verifyCancel()
-
-	errorGroup, groupCtx := errgroup.WithContext(verifyCtx)
-	for _, info := range tabletMap {
-		tablet := info.Tablet
-		errorGroup.Go(func() error {
-			_, err := pr.tmc.PrimaryStatus(groupCtx, tablet)
-			return err
-		})
-	}
-	return errorGroup.Wait()
 }
