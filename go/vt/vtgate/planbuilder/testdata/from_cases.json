@@ -5044,6 +5044,7 @@
         "JoinVars": {
           "u1_col": 1
         },
+        "TableName": "`user`_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -5053,7 +5054,8 @@
               "Sharded": true
             },
             "FieldQuery": "select 1, u1.col from `user` as u1 where 1 != 1",
-            "Query": "select 1, u1.col from `user` as u1"
+            "Query": "select 1, u1.col from `user` as u1",
+            "Table": "`user`"
           },
           {
             "OperatorType": "Route",
@@ -5063,7 +5065,8 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-            "Query": "select 1 from `user` as u2 where :u1_col /* INT16 */ = case when u2.col = 2 then 0 when u2.col in (1, 2) then 1 else 2 end"
+            "Query": "select 1 from `user` as u2 where :u1_col /* INT16 */ = case when u2.col = 2 then 0 when u2.col in (1, 2) then 1 else 2 end",
+            "Table": "`user`"
           }
         ]
       },
