@@ -163,6 +163,11 @@ func (e *Executor) newExecute(
 			return err
 		}
 
+		if plan.QueryType.IsReadStatement() {
+			safeSession.SetExecReadQuery(true)
+			defer safeSession.SetExecReadQuery(false)
+		}
+
 		// Execute the plan.
 		if plan.Instructions.NeedsTransaction() {
 			err = e.insideTransaction(ctx, safeSession, logStats,

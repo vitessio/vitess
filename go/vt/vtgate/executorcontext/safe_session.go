@@ -59,9 +59,9 @@ type (
 		// and doesn't have to be updated by the executor
 		foundRowsHandled bool
 
-		// queryFromVindex is used to avoid erroring out on multi-db transaction
+		// execReadQuery is used to avoid erroring out on multi-db transaction
 		// as the query that started a new transaction on the shard belong to a vindex.
-		queryFromVindex bool
+		execReadQuery bool
 
 		logging *ExecuteLogger
 
@@ -241,18 +241,11 @@ func (session *SafeSession) GetRollbackOnPartialExec() string {
 	return session.rollbackOnPartialExec
 }
 
-// SetQueryFromVindex set the queryFromVindex value.
-func (session *SafeSession) SetQueryFromVindex(value bool) {
+// SetExecReadQuery set the execReadQuery value.
+func (session *SafeSession) SetExecReadQuery(value bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.queryFromVindex = value
-}
-
-// GetQueryFromVindex returns the queryFromVindex value.
-func (session *SafeSession) GetQueryFromVindex() bool {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	return session.queryFromVindex
+	session.execReadQuery = value
 }
 
 // SetQueryTimeout sets the query timeout
@@ -450,7 +443,7 @@ func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard
 		return nil, nil
 	}
 
-	if !shardSession.VindexOnly {
+	if !shardSession.ReadOnly {
 		return shardSession, nil
 	}
 
@@ -460,7 +453,7 @@ func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard
 
 	// the shard session is now used by non-vindex query as well,
 	// so it is not an exclusive vindex only shard session anymore.
-	shardSession.VindexOnly = false
+	shardSession.ReadOnly = false
 	return shardSession, nil
 }
 
@@ -518,8 +511,8 @@ func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info ShardAct
 		if !existingSession.RowsAffected {
 			existingSession.RowsAffected = info.RowsAffected()
 		}
-		if existingSession.VindexOnly {
-			existingSession.VindexOnly = session.queryFromVindex
+		if existingSession.ReadOnly {
+			existingSession.ReadOnly = session.execReadQuery
 		}
 		if err := session.singleModeErrorOnCrossShard(txMode, 1); err != nil {
 			return err
@@ -532,7 +525,7 @@ func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info ShardAct
 		TransactionId: info.TransactionID(),
 		ReservedId:    info.ReservedID(),
 		RowsAffected:  info.RowsAffected(),
-		VindexOnly:    session.queryFromVindex,
+		ReadOnly:      session.execReadQuery,
 	}
 
 	// Always append, in order for rollback to succeed.
@@ -560,7 +553,7 @@ func (session *SafeSession) singleModeErrorOnCrossShard(txMode vtgatepb.Transact
 	// 1. The query comes from a lookup vindex.
 	// 2. The transaction mode is not Single.
 	// 3. The transaction is not in the normal shard session.
-	if session.queryFromVindex || session.commitOrder != vtgatepb.CommitOrder_NORMAL || !session.isSingleDB(txMode) {
+	if session.execReadQuery || session.commitOrder != vtgatepb.CommitOrder_NORMAL || !session.isSingleDB(txMode) {
 		return nil
 	}
 
@@ -576,7 +569,7 @@ func (session *SafeSession) singleModeErrorOnCrossShard(txMode vtgatepb.Transact
 func actualNoOfShardSession(sessions []*vtgatepb.Session_ShardSession) int {
 	actualSS := 0
 	for _, ss := range sessions {
-		if ss.VindexOnly {
+		if ss.ReadOnly {
 			continue
 		}
 		actualSS++
