@@ -48,6 +48,11 @@ type DiffReport struct {
 	MismatchedRowsDiffs  []*DiffMismatch `json:"MismatchedRowsSample,omitempty"`
 }
 
+func (dr *DiffReport) String() string {
+	return fmt.Sprintf("DiffReport:: Table: %s, ProcessedRows: %d, MatchingRows: %d, MismatchedRows: %d, ExtraRowsSource: %d, ExtraRowsTarget: %d",
+		dr.TableName, dr.ProcessedRows, dr.MatchingRows, dr.MismatchedRows, dr.ExtraRowsSource, dr.ExtraRowsTarget)
+}
+
 type ProgressReport struct {
 	Percentage float64
 	ETA        string `json:"ETA,omitempty"` // a formatted date
