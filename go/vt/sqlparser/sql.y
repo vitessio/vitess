@@ -363,7 +363,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> values_statement subquery_or_values
 %type <val> subquery
 %type <val> join_condition join_condition_opt on_expression_opt
-%type <val> table_name_list delete_table_list view_name_list
+%type <val> table_name_list_opt table_name_list delete_table_list view_name_list
 %type <val> inner_join outer_join straight_join natural_join
 %type <val> trigger_name
 %type <val> table_name load_into_table_name into_table_name delete_table_name
@@ -1099,6 +1099,15 @@ view_name_list:
 | view_name_list ',' table_name
   {
     $$ = append($$.(TableNames), $3.(TableName).ToViewName())
+  }
+
+table_name_list_opt:
+  {
+    $$ = TableNames{}
+  }
+| table_name_list
+  {
+    $$ = $1
   }
 
 table_name_list:
@@ -4251,11 +4260,11 @@ flush_option:
   {
     $$ = &FlushOption{Name: string($1)}
   }
-| TABLE table_name_list flush_tables_read_lock_opt
+| TABLE table_name_list_opt flush_tables_read_lock_opt
   {
     $$ = &FlushOption{Name: string($1), Tables: $2.(TableNames), ReadLock: $3.(bool)}
   }
-| TABLES table_name_list flush_tables_read_lock_opt
+| TABLES table_name_list_opt flush_tables_read_lock_opt
   {
     $$ = &FlushOption{Name: string($1), Tables: $2.(TableNames), ReadLock: $3.(bool)}
   }
