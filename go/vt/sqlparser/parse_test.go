@@ -3356,9 +3356,6 @@ var (
 			input:  "FLUSH NO_WRITE_TO_BINLOG HOSTS",
 			output: "flush no_write_to_binlog hosts",
 		}, {
-			input:  "FLUSH NO_WRITE_TO_BINLOG TABLES",
-			output: "flush no_write_to_binlog TABLES",
-		}, {
 			input:  "FLUSH TABLE `inventory`.`customers` WITH READ LOCK",
 			output: "flush table inventory.customers with read lock",
 		}, {
