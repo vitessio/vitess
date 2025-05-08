@@ -3337,40 +3337,64 @@ var (
 		}, {
 			input:  "PURGE BINARY LOGS BEFORE DATE_SUB(NOW(), INTERVAL 1 MONTH);",
 			output: "purge binary logs before DATE_SUB(NOW(), interval 1 MONTH)",
-		}, {
+		},
+		{
 			input:  "FLUSH USER_RESOURCES",
 			output: "flush user_resources",
-		}, {
+		},
+		{
 			input:  "FLUSH RELAY LOGS",
 			output: "flush relay logs",
-		}, {
+		},
+		{
 			input:  "FLUSH LOCAL RELAY LOGS FOR CHANNEL 'connections'",
 			output: "flush local relay logs for channel connections",
-		}, {
+		},
+		{
 			input:  "FLUSH LOCAL reLay lOgs FOR CHANNEL 'connections'",
 			output: "flush local relay logs for channel connections",
-		}, {
+		},
+		{
 			input:  "FLUSH LOCAL OPTIMIZER_COSTS",
 			output: "flush local optimizer_costs",
-		}, {
+		},
+		{
+			input:  "FLUSH NO_WRITE_TO_BINLOG TABLES",
+			output: "flush no_write_to_binlog tables",
+		},
+		{
 			input:  "FLUSH NO_WRITE_TO_BINLOG HOSTS",
 			output: "flush no_write_to_binlog hosts",
-		}, {
+		},
+		{
 			input:  "FLUSH TABLE `inventory`.`customers` WITH READ LOCK",
 			output: "flush table inventory.customers with read lock",
-		}, {
+		},
+		{
 			input:  "FLUSH TABLES `inventory`.`customers` WITH READ LOCK",
 			output: "flush tables inventory.customers with read lock",
-		}, {
+		},
+		{
 			input:  "FLUSH TABLES `inventory`.`customers`",
 			output: "flush tables inventory.customers",
-		}, {
+		},
+		{
+			input:  "FLUSH TABLE WITH READ LOCK",
+			output: "flush table",
+		},
+		{
+			input:  "FLUSH TABLES WITH READ LOCK",
+			output: "flush tables",
+		},
+		{
 			input:  "FLUSH TABLE table1, foo.table2 WITH READ LOCK",
 			output: "flush table table1, foo.table2 with read lock",
-		}, {
+		},
+		{
 			input:  "FLUSH TABLES table1, foo.table2 WITH READ LOCK",
 			output: "flush tables table1, foo.table2 with read lock",
-		}, {
+		},
+		{
 			input:  "SHOW GRANTS",
 			output: "show grants",
 		}, {

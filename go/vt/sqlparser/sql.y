@@ -4251,6 +4251,14 @@ flush_option:
   {
     $$ = &FlushOption{Name: string($1)}
   }
+| TABLE flush_tables_read_lock_opt
+  {
+    $$ = &FlushOption{Name: string($1), ReadLock: $2.(bool)}
+  }
+| TABLES flush_tables_read_lock_opt
+  {
+    $$ = &FlushOption{Name: string($1), ReadLock: $2.(bool)}
+  }
 | TABLE table_name_list flush_tables_read_lock_opt
   {
     $$ = &FlushOption{Name: string($1), Tables: $2.(TableNames), ReadLock: $3.(bool)}
