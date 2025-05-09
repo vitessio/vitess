@@ -339,8 +339,8 @@ func canMergeOnFilter(ctx *plancontext.PlanningContext, a, b *Route, predicate s
 	if comparison.Operator != sqlparser.EqualOp {
 		return false
 	}
-	left := comparison.Left
-	right := comparison.Right
+	left := getColName(comparison.Left)
+	right := getColName(comparison.Right)
 
 	lVindex := findColumnVindex(ctx, a, left)
 	if lVindex == nil {
