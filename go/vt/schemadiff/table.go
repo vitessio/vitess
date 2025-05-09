@@ -2716,13 +2716,14 @@ func (c *CreateTableEntity) validateDuplicateKeyNameError() error {
 // validate checks that the table structure is valid:
 // - all columns referenced by keys exist
 func (c *CreateTableEntity) validate() error {
-	columnExists := map[string]bool{}
-	for _, col := range c.CreateTable.TableSpec.Columns {
-		colName := col.Name.Lowered()
-		if columnExists[colName] {
-			return &ApplyDuplicateColumnError{Table: c.Name(), Column: col.Name.String()}
+	entities := c.ColumnDefinitionEntities()
+	columnsMap := make(map[string]*ColumnDefinitionEntity, len(entities))
+	for _, entity := range entities {
+		lowered := entity.NameLowered()
+		if _, ok := columnsMap[lowered]; ok {
+			return &ApplyDuplicateColumnError{Table: c.Name(), Column: entity.Name()}
 		}
-		columnExists[colName] = true
+		columnsMap[lowered] = entity
 	}
 	for _, colEntity := range c.ColumnDefinitionEntities() {
 		if _, _, _, _, err := colEntity.InferCharsetCollate(); err != nil {
@@ -2740,7 +2741,7 @@ func (c *CreateTableEntity) validate() error {
 			return &ForeignKeyColumnCountMismatchError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(fk.Source), ReferencedTable: fk.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(fk.ReferenceDefinition.ReferencedColumns)}
 		}
 		for _, col := range fk.Source {
-			if !columnExists[col.Lowered()] {
+			if _, ok := columnsMap[col.Lowered()]; !ok {
 				return &InvalidColumnInForeignKeyConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: col.String()}
 			}
 		}
@@ -2748,7 +2749,7 @@ func (c *CreateTableEntity) validate() error {
 	// validate all columns referenced by indexes do in fact exist
 	for _, key := range c.CreateTable.TableSpec.Indexes {
 		for colName := range getKeyColumnNames(key) {
-			if !columnExists[colName] {
+			if _, ok := columnsMap[colName]; !ok {
 				return &InvalidColumnInKeyError{Table: c.Name(), Column: colName, Key: key.Info.Name.String()}
 			}
 		}
@@ -2768,7 +2769,7 @@ func (c *CreateTableEntity) validate() error {
 				return err
 			}
 			for _, referencedColName := range referencedColumns {
-				if !columnExists[strings.ToLower(referencedColName)] {
+				if _, ok := columnsMap[strings.ToLower(referencedColName)]; !ok {
 					return &InvalidColumnInGeneratedColumnError{Table: c.Name(), Column: referencedColName, GeneratedColumn: col.Name.String()}
 				}
 			}
@@ -2789,7 +2790,7 @@ func (c *CreateTableEntity) validate() error {
 				return err
 			}
 			for _, referencedColName := range referencedColumns {
-				if !columnExists[strings.ToLower(referencedColName)] {
+				if _, ok := columnsMap[strings.ToLower(referencedColName)]; !ok {
 					return &InvalidColumnInKeyError{Table: c.Name(), Column: referencedColName, Key: idx.Info.Name.String()}
 				}
 			}
@@ -2813,11 +2814,12 @@ func (c *CreateTableEntity) validate() error {
 			return err
 		}
 		for _, referencedColName := range referencedColumns {
-			if !columnExists[strings.ToLower(referencedColName)] {
+			if _, ok := columnsMap[strings.ToLower(referencedColName)]; !ok {
 				return &InvalidColumnInCheckConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: referencedColName}
 			}
 		}
 	}
+
 	// validate no two keys have same name
 	if err := c.validateDuplicateKeyNameError(); err != nil {
 		return err
@@ -2845,10 +2847,27 @@ func (c *CreateTableEntity) validate() error {
 		if err != nil {
 			return err
 		}
+		for _, colName := range partition.ColList {
+			// PARTITION BY RANGE COLUMNS
+			col, ok := columnsMap[strings.ToLower(colName.String())]
+			if !ok {
+				return &InvalidColumnInPartitionError{Table: c.Name(), Column: colName.String()}
+			}
+			// Validate column type
+			// See https://dev.mysql.com/doc/refman/en/partitioning-columns.html
+			if !IsIntegralType(col.Type()) {
+				switch strings.ToLower(col.Type()) {
+				case "date", "datetime":
+				case "char", "varchar", "binary", "varbinary":
+				default:
+					return &UnsupportedRangeColumnsTypeError{Table: c.Name(), Column: colName.String(), Type: col.Type()}
+				}
+			}
+		}
 
 		for _, partitionColName := range partitionColNames {
 			// Validate columns exists in table:
-			if !columnExists[strings.ToLower(partitionColName)] {
+			if _, ok := columnsMap[strings.ToLower(partitionColName)]; !ok {
 				return &InvalidColumnInPartitionError{Table: c.Name(), Column: partitionColName}
 			}
 
