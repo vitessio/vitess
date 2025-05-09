@@ -92,6 +92,7 @@ func (blw *BinlogWatcher) process(ctx context.Context) {
 	}
 
 	for {
+		log.Info("Binlog watcher: streaming")
 		// VStreamer will reload the schema when it encounters a DDL.
 		err := blw.vs.Stream(ctx, "current", nil, filter, throttlerapp.BinlogWatcherName, func(events []*binlogdatapb.VEvent) error {
 			return nil
