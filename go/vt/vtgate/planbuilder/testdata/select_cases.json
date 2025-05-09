@@ -4780,75 +4780,23 @@
     "comment": "Mergeable subquery with `MAX` aggregate and grouped by unique vindex",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6) GROUP BY music.user_id)",
     "plan": {
-      "Type": "Complex",
+      "Type": "MultiShard",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id IN (5, 6) GROUP BY music.user_id)",
       "Instructions": {
-        "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values",
-          "__sq1"
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.id in (select max(music.id) from music where music.user_id in (5, 6) group by music.user_id)",
+        "Table": "music",
+        "Values": [
+          "(5, 6)"
         ],
-        "Inputs": [
-          {
-            "InputName": "SubQuery",
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select max(music.id) from music where 1 != 1 group by music.user_id",
-            "Query": "select max(music.id) from music where music.user_id in ::__vals group by music.user_id",
-            "Table": "music",
-            "Values": [
-              "(5, 6)"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "InputName": "Outer",
-            "OperatorType": "VindexLookup",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "IN",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
-                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-                "Table": "name_user_vdx",
-                "Values": [
-                  "::name"
-                ],
-                "Vindex": "user_index"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "ByDestination",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select music.id from music where 1 != 1",
-                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
-                "Table": "music"
-              }
-            ]
-          }
-        ]
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.music"
@@ -4946,75 +4894,23 @@
     "comment": "Mergeable subquery with `MAX` aggregate with `EqualUnique` route operator",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5)",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5)",
       "Instructions": {
-        "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values",
-          "__sq1"
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.id in (select max(music.id) from music where music.user_id = 5)",
+        "Table": "music",
+        "Values": [
+          "5"
         ],
-        "Inputs": [
-          {
-            "InputName": "SubQuery",
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select max(music.id) from music where 1 != 1",
-            "Query": "select max(music.id) from music where music.user_id = 5",
-            "Table": "music",
-            "Values": [
-              "5"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "InputName": "Outer",
-            "OperatorType": "VindexLookup",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "IN",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
-                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-                "Table": "name_user_vdx",
-                "Values": [
-                  "::name"
-                ],
-                "Vindex": "user_index"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "ByDestination",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select music.id from music where 1 != 1",
-                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
-                "Table": "music"
-              }
-            ]
-          }
-        ]
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.music"
@@ -5025,75 +4921,23 @@
     "comment": "Mergeable subquery with `LIMIT` due to `EqualUnique` route",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5 LIMIT 10)",
     "plan": {
-      "Type": "Complex",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT MAX(music.id) FROM music WHERE music.user_id = 5 LIMIT 10)",
       "Instructions": {
-        "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values",
-          "__sq1"
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id from music where 1 != 1",
+        "Query": "select music.id from music where music.id in (select max(music.id) from music where music.user_id = 5 limit 10)",
+        "Table": "music",
+        "Values": [
+          "5"
         ],
-        "Inputs": [
-          {
-            "InputName": "SubQuery",
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select max(music.id) from music where 1 != 1",
-            "Query": "select max(music.id) from music where music.user_id = 5 limit 10",
-            "Table": "music",
-            "Values": [
-              "5"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "InputName": "Outer",
-            "OperatorType": "VindexLookup",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "Values": [
-              "::__sq1"
-            ],
-            "Vindex": "music_user_map",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "IN",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
-                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-                "Table": "name_user_vdx",
-                "Values": [
-                  "::name"
-                ],
-                "Vindex": "user_index"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "ByDestination",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select music.id from music where 1 != 1",
-                "Query": "select music.id from music where :__sq_has_values and music.id in ::__vals",
-                "Table": "music"
-              }
-            ]
-          }
-        ]
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.music"
