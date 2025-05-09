@@ -21,3 +21,7 @@ VALUES (200, 'foo', 2);
 
 INSERT INTO rerouted_ref (id, ref_col, name)
 VALUES (200, 'bar', 'baz');
+
+insert into user(id, bar, name) values (1, 1, 'user1');
+
+insert into user_extra(id, user_id, extra_id, col) values (21, 10, 1, 2);

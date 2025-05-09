@@ -46,7 +46,7 @@ CREATE TABLE music
 
 CREATE TABLE name_user_vdx
 (
-    name        INT,
+    name        VARCHAR(255),
     keyspace_id VARBINARY(10),
     primary key (name)
 );
@@ -146,6 +146,7 @@ CREATE TABLE user_extra
     extra_id INT,
     col      INT,
     m2       INT,
+    email    VARCHAR(255),
     PRIMARY KEY (id, extra_id)
 );
 

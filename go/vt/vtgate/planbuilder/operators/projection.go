@@ -18,6 +18,7 @@ package operators
 
 import (
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 
@@ -25,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -261,13 +263,22 @@ func (p *Projection) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		return -1
 	}
 
-	for offset, pe := range ap {
-		if ctx.SemTable.EqualsExprWithDeps(pe.ColExpr, expr) {
-			return offset
-		}
-	}
+	offset := -1
+	_ = ctx.SemTable.ForeachExprEquality(expr, func(expr sqlparser.Expr) error {
+		for offsetVal, pe := range ap {
 
-	return -1
+			colExpr := pe.ColExpr
+			if jp, ok := colExpr.(*predicates.JoinPredicate); ok {
+				colExpr = jp.Current()
+			}
+			if ctx.SemTable.EqualsExprWithDeps(colExpr, expr) {
+				offset = offsetVal
+				return io.EOF
+			}
+		}
+		return nil
+	})
+	return offset
 }
 
 func (p *Projection) addProjExpr(pe ...*ProjExpr) int {

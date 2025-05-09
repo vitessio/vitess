@@ -175,6 +175,7 @@ func prepareMySQLWithSchema(params mysql.ConnParams, sql string) error {
 type CompareOptions struct {
 	CompareColumnNames bool
 	IgnoreRowsAffected bool
+	AllowAnyFieldSize  bool
 }
 
 func CompareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, vtQr, mysqlQr *sqltypes.Result, opts CompareOptions) error {
@@ -204,7 +205,7 @@ func CompareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 		var myCols []string
 		for i, vtField := range vtQr.Fields {
 			myField := mysqlQr.Fields[i]
-			checkFields(t, myField.Name, vtField, myField)
+			checkFields(t, myField.Name, vtField, myField, opts.AllowAnyFieldSize)
 
 			vtCols = append(vtCols, vtField.Name)
 			myCols = append(myCols, myField.Name)
@@ -230,7 +231,10 @@ func CompareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 		mysqlQr.RowsAffected = 0
 	}
 
-	if (orderBy && sqltypes.ResultsEqual([]*sqltypes.Result{vtQr}, []*sqltypes.Result{mysqlQr})) || sqltypes.ResultsEqualUnordered([]sqltypes.Result{*vtQr}, []sqltypes.Result{*mysqlQr}) {
+	l := []*sqltypes.Result{vtQr}
+	r := []*sqltypes.Result{mysqlQr}
+	if (orderBy && sqltypes.ResultsEqual(l, r)) ||
+		sqltypes.ResultsEqualUnordered(l, r, opts.AllowAnyFieldSize) {
 		return nil
 	}
 
@@ -260,36 +264,20 @@ func CompareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 // "TIMESTAMP" for instance.
 var checkFieldsRegExpr = regexp.MustCompile(`([a-zA-Z]*)(\d*)`)
 
-func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field) {
+func isBinary(t string) bool {
+	return t == "BINARY" || t == "VARBINARY" || t == "BLOB" || t == "LONGBLOB"
+}
+
+func isChar(t string) bool {
+	return t == "CHAR" || t == "VARCHAR" || t == "TEXT" || t == "LONGTEXT"
+}
+
+func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field, allowAnyFieldSize bool) {
 	t.Helper()
 
-	fail := func() {
+	if vtField.Type != myField.Type && !isFieldCompatible(vtField, myField, allowAnyFieldSize) {
 		t.Errorf("for column %s field types do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Type.String(), vtField.Type.String())
-	}
-
-	if vtField.Type != myField.Type {
-		vtMatches := checkFieldsRegExpr.FindStringSubmatch(vtField.Type.String())
-		myMatches := checkFieldsRegExpr.FindStringSubmatch(myField.Type.String())
-
-		// Here we want to fail if we have totally different types for instance: "INT64" vs "TIMESTAMP"
-		// We do this by checking the length of the regexp slices and checking the second item of the slices (the real type i.e. "INT")
-		if len(vtMatches) != 3 || len(vtMatches) != len(myMatches) || vtMatches[1] != myMatches[1] {
-			fail()
-			return
-		}
-		vtVal, vtErr := strconv.Atoi(vtMatches[2])
-		myVal, myErr := strconv.Atoi(myMatches[2])
-		if vtErr != nil || myErr != nil {
-			fail()
-			return
-		}
-
-		// Types the same now, however, if the size of the type is smaller on Vitess compared to MySQL
-		// we need to fail. We can allow superset but not the opposite.
-		if vtVal < myVal {
-			fail()
-			return
-		}
+		return
 	}
 
 	// starting in Vitess 20, decimal types are properly sized in their field information
@@ -298,6 +286,91 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field)
 			t.Errorf("for column %s field decimals count do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Decimals, vtField.Decimals)
 		}
 	}
+}
+
+// compareFieldAttributes compares two Field definitions from Vitess and MySQL,
+// using enum-based helper methods where possible, and only falling back to
+// string parsing for size when needed.
+func isFieldCompatible(vtField *querypb.Field, myField *querypb.Field, allowAnyFieldSize bool) bool {
+	vtType, myType := vtField.Type, myField.Type
+
+	// Numeric types
+	if sqltypes.IsNumber(vtType) && sqltypes.IsNumber(myType) {
+		return areNumericTypesCompatible(vtField, myField, allowAnyFieldSize)
+	}
+
+	// Character/text types (CHAR, VARCHAR, TEXT, etc.)
+	if sqltypes.IsText(vtType) && sqltypes.IsText(myType) {
+		return true
+	}
+
+	// Binary types (BINARY, VARBINARY)
+	if sqltypes.IsBinary(vtType) && sqltypes.IsBinary(myType) {
+		return true
+	}
+
+	// Date and Time types
+	if sqltypes.IsDateOrTime(vtType) && sqltypes.IsDateOrTime(myType) {
+		return true
+	}
+
+	// Enum and Set types
+	if sqltypes.IsEnum(vtType) && sqltypes.IsEnum(myType) {
+		return true
+	}
+	if sqltypes.IsSet(vtType) && sqltypes.IsSet(myType) {
+		return true
+	}
+
+	// NULL type
+	if sqltypes.IsNull(vtType) && sqltypes.IsNull(myType) {
+		return true
+	}
+
+	// Fallback: compare raw type strings
+	if vtField.Type.String() != myField.Type.String() {
+		return false
+	}
+
+	return true
+}
+
+// areNumericTypesCompatible handles numeric type comparisons, including signed/unsigned and length checks.
+func areNumericTypesCompatible(vtField, myField *querypb.Field, allowAnyFieldSize bool) bool {
+	// Signed vs Unsigned
+	vtUnsigned := sqltypes.IsUnsigned(vtField.Type)
+	myUnsigned := sqltypes.IsUnsigned(myField.Type)
+	if vtUnsigned != myUnsigned {
+		// Types mismatch in signedness
+		return false
+	}
+
+	// Size comparison: parse length only when needed
+	vtLen, err1 := getFieldSize(vtField)
+	myLen, err2 := getFieldSize(myField)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+
+	if !allowAnyFieldSize && vtLen < myLen {
+		return false
+	}
+
+	return true
+}
+
+// getFieldSize extracts the numeric size parameter from a field's type string.
+// For example, VARCHAR(255) returns 255. If no size is present, returns 0.
+func getFieldSize(field *querypb.Field) (int, error) {
+	// Expect strings like "VARCHAR255" or "INT64", but handle absence of digits.
+	matches := checkFieldsRegExpr.FindStringSubmatch(field.Type.String())
+	if len(matches) != 3 {
+		return 0, fmt.Errorf("invalid type string: %s", field.Type.String())
+	}
+	if matches[2] == "" {
+		return 0, nil
+	}
+	return strconv.Atoi(matches[2])
 }
 
 func compareVitessAndMySQLErrors(t TestingT, vtErr, mysqlErr error) {

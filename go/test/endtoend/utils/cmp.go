@@ -38,6 +38,16 @@ type TestingT interface {
 type MySQLCompare struct {
 	t                 TestingT
 	MySQLConn, VtConn *mysql.Conn
+
+	// When the LHS of a block join returns a single row, MySQL changes the column types of INT64 to INT32,
+	// if the size of the int is small enough to fit in a 32-bits. For this reason, we may not want to be
+	// fully restrictive on the size of the types between MySQL and Vitess.
+	// https://github.com/vitessio/vitess/issues/16508#issuecomment-2710692111
+	allowAnyFieldSize bool
+}
+
+func (mcmp *MySQLCompare) SetAllowAnyFieldSize(val bool) {
+	mcmp.allowAnyFieldSize = val
 }
 
 func NewMySQLCompare(t TestingT, vtParams, mysqlParams mysql.ConnParams) (MySQLCompare, error) {
@@ -212,7 +222,7 @@ func (mcmp *MySQLCompare) Exec(query string) *sqltypes.Result {
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
-	CompareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	CompareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{AllowAnyFieldSize: mcmp.allowAnyFieldSize})
 	return vtQr
 }
 
@@ -299,7 +309,7 @@ func (mcmp *MySQLCompare) ExecVitessAndMySQLDifferentQueries(vtQ, mQ string) *sq
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(mQ, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+mQ)
-	CompareVitessAndMySQLResults(mcmp.t, vtQ, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
+	CompareVitessAndMySQLResults(mcmp.t, vtQ, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{AllowAnyFieldSize: true})
 	return vtQr
 }
 
@@ -338,7 +348,7 @@ func (mcmp *MySQLCompare) ExecWithColumnCompare(query string) *sqltypes.Result {
 
 	mysqlQr, err := mcmp.MySQLConn.ExecuteFetch(query, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for query: "+query)
-	CompareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{CompareColumnNames: true})
+	CompareVitessAndMySQLResults(mcmp.t, query, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{AllowAnyFieldSize: mcmp.allowAnyFieldSize, CompareColumnNames: true})
 	return vtQr
 }
 

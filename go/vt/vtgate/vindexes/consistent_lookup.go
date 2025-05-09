@@ -367,7 +367,7 @@ func (lu *clCommon) Create(ctx context.Context, vcursor VCursor, rowsColValues [
 	for i, row := range rowsColValues {
 		rowKey := hashKeyXXH(row)
 		// If a row with the same hash exists, perform an explicit value check to avoid hash collisions.
-		if idx, exists := rowHashIndex[rowKey]; exists && sqltypes.RowEqual(row, rowsColValues[idx]) {
+		if idx, exists := rowHashIndex[rowKey]; exists && sqltypes.RowEqual(row, rowsColValues[idx], true) {
 			return origErr // Exact duplicate found, return the original error.
 		}
 		rowHashIndex[rowKey] = i

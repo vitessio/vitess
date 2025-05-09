@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -35,12 +36,12 @@ import (
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
-func start(t *testing.T) (utils.MySQLCompare, func()) {
+func start(t testing.TB) (utils.MySQLCompare, func()) {
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		tables := []string{"t1", "tbl", "unq_idx", "nonunq_idx", "tbl_enum_set", "uks.unsharded", "all_types"}
+		tables := []string{"t1", "t2", "tbl", "tbl2", "unq_idx", "nonunq_idx", "tbl_enum_set", "uks.unsharded", "all_types"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -51,6 +52,97 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	return mcmp, func() {
 		deleteAll()
 		mcmp.Close()
+	}
+}
+
+func BenchmarkBlockJoin(b *testing.B) {
+	mcmp, closer := start(b)
+	defer closer()
+
+	type Rep struct {
+		QueriesRouted map[string]int `json:"QueriesRouted"`
+	}
+
+	getQueriesRouted := func(thisB *testing.B) int {
+		_, response, _ := clusterInstance.VtgateProcess.MakeAPICall("/debug/vars")
+		r := Rep{}
+		err := json.Unmarshal([]byte(response), &r)
+		require.NoError(thisB, err)
+
+		var res int
+		for _, c := range r.QueriesRouted {
+			res += c
+		}
+		return res
+	}
+
+	b.ReportAllocs()
+
+	lhsRowCount := 0
+	rhsRowCount := 0
+
+	insertLHS := func(count int) {
+		for ; lhsRowCount < count; lhsRowCount++ {
+			mcmp.Exec(fmt.Sprintf("insert into t1(id1, id2) values (%d, %d)", lhsRowCount, lhsRowCount))
+		}
+	}
+	insertRHS := func(count int) {
+		for ; rhsRowCount < count; rhsRowCount++ {
+			mcmp.Exec(fmt.Sprintf("insert into tbl(id, unq_col, nonunq_col) values (%d, %d, %d)", rhsRowCount, rhsRowCount, rhsRowCount))
+		}
+	}
+
+	testCases := []struct {
+		lhsRowCount int
+		rhsRowCount int
+	}{
+		{
+			lhsRowCount: 20,
+			rhsRowCount: 10,
+		},
+		{
+			lhsRowCount: 50,
+			rhsRowCount: 25,
+		},
+		{
+			lhsRowCount: 100,
+			rhsRowCount: 50,
+		},
+		{
+			lhsRowCount: 200,
+			rhsRowCount: 100,
+		},
+		{
+			lhsRowCount: 500,
+			rhsRowCount: 250,
+		},
+		{
+			lhsRowCount: 1000,
+			rhsRowCount: 500,
+		},
+		{
+			lhsRowCount: 2000,
+			rhsRowCount: 1000,
+		},
+	}
+
+	var previousQueriesRoutedSum int
+	for _, testCase := range testCases {
+		insertLHS(testCase.lhsRowCount)
+		insertRHS(testCase.rhsRowCount)
+
+		b.Run(fmt.Sprintf("LHS(%d) RHS(%d)", testCase.lhsRowCount, testCase.rhsRowCount), func(b *testing.B) {
+			for range b.N {
+				_, err := mcmp.VtConn.ExecuteFetch("select /*vt+ ALLOW_BLOCK_JOIN */ t1.id1, tbl.id from t1, tbl where t1.id2 = tbl.nonunq_col", 10001, true)
+				require.NoError(b, err)
+			}
+			b.StopTimer()
+
+			totalQueriesRouted := getQueriesRouted(b)
+			queriesRouted := totalQueriesRouted - previousQueriesRoutedSum
+			previousQueriesRoutedSum = totalQueriesRouted
+			b.ReportMetric(float64(queriesRouted/b.N), "queries_routed/op")
+		})
 	}
 }
 
@@ -513,58 +605,182 @@ func TestAliasesInOuterJoinQueries(t *testing.T) {
 	}
 }
 
-func TestJoinTypes(t *testing.T) {
-	columns := []string{
-		"id",
-		"msg",
-		"keyspace_id",
-		"tinyint_unsigned",
-		"bool_signed",
-		"smallint_unsigned",
-		"mediumint_unsigned",
-		"int_unsigned",
-		"float_unsigned",
-		"double_unsigned",
-		"decimal_unsigned",
-		"t_date",
-		"t_datetime",
-		"t_datetime_micros",
-		"t_time",
-		"t_timestamp",
-		"c8",
-		"c16",
-		"c24",
-		"c32",
-		"c40",
-		"c48",
-		"c56",
-		"c63",
-		"c64",
-		"json_col",
-		"text_col",
-		"data",
-		"tinyint_min",
-		"tinyint_max",
-		"tinyint_pos",
-		"tinyint_neg",
-		"smallint_min",
-		"smallint_max",
-		"smallint_pos",
-		"smallint_neg",
-		"medint_min",
-		"medint_max",
-		"medint_pos",
-		"medint_neg",
-		"int_min",
-		"int_max",
-		"int_pos",
-		"int_neg",
-		"bigint_min",
-		"bigint_max",
-		"bigint_pos",
-		"bigint_neg",
-	}
+type allTypesColumn struct {
+	name                    string
+	cannotEncoreInBlockJoin bool
+}
 
+var columns = []allTypesColumn{
+	{name: "id"},
+	{name: "msg"},
+	{name: "keyspace_id"},
+	{name: "tinyint_unsigned"},
+	{name: "bool_signed"},
+	{name: "smallint_unsigned"},
+	{name: "mediumint_unsigned"},
+	{name: "int_unsigned"},
+	{name: "float_unsigned", cannotEncoreInBlockJoin: true},
+	{name: "double_unsigned", cannotEncoreInBlockJoin: true},
+	{name: "decimal_unsigned"},
+	{name: "t_date"},
+	{name: "t_datetime", cannotEncoreInBlockJoin: true},
+	{name: "t_datetime_micros", cannotEncoreInBlockJoin: true},
+	{name: "t_time", cannotEncoreInBlockJoin: true},
+	{name: "t_timestamp", cannotEncoreInBlockJoin: true},
+	{name: "c8", cannotEncoreInBlockJoin: true},
+	{name: "c16", cannotEncoreInBlockJoin: true},
+	{name: "c24", cannotEncoreInBlockJoin: true},
+	{name: "c32", cannotEncoreInBlockJoin: true},
+	{name: "c40", cannotEncoreInBlockJoin: true},
+	{name: "c48", cannotEncoreInBlockJoin: true},
+	{name: "c56", cannotEncoreInBlockJoin: true},
+	{name: "c63", cannotEncoreInBlockJoin: true},
+	{name: "c64", cannotEncoreInBlockJoin: true},
+	{name: "json_col"},
+	{name: "text_col"},
+	{name: "data"},
+	{name: "tinyint_min"},
+	{name: "tinyint_max"},
+	{name: "tinyint_pos"},
+	{name: "tinyint_neg"},
+	{name: "smallint_min"},
+	{name: "smallint_max"},
+	{name: "smallint_pos"},
+	{name: "smallint_neg"},
+	{name: "medint_min"},
+	{name: "medint_max"},
+	{name: "medint_pos"},
+	{name: "medint_neg"},
+	{name: "int_min"},
+	{name: "int_max"},
+	{name: "int_pos"},
+	{name: "int_neg"},
+	{name: "bigint_min"},
+	{name: "bigint_max"},
+	{name: "bigint_pos"},
+	{name: "bigint_neg"},
+}
+
+const allTypesInsert = `INSERT INTO all_types (
+    id,
+    msg,
+    keyspace_id,
+    tinyint_unsigned,
+    bool_signed,
+    smallint_unsigned,
+    mediumint_unsigned,
+    int_unsigned,
+    float_unsigned,
+    double_unsigned,
+    decimal_unsigned,
+    t_date,
+    t_datetime,
+    t_datetime_micros,
+    t_time,
+    t_timestamp,
+    c8,
+    c16,
+    c24,
+    c32,
+    c40,
+    c48,
+    c56,
+    c63,
+    c64,
+    json_col,
+    text_col,
+    data,
+    tinyint_min,
+    tinyint_max,
+    tinyint_pos,
+    tinyint_neg,
+    smallint_min,
+    smallint_max,
+    smallint_pos,
+    smallint_neg,
+    medint_min,
+    medint_max,
+    medint_pos,
+    medint_neg,
+    int_min,
+    int_max,
+    int_pos,
+    int_neg,
+    bigint_min,
+    bigint_max,
+    bigint_pos,
+    bigint_neg
+)
+VALUES (
+    -- Basic identifying and string columns
+    1,
+    'Hello World',
+    999,            -- keyspace_id (unsigned bigint)
+    127,            -- tinyint_unsigned (signed TINYINT, but name is misleading)
+    TRUE,           -- bool_signed
+    32767,          -- smallint_unsigned (SMALLINT, again "unsigned" in name only)
+    8388607,        -- mediumint_unsigned
+    2147483647,     -- int_unsigned
+    1234.56,        -- float_unsigned
+    1234567.89,     -- double_unsigned
+    12345,          -- decimal_unsigned (DECIMAL without explicit precision -> default or compile-time)
+    
+    -- Date/Time columns
+    '2023-01-01',                          -- t_date
+    '2023-01-01 00:00:00',                 -- t_datetime
+    '2023-01-01 12:34:56.123456',          -- t_datetime_micros
+    '12:34:56',                            -- t_time
+    '2023-01-01 12:34:56',                 -- t_timestamp
+
+    -- BIT columns (binary literals)
+    b'10101010',                           -- c8   (8 bits)
+    b'1010101010101010',                   -- c16  (16 bits)
+    b'111111111111111111111111',           -- c24
+    b'00000000111111110000000011111111',   -- c32
+    b'1111111111111111111111111111111111111111',                           -- c40
+    b'101010101010101010101010101010101010101010101010',                   -- c48
+    b'11111111111111111111111111111111111111111111111111111111',           -- c56
+    b'111111111111111111111111111111111111111111111111111111111111111',    -- c63
+    b'1111111111111111111111111111111111111111111111111111111111111111',   -- c64
+
+    -- JSON, TEXT, and BLOB
+    JSON_OBJECT('key','value'),            -- json_col
+    'Some text data here...',              -- text_col
+    x'00112233',                           -- data (longblob)
+
+    -- Range checks for signed TINYINT
+    -128,  -- tinyint_min
+    127,   -- tinyint_max
+    42,    -- tinyint_pos (a positive TINYINT)
+    -42,   -- tinyint_neg
+
+    -- Range checks for signed SMALLINT
+    -32768,  -- smallint_min
+    32767,   -- smallint_max
+    123,     -- smallint_pos
+    -123,    -- smallint_neg
+
+    -- Range checks for signed MEDIUMINT
+    -8388608,  -- medint_min
+    8388607,   -- medint_max
+    12345,     -- medint_pos
+    -12345,    -- medint_neg
+
+    -- Range checks for signed INT
+    -2147483648,  -- int_min
+    2147483647,   -- int_max
+    123456,       -- int_pos
+    -123456,      -- int_neg
+
+    -- Range checks for signed BIGINT
+    '-9223372036854775808',  -- bigint_min (quoted to avoid literal parsing issues)
+    '9223372036854775807',   -- bigint_max
+    1234567890123,           -- bigint_pos
+    -1234567890123           -- bigint_neg
+);
+`
+
+func TestJoinTypes(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -585,9 +801,34 @@ func TestJoinTypes(t *testing.T) {
 			// leading to DECIMAL/FLOAT64 types returned by MySQL as we are doing "tbl.unq_col + null + null"
 
 			for _, column := range columns {
-				query := fmt.Sprintf("select t1.id1 as t0, tbl.%s+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90", column)
-				mcmp.Run(column, func(mcmp *utils.MySQLCompare) {
+				query := fmt.Sprintf("select t1.id1 as t0, tbl.%s+tbl.id+t1.id1 as col from t1 join all_types tbl where tbl.id > 90", column.name)
+				mcmp.Run(column.name, func(mcmp *utils.MySQLCompare) {
 					mcmp.ExecWithColumnCompare(query)
+				})
+			}
+		})
+	}
+}
+
+func TestBlockJoinTypes(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Insert data into the 2 tables
+	mcmp.Exec("insert into t1(id1, id2) values (1,2), (42,5), (5, 42)")
+	mcmp.Exec(allTypesInsert)
+
+	for _, mode := range []string{"oltp", "olap"} {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+			for _, column := range columns {
+				query := fmt.Sprintf("select /*vt+ ALLOW_BLOCK_JOIN */ tbl.%s from all_types tbl join t1 where t1.id1 = 1", column.name)
+				mcmp.Run(column.name, func(mcmp *utils.MySQLCompare) {
+					if column.cannotEncoreInBlockJoin {
+						mcmp.AsT().Skipf("%s is not supported in block join", column.name)
+					}
+					mcmp.SetAllowAnyFieldSize(true)
+					mcmp.Exec(query)
 				})
 			}
 		})
@@ -789,6 +1030,39 @@ func TestSemiJoin(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
 
 			mcmp.Exec("select id1, id2 from t1 where exists (select id from tbl where nonunq_col = t1.id2) order by id1")
+		})
+	}
+}
+
+func TestBlockJoin(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	for i := 1; i <= 1000; i++ {
+		mcmp.Exec(fmt.Sprintf("insert into t2(id1, id2, id, name) values (%d, %d, %d, \"%d\")", i, 2*i, i, i))
+		mcmp.Exec(fmt.Sprintf("insert into tbl2(id, unq_col, nonunq_col, name) values (%d, %d, %d, \"%d\")", i, 2*i, 3*i, i))
+	}
+
+	for _, mode := range []string{"oltp", "olap"} {
+		mcmp.Run(mode, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = %s", mode))
+
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id1, t2.id2 from t2 join tbl2 where t2.id1 = tbl2.id")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id1 from t2 join tbl2 where t2.id2 = tbl2.id")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id1 from t2 join tbl2 where t2.id2 = tbl2.id order by t2.id1")
+
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id1+t2.id2 as mas from t2 join tbl2 where t2.id2 = tbl2.id order by mas")
+
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id1, tbl2.nonunq_col from t2 join tbl2 where t2.id2 = tbl2.id")
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id1+t2.id2 as mas, tbl2.unq_col, t2.id2 from t2 join tbl2 where t2.id2 = tbl2.id and tbl2.id > 50 order by mas")
+
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t2.id), abs(t2.id+t3.id) from tbl2 t3 join t2 on lower(t3.name) = lower(t2.name) where lower(t3.name) = '5' and abs(t2.id) > 1")
+
+			mcmp.SetAllowAnyFieldSize(true)
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ t2.id2 from t2 join tbl2 where t2.id2 = tbl2.id and t2.id2 = 500")
+			mcmp.SetAllowAnyFieldSize(false)
+
+			mcmp.Exec("select /*vt+ ALLOW_BLOCK_JOIN */ abs(t3.id), abs(t2.id1), abs(t2.id1+t3.id) from tbl2 t3 join t2 on t3.unq_col = t2.id2")
 		})
 	}
 }

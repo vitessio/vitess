@@ -19,7 +19,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Single table unsharded",
@@ -41,7 +42,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Select from sequence",
@@ -63,32 +65,38 @@
       "TablesUsed": [
         "main.seq"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "select next from non-sequence table",
     "query": "select next value from user",
-    "plan": "NEXT used on a non-sequence table `user`"
+    "plan": "NEXT used on a non-sequence table `user`",
+    "skip_e2e": true
   },
   {
     "comment": "select next in derived table",
     "query": "select 1 from (select next value from seq) t",
-    "plan": "Incorrect usage/placement of 'NEXT'"
+    "plan": "Incorrect usage/placement of 'NEXT'",
+    "skip_e2e": true
   },
   {
     "comment": "select next in derived table",
     "query": "select * from (select next value from seq) t",
-    "plan": "Incorrect usage/placement of 'NEXT'"
+    "plan": "Incorrect usage/placement of 'NEXT'",
+    "skip_e2e": true
   },
   {
     "comment": "select next in subquery",
     "query": "select 1 from user where id in (select next value from seq)",
-    "plan": "Incorrect usage/placement of 'NEXT'"
+    "plan": "Incorrect usage/placement of 'NEXT'",
+    "skip_e2e": true
   },
   {
     "comment": "select next in projection",
     "query": "select (select next value from seq) from user",
-    "plan": "Incorrect usage/placement of 'NEXT'"
+    "plan": "Incorrect usage/placement of 'NEXT'",
+    "skip_e2e": true
   },
   {
     "comment": "Select from reference",
@@ -110,7 +118,8 @@
       "TablesUsed": [
         "user.ref"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Multi-table unsharded",
@@ -132,7 +141,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Multi-table, multi-chunk",
@@ -172,7 +182,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "routing rules where table name matches, and there's no alias.",
@@ -194,7 +205,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "routing rules where table name matches, and there's an alias.",
@@ -216,7 +228,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "routing rules where table name does not match, and there's no alias.",
@@ -238,7 +251,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "routing rules where table name does not match, and there's an alias.",
@@ -260,7 +274,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "routing rules with primary targeting",
@@ -282,17 +297,20 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "routing rules bad table",
     "query": "select * from bad_table",
-    "plan": "VT05003: unknown database 'noks' in vschema"
+    "plan": "VT05003: unknown database 'noks' in vschema",
+    "skip_e2e": true
   },
   {
     "comment": "routing rules disabled table",
     "query": "select * from disabled",
-    "plan": "table disabled has been disabled"
+    "plan": "table disabled has been disabled",
+    "skip_e2e": true
   },
   {
     "comment": "select second_user.foo.col from second_user.foo join user on second_user.foo.id = user.id where second_user.foo.col = 42",
@@ -314,7 +332,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "select user.music.foo from user.music join user on user.music.id = user.id where user.music.col = 42",
@@ -361,7 +380,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "',' join",
@@ -401,7 +421,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "DISTINCT inside derived table",
@@ -423,7 +444,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "',' join unsharded",
@@ -445,7 +467,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "',' 3-way join unsharded",
@@ -467,7 +490,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Left join, single chunk",
@@ -489,7 +513,130 @@
       "TablesUsed": [
         "main.unsharded"
       ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Query using BLOCK JOIN",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user.bar, user_extra.user_id from user, user_extra where user.id = user_extra.extra_id and user.bar = 1 and user_extra.col = 2",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user.bar, user_extra.user_id from user, user_extra where user.id = user_extra.extra_id and user.bar = 1 and user_extra.col = 2",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Block",
+        "BindVarName": "values",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.user_id, user_extra.extra_id from user_extra where 1 != 1",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user_extra.extra_id from user_extra where user_extra.col = 2"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "MultiEqual",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.bar, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_extra_id), `user` where 1 != 1",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.bar, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_extra_id), `user` where `user`.bar = 1 and `user`.id = `values`.user_extra_extra_id",
+            "Values": [
+              "values:1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
     }
+  },
+  {
+    "comment": "Block join for a query with a simple projection",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user.id1 + user.id2 as mas from user join music where user.id2 = music.id order by mas asc",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user.id1 + user.id2 as mas from user join music where user.id2 = music.id order by mas asc",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:mas"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Block",
+            "BindVarName": "values",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id1 + `user`.id2 as mas, `user`.id2, weight_string(`user`.id1 + `user`.id2) from `user` where 1 != 1",
+                "OrderBy": "(0|2) ASC",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.id1 + `user`.id2 as mas, `user`.id2, weight_string(`user`.id1 + `user`.id2) from `user` order by `user`.id1 + `user`.id2 asc"
+              },
+              {
+                "OperatorType": "VindexLookup",
+                "Variant": "MultiEqual",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "Values": [
+                  "values:1"
+                ],
+                "Vindex": "music_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_md5_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `values`.x_x as ```user``.id1 + ``user``.id2` from (values ::values) as `values`(x_x, user_id2), music where 1 != 1",
+                    "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `values`.x_x as ```user``.id1 + ``user``.id2` from (values ::values) as `values`(x_x, user_id2), music where `values`.user_id2 = music.id"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Left join, multi-chunk",
@@ -532,7 +679,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Three-way left join",
@@ -595,7 +743,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Three-way left join, right-associated",
@@ -658,7 +807,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Right join",
@@ -680,7 +830,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Right join with a join LHS",
@@ -702,7 +853,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Complex query that has hash left join underneath a memory sort and ordered aggregation",
@@ -809,7 +961,8 @@
         "user.user_extra",
         "user.user_metadata"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Straight-join (ignores the straight_join hint)",
@@ -831,7 +984,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Three-way join",
@@ -871,7 +1025,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Outer join with join predicates that only depend on the inner side",
@@ -922,7 +1077,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Parenthesized, single chunk",
@@ -962,7 +1118,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Parenthesized, multi-chunk",
@@ -1019,7 +1176,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "index hints, make sure they are not stripped.",
@@ -1041,7 +1199,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "multiple index hints, make sure they are not stripped.",
@@ -1063,7 +1222,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "derived table that contains literals merged with outer query",
@@ -1117,7 +1277,8 @@
         "main.dual",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "mergeable sharded join on unique vindex",
@@ -1140,7 +1301,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "mergeable sharded join on unique vindex (parenthesized ON clause)",
@@ -1163,7 +1325,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "mergeable sharded join on unique vindex, with a stray condition",
@@ -1186,7 +1349,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "mergeable sharded join on unique vindex, swapped operands",
@@ -1209,7 +1373,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "mergeable sharded join on unique vindex, and condition",
@@ -1236,7 +1401,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded join on unique vindex, inequality",
@@ -1279,7 +1445,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded join, non-col reference RHS",
@@ -1323,7 +1490,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded join, non-col reference LHS",
@@ -1367,7 +1535,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded join, non-vindex col",
@@ -1414,7 +1583,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "sharded join, non-unique vindex",
@@ -1461,7 +1631,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "join with reference table",
@@ -1484,7 +1655,8 @@
         "user.ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "reference table self-join",
@@ -1506,7 +1678,8 @@
       "TablesUsed": [
         "user.ref"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "reference table can merge with other opcodes left to right.",
@@ -1529,7 +1702,8 @@
         "user.ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "reference table can merge with other opcodes left to right and vindex value is in the plan.\n# This tests that route.Merge also copies the condition to the LHS.",
@@ -1556,7 +1730,8 @@
         "user.ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "routing rules for join, unsharded route wins if we can't find a merged route",
@@ -1596,7 +1771,8 @@
         "main.unsharded",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "derived table",
@@ -1622,7 +1798,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "derived table with join",
@@ -1649,7 +1826,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "derived table with join, and aliased references",
@@ -1676,12 +1854,14 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "derived table with join, duplicate columns",
     "query": "select t.id from (select user.id, id from user where user.id = 5) as t join user_extra on t.id = user_extra.user_id",
-    "plan": "Duplicate column name 'id'"
+    "plan": "Duplicate column name 'id'",
+    "skip_e2e": true
   },
   {
     "comment": "derived table in RHS of join",
@@ -1708,7 +1888,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "derived table in FROM with cross-shard join",
@@ -1755,7 +1936,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "routing rules for derived table",
@@ -1781,12 +1963,14 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "derived table missing columns",
     "query": "select t.id from (select id from user) as t join user_extra on t.id = user_extra.user_id where t.col = 42",
-    "plan": "column 't.col' not found"
+    "plan": "column 't.col' not found",
+    "skip_e2e": true
   },
   {
     "comment": "routing rules for derived table where the constraint is in the outer query",
@@ -1812,12 +1996,14 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "routing rules for derived table where the constraint is in the outer query",
     "query": "select id from (select id+col as foo from route1) as t where foo = 5",
-    "plan": "column 'id' not found in table 't'"
+    "plan": "column 'id' not found in table 't'",
+    "skip_e2e": true
   },
   {
     "comment": "push predicate on joined derived tables",
@@ -1839,7 +2025,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "recursive derived table predicate push down",
@@ -1861,7 +2048,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "recursive derived table lookups",
@@ -1887,7 +2075,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "merge derived tables with single-shard routes",
@@ -1914,7 +2103,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Unneeded ORDER BY inside derived table removed",
@@ -1953,7 +2143,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "join of information_schema with normal table",
@@ -1992,7 +2183,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "three table join with join predicate touching all tables",
@@ -2016,7 +2208,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "join of normal table with information_schema",
@@ -2055,7 +2248,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "wire-up on join with cross-shard derived table",
@@ -2117,7 +2311,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "wire-up on within cross-shard derived table",
@@ -2160,7 +2355,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Join with cross-shard derived table on rhs",
@@ -2218,7 +2414,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Join with cross-shard derived table on rhs - push down join predicate to derived table",
@@ -2283,7 +2480,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "subquery in ON clause, single route",
@@ -2328,7 +2526,8 @@
         "main.unsharded_b",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "subquery in ON clause as sub-expression",
@@ -2373,7 +2572,8 @@
         "main.unsharded_b",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "IN subquery in ON clause, single route",
@@ -2419,7 +2619,8 @@
         "main.unsharded_b",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "subquery in ON clause, with join primitives",
@@ -2488,7 +2689,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "subquery in ON clause, with join primitives, and join on top\n# The subquery is not pulled all the way out.",
@@ -2574,7 +2776,8 @@
         "main.unsharded_a",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "keyspace-qualified queries",
@@ -2617,7 +2820,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "implicit table reference for unsharded keyspace",
@@ -2639,7 +2843,8 @@
       "TablesUsed": [
         "main.foo"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "col refs should be case-insensitive",
@@ -2662,7 +2867,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "derived table with join primitive (FROM)",
@@ -2702,7 +2908,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "database call in ON clause.\n# The on clause is weird because the substitution must even for root expressions.",
@@ -2724,7 +2931,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "last_insert_id for dual",
@@ -2747,7 +2955,8 @@
       "TablesUsed": [
         "main.dual"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "last_insert_id for sharded keyspace",
@@ -2769,7 +2978,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "last_insert_id for unsharded route",
@@ -2791,7 +3001,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "join with bindvariables",
@@ -2842,7 +3053,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "verify ',' vs JOIN precedence",
@@ -2864,12 +3076,14 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "first expression fails for ',' join (code coverage: ensure error is returned)",
     "query": "select user.foo.col from user.foo, user",
-    "plan": "table foo not found"
+    "plan": "table foo not found",
+    "skip_e2e": true
   },
   {
     "comment": "table names should be case-sensitive",
@@ -2891,37 +3105,44 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "implicit table reference for sharded keyspace",
     "query": "select user.foo.col from user.foo",
-    "plan": "table foo not found"
+    "plan": "table foo not found",
+    "skip_e2e": true
   },
   {
     "comment": "duplicate symbols",
     "query": "select user.id from user join user",
-    "plan": "VT03013: not unique table/alias: 'user'"
+    "plan": "VT03013: not unique table/alias: 'user'",
+    "skip_e2e": true
   },
   {
     "comment": "duplicate symbols for merging routes",
     "query": "select user.id from user join user_extra user on user.id = user.user_id",
-    "plan": "VT03013: not unique table/alias: 'user'"
+    "plan": "VT03013: not unique table/alias: 'user'",
+    "skip_e2e": true
   },
   {
     "comment": "non-existent table",
     "query": "select c from t",
-    "plan": "table t not found"
+    "plan": "table t not found",
+    "skip_e2e": true
   },
   {
     "comment": "non-existent table on left of join",
     "query": "select c from t join user",
-    "plan": "table t not found"
+    "plan": "table t not found",
+    "skip_e2e": true
   },
   {
     "comment": "non-existent table on right of join",
     "query": "select c from user join t",
-    "plan": "table t not found"
+    "plan": "table t not found",
+    "skip_e2e": true
   },
   {
     "comment": "query with parens is planned correctly",
@@ -2943,7 +3164,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "optimise plan by merging user_extra and music first, and then querying for user info",
@@ -2991,7 +3213,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "join column selected as alias",
@@ -3038,7 +3261,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Hash join has to be used since we have LIMIT on both sides",
@@ -3092,7 +3316,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "alias on column from derived table. TODO: to support alias in SimpleProjection engine primitive.",
@@ -3129,7 +3354,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "select star from derived table on expandable and unsharded table",
@@ -3151,7 +3377,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "filtering on a cross-shard derived table",
@@ -3195,7 +3422,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "expression on a cross-shard derived table",
@@ -3235,7 +3463,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "derived table with aliased columns and outer predicate pushed in derived table",
@@ -3268,7 +3497,7 @@
             "Values": [
               "::name"
             ],
-            "Vindex": "user_index"
+            "Vindex": "user_md5_index"
           },
           {
             "OperatorType": "Route",
@@ -3285,7 +3514,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "derived table with aliased columns predicate in both the outer and inner",
@@ -3318,7 +3548,7 @@
             "Values": [
               "::name"
             ],
-            "Vindex": "user_index"
+            "Vindex": "user_md5_index"
           },
           {
             "OperatorType": "Route",
@@ -3335,7 +3565,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "derived table with aliased columns and a join that requires pushProjection",
@@ -3375,7 +3606,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "two subqueries with different Select and OpCode",
@@ -3451,7 +3683,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "join on int columns",
@@ -3493,7 +3726,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Duplicate output column from derived table having a join",
@@ -3553,7 +3787,8 @@
         "main.unsharded",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "left join where clauses #2",
@@ -3603,7 +3838,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "dont merge unsharded tables from different keyspaces",
@@ -3643,7 +3879,8 @@
         "main.unsharded",
         "main_2.unsharded_tab"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Unsharded join with using",
@@ -3666,7 +3903,8 @@
         "main.unsharded_a",
         "main.unsharded_b"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Column aliases in Derived Table",
@@ -3688,7 +3926,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "single unsharded keyspace with derived table",
@@ -3712,7 +3951,8 @@
         "main.unsharded_a",
         "main.unsharded_b"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "query builder with derived table having join inside it",
@@ -3781,7 +4021,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "left join with expressions",
@@ -3832,7 +4073,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "left join with expressions, with three-way join (different code path)",
@@ -3901,7 +4143,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "left join with expressions coming from both sides",
@@ -3952,7 +4195,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Do not rewrite derived expressions when the derived table is merged with the outer",
@@ -3984,7 +4228,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "join with USING construct",
@@ -4027,7 +4272,8 @@
         "main.unsharded_authoritative",
         "user.authoritative"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "derived table inside derived table with a where clause depending on columns from the derived table",
@@ -4053,7 +4299,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "use a view",
@@ -4076,7 +4323,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "use a view without qualifying the keyspace",
@@ -4099,7 +4347,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "left join where clauses #3 - assert that we can evaluate BETWEEN with the evalengine",
@@ -4149,7 +4398,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "missing and ambiguous column info is OK as long as we can send the query to a single unsharded keyspace",
@@ -4172,12 +4422,14 @@
         "main.unsharded",
         "main.unsharded_a"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "missing and ambiguous column info is not valid when we have two different unsharded keyspaces in the query",
     "query": "select missing_column from unsharded, unsharded_tab",
-    "plan": "Column 'missing_column' in field list is ambiguous"
+    "plan": "Column 'missing_column' in field list is ambiguous",
+    "skip_e2e": true
   },
   {
     "comment": "join predicate only depending on the RHS should not turn outer join into inner join",
@@ -4216,7 +4468,8 @@
       "TablesUsed": [
         "zlookup_unique.t1"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "left join with using has to be transformed into inner join with on condition",
@@ -4238,7 +4491,8 @@
       "TablesUsed": [
         "main.unsharded_authoritative"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "join query using table with muticolumn vindex",
@@ -4284,12 +4538,14 @@
       "TablesUsed": [
         "user.multicol_tbl"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "select with a target destination",
     "query": "select * from `user[-]`.user_metadata",
-    "plan": "VT09017: SELECT with a target destination is not allowed"
+    "plan": "VT09017: SELECT with a target destination is not allowed",
+    "skip_e2e": true
   },
   {
     "comment": "query that needs a hash join",
@@ -4338,7 +4594,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "query that needs a hash join - both sides have limits",
@@ -4393,7 +4650,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "query that needs a hash join - both sides have limits. check that it can be merged even with the hash join",
@@ -4420,7 +4678,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "query that needs a hash join - outer side has LIMIT. distinct should be pushed down",
@@ -4478,7 +4737,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "unexpanded columns are fine if we can push down into single route",
@@ -4500,7 +4760,8 @@
       "TablesUsed": [
         "main.unsharded"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "pushing derived projection under the join should not cause problems",
@@ -4571,7 +4832,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "join table influencing vindex selection with ignore and use vindex syntax",
@@ -4612,7 +4874,7 @@
                 "Values": [
                   "::name"
                 ],
-                "Vindex": "user_index"
+                "Vindex": "user_md5_index"
               },
               {
                 "OperatorType": "Route",
@@ -4650,7 +4912,7 @@
                 "Values": [
                   "::name"
                 ],
-                "Vindex": "user_index"
+                "Vindex": "user_md5_index"
               },
               {
                 "OperatorType": "Route",
@@ -4670,7 +4932,8 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Cross keyspace join",
@@ -4717,7 +4980,8 @@
         "user.user",
         "zlookup_unique.t1"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Select everything from a derived table having a cross-shard join",
@@ -4760,7 +5024,154 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Block Join with using",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ u.textcol1, u.id, u.textcol2, ue.id, ue.email from user u join user_extra ue using (col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ u.textcol1, u.id, u.textcol2, ue.id, ue.email from user u join user_extra ue using (col)",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:textcol1",
+          "1:id",
+          "2:textcol2",
+          "3:id",
+          "4:email"
+        ],
+        "Columns": "2,3,4,0,1",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Block",
+            "BindVarName": "values",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.textcol1, u.id, u.textcol2, u.col from `user` as u where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ u.textcol1, u.id, u.textcol2, u.col from `user` as u"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select ue.id, ue.email, `values`.u_textcol1 as textcol1, `values`.u_id as id, `values`.u_textcol2 as textcol2 from (values ::values) as `values`(u_textcol1, u_id, u_textcol2, u_col), user_extra as ue where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ ue.id, ue.email, `values`.u_textcol1 as textcol1, `values`.u_id as id, `values`.u_textcol2 as textcol2 from (values ::values) as `values`(u_textcol1, u_id, u_textcol2, u_col), user_extra as ue where `values`.u_col = ue.col"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Block joins two select expressions with same column name needing a simple projection",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user.user_id from user_extra join user on user_extra.email = user.textcol2 where user_extra.email = 'B'",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user.user_id from user_extra join user on user_extra.email = user.textcol2 where user_extra.email = 'B'",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:user_id",
+          "1:user_id"
+        ],
+        "Columns": "1,0",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Block",
+            "BindVarName": "values",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_extra.user_id, user_extra.email from user_extra where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user_extra.email from user_extra where user_extra.email = 'B'"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_email), `user` where 1 != 1",
+                "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_email), `user` where `values`.user_extra_email = `user`.textcol2"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Block joins two select expressions with same column name not needing a simple projection",
+    "query": "select /*vt+ ALLOW_BLOCK_JOIN */ user.user_id, user_extra.user_id from user_extra join user on user_extra.email = user.textcol2 where user_extra.email = 'B'",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select /*vt+ ALLOW_BLOCK_JOIN */ user.user_id, user_extra.user_id from user_extra join user on user_extra.email = user.textcol2 where user_extra.email = 'B'",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Block",
+        "BindVarName": "values",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.user_id, user_extra.email from user_extra where 1 != 1",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ user_extra.user_id, user_extra.email from user_extra where user_extra.email = 'B'"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_email), `user` where 1 != 1",
+            "Query": "select /*vt+ ALLOW_BLOCK_JOIN */ `user`.user_id, `values`.user_extra_user_id as user_id from (values ::values) as `values`(user_extra_user_id, user_extra_email), `user` where `values`.user_extra_email = `user`.textcol2"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   },
   {
     "comment": "case statement in join condition for evaluation - tuple‐expr simplification in CASE",
@@ -4802,6 +5213,7 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   }
 ]
