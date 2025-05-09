@@ -1156,7 +1156,7 @@ func StrcmpComparison(yield Query) {
 
 func MultiComparisons(yield Query) {
 	var numbers = []string{
-		`0`, `-1`, `1`, `0.0`, `1.0`, `-1.0`, `1.0E0`, `-1.0E0`, `0.0E0`,
+		`NULL`, `0`, `-1`, `1`, `0.0`, `1.0`, `-1.0`, `1.0E0`, `-1.0E0`, `0.0E0`,
 		strconv.FormatUint(math.MaxUint64, 10),
 		strconv.FormatUint(math.MaxInt64, 10),
 		strconv.FormatInt(math.MinInt64, 10),
