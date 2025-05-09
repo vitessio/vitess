@@ -188,7 +188,7 @@
 			"Manual": false,
 			"Shard": "12",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"mysql_server": {
 			"File": "unused.go",
