@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -94,6 +95,25 @@ var (
 	txLogHandler    = "/debug/txlog"
 )
 
+var (
+	maxResultSize = viperutil.Configure(
+		"queryserver-config-max-result-size",
+		viperutil.Options[int64]{
+			FlagName: "queryserver-config-max-result-size",
+			Default:  10000,
+			Dynamic:  true,
+		},
+	)
+	warnResultSize = viperutil.Configure(
+		"queryserver-config-warn-result-size",
+		viperutil.Options[int64]{
+			FlagName: "queryserver-config-warn-result-size",
+			Default:  0,
+			Dynamic:  true,
+		},
+	)
+)
+
 type TxThrottlerConfigFlag struct {
 	*throttlerdatapb.Configuration
 }
@@ -128,8 +148,10 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	fs.DurationVar(&currentConfig.Oltp.TxTimeout, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeout, "query server transaction timeout, a transaction will be killed if it takes longer than this value")
 	fs.DurationVar(&currentConfig.GracePeriods.Shutdown, "shutdown_grace_period", defaultConfig.GracePeriods.Shutdown, "how long to wait for queries and transactions to complete during graceful shutdown.")
-	fs.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
-	fs.IntVar(&currentConfig.Oltp.WarnRows, "queryserver-config-warn-result-size", defaultConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
+
+	fs.Int64("queryserver-config-max-result-size", maxResultSize.Default(), "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
+	fs.Int64("queryserver-config-warn-result-size", warnResultSize.Default(), "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
+
 	fs.BoolVar(&currentConfig.PassthroughDML, "queryserver-config-passthrough-dmls", defaultConfig.PassthroughDML, "query server pass through all dml statements without rewriting")
 
 	fs.IntVar(&currentConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", defaultConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream_buffer_size.")
@@ -219,6 +241,11 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.SkipUserMetrics, "skip-user-metrics", defaultConfig.SkipUserMetrics, "If true, user based stats are not recorded.")
 
 	fs.BoolVar(&currentConfig.Unmanaged, "unmanaged", false, "Indicates an unmanaged tablet, i.e. using an external mysql-compatible database")
+
+	viperutil.BindFlags(fs,
+		maxResultSize,
+		warnResultSize,
+	)
 }
 
 var (
@@ -234,6 +261,8 @@ func Init() {
 	currentConfig.TxPool.IdleTimeout = currentConfig.OltpReadPool.IdleTimeout
 	currentConfig.OlapReadPool.MaxLifetime = currentConfig.OltpReadPool.MaxLifetime
 	currentConfig.TxPool.MaxLifetime = currentConfig.OltpReadPool.MaxLifetime
+	currentConfig.Oltp.MaxRows = maxResultSize
+	currentConfig.Oltp.WarnRows = warnResultSize
 
 	if enableHotRowProtection {
 		if enableHotRowProtectionDryRun {
@@ -555,19 +584,21 @@ func (cfg *OlapConfig) UnmarshalJSON(data []byte) (err error) {
 type OltpConfig struct {
 	QueryTimeout time.Duration `json:"queryTimeoutSeconds,omitempty"`
 	TxTimeout    time.Duration `json:"txTimeoutSeconds,omitempty"`
-	MaxRows      int           `json:"maxRows,omitempty"`
-	WarnRows     int           `json:"warnRows,omitempty"`
+	MaxRows      viperutil.Value[int64]
+	WarnRows     viperutil.Value[int64]
 }
 
 func (cfg *OltpConfig) MarshalJSON() ([]byte, error) {
 	type Proxy OltpConfig
 
 	tmp := struct {
-		Proxy
 		QueryTimeout string `json:"queryTimeoutSeconds,omitempty"`
 		TxTimeout    string `json:"txTimeoutSeconds,omitempty"`
+		MaxRows      int64  `json:"maxRows,omitempty"`
+		WarnRows     int64  `json:"warnRows,omitempty"`
 	}{
-		Proxy: Proxy(*cfg),
+		MaxRows:  cfg.MaxRows.Get(),
+		WarnRows: cfg.WarnRows.Get(),
 	}
 
 	if d := cfg.QueryTimeout; d != 0 {
@@ -1047,7 +1078,6 @@ var defaultConfig = TabletConfig{
 	Oltp: OltpConfig{
 		QueryTimeout: 30 * time.Second,
 		TxTimeout:    30 * time.Second,
-		MaxRows:      10000,
 	},
 	Healthcheck: HealthcheckConfig{
 		Interval:           20 * time.Second,
