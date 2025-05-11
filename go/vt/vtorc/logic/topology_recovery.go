@@ -553,8 +553,10 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 
 	// Prioritise primary recovery.
 	// If we are performing some other action, first ensure that it is not because of primary issues.
-	if err = recheckPrimaryHealth(analysisEntry, DiscoverInstance, checkIfAlreadyFixed); err != nil {
-		return err
+	if !isClusterWideRecovery(checkAndRecoverFunctionCode) {
+		if err = recheckPrimaryHealth(analysisEntry, DiscoverInstance); err != nil {
+			return err
+		}
 	}
 
 	// We lock the shard here and then refresh the tablets information
@@ -677,30 +679,35 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	return err
 }
 
-// recheckPrimaryHealth check the health of the primary node if the original analysis is not a primary failure issue.
-func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc func(string, bool), checkIfRecoveryRequired func(*inst.ReplicationAnalysis) (bool, error)) error {
+// recheckPrimaryHealth check the health of the primary node.
+// It then checks whether, given the re-discovered primary health, the original recovery is still valid.
+// If not valid then it will abort the current analysis.
+func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc func(string, bool)) error {
 	originalAnalysisEntry := analysisEntry.Analysis
-	if !analysisEntry.PrimaryFailures() {
-		primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
-		if err != nil {
-			return err
-		}
-		primaryTabletAlias := topoproto.TabletAliasString(primaryTablet.Alias)
-		// re-check if there are any mitigation required for the leader node.
-		discoveryFunc(primaryTabletAlias, true)
+	primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	if err != nil {
+		return err
+	}
+	primaryTabletAlias := topoproto.TabletAliasString(primaryTablet.Alias)
 
-		recoveryRequired, err := checkIfRecoveryRequired(analysisEntry)
-		if err != nil {
-			log.Infof("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err)
-			return err
-		}
-		// primary recovery is required, abort the current mitigation.
-		if recoveryRequired && analysisEntry.PrimaryFailures() {
-			log.Infof("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
-			// this recovery instance was going for a different recovery, but we found that the leader is not healthy.
-			// so abort this recovery and start a new one. The new recovery should pick the dead primary action first.
-			return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
-		}
+	// re-check if there are any mitigation required for the leader node.
+	// if the current problem is because of dead primary, this call will update the analysis entry
+	discoveryFunc(primaryTabletAlias, true)
+
+	// checking if the original analysis is valid even after the primary refresh.
+	recoveryRequired, err := checkIfAlreadyFixed(analysisEntry)
+	if err != nil {
+		log.Infof("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err)
+		return err
+	}
+
+	// The original analysis for the tablet has changed.
+	// This could mean that either the original analysis has changed or some other Vtorc instance has already performing the mitigation.
+	// In either case, the original analysis is stale which can be safely aborted.
+	if recoveryRequired {
+		log.Infof("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
+		// this recovery is stale.
+		return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
 	}
 
 	return nil
