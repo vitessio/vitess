@@ -16,7 +16,10 @@ limitations under the License.
 
 package vtgate
 
-import vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+import (
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+)
 
 // StaticConfig is a static configuration for vtgate.
 // It is used for tests and vtexplain_vtgate where we don't want the user to
@@ -25,6 +28,7 @@ type StaticConfig struct {
 	OnlineDDLEnabled bool
 	DirectDDLEnabled bool
 	TxMode           vtgatepb.TransactionMode
+	TabletType       topodatapb.TabletType
 }
 
 func (s *StaticConfig) OnlineEnabled() bool {
@@ -37,4 +41,8 @@ func (s *StaticConfig) DirectEnabled() bool {
 
 func (s *StaticConfig) TransactionMode() vtgatepb.TransactionMode {
 	return s.TxMode
+}
+
+func (s *StaticConfig) DefaultTabletType() topodatapb.TabletType {
+	return s.TabletType
 }
