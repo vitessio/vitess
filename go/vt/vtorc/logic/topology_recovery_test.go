@@ -18,8 +18,10 @@ package logic
 
 import (
 	"context"
-	"fmt"
 	"testing"
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/test"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -313,62 +315,106 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 	}
 }
 
-func TestCheckIfLeaderMitigationRequired(t *testing.T) {
+func TestRecheckPrimaryHealth(t *testing.T) {
 	tests := []struct {
-		name              string
-		analysisCode      inst.AnalysisCode
-		wantErr           string
-		wantAnalysisError error
+		name    string
+		info    []*test.InfoForRecoveryAnalysis
+		wantErr string
 	}{
 		{
-			name:         "error if leader mitigation is required",
-			analysisCode: inst.DeadPrimary,
-			wantErr:      "aborting ReplicationStopped, primary mitigation is required",
+			name: "analysis change",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy:              "none",
+				LastCheckValid:                0,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 0,
+			}},
+			wantErr: "aborting ReplicationStopped, primary mitigation is required",
 		},
 		{
-			name:         "no error if leader mitigation is not required",
-			analysisCode: inst.ReplicaMisconfigured,
-		},
-		{
-			name:              "return error of leader analysis fails",
-			wantAnalysisError: fmt.Errorf("mocked error"),
-			wantErr:           "mocked error",
+			name: "analysis did not change",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy:              policy.DurabilityNone,
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy: policy.DurabilityNone,
+				PrimaryTabletInfo: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+				},
+				LastCheckValid:     1,
+				ReadOnly:           1,
+				ReplicationStopped: 1,
+			}},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tablet := &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  100,
-				},
-				Hostname:      "localhost",
-				MysqlHostname: "localhost",
-				MysqlPort:     1200,
-				Keyspace:      "ks",
-				Shard:         "-80",
-				Type:          topodatapb.TabletType_PRIMARY,
-			}
-			err := inst.SaveTablet(tablet)
-			require.NoError(t, err)
+			// reset vtorc db after every test
+			oldDB := db.Db
+			defer func() {
+				db.Db = oldDB
+			}()
 
-			gotErr := recheckPrimaryHealth(&inst.ReplicationAnalysis{
-				Analysis:         inst.ReplicationStopped,
-				AnalyzedKeyspace: "ks",
-				AnalyzedShard:    "-80",
+			var rowMaps []sqlutils.RowMap
+			for _, analysis := range tt.info {
+				analysis.SetValuesFromTabletInfo()
+				rowMaps = append(rowMaps, analysis.ConvertToRowMap())
+			}
+
+			// set replication analysis in Vtorc DB.
+			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
+
+			err := recheckPrimaryHealth(&inst.ReplicationAnalysis{
+				AnalyzedInstanceAlias: "zon1-0000000100",
+				Analysis:              inst.ReplicationStopped,
+				AnalyzedKeyspace:      "ks",
+				AnalyzedShard:         "0",
 			}, func(s string, b bool) {
-			}, func(analysis *inst.ReplicationAnalysis) (bool, error) {
-				analysis.Analysis = tt.analysisCode
-				return true, tt.wantAnalysisError
+				// the implementation for DiscoverInstance is not required because we are mocking the db response.
 			})
 
 			if tt.wantErr != "" {
-				require.EqualError(t, gotErr, tt.wantErr)
+				require.EqualError(t, err, tt.wantErr)
 				return
 			}
 
-			require.NoError(t, gotErr)
+			require.NoError(t, err)
 		})
 	}
 

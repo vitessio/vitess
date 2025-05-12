@@ -684,11 +684,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 // If not valid then it will abort the current analysis.
 func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc func(string, bool)) error {
 	originalAnalysisEntry := analysisEntry.Analysis
-	primaryTablet, err := shardPrimary(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
-	if err != nil {
-		return err
-	}
-	primaryTabletAlias := topoproto.TabletAliasString(primaryTablet.Alias)
+	primaryTabletAlias := analysisEntry.AnalyzedInstancePrimaryAlias
 
 	// re-check if there are any mitigation required for the leader node.
 	// if the current problem is because of dead primary, this call will update the analysis entry
@@ -706,7 +702,7 @@ func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc
 	// In either case, the original analysis is stale which can be safely aborted.
 	if recoveryRequired {
 		log.Infof("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
-		// this recovery is stale.
+		// original analysis is stale, abort.
 		return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
 	}
 
