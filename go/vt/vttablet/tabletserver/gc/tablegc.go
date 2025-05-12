@@ -142,12 +142,9 @@ func NewTableGC(env tabletenv.Env, ts *topo.Server, lagThrottler *throttle.Throt
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerapp.TableGCName, base.UndefinedScope),
 		isOpen:          0,
 
-		env: env,
-		ts:  ts,
-		pool: connpool.NewPool(env, "TableGCPool", tabletenv.ConnPoolConfig{
-			Size:        2,
-			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
-		}),
+		env:  env,
+		ts:   ts,
+		pool: newPool(env),
 
 		purgingTables:    map[string]bool{},
 		checkRequestChan: make(chan bool),
@@ -174,6 +171,11 @@ func (collector *TableGC) Open() (err error) {
 	}
 	if !collector.env.Config().EnableTableGC {
 		return nil
+	}
+
+	// Reinitialize the pool if it was closed
+	if collector.pool == nil {
+		collector.pool = newPool(collector.env)
 	}
 
 	collector.lifecycleStates, err = schema.ParseGCLifecycle(gcLifecycle)
@@ -228,7 +230,12 @@ func (collector *TableGC) Close() {
 		collector.cancelOperation()
 	}
 	log.Infof("TableGC - closing pool")
-	collector.pool.Close()
+
+	if collector.pool != nil {
+		collector.pool.Close()
+		collector.pool = nil
+	}
+
 	atomic.StoreInt64(&collector.isOpen, 0)
 	log.Infof("TableGC - finished execution of Close")
 }
@@ -705,4 +712,11 @@ func (collector *TableGC) Status() *Status {
 	}
 
 	return status
+}
+
+func newPool(env tabletenv.Env) *connpool.Pool {
+	return connpool.NewPool(env, "TableGCPool", tabletenv.ConnPoolConfig{
+		Size:        2,
+		IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
+	})
 }
