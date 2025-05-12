@@ -510,7 +510,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> account_name_str user_comment_attribute
 %type <val> account_with_auth
 %type <val> account_with_auth_list
-%type <val> authentication authentication_initial
+%type <val> authentication authentication_opt authentication_initial
 %type <val> event_schedule
 %type <val> event_starts_opt event_ends_opt
 %type <val> event_status_opt
@@ -2487,6 +2487,15 @@ account_with_auth:
 | account_name authentication AND authentication AND authentication
   {
     $$ = AccountWithAuth{AccountName: $1.(AccountName), Auth1: $2.(*Authentication), Auth2: $4.(*Authentication), Auth3: $6.(*Authentication)}
+  }
+
+authentication_opt:
+  {
+    $$ = &Authentication{}
+  }
+| authentication
+  {
+    $$ = $1
   }
 
 authentication:
@@ -6178,13 +6187,18 @@ id_or_non_reserved:
 | all_non_reserved
 
 alter_user_statement:
-  ALTER USER exists_opt account_name authentication
+  ALTER USER exists_opt account_name authentication_opt account_limits
   {
     var ifExists bool
     if $3.(int) != 0 {
       ifExists = true
     }
     accountName := $4.(AccountName)
+    accountLimits, err := NewAccountLimits($6.([]AccountLimitItem))
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
     $$ = &DDL{
       Action: AlterStr,
       User: accountName,
@@ -6195,6 +6209,7 @@ alter_user_statement:
           TargetType: AuthTargetType_Ignore,
           TargetNames: []string{accountName.Name, accountName.Host},
       },
+      AccountLimits: accountLimits,
     }
   }
 

@@ -3095,22 +3095,36 @@ var (
 		}, {
 			input:  "CREATE USER 'UserName'@'%' IDENTIFIED WITH 'caching_sha2_password' AS 'xyz0123'",
 			output: "create user `UserName`@`%` identified with caching_sha2_password as 'xyz0123'",
-		}, {
+		},
+		{
 			input:  "ALTER USER IF EXISTS foo@bar IDENTIFIED BY 'password1';",
 			output: "alter user if exists `foo`@`bar` identified by 'password1'",
-		}, {
+		},
+		{
 			input:  "ALTER USER foo@bar IDENTIFIED BY 'password1';",
 			output: "alter user `foo`@`bar` identified by 'password1'",
-		}, {
+		},
+		{
 			input:  "ALTER USER foo@bar IDENTIFIED BY RANDOM PASSWORD;",
 			output: "alter user `foo`@`bar` identified by random password",
-		}, {
+		},
+		{
 			input:  "ALTER USER foo@bar IDENTIFIED WITH some_plugin;",
 			output: "alter user `foo`@`bar` identified with some_plugin",
-		}, {
+		},
+		{
 			input:  "ALTER USER foo@bar IDENTIFIED WITH some_plugin BY 'auth_string';",
 			output: "alter user `foo`@`bar` identified with some_plugin by 'auth_string'",
-		}, {
+		},
+		{
+			input:  "ALTER USER foo@bar IDENTIFIED WITH some_plugin BY 'auth_string' with MAX_QUERIES_PER_HOUR 123;",
+			output: "alter user `foo`@`bar` identified with some_plugin by 'auth_string' with max_queries_per_hour 123",
+		},
+		{
+			input:  "ALTER USER foo@bar with max_queries_per_hour 123 max_updates_per_hour 456 max_connections_per_hour 789 max_user_connections 321;",
+			output: "alter user `foo`@`bar` identified by '' with max_queries_per_hour 123 max_updates_per_hour 456 max_connections_per_hour 789 max_user_connections 321",
+		},
+		{
 			input:  "RENAME USER UserName1@localhost TO UserName2@localhost, UserName3 TO UserName4",
 			output: "rename user `UserName1`@`localhost` to `UserName2`@`localhost`, `UserName3`@`%` to `UserName4`@`%`",
 		}, {
