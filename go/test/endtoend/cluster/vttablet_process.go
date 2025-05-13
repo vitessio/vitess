@@ -98,7 +98,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--topo_implementation", vttablet.TopoImplementation,
 		"--topo_global_server_address", vttablet.TopoGlobalAddress,
 		"--topo_global_root", vttablet.TopoGlobalRoot,
-		"--log_queries_to_file", vttablet.FileToLogQueries,
+		"--log-queries-to-file", vttablet.FileToLogQueries,
 		"--tablet-path", vttablet.TabletPath,
 		"--port", fmt.Sprintf("%d", vttablet.Port),
 		"--grpc_port", fmt.Sprintf("%d", vttablet.GrpcPort),
