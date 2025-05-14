@@ -309,7 +309,7 @@ func TestMtlsAuth(t *testing.T) {
 		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--grpc-ca"), caCert),
 		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--vtctld-grpc-key"), clientKey),
 		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--vtctld-grpc-cert"), clientCert),
-		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--vtctld-grpc-ca="), caCert),
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--vtctld-grpc-ca"), caCert),
 		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--grpc-auth-mtls-allowed-substrings"), "CN=ClientApp"))
 	require.NoError(t, err)
 	defer func() {
