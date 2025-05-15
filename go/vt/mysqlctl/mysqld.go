@@ -147,7 +147,12 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 }
 
 func registerReparentFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&DisableActiveReparents, "disable_active_reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
+	utils.SetFlagBoolVar(fs, &DisableActiveReparents, "disable-active-reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
+}
+
+func registerDeprecatedReparentFlags(fs *pflag.FlagSet) {
+	utils.SetFlagBoolVar(fs, &DisableActiveReparents, "disable-active-reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
+	fs.MarkDeprecated("disable-active-reparents", "Use --unmanaged flag instead for unmanaged tablets.")
 }
 
 func registerPoolFlags(fs *pflag.FlagSet) {

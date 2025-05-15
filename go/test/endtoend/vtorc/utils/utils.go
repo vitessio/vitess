@@ -134,6 +134,7 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 	}
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
+		"--disable-active-reparents",
 	}
 	// Initialize Cluster
 	shard0.Vttablets = tablets
@@ -812,6 +813,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
+		"--disable-active-reparents",
 	}
 
 	// Initialize Cluster
@@ -886,6 +888,7 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 	}()
 	clusterInfo.ClusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
+		"--disable-active-reparents",
 	}
 
 	// Initialize Cluster

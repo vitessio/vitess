@@ -110,6 +110,7 @@ func TestMain(m *testing.M) {
 			"--enable_replication_reporter",
 			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
 			"--heartbeat_on_demand_duration", onDemandHeartbeatDuration.String(),
+			utils.GetFlagVariantForTests("--disable-active-reparents"),
 		}
 
 		// Start keyspace
