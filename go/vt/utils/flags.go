@@ -111,6 +111,34 @@ func SetFlagVar(fs *pflag.FlagSet, value pflag.Value, name, usage string) {
 	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
 }
 
+// SetFlagStringWithViperVar registers a string flag with both dash and underscore variants
+// This is designed to work with viper-managed flags
+func SetFlagStringWithViperVar(fs *pflag.FlagSet, name string, def string, usage string) {
+	underscored, dashed := flagVariants(name)
+	if name == underscored {
+		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
+	}
+
+	fs.String(dashed, def, usage)
+	fs.String(underscored, def, "")
+	_ = fs.MarkHidden(underscored)
+	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
+}
+
+// SetFlagBoolWithViperVar registers a boolean flag with both dash and underscore variants
+// This is designed to work with viper-managed flags
+func SetFlagBoolWithViperVar(fs *pflag.FlagSet, name string, def bool, usage string) {
+	underscored, dashed := flagVariants(name)
+	if name == underscored {
+		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
+	}
+
+	fs.Bool(dashed, def, usage)
+	fs.Bool(underscored, def, "")
+	_ = fs.MarkHidden(underscored)
+	_ = fs.MarkDeprecated(underscored, fmt.Sprintf("use %s instead", dashed))
+}
+
 // SetFlagVariantsForTests randomly assigns either the underscored or dashed version of the flag name to the map.
 // This is designed to help catch cases where code does not properly handle both formats during testing.
 func SetFlagVariantsForTests(m map[string]string, key, value string) {

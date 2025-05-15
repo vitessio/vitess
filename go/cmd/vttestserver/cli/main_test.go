@@ -137,7 +137,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
 
-	cluster, err := startCluster("--foreign_key_mode=allow", "--enable_online_ddl=true", "--enable_direct_ddl=true")
+	cluster, err := startCluster("--foreign_key_mode=allow", "--enable-online-ddl=true", "--enable-direct-ddl=true")
 	require.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -163,7 +163,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	assert.NoError(t, err)
 
 	cluster.TearDown()
-	cluster, err = startCluster("--foreign_key_mode=disallow", "--enable_online_ddl=false", "--enable_direct_ddl=false")
+	cluster, err = startCluster("--foreign_key_mode=disallow", "--enable-online-ddl=false", "--enable-direct-ddl=false")
 	require.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -380,7 +380,7 @@ func startCluster(flags ...string) (cluster vttest.LocalCluster, err error) {
 	tabletHostname := fmt.Sprintf("%s=localhost", utils.GetFlagVariantForTests("--tablet-hostname"))
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
 	numShardsArg := "--num_shards=2,2"
-	vschemaDDLAuthorizedUsers := "--vschema_ddl_authorized_users=%"
+	vschemaDDLAuthorizedUsers := utils.GetFlagVariantForTests("--vschema-ddl-authorized-users") + "=%"
 	alsoLogToStderr := "--alsologtostderr" // better debugging
 	args = append(args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers, alsoLogToStderr}...)
 	args = append(args, flags...)

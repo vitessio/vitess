@@ -209,6 +209,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
+		// TODO: Replace flag with dashed version in v25
 		args = append(args, "--enable_system_settings")
 	}
 	vtgate.proc = exec.Command(

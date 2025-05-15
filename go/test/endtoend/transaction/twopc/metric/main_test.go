@@ -66,7 +66,7 @@ func TestMain(m *testing.M) {
 
 		// Set extra args for twopc
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"--transaction_mode", "TWOPC",
+			utils.GetFlagVariantForTests("--transaction-mode"), "TWOPC",
 			utils.GetFlagVariantForTests("--grpc-use-effective-callerid"),
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,

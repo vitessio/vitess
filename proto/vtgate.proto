@@ -31,7 +31,7 @@ import "vtrpc.proto";
 // TransactionMode controls the execution of distributed transaction
 // across multiple shards.
 enum TransactionMode {
-  // UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction_mode'.
+  // UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction-mode'.
   UNSPECIFIED = 0;
   // SINGLE disallows distributed transactions.
   SINGLE = 1;

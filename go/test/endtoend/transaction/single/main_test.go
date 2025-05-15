@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
 
@@ -71,7 +72,7 @@ func TestMain(m *testing.M) {
 
 		// Start vtgate
 		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
-		clusterInstance.VtGateExtraArgs = []string{"--transaction_mode", "SINGLE"}
+		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--transaction-mode"), "SINGLE"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

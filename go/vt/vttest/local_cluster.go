@@ -123,10 +123,10 @@ type Config struct {
 	SnapshotFile string
 
 	// Enable system settings to be changed per session at the database connection level
-	EnableSystemSettings bool
+	EnableSystemSettingsFlag bool
 
-	// TransactionMode is SINGLE, MULTI or TWOPC
-	TransactionMode string
+	// TransactionModeFlag is SINGLE, MULTI or TWOPC
+	TransactionModeFlag string
 
 	TransactionTimeout time.Duration
 

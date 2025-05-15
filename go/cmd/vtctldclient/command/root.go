@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
@@ -223,7 +224,7 @@ func getClientForCommand(cmd *cobra.Command) (vtctldclient.VtctldClient, error) 
 
 func init() {
 	Root.PersistentFlags().StringVar(&server, "server", "", "server to use for the connection (required)")
-	Root.PersistentFlags().DurationVar(&actionTimeout, "action_timeout", time.Hour, "timeout to use for the command")
+	utils.SetFlagDurationVar(Root.PersistentFlags(), &actionTimeout, "action-timeout", time.Hour, "timeout to use for the command")
 	Root.PersistentFlags().BoolVar(&compactOutput, "compact", false, "use compact format for otherwise verbose outputs")
 	Root.PersistentFlags().StringVar(&topoOptions.implementation, "topo-implementation", topoOptions.implementation, "the topology implementation to use")
 	Root.PersistentFlags().StringSliceVar(&topoOptions.globalServerAddresses, "topo-global-server-address", topoOptions.globalServerAddresses, "the address of the global topology server(s)")

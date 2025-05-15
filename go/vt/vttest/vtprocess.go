@@ -246,7 +246,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--planner-version", args.PlannerVersion,
 		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
-		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
+		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettingsFlag),
 		fmt.Sprintf("--no_scatter=%t", args.NoScatter),
 	}...)
 
@@ -268,8 +268,8 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if args.PersistentMode && args.DataDir != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-persistence-dir", path.Join(args.DataDir, "vschema_data")}...)
 	}
-	if args.TransactionMode != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction_mode", args.TransactionMode}...)
+	if args.TransactionModeFlag != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--transaction_mode", args.TransactionModeFlag}...)
 	}
 	if args.TransactionTimeout != 0 {
 		vt.ExtraArgs = append(vt.ExtraArgs, "--queryserver-config-transaction-timeout", fmt.Sprintf("%v", args.TransactionTimeout))
@@ -281,7 +281,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc-auth-mode", servenv.GRPCAuth(), "--grpc-key", servenv.GRPCKey(), "--grpc-cert", servenv.GRPCCert(), "--grpc-ca", servenv.GRPCCertificateAuthority(), "--grpc-auth-mtls-allowed-substrings", servenv.ClientCertSubstrings()}...)
 	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-ddl-authorized-users", args.VSchemaDDLAuthorizedUsers}...)
 	}
 	vt.ExtraArgs = append(vt.ExtraArgs, "--mysql-server-version", servenv.MySQLServerVersion())
 	if socket != "" {

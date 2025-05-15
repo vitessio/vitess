@@ -118,7 +118,7 @@ Available Commands:
   help                        Help about any command
 
 Flags:
-      --action_timeout duration                  timeout to use for the command (default 1h0m0s)
+      --action-timeout duration                  timeout to use for the command (default 1h0m0s)
       --alsologtostderr                          log to standard error as well as files
       --compact                                  use compact format for otherwise verbose outputs
       --grpc-auth-static-client-creds string     When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.

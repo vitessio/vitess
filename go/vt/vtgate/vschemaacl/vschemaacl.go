@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/viperutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 type authorizedDDLUsers struct {
@@ -62,9 +63,9 @@ func (a *authorizedDDLUsers) String() string {
 var (
 	// AuthorizedDDLUsers specifies the users that can perform ddl operations
 	AuthorizedDDLUsers = viperutil.Configure(
-		"vschema_ddl_authorized_users",
+		"vschema-ddl-authorized-users",
 		viperutil.Options[*authorizedDDLUsers]{
-			FlagName: "vschema_ddl_authorized_users",
+			FlagName: "vschema-ddl-authorized-users",
 			Default:  &authorizedDDLUsers{},
 			Dynamic:  true,
 			GetFunc: func(v *viper.Viper) func(key string) *authorizedDDLUsers {
@@ -87,7 +88,7 @@ var (
 // calls this function, or call this function directly before parsing
 // command-line arguments.
 func RegisterSchemaACLFlags(fs *pflag.FlagSet) {
-	fs.String("vschema_ddl_authorized_users", "", "List of users authorized to execute vschema ddl operations, or '%' to allow all users.")
+	utils.SetFlagStringWithViperVar(fs, "vschema-ddl-authorized-users", "", "List of users authorized to execute vschema ddl operations, or '%' to allow all users.")
 	viperutil.BindFlags(fs, AuthorizedDDLUsers)
 }
 
