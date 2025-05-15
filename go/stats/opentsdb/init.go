@@ -76,7 +76,7 @@ func InitWithoutServenv(prefix string) (stats.PushBackend, error) {
 
 func newBackend(prefix string) (*backend, error) {
 	if openTSDBURI == "" {
-		return nil, fmt.Errorf("cannot create opentsdb PushBackend with empty --opentsdb_uri")
+		return nil, fmt.Errorf("cannot create opentsdb PushBackend with empty --opentsdb-uri")
 	}
 
 	var w writer
@@ -84,11 +84,11 @@ func newBackend(prefix string) (*backend, error) {
 	// Use the file API when the uri is in format file://...
 	u, err := url.Parse(openTSDBURI)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse --opentsdb_uri %s: %v", openTSDBURI, err)
+		return nil, fmt.Errorf("failed to parse --opentsdb-uri %s: %v", openTSDBURI, err)
 	} else if u.Scheme == "file" {
 		fw, err := newFileWriter(u.Path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create file-based writer for --opentsdb_uri %s: %v", openTSDBURI, err)
+			return nil, fmt.Errorf("failed to create file-based writer for --opentsdb-uri %s: %v", openTSDBURI, err)
 		} else {
 			w = fw
 		}
