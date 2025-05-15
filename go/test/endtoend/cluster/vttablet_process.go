@@ -110,7 +110,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--health_check_interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
 		"--enable_replication_reporter",
 		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
-		"--file_backup_storage_root", vttablet.FileBackupStorageRoot,
+		"--file-backup-storage-root", vttablet.FileBackupStorageRoot,
 		"--service_map", vttablet.ServiceMap,
 		"--db_charset", vttablet.Charset,
 		"--bind-address", "127.0.0.1",

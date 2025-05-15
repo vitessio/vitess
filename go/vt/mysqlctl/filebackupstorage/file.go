@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/vt/mysqlctl/errors"
+	"vitess.io/vitess/go/vt/utils"
 
 	"vitess.io/vitess/go/ioutil"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -45,7 +46,7 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&FileBackupStorageRoot, "file_backup_storage_root", "", "Root directory for the file backup storage.")
+	utils.SetFlagStringVar(fs, &FileBackupStorageRoot, "file-backup-storage-root", "", "Root directory for the file backup storage.")
 }
 
 func init() {

@@ -109,7 +109,7 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtGateExtraArgs = []string{
-			"--vschema_ddl_authorized_users=%",
+			utils.GetFlagVariantForTests("--vschema-ddl-authorized-users") + "=%",
 			"--mysql_server_query_timeout", "1s",
 			utils.GetFlagVariantForTests("--mysql-auth-server-impl"), "static",
 			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,

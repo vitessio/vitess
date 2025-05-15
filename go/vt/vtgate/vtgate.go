@@ -51,6 +51,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
@@ -99,27 +100,27 @@ var (
 	defaultDDLStrategy = string(schema.DDLStrategyDirect)
 
 	enableOnlineDDL = viperutil.Configure(
-		"enable_online_ddl",
+		"enable-online-ddl",
 		viperutil.Options[bool]{
-			FlagName: "enable_online_ddl",
+			FlagName: "enable-online-ddl",
 			Default:  true,
 			Dynamic:  true,
 		},
 	)
 
 	enableDirectDDL = viperutil.Configure(
-		"enable_direct_ddl",
+		"enable-direct-ddl",
 		viperutil.Options[bool]{
-			FlagName: "enable_direct_ddl",
+			FlagName: "enable-direct-ddl",
 			Default:  true,
 			Dynamic:  true,
 		},
 	)
 
 	transactionMode = viperutil.Configure(
-		"transaction_mode",
+		"transaction-mode",
 		viperutil.Options[vtgatepb.TransactionMode]{
-			FlagName: "transaction_mode",
+			FlagName: "transaction-mode",
 			Default:  vtgatepb.TransactionMode_MULTI,
 			Dynamic:  true,
 			GetFunc: func(v *viper.Viper) func(key string) vtgatepb.TransactionMode {
@@ -134,7 +135,7 @@ var (
 						return vtgatepb.TransactionMode_TWOPC
 					default:
 						fmt.Printf("Invalid option: %v\n", txMode)
-						fmt.Println("Usage: -transaction_mode {SINGLE | MULTI | TWOPC}")
+						fmt.Println("Usage: -transaction-mode {SINGLE | MULTI | TWOPC}")
 						os.Exit(1)
 						return -1
 					}
@@ -167,7 +168,7 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
+	utils.SetFlagStringWithViperVar(fs, "transaction-mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
 	fs.BoolVar(&normalizeQueries, "normalize_queries", normalizeQueries, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
 	fs.BoolVar(&terseErrors, "vtgate-config-terse-errors", terseErrors, "prevent bind vars from escaping in returned errors")
 	fs.IntVar(&truncateErrorLen, "truncate-error-len", truncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
@@ -188,8 +189,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&lockHeartbeatTime, "lock_heartbeat_time", lockHeartbeatTime, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
 	fs.BoolVar(&warnShardedOnly, "warn_sharded_only", warnShardedOnly, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
 	fs.StringVar(&foreignKeyMode, "foreign_key_mode", foreignKeyMode, "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
-	fs.Bool("enable_online_ddl", enableOnlineDDL.Default(), "Allow users to submit, review and control Online DDL")
-	fs.Bool("enable_direct_ddl", enableDirectDDL.Default(), "Allow users to submit direct DDL statements")
+	utils.SetFlagBoolWithViperVar(fs, "enable-online-ddl", enableOnlineDDL.Default(), "Allow users to submit, review and control Online DDL")
+	utils.SetFlagBoolWithViperVar(fs, "enable-direct-ddl", enableDirectDDL.Default(), "Allow users to submit direct DDL statements")
 	fs.BoolVar(&enableSchemaChangeSignal, "schema_change_signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	fs.IntVar(&queryTimeout, "query-timeout", queryTimeout, "Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)")
 	fs.StringVar(&queryLogToFile, "log_queries_to_file", queryLogToFile, "Enable query logging to the specified file")

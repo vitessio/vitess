@@ -55,7 +55,7 @@ var (
 	sidecarDBIdentifier   = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
-	extraVTGateArgs       = []string{utils.GetFlagVariantForTests("--tablet-refresh-interval"), "10ms", "--enable_buffer", "--buffer_window", loadTestBufferingWindowDuration.String(),
+	extraVTGateArgs       = []string{utils.GetFlagVariantForTests("--tablet-refresh-interval"), "10ms", utils.GetFlagVariantForTests("--enable-buffer"), "--buffer_window", loadTestBufferingWindowDuration.String(),
 		"--buffer_size", "250000", "--buffer_min_time_between_failovers", "1s", "--buffer_max_failover_duration", loadTestBufferingWindowDuration.String(),
 		"--buffer_drain_concurrency", "10"}
 	extraVtctldArgs = []string{utils.GetFlagVariantForTests("--remote-operation-timeout"), "600s", "--topo-etcd-lease-ttl", "120"}

@@ -47,7 +47,7 @@ Flags:
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --dbname string                                               Optional database target to override normal routing
-      --default_tablet_type topodatapb.TabletType                   The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
+      --default-tablet-type topodatapb.TabletType                   The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --execution-mode string                                       The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc (default "multi")
   -h, --help                                                        help for vtexplain
       --keep-logs duration                                          keep logs for this long (using ctime) (zero to keep forever)

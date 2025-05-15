@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -89,7 +90,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--vschema_ddl_authorized_users", "%"}
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", vtutils.GetFlagVariantForTests("--vschema-ddl-authorized-users"), "%"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

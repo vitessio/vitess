@@ -47,7 +47,7 @@ const (
 type TransactionMode int32
 
 const (
-	// UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction_mode'.
+	// UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction-mode'.
 	TransactionMode_UNSPECIFIED TransactionMode = 0
 	// SINGLE disallows distributed transactions.
 	TransactionMode_SINGLE TransactionMode = 1
