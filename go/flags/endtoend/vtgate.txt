@@ -56,14 +56,14 @@ Flags:
       --discovery_low_replication_lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
       --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-balancer                                                  Enable the tablet balancer to evenly spread query load for a given tablet type
-      --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
-      --enable-views                                                     Enable views support in vtgate. (default true)
       --enable-buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
-      --enable_buffer_dry_run                                            Detect and log failover events, but do not actually buffer requests.
       --enable-direct-ddl                                                Allow users to submit direct DDL statements (default true)
       --enable-online-ddl                                                Allow users to submit, review and control Online DDL (default true)
-      --enable_set_var                                                   This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections (default true)
+      --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable-system-settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
+      --enable-views                                                     Enable views support in vtgate. (default true)
+      --enable_buffer_dry_run                                            Detect and log failover events, but do not actually buffer requests.
+      --enable_set_var                                                   This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections (default true)
       --foreign_key_mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")
       --gate_query_cache_memory int                                      gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
       --gateway_initial_tablet_timeout duration                          At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type (default 30s)

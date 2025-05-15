@@ -700,11 +700,13 @@ func TestSelectBooleanSystemVariables(t *testing.T) {
 		return testCase{Variable: varname, Value: value, Type: vartype}
 	}
 
+	enableSystemSettings := "enable_system_settings"
+
 	tcs := []testCase{
 		newTestCase("autocommit", querypb.Type_INT64, true),
 		newTestCase("autocommit", querypb.Type_INT64, false),
-		newTestCase("enable_system_settings", querypb.Type_INT64, true),
-		newTestCase("enable_system_settings", querypb.Type_INT64, false),
+		newTestCase(enableSystemSettings, querypb.Type_INT64, true),
+		newTestCase(enableSystemSettings, querypb.Type_INT64, false),
 	}
 
 	for _, tc := range tcs {

@@ -204,9 +204,9 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().StringVar(&config.SnapshotFile, "snapshot_file", "",
 		"A MySQL DB snapshot file")
 
-	utils.SetFlagBoolVar(cmd.Flags(), &config.EnableSystemSettings, "enable-system-settings", true, "This will enable the system settings to be changed per session at the database connection level")
+	utils.SetFlagBoolVar(cmd.Flags(), &config.EnableSystemSettingsFlag, "enable-system-settings", true, "This will enable the system settings to be changed per session at the database connection level")
 
-	utils.SetFlagStringVar(cmd.Flags(), &config.TransactionMode, "transaction-mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
+	utils.SetFlagStringVar(cmd.Flags(), &config.TransactionModeFlag, "transaction-mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
 	cmd.Flags().DurationVar(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 30*time.Second, "query server transaction timeout, a transaction will be killed if it takes longer than this value")
 
 	utils.SetFlagStringVar(cmd.Flags(), &config.TabletHostName, "tablet-hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
