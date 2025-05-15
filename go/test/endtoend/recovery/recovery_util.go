@@ -72,7 +72,8 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 	if UseXb {
 		replicaTabletArgs = append(replicaTabletArgs, XbArgs...)
 	}
-	replicaTabletArgs = append(replicaTabletArgs, "--disable_active_reparents",
+	replicaTabletArgs = append(replicaTabletArgs,
+		utils.GetFlagVariantForTests("--disable-active-reparents"),
 		"--enable_replication_reporter=false",
 		utils.GetFlagVariantForTests("--init-tablet-type"), "replica",
 		utils.GetFlagVariantForTests("--init-keyspace"), restoreKSName,

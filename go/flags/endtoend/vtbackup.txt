@@ -193,7 +193,7 @@ Flags:
       --mysql-shutdown-timeout duration                             how long to wait for mysqld shutdown (default 5m0s)
       --mysql-socket string                                         Path to the mysqld socket file
       --mysql_timeout duration                                      how long to wait for mysqld startup (default 5m0s)
-      --opentsdb_uri string                                         URI of opentsdb /api/put method
+      --opentsdb-uri string                                         URI of opentsdb /api/put method
       --port int                                                    port for the server
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints
