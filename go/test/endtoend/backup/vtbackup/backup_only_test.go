@@ -245,7 +245,7 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 		// Use opentsdb for stats.
 		utils.GetFlagVariantForTests("--stats-backend"), "opentsdb",
 		// Write stats to file for reading afterwards.
-		"--opentsdb_uri", fmt.Sprintf("file://%s", statsPath),
+		utils.GetFlagVariantForTests("--opentsdb-uri"), fmt.Sprintf("file://%s", statsPath),
 	}
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
