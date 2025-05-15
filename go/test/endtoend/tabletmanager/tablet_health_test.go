@@ -66,7 +66,7 @@ func TestTabletReshuffle(t *testing.T) {
 		"--lock_tables_timeout", "5s",
 		vtutils.GetFlagVariantForTests("--mycnf-server-id"), fmt.Sprintf("%d", rTablet.TabletUID),
 		vtutils.GetFlagVariantForTests("--db-socket"), fmt.Sprintf("%s/mysql.sock", primaryTablet.VttabletProcess.Directory),
-		"--disable_active_reparents",
+		vtutils.GetFlagVariantForTests("--disable-active-reparents"),
 		"--enable_replication_reporter=false",
 	}
 	defer func() { clusterInstance.VtTabletExtraArgs = []string{} }()

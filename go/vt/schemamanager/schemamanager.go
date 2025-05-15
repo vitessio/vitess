@@ -30,10 +30,10 @@ import (
 const (
 	// SchemaChangeDirName is the key name in the ControllerFactory params.
 	// It specifies the schema change directory.
-	SchemaChangeDirName = "schema_change_dir"
+	SchemaChangeDirName = "schema-change-dir"
 	// SchemaChangeUser is the key name in the ControllerFactory params.
 	// It specifies the user who submits this schema change.
-	SchemaChangeUser = "schema_change_user"
+	SchemaChangeUser = "schema-change-user"
 )
 
 // ControllerFactory takes a set params and construct a Controller instance.
