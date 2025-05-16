@@ -161,29 +161,29 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	expectNoError(t, err)
 	defer conn.Close()
 
-	qr, more, err := conn.ExecuteFetchMulti("select 1 from dual; set autocommit=1; select 1 from dual", 10, true)
+	qr, status, err := conn.ExecuteFetchMulti("select 1 from dual; set autocommit=1; select 1 from dual", 10, true)
 	expectNoError(t, err)
-	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
+	expectFlag(t, "ExecuteMultiFetch(multi result)", mysql.IsMoreResultsExists(status), true)
 	assert.EqualValues(t, 1, len(qr.Rows))
 
-	qr, more, _, err = conn.ReadQueryResult(10, true)
+	qr, status, _, err = conn.ReadQueryResult(10, true)
 	expectNoError(t, err)
-	expectFlag(t, "ReadQueryResult(1)", more, true)
+	expectFlag(t, "ReadQueryResult(1)", mysql.IsMoreResultsExists(status), true)
 	assert.EqualValues(t, 0, len(qr.Rows))
 
-	qr, more, _, err = conn.ReadQueryResult(10, true)
+	qr, status, _, err = conn.ReadQueryResult(10, true)
 	expectNoError(t, err)
-	expectFlag(t, "ReadQueryResult(2)", more, false)
+	expectFlag(t, "ReadQueryResult(2)", mysql.IsMoreResultsExists(status), false)
 	assert.EqualValues(t, 1, len(qr.Rows))
 
-	qr, more, err = conn.ExecuteFetchMulti("select 1 from dual", 10, true)
+	qr, status, err = conn.ExecuteFetchMulti("select 1 from dual", 10, true)
 	expectNoError(t, err)
-	expectFlag(t, "ExecuteMultiFetch(single result)", more, false)
+	expectFlag(t, "ExecuteMultiFetch(single result)", mysql.IsMoreResultsExists(status), false)
 	assert.EqualValues(t, 1, len(qr.Rows))
 
-	qr, more, err = conn.ExecuteFetchMulti("set autocommit=1", 10, true)
+	qr, status, err = conn.ExecuteFetchMulti("set autocommit=1", 10, true)
 	expectNoError(t, err)
-	expectFlag(t, "ExecuteMultiFetch(no result)", more, false)
+	expectFlag(t, "ExecuteMultiFetch(no result)", mysql.IsMoreResultsExists(status), false)
 	assert.EqualValues(t, 0, len(qr.Rows))
 
 	// The ClientDeprecateEOF protocol change has a subtle twist in which an EOF or OK
@@ -212,19 +212,19 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	err = conn.ExecuteFetchMultiDrain("update a set name = concat(name, ', multi drain 1'); select * from a; select count(*) from a")
 	expectNoError(t, err)
 	// If the previous command leaves packet in invalid state, this will fail.
-	qr, more, err = conn.ExecuteFetchMulti("update a set name = concat(name, ', fetch multi'); select * from a; select count(*) from a", 300, true)
+	qr, status, err = conn.ExecuteFetchMulti("update a set name = concat(name, ', fetch multi'); select * from a; select count(*) from a", 300, true)
 	expectNoError(t, err)
-	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
+	expectFlag(t, "ExecuteMultiFetch(multi result)", mysql.IsMoreResultsExists(status), true)
 	assert.EqualValues(t, 255, qr.RowsAffected)
 
-	qr, more, _, err = conn.ReadQueryResult(300, true)
+	qr, status, _, err = conn.ReadQueryResult(300, true)
 	expectNoError(t, err)
-	expectFlag(t, "ReadQueryResult(1)", more, true)
+	expectFlag(t, "ReadQueryResult(1)", mysql.IsMoreResultsExists(status), true)
 	assert.EqualValues(t, 255, len(qr.Rows), "ReadQueryResult(1)")
 
-	qr, more, _, err = conn.ReadQueryResult(300, true)
+	qr, status, _, err = conn.ReadQueryResult(300, true)
 	expectNoError(t, err)
-	expectFlag(t, "ReadQueryResult(2)", more, false)
+	expectFlag(t, "ReadQueryResult(2)", mysql.IsMoreResultsExists(status), false)
 	assert.EqualValues(t, 1, len(qr.Rows), "ReadQueryResult(1)")
 
 	// Verify that a ExecuteFetchMultiDrain is happy to operate again after all the above.

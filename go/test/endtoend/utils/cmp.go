@@ -225,11 +225,13 @@ func (mcmp *MySQLCompare) ExecMulti(sql string) []*sqltypes.Result {
 	mcmp.t.Helper()
 	stmts, err := sqlparser.NewTestParser().SplitStatementToPieces(sql)
 	require.NoError(mcmp.t, err)
-	vtQr, vtMore, err := mcmp.VtConn.ExecuteFetchMulti(sql, 1000, true)
+	vtQr, vtStatus, err := mcmp.VtConn.ExecuteFetchMulti(sql, 1000, true)
 	require.NoError(mcmp.t, err, "[Vitess Error] for sql: "+sql)
+	vtMore := mysql.IsMoreResultsExists(vtStatus)
 
-	mysqlQr, mysqlMore, err := mcmp.MySQLConn.ExecuteFetchMulti(sql, 1000, true)
+	mysqlQr, mysqlStatus, err := mcmp.MySQLConn.ExecuteFetchMulti(sql, 1000, true)
 	require.NoError(mcmp.t, err, "[MySQL Error] for sql: "+sql)
+	mysqlMore := mysql.IsMoreResultsExists(mysqlStatus)
 	sql = stmts[0]
 	CompareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 	if vtMore != mysqlMore {
@@ -241,11 +243,13 @@ func (mcmp *MySQLCompare) ExecMulti(sql string) []*sqltypes.Result {
 	for vtMore {
 		sql = stmts[idx]
 		idx++
-		vtQr, vtMore, _, err = mcmp.VtConn.ReadQueryResult(1000, true)
+		vtQr, vtStatus, _, err = mcmp.VtConn.ReadQueryResult(1000, true)
 		require.NoError(mcmp.t, err, "[Vitess Error] for sql: "+sql)
+		vtMore = mysql.IsMoreResultsExists(vtStatus)
 
-		mysqlQr, mysqlMore, _, err = mcmp.MySQLConn.ReadQueryResult(1000, true)
+		mysqlQr, mysqlStatus, _, err = mcmp.MySQLConn.ReadQueryResult(1000, true)
 		require.NoError(mcmp.t, err, "[MySQL Error] for sql: "+sql)
+		mysqlMore = mysql.IsMoreResultsExists(mysqlStatus)
 		CompareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
 		if vtMore != mysqlMore {
 			mcmp.AsT().Errorf("Vitess and MySQL have different More flags: %v vs %v", vtMore, mysqlMore)
@@ -262,9 +266,11 @@ func (mcmp *MySQLCompare) ExecMultiAllowError(sql string) {
 	mcmp.t.Helper()
 	stmts, err := sqlparser.NewTestParser().SplitStatementToPieces(sql)
 	require.NoError(mcmp.t, err)
-	vtQr, vtMore, vtErr := mcmp.VtConn.ExecuteFetchMulti(sql, 1000, true)
+	vtQr, vtStatus, vtErr := mcmp.VtConn.ExecuteFetchMulti(sql, 1000, true)
+	vtMore := mysql.IsMoreResultsExists(vtStatus)
 
-	mysqlQr, mysqlMore, mysqlErr := mcmp.MySQLConn.ExecuteFetchMulti(sql, 1000, true)
+	mysqlQr, mysqlStatus, mysqlErr := mcmp.MySQLConn.ExecuteFetchMulti(sql, 1000, true)
+	mysqlMore := mysql.IsMoreResultsExists(mysqlStatus)
 	sql = stmts[0]
 	compareVitessAndMySQLErrors(mcmp.t, vtErr, mysqlErr)
 	if vtErr == nil && mysqlErr == nil {
@@ -278,9 +284,11 @@ func (mcmp *MySQLCompare) ExecMultiAllowError(sql string) {
 	for vtMore {
 		sql = stmts[idx]
 		idx++
-		vtQr, vtMore, _, vtErr = mcmp.VtConn.ReadQueryResult(1000, true)
+		vtQr, vtStatus, _, vtErr = mcmp.VtConn.ReadQueryResult(1000, true)
+		vtMore = mysql.IsMoreResultsExists(vtStatus)
 
-		mysqlQr, mysqlMore, _, mysqlErr = mcmp.MySQLConn.ReadQueryResult(1000, true)
+		mysqlQr, mysqlStatus, _, mysqlErr = mcmp.MySQLConn.ReadQueryResult(1000, true)
+		mysqlMore = mysql.IsMoreResultsExists(mysqlStatus)
 		compareVitessAndMySQLErrors(mcmp.t, vtErr, mysqlErr)
 		if vtErr == nil && mysqlErr == nil {
 			CompareVitessAndMySQLResults(mcmp.t, sql, mcmp.VtConn, vtQr, mysqlQr, CompareOptions{})
