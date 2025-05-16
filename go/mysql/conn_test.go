@@ -865,9 +865,9 @@ func TestEmptyQuery(t *testing.T) {
 			// The queries run will be an empty query; Even with the empty error, the connection should be fine
 			require.True(t, res, "we should not break the connection in case of no errors")
 			// Read the result and assert that we indeed see the error for empty query.
-			data, more, _, err := cConn.ReadQueryResult(100, true)
+			data, status, _, err := cConn.ReadQueryResult(100, true)
 			require.EqualError(t, err, "Query was empty (errno 1065) (sqlstate 42000)")
-			require.False(t, more)
+			require.False(t, (status&ServerMoreResultsExists) != 0)
 			require.Nil(t, data)
 		})
 	}
