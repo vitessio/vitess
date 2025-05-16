@@ -317,7 +317,7 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 //	    readComQueryResponse will fail, and we'll return CRServerLost(2013).
 func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
 	result, status, err := c.ExecuteFetchMulti(query, maxrows, wantfields)
-	if (status & ServerMoreResultsExists) != 0 {
+	if IsMoreResultsExists(status) {
 		// Multiple results are unexpected. Prioritize this "unexpected" error over whatever error we got from the first result.
 		err = errors.Join(ErrExecuteFetchMultipleResults, err)
 	}
@@ -337,7 +337,7 @@ func (c *Conn) ExecuteFetchMultiDrain(query string) (err error) {
 // drainMoreResults ensures to drain all query results, even if there's an error.
 // We collect all errors until we consume all results.
 func (c *Conn) drainMoreResults(status uint16, err error) error {
-	for (status & ServerMoreResultsExists) != 0 {
+	for IsMoreResultsExists(status) {
 		var moreErr error
 		_, status, _, moreErr = c.ReadQueryResult(FETCH_NO_ROWS, false)
 		if moreErr != nil {

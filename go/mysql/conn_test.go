@@ -854,7 +854,7 @@ func TestEmptyQuery(t *testing.T) {
 			// Read the result and assert that we indeed see the error for empty query.
 			data, status, _, err := cConn.ReadQueryResult(100, true)
 			require.EqualError(t, err, "Query was empty (errno 1065) (sqlstate 42000)")
-			require.False(t, (status&ServerMoreResultsExists) != 0)
+			require.False(t, IsMoreResultsExists(status))
 			require.Nil(t, data)
 		})
 	}
@@ -885,14 +885,14 @@ func TestMultiStatement(t *testing.T) {
 			data, status, _, err := cConn.ReadQueryResult(100, true)
 			require.NoError(t, err)
 			// Since we executed 2 queries, there should be more results to be read
-			require.True(t, (status&ServerMoreResultsExists) != 0)
+			require.True(t, IsMoreResultsExists(status))
 			require.True(t, data.Equal(selectRowsResult))
 
 			// Read the results for the second query and verify the correctness
 			data, status, _, err = cConn.ReadQueryResult(100, true)
 			require.NoError(t, err)
 			// This was the final query run, so we expect that more should be false as there are no more queries.
-			require.False(t, (status&ServerMoreResultsExists) != 0)
+			require.False(t, IsMoreResultsExists(status))
 			require.True(t, data.Equal(selectRowsResult))
 
 			// This time we run two queries fist of which will return an error
@@ -907,7 +907,7 @@ func TestMultiStatement(t *testing.T) {
 			data, status, _, err = cConn.ReadQueryResult(100, true)
 			require.EqualError(t, err, "cannot get column number (errno 2027) (sqlstate HY000)")
 			// In case of errors in a multi-statement, the following statements are not executed, therefore we want that more should be false
-			require.False(t, (status&ServerMoreResultsExists) != 0)
+			require.False(t, IsMoreResultsExists(status))
 			require.Nil(t, data)
 		})
 	}
