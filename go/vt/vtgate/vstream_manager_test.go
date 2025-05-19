@@ -127,6 +127,82 @@ func TestVStreamSkew(t *testing.T) {
 	}
 }
 
+func TestVStreamEventsRawTableName(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+
+	send1 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
+		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "f0"}},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t0"}},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}
+	want1 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: ks,
+				Shard:    "-20",
+				Gtid:     "gtid01",
+			}},
+		}},
+		// Verify that the table names lack the keyspace
+		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "f0"}},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t0"}},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}
+	sbc0.AddVStreamEvents(send1, nil)
+
+	send2 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid02"},
+		{Type: binlogdatapb.VEventType_DDL},
+	}
+	want2 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: ks,
+				Shard:    "-20",
+				Gtid:     "gtid02",
+			}},
+		}},
+		{Type: binlogdatapb.VEventType_DDL},
+	}}
+	sbc0.AddVStreamEvents(send2, nil)
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: ks,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}},
+	}
+	ch := make(chan *binlogdatapb.VStreamResponse)
+	go func() {
+		err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{UseRawTableName: true}, func(events []*binlogdatapb.VEvent) error {
+			ch <- &binlogdatapb.VStreamResponse{Events: events}
+			return nil
+		})
+		wantErr := "context canceled"
+		if err == nil || !strings.Contains(err.Error(), wantErr) {
+			t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
+		}
+		ch <- nil
+	}()
+	verifyEvents(t, ch, want1, want2)
+
+	// Ensure the go func error return was verified.
+	cancel()
+	<-ch
+}
+
 func TestVStreamEvents(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

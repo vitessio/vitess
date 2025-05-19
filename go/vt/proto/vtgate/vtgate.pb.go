@@ -1338,6 +1338,8 @@ type VStreamFlags struct {
 	StreamKeyspaceHeartbeats bool `protobuf:"varint,7,opt,name=stream_keyspace_heartbeats,json=streamKeyspaceHeartbeats,proto3" json:"stream_keyspace_heartbeats,omitempty"`
 	// Include reshard journal events in the stream.
 	IncludeReshardJournalEvents bool `protobuf:"varint,8,opt,name=include_reshard_journal_events,json=includeReshardJournalEvents,proto3" json:"include_reshard_journal_events,omitempty"`
+	// Use the original raw table name received from the tablet
+	UseRawTableName bool `protobuf:"varint,8,opt,name=use_raw_table_name,json=useRawTableName,proto3" json:"use_raw_table_name,omitempty"`
 	// Copy only these tables, skip the rest in the filter.
 	// If not provided, the default behaviour is to copy all tables.
 	TablesToCopy  []string `protobuf:"bytes,9,rep,name=tables_to_copy,json=tablesToCopy,proto3" json:"tables_to_copy,omitempty"`

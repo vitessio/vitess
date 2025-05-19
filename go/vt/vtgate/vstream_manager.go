@@ -687,17 +687,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
 			for i, event := range events {
 				switch event.Type {
-				case binlogdatapb.VEventType_FIELD:
-					// Update table names and send.
-					// If we're streaming from multiple keyspaces, this will disambiguate
-					// duplicate table names.
-					ev := event.CloneVT()
-					ev.FieldEvent.TableName = sgtid.Keyspace + "." + ev.FieldEvent.TableName
-					sendevents = append(sendevents, ev)
-				case binlogdatapb.VEventType_ROW:
-					// Update table names and send.
-					ev := event.CloneVT()
-					ev.RowEvent.TableName = sgtid.Keyspace + "." + ev.RowEvent.TableName
+				case binlogdatapb.VEventType_FIELD, binlogdatapb.VEventType_ROW:
+					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.UseRawTableName)
 					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
 					sendevents = append(sendevents, event)
@@ -838,6 +829,23 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		log.Infof("vstream for %s/%s error, retrying: %v", sgtid.Keyspace, sgtid.Shard, err)
 	}
 
+}
+
+// maybeUpdateTableNames updates table names when the UseRawTableName flag is disabled.
+// If we're streaming from multiple keyspaces, updating the table names by inserting the keyspace will disambiguate
+// duplicate table names. If we enable the UseRawTableName flag to not update the table names, there is no need to
+// clone the entire event, whcih improves performance. This is typically safely used by clients only streaming one keyspace.
+func maybeUpdateTableName(event *binlogdatapb.VEvent, keyspace string, useRawTableName bool) *binlogdatapb.VEvent {
+	if useRawTableName {
+		return event
+	}
+	ev := event.CloneVT()
+	if event.Type == binlogdatapb.VEventType_FIELD {
+		ev.FieldEvent.TableName = keyspace + "." + ev.RowEvent.TableName
+	} else {
+		ev.RowEvent.TableName = keyspace + "." + ev.RowEvent.TableName
+	}
+	return ev
 }
 
 // shouldRetry determines whether we should exit immediately or retry the vstream.
