@@ -278,6 +278,93 @@ func TestVStreamEvents(t *testing.T) {
 	<-ch
 }
 
+func BenchmarkVStreamEvents(b *testing.B) {
+	tests := []struct {
+		name            string
+		useRawTableName bool
+	}{
+		{"UseRawTableName=true", true},
+		{"UseRawTableName=false", false},
+	}
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			cell := "aa"
+			ks := "TestVStream"
+			_ = createSandbox(ks)
+			hc := discovery.NewFakeHealthCheck(nil)
+			st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+
+			vsm := newTestVStreamManager(ctx, hc, st, cell)
+			sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+			addTabletToSandboxTopo(b, ctx, st, ks, "-20", sbc0.Tablet())
+
+			const totalEvents = 5_000_000
+			batchSize := 100_000
+			for i := 0; i < totalEvents; i += batchSize {
+				var events []*binlogdatapb.VEvent
+				events = append(events, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_GTID,
+					Gtid: fmt.Sprintf("gtid-%d", i),
+				})
+				for j := 0; j < batchSize-2; j++ {
+					events = append(events, &binlogdatapb.VEvent{
+						Type: binlogdatapb.VEventType_ROW,
+						RowEvent: &binlogdatapb.RowEvent{
+							TableName: fmt.Sprintf("t%d", j),
+						},
+					})
+				}
+				events = append(events, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT})
+				sbc0.AddVStreamEvents(events, nil)
+			}
+
+			vgtid := &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{{
+					Keyspace: ks,
+					Shard:    "-20",
+					Gtid:     "pos",
+				}},
+			}
+			ch := make(chan *binlogdatapb.VStreamResponse)
+			go func() {
+				err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil,
+					&vtgatepb.VStreamFlags{UseRawTableName: tt.useRawTableName}, func(events []*binlogdatapb.VEvent) error {
+						ch <- &binlogdatapb.VStreamResponse{Events: events}
+						return nil
+					})
+				wantErr := "context canceled"
+				if err == nil || !strings.Contains(err.Error(), wantErr) {
+					b.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
+				}
+				ch <- nil
+			}()
+
+			received := 0
+			for {
+				resp := <-ch
+				if resp == nil {
+					close(ch)
+					break
+				}
+				received += len(resp.Events)
+				if received >= totalEvents {
+					b.Logf("Received events %d, expected total %d", received, totalEvents)
+					cancel()
+				}
+			}
+
+			if received < totalEvents {
+				b.Errorf("expected at least %d events, got %d", totalEvents, received)
+			}
+
+			cancel()
+			<-ch
+		})
+	}
+}
+
 // TestVStreamChunks ensures that a transaction that's broken
 // into chunks is sent together.
 func TestVStreamChunks(t *testing.T) {
@@ -1942,12 +2029,12 @@ func getSandboxTopoMultiCell(ctx context.Context, cells []string, keyspace strin
 	return st
 }
 
-func addTabletToSandboxTopo(t *testing.T, ctx context.Context, st *sandboxTopo, ks, shard string, tablet *topodatapb.Tablet) {
+func addTabletToSandboxTopo(tb testing.TB, ctx context.Context, st *sandboxTopo, ks, shard string, tablet *topodatapb.Tablet) {
 	_, err := st.topoServer.UpdateShardFields(ctx, ks, shard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = tablet.Alias
 		return nil
 	})
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	err = st.topoServer.CreateTablet(ctx, tablet)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 }
