@@ -688,10 +688,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			for i, event := range events {
 				switch event.Type {
 				case binlogdatapb.VEventType_FIELD:
-					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.UseRawTableName, extractFieldTableName)
+					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.ExcludeKeyspaceFromTableName, extractFieldTableName)
 					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_ROW:
-					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.UseRawTableName, extractRowTableName)
+					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.ExcludeKeyspaceFromTableName, extractRowTableName)
 					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
 					sendevents = append(sendevents, event)
@@ -834,13 +834,13 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 }
 
-// maybeUpdateTableNames updates table names when the UseRawTableName flag is disabled.
+// maybeUpdateTableNames updates table names when the ExcludeKeyspaceFromTableName flag is disabled.
 // If we're streaming from multiple keyspaces, updating the table names by inserting the keyspace will disambiguate
-// duplicate table names. If we enable the UseRawTableName flag to not update the table names, there is no need to
+// duplicate table names. If we enable the ExcludeKeyspaceFromTableName flag to not update the table names, there is no need to
 // clone the entire event, whcih improves performance. This is typically safely used by clients only streaming one keyspace.
-func maybeUpdateTableName(event *binlogdatapb.VEvent, keyspace string, useRawTableName bool,
+func maybeUpdateTableName(event *binlogdatapb.VEvent, keyspace string, excludeKeyspaceFromTableName bool,
 	tableNameExtractor func(ev *binlogdatapb.VEvent) *string) *binlogdatapb.VEvent {
-	if useRawTableName {
+	if excludeKeyspaceFromTableName {
 		return event
 	}
 	ev := event.CloneVT()

@@ -127,7 +127,7 @@ func TestVStreamSkew(t *testing.T) {
 	}
 }
 
-func TestVStreamEventsRawTableName(t *testing.T) {
+func TestVStreamEventsExcludeKeyspaceFromTableName(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cell := "aa"
@@ -186,7 +186,7 @@ func TestVStreamEventsRawTableName(t *testing.T) {
 	}
 	ch := make(chan *binlogdatapb.VStreamResponse)
 	go func() {
-		err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{UseRawTableName: true}, func(events []*binlogdatapb.VEvent) error {
+		err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{ExcludeKeyspaceFromTableName: true}, func(events []*binlogdatapb.VEvent) error {
 			ch <- &binlogdatapb.VStreamResponse{Events: events}
 			return nil
 		})
@@ -280,11 +280,11 @@ func TestVStreamEvents(t *testing.T) {
 
 func BenchmarkVStreamEvents(b *testing.B) {
 	tests := []struct {
-		name            string
-		useRawTableName bool
+		name                         string
+		excludeKeyspaceFromTableName bool
 	}{
-		{"UseRawTableName=true", true},
-		{"UseRawTableName=false", false},
+		{"ExcludeKeyspaceFromTableName=true", true},
+		{"ExcludeKeyspaceFromTableName=false", false},
 	}
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
@@ -332,7 +332,7 @@ func BenchmarkVStreamEvents(b *testing.B) {
 			go func() {
 				close(start)
 				err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil,
-					&vtgatepb.VStreamFlags{UseRawTableName: tt.useRawTableName}, func(events []*binlogdatapb.VEvent) error {
+					&vtgatepb.VStreamFlags{ExcludeKeyspaceFromTableName: tt.excludeKeyspaceFromTableName}, func(events []*binlogdatapb.VEvent) error {
 						ch <- &binlogdatapb.VStreamResponse{Events: events}
 						return nil
 					})
