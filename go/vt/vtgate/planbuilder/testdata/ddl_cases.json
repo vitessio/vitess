@@ -140,6 +140,46 @@
     }
   },
   {
+    "comment": "Create procedure with set statement",
+    "query": "create procedure main.t1 (in x BIGINT) begin declare y DECIMAL(14,2); set y = 4.2; end;",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "create procedure main.t1 (in x BIGINT) begin declare y DECIMAL(14,2); set y = 4.2; end;",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "create procedure t1 (in x BIGINT) begin declare y DECIMAL(14,2); set y = 4.2; end;"
+      },
+      "TablesUsed": [
+        "main.t1"
+      ]
+    }
+  },
+  {
+    "comment": "Create procedure with a transaction inside",
+    "query": "create procedure main.t1 (in x BIGINT) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "create procedure main.t1 (in x BIGINT) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "create procedure t1 (in x BIGINT) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;"
+      },
+      "TablesUsed": [
+        "main.t1"
+      ]
+    }
+  },
+  {
     "comment": "DDL",
     "query": "create table a(id int)",
     "plan": {
