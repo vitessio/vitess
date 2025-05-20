@@ -22,6 +22,7 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/orca"
 )
 
 func TestEmpty(t *testing.T) {
@@ -58,6 +59,22 @@ func TestDoubleInterceptor(t *testing.T) {
 	}
 	if len(interceptors.unaryInterceptors) != 2 {
 		t.Fatalf("expected 1 server options to be available")
+	}
+}
+
+func TestOrcaMetricsRecorder(t *testing.T) {
+	recorder := orca.NewServerMetricsRecorder()
+
+	recorder.SetCPUUtilization(0.25)
+	recorder.SetMemoryUtilization(0.5)
+
+	snap := recorder.ServerMetrics()
+
+	if snap.CPUUtilization != 0.25 {
+		t.Errorf("expected cpu 0.25, got %v", snap.CPUUtilization)
+	}
+	if snap.MemUtilization != 0.5 {
+		t.Errorf("expected memory 0.5, got %v", snap.MemUtilization)
 	}
 }
 

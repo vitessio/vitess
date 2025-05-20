@@ -26,12 +26,15 @@ import (
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/reflection"
 
 	"vitess.io/vitess/go/trace"
@@ -99,6 +102,8 @@ var (
 	// even when there are no active streams (RPCs). If false, and client sends ping when
 	// there are no active streams, server will send GOAWAY and close the connection.
 	gRPCKeepAliveEnforcementPolicyPermitWithoutStream bool
+
+	orcaRecorder orca.ServerMetricsRecorder
 
 	gRPCKeepaliveTime    = 10 * time.Second
 	gRPCKeepaliveTimeout = 10 * time.Second
@@ -224,6 +229,9 @@ func createGRPCServer() {
 	opts = append(opts, grpc.MaxRecvMsgSize(msgSize))
 	opts = append(opts, grpc.MaxSendMsgSize(msgSize))
 
+	opts = append(opts, orca.CallMetricsServerOption(nil))
+	orcaRecorder = orca.NewServerMetricsRecorder()
+
 	if gRPCInitialConnWindowSize != 0 {
 		log.Infof("Setting grpc server initial conn window size to %d", int32(gRPCInitialConnWindowSize))
 		opts = append(opts, grpc.InitialConnWindowSize(int32(gRPCInitialConnWindowSize)))
@@ -287,6 +295,23 @@ func serveGRPC() {
 		return
 	}
 
+	if err := orca.Register(GRPCServer, orca.ServiceOptions{
+		// The minimum interval of orca is 30 seconds, unless we enable a testing flag.
+		MinReportingInterval:  30 * time.Second,
+		ServerMetricsProvider: orcaRecorder,
+	}); err != nil {
+		log.Exitf("Failed to register ORCA service: %v", err)
+	}
+
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			orcaRecorder.SetCPUUtilization(getCPUUsage())
+			orcaRecorder.SetMemoryUtilization(getMemoryUsage())
+		}
+	}()
+
 	// register reflection to support list calls :)
 	reflection.Register(GRPCServer)
 
@@ -323,6 +348,22 @@ func serveGRPC() {
 		GRPCServer.GracefulStop()
 		log.Info("gRPC server stopped")
 	})
+}
+
+func getCPUUsage() float64 {
+	percentages, err := cpu.Percent(0, false)
+	if err != nil || len(percentages) == 0 {
+		return 0
+	}
+	return percentages[0]
+}
+
+func getMemoryUsage() float64 {
+	vmStat, err := mem.VirtualMemory()
+	if err != nil {
+		return 0
+	}
+	return vmStat.UsedPercent
 }
 
 // GRPCCheckServiceMap returns if we should register a gRPC service
