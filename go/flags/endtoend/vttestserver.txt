@@ -24,7 +24,7 @@ Flags:
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
       --config-name string                                               Name of the config file (without extension) to search for. (default "vtconfig")
-      --config-path strings                                              Paths to search for config files in. (default [{{ .Workdir }}])
+      --config-path strings                                              Paths to search for config files in. (default [/home/mounica/Desktop/vitess/go/flags/endtoend])
       --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                               Config file type (omit to infer config type from file extension).
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
@@ -32,9 +32,9 @@ Flags:
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --default_schema_dir string                                        Default directory for initial schema files. If no schema is found in schema_dir, default to this location.
-      --enable_direct_ddl                                                Allow users to submit direct DDL statements (default true)
-      --enable_online_ddl                                                Allow users to submit, review and control Online DDL (default true)
-      --enable_system_settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
+      --enable-direct-ddl                                                Allow users to submit direct DDL statements (default true)
+      --enable-online-ddl                                                Allow users to submit, review and control Online DDL (default true)
+      --enable-system-settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
       --external-compressor string                                       command with arguments to use when compressing a backup.
       --external-compressor-extension string                             extension to use when using an external compressor.
       --external-decompressor string                                     command with arguments to use when decompressing a backup.
@@ -147,11 +147,11 @@ Flags:
       --topo-zk-tls-ca string                                            the server ca to use to validate servers when connecting to the zk topo server
       --topo-zk-tls-cert string                                          the cert to use to connect to the zk topo server, requires topo-zk-tls-key, enables TLS
       --topo-zk-tls-key string                                           the key to use to connect to the zk topo server, enables TLS
-      --transaction_mode string                                          Transaction mode MULTI (default), SINGLE or TWOPC  (default "MULTI")
+      --transaction-mode string                                          Transaction mode MULTI (default), SINGLE or TWOPC  (default "MULTI")
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
       --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
-      --vschema_ddl_authorized_users string                              Comma separated list of users authorized to execute vschema ddl operations via vtgate
+      --vschema-ddl-authorized-users string                              Comma separated list of users authorized to execute vschema ddl operations via vtgate
       --vtcombo-bind-host string                                         which host to bind vtcombo servenv listener to (default "localhost")
       --vtctl_client_protocol string                                     Protocol to use to talk to the vtctl server. (default "grpc")
       --vtctld_grpc_ca string                                            the server ca to use to validate servers when connecting

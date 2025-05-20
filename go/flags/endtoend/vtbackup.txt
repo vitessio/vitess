@@ -74,7 +74,7 @@ Flags:
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling   Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
       --config-name string                                          Name of the config file (without extension) to search for. (default "vtconfig")
-      --config-path strings                                         Paths to search for config files in. (default [{{ .Workdir }}])
+      --config-path strings                                         Paths to search for config files in. (default [/home/mounica/Desktop/vitess/go/flags/endtoend])
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul-auth-static-file string                              JSON File to read the topos/tokens from.
@@ -131,7 +131,7 @@ Flags:
       --external-compressor string                                  command with arguments to use when compressing a backup.
       --external-compressor-extension string                        extension to use when using an external compressor.
       --external-decompressor string                                command with arguments to use when decompressing a backup.
-      --file_backup_storage_root string                             Root directory for the file backup storage.
+      --file-backup-storage-root string                             Root directory for the file backup storage.
       --gcs-backup-storage-bucket string                            Google Cloud Storage bucket to use for backups.
       --gcs-backup-storage-root string                              Root prefix for all backup-related object names.
       --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -193,7 +193,7 @@ Flags:
       --mysql-shutdown-timeout duration                             how long to wait for mysqld shutdown (default 5m0s)
       --mysql-socket string                                         Path to the mysqld socket file
       --mysql_timeout duration                                      how long to wait for mysqld startup (default 5m0s)
-      --opentsdb_uri string                                         URI of opentsdb /api/put method
+      --opentsdb-uri string                                         URI of opentsdb /api/put method
       --port int                                                    port for the server
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints
