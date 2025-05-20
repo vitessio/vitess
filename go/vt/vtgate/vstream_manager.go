@@ -687,8 +687,11 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
 			for i, event := range events {
 				switch event.Type {
-				case binlogdatapb.VEventType_FIELD, binlogdatapb.VEventType_ROW:
-					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.UseRawTableName)
+				case binlogdatapb.VEventType_FIELD:
+					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.UseRawTableName, extractFieldTableName)
+					sendevents = append(sendevents, ev)
+				case binlogdatapb.VEventType_ROW:
+					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.UseRawTableName, extractRowTableName)
 					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
 					sendevents = append(sendevents, event)
@@ -835,17 +838,23 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 // If we're streaming from multiple keyspaces, updating the table names by inserting the keyspace will disambiguate
 // duplicate table names. If we enable the UseRawTableName flag to not update the table names, there is no need to
 // clone the entire event, whcih improves performance. This is typically safely used by clients only streaming one keyspace.
-func maybeUpdateTableName(event *binlogdatapb.VEvent, keyspace string, useRawTableName bool) *binlogdatapb.VEvent {
+func maybeUpdateTableName(event *binlogdatapb.VEvent, keyspace string, useRawTableName bool,
+	tableNameExtractor func(ev *binlogdatapb.VEvent) *string) *binlogdatapb.VEvent {
 	if useRawTableName {
 		return event
 	}
 	ev := event.CloneVT()
-	if event.Type == binlogdatapb.VEventType_FIELD {
-		ev.FieldEvent.TableName = keyspace + "." + ev.RowEvent.TableName
-	} else {
-		ev.RowEvent.TableName = keyspace + "." + ev.RowEvent.TableName
-	}
+	tableName := tableNameExtractor(ev)
+	*tableName = keyspace + "." + *tableName
 	return ev
+}
+
+func extractFieldTableName(ev *binlogdatapb.VEvent) *string {
+	return &ev.FieldEvent.TableName
+}
+
+func extractRowTableName(ev *binlogdatapb.VEvent) *string {
+	return &ev.RowEvent.TableName
 }
 
 // shouldRetry determines whether we should exit immediately or retry the vstream.
