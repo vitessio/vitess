@@ -300,7 +300,7 @@ func BenchmarkVStreamEvents(b *testing.B) {
 			sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 			addTabletToSandboxTopo(b, ctx, st, ks, "-20", sbc0.Tablet())
 
-			const totalEvents = 5_000_000
+			const totalEvents = 15_000_000
 			batchSize := 100_000
 			for i := 0; i < totalEvents; i += batchSize {
 				var events []*binlogdatapb.VEvent
@@ -327,8 +327,10 @@ func BenchmarkVStreamEvents(b *testing.B) {
 					Gtid:     "pos",
 				}},
 			}
+			start := make(chan struct{})
 			ch := make(chan *binlogdatapb.VStreamResponse)
 			go func() {
+				close(start)
 				err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil,
 					&vtgatepb.VStreamFlags{UseRawTableName: tt.useRawTableName}, func(events []*binlogdatapb.VEvent) error {
 						ch <- &binlogdatapb.VStreamResponse{Events: events}
@@ -341,6 +343,10 @@ func BenchmarkVStreamEvents(b *testing.B) {
 				ch <- nil
 			}()
 
+			// Start the timer when the VStream begins
+			<-start
+			b.ResetTimer()
+
 			received := 0
 			for {
 				resp := <-ch
@@ -351,6 +357,7 @@ func BenchmarkVStreamEvents(b *testing.B) {
 				received += len(resp.Events)
 				if received >= totalEvents {
 					b.Logf("Received events %d, expected total %d", received, totalEvents)
+					b.StopTimer()
 					cancel()
 				}
 			}
