@@ -30,8 +30,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 	"vitess.io/vitess/go/vt/log"
-	vtutils "vitess.io/vitess/go/vt/utils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )

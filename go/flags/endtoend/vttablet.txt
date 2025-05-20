@@ -3,7 +3,7 @@ The VTTablet server _controls_ a running MySQL server. VTTablet supports two pri
 * Managed MySQL (most common)
 * External MySQL
 
-In addition to these deployment types, a partially managed VTTablet is also possible by setting `--disable-active-reparents`.
+In addition to these deployment types, a partially managed VTTablet is also possible by setting `--disable_active_reparents`.
 
 ### Managed MySQL
 
@@ -155,7 +155,7 @@ Flags:
       --external-compressor string                                       command with arguments to use when compressing a backup.
       --external-compressor-extension string                             extension to use when using an external compressor.
       --external-decompressor string                                     command with arguments to use when decompressing a backup.
-      --file-backup-storage-root string                                  Root directory for the file backup storage.
+      --file_backup_storage_root string                                  Root directory for the file backup storage.
       --filecustomrules string                                           file based custom rule path
       --filecustomrules_watch                                            set up a watch on the target file and reload query rules when it changes
       --gc_check_interval duration                                       Interval between garbage collection checks (default 1h0m0s)
@@ -247,12 +247,12 @@ Flags:
       --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
-      --mysql-shutdown-timeout duration                                  timeout to use when MySQL is being shut down. (default 5m0s)
+      --mysql-shutdown-timeout duration                                  Timeout to use when MySQL is being shut down. (default 5m0s)
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
-      --opentsdb-uri string                                              URI of opentsdb /api/put method
+      --opentsdb_uri string                                              URI of opentsdb /api/put method
       --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --pool-hostname-resolve-interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         port for the server
@@ -327,6 +327,7 @@ Flags:
       --serving_state_grace_period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state
       --shard_sync_retry_delay duration                                  delay between retries of updates to keep the tablet and its shard record in sync (default 30s)
       --shutdown_grace_period duration                                   how long to wait for queries and transactions to complete during graceful shutdown. (default 3s)
+      --skip-user-metrics                                                If true, user based stats are not recorded.
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
       --srv-topo-cache-refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)

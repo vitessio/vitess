@@ -131,7 +131,7 @@ Flags:
       --external-compressor string                                  command with arguments to use when compressing a backup.
       --external-compressor-extension string                        extension to use when using an external compressor.
       --external-decompressor string                                command with arguments to use when decompressing a backup.
-      --file-backup-storage-root string                             Root directory for the file backup storage.
+      --file_backup_storage_root string                             Root directory for the file backup storage.
       --gcs-backup-storage-bucket string                            Google Cloud Storage bucket to use for backups.
       --gcs-backup-storage-root string                              Root prefix for all backup-related object names.
       --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -193,7 +193,7 @@ Flags:
       --mysql-shutdown-timeout duration                             how long to wait for mysqld shutdown (default 5m0s)
       --mysql-socket string                                         Path to the mysqld socket file
       --mysql_timeout duration                                      how long to wait for mysqld startup (default 5m0s)
-      --opentsdb-uri string                                         URI of opentsdb /api/put method
+      --opentsdb_uri string                                         URI of opentsdb /api/put method
       --port int                                                    port for the server
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints
