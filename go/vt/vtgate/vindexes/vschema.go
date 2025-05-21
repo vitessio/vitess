@@ -163,7 +163,7 @@ func (t *BaseTable) GetTableName() sqlparser.TableName {
 	return sqlparser.NewTableNameWithQualifier(t.Name.String(), t.Keyspace.Name)
 }
 
-// Keyspace contains the keyspcae info for each Table.
+// Keyspace contains the keyspace info for each Table.
 type Keyspace struct {
 	Name    string
 	Sharded bool
