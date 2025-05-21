@@ -101,7 +101,7 @@ func (vg *varGroup) publish(name string, v expvar.Var) {
 	defer vg.Unlock()
 
 	// Check if the variable is already registered
-	if ok := vg.vars[name]; ok != nil {
+	if _, ok := vg.vars[name]; ok {
 		return
 	}
 
