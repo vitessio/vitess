@@ -144,7 +144,7 @@ func NewTableGC(env tabletenv.Env, ts *topo.Server, lagThrottler *throttle.Throt
 
 		env:  env,
 		ts:   ts,
-		pool: newPool(env, "TableGCPool"),
+		pool: newPool(env),
 
 		purgingTables:    map[string]bool{},
 		checkRequestChan: make(chan bool),
@@ -175,8 +175,7 @@ func (collector *TableGC) Open() (err error) {
 
 	// Reinitialize the pool if it was closed
 	if collector.pool == nil {
-		// Pass empty name so that metrics are not re-registered.
-		collector.pool = newPool(collector.env, "")
+		collector.pool = newPool(collector.env)
 	}
 
 	collector.lifecycleStates, err = schema.ParseGCLifecycle(gcLifecycle)
@@ -715,8 +714,8 @@ func (collector *TableGC) Status() *Status {
 	return status
 }
 
-func newPool(env tabletenv.Env, name string) *connpool.Pool {
-	return connpool.NewPool(env, name, tabletenv.ConnPoolConfig{
+func newPool(env tabletenv.Env) *connpool.Pool {
+	return connpool.NewPool(env, "TableGCPool", tabletenv.ConnPoolConfig{
 		Size:        2,
 		IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 	})

@@ -100,6 +100,11 @@ func (vg *varGroup) publish(name string, v expvar.Var) {
 	vg.Lock()
 	defer vg.Unlock()
 
+	// Check if the variable is already registered
+	if ok := vg.vars[name]; ok != nil {
+		return
+	}
+
 	expvar.Publish(name, v)
 	if vg.newVarHook != nil {
 		vg.newVarHook(name, v)
