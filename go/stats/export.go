@@ -100,7 +100,7 @@ func (vg *varGroup) publish(name string, v expvar.Var) {
 	vg.Lock()
 	defer vg.Unlock()
 
-	// Check if the variable is already registered
+	// Check if the variable is already exported
 	if _, ok := vg.vars[name]; ok {
 		return
 	}
