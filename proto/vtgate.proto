@@ -372,7 +372,7 @@ message VStreamFlags {
   // If not provided, the default behaviour is to copy all tables.
   repeated string tables_to_copy = 9;
   // Exclude the keyspace from the table name that is sent to the vstream client
-  repeated string exclude_keyspace_from_table_name = 10;
+  bool exclude_keyspace_from_table_name = 10;
 }
 
 // VStreamRequest is the payload for VStream.
