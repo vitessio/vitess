@@ -643,6 +643,7 @@ func TestDeadlockOnClose(t *testing.T) {
 
 	// Open the monitor
 	m.Open()
+	defer m.Close()
 
 	// We will now try to close and open the monitor multiple times to see if we can trigger a deadlock.
 	finishCh := make(chan int)
