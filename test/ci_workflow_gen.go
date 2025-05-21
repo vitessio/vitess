@@ -170,6 +170,7 @@ var (
 		"vreplication_basic",
 		"vreplication_migrate",
 		"vreplication_vtctldclient_vdiff2_movetables_tz",
+		"vtgate_transaction",
 	}
 	clusterRequiringMinio = []string{
 		"21",
