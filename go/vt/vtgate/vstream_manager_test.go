@@ -19,6 +19,8 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"os"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -288,6 +290,11 @@ func BenchmarkVStreamEvents(b *testing.B) {
 	}
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
+			f, err := os.Create("cpu.prof")
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer f.Close()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			cell := "aa"
@@ -300,7 +307,7 @@ func BenchmarkVStreamEvents(b *testing.B) {
 			sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 			addTabletToSandboxTopo(b, ctx, st, ks, "-20", sbc0.Tablet())
 
-			const totalEvents = 15_000_000
+			const totalEvents = 20_000_000
 			batchSize := 100_000
 			for i := 0; i < totalEvents; i += batchSize {
 				var events []*binlogdatapb.VEvent
@@ -346,6 +353,7 @@ func BenchmarkVStreamEvents(b *testing.B) {
 			// Start the timer when the VStream begins
 			<-start
 			b.ResetTimer()
+			pprof.StartCPUProfile(f)
 
 			received := 0
 			for {
@@ -358,6 +366,7 @@ func BenchmarkVStreamEvents(b *testing.B) {
 				if received >= totalEvents {
 					b.Logf("Received events %d, expected total %d", received, totalEvents)
 					b.StopTimer()
+					pprof.StopCPUProfile()
 					cancel()
 				}
 			}
