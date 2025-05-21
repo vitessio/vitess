@@ -420,8 +420,8 @@ func (session *SafeSession) InTransaction() bool {
 // Key behavior:
 // 1. Retrieves the appropriate list of sessions (PreSessions, PostSessions, or default ShardSessions) based on the commit order.
 // 2. Identifies a matching session by keyspace, shard, and tablet type.
-// 3. If the session meets specific conditions (e.g., non-vindex-only, single transaction mode), it updates the session state:
-//   - Converts a vindex-only session to a standard session if required by the transaction type.
+// 3. If the session meets specific conditions (e.g., dml, single transaction mode), it updates the session state:
+//   - Converts a non-dml session to a standard session if required by the transaction type.
 //   - If a multi-shard transaction is detected in Single mode, marks the session for rollback and returns an error.
 //
 // Parameters:
@@ -439,11 +439,7 @@ func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard
 
 	shardSession := session.findSessionLocked(keyspace, shard, tabletType)
 
-	if shardSession == nil {
-		return nil, nil
-	}
-
-	if !shardSession.ReadOnly {
+	if shardSession == nil || !shardSession.ReadOnly || session.execReadQuery {
 		return shardSession, nil
 	}
 
@@ -451,8 +447,7 @@ func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard
 		return nil, err
 	}
 
-	// the shard session is now used by non-vindex query as well,
-	// so it is not an exclusive vindex only shard session anymore.
+	// the shard session is now used by dml query as well.
 	shardSession.ReadOnly = false
 	return shardSession, nil
 }
