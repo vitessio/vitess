@@ -20,8 +20,8 @@ jobs:
 
       - name: Set up git user
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          git config --global user.name "${{ github.actor }}"
 
       - name: Add upstream
         run: git remote add upstream https://github.com/HubSpot/vitess.git
@@ -33,10 +33,10 @@ jobs:
         run: git merge upstream/main-2025-q2 --ff --allow-unrelated-histories
 
       - name: Add authentication for pushing
-        run: git remote set-url origin https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/Hubspot/vitess.git
+        run: git remote set-url origin https://${{ github.actor }}:${{ secrets.GH_TOKEN }}@github.com/Hubspot/vitess.git
 
       - name: Push changes to forked repo
         run: |
           git push origin sync-vitessio-workflow
         env:
-          gh_token: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
