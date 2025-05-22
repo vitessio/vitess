@@ -30,7 +30,7 @@ jobs:
         run: git fetch upstream
 
       - name: Merge upstream main into fork main
-        run: git merge upstream/main --ff --allow-unrelated-histories
+        run: git merge upstream/main-2025-q2 --ff --allow-unrelated-histories
 
       - name: Push changes to forked repo
         run: |
