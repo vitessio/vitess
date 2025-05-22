@@ -233,6 +233,45 @@ func TestNoRecordInTableNotFail(t *testing.T) {
 	}
 }
 
+func TestOnlyMultiShardWriteFail(t *testing.T) {
+	conn, cleanup := setup(t)
+	defer func() {
+		cleanup()
+		conn.Close()
+	}()
+
+	// basic test to check that multi-shard transaction is not allowed.
+	t.Run("insert-select-insert fail", func(t *testing.T) {
+		utils.Exec(t, conn, `begin`)
+		utils.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "a")`)
+		// read is ok on another shard.
+		utils.Exec(t, conn, `select * from t1 where txn_id = "b"`)
+		// write on it will fail.
+		_, err := utils.ExecAllowError(t, conn, `INSERT INTO t1(id, txn_id) VALUES (2, "b")`)
+		require.ErrorContains(t, err, "multi-db transaction attempted")
+		utils.Exec(t, conn, `rollback`)
+	})
+
+	// test with select query on different shards and one write query.
+	t.Run("select-select-insert pass", func(t *testing.T) {
+		utils.Exec(t, conn, `begin`)
+		utils.Exec(t, conn, `select * from t1 where txn_id = "a"`)
+		utils.Exec(t, conn, `select * from t1 where txn_id = "b"`)
+		utils.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (1, "a")`)
+		utils.Exec(t, conn, `commit`)
+	})
+
+	// test with one write query and multiple select.
+	t.Run("insert-select-select pass", func(t *testing.T) {
+		utils.Exec(t, conn, `begin`)
+		utils.Exec(t, conn, `INSERT INTO t1(id, txn_id) VALUES (2, "b")`)
+		utils.Exec(t, conn, `select * from t1 where txn_id in ("a", "b", "c")`)
+		utils.Exec(t, conn, `select * from t1 where txn_id in ("d", "e", "f")`)
+		utils.Exec(t, conn, `commit`)
+	})
+
+}
+
 func setup(t *testing.T) (*mysql.Conn, func()) {
 	t.Helper()
 	conn, err := mysql.Connect(context.Background(), &vtParams)

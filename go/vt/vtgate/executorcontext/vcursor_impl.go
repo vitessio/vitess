@@ -840,11 +840,13 @@ func (vc *VCursorImpl) markSavepoint(ctx context.Context, needsRollbackOnParialE
 	}
 	uID := fmt.Sprintf("_vt%s", strings.ReplaceAll(uuid.NewString(), "-", "_"))
 	spQuery := fmt.Sprintf("%ssavepoint %s%s", vc.marginComments.Leading, uID, vc.marginComments.Trailing)
+	vc.SafeSession.SetExecReadQuery(true)
 	_, err := vc.executor.Execute(ctx, nil, "MarkSavepoint", vc.SafeSession, spQuery, bindVars, false)
 	if err != nil {
 		return err
 	}
 	vc.SafeSession.SetSavepoint(uID)
+	vc.SafeSession.SetExecReadQuery(false)
 	return nil
 }
 
@@ -924,11 +926,11 @@ func (vc *VCursorImpl) ExecuteKeyspaceID(ctx context.Context, keyspace string, k
 	// This function is only called from consistent_lookup vindex when the lookup row getting inserting finds a duplicate.
 	// In such scenario, original row needs to be locked to check if it already exists or no other transaction is working on it or does not write to it.
 	// This creates a transaction but that transaction is for locking purpose only and should not cause multi-db transaction error.
-	// This fields helps in to ignore multi-db transaction error when it states `queryFromVindex`.
+	// This fields helps in to ignore multi-db transaction error when it states `execReadQuery`.
 	if !rollbackOnError {
-		vc.SafeSession.SetQueryFromVindex(true)
+		vc.SafeSession.SetExecReadQuery(true)
 		defer func() {
-			vc.SafeSession.SetQueryFromVindex(false)
+			vc.SafeSession.SetExecReadQuery(false)
 		}()
 	}
 	qr, errs := vc.ExecuteMultiShard(ctx, nil, rss, queries, rollbackOnError, autocommit, false)
