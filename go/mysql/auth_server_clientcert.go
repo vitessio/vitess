@@ -33,8 +33,13 @@ type AuthServerClientCert struct {
 
 // InitAuthServerClientCert is public so it can be called from plugin_auth_clientcert.go (go/cmd/vtgate)
 func InitAuthServerClientCert(clientcertAuthMethod string) {
-	if pflag.CommandLine.Lookup("mysql_server_ssl_ca").Value.String() == "" {
-		log.Info("Not configuring AuthServerClientCert because mysql_server_ssl_ca is empty")
+	caValue := pflag.CommandLine.Lookup("mysql-server-ssl-ca").Value.String()
+	//TODO: This block can be removed in v25 when "mysql_server_ssl_ca" will be deprecated.
+	if caValue == "" {
+		caValue = pflag.CommandLine.Lookup("mysql_server_ssl_ca").Value.String()
+	}
+	if caValue == "" {
+		log.Info("Not configuring AuthServerClientCert because mysql-server-ssl-ca is empty")
 		return
 	}
 	if clientcertAuthMethod != string(MysqlClearPassword) && clientcertAuthMethod != string(MysqlDialog) {

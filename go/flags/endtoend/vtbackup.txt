@@ -67,7 +67,7 @@ Flags:
       --builtinbackup-incremental-restore-path string               the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
       --builtinbackup-mysqld-timeout duration                       how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
       --builtinbackup-progress duration                             how often to send progress updates when backing up large files. (default 5s)
-      --ceph-backup-storage-config string                           Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
+      --ceph_backup_storage_config string                           Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
       --compression-engine-name string                              compressor engine used for compression. (default "pargzip")
       --compression-level int                                       what level to pass to the compressor. (default 1)
       --concurrency int                                             (init restore parameter) how many concurrent files to restore at once (default 4)
@@ -193,7 +193,7 @@ Flags:
       --mysql-shutdown-timeout duration                             how long to wait for mysqld shutdown (default 5m0s)
       --mysql-socket string                                         Path to the mysqld socket file
       --mysql_timeout duration                                      how long to wait for mysqld startup (default 5m0s)
-      --opentsdb-uri string                                         URI of opentsdb /api/put method
+      --opentsdb_uri string                                         URI of opentsdb /api/put method
       --port int                                                    port for the server
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints

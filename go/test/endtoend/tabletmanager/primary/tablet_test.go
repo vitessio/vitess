@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -85,7 +86,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--lock_tables_timeout", "5s",
 			"--watch_replication_stream",
-			"--enable_replication_reporter",
+			utils.GetFlagVariantForTests("--enable-replication-reporter"),
 		}
 
 		// Start keyspace

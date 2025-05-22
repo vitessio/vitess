@@ -58,8 +58,8 @@ Flags:
       --db-ssl-key string                                           connection ssl key
       --db-ssl-mode SslMode                                         SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
       --db-tls-min-version string                                   Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --dba-idle-timeout duration                                   Idle timeout for dba connections (default 1m0s)
-      --dba-pool-size int                                           Size of the connection pool for dba connections (default 20)
+      --dba_idle_timeout duration                                   Idle timeout for dba connections (default 1m0s)
+      --dba_pool_size int                                           Size of the connection pool for dba connections (default 20)
   -h, --help                                                        help for mysqlctl
       --keep-logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep-logs-by-mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)

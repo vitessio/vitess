@@ -86,11 +86,11 @@ gracePeriods:
   transitionSeconds: 0 # serving_state_grace_period
 
 replicationTracker:
-  mode: disable                    # enable_replication_reporter
+  mode: disable                    # enable-replication-reporter
   heartbeatIntervalMilliseconds: 0 # heartbeat-enable, heartbeat-interval
 
 hotRowProtection:
-  mode: disable|dryRun|enable # enable_hot_row_protection, enable_hot_row_protection_dry_run
+  mode: disable|dryRun|enable # enable-hot-row-protection, enable-hot-row-protection-dry-run
   # Recommended value: same as txPool.size.
   maxQueueSize: 20            # hot_row_protection_max_queue_size
   maxGlobalQueueSize: 1000    # hot_row_protection_max_global_queue_size
@@ -115,8 +115,8 @@ messagePostponeParallelism: 4            # queryserver-config-message-postpone-c
 # tx-throttler-config
 # tx-throttler-healthcheck-cells
 # tx-throttler-tablet-types
-# enable_transaction_limit
-# enable_transaction_limit_dry_run
+# enable-transaction-limit
+# enable-transaction-limit-dry-run
 # transaction_limit_per_user
 # transaction_limit_by_username
 # transaction_limit_by_principal
