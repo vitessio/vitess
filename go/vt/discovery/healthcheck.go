@@ -62,6 +62,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
@@ -180,9 +181,10 @@ func registerDiscoveryFlags(fs *pflag.FlagSet) {
 }
 
 func registerWebUIFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&TabletURLTemplateString, "tablet_url_template", "http://{{.GetTabletHostPort}}", "Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this.")
-	fs.DurationVar(&refreshInterval, "tablet_refresh_interval", 1*time.Minute, "Tablet refresh interval.")
-	fs.BoolVar(&refreshKnownTablets, "tablet_refresh_known_tablets", true, "Whether to reload the tablet's address/port map from topo in case they change.")
+	utils.SetFlagStringVar(fs, &TabletURLTemplateString, "tablet-url-template", "http://{{.GetTabletHostPort}}", "Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this.")
+	utils.SetFlagDurationVar(fs, &refreshInterval, "tablet-refresh-interval", 1*time.Minute, "Tablet refresh interval.")
+	utils.SetFlagBoolVar(fs, &refreshKnownTablets, "tablet-refresh-known-tablets", true, "Whether to reload the tablet's address/port map from topo in case they change.")
+
 	ParseTabletURLTemplateFromFlag()
 }
 
