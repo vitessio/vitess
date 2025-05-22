@@ -25,7 +25,7 @@ jobs:
       #    git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Add upstream
-        run: git remote add upstream https://github.com/vitessio/vitess.git
+        run: git remote add upstream https://github.com/HubSpot/vitess.git
 
       - name: Fetch upstream changes
         run: git fetch upstream
