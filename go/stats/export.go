@@ -108,9 +108,9 @@ func (vg *varGroup) publish(name string, v expvar.Var) {
 	expvar.Publish(name, v)
 	if vg.newVarHook != nil {
 		vg.newVarHook(name, v)
-	} else {
-		vg.vars[name] = v
 	}
+
+	vg.vars[name] = v
 }
 
 var defaultVarGroup = varGroup{vars: make(map[string]expvar.Var)}
