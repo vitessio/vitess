@@ -50,6 +50,48 @@ func TestConnPoolGet(t *testing.T) {
 	dbConn.Recycle()
 }
 
+func TestReopenPool(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	cfg := tabletenv.ConnPoolConfig{
+		Size:        1,
+		Timeout:     time.Second,
+		IdleTimeout: 10 * time.Second,
+	}
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "PoolTest")
+	params := dbconfigs.New(db.ConnParams())
+
+	connPool := NewPool(env, "TestPool", cfg)
+	connPool.Open(params, params, params)
+	connPool.Close()
+
+	connPool = NewPool(env, "TestPool", cfg)
+	connPool.Open(params, params, params)
+	connPool.Close()
+}
+
+func TestReopenPoolUnnamedEnv(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	cfg := tabletenv.ConnPoolConfig{
+		Size:        1,
+		Timeout:     time.Second,
+		IdleTimeout: 10 * time.Second,
+	}
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "")
+	params := dbconfigs.New(db.ConnParams())
+
+	connPool := NewPool(env, "TestPool", cfg)
+	connPool.Open(params, params, params)
+	connPool.Close()
+
+	connPool = NewPool(env, "TestPool", cfg)
+	connPool.Open(params, params, params)
+	connPool.Close()
+}
+
 func TestConnPoolTimeout(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
