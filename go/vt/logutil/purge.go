@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/pflag"
 
 	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -41,9 +42,9 @@ var (
 // calls this function, or call this function directly before parsing
 // command-line arguments.
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&keepLogsByCtime, "keep_logs", keepLogsByCtime, "keep logs for this long (using ctime) (zero to keep forever)")
-	fs.DurationVar(&keepLogsByMtime, "keep_logs_by_mtime", keepLogsByMtime, "keep logs for this long (using mtime) (zero to keep forever)")
-	fs.DurationVar(&purgeLogsInterval, "purge_logs_interval", purgeLogsInterval, "how often try to remove old logs")
+	utils.SetFlagDurationVar(fs, &keepLogsByCtime, "keep-logs", keepLogsByCtime, "keep logs for this long (using ctime) (zero to keep forever)")
+	utils.SetFlagDurationVar(fs, &keepLogsByMtime, "keep-logs-by-mtime", keepLogsByMtime, "keep logs for this long (using mtime) (zero to keep forever)")
+	utils.SetFlagDurationVar(fs, &purgeLogsInterval, "purge-logs-interval", purgeLogsInterval, "how often try to remove old logs")
 }
 
 // parse parses a file name (as used by glog) and returns its process

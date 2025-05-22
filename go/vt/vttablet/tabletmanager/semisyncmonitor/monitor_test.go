@@ -619,6 +619,53 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	require.True(t, m.isClosed())
 }
 
+// TestDeadlockOnClose tests the deadlock that can occur when calling Close().
+// Look at https://github.com/vitessio/vitess/issues/18275 for more details.
+func TestDeadlockOnClose(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
+	config := &tabletenv.TabletConfig{
+		DB: dbc,
+		SemiSyncMonitor: tabletenv.SemiSyncMonitorConfig{
+			// Extremely low interval to trigger the deadlock quickly.
+			// This makes the monitor try and write that it is still blocked quite aggressively.
+			Interval: 10 * time.Millisecond,
+		},
+	}
+	m := NewMonitor(config, exporter)
+
+	// Set up for semisync to be blocked
+	db.SetNeverFail(true)
+	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "1"))
+
+	// Open the monitor
+	m.Open()
+	defer m.Close()
+
+	// We will now try to close and open the monitor multiple times to see if we can trigger a deadlock.
+	finishCh := make(chan int)
+	go func() {
+		count := 100
+		for i := 0; i < count; i++ {
+			m.Close()
+			m.Open()
+			time.Sleep(20 * time.Millisecond)
+		}
+		close(finishCh)
+	}()
+
+	select {
+	case <-finishCh:
+		// The test finished without deadlocking.
+	case <-time.After(5 * time.Second):
+		// The test timed out, which means we deadlocked.
+		t.Fatalf("Deadlock occurred while closing the monitor")
+	}
+}
+
 // TestSemiSyncMonitor tests the semi-sync monitor as a black box.
 // It only calls the exported methods to see they work as intended.
 func TestSemiSyncMonitor(t *testing.T) {

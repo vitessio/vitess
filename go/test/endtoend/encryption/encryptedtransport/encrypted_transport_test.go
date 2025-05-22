@@ -67,6 +67,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/encryption"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/assert"
@@ -201,7 +202,7 @@ func useEffectiveCallerID(ctx context.Context, t *testing.T) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller id
 	// into immediate caller id.
-	clusterInstance.VtGateExtraArgs = []string{"--grpc_use_effective_callerid"}
+	clusterInstance.VtGateExtraArgs = []string{utils.GetFlagVariantForTests("--grpc-use-effective-callerid")}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
 	err := clusterInstance.RestartVtgate()
 	require.NoError(t, err)
@@ -250,7 +251,7 @@ func useEffectiveGroups(ctx context.Context, t *testing.T) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller's groups
 	// into immediate caller id.
-	clusterInstance.VtGateExtraArgs = []string{"--grpc_use_effective_callerid", "--grpc-use-effective-groups"}
+	clusterInstance.VtGateExtraArgs = []string{utils.GetFlagVariantForTests("--grpc-use-effective-callerid"), utils.GetFlagVariantForTests("--grpc-use-effective-groups")}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
 	err := clusterInstance.RestartVtgate()
 	require.NoError(t, err)
@@ -422,27 +423,29 @@ func createSignedCert(ca string, serial string, name string, commonName string) 
 }
 
 func serverExtraArguments(name string, ca string) []string {
-	args := []string{"--grpc_cert", certDirectory + "/" + name + "-cert.pem",
-		"--grpc_key", certDirectory + "/" + name + "-key.pem",
-		"--grpc_ca", certDirectory + "/" + ca + "-cert.pem"}
+	args := []string{
+		utils.GetFlagVariantForTests("--grpc-cert"), certDirectory + "/" + name + "-cert.pem",
+		utils.GetFlagVariantForTests("--grpc-key"), certDirectory + "/" + name + "-key.pem",
+		utils.GetFlagVariantForTests("--grpc-ca"), certDirectory + "/" + ca + "-cert.pem",
+	}
 	return args
 }
 
 func tmclientExtraArgs(name string) []string {
 	ca := "vttablet-server"
-	var args = []string{"--tablet_manager_grpc_cert", certDirectory + "/" + name + "-cert.pem",
-		"--tablet_manager_grpc_key", certDirectory + "/" + name + "-key.pem",
-		"--tablet_manager_grpc_ca", certDirectory + "/" + ca + "-cert.pem",
-		"--tablet_manager_grpc_server_name", "vttablet server instance"}
+	var args = []string{"--tablet-manager-grpc-cert", certDirectory + "/" + name + "-cert.pem",
+		"--tablet-manager-grpc-key", certDirectory + "/" + name + "-key.pem",
+		"--tablet-manager-grpc-ca", certDirectory + "/" + ca + "-cert.pem",
+		"--tablet-manager-grpc-server-name", "vttablet server instance"}
 	return args
 }
 
 func tabletConnExtraArgs(name string) []string {
 	ca := "vttablet-server"
-	args := []string{"--tablet_grpc_cert", certDirectory + "/" + name + "-cert.pem",
-		"--tablet_grpc_key", certDirectory + "/" + name + "-key.pem",
-		"--tablet_grpc_ca", certDirectory + "/" + ca + "-cert.pem",
-		"--tablet_grpc_server_name", "vttablet server instance"}
+	args := []string{utils.GetFlagVariantForTests("--tablet-grpc-cert"), certDirectory + "/" + name + "-cert.pem",
+		utils.GetFlagVariantForTests("--tablet-grpc-key"), certDirectory + "/" + name + "-key.pem",
+		utils.GetFlagVariantForTests("--tablet-grpc-ca"), certDirectory + "/" + ca + "-cert.pem",
+		utils.GetFlagVariantForTests("--tablet-grpc-server-name"), "vttablet server instance"}
 	return args
 }
 

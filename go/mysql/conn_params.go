@@ -38,7 +38,7 @@ type ConnParams struct {
 	// The following SSL flags control the SSL behavior.
 	//
 	// Not setting this value implies preferred mode unless
-	// the CapabilityClientSSL bit is set in db_flags. In the
+	// the CapabilityClientSSL bit is set in db-flags. In the
 	// flag is set, it ends up equivalent to verify_identity mode.
 	SslMode          vttls.SslMode
 	SslCa            string
@@ -93,7 +93,7 @@ func (cp *ConnParams) EnableClientFoundRows() {
 // SslRequired returns whether the connection parameters
 // define that SSL is a requirement. If SslMode is set, it uses
 // that to determine this, if it's not set it falls back to
-// the legacy db_flags behavior.
+// the legacy db-flags behavior.
 func (cp *ConnParams) SslRequired() bool {
 	mode := cp.EffectiveSslMode()
 	return mode != vttls.Disabled && mode != vttls.Preferred
@@ -101,7 +101,7 @@ func (cp *ConnParams) SslRequired() bool {
 
 // EffectiveSslMode computes the effective SslMode. If SslMode
 // is explicitly set, it uses that to determine this, if it's
-// not set it falls back to the legacy db_flags behavior.
+// not set it falls back to the legacy db-flags behavior.
 func (cp *ConnParams) EffectiveSslMode() vttls.SslMode {
 	if cp.SslMode == "" {
 		if (cp.Flags & CapabilityClientSSL) > 0 {

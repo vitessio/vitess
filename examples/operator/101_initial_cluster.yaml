@@ -44,7 +44,7 @@ spec:
     cells:
     - zone1
     extraFlags:
-      security_policy: read-only
+      security-policy: read-only
     replicas: 1
     resources:
       limits:
@@ -101,7 +101,7 @@ spec:
             replicas: 2
             vttablet:
               extraFlags:
-                db_charset: utf8mb4
+                db-charset: utf8mb4
               resources:
                 limits:
                   memory: 256Mi

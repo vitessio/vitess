@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -173,7 +174,7 @@ func main() {
 
 	// Tracing flags
 	trace.RegisterFlags(rootCmd.Flags()) // defined in go/vt/trace
-	rootCmd.Flags().BoolVar(&opts.EnableTracing, "grpc-tracing", false, "whether to enable tracing on the gRPC server")
+	utils.SetFlagBoolVar(rootCmd.Flags(), &opts.EnableTracing, "grpc-tracing", false, "whether to enable tracing on the gRPC server")
 	rootCmd.Flags().BoolVar(&httpOpts.EnableTracing, "http-tracing", false, "whether to enable tracing on the HTTP server")
 
 	// gRPC server flags

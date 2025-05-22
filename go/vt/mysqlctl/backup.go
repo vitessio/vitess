@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -112,9 +113,9 @@ func ParseBinlogTimestamp(timestamp string) (time.Time, error) {
 }
 
 func registerBackupFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&backupStorageCompress, "backup_storage_compress", backupStorageCompress, "if set, the backup files will be compressed.")
-	fs.IntVar(&backupCompressBlockSize, "backup_storage_block_size", backupCompressBlockSize, "if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000).")
-	fs.IntVar(&backupCompressBlocks, "backup_storage_number_blocks", backupCompressBlocks, "if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression.")
+	utils.SetFlagBoolVar(fs, &backupStorageCompress, "backup-storage-compress", backupStorageCompress, "if set, the backup files will be compressed.")
+	utils.SetFlagIntVar(fs, &backupCompressBlockSize, "backup-storage-block-size", backupCompressBlockSize, "if backup-storage-compress is true, backup-storage-block-size sets the byte size for each block while compressing (default is 250000).")
+	utils.SetFlagIntVar(fs, &backupCompressBlocks, "backup-storage-number-blocks", backupCompressBlocks, "if backup-storage-compress is true, backup-storage-number-blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression.")
 }
 
 // Backup is the main entry point for a backup:

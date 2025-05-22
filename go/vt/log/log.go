@@ -28,6 +28,8 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/utils"
 )
 
 // Level is used with V() to test log verbosity.
@@ -85,7 +87,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	flagVal := logRotateMaxSize{
 		val: fmt.Sprintf("%d", atomic.LoadUint64(&glog.MaxSize)),
 	}
-	fs.Var(&flagVal, "log_rotate_max_size", "size in bytes at which logs are rotated (glog.MaxSize)")
+	utils.SetFlagVar(fs, &flagVal, "log-rotate-max-size", "size in bytes at which logs are rotated (glog.MaxSize)")
 }
 
 // logRotateMaxSize implements pflag.Value and is used to

@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttls"
 )
 
@@ -71,17 +72,18 @@ var (
 )
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&keepaliveTime, "grpc_keepalive_time", keepaliveTime, "After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive.")
-	fs.DurationVar(&keepaliveTimeout, "grpc_keepalive_timeout", keepaliveTimeout, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
-	fs.IntVar(&initialConnWindowSize, "grpc_initial_conn_window_size", initialConnWindowSize, "gRPC initial connection window size")
-	fs.IntVar(&initialWindowSize, "grpc_initial_window_size", initialWindowSize, "gRPC initial window size")
-	fs.StringVar(&compression, "grpc_compression", compression, "Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy")
 
-	fs.StringVar(&credsFile, "grpc_auth_static_client_creds", credsFile, "When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.")
+	utils.SetFlagDurationVar(fs, &keepaliveTime, "grpc-keepalive-time", keepaliveTime, "After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive.")
+	utils.SetFlagDurationVar(fs, &keepaliveTimeout, "grpc-keepalive-timeout", keepaliveTimeout, "After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed.")
+	utils.SetFlagIntVar(fs, &initialConnWindowSize, "grpc-initial-conn-window-size", initialConnWindowSize, "gRPC initial connection window size")
+	utils.SetFlagIntVar(fs, &initialWindowSize, "grpc-initial-window-size", initialWindowSize, "gRPC initial window size")
+	utils.SetFlagStringVar(fs, &compression, "grpc-compression", compression, "Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy")
+
+	utils.SetFlagStringVar(fs, &credsFile, "grpc-auth-static-client-creds", credsFile, "When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.")
 }
 
 func RegisterDialConcurrencyFlags(fs *pflag.FlagSet) {
-	fs.Int64Var(&dialConcurrencyLimit, "grpc-dial-concurrency-limit", 1024, "Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000.")
+	utils.SetFlagInt64Var(fs, &dialConcurrencyLimit, "grpc-dial-concurrency-limit", 1024, "Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000.")
 }
 
 func init() {

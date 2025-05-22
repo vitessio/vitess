@@ -775,6 +775,32 @@ func TestCompilerSingle(t *testing.T) {
 			// exercise the path to push sets onto the stack.
 			result: `FLOAT64(1)`,
 		},
+		{
+			expression: `GREATEST(NULL, '2023-10-24')`,
+			result:     `NULL`,
+		},
+		{
+			expression: `GREATEST(NULL, 1)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `GREATEST(NULL, 1.0)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `GREATEST(NULL, 1.0e0)`,
+			result:     `NULL`,
+		},
+		{
+			expression: `GREATEST(column0, 1.0e0)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte("foo"))},
+			// Enum and set are treated as strings in this case.
+			result: `VARCHAR("foo")`,
+		},
+		{
+			expression: `GREATEST(JSON_OBJECT(), JSON_ARRAY())`,
+			result:     `VARCHAR("{}")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

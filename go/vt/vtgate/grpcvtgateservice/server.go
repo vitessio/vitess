@@ -36,6 +36,7 @@ import (
 	vtgateservicepb "vitess.io/vitess/go/vt/proto/vtgateservice"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -54,10 +55,10 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&useEffective, "grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
-	fs.BoolVar(&useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
-	fs.BoolVar(&useStaticAuthenticationIdentity, "grpc-use-static-authentication-callerid", false, "If set, will set the immediate caller id to the username authenticated by the static auth plugin.")
-	fs.BoolVar(&sendSessionInStreaming, "grpc-send-session-in-streaming", true, "If set, will send the session as last packet in streaming api to support transactions in streaming")
+	utils.SetFlagBoolVar(fs, &useEffective, "grpc-use-effective-callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
+	utils.SetFlagBoolVar(fs, &useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
+	utils.SetFlagBoolVar(fs, &useStaticAuthenticationIdentity, "grpc-use-static-authentication-callerid", false, "If set, will set the immediate caller id to the username authenticated by the static auth plugin.")
+	utils.SetFlagBoolVar(fs, &sendSessionInStreaming, "grpc-send-session-in-streaming", true, "If set, will send the session as last packet in streaming api to support transactions in streaming")
 	_ = fs.MarkDeprecated("grpc-send-session-in-streaming", "This option is deprecated and will be deleted in a future release")
 }
 
@@ -116,7 +117,7 @@ func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerI
 	// The client cert common name (if using mTLS)
 	immediate, securityGroups := immediateCallerIDFromCert(ctx)
 
-	// The effective caller id (if --grpc_use_effective_callerid=true)
+	// The effective caller id (if --grpc-use-effective-callerid=true)
 	if immediate == "" && useEffective && effectiveCallerID != nil {
 		immediate = effectiveCallerID.Principal
 		if useEffectiveGroups && len(effectiveCallerID.Groups) > 0 {
