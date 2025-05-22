@@ -32,6 +32,9 @@ jobs:
       - name: Merge upstream main into fork main
         run: git merge upstream/main-2025-q2 --ff --allow-unrelated-histories
 
+        - name: Add authentication for pushing
+        run: git remote set-url origin https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/Hubspot/vitess.git
+
       - name: Push changes to forked repo
         run: |
           git push origin sync-vitessio-workflow
