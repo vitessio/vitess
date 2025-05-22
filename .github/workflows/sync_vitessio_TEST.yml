@@ -1,6 +1,9 @@
 name: Sync Vitessio TEST
 
 on:
+  push:
+    branches:
+      - sync-vitessio-workflow
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
