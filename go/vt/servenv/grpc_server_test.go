@@ -17,6 +17,8 @@ limitations under the License.
 package servenv
 
 import (
+	"fmt"
+	"net"
 	"testing"
 
 	"context"
@@ -80,7 +82,7 @@ func TestOrcaMetricsRecorder(t *testing.T) {
 
 func TestEnableOrcaMetrics(t *testing.T) {
 	// Set the port to enable gRPC server
-	withTempVar(&gRPCPort, 1000)
+	withTempVar(&gRPCPort, getFreePort())
 	withTempVar(&gRPCEnableOrcaMetrics, true)
 	withTempVar(&GRPCServerMetricsRecorder, nil)
 
@@ -105,7 +107,7 @@ func TestEnableOrcaMetrics(t *testing.T) {
 
 func TestDisableOrcaMetrics(t *testing.T) {
 	// Set the port to enable gRPC server
-	withTempVar(&gRPCPort, 10001)
+	withTempVar(&gRPCPort, getFreePort())
 	withTempVar(&gRPCEnableOrcaMetrics, false)
 	withTempVar(&GRPCServerMetricsRecorder, nil)
 
@@ -128,7 +130,7 @@ func TestDisableOrcaMetrics(t *testing.T) {
 
 func TestReportedOrcaMetrics(t *testing.T) {
 	// Set the port to enable gRPC server
-	withTempVar(&gRPCPort, 10003)
+	withTempVar(&gRPCPort, getFreePort())
 	withTempVar(&gRPCEnableOrcaMetrics, true)
 	withTempVar(&GRPCServerMetricsRecorder, nil)
 
@@ -146,6 +148,15 @@ func TestReportedOrcaMetrics(t *testing.T) {
 	if memUsage := serverMetrics.MemUtilization; memUsage < 0 {
 		t.Errorf("Mem Utilization is not set %.2f", memUsage)
 	}
+}
+
+func getFreePort() int {
+	l, err := net.Listen("tcp", ":0")
+	if err != nil {
+		panic(fmt.Sprintf("could not get free port: %v", err))
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
 }
 
 func withTempVar[T any](set *T, temp T) (restore func()) {
