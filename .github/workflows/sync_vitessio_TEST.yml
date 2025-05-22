@@ -1,5 +1,10 @@
 name: Sync Vitessio TEST
 
+### This is just a test workflow.
+### We just want a temporary workflow that can be run on push to verify access etc.
+### Currently we are running into problems with auth and GITHUB_TOKEN.
+### Once we have auth sorted, and can run this, we will delete this file and submit the non-test workflow.
+
 on:
   push:
     branches:
