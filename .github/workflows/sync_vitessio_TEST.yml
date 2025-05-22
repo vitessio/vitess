@@ -39,4 +39,4 @@ jobs:
         run: |
           git push origin sync-vitessio-workflow
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          gh_token: ${{ secrets.GH_TOKEN }}
