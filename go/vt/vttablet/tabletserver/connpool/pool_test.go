@@ -64,10 +64,22 @@ func TestReopenPool(t *testing.T) {
 
 	connPool := NewPool(env, "TestPool", cfg)
 	connPool.Open(params, params, params)
+
+	dbConn, err := connPool.Get(context.Background(), nil)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn)
+
+	dbConn.Recycle()
 	connPool.Close()
 
 	connPool = NewPool(env, "TestPool", cfg)
 	connPool.Open(params, params, params)
+
+	dbConn, err = connPool.Get(context.Background(), nil)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn)
+
+	dbConn.Recycle()
 	connPool.Close()
 }
 
@@ -85,10 +97,22 @@ func TestReopenPoolUnnamedEnv(t *testing.T) {
 
 	connPool := NewPool(env, "TestPool", cfg)
 	connPool.Open(params, params, params)
+
+	dbConn, err := connPool.Get(context.Background(), nil)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn)
+
+	dbConn.Recycle()
 	connPool.Close()
 
 	connPool = NewPool(env, "TestPool", cfg)
 	connPool.Open(params, params, params)
+
+	dbConn, err = connPool.Get(context.Background(), nil)
+	require.NoError(t, err)
+	require.NotNil(t, dbConn)
+
+	dbConn.Recycle()
 	connPool.Close()
 }
 
