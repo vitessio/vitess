@@ -80,11 +80,9 @@ func TestOrcaMetricsRecorder(t *testing.T) {
 
 func TestEnableOrcaMetrics(t *testing.T) {
 	// Set the port to enable gRPC server
-	gRPCPort = 1000
-	originalFlag := gRPCEnableOrcaMetrics
-	defer func() { gRPCEnableOrcaMetrics = originalFlag }()
-	originalRecorder := GRPCServerMetricsRecorder
-	defer func() { GRPCServerMetricsRecorder = originalRecorder }()
+	withTempVar(&gRPCPort, 1000)
+	withTempVar(&gRPCEnableOrcaMetrics, true)
+	withTempVar(&GRPCServerMetricsRecorder, nil)
 
 	gRPCEnableOrcaMetrics = true
 	GRPCServerMetricsRecorder = nil
@@ -107,13 +105,10 @@ func TestEnableOrcaMetrics(t *testing.T) {
 
 func TestDisableOrcaMetrics(t *testing.T) {
 	// Set the port to enable gRPC server
-	gRPCPort = 1001
-	originalFlag := gRPCEnableOrcaMetrics
-	defer func() { gRPCEnableOrcaMetrics = originalFlag }()
-	originalRecorder := GRPCServerMetricsRecorder
-	defer func() { GRPCServerMetricsRecorder = originalRecorder }()
-	GRPCServerMetricsRecorder = nil
-	gRPCEnableOrcaMetrics = false
+	withTempVar(&gRPCPort, 10001)
+	withTempVar(&gRPCEnableOrcaMetrics, false)
+	withTempVar(&GRPCServerMetricsRecorder, nil)
+
 	createGRPCServer()
 	if GRPCServerMetricsRecorder != nil {
 		t.Errorf("GRPCServerMetricsRecorder should NOT be initialized when gRPCEnableOrcaMetrics is false")
@@ -128,6 +123,36 @@ func TestDisableOrcaMetrics(t *testing.T) {
 	serveGRPC()
 	if called {
 		t.Errorf("registerORCA should NOT have been called when ORCA metrics are enabled")
+	}
+}
+
+func TestReportedOrcaMetrics(t *testing.T) {
+	// Set the port to enable gRPC server
+	withTempVar(&gRPCPort, 10003)
+	withTempVar(&gRPCEnableOrcaMetrics, true)
+	withTempVar(&GRPCServerMetricsRecorder, nil)
+
+	createGRPCServer()
+	if GRPCServerMetricsRecorder == nil {
+		t.Errorf("GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is false")
+	}
+
+	serveGRPC()
+	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
+	if cpuUsage := serverMetrics.CPUUtilization; cpuUsage < 0 {
+		t.Errorf("CPU Utilization is not set %.2f", cpuUsage)
+	}
+
+	if memUsage := serverMetrics.MemUtilization; memUsage < 0 {
+		t.Errorf("Mem Utilization is not set %.2f", memUsage)
+	}
+}
+
+func withTempVar[T any](set *T, temp T) (restore func()) {
+	original := *set
+	*set = temp
+	return func() {
+		*set = original
 	}
 }
 

@@ -21,12 +21,14 @@ import (
 	"crypto/tls"
 	"math"
 	"net"
+	"runtime"
 	"strconv"
 	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/docker"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
@@ -358,6 +360,10 @@ func registerOrca() {
 		log.Exitf("Failed to register ORCA service: %v", err)
 	}
 
+	// Initialize the server metrics values
+	GRPCServerMetricsRecorder.SetCPUUtilization(getCPUUsage())
+	GRPCServerMetricsRecorder.SetMemoryUtilization(getMemoryUsage())
+
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
@@ -369,19 +375,56 @@ func registerOrca() {
 }
 
 func getCPUUsage() float64 {
+	if isLinux() {
+		if cpuUsage := getCGroupCpuUsage(); cpuUsage != -1 {
+			return cpuUsage
+		}
+	}
+
 	percentages, err := cpu.Percent(0, false)
 	if err != nil || len(percentages) == 0 {
 		return 0
 	}
-	return percentages[0]
+	return percentages[0] / 100.0
 }
 
 func getMemoryUsage() float64 {
+	if isLinux() {
+		if stats, err := docker.CgroupMem("self", "/sys/fs/cgroup"); err == nil && stats != nil {
+			return float64(stats.MemUsageInBytes) / float64(stats.MemLimitInBytes)
+		}
+	}
+
 	vmStat, err := mem.VirtualMemory()
 	if err != nil {
 		return 0
 	}
-	return vmStat.UsedPercent
+	return vmStat.UsedPercent / 100.0
+}
+
+func isLinux() bool {
+	return runtime.GOOS == "linux"
+}
+
+func getCGroupCpuUsage() float64 {
+	const interval = 100 * time.Millisecond
+
+	start, err := docker.CgroupCPU("self", "/sys/fs/cgroup")
+	if err != nil || start == nil {
+		return -1
+	}
+
+	time.Sleep(interval)
+
+	end, err := docker.CgroupCPU("self", "/sys/fs/cgroup")
+	if err != nil || end == nil {
+		return -1
+	}
+
+	delta := end.Usage - start.Usage // in nanoseconds
+	numCPU := float64(runtime.NumCPU())
+	usage := float64(delta) / (float64(interval.Nanoseconds()) * numCPU)
+	return usage
 }
 
 // GRPCCheckServiceMap returns if we should register a gRPC service
