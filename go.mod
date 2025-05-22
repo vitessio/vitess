@@ -106,11 +106,19 @@ require (
 	github.com/spf13/afero v1.14.0
 	github.com/spf13/jwalterweatherman v1.1.0
 	github.com/xlab/treeprint v1.2.0
+	go.opentelemetry.io/otel/bridge/opentracing v1.35.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.35.0
 	go.uber.org/goleak v1.3.0
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
 	golang.org/x/sync v0.13.0
 	gonum.org/v1/gonum v0.15.1
 	modernc.org/sqlite v1.37.0
+)
+
+require (
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1 // indirect
+	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
 )
 
 require (
@@ -209,9 +217,10 @@ require (
 	go.opentelemetry.io/contrib/detectors/gcp v1.35.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0 // indirect
-	go.opentelemetry.io/otel v1.35.0 // indirect
+	go.opentelemetry.io/otel v1.35.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.35.0
 	go.opentelemetry.io/otel/metric v1.35.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.35.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.35.0
 	go.opentelemetry.io/otel/sdk/metric v1.35.0 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
