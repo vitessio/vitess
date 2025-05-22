@@ -1,4 +1,4 @@
-name: Sync Vitessio
+name: Sync Vitessio TEST
 
 on:
   schedule:
