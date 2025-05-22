@@ -72,6 +72,7 @@ Flags:
       --grpc-crl string                                                  path to a certificate revocation list in PEM format, client certificates will be further verified against this file during TLS handshake
       --grpc-dial-concurrency-limit int                                  Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
       --grpc-enable-optional-tls                                         enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port
+      --grpc-enable-orca-metrics                                         gRPC server option to enable sending ORCA metrics to clients for load balancing
       --grpc-initial-conn-window-size int                                gRPC initial connection window size
       --grpc-initial-window-size int                                     gRPC initial window size
       --grpc-keepalive-time duration                                     After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)

@@ -21,17 +21,22 @@ import (
 	"crypto/tls"
 	"math"
 	"net"
+	"runtime"
 	"strconv"
 	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/docker"
+	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/orca"
 	"google.golang.org/grpc/reflection"
 
 	"vitess.io/vitess/go/trace"
@@ -64,6 +69,9 @@ var (
 
 	// GRPCServer is the global server to serve gRPC.
 	GRPCServer *grpc.Server
+
+	// GRPC server metrics recorder
+	GRPCServerMetricsRecorder orca.ServerMetricsRecorder
 
 	authPlugin Authenticator
 )
@@ -101,8 +109,16 @@ var (
 	// there are no active streams, server will send GOAWAY and close the connection.
 	gRPCKeepAliveEnforcementPolicyPermitWithoutStream bool
 
+	// Enable ORCA metrics to be sent from the server to the client to be used for load balancing
+	gRPCEnableOrcaMetrics bool
+
 	gRPCKeepaliveTime    = 10 * time.Second
 	gRPCKeepaliveTimeout = 10 * time.Second
+)
+
+// Injectable behavior for testing
+var (
+	registerORCA = orca.Register
 )
 
 // TLS variables.
@@ -130,7 +146,6 @@ var (
 // ParseFlags(WithArgs)? if they wish to run a gRPC server.
 func RegisterGRPCServerFlags() {
 	OnParse(func(fs *pflag.FlagSet) {
-
 		utils.SetFlagIntVar(fs, &gRPCPort, "grpc-port", gRPCPort, "Port to listen on for gRPC calls. If zero, do not listen.")
 		utils.SetFlagStringVar(fs, &gRPCBindAddress, "grpc-bind-address", gRPCBindAddress, "Bind address for gRPC calls. If empty, listen on all addresses.")
 		utils.SetFlagDurationVar(fs, &gRPCMaxConnectionAge, "grpc-max-connection-age", gRPCMaxConnectionAge, "Maximum age of a client connection before GoAway is sent.")
@@ -139,6 +154,7 @@ func RegisterGRPCServerFlags() {
 		utils.SetFlagIntVar(fs, &gRPCInitialWindowSize, "grpc-server-initial-window-size", gRPCInitialWindowSize, "gRPC server initial window size")
 		utils.SetFlagDurationVar(fs, &gRPCKeepAliveEnforcementPolicyMinTime, "grpc-server-keepalive-enforcement-policy-min-time", gRPCKeepAliveEnforcementPolicyMinTime, "gRPC server minimum keepalive time")
 		utils.SetFlagBoolVar(fs, &gRPCKeepAliveEnforcementPolicyPermitWithoutStream, "grpc-server-keepalive-enforcement-policy-permit-without-stream", gRPCKeepAliveEnforcementPolicyPermitWithoutStream, "gRPC server permit client keepalive pings even when there are no active streams (RPCs)")
+		utils.SetFlagBoolVar(fs, &gRPCEnableOrcaMetrics, "grpc-enable-orca-metrics", gRPCEnableOrcaMetrics, "gRPC server option to enable sending ORCA metrics to clients for load balancing")
 
 		utils.SetFlagStringVar(fs, &gRPCCert, "grpc-cert", gRPCCert, "server certificate to use for gRPC connections, requires grpc-key, enables TLS")
 		utils.SetFlagStringVar(fs, &gRPCKey, "grpc-key", gRPCKey, "server private key to use for gRPC connections, requires grpc-cert, enables TLS")
@@ -226,6 +242,11 @@ func createGRPCServer() {
 	opts = append(opts, grpc.MaxRecvMsgSize(msgSize))
 	opts = append(opts, grpc.MaxSendMsgSize(msgSize))
 
+	if gRPCEnableOrcaMetrics {
+		GRPCServerMetricsRecorder = orca.NewServerMetricsRecorder()
+		opts = append(opts, orca.CallMetricsServerOption(GRPCServerMetricsRecorder))
+	}
+
 	if gRPCInitialConnWindowSize != 0 {
 		log.Infof("Setting grpc server initial conn window size to %d", int32(gRPCInitialConnWindowSize))
 		opts = append(opts, grpc.InitialConnWindowSize(int32(gRPCInitialConnWindowSize)))
@@ -289,6 +310,10 @@ func serveGRPC() {
 		return
 	}
 
+	if gRPCEnableOrcaMetrics {
+		registerOrca()
+	}
+
 	// register reflection to support list calls :)
 	reflection.Register(GRPCServer)
 
@@ -325,6 +350,82 @@ func serveGRPC() {
 		GRPCServer.GracefulStop()
 		log.Info("gRPC server stopped")
 	})
+}
+
+func registerOrca() {
+	if err := registerORCA(GRPCServer, orca.ServiceOptions{
+		// The minimum interval of orca is 30 seconds, unless we enable a testing flag.
+		MinReportingInterval:  30 * time.Second,
+		ServerMetricsProvider: GRPCServerMetricsRecorder,
+	}); err != nil {
+		log.Exitf("Failed to register ORCA service: %v", err)
+	}
+
+	// Initialize the server metrics values
+	GRPCServerMetricsRecorder.SetCPUUtilization(getCPUUsage())
+	GRPCServerMetricsRecorder.SetMemoryUtilization(getMemoryUsage())
+
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			GRPCServerMetricsRecorder.SetCPUUtilization(getCPUUsage())
+			GRPCServerMetricsRecorder.SetMemoryUtilization(getMemoryUsage())
+		}
+	}()
+}
+
+func getCPUUsage() float64 {
+	if isLinux() {
+		if cpuUsage := getCGroupCpuUsage(); cpuUsage != -1 {
+			return cpuUsage
+		}
+	}
+
+	percentages, err := cpu.Percent(0, false)
+	if err != nil || len(percentages) == 0 {
+		return 0
+	}
+	return percentages[0] / 100.0
+}
+
+func getMemoryUsage() float64 {
+	if isLinux() {
+		if stats, err := docker.CgroupMem("self", "/sys/fs/cgroup"); err == nil && stats != nil {
+			return float64(stats.MemUsageInBytes) / float64(stats.MemLimitInBytes)
+		}
+	}
+
+	vmStat, err := mem.VirtualMemory()
+	if err != nil {
+		return 0
+	}
+	return vmStat.UsedPercent / 100.0
+}
+
+func isLinux() bool {
+	return runtime.GOOS == "linux"
+}
+
+func getCGroupCpuUsage() float64 {
+	const interval = 100 * time.Millisecond
+
+	start, err := docker.CgroupCPU("self", "/sys/fs/cgroup")
+	if err != nil || start == nil {
+		return -1
+	}
+
+	time.Sleep(interval)
+
+	end, err := docker.CgroupCPU("self", "/sys/fs/cgroup")
+	if err != nil || end == nil {
+		return -1
+	}
+
+	delta := end.Usage - start.Usage // in nanoseconds
+	numCPU := float64(runtime.NumCPU())
+	usage := float64(delta) / (float64(interval.Nanoseconds()) * numCPU)
+	return usage
 }
 
 // GRPCCheckServiceMap returns if we should register a gRPC service
