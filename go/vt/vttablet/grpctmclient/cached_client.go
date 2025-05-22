@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
@@ -40,7 +41,7 @@ import (
 var defaultPoolCapacity = 100
 
 func registerCachedClientFlags(fs *pflag.FlagSet) {
-	fs.IntVar(&defaultPoolCapacity, "tablet_manager_grpc_connpool_size", defaultPoolCapacity, "number of tablets to keep tmclient connections open to")
+	utils.SetFlagIntVar(fs, &defaultPoolCapacity, "tablet-manager-grpc-connpool-size", defaultPoolCapacity, "number of tablets to keep tmclient connections open to")
 }
 
 func init() {

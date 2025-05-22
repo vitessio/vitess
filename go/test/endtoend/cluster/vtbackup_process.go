@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 // VtbackupProcess is a generic handle for a running Vtbackup.
@@ -55,23 +56,36 @@ type VtbackupProcess struct {
 
 // Setup starts vtbackup process with required arguements
 func (vtbackup *VtbackupProcess) Setup() (err error) {
-	vtbackup.proc = exec.Command(
-		vtbackup.Binary,
-		"--topo_implementation", vtbackup.TopoImplementation,
-		"--topo_global_server_address", vtbackup.TopoGlobalAddress,
-		"--topo_global_root", vtbackup.TopoGlobalRoot,
-		"--log_dir", vtbackup.LogDir,
+
+	flags := map[string]string{
+		"--topo-implementation":        vtbackup.TopoImplementation,
+		"--topo-global-server-address": vtbackup.TopoGlobalAddress,
+		"--topo-global-root":           vtbackup.TopoGlobalRoot,
+		"--log_dir":                    vtbackup.LogDir,
 
 		//initDBfile is required to run vtbackup
-		"--mysql_port", fmt.Sprintf("%d", vtbackup.MysqlPort),
-		"--init_db_sql_file", vtbackup.initDBfile,
-		"--init_keyspace", vtbackup.Keyspace,
-		"--init_shard", vtbackup.Shard,
+		"--mysql-port":       fmt.Sprintf("%d", vtbackup.MysqlPort),
+		"--init_db_sql_file": vtbackup.initDBfile,
+		"--init-keyspace":    vtbackup.Keyspace,
+		"--init-shard":       vtbackup.Shard,
 
 		//Backup Arguments are not optional
-		"--backup_storage_implementation", vtbackup.BackupStorageImplementation,
-		"--file_backup_storage_root", vtbackup.FileBackupStorageRoot,
-	)
+		"--backup-storage-implementation": vtbackup.BackupStorageImplementation,
+		"--file_backup_storage_root":      vtbackup.FileBackupStorageRoot,
+	}
+
+	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtbackup.TopoImplementation)
+	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtbackup.TopoGlobalAddress)
+	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtbackup.TopoGlobalRoot)
+	utils.SetFlagVariantsForTests(flags, "--mysql-port", fmt.Sprintf("%d", vtbackup.MysqlPort))
+	utils.SetFlagVariantsForTests(flags, "--init-keyspace", vtbackup.Keyspace)
+	utils.SetFlagVariantsForTests(flags, "--init-shard", vtbackup.Shard)
+	utils.SetFlagVariantsForTests(flags, "--backup-storage-implementation", vtbackup.BackupStorageImplementation)
+
+	vtbackup.proc = exec.Command(vtbackup.Binary)
+	for k, v := range flags {
+		vtbackup.proc.Args = append(vtbackup.proc.Args, k, v)
+	}
 
 	if vtbackup.initialBackup {
 		vtbackup.proc.Args = append(vtbackup.proc.Args, "--initial_backup")
