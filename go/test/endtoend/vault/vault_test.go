@@ -57,7 +57,7 @@ var (
 	vtgateUser      = "vtgate_user"
 	vtgatePassword  = "password123"
 	commonTabletArg = []string{
-		"--vreplication_retry_delay", "1s",
+		vtutils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
 		"--watch_replication_stream",

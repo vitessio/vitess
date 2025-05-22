@@ -51,7 +51,7 @@ var (
 	dbCredentialFile string
 	shardName        = "0"
 	commonTabletArg  = []string{
-		"--vreplication_retry_delay", "1s",
+		"--vreplication-retry-delay", "1s",
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
 		"--watch_replication_stream",

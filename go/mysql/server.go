@@ -63,7 +63,7 @@ var (
 	connCount  = stats.NewGauge("MysqlServerConnCount", "Active MySQL server connections")
 	connAccept = stats.NewCounter("MysqlServerConnAccepted", "Connections accepted by MySQL server")
 	connRefuse = stats.NewCounter("MysqlServerConnRefused", "Connections refused by MySQL server")
-	connSlow   = stats.NewCounter("MysqlServerConnSlow", "Connections that took more than the configured mysql_slow_connect_warn_threshold to establish")
+	connSlow   = stats.NewCounter("MysqlServerConnSlow", "Connections that took more than the configured mysql-slow-connect-warn-threshold to establish")
 
 	connCountByTLSVer = stats.NewGaugesWithSingleLabel("MysqlServerConnCountByTLSVer", "Active MySQL server connections by TLS version", "tls")
 	connCountPerUser  = stats.NewGaugesWithSingleLabel("MysqlServerConnCountPerUser", "Active MySQL server connections per user", "count")
