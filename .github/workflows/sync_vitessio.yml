@@ -15,11 +15,10 @@ jobs:
           ref: main-2025-q2
           persist-credentials: 'false'
 
-      # - name: Set up git user
-      #TODO: Do we really need this?
-      #  run: |
-      #   git config user.name "github-actions[bot]"
-      #    git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Set up git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Add upstream
         run: git remote add upstream https://github.com/vitessio/vitess.git
