@@ -901,7 +901,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, tmClie
 		req := &tabletmanagerdatapb.CheckThrottlerRequest{MultiMetricsEnabled: true} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 		resp, gRPCErr := tmClient.CheckThrottler(ctx, probe.Tablet, req)
 		if gRPCErr != nil {
-			return metricsWithError(fmt.Errorf("gRPC error accessing tablet %v. Err=%v", probe.Alias, gRPCErr))
+			return metricsWithError(fmt.Errorf("gRPC error accessing tablet %v. Err=%w", probe.Alias, gRPCErr))
 		}
 		throttleMetric.Value = resp.Value
 		if resp.ResponseCode == tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR {
