@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - sync-vitessio-workflow
-  schedule:
-    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
@@ -20,8 +18,8 @@ jobs:
 
       - name: Set up git user
         run: |
-          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
-          git config --global user.name "${{ github.actor }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Add upstream
         run: git remote add upstream https://github.com/HubSpot/vitess.git
