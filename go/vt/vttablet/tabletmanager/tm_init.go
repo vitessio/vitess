@@ -252,9 +252,9 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		return nil, err
 	}
 	switch tabletType {
-	case topodatapb.TabletType_SPARE, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+	case topodatapb.TabletType_SPARE, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_DRAINED:
 	default:
-		return nil, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
+		return nil, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY, SPARE or DRAINED", tabletType)
 	}
 
 	buildTags, err := getBuildTags(servenv.AppVersion.ToStringMap(), skipBuildInfoTags)
