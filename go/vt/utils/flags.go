@@ -97,6 +97,10 @@ func SetFlagUintVar(fs *pflag.FlagSet, p *uint, name string, def uint, usage str
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).UintVar)
 }
 
+func SetFlagFloat64Var(fs *pflag.FlagSet, p *float64, name string, def float64, usage string) {
+	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).Float64Var)
+}
+
 // SetFlagVar registers a flag (that implements the pflag.Value interface)
 // using both the dashed and underscored versions of the flag name.
 // The underscored version is hidden and marked as deprecated.

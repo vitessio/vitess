@@ -155,8 +155,8 @@ Flags:
       --file_backup_storage_root string                                  Root directory for the file backup storage.
       --filecustomrules string                                           file based custom rule path
       --filecustomrules_watch                                            set up a watch on the target file and reload query rules when it changes
-      --gc_check_interval duration                                       Interval between garbage collection checks (default 1h0m0s)
-      --gc_purge_check_interval duration                                 Interval between purge discovery checks (default 1m0s)
+      --gc-check-interval duration                                       Interval between garbage collection checks (default 1h0m0s)
+      --gc-purge-check-interval duration                                 Interval between purge discovery checks (default 1m0s)
       --gcs-backup-storage-bucket string                                 Google Cloud Storage bucket to use for backups.
       --gcs-backup-storage-root string                                   Root prefix for all backup-related object names.
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
@@ -188,14 +188,14 @@ Flags:
       --grpc-server-keepalive-enforcement-policy-permit-without-stream   gRPC server permit client keepalive pings even when there are no active streams (RPCs)
       --grpc-server-keepalive-time duration                              After a duration of this time, if the server doesn't see any activity, it pings the client to see if the transport is still alive. (default 10s)
       --grpc-server-keepalive-timeout duration                           After having pinged for keepalive check, the server waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
-      --health_check_interval duration                                   Interval between health checks (default 20s)
+      --health-check-interval duration                                   Interval between health checks (default 20s)
       --heartbeat-enable                                                 If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the sidecar database's heartbeat table. The result is used to inform the serving state of the vttablet via healthchecks.
       --heartbeat-interval duration                                      How frequently to read and write replication heartbeat. (default 1s)
-      --heartbeat_on_demand_duration duration                            If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests
+      --heartbeat-on-demand-duration duration                            If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests
   -h, --help                                                             help for vttablet
-      --hot_row_protection_concurrent_transactions int                   Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect. (default 5)
-      --hot_row_protection_max_global_queue_size int                     Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded. (default 1000)
-      --hot_row_protection_max_queue_size int                            Maximum number of BeginExecute RPCs which will be queued for the same row (range). (default 20)
+      --hot-row-protection-concurrent-transactions int                   Number of concurrent transactions let through to the txpool/MySQL for the same hot row. Should be > 1 to have enough 'ready' transactions in MySQL and benefit from a pipelining effect. (default 5)
+      --hot-row-protection-max-global-queue-size int                     Global queue limit across all row (ranges). Useful to prevent that the queue can grow unbounded. (default 1000)
+      --hot-row-protection-max-queue-size int                            Maximum number of BeginExecute RPCs which will be queued for the same row (range). (default 20)
       --init-db-name-override string                                     (init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>
       --init-keyspace string                                             (init parameter) keyspace to use for this tablet
       --init-shard string                                                (init parameter) shard to use for this tablet
@@ -387,12 +387,12 @@ Flags:
       --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
       --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
       --track_schema_versions                                            When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position
+      --transaction-limit-by-component                                   Include CallerID.component when considering who the user is for the purpose of transaction limit.
+      --transaction-limit-by-principal                                   Include CallerID.principal when considering who the user is for the purpose of transaction limit. (default true)
+      --transaction-limit-by-subcomponent                                Include CallerID.subcomponent when considering who the user is for the purpose of transaction limit.
+      --transaction-limit-by-username                                    Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit. (default true)
+      --transaction-limit-per-user float                                 Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap. (default 0.4)
       --transaction-log-stream-handler string                            URL handler for streaming transactions log (default "/debug/txlog")
-      --transaction_limit_by_component                                   Include CallerID.component when considering who the user is for the purpose of transaction limit.
-      --transaction_limit_by_principal                                   Include CallerID.principal when considering who the user is for the purpose of transaction limit. (default true)
-      --transaction_limit_by_subcomponent                                Include CallerID.subcomponent when considering who the user is for the purpose of transaction limit.
-      --transaction_limit_by_username                                    Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit. (default true)
-      --transaction_limit_per_user float                                 Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap. (default 0.4)
       --twopc_abandon_age time.Duration                                  Any unresolved transaction older than this time will be sent to the coordinator to be resolved. NOTE: Providing time as seconds (float64) is deprecated. Use time.Duration format (e.g., '1s', '2m', '1h'). (default 15m0s)
       --tx-throttler-config string                                       Synonym to -tx_throttler_config (default "target_replication_lag_sec:2 max_replication_lag_sec:10 initial_rate:100 max_increase:1 emergency_decrease:0.5 min_duration_between_increases_sec:40 max_duration_between_increases_sec:62 min_duration_between_decreases_sec:20 spread_backlog_across_sec:20 age_bad_rate_after_sec:180 bad_rate_increase:0.1 max_rate_approach_threshold:0.9")
       --tx-throttler-default-priority int                                Default priority assigned to queries that lack priority information (default 100)
@@ -423,10 +423,10 @@ Flags:
       --vstream-binlog-rotation-threshold int                            Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer) (default 67108864)
       --vstream-dynamic-packet-size                                      Enable dynamic packet sizing for vstreamers. This will adjust the packet size in vreplication workflows to improve performance. (default true)
       --vstream-packet-size int                                          Suggested packet size for vstreamers. The actual packet size may be more or less than this amount. (default 250000)
-      --vttablet_skip_buildinfo_tags string                              comma-separated list of buildinfo tags to skip from merging with --init-tags. each tag is either an exact match or a regular expression of the form '/regexp/'. (default "/.*/")
-      --wait_for_backup_interval duration                                (init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear
-      --watch_replication_stream                                         When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.
-      --xbstream_restore_flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
+      --vttablet-skip-buildinfo-tags string                              comma-separated list of buildinfo tags to skip from merging with --init-tags. each tag is either an exact match or a regular expression of the form '/regexp/'. (default "/.*/")
+      --wait-for-backup-interval duration                                (init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear
+      --watch-replication-stream                                         When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.
+      --xbstream-restore-flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
       --xtrabackup-backup-flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
       --xtrabackup-prepare-flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command
       --xtrabackup-root-path string                                      Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin

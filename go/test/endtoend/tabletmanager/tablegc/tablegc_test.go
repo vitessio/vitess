@@ -99,11 +99,11 @@ func TestMain(m *testing.M) {
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--lock_tables_timeout", "5s",
-			"--watch_replication_stream",
+			utils.GetFlagVariantForTests("--watch-replication-stream"),
 			utils.GetFlagVariantForTests("--enable-replication-reporter"),
 			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			"--gc_check_interval", gcCheckInterval.String(),
-			"--gc_purge_check_interval", gcPurgeCheckInterval.String(),
+			utils.GetFlagVariantForTests("--gc-check-interval"), gcCheckInterval.String(),
+			utils.GetFlagVariantForTests("--gc-purge-check-interval"), gcPurgeCheckInterval.String(),
 			"--table_gc_lifecycle", "hold,purge,evac,drop",
 		}
 
