@@ -179,7 +179,8 @@ func verifyTestExpectations(t *testing.T, pd engine.PrimitiveDescription, test p
 	// 1. Verify that the Join primitive sees atleast 1 row on the left side.
 	engine.WalkPrimitiveDescription(pd, func(description engine.PrimitiveDescription) {
 		if description.OperatorType == "Join" {
-			assert.NotZero(t, description.Inputs[0].RowsReceived[0])
+			message := fmt.Sprintf("expected at least 1 row on the left side of the join for query: %s", test.Query)
+			assert.NotZero(t, description.Inputs[0].RowsReceived[0], message)
 		}
 	})
 
