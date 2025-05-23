@@ -1560,7 +1560,7 @@ func (node *Commit) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *Begin) FormatFast(buf *TrackedBuffer) {
-	if node.TxAccessModes == nil {
+	if node.Type == BeginStmt {
 		buf.WriteString("begin")
 		return
 	}

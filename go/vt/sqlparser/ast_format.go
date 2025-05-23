@@ -1184,7 +1184,7 @@ func (node *Commit) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Begin) Format(buf *TrackedBuffer) {
-	if node.TxAccessModes == nil {
+	if node.Type == BeginStmt {
 		buf.literal("begin")
 		return
 	}

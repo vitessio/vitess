@@ -17649,7 +17649,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4770
 		{
-			yyLOCAL = &Begin{}
+			yyLOCAL = &Begin{Type: BeginStmt}
 		}
 		yyVAL.union = yyLOCAL
 	case 882:
@@ -17657,7 +17657,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4774
 		{
-			yyLOCAL = &Begin{TxAccessModes: yyDollar[3].txAccessModesUnion()}
+			yyLOCAL = &Begin{Type: StartTransactionStmt, TxAccessModes: yyDollar[3].txAccessModesUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 883:
