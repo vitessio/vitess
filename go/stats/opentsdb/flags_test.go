@@ -33,7 +33,7 @@ func TestRegisterFlags(t *testing.T) {
 
 	registerFlags(fs)
 
-	err := fs.Set("opentsdb_uri", "testURI")
+	err := fs.Set("opentsdb-uri", "testURI")
 	assert.NoError(t, err)
 	assert.Equal(t, "testURI", openTSDBURI)
 }

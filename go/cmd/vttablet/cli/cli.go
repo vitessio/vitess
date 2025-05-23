@@ -65,7 +65,7 @@ var (
 * Managed MySQL (most common)
 * External MySQL
 
-In addition to these deployment types, a partially managed VTTablet is also possible by setting ` + "`--disable_active_reparents`." + `
+In addition to these deployment types, a partially managed VTTablet is also possible by setting ` + "`--disable-active-reparents`." + `
 
 ### Managed MySQL
 

@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -84,7 +85,7 @@ func init() {
 
 func registerVtctldAPIFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&localCell, "cell", localCell, "cell to use")
-	fs.BoolVar(&proxyTablets, "proxy_tablets", proxyTablets, "Setting this true will make vtctld proxy the tablet status instead of redirecting to them")
+	utils.SetFlagBoolVar(fs, &proxyTablets, "proxy-tablets", proxyTablets, "Setting this true will make vtctld proxy the tablet status instead of redirecting to them")
 }
 
 func newTabletWithURL(t *topodatapb.Tablet) *TabletWithURL {
