@@ -1,12 +1,17 @@
 create table s_tbl
 (
-    id  bigint,
-    num bigint,
-    col bigint,
+    id   bigint,
+    num  bigint,
+    col  bigint,
     unique key (num),
     primary key (id)
 ) Engine = InnoDB;
-
+create table name_tbl
+(
+    id   bigint,
+    name varchar(50),
+    primary key (id)
+) Engine = InnoDB;
 create table num_vdx_tbl
 (
     num         bigint,
@@ -20,6 +25,14 @@ create table col_vdx_tbl
     id          bigint,
     keyspace_id varbinary(20),
     primary key (col, id)
+) Engine = InnoDB
+;
+create table name_vdx_tbl
+(
+    name        varchar(50),
+    id          bigint,
+    keyspace_id varbinary(20),
+    primary key (name, id)
 ) Engine = InnoDB;
 
 create table user_tbl
@@ -100,7 +113,7 @@ create table lkp_mixed_idx
 
 create table j_tbl
 (
-    id  bigint,
+    id   bigint,
     jdoc json,
     primary key (id)
 ) Engine = InnoDB;
