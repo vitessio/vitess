@@ -7,9 +7,9 @@
         - [Metrics](#deleted-metrics)
     - **[New Metrics](#new-metrics)**
         - [VTGate](#new-vtgate-metrics)
-        - **[VTTablet](#minor-changes-vttablet)**
-            - [CLI Flags](#flags-vttablet)
-            - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password)
+    - **[VTTablet](#minor-changes-vttablet)**
+        - [CLI Flags](#flags-vttablet)
+        - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password)
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
