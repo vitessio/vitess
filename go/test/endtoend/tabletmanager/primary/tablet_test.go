@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -84,7 +85,7 @@ func TestMain(m *testing.M) {
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--lock_tables_timeout", "5s",
-			"--watch_replication_stream",
+			utils.GetFlagVariantForTests("--watch-replication-stream"),
 			"--enable_replication_reporter",
 		}
 

@@ -127,7 +127,7 @@ func init() {
 }
 
 func registerXtraBackupEngineFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&xbstreamRestoreFlags, "xbstream_restore_flags", xbstreamRestoreFlags, "Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
+	utils.SetFlagStringVar(fs, &xbstreamRestoreFlags, "xbstream-restore-flags", xbstreamRestoreFlags, "Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
 	utils.SetFlagStringVar(fs, &xtrabackupEnginePath, "xtrabackup-root-path", xtrabackupEnginePath, "Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin")
 	utils.SetFlagStringVar(fs, &xtrabackupBackupFlags, "xtrabackup-backup-flags", xtrabackupBackupFlags, "Flags to pass to backup command. These should be space separated and will be added to the end of the command")
 	utils.SetFlagStringVar(fs, &xtrabackupPrepareFlags, "xtrabackup-prepare-flags", xtrabackupPrepareFlags, "Flags to pass to prepare command. These should be space separated and will be added to the end of the command")

@@ -195,7 +195,7 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 
 	// Second failover: Buffering is skipped because last failover is too recent.
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
-		t.Fatalf("subsequent failovers must be skipped due to -buffer_min_time_between_failovers setting. err: %v retryDone: %v", err, retryDone)
+		t.Fatalf("subsequent failovers must be skipped due to -buffer-min-time-between-failovers setting. err: %v retryDone: %v", err, retryDone)
 	}
 	if got, want := requestsSkipped.Counts()[statsKeyJoinedLastFailoverTooRecent], int64(1); got != want {
 		t.Fatalf("skipped request was not tracked: got = %v, want = %v", got, want)
@@ -377,7 +377,7 @@ func testLastReparentTooRecentBuffering1(t *testing.T, fail failover) {
 	now = now.Add(1 * time.Second)
 	fail(b, newPrimary, keyspace, shard, now)
 
-	// After we're past the --buffer_min_time_between_failovers threshold, go
+	// After we're past the --buffer-min-time-between-failovers threshold, go
 	// through a failover with non-zero QPS.
 	now = now.Add(cfg.MinTimeBetweenFailovers)
 	// We're seeing errors first.
