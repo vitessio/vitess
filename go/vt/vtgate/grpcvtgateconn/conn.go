@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -60,11 +61,11 @@ func init() {
 }
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&cert, "vtgate_grpc_cert", "", "the cert to use to connect")
-	fs.StringVar(&key, "vtgate_grpc_key", "", "the key to use to connect")
-	fs.StringVar(&ca, "vtgate_grpc_ca", "", "the server ca to use to validate servers when connecting")
-	fs.StringVar(&crl, "vtgate_grpc_crl", "", "the server crl to use to validate server certificates when connecting")
-	fs.StringVar(&name, "vtgate_grpc_server_name", "", "the server name to use to validate server certificate")
+	utils.SetFlagStringVar(fs, &cert, "vtgate-grpc-cert", "", "the cert to use to connect")
+	utils.SetFlagStringVar(fs, &key, "vtgate-grpc-key", "", "the key to use to connect")
+	utils.SetFlagStringVar(fs, &ca, "vtgate-grpc-ca", "", "the server ca to use to validate servers when connecting")
+	utils.SetFlagStringVar(fs, &crl, "vtgate-grpc-crl", "", "the server crl to use to validate server certificates when connecting")
+	utils.SetFlagStringVar(fs, &name, "vtgate-grpc-server-name", "", "the server name to use to validate server certificate")
 }
 
 type vtgateConn struct {

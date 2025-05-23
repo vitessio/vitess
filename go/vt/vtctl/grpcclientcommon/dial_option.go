@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var cert, key, ca, crl, name string
@@ -36,11 +37,11 @@ func init() {
 }
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&cert, "vtctld_grpc_cert", cert, "the cert to use to connect")
-	fs.StringVar(&key, "vtctld_grpc_key", key, "the key to use to connect")
-	fs.StringVar(&ca, "vtctld_grpc_ca", ca, "the server ca to use to validate servers when connecting")
-	fs.StringVar(&crl, "vtctld_grpc_crl", crl, "the server crl to use to validate server certificates when connecting")
-	fs.StringVar(&name, "vtctld_grpc_server_name", name, "the server name to use to validate server certificate")
+	utils.SetFlagStringVar(fs, &cert, "vtctld-grpc-cert", cert, "the cert to use to connect")
+	utils.SetFlagStringVar(fs, &key, "vtctld-grpc-key", key, "the key to use to connect")
+	utils.SetFlagStringVar(fs, &ca, "vtctld-grpc-ca", ca, "the server ca to use to validate servers when connecting")
+	utils.SetFlagStringVar(fs, &crl, "vtctld-grpc-crl", crl, "the server crl to use to validate server certificates when connecting")
+	utils.SetFlagStringVar(fs, &name, "vtctld-grpc-server-name", name, "the server name to use to validate server certificate")
 }
 
 // SecureDialOption returns a grpc.DialOption configured to use TLS (or

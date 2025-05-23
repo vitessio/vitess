@@ -54,6 +54,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
@@ -195,7 +196,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("enable_direct_ddl", enableDirectDDL.Default(), "Allow users to submit direct DDL statements")
 	fs.BoolVar(&enableSchemaChangeSignal, "schema_change_signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	fs.IntVar(&queryTimeout, "query-timeout", queryTimeout, "Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)")
-	fs.StringVar(&queryLogToFile, "log_queries_to_file", queryLogToFile, "Enable query logging to the specified file")
+	utils.SetFlagStringVar(fs, &queryLogToFile, "log-queries-to-file", queryLogToFile, "Enable query logging to the specified file")
 	fs.IntVar(&queryLogBufferSize, "querylog-buffer-size", queryLogBufferSize, "Maximum number of buffered query logs before throttling log output")
 	fs.DurationVar(&messageStreamGracePeriod, "message_stream_grace_period", messageStreamGracePeriod, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
 	fs.BoolVar(&enableViews, "enable-views", enableViews, "Enable views support in vtgate.")

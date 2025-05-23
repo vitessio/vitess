@@ -312,7 +312,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 
 	if args.ExternalTopoImplementation != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
-			"--external_topo_server",
+			"--external-topo-server",
 			"--topo-implementation", args.ExternalTopoImplementation,
 			"--topo-global-server-address", args.ExternalTopoGlobalServerAddress,
 			"--topo-global-root", args.ExternalTopoGlobalRoot,
