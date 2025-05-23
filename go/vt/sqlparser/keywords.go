@@ -654,6 +654,7 @@ var keywords = map[string]int{
 	"union":                         UNION,
 	"unique":                        UNIQUE,
 	"unlock":                        UNLOCK,
+	"unknown":                       UNKNOWN,
 	"unsigned":                      UNSIGNED,
 	"until":                         UNTIL,
 	"update":                        UPDATE,

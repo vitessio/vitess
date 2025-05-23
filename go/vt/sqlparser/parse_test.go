@@ -3291,52 +3291,116 @@ var (
 		}, {
 			input:  "GRANT REPLICATION_SLAVE_ADMIN, GROUP_REPLICATION_ADMIN, BINLOG_ADMIN ON *.* TO 'u1'@'localhost'",
 			output: "grant replication_slave_admin, group_replication_admin, binlog_admin on *.* to `u1`@`localhost`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL ON * FROM UserName",
 			output: "revoke all on * from `UserName`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL ON *.* FROM UserName",
 			output: "revoke all on *.* from `UserName`@`%`",
-		}, {
+		},
+		{
+			input:  "REVOKE IF EXISTS ALL ON *.* FROM UserName",
+			output: "revoke if exists all on *.* from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE ALL ON *.* FROM UserName IGNORE UNKNOWN USER",
+			output: "revoke all on *.* from `UserName`@`%` ignore unknown user",
+		},
+		{
 			input:  "REVOKE ALL ON db.* FROM UserName",
 			output: "revoke all on `db`.* from `UserName`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL ON db.tbl FROM UserName",
 			output: "revoke all on `db`.`tbl` from `UserName`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL ON `db`.`tbl` FROM UserName",
 			output: "revoke all on `db`.`tbl` from `UserName`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL ON tbl FROM UserName",
 			output: "revoke all on `tbl` from `UserName`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL ON TABLE tbl FROM UserName",
 			output: "revoke all on table `tbl` from `UserName`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE SELECT (col1, col2), UPDATE (col2) ON db.tbl FROM UserName",
 			output: "revoke select (`col1`, `col2`), update (`col2`) on `db`.`tbl` from `UserName`@`%`",
-		}, {
+		},
+		{
+			input:  "REVOKE IF EXISTS SELECT (col1, col2), UPDATE (col2) ON db.tbl FROM UserName",
+			output: "revoke if exists select (`col1`, `col2`), update (`col2`) on `db`.`tbl` from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE SELECT (col1, col2), UPDATE (col2) ON db.tbl FROM UserName IGNORE UNKNOWN USER",
+			output: "revoke select (`col1`, `col2`), update (`col2`) on `db`.`tbl` from `UserName`@`%` ignore unknown user",
+		},
+		{
 			input:  "REVOKE ALL ON tbl FROM UserName1@localhost, UserName2",
 			output: "revoke all on `tbl` from `UserName1`@`localhost`, `UserName2`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL, GRANT OPTION FROM UserName",
-			output: "revoke all privileges, grant option from `UserName`@`%`",
-		}, {
+			output: "revoke all on *.* from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE IF EXISTS ALL, GRANT OPTION FROM UserName",
+			output: "revoke if exists all on *.* from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE ALL, GRANT OPTION FROM UserName IGNORE UNKNOWN USER",
+			output: "revoke all on *.* from `UserName`@`%` ignore unknown user",
+		},
+		{
 			input:  "REVOKE ALL PRIVILEGES, GRANT OPTION FROM UserName",
-			output: "revoke all privileges, grant option from `UserName`@`%`",
-		}, {
+			output: "revoke all on *.* from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE IF EXISTS ALL PRIVILEGES, GRANT OPTION FROM UserName",
+			output: "revoke if exists all on *.* from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE ALL PRIVILEGES, GRANT OPTION FROM UserName IGNORE UNKNOWN USER",
+			output: "revoke all on *.* from `UserName`@`%` ignore unknown user",
+		},
+		{
 			input:  "REVOKE Role1 FROM UserName",
 			output: "revoke `Role1`@`%` from `UserName`@`%`",
-		}, {
+		},
+		{
+			input:  "REVOKE IF EXISTS Role1 FROM UserName",
+			output: "revoke if exists `Role1`@`%` from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE Role1 FROM UserName IGNORE UNKNOWN USER",
+			output: "revoke `Role1`@`%` from `UserName`@`%` ignore unknown user",
+		},
+		{
 			input:  "REVOKE Role1, Role2 FROM UserName1, UserName2",
 			output: "revoke `Role1`@`%`, `Role2`@`%` from `UserName1`@`%`, `UserName2`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE PROXY ON UserName FROM Role1, Role2",
 			output: "revoke proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%`",
-		}, {
+		},
+		{
+			input:  "REVOKE IF EXISTS PROXY ON UserName FROM Role1, Role2",
+			output: "revoke if exists proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%`",
+		},
+		{
+			input:  "REVOKE PROXY ON UserName FROM Role1, Role2 IGNORE UNKNOWN USER",
+			output: "revoke proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%` ignore unknown user",
+		},
+		{
 			input:  "REVOKE PROXY ON UserName FROM Role1, Role2",
 			output: "revoke proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%`",
-		}, {
+		},
+		{
 			input:  "FLUSH PRIVILEGES",
 			output: "flush privileges",
 		}, {
