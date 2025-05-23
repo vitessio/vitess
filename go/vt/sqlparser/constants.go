@@ -997,6 +997,12 @@ const (
 	ReadOnly
 )
 
+// BEGIN statement type
+const (
+	BeginStmt BeginType = iota
+	StartTransactionStmt
+)
+
 // Enum Types of WKT functions
 const (
 	GeometryFromText GeomFromWktType = iota

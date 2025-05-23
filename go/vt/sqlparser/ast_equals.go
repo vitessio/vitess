@@ -2071,7 +2071,8 @@ func (cmp *Comparator) RefOfBegin(a, b *Begin) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.SliceOfTxAccessMode(a.TxAccessModes, b.TxAccessModes)
+	return a.Type == b.Type &&
+		cmp.SliceOfTxAccessMode(a.TxAccessModes, b.TxAccessModes)
 }
 
 // RefOfBeginEndStatement does deep equals between the two objects.

@@ -421,7 +421,7 @@ func (cached *Begin) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(32)
 	}
 	// field TxAccessModes []vitess.io/vitess/go/vt/sqlparser.TxAccessMode
 	{

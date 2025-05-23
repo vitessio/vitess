@@ -441,6 +441,11 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.Int64BindVariable(1),
 			"bv2": sqltypes.Int64BindVariable(0),
 		},
+	}, {
+		// Verify we don't change anything in the normalization of create procedures.
+		in:      "CREATE PROCEDURE p2 (in x BIGINT) BEGIN declare y DECIMAL(14,2); START TRANSACTION; set y = 4.2; SELECT 128 from dual; COMMIT; END",
+		outstmt: "create procedure p2 (in x BIGINT) begin declare y DECIMAL(14,2); start transaction; set y = 4.2; select 128 from dual; commit; end;",
+		outbv:   map[string]*querypb.BindVariable{},
 	}}
 	parser := NewTestParser()
 	for _, tc := range testcases {

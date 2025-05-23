@@ -174,7 +174,7 @@ func (nz *normalizer) determineQueryRewriteStrategy(in Statement) {
 func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 	switch node := node.(type) {
 	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release, *OtherAdmin, *Analyze,
-		*PrepareStmt, *ExecuteStmt, *FramePoint, *ColName, TableName, *ConvertType:
+		*PrepareStmt, *ExecuteStmt, *FramePoint, *ColName, TableName, *ConvertType, *CreateProcedure:
 		// These statement do not need normalizing
 		return false
 	case *AssignmentExpr:

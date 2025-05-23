@@ -4781,11 +4781,11 @@ use_table_name:
 begin_statement:
   BEGIN
   {
-    $$ = &Begin{}
+    $$ = &Begin{Type: BeginStmt}
   }
 | START TRANSACTION tx_chacteristics_opt
   {
-    $$ = &Begin{TxAccessModes: $3}
+    $$ = &Begin{Type: StartTransactionStmt, TxAccessModes: $3}
   }
 
 tx_chacteristics_opt:

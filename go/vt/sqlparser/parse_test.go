@@ -2227,6 +2227,8 @@ var (
 		input:  "create procedure ConditionWithSignalAndHandler() begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Handled with custom condition and signal'; end; signal sqlstate '45000' set message_text = 'Custom signal triggered'; end;",
 		output: "create procedure ConditionWithSignalAndHandler () begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Handled with custom condition and signal' from dual; end; signal sqlstate '45000' set message_text = 'Custom signal triggered'; end;",
 	}, {
+		input: "create procedure t1 (in x BIGINT) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;",
+	}, {
 		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {
 		input: "alter view a as select * from t",
@@ -2907,8 +2909,7 @@ var (
 		input:  "begin;",
 		output: "begin",
 	}, {
-		input:  "start transaction",
-		output: "begin",
+		input: "start transaction",
 	}, {
 		input: "start transaction with consistent snapshot",
 	}, {

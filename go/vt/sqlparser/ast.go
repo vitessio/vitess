@@ -640,8 +640,15 @@ type (
 	// TxAccessMode is an enum for Transaction Access Mode
 	TxAccessMode int8
 
+	// BeginType is an enum for the type of BEGIN statement.
+	BeginType int8
+
 	// Begin represents a Begin statement.
 	Begin struct {
+		// We need to differentiate between BEGIN and START TRANSACTION statements
+		// because inside a stored procedure the former is considered part of a BEGIN...END statement,
+		// while the latter starts a transaction.
+		Type          BeginType
 		TxAccessModes []TxAccessMode
 	}
 
