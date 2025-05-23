@@ -52,6 +52,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
+	"vitess.io/vitess/go/vt/vtgate/dynamicconfig"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -79,7 +80,7 @@ type (
 
 		MaxMemoryRows      int
 		EnableShardRouting bool
-		DefaultTabletType  topodatapb.TabletType
+		TabletType         dynamicconfig.DefaultTabletType
 		QueryTimeout       int
 		DBDDLPlugin        string
 		ForeignKeyMode     vschemapb.Keyspace_ForeignKeyMode
@@ -207,7 +208,7 @@ func NewVCursorImpl(
 	cfg VCursorConfig,
 	metrics Metrics,
 ) (*VCursorImpl, error) {
-	keyspace, tabletType, destination, err := ParseDestinationTarget(safeSession.TargetString, cfg.DefaultTabletType, vschema)
+	keyspace, tabletType, destination, err := ParseDestinationTarget(safeSession.TargetString, cfg.TabletType.DefaultTabletType(), vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -1021,7 +1022,7 @@ func (vc *VCursorImpl) Session() engine.SessionActions {
 }
 
 func (vc *VCursorImpl) SetTarget(target string) error {
-	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, vc.config.DefaultTabletType)
+	keyspace, tabletType, _, err := topoprotopb.ParseDestination(target, vc.config.TabletType.DefaultTabletType())
 	if err != nil {
 		return err
 	}
