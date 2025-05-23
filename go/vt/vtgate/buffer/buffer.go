@@ -147,7 +147,7 @@ type Buffer struct {
 	config *Config
 
 	// bufferSizeSema limits how many requests can be buffered
-	// ("-buffer_size") and is shared by all shardBuffer instances.
+	// ("-buffer-size") and is shared by all shardBuffer instances.
 	bufferSizeSema *semaphore.Weighted
 	bufferSize     int
 
@@ -156,7 +156,7 @@ type Buffer struct {
 	// - 1. Requests which may buffer (RLock, can be run in parallel)
 	// - 2. Request which starts buffering (based on the seen error)
 	// - 3. HealthCheck subscriber ("StatsUpdate") which stops buffering
-	// - 4. Timer which may stop buffering after -buffer_max_failover_duration
+	// - 4. Timer which may stop buffering after -buffer-max-failover-duration
 	mu sync.RWMutex
 	// buffers holds a shardBuffer object per shard, even if no failover is in
 	// progress.

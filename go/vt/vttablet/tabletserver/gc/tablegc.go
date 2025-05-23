@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
@@ -64,9 +65,9 @@ func init() {
 
 func registerGCFlags(fs *pflag.FlagSet) {
 	// checkInterval marks the interval between looking for tables in mysql server/schema
-	fs.DurationVar(&checkInterval, "gc_check_interval", checkInterval, "Interval between garbage collection checks")
+	utils.SetFlagDurationVar(fs, &checkInterval, "gc-check-interval", checkInterval, "Interval between garbage collection checks")
 	// purgeReentranceInterval marks the interval between searching tables to purge
-	fs.DurationVar(&purgeReentranceInterval, "gc_purge_check_interval", purgeReentranceInterval, "Interval between purge discovery checks")
+	utils.SetFlagDurationVar(fs, &purgeReentranceInterval, "gc-purge-check-interval", purgeReentranceInterval, "Interval between purge discovery checks")
 	// gcLifecycle is the sequence of steps the table goes through in the process of getting dropped
 	fs.StringVar(&gcLifecycle, "table_gc_lifecycle", gcLifecycle, "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implicitly always included)")
 }

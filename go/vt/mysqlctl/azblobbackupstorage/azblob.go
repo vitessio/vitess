@@ -76,7 +76,7 @@ var (
 	)
 
 	azBlobBufferSize = viperutil.Configure(
-		configKey("buffer_size"),
+		configKey("buffer-size"),
 		viperutil.Options[int]{
 			Default:  100 << (10 * 2), // 100 MiB
 			FlagName: "azblob_buffer_size",

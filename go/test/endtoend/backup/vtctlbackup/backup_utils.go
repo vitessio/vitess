@@ -991,7 +991,7 @@ func restoreWaitForBackup(t *testing.T, tabletType string, cDetails *Compression
 	if fakeImpl {
 		replicaTabletArgs = append(replicaTabletArgs, vtutils.GetFlagVariantForTests("--backup-engine-implementation"), "fake_implementation")
 	}
-	replicaTabletArgs = append(replicaTabletArgs, "--wait_for_backup_interval", "1s")
+	replicaTabletArgs = append(replicaTabletArgs, vtutils.GetFlagVariantForTests("--wait-for-backup-interval"), "1s")
 	replicaTabletArgs = append(replicaTabletArgs, vtutils.GetFlagVariantForTests("--init-tablet-type"), tabletType)
 	replica2.VttabletProcess.ExtraArgs = replicaTabletArgs
 	replica2.VttabletProcess.ServingStatus = ""
@@ -1494,7 +1494,7 @@ func getDefaultCommonArgs() []string {
 		"--vreplication_retry_delay", "1s",
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
-		"--watch_replication_stream",
+		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
 		"--enable_replication_reporter",
 		"--serving_state_grace_period", "1s",
 	}
