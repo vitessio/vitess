@@ -432,12 +432,12 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
 			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
-			"--migration_check_interval", "5s",
+			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
 			"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
 			utils.GetFlagVariantForTests("--watch-replication-stream"),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			"--ddl_strategy", "online",
+			utils.GetFlagVariantForTests("--ddl-strategy"), "online",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {

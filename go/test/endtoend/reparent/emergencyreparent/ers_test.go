@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
+	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
@@ -388,7 +389,7 @@ func TestERSForInitialization(t *testing.T) {
 	shard := &cluster.Shard{Name: utils.ShardName}
 	shard.Vttablets = tablets
 	clusterInstance.VtTabletExtraArgs = []string{
-		"--lock_tables_timeout", "5s",
+		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		"--track_schema_versions=true",
 	}
 

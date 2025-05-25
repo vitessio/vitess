@@ -109,7 +109,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
 	utils.SetFlagStringVar(fs, &skipBuildInfoTags, "vttablet-skip-buildinfo-tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init-tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	utils.SetFlagVar(fs, &initTags, "init-tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
-	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
+	utils.SetFlagDurationVar(fs, &initTimeout, "init-timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "Timeout to use when MySQL is being shut down.")
 }
 
@@ -924,7 +924,7 @@ func (tm *TabletManager) exportStats() {
 // withRetry will exponentially back off and retry a function upon
 // failure, until the context is Done(), or the function returned with
 // no error. We use this at startup with a context timeout set to the
-// value of the init_timeout flag, so we can try to modify the
+// value of the init-timeout flag, so we can try to modify the
 // topology over a longer period instead of dying right away.
 func (tm *TabletManager) withRetry(ctx context.Context, description string, work func() error) error {
 	backoff := 1 * time.Second

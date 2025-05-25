@@ -5,7 +5,7 @@ init:
   keyspace:          # init-keyspace
   shard:             # init-shard
   tabletType:        # init-tablet-type
-  timeoutSeconds: 60 # init_timeout
+  timeoutSeconds: 60 # init-timeout
 
 db:
   socket:     # db-socket
@@ -78,7 +78,7 @@ oltp:
 
 healthcheck:
   intervalSeconds: 20             # health-check-interval
-  degradedThresholdSeconds: 30    # degraded_threshold
+  degradedThresholdSeconds: 30    # degraded-threshold
   unhealthyThresholdSeconds: 7200 # unhealthy_threshold
 
 gracePeriods:
@@ -107,7 +107,7 @@ messagePostponeParallelism: 4            # queryserver-config-message-postpone-c
 
 
 # The following flags are currently not supported.
-# enforce_strict_trans_tables
+# enforce-strict-trans-tables
 # queryserver-config-strict-table-acl
 # queryserver-config-enable-table-acl-dry-run
 # queryserver-config-acl-exempt-acl

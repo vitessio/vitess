@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -154,7 +155,7 @@ func TestFKExt(t *testing.T) {
 		}
 		sqls := strings.Split(FKExtSourceSchema, "\n")
 		for _, sql := range sqls {
-			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy=direct", "--sql", sql, keyspaceName)
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy")+"=direct", "--sql", sql, keyspaceName)
 			require.NoErrorf(t, err, output)
 		}
 		doReshard(t, fkextConfig.target2KeyspaceName, "reshard2to3", "-80,80-", threeShards, tablets)
@@ -167,7 +168,7 @@ func TestFKExt(t *testing.T) {
 		tablets[shard] = vc.Cells[cellName].Keyspaces[keyspaceName].Shards[shard].Tablets[fmt.Sprintf("%s-%d", cellName, tabletID)].Vttablet
 		sqls := strings.Split(FKExtSourceSchema, "\n")
 		for _, sql := range sqls {
-			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy=direct", "--sql", sql, keyspaceName)
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy")+"=direct", "--sql", sql, keyspaceName)
 			require.NoErrorf(t, err, output)
 		}
 		doReshard(t, fkextConfig.target2KeyspaceName, "reshard3to1", threeShards, "0", tablets)
@@ -314,7 +315,7 @@ const fkExtMaterializeSpec = `
 
 func materializeTables(t *testing.T) {
 	wfName := "mat"
-	err := vc.VtctldClient.ExecuteCommand("ApplySchema", "--ddl-strategy=direct", "--sql", FKExtMaterializeSchema, fkextConfig.target1KeyspaceName)
+	err := vc.VtctldClient.ExecuteCommand("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy")+"=direct", "--sql", FKExtMaterializeSchema, fkextConfig.target1KeyspaceName)
 	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
 	materializeSpec := fmt.Sprintf(fkExtMaterializeSpec, "mat", fkextConfig.target2KeyspaceName, fkextConfig.target1KeyspaceName)
 	materialize(t, materializeSpec)

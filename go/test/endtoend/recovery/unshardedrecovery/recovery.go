@@ -53,8 +53,8 @@ var (
 	shardName        = "0"
 	commonTabletArg  = []string{
 		"--vreplication-retry-delay", "1s",
-		"--degraded_threshold", "5s",
-		"--lock_tables_timeout", "5s",
+		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
+		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
 		"--serving_state_grace_period", "1s"}
 	recoveryKS1  = "recovery_ks1"
