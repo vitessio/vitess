@@ -46,7 +46,7 @@ func TestReparentSyslog(t *testing.T) {
 			},
 		},
 	)
-	tc.Id = "123-456-789"
+	tc.Meta.Id = "123-456-789"
 	tc.Update(eventsdatapb.ReparentPhaseType_PrimaryElected)
 	gotSev, gotMsg := tc.Syslog()
 

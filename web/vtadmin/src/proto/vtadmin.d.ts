@@ -15615,8 +15615,9 @@ export namespace eventsdata {
 
     /** SourceType enum. */
     enum SourceType {
-        Vtctld = 0,
-        Vtorc = 1
+        Unknown = 0,
+        Vtctld = 1,
+        Vtorc = 2
     }
 
     /** Properties of a Source. */

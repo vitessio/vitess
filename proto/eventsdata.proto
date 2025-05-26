@@ -30,8 +30,9 @@ import "topodata.proto";
 import "vttime.proto";
 
 enum SourceType {
-  Vtctld = 0;
-  Vtorc = 1;
+  Unknown = 0;
+  Vtctld = 1;
+  Vtorc = 2;
 }
 
 message Source {
@@ -58,6 +59,7 @@ enum ReparentType {
 
 // ReparentPhaseType represents the type of phase of a reparent.
 enum ReparentPhaseType {
+  // Pending is...TODO
   Pending = 0;
  
   // Finished is...TODO
