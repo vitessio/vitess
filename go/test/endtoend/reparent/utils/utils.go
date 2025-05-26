@@ -32,7 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -85,11 +84,12 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 	require.NoError(t, err)
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		"--lock_tables_timeout", "5s",
 		// Fast health checks help find corner cases.
 		utils.GetFlagVariantForTests("--health-check-interval"), "1s",
 		"--track_schema_versions=true",
-		utils.GetFlagVariantForTests("--queryserver-enable-online-ddl")+"=false")
+		"--queryserver_enable_online_ddl"+"=false")
 
 	if len(extraVttabletFlags) > 0 {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, extraVttabletFlags...)
@@ -188,7 +188,8 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	shard.Vttablets = tablets
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+		"--lock_tables_timeout", "5s",
 		"--track_schema_versions=true",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
 		// All the tests in this package reparent frequently between different tablets
@@ -196,7 +197,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// In this case, the close method and initSchema method of the onlineDDL executor race.
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
-		utils.GetFlagVariantForTests("--queryserver-enable-online-ddl")+"=false")
+		"--queryserver_enable_online_ddl"+"=false")
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
@@ -282,9 +283,10 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		clusterInstance.Hostname,
 		clusterInstance.TmpDirectory,
 		[]string{
-			utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+			//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
+			"--lock_tables_timeout", "5s",
 			"--track_schema_versions=true",
-			utils.GetFlagVariantForTests("--queryserver-enable-online-ddl") + "=false",
+			"--queryserver_enable_online_ddl" + "=false",
 		},
 		clusterInstance.DefaultCharset)
 	tablet.VttabletProcess.SupportsBackup = supportsBackup
