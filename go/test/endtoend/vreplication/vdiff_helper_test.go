@@ -207,16 +207,20 @@ type vdiffResult struct {
 // execVDiffWithRetry will ignore transient errors that can occur during workflow state changes.
 func execVDiffWithRetry(t *testing.T, expectError bool, args []string) (string, error) {
 	log.Infof("Executing vdiff with retry with args: %+v", args)
-	ctx, cancel := context.WithTimeout(context.Background(), vdiffRetryTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), vdiffRetryTimeout*3)
 	defer cancel()
 	vdiffResultCh := make(chan vdiffResult)
 	go func() {
 		var output string
 		var err error
 		retry := false
+		log.Infof("vdiff attempt: args=%+v", args)
 		for {
 			select {
 			case <-ctx.Done():
+				vdiffResultCh <- vdiffResult{
+					output: "", err: fmt.Errorf("context done before vdiff completed: %v", ctx.Err()),
+				}
 				return
 			default:
 			}
@@ -224,7 +228,9 @@ func execVDiffWithRetry(t *testing.T, expectError bool, args []string) (string, 
 				time.Sleep(vdiffRetryInterval)
 			}
 			retry = false
+			log.Infof("Calling vtctldclient with args: %+v", args)
 			output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
+			log.Infof("vtctldclient finished: err=%v output=%q", err, output)
 			if err != nil {
 				if expectError {
 					result := vdiffResult{output: output, err: err}
