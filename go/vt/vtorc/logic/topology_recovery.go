@@ -553,6 +553,12 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 
 	// Prioritise primary recovery.
 	// If we are performing some other action, first ensure that it is not because of primary issues.
+	// This step is only meant to improve the time taken to detect and fix cluster wide recoveries, it does not impact correctness.
+	// If a VTOrc detects an issue on a replica like ReplicationStopped, the underlying cause could be a dead primary instead.
+	// So, we try to reload that primary's information before proceeding with the replication stopped fix. We do this before acquiring the shard lock
+	// to allow another VTOrc instance to proceed with the dead primary recovery if it is indeed the case and it detects it before us. If however, the primary
+	// is not dead, then we will proceed with the fix for the replica. Essentially, we are trading off speed in replica recoveries (by doing an additional primary tablet reload)
+	// for speed in cluster-wide recoveries (by not holding the shard lock before reloading the primary tablet information).
 	if !isClusterWideRecovery(checkAndRecoverFunctionCode) {
 		if err = recheckPrimaryHealth(analysisEntry, DiscoverInstance); err != nil {
 			return err
