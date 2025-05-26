@@ -230,7 +230,6 @@ func markBindVariable(yylex yyLexer, bvar string) {
 }
 
 // These precedence rules are there to handle shift-reduce conflicts.
-%nonassoc <str> MEMBER
 // MULTIPLE_TEXT_LITERAL is used to resolve shift-reduce conflicts occuring due to multiple STRING symbols occuring one after the other.
 // According to the ANSI standard, these strings should be concatenated together.
 // The shift-reduce conflict occurrs because after seeing a STRING, if we see another one, then we can either shift to concatenate them or
@@ -318,7 +317,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %left <str> AND
 %right <str> NOT '!'
 %left <str> BETWEEN CASE WHEN THEN ELSE ELSEIF END
-%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP RLIKE IN ASSIGNMENT_OPT
+%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP RLIKE IN ASSIGNMENT_OPT MEMBER
 %left <str> '&'
 %left <str> SHIFT_LEFT SHIFT_RIGHT
 %left <str> '+' '-'
@@ -4782,11 +4781,11 @@ use_table_name:
 begin_statement:
   BEGIN
   {
-    $$ = &Begin{}
+    $$ = &Begin{Type: BeginStmt}
   }
 | START TRANSACTION tx_chacteristics_opt
   {
-    $$ = &Begin{TxAccessModes: $3}
+    $$ = &Begin{Type: StartTransactionStmt, TxAccessModes: $3}
   }
 
 tx_chacteristics_opt:
@@ -5732,9 +5731,9 @@ expression:
  {
     $$ = &AssignmentExpr{Left: $1, Right: $3}
  }
-| expression MEMBER OF openb expression closeb
+| expression MEMBER OF openb expression closeb %prec '='
   {
-    $$ = &MemberOfExpr{Value: $1, JSONArr:$5 }
+    $$ = &MemberOfExpr{Value: $1, JSONArr: $5}
   }
 
 null_or_unknown:

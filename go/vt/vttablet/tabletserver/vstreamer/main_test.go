@@ -28,22 +28,22 @@ import (
 	"testing"
 	"time"
 
-	vttablet "vitess.io/vitess/go/vt/vttablet/common"
-
 	"github.com/stretchr/testify/require"
 
-	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
 
 var (
@@ -317,8 +317,13 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 	// values to the VStreamer for the duration of this test.
 	var options binlogdatapb.VStreamOptions
 	options.ConfigOverrides = make(map[string]string)
-	options.ConfigOverrides["vstream_dynamic_packet_size"] = strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
-	options.ConfigOverrides["vstream_packet_size"] = strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
+	dynamicPacketSize := strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
+	packetSize := strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
+
+	// Support both formats for backwards compatibility
+	// TODO(v25): Remove underscore versions
+	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", dynamicPacketSize)
+	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", packetSize)
 
 	return engine.Stream(ctx, pos, tablePKs, filter, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
 		timer := time.NewTimer(2 * time.Second)

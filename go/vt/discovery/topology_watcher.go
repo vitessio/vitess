@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -84,11 +84,16 @@ type TopologyWatcher struct {
 	firstLoadDone bool
 	// firstLoadChan is closed when the initial load of topology data is complete.
 	firstLoadChan chan struct{}
+	// options contains optional settings used to modify HealthCheckImpl
+	// behavior.
+	options Options
 }
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and reloads them as needed.
-func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool) *TopologyWatcher {
+func NewTopologyWatcher(
+	ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, opts ...Option,
+) *TopologyWatcher {
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
 		healthcheck:         hc,
@@ -97,6 +102,7 @@ func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthC
 		refreshInterval:     refreshInterval,
 		refreshKnownTablets: refreshKnownTablets,
 		tablets:             make(map[string]*tabletInfo),
+		options:             withOptions(opts...),
 	}
 	tw.firstLoadChan = make(chan struct{})
 
@@ -157,12 +163,12 @@ func (tw *TopologyWatcher) Stop() {
 
 func (tw *TopologyWatcher) loadTabletsForKeyspaceShard(keyspace string, shard string) {
 	if keyspace == "" || shard == "" {
-		log.Errorf("topologyWatcher: loadTabletsForKeyspaceShard: keyspace and shard are required")
+		tw.logger().Errorf("topologyWatcher: loadTabletsForKeyspaceShard: keyspace and shard are required")
 		return
 	}
 	tabletInfos, err := tw.getTabletsByShard(keyspace, shard)
 	if err != nil {
-		log.Errorf("error getting tablets for keyspace-shard: %v:%v: %v", keyspace, shard, err)
+		tw.logger().Errorf("error getting tablets for keyspace-shard: %v:%v: %v", keyspace, shard, err)
 		return
 	}
 	// Since we are only reading tablets for a keyspace shard,
@@ -179,10 +185,10 @@ func (tw *TopologyWatcher) loadTablets() {
 		topologyWatcherErrors.Add(topologyWatcherOpListTablets, 1)
 		// If we get a partial result error, we just log it and process the tablets that we did manage to fetch.
 		if topo.IsErrType(err, topo.PartialResult) {
-			log.Errorf("received partial result from getTablets for cell %v: %v", tw.cell, err)
+			tw.logger().Errorf("received partial result from getTablets for cell %v: %v", tw.cell, err)
 			partialResult = true
 		} else { // For all other errors, just return.
-			log.Errorf("error getting tablets for cell: %v: %v", tw.cell, err)
+			tw.logger().Errorf("error getting tablets for cell: %v: %v", tw.cell, err)
 			return
 		}
 	}
@@ -298,6 +304,11 @@ func (tw *TopologyWatcher) TopoChecksum() uint32 {
 	return tw.topoChecksum
 }
 
+// logger returns the logutil.Logger used by the TopologyWatcher.
+func (tw *TopologyWatcher) logger() logutil.Logger {
+	return tw.options.logger
+}
+
 // TabletFilter is an interface that can be given to a TopologyWatcher
 // to be applied as an additional filter on the list of tablets returned by its getTablets function.
 type TabletFilter interface {
@@ -323,6 +334,9 @@ func (tf TabletFilters) IsIncluded(tablet *topodatapb.Tablet) bool {
 type FilterByShard struct {
 	// filters is a map of keyspace to filters for shards
 	filters map[string][]*filterShard
+	// options contains optional settings used to modify FilterByShard
+	// behavior.
+	options Options
 }
 
 // filterShard describes a filter for a given shard or keyrange inside
@@ -331,6 +345,7 @@ type filterShard struct {
 	keyspace string
 	shard    string
 	keyRange *topodatapb.KeyRange // only set if shard is also a KeyRange
+	options  Options
 }
 
 // NewFilterByShard creates a new FilterByShard for use by a
@@ -338,7 +353,7 @@ type filterShard struct {
 // can either be a shard name, or a keyrange. All tablets that match
 // at least one keyspace|shard tuple will be forwarded by the
 // TopologyWatcher to its consumer.
-func NewFilterByShard(filters []string) (*FilterByShard, error) {
+func NewFilterByShard(filters []string, opts ...Option) (*FilterByShard, error) {
 	m := make(map[string][]*filterShard)
 	for _, filter := range filters {
 		parts := strings.Split(filter, "|")
@@ -369,16 +384,19 @@ func NewFilterByShard(filters []string) (*FilterByShard, error) {
 		})
 	}
 
-	return &FilterByShard{
+	fbs := &FilterByShard{
 		filters: m,
-	}, nil
+		options: withOptions(opts...),
+	}
+
+	return fbs, nil
 }
 
 // IsIncluded returns true iff the tablet's keyspace and shard match what we have.
 func (fbs *FilterByShard) IsIncluded(tablet *topodatapb.Tablet) bool {
 	canonical, kr, err := topo.ValidateShardName(tablet.Shard)
 	if err != nil {
-		log.Errorf("Error parsing shard name %v, will ignore tablet: %v", tablet.Shard, err)
+		fbs.logger().Errorf("Error parsing shard name %v, will ignore tablet: %v", tablet.Shard, err)
 		return false
 	}
 
@@ -393,6 +411,11 @@ func (fbs *FilterByShard) IsIncluded(tablet *topodatapb.Tablet) bool {
 		}
 	}
 	return false
+}
+
+// logger returns the logutil.Logger used by the FilterByShard.
+func (fbs *FilterByShard) logger() logutil.Logger {
+	return fbs.options.logger
 }
 
 // FilterByKeyspace is a filter that filters tablets by keyspace.

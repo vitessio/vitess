@@ -151,7 +151,10 @@ BEGIN
 	insert into allDefaults(id) values (128);
 	select 128 into val from dual;
 END;
-`}
+`,
+		`CREATE PROCEDURE p1 (in x BIGINT) BEGIN declare y DECIMAL(14,2); set y = 4.2; END`,
+		`CREATE PROCEDURE p2 (in x BIGINT) BEGIN START TRANSACTION; SELECT 128 from dual; COMMIT; END`,
+	}
 )
 
 func TestMain(m *testing.M) {

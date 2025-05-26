@@ -37,17 +37,17 @@ It is usually the first Vitess component to be started after a valid global topo
 
 For the last several releases, vtctld has been transitioning to a newer gRPC service for well-typed cluster management requests.
 This is **required** to use programs such as vtadmin and vtctldclient, and The old API and service are deprecated and will be removed in a future release.
-To enable this newer service, include "grpc-vtctld" in the --service_map argument.
+To enable this newer service, include "grpc-vtctld" in the --service-map argument.
 This is demonstrated in the example usage below.`,
 		Example: `vtctld \
-	--topo_implementation etcd2 \
-	--topo_global_server_address localhost:2379 \
-	--topo_global_root /vitess/ \
-	--service_map 'grpc-vtctl,grpc-vtctld' \
-	--backup_storage_implementation file \
+	--topo-implementation etcd2 \
+	--topo-global-server-address localhost:2379 \
+	--topo-global-root /vitess/ \
+	--service-map 'grpc-vtctl,grpc-vtctld' \
+	--backup-storage-implementation file \
 	--file_backup_storage_root $VTDATAROOT/backups \
 	--port 15000 \
-	--grpc_port 15999`,
+	--grpc-port 15999`,
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),
 		PreRunE: servenv.CobraPreRunE,
