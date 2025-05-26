@@ -480,6 +480,18 @@ func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) bo
 
 func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
 	switch a := a.(type) {
+	case sqlparser.ValTuple:
+		if b, ok := b.(sqlparser.ValTuple); ok {
+			return gen4ValuesEqual(ctx, a, b)
+		}
+
+		return false
+
+	case sqlparser.ListArg:
+		if b, ok := b.(sqlparser.ListArg); ok {
+			return a == b
+		}
+
 	case *sqlparser.ColName:
 		if b, ok := b.(*sqlparser.ColName); ok {
 			if !a.Name.Equal(b.Name) {
