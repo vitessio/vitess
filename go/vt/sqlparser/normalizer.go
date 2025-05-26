@@ -47,15 +47,17 @@ type normalizer struct {
 	bindVars  map[string]*querypb.BindVariable
 	reserved  *ReservedVars
 	vals      map[Literal]string
+	tupleVals map[string]string
 	err       error
 	inDerived bool
 }
 
 func newNormalizer(reserved *ReservedVars, bindVars map[string]*querypb.BindVariable) *normalizer {
 	return &normalizer{
-		bindVars: bindVars,
-		reserved: reserved,
-		vals:     make(map[Literal]string),
+		bindVars:  bindVars,
+		reserved:  reserved,
+		vals:      make(map[Literal]string),
+		tupleVals: make(map[string]string),
 	}
 }
 
@@ -326,8 +328,22 @@ func (nz *normalizer) rewriteInComparisons(node *ComparisonExpr) {
 			Value: bval.Value,
 		})
 	}
-	bvname := nz.reserved.nextUnusedVar()
-	nz.bindVars[bvname] = bvals
+
+	var bvname string
+
+	if key, err := bvals.MarshalVT(); err != nil {
+		bvname = nz.reserved.nextUnusedVar()
+		nz.bindVars[bvname] = bvals
+	} else {
+		// Check if we can find key in tuplevals
+		if bvname, ok = nz.tupleVals[string(key)]; !ok {
+			bvname = nz.reserved.nextUnusedVar()
+		}
+
+		nz.bindVars[bvname] = bvals
+		nz.tupleVals[string(key)] = bvname
+	}
+
 	// Modify RHS to be a list bindvar.
 	node.Right = ListArg(bvname)
 }
