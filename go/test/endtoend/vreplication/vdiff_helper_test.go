@@ -206,6 +206,7 @@ type vdiffResult struct {
 
 // execVDiffWithRetry will ignore transient errors that can occur during workflow state changes.
 func execVDiffWithRetry(t *testing.T, expectError bool, args []string) (string, error) {
+	log.Infof("Executing vdiff with retry with args: %+v", args)
 	ctx, cancel := context.WithTimeout(context.Background(), vdiffRetryTimeout)
 	defer cancel()
 	vdiffResultCh := make(chan vdiffResult)
@@ -251,7 +252,7 @@ func execVDiffWithRetry(t *testing.T, expectError bool, args []string) (string, 
 	}()
 	select {
 	case <-ctx.Done():
-		return "", fmt.Errorf("timed out waiting for vdiff to complete")
+		return "", fmt.Errorf("timed out waiting for vdiff to complete: %+v", args)
 	case result := <-vdiffResultCh:
 		return result.output, result.err
 	}
