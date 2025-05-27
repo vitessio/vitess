@@ -109,14 +109,14 @@ var (
 	// there are no active streams, server will send GOAWAY and close the connection.
 	gRPCKeepAliveEnforcementPolicyPermitWithoutStream bool
 
-	// Enable ORCA metrics to be sent from the server to the client to be used for load balancing
+	// Enable ORCA metrics to be sent from the server to the client to be used for load balancing.
 	gRPCEnableOrcaMetrics bool
 
 	gRPCKeepaliveTime    = 10 * time.Second
 	gRPCKeepaliveTimeout = 10 * time.Second
 )
 
-// Injectable behavior for testing
+// Injectable behavior for testing.
 var (
 	registerORCA = orca.Register
 )
@@ -361,7 +361,7 @@ func registerOrca() {
 		log.Exitf("Failed to register ORCA service: %v", err)
 	}
 
-	// Initialize the server metrics values
+	// Initialize the server metrics values.
 	GRPCServerMetricsRecorder.SetCPUUtilization(getCPUUsage())
 	GRPCServerMetricsRecorder.SetMemoryUtilization(getMemoryUsage())
 

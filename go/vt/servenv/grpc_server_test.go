@@ -81,7 +81,7 @@ func TestOrcaMetricsRecorder(t *testing.T) {
 }
 
 func TestEnableOrcaMetrics(t *testing.T) {
-	// Set the port to enable gRPC server
+	// Set the port to enable gRPC server.
 	withTempVar(&gRPCPort, getFreePort())
 	withTempVar(&gRPCEnableOrcaMetrics, true)
 	withTempVar(&GRPCServerMetricsRecorder, nil)
@@ -106,7 +106,7 @@ func TestEnableOrcaMetrics(t *testing.T) {
 }
 
 func TestDisableOrcaMetrics(t *testing.T) {
-	// Set the port to enable gRPC server
+	// Set the port to enable gRPC server.
 	withTempVar(&gRPCPort, getFreePort())
 	withTempVar(&gRPCEnableOrcaMetrics, false)
 	withTempVar(&GRPCServerMetricsRecorder, nil)
@@ -129,7 +129,7 @@ func TestDisableOrcaMetrics(t *testing.T) {
 }
 
 func TestReportedOrcaMetrics(t *testing.T) {
-	// Set the port to enable gRPC server
+	// Set the port to enable gRPC server.
 	withTempVar(&gRPCPort, getFreePort())
 	withTempVar(&gRPCEnableOrcaMetrics, true)
 	withTempVar(&GRPCServerMetricsRecorder, nil)
