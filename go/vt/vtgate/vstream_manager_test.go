@@ -291,11 +291,15 @@ func BenchmarkVStreamEvents(b *testing.B) {
 	}
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
-			f, err := os.Create("cpu.prof")
-			if err != nil {
-				b.Fatal(err)
+			var f *os.File
+			var err error
+			if os.Getenv("PROFILE_CPU") == "true" {
+				f, err = os.Create("cpu.prof")
+				if err != nil {
+					b.Fatal(err)
+				}
+				defer f.Close()
 			}
-			defer f.Close()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			cell := "aa"
@@ -354,7 +358,9 @@ func BenchmarkVStreamEvents(b *testing.B) {
 			// Start the timer when the VStream begins
 			<-start
 			b.ResetTimer()
-			pprof.StartCPUProfile(f)
+			if os.Getenv("PROFILE_CPU") == "true" {
+				pprof.StartCPUProfile(f)
+			}
 
 			received := 0
 			for {
@@ -367,7 +373,9 @@ func BenchmarkVStreamEvents(b *testing.B) {
 				if received >= totalEvents {
 					b.Logf("Received events %d, expected total %d", received, totalEvents)
 					b.StopTimer()
-					pprof.StopCPUProfile()
+					if os.Getenv("PROFILE_CPU") == "true" {
+						pprof.StopCPUProfile()
+					}
 					cancel()
 				}
 			}
