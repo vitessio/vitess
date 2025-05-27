@@ -27,13 +27,14 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 // vtctlClientProtocol specifics which RPC client implementation should be used.
 var vtctlClientProtocol = "grpc"
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&vtctlClientProtocol, "vtctl_client_protocol", vtctlClientProtocol, "Protocol to use to talk to the vtctl server.")
+	utils.SetFlagStringVar(fs, &vtctlClientProtocol, "vtctl-client-protocol", vtctlClientProtocol, "Protocol to use to talk to the vtctl server.")
 }
 
 func init() {
