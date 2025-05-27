@@ -308,8 +308,8 @@ func BenchmarkVStreamEvents(b *testing.B) {
 			sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 			addTabletToSandboxTopo(b, ctx, st, ks, "-20", sbc0.Tablet())
 
-			const totalEvents = 20_000_000
-			batchSize := 100_000
+			const totalEvents = 100_000
+			batchSize := 10_000
 			for i := 0; i < totalEvents; i += batchSize {
 				var events []*binlogdatapb.VEvent
 				events = append(events, &binlogdatapb.VEvent{
