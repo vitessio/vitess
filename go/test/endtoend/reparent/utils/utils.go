@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -87,7 +88,7 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 		"--lock_tables_timeout", "5s",
 		// Fast health checks help find corner cases.
 		"--health_check_interval", "1s",
-		"--track_schema_versions=true",
+		utils.GetFlagVariantForTests("--track-schema-versions")+"=true",
 		"--queryserver_enable_online_ddl=false")
 
 	if len(extraVttabletFlags) > 0 {
@@ -188,7 +189,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 		"--lock_tables_timeout", "5s",
-		"--track_schema_versions=true",
+		utils.GetFlagVariantForTests("--track-schema-versions")+"=true",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
 		// All the tests in this package reparent frequently between different tablets
 		// This means that Promoting a tablet to primary is sometimes immediately followed by a DemotePrimary call.
@@ -282,7 +283,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		clusterInstance.TmpDirectory,
 		[]string{
 			"--lock_tables_timeout", "5s",
-			"--track_schema_versions=true",
+			"--track-schema-versions=true",
 			"--queryserver_enable_online_ddl=false",
 		},
 		clusterInstance.DefaultCharset)

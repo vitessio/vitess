@@ -31,7 +31,7 @@ import (
 // TestRunFailsToStartTabletManager tests the code path in 'run' where we fail to start the TabletManager
 // this is done by starting vttablet without a cnf file but requesting it to restore from backup.
 // When starting, the TabletManager checks if it needs to restore, in tm.handleRestore but this step will
-// fail if we do not provide a cnf file and if the flag --restore_from_backup is provided.
+// fail if we do not provide a cnf file and if the flag --restore-from-backup is provided.
 func TestRunFailsToStartTabletManager(t *testing.T) {
 	ts, factory := memorytopo.NewServerAndFactory(context.Background(), "cell")
 	topo.RegisterFactory("test", factory)
@@ -59,7 +59,7 @@ func TestRunFailsToStartTabletManager(t *testing.T) {
 	}
 
 	flagArgs = append(flagArgs,
-		"--tablet-path", "cell-1", "--restore_from_backup",
+		"--tablet-path", "cell-1", "--restore-from-backup",
 	)
 
 	os.Args = append([]string{"vttablet"}, flagArgs...)
@@ -69,5 +69,5 @@ func TestRunFailsToStartTabletManager(t *testing.T) {
 	defer cancel()
 
 	err := Main.ExecuteContext(ctx)
-	require.ErrorContains(t, err, "you cannot enable --restore_from_backup without a my.cnf file")
+	require.ErrorContains(t, err, "you cannot enable --restore-from-backup without a my.cnf file")
 }

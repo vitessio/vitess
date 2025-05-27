@@ -30,6 +30,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -53,7 +54,7 @@ var (
 		"--lock_tables_timeout", "5s",
 		"--watch_replication_stream",
 		"--enable_replication_reporter",
-		"--serving_state_grace_period", "1s",
+		utils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
 		"--binlog_player_protocol", "grpc",
 	}
 	vSchema = `

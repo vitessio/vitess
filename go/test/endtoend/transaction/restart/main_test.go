@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -59,7 +60,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 		}
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--shutdown_grace_period=0s",
+			vtutils.GetFlagVariantForTests("--shutdown-grace-period")+"=0s",
 		)
 		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
 		if err != nil {

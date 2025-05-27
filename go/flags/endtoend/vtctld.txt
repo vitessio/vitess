@@ -153,7 +153,7 @@ Flags:
       --tablet-refresh-interval duration                                 Tablet refresh interval. (default 1m0s)
       --tablet-refresh-known-tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
       --tablet-url-template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
-      --tablet_health_keep_alive duration                                close streaming tablet health connection if there are no requests for this long (default 5m0s)
+      --tablet_health_keep-alive duration                                close streaming tablet health connection if there are no requests for this long (default 5m0s)
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")
       --topo-consul-lock-session-ttl string                              TTL for consul session.

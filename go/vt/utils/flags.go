@@ -81,6 +81,12 @@ func SetFlagDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def ti
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).DurationVar)
 }
 
+func SetFlagFloatDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def time.Duration, usage string) {
+	setFlagVar(fs, p, name, time.Duration(float64(def)*float64(time.Second)), usage, func(fs *pflag.FlagSet, p *time.Duration, name string, def time.Duration, usage string) {
+		fs.DurationVar(p, name, def, usage)
+	})
+}
+
 func SetFlagUint32Var(fs *pflag.FlagSet, p *uint32, name string, def uint32, usage string) {
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).Uint32Var)
 }

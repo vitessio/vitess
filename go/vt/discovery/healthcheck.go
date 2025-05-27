@@ -111,7 +111,7 @@ var (
 	HealthCheckHealthyTemplate = fmt.Sprintf(healthCheckTemplate, "HealthCheck - Healthy Tablets")
 
 	// errKeyspacesToWatchAndTabletFilters is an error for cases where incompatible filters are defined.
-	errKeyspacesToWatchAndTabletFilters = errors.New("only one of --keyspaces_to_watch and --tablet_filters may be specified at a time")
+	errKeyspacesToWatchAndTabletFilters = errors.New("only one of --keyspaces_to_watch and --tablet-filters may be specified at a time")
 )
 
 // See the documentation for NewHealthCheck below for an explanation of these parameters.
@@ -174,7 +174,7 @@ func init() {
 }
 
 func registerDiscoveryFlags(fs *pflag.FlagSet) {
-	fs.StringSliceVar(&tabletFilters, "tablet_filters", []string{}, "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.")
+	utils.SetFlagStringSliceVar(fs, &tabletFilters, "tablet-filters", []string{}, "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.")
 	fs.Var(&tabletFilterTags, "tablet-filter-tags", "Specifies a comma-separated list of tablet tags (as key:value pairs) to filter the tablets to watch.")
 	fs.Var((*topoproto.TabletTypeListFlag)(&AllowedTabletTypes), "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to. Should be provided as a comma-separated set of tablet types.")
 	fs.StringSliceVar(&KeyspacesToWatch, "keyspaces_to_watch", []string{}, "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.")
@@ -320,7 +320,7 @@ func NewVTGateHealthCheckFilters() (filters TabletFilters, err error) {
 
 		fbs, err := NewFilterByShard(tabletFilters)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse tablet_filters value %q: %v", strings.Join(tabletFilters, ","), err)
+			return nil, fmt.Errorf("failed to parse tablet-filters value %q: %v", strings.Join(tabletFilters, ","), err)
 		}
 		filters = append(filters, fbs)
 	} else if len(KeyspacesToWatch) > 0 {

@@ -183,7 +183,7 @@ Flags:
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --remote-operation-timeout duration                                time to wait for a remote operation (default 15s)
       --retry-count int                                                  retry count (default 2)
-      --schema_change_signal                                             Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
+      --schema-change-signal                                             Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
@@ -199,9 +199,10 @@ Flags:
       --statsd_address string                                            Address for statsd client
       --statsd_sample_rate float                                         Sample rate for statsd metrics (default 1)
       --stderrthreshold severityFlag                                     logs at or above this threshold go to stderr (default 1)
-      --stream_buffer_size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
+      --stream-buffer-size int                                           the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size. (default 32768)
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet-filter-tags StringMap                                     Specifies a comma-separated list of tablet tags (as key:value pairs) to filter the tablets to watch.
+      --tablet-filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
       --tablet-grpc-ca string                                            the server ca to use to validate servers when connecting
       --tablet-grpc-cert string                                          the cert to use to connect
       --tablet-grpc-crl string                                           the server crl to use to validate server certificates when connecting
@@ -212,7 +213,6 @@ Flags:
       --tablet-refresh-known-tablets                                     Whether to reload the tablet's address/port map from topo in case they change. (default true)
       --tablet-types-to-wait strings                                     Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.
       --tablet-url-template string                                       Format string describing debug tablet url formatting. See getTabletDebugURL() for how to customize this. (default "http://{{ "{{.GetTabletHostPort}}" }}")
-      --tablet_filters strings                                           Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch.
       --topo-consul-lock-delay duration                                  LockDelay for consul session. (default 15s)
       --topo-consul-lock-session-checks string                           List of checks for consul session. (default "serfHealth")
       --topo-consul-lock-session-ttl string                              TTL for consul session.

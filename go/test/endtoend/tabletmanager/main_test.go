@@ -104,8 +104,8 @@ func TestMain(m *testing.M) {
 			"--watch_replication_stream",
 			utils.GetFlagVariantForTests("--heartbeat-enable"),
 			"--health_check_interval", tabletHealthcheckRefreshInterval.String(),
-			"--unhealthy_threshold", tabletUnhealthyThreshold.String(),
-			"--twopc_abandon_age", "200",
+			utils.GetFlagVariantForTests("--unhealthy-threshold"), tabletUnhealthyThreshold.String(),
+			utils.GetFlagVariantForTests("--twopc-abandon-age"), "200",
 		}
 
 		// Start keyspace

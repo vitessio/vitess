@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/recovery"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -55,7 +56,7 @@ var (
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
 		"--watch_replication_stream",
-		"--serving_state_grace_period", "1s"}
+		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s"}
 	recoveryKS1  = "recovery_ks1"
 	recoveryKS2  = "recovery_ks2"
 	vtInsertTest = `create table vt_insert_test (

@@ -300,7 +300,7 @@ func TestMtlsAuth(t *testing.T) {
 	clientCert := path.Join(root, "client-cert.pem")
 	clientKey := path.Join(root, "client-key.pem")
 
-	// When cluster starts it will apply SQL and VSchema migrations in the configured schema_dir folder
+	// When cluster starts it will apply SQL and VSchema migrations in the configured schema-dir folder
 	// With mtls authorization enabled, the authorized CN must match the certificate's CN
 	cluster, err := startCluster(
 		utils.GetFlagVariantForTests("--grpc-auth-mode")+"=mtls",
@@ -341,7 +341,7 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	clientCert := path.Join(root, "client-cert.pem")
 	clientKey := path.Join(root, "client-key.pem")
 
-	// When cluster starts it will apply SQL and VSchema migrations in the configured schema_dir folder
+	// When cluster starts it will apply SQL and VSchema migrations in the configured schema-dir folder
 	// For mtls authorization failure by providing a client certificate with different CN thant the
 	// authorized in the configuration
 	cluster, err := startCluster(
@@ -376,7 +376,7 @@ var clusterKeyspaces = []string{
 
 func startCluster(flags ...string) (cluster vttest.LocalCluster, err error) {
 	args := []string{"vttestserver"}
-	schemaDirArg := "--schema_dir=data/schema"
+	schemaDirArg := utils.GetFlagVariantForTests("--schema-dir") + "=data/schema"
 	tabletHostname := fmt.Sprintf("%s=localhost", utils.GetFlagVariantForTests("--tablet-hostname"))
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
 	numShardsArg := "--num_shards=2,2"

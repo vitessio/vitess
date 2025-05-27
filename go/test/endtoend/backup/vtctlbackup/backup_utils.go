@@ -1496,7 +1496,7 @@ func getDefaultCommonArgs() []string {
 		"--lock_tables_timeout", "5s",
 		"--watch_replication_stream",
 		"--enable_replication_reporter",
-		"--serving_state_grace_period", "1s",
+		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
 	}
 }
 

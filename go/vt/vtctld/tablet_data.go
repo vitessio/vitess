@@ -66,7 +66,7 @@ func init() {
 }
 
 func registerVtctlTabletFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&tabletHealthKeepAlive, "tablet_health_keep_alive", tabletHealthKeepAlive, "close streaming tablet health connection if there are no requests for this long")
+	fs.DurationVar(&tabletHealthKeepAlive, "tablet_health_keep-alive", tabletHealthKeepAlive, "close streaming tablet health connection if there are no requests for this long")
 }
 
 func newTabletHealth() *tabletHealth {

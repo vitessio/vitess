@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	rutils "vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -67,7 +68,7 @@ func TestMain(m *testing.M) {
 			"--queryserver-config-stream-pool-size=3",
 			"--queryserver-config-transaction-cap=2",
 			"--queryserver-config-transaction-timeout=20s",
-			"--shutdown_grace_period=3s",
+			vtutils.GetFlagVariantForTests("--shutdown-grace-period")+"=3s",
 			"--queryserver-config-schema-change-signal=false")
 		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
 		if err != nil {
@@ -78,7 +79,7 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			"--planner-version=gen4",
 			"--mysql_default_workload=olap",
-			"--schema_change_signal=false")
+			vtutils.GetFlagVariantForTests("--schema-change-signal")+"=false")
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
