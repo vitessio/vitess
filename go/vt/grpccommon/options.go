@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -38,17 +39,17 @@ var (
 // calls this function, or call this function directly before parsing
 // command-line arguments.
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.IntVar(&maxMessageSize, "grpc_max_message_size", maxMessageSize, "Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'.")
-	fs.BoolVar(&grpc.EnableTracing, "grpc_enable_tracing", grpc.EnableTracing, "Enable gRPC tracing.")
-	fs.BoolVar(&enablePrometheus, "grpc_prometheus", enablePrometheus, "Enable gRPC monitoring with Prometheus.")
+	utils.SetFlagIntVar(fs, &maxMessageSize, "grpc-max-message-size", maxMessageSize, "Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'.")
+	utils.SetFlagBoolVar(fs, &grpc.EnableTracing, "grpc-enable-tracing", grpc.EnableTracing, "Enable gRPC tracing.")
+	utils.SetFlagBoolVar(fs, &enablePrometheus, "grpc-prometheus", enablePrometheus, "Enable gRPC monitoring with Prometheus.")
 }
 
-// EnableGRPCPrometheus returns the value of the --grpc_prometheus flag.
+// EnableGRPCPrometheus returns the value of the --grpc-prometheus flag.
 func EnableGRPCPrometheus() bool {
 	return enablePrometheus
 }
 
-// MaxMessageSize returns the value of the --grpc_max_message_size flag.
+// MaxMessageSize returns the value of the --grpc-max-message-size flag.
 func MaxMessageSize() int {
 	return maxMessageSize
 }

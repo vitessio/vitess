@@ -33,8 +33,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -2701,6 +2703,172 @@ func TestFinalizeMigrateWorkflow(t *testing.T) {
 			// Expect queries to be used.
 			assert.Empty(t, te.tmc.applySchemaRequests[200])
 			assert.Empty(t, te.tmc.applySchemaRequests[210])
+		})
+	}
+}
+
+func TestMaterializeAddTables(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
+	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
+
+	te := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer te.close()
+
+	tableName1 := "t1"
+	tableName2 := "t2"
+	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName1: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName1,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName1),
+				},
+			},
+		},
+		// This will be used in deploySchema().
+		fmt.Sprintf("%s.%s", sourceKeyspace.KeyspaceName, tableName2): {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName2,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName2),
+				},
+			},
+		},
+	}
+	te.tmc.schema = schema
+
+	testcases := []struct {
+		name                                          string
+		request                                       *vtctldatapb.WorkflowAddTablesRequest
+		expectApplySchemaRequest                      bool
+		addUpdateVReplicationWorkflowRequestResponses []*updateVReplicationWorkflowRequestResponse
+		expectedErrContains                           string
+	}{
+		{
+			name: "success",
+			request: &vtctldatapb.WorkflowAddTablesRequest{
+				Workflow: "wf",
+				Keyspace: targetKeyspace.KeyspaceName,
+				TableSettings: []*vtctldatapb.TableMaterializeSettings{
+					{
+						TargetTable: "t2",
+					},
+				},
+				MaterializationIntent: vtctldatapb.MaterializationIntent_REFERENCE,
+			},
+			addUpdateVReplicationWorkflowRequestResponses: []*updateVReplicationWorkflowRequestResponse{
+				{
+					req: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+						Workflow: "wf",
+						State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+					},
+				},
+				{
+					req: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+						Workflow: "wf",
+						State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Running),
+						FilterRules: []*binlogdatapb.Rule{
+							{
+								Match:  "t2",
+								Filter: "select * from t2",
+							},
+						},
+					},
+				},
+			},
+			expectApplySchemaRequest: true,
+		},
+		{
+			name: "rule already exists error",
+			request: &vtctldatapb.WorkflowAddTablesRequest{
+				Workflow: "wf",
+				Keyspace: targetKeyspace.KeyspaceName,
+				TableSettings: []*vtctldatapb.TableMaterializeSettings{
+					{
+						TargetTable: "t1",
+					},
+				},
+				MaterializationIntent: vtctldatapb.MaterializationIntent_REFERENCE,
+			},
+			expectedErrContains: "rule for table t1 already exists",
+		},
+		{
+			name: "source table doesn't exist error",
+			request: &vtctldatapb.WorkflowAddTablesRequest{
+				Workflow: "wf",
+				Keyspace: targetKeyspace.KeyspaceName,
+				TableSettings: []*vtctldatapb.TableMaterializeSettings{
+					{
+						TargetTable: "t3",
+					},
+				},
+				MaterializationIntent: vtctldatapb.MaterializationIntent_REFERENCE,
+			},
+			addUpdateVReplicationWorkflowRequestResponses: []*updateVReplicationWorkflowRequestResponse{
+				{
+					req: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+						Workflow: "wf",
+						State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Stopped),
+					},
+				},
+				{
+					req: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+						Workflow: "wf",
+						State:    ptr.Of(binlogdatapb.VReplicationWorkflowState_Running),
+						// Don't change anything else, so pass simulated NULLs.
+						Cells:       textutil.SimulatedNullStringSlice,
+						TabletTypes: textutil.SimulatedNullTabletTypeSlice,
+					},
+				},
+			},
+			expectedErrContains: "source table t3",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.expectApplySchemaRequest {
+				te.tmc.expectApplySchemaRequest(200, &applySchemaRequestResponse{
+					change: &tmutils.SchemaChange{
+						SQL:                     "/create table t2",
+						Force:                   false,
+						AllowReplication:        true,
+						SQLMode:                 vreplication.SQLMode,
+						DisableForeignKeyChecks: true,
+					},
+					matchSqlOnly: true,
+				})
+				te.tmc.expectApplySchemaRequest(210, &applySchemaRequestResponse{
+					change: &tmutils.SchemaChange{
+						SQL:                     "/create table t2",
+						Force:                   false,
+						AllowReplication:        true,
+						SQLMode:                 vreplication.SQLMode,
+						DisableForeignKeyChecks: true,
+					},
+					matchSqlOnly: true,
+				})
+			}
+			for _, reqres := range tc.addUpdateVReplicationWorkflowRequestResponses {
+				te.tmc.AddUpdateVReplicationWorkflowRequestResponse(200, reqres)
+				te.tmc.AddUpdateVReplicationWorkflowRequestResponse(210, reqres)
+			}
+			err := te.ws.WorkflowAddTables(ctx, tc.request)
+			if tc.expectedErrContains == "" {
+				assert.NoError(t, err)
+				assert.Empty(t, te.tmc.applySchemaRequests[200])
+				assert.Empty(t, te.tmc.applySchemaRequests[210])
+				assert.Empty(t, te.tmc.updateVReplicationWorklowRequests[200])
+				assert.Empty(t, te.tmc.updateVReplicationWorklowRequests[210])
+				return
+			}
+			assert.ErrorContains(t, err, tc.expectedErrContains)
+			assert.Empty(t, te.tmc.applySchemaRequests[200])
+			assert.Empty(t, te.tmc.applySchemaRequests[210])
+			assert.Empty(t, te.tmc.updateVReplicationWorklowRequests[200])
+			assert.Empty(t, te.tmc.updateVReplicationWorklowRequests[210])
 		})
 	}
 }

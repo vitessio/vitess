@@ -26,6 +26,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
+
+	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
@@ -50,11 +52,21 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	}()
 
 	// Change the args such that they match how we would invoke VTOrc
-	os.Args = []string{"vtorc",
-		"--topo_global_server_address", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalAddress,
-		"--topo_implementation", clusterInfo.ClusterInstance.VtctldClientProcess.TopoImplementation,
-		"--topo_global_root", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalRoot,
+	args := map[string]string{
+		"--topo-global-server-address": clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalAddress,
+		"--topo-implementation":        clusterInfo.ClusterInstance.VtctldClientProcess.TopoImplementation,
+		"--topo-global-root":           clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalRoot,
 	}
+
+	vtutils.SetFlagVariantsForTests(args, "--topo-global-server-address", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalAddress)
+	vtutils.SetFlagVariantsForTests(args, "--topo-implementation", clusterInfo.ClusterInstance.VtctldClientProcess.TopoImplementation)
+	vtutils.SetFlagVariantsForTests(args, "--topo-global-root", clusterInfo.ClusterInstance.VtctldClientProcess.TopoGlobalRoot)
+
+	os.Args = []string{"vtorc"}
+	for k, v := range args {
+		os.Args = append(os.Args, k, v)
+	}
+
 	servenv.ParseFlags("vtorc")
 	config.SetInstancePollTime(1 * time.Second)
 	config.MarkConfigurationLoaded()

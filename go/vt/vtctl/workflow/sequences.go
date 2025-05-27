@@ -25,10 +25,8 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -44,10 +42,8 @@ import (
 )
 
 const (
-	sqlInitSequenceTable     = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
 	sqlCreateSequenceTable   = "create table if not exists %a (id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence'"
 	sqlGetCurrentSequenceVal = "select next_id from %a.%a where id = 0"
-	sqlGetMaxSequenceVal     = "select max(%a) as maxval from %a.%a"
 )
 
 // sequenceMetadata contains all of the relevant metadata for a sequence that
@@ -115,40 +111,29 @@ func (sm *sequenceMetadata) escapeValues() error {
 }
 
 func (ts *trafficSwitcher) getMaxSequenceValues(ctx context.Context, sequences map[string]*sequenceMetadata) (map[string]int64, error) {
-	maxValues := make(map[string]int64, len(sequences))
-	mu := sync.Mutex{}
-	initGroup, gctx := errgroup.WithContext(ctx)
-	for _, sm := range sequences {
-		initGroup.Go(func() error {
-			maxId, err := ts.getMaxSequenceValue(gctx, sm)
-			if err != nil {
-				return err
-			}
-			mu.Lock()
-			defer mu.Unlock()
-			maxValues[sm.backingTableName] = maxId
-			return nil
+	var sequencesMetadata []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata
+	for _, seq := range sequences {
+		if err := seq.escapeValues(); err != nil {
+			return nil, err
+		}
+		sequencesMetadata = append(sequencesMetadata, &tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata{
+			BackingTableName:        seq.backingTableName,
+			UsingColEscaped:         seq.usingCol,
+			UsingTableNameEscaped:   seq.usingTable,
+			UsingTableDbNameEscaped: seq.usingDB,
 		})
 	}
-	errs := initGroup.Wait()
-	if errs != nil {
-		return nil, errs
-	}
-	return maxValues, nil
-}
 
-func (ts *trafficSwitcher) getMaxSequenceValue(ctx context.Context, seq *sequenceMetadata) (int64, error) {
-	var maxSequenceValue int64
 	var mu sync.Mutex
-	setMaxSequenceValue := func(id int64) {
+	maxValuesByBackingTable := make(map[string]int64, len(sequences))
+	setMaxSequenceValue := func(maxValues map[string]int64) {
 		mu.Lock()
 		defer mu.Unlock()
-		if id > maxSequenceValue {
-			maxSequenceValue = id
+		for _, sm := range sequences {
+			if maxValuesByBackingTable[sm.backingTableName] < maxValues[sm.backingTableName] {
+				maxValuesByBackingTable[sm.backingTableName] = maxValues[sm.backingTableName]
+			}
 		}
-	}
-	if err := seq.escapeValues(); err != nil {
-		return 0, err
 	}
 	errs := ts.ForAllTargets(func(target *MigrationTarget) error {
 		primary := target.GetPrimary()
@@ -156,34 +141,18 @@ func (ts *trafficSwitcher) getMaxSequenceValue(ctx context.Context, seq *sequenc
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no primary tablet found for target shard %s/%s",
 				ts.targetKeyspace, target.GetShard().ShardName())
 		}
-
-		query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
-			seq.usingCol,
-			seq.usingDB,
-			seq.usingTable,
-		)
-		qr, terr := ts.ws.tmc.ExecuteFetchAsApp(ctx, primary.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
-			Query:   []byte(query.Query),
-			MaxRows: 1,
+		resp, terr := ts.ws.tmc.GetMaxValueForSequences(ctx, primary.Tablet, &tabletmanagerdatapb.GetMaxValueForSequencesRequest{
+			Sequences: sequencesMetadata,
 		})
-		if terr != nil || len(qr.Rows) != 1 {
+		if terr != nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
-				ts.targetKeyspace, seq.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
+				"failed to get the max used sequence values on tablet %s in order to initialize the backing sequence table: %v",
+				topoproto.TabletAliasString(primary.Alias), terr)
 		}
-		rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
-		maxID := int64(0)
-		if !rawVal.IsNull() { // If it's NULL then there are no rows and 0 remains the max
-			maxID, terr = rawVal.ToInt64()
-			if terr != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the max used sequence value for target table %s.%s on tablet %s in order to initialize the backing sequence table: %v",
-					ts.targetKeyspace, seq.usingTableName, topoproto.TabletAliasString(primary.Alias), terr)
-			}
-		}
-		setMaxSequenceValue(maxID)
+		setMaxSequenceValue(resp.MaxValuesBySequenceTable)
 		return nil
 	})
-	return maxSequenceValue, errs
+	return maxValuesByBackingTable, errs
 }
 
 func (ts *trafficSwitcher) getCurrentSequenceValues(ctx context.Context, sequences map[string]*sequenceMetadata) (map[string]int64, error) {
@@ -250,70 +219,44 @@ func (ts *trafficSwitcher) getCurrentSequenceValue(ctx context.Context, seq *seq
 	return currentVal, nil
 }
 
-func (ts *trafficSwitcher) updateSequenceValue(ctx context.Context, seq *sequenceMetadata, currentMaxValue int64) error {
-	if err := seq.escapeValues(); err != nil {
-		return err
-	}
-	nextVal := currentMaxValue + 1
-	log.Infof("Updating sequence %s.%s to %d", seq.backingTableDBName, seq.backingTableName, nextVal)
-
-	// Now we need to update the sequence table, if needed, in order to
-	// ensure that the next value it provides is > the current max.
-	sequenceShard, ierr := ts.TopoServer().GetOnlyShard(ctx, seq.backingTableKeyspace)
-	if ierr != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
-			seq.backingTableKeyspace, ierr)
-	}
-	sequenceTablet, ierr := ts.TopoServer().GetTablet(ctx, sequenceShard.PrimaryAlias)
-	if ierr != nil || sequenceTablet == nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
-			seq.backingTableKeyspace, ierr)
-	}
-	if sequenceTablet.DbNameOverride != "" {
-		seq.backingTableDBName = sequenceTablet.DbNameOverride
-	}
-	initQuery := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
-		seq.backingTableDBName,
-		seq.backingTableName,
-		nextVal,
-		nextVal,
-		nextVal,
-	)
-
-	const maxTries = 2
-	var err error
-
-	for i := 0; i < maxTries; i++ {
-		// Attempt to initialize the sequence.
-		_, err = ts.ws.tmc.ExecuteFetchAsApp(ctx, sequenceTablet.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
-			Query:   []byte(initQuery.Query),
-			MaxRows: 1,
+func (ts *trafficSwitcher) updateSequenceValues(ctx context.Context, sequences []*sequenceMetadata, maxValues map[string]int64) error {
+	sequencesByShard := map[string][]*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{}
+	for _, seq := range sequences {
+		maxValue := maxValues[seq.backingTableName]
+		if maxValue == 0 {
+			continue
+		}
+		sequenceShard, ierr := ts.TopoServer().GetOnlyShard(ctx, seq.backingTableKeyspace)
+		if ierr != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+				seq.backingTableKeyspace, ierr)
+		}
+		tabletAliasStr := topoproto.TabletAliasString(sequenceShard.PrimaryAlias)
+		sequencesByShard[tabletAliasStr] = append(sequencesByShard[tabletAliasStr], &tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
+			BackingTableName:   seq.backingTableName,
+			BackingTableDbName: seq.backingTableDBName,
+			MaxValue:           maxValue,
 		})
-		if err == nil {
-			return nil
-		}
-
-		// If the table doesn't exist, try creating it.
-		sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
-		if !ok || (sqlErr.Num != sqlerror.ERNoSuchTable && sqlErr.Num != sqlerror.ERBadTable) {
-			return vterrors.Errorf(
-				vtrpcpb.Code_INTERNAL,
-				"failed to initialize the backing sequence table %s.%s: %v",
-				seq.backingTableDBName, seq.backingTableName, err,
-			)
-		}
-
-		if err := ts.createSequenceTable(ctx, seq.backingTable, sequenceTablet); err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"failed to create the backing sequence table %s in the global-keyspace %s: %v",
-				seq.backingTable, sequenceShard.Keyspace(), err)
-		}
-		// Table has been created, so we fall through and try again on the next loop iteration.
 	}
-
-	return vterrors.Errorf(
-		vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s after retries. Last error: %v",
-		seq.backingTableDBName, seq.backingTableName, err)
+	for tabletAliasStr, sequencesMetadata := range sequencesByShard {
+		tabletAlias, err := topoproto.ParseTabletAlias(tabletAliasStr)
+		if err != nil {
+			// This should be impossible.
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the parse tablet alias %s: %v", tabletAlias, err)
+		}
+		sequenceTablet, ierr := ts.TopoServer().GetTablet(ctx, tabletAlias)
+		if ierr != nil || sequenceTablet == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+				sequenceTablet.Keyspace, ierr)
+		}
+		_, err = ts.TabletManagerClient().UpdateSequenceTables(ctx, sequenceTablet.Tablet, &tabletmanagerdatapb.UpdateSequenceTablesRequest{
+			Sequences: sequencesMetadata,
+		})
+		if err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence tables on tablet %s: %v", topoproto.TabletAliasString(tabletAlias), err)
+		}
+	}
+	return nil
 }
 
 // initializeTargetSequences initializes the backing sequence tables
@@ -334,14 +277,9 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 	if err != nil {
 		return err
 	}
-	for _, sm := range sequencesByBackingTable {
-		maxValue := maxValues[sm.backingTableName]
-		if maxValue == 0 {
-			continue
-		}
-		if err := ts.updateSequenceValue(ctx, sm, maxValue); err != nil {
-			return err
-		}
+	sequences := maps.Values(sequencesByBackingTable)
+	if err := ts.updateSequenceValues(ctx, sequences, maxValues); err != nil {
+		return err
 	}
 	return nil
 }

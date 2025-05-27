@@ -342,8 +342,8 @@ func canMergeOnFilter(ctx *plancontext.PlanningContext, a, b *Route, predicate s
 	if comparison.Operator != sqlparser.EqualOp {
 		return false
 	}
-	left := comparison.Left
-	right := comparison.Right
+	left := getColName(comparison.Left)
+	right := getColName(comparison.Right)
 
 	lVindex := findColumnVindex(ctx, a, left)
 	if lVindex == nil {
@@ -478,14 +478,26 @@ func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) (b
 			return false, nil
 		}
 		if c != nil {
-			conditions = append(conditions, *c)
+			conditions = append(conditions, c...)
 		}
 	}
 	return true, conditions
 }
 
-func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) (bool, *engine.Condition) {
+func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) (bool, []engine.Condition) {
 	switch a := a.(type) {
+	case sqlparser.ValTuple:
+		if b, ok := b.(sqlparser.ValTuple); ok {
+			return gen4ValuesEqual(ctx, a, b)
+		}
+
+		return false, nil
+
+	case sqlparser.ListArg:
+		if b, ok := b.(sqlparser.ListArg); ok {
+			return a == b, nil
+		}
+
 	case *sqlparser.ColName:
 		if b, ok := b.(*sqlparser.ColName); ok {
 			if !a.Name.Equal(b.Name) {
@@ -518,7 +530,7 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) (bool, 
 		}
 
 		return aVal.Type == bVal.Type && bytes.Equal(aVal.Value, bVal.Value),
-			&engine.Condition{A: a.Name, B: b.Name}
+			[]engine.Condition{{A: a.Name, B: b.Name}}
 
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)

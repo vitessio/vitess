@@ -960,6 +960,8 @@ const (
 	LaunchAllMigrationType
 	CompleteMigrationType
 	CompleteAllMigrationType
+	PostponeCompleteMigrationType
+	PostponeCompleteAllMigrationType
 	CancelMigrationType
 	CancelAllMigrationType
 	CleanupMigrationType
@@ -993,6 +995,12 @@ const (
 	WithConsistentSnapshot TxAccessMode = iota
 	ReadWrite
 	ReadOnly
+)
+
+// BEGIN statement type
+const (
+	BeginStmt BeginType = iota
+	StartTransactionStmt
 )
 
 // Enum Types of WKT functions

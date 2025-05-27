@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/tlstest"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 	"vitess.io/vitess/go/vt/vttest"
 
@@ -302,14 +303,14 @@ func TestMtlsAuth(t *testing.T) {
 	// When cluster starts it will apply SQL and VSchema migrations in the configured schema_dir folder
 	// With mtls authorization enabled, the authorized CN must match the certificate's CN
 	cluster, err := startCluster(
-		"--grpc_auth_mode=mtls",
-		fmt.Sprintf("--grpc_key=%s", key),
-		fmt.Sprintf("--grpc_cert=%s", cert),
-		fmt.Sprintf("--grpc_ca=%s", caCert),
-		fmt.Sprintf("--vtctld_grpc_key=%s", clientKey),
-		fmt.Sprintf("--vtctld_grpc_cert=%s", clientCert),
-		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
-		fmt.Sprintf("--grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
+		utils.GetFlagVariantForTests("--grpc-auth-mode")+"=mtls",
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--grpc-key"), key),
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--grpc-cert"), cert),
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--grpc-ca"), caCert),
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--vtctld-grpc-key"), clientKey),
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--vtctld-grpc-cert"), clientCert),
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--vtctld-grpc-ca"), caCert),
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--grpc-auth-mtls-allowed-substrings"), "CN=ClientApp"))
 	require.NoError(t, err)
 	defer func() {
 		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
@@ -344,14 +345,14 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	// For mtls authorization failure by providing a client certificate with different CN thant the
 	// authorized in the configuration
 	cluster, err := startCluster(
-		"--grpc_auth_mode=mtls",
-		fmt.Sprintf("--grpc_key=%s", key),
-		fmt.Sprintf("--grpc_cert=%s", cert),
-		fmt.Sprintf("--grpc_ca=%s", caCert),
-		fmt.Sprintf("--vtctld_grpc_key=%s", clientKey),
-		fmt.Sprintf("--vtctld_grpc_cert=%s", clientCert),
-		fmt.Sprintf("--vtctld_grpc_ca=%s", caCert),
-		fmt.Sprintf("--grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
+		utils.GetFlagVariantForTests("--grpc-auth-mode")+"=mtls",
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--grpc-key"), key),
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--grpc-cert"), cert),
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--grpc-ca"), caCert),
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--vtctld-grpc-key"), clientKey),
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--vtctld-grpc-cert"), clientCert),
+		fmt.Sprintf("%s=%s", utils.GetFlagVariantForTests("--vtctld-grpc-ca"), caCert),
+		fmt.Sprintf("--grpc-auth-mtls-allowed-substrings=%s", "CN=ClientApp"))
 	defer cluster.TearDown()
 
 	require.Error(t, err)
@@ -376,7 +377,7 @@ var clusterKeyspaces = []string{
 func startCluster(flags ...string) (cluster vttest.LocalCluster, err error) {
 	args := []string{"vttestserver"}
 	schemaDirArg := "--schema_dir=data/schema"
-	tabletHostname := "--tablet_hostname=localhost"
+	tabletHostname := fmt.Sprintf("%s=localhost", utils.GetFlagVariantForTests("--tablet-hostname"))
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
 	numShardsArg := "--num_shards=2,2"
 	vschemaDDLAuthorizedUsers := "--vschema_ddl_authorized_users=%"

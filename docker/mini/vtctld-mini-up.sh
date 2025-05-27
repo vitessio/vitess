@@ -23,6 +23,7 @@ grpc_port=15999
 
 echo "- Starting vtctld..."
 # shellcheck disable=SC2086
+#TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 vtctld \
  $TOPOLOGY_FLAGS \
  --disable_active_reparents \
