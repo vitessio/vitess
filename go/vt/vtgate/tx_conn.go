@@ -62,6 +62,29 @@ var txAccessModeToEOTxAccessMode = map[sqlparser.TxAccessMode]querypb.ExecuteOpt
 	sqlparser.ReadOnly:               querypb.ExecuteOptions_READ_ONLY,
 }
 
+const (
+	SingleShardTransaction = "Single"
+	CrossShardTransaction  = "Cross"
+)
+
+type txType int
+
+const (
+	TXReadOnly txType = iota
+	TXReadWrite
+)
+
+func (tt txType) String() string {
+	switch tt {
+	case TXReadOnly:
+		return "ReadOnly"
+	case TXReadWrite:
+		return "ReadWrite"
+	default:
+		return "Unknown"
+	}
+}
+
 type commitPhase int
 
 const (
@@ -126,10 +149,12 @@ func (txc *TxConn) Commit(ctx context.Context, session *econtext.SafeSession) er
 		return err
 	}
 
+	shardDistribution := getShardDistribution(session.ShardSessions)
+	var txnType txType
 	if twopc {
-		err = txc.commit2PC(ctx, session)
+		txnType, err = txc.commit2PC(ctx, session)
 	} else {
-		err = txc.commitNormal(ctx, session)
+		txnType, err = txc.commitNormal(ctx, session)
 	}
 
 	if err != nil {
@@ -146,7 +171,15 @@ func (txc *TxConn) Commit(ctx context.Context, session *econtext.SafeSession) er
 			_ = txc.Release(ctx, session)
 		}
 	}
+	txProcessed.Add([]string{shardDistribution, txnType.String()}, 1)
 	return nil
+}
+
+func getShardDistribution(sessions []*vtgatepb.Session_ShardSession) string {
+	if len(sessions) > 1 {
+		return CrossShardTransaction
+	}
+	return SingleShardTransaction
 }
 
 func recordCommitTime(session *econtext.SafeSession, twopc bool, startTime time.Time) {
@@ -193,9 +226,13 @@ func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSes
 	return nil
 }
 
-func (txc *TxConn) commitNormal(ctx context.Context, session *econtext.SafeSession) error {
+func (txc *TxConn) commitNormal(ctx context.Context, session *econtext.SafeSession) (txType, error) {
+	txnType := TXReadOnly
 	// Retain backward compatibility on commit order for the normal session.
 	for i, shardSession := range session.ShardSessions {
+		if txnType == TXReadOnly && shardSession.RowsAffected {
+			txnType = TXReadWrite
+		}
 		if err := txc.commitShard(ctx, shardSession, session.GetLogger()); err != nil {
 			if i > 0 {
 				nShards := i
@@ -217,14 +254,14 @@ func (txc *TxConn) commitNormal(ctx context.Context, session *econtext.SafeSessi
 				})
 				warnings.Add("NonAtomicCommit", 1)
 			}
-			return err
+			return txnType, err
 		}
 	}
-	return nil
+	return txnType, nil
 }
 
 // commit2PC will not used the pinned tablets - to make sure we use the current source, we need to use the gateway's queryservice
-func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession) (err error) {
+func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession) (txnType txType, err error) {
 	// If the number of participants is one or less, then it's a normal commit.
 	if len(session.ShardSessions) <= 1 {
 		return txc.commitNormal(ctx, session)
@@ -233,8 +270,14 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession)
 	mmShard := session.ShardSessions[0]
 	rmShards := session.ShardSessions[1:]
 	dtid := dtids.New(mmShard)
+	if mmShard.RowsAffected {
+		txnType = TXReadWrite
+	}
 	participants := make([]*querypb.Target, len(rmShards))
 	for i, s := range rmShards {
+		if s.RowsAffected {
+			txnType = TXReadWrite
+		}
 		participants[i] = s.Target
 	}
 
@@ -249,12 +292,12 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession)
 
 	txPhase = Commit2pcCreateTransaction
 	if err = txc.tabletGateway.CreateTransaction(ctx, mmShard.Target, dtid, participants); err != nil {
-		return err
+		return txnType, err
 	}
 
 	if DebugTwoPc { // Test code to simulate a failure after RM prepare
 		if terr := checkTestFailure(ctx, "TRCreated_FailNow", nil); terr != nil {
-			return terr
+			return txnType, terr
 		}
 	}
 
@@ -268,24 +311,24 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession)
 		return txc.tabletGateway.Prepare(ctx, s.Target, s.TransactionId, dtid)
 	}
 	if err = txc.runSessions(ctx, rmShards, session.GetLogger(), prepareAction); err != nil {
-		return err
+		return txnType, err
 	}
 
 	if DebugTwoPc { // Test code to simulate a failure after RM prepare
 		if terr := checkTestFailure(ctx, "RMPrepared_FailNow", nil); terr != nil {
-			return terr
+			return txnType, terr
 		}
 	}
 
 	txPhase = Commit2pcStartCommit
 	startCommitState, err = txc.tabletGateway.StartCommit(ctx, mmShard.Target, mmShard.TransactionId, dtid)
 	if err != nil {
-		return err
+		return txnType, err
 	}
 
 	if DebugTwoPc { // Test code to simulate a failure after MM commit
 		if terr := checkTestFailure(ctx, "MMCommitted_FailNow", nil); terr != nil {
-			return terr
+			return txnType, terr
 		}
 	}
 
@@ -299,7 +342,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession)
 		return txc.tabletGateway.CommitPrepared(ctx, s.Target, dtid)
 	}
 	if err = txc.runSessions(ctx, rmShards, session.GetLogger(), prepareCommitAction); err != nil {
-		return err
+		return txnType, err
 	}
 
 	// At this point, application can continue forward.
@@ -307,7 +350,7 @@ func (txc *TxConn) commit2PC(ctx context.Context, session *econtext.SafeSession)
 	// This step is to clean up the transaction metadata.
 	txPhase = Commit2pcConclude
 	_ = txc.tabletGateway.ConcludeTransaction(ctx, mmShard.Target, dtid)
-	return nil
+	return txnType, nil
 }
 
 func (txc *TxConn) errActionAndLogWarn(

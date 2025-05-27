@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
@@ -43,7 +44,7 @@ func TestDownPrimary(t *testing.T) {
 	// We specify the --wait-replicas-timeout to a small value because we spawn a cross-cell replica later in the test.
 	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{fmt.Sprintf("%s=10s", vtutils.GetFlagVariantForTests("--remote-operation-timeout")), "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, 1, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -148,7 +149,7 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start a VTOrc instance
-	utils.StartVTOrcs(t, clusterInfo, []string{"--remote_operation_timeout=10s"}, cluster.VTOrcConfiguration{
+	utils.StartVTOrcs(t, clusterInfo, []string{fmt.Sprintf("%s=10s", vtutils.GetFlagVariantForTests("--remote-operation-timeout"))}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, 1)
 
@@ -171,7 +172,7 @@ func TestDownPrimaryBeforeVTOrc(t *testing.T) {
 // delete the primary record and let vtorc repair.
 func TestDeletedPrimaryTablet(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s"}, cluster.VTOrcConfiguration{}, 1, policy.DurabilityNone)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{fmt.Sprintf("%s=10s", vtutils.GetFlagVariantForTests("--remote-operation-timeout"))}, cluster.VTOrcConfiguration{}, 1, policy.DurabilityNone)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -240,7 +241,7 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	// We specify the --wait-replicas-timeout to a small value because we spawn a cross-cell replica later in the test.
 	// If that replica is more advanced than the same-cell-replica, then we try to promote the cross-cell replica as an intermediate source.
 	// If we don't specify a small value of --wait-replicas-timeout, then we would end up waiting for 30 seconds for the dead-primary to respond, failing this test.
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote-operation-timeout=10s", "--wait-replicas-timeout=5s"}, cluster.VTOrcConfiguration{
 		PreventCrossCellFailover: true,
 	}, 1, policy.DurabilitySemiSync)
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -309,8 +310,8 @@ func TestDeadPrimaryRecoversImmediately(t *testing.T) {
 	}
 	diff := time2.Sub(time1)
 	fmt.Printf("The difference between %s and %s is %v seconds.\n", t1, t2, diff.Seconds())
-	// assert that it takes less than `remote_operation_timeout` to recover from `DeadPrimary`
-	// use the value provided in `remote_operation_timeout` flag to compare with.
+	// assert that it takes less than `remote-operation-timeout` to recover from `DeadPrimary`
+	// use the value provided in `remote-operation-timeout` flag to compare with.
 	// We are testing against 9.5 seconds to be safe and prevent flakiness.
 	assert.Less(t, diff.Seconds(), 9.5)
 }

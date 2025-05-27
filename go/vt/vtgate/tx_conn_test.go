@@ -1554,6 +1554,69 @@ func TestTxConnAccessModeReset(t *testing.T) {
 	}
 }
 
+// TestTxConnMetrics tests the `TransactionProcessed` metrics.
+func TestTxConnMetrics(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	sc, _, _, rss0, rss1, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
+	session := &vtgatepb.Session{}
+
+	tcases := []struct {
+		name      string
+		queries   []*querypb.BoundQuery
+		rss       []*srvtopo.ResolvedShard
+		expMetric string
+		expVal    int
+	}{{
+		name:      "oneReadQuery",
+		queries:   []*querypb.BoundQuery{{Sql: "select 1"}},
+		rss:       rss0,
+		expMetric: "Single.ReadOnly",
+		expVal:    1,
+	}, {
+		name:      "twoReadQuery",
+		queries:   []*querypb.BoundQuery{{Sql: "select 2"}, {Sql: "select 3"}},
+		rss:       append(rss0, rss1...),
+		expMetric: "Cross.ReadOnly",
+		expVal:    1,
+	}, {
+		name:      "oneWriteQuery",
+		queries:   []*querypb.BoundQuery{{Sql: "update t set col = 1"}},
+		rss:       rss0,
+		expMetric: "Single.ReadWrite",
+		expVal:    1,
+	}, {
+		name:      "twoWriteQuery",
+		queries:   []*querypb.BoundQuery{{Sql: "update t set col = 2"}, {Sql: "update t set col = 3"}},
+		rss:       append(rss0, rss1...),
+		expMetric: "Cross.ReadWrite",
+		expVal:    1,
+	}, {
+		name:      "oneReadOneWriteQuery",
+		queries:   []*querypb.BoundQuery{{Sql: "select 4"}, {Sql: "update t set col = 4"}},
+		rss:       append(rss0, rss1...),
+		expMetric: "Cross.ReadWrite",
+		expVal:    2,
+	}}
+
+	txProcessed.ResetAll()
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			// begin
+			safeSession := econtext.NewAutocommitSession(session)
+			err := sc.txConn.Begin(ctx, safeSession, nil)
+			require.NoError(t, err)
+			_, errors := sc.ExecuteMultiShard(ctx, nil, tc.rss, tc.queries, safeSession, false, false, nullResultsObserver{}, false)
+			require.Empty(t, errors)
+			require.NoError(t,
+				sc.txConn.Commit(ctx, safeSession))
+			txCountMap := txProcessed.Counts()
+			fmt.Printf("%v", txCountMap)
+			assert.EqualValues(t, tc.expVal, txCountMap[tc.expMetric])
+		})
+	}
+}
+
 func newTestTxConnEnv(t *testing.T, ctx context.Context, name string) (sc *ScatterConn, sbc0, sbc1 *sandboxconn.SandboxConn, rss0, rss1, rss01 []*srvtopo.ResolvedShard) {
 	t.Helper()
 	createSandbox(name)

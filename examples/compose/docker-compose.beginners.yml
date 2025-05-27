@@ -63,14 +63,15 @@ services:
       - "15000:$WEB_PORT"
       - "$GRPC_PORT"
     command: ["sh", "-c", " /vt/bin/vtctld \
+        # TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
         $TOPOLOGY_FLAGS \
         --cell $CELL \
-        --service_map 'grpc-vtctl,grpc-vtctld' \
-        --backup_storage_implementation file \
+        --service-map 'grpc-vtctl,grpc-vtctld' \
+        --backup-storage-implementation file \
         --file_backup_storage_root /vt/vtdataroot/backups \
         --logtostderr=true \
         --port $WEB_PORT \
-        --grpc_port $GRPC_PORT
+        --grpc-port $GRPC_PORT
         "]
     depends_on:
       consul1:
@@ -89,16 +90,17 @@ services:
       - "$GRPC_PORT"
       - "15306:$MYSQL_PORT"
     command: ["sh", "-c", "/vt/bin/vtgate \
+        # TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
         $TOPOLOGY_FLAGS \
         --logtostderr=true \
         --port $WEB_PORT \
-        --grpc_port $GRPC_PORT \
-        --mysql_server_port $MYSQL_PORT \
-        --mysql_auth_server_impl none \
+        --grpc-port $GRPC_PORT \
+        --mysql-server-port $MYSQL_PORT \
+        --mysql-auth-server-impl none \
         --cell $CELL \
         --cells_to_watch $CELL \
-        --tablet_types_to_wait PRIMARY,REPLICA \
-        --service_map 'grpc-vtgateservice' \
+        --tablet-types-to-wait PRIMARY,REPLICA \
+        --service-map 'grpc-vtgateservice' \
         --enable_system_settings=true \
         "]
     volumes:
