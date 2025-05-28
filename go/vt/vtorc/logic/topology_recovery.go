@@ -56,14 +56,6 @@ const (
 )
 
 var (
-	actionableRecoveriesNames = []string{
-		RecoverDeadPrimaryRecoveryName,
-		RecoverPrimaryHasPrimaryRecoveryName,
-		ElectNewPrimaryRecoveryName,
-		FixPrimaryRecoveryName,
-		FixReplicaRecoveryName,
-	}
-
 	countPendingRecoveries = stats.NewGauge("PendingRecoveries", "Count of the number of pending recoveries")
 
 	// detectedProblems is used to track the number of detected problems.
@@ -80,14 +72,17 @@ var (
 	// shardsLockCounter is a count of in-flight shard locks. Use atomics to read/update.
 	shardsLockCounter int64
 
+	// recoveriesCounterLabels are labels for grouping the counter based stats for recoveries.
+	recoveriesCounterLabels = []string{"RecoveryType", "Keyspace", "Shard"}
+
 	// recoveriesCounter counts the number of recoveries that VTOrc has performed
-	recoveriesCounter = stats.NewCountersWithSingleLabel("RecoveriesCount", "Count of the different recoveries performed", "RecoveryType", actionableRecoveriesNames...)
+	recoveriesCounter = stats.NewCountersWithMultiLabels("RecoveriesCount", "Count of the different recoveries performed", recoveriesCounterLabels)
 
 	// recoveriesSuccessfulCounter counts the number of successful recoveries that VTOrc has performed
-	recoveriesSuccessfulCounter = stats.NewCountersWithSingleLabel("SuccessfulRecoveries", "Count of the different successful recoveries performed", "RecoveryType", actionableRecoveriesNames...)
+	recoveriesSuccessfulCounter = stats.NewCountersWithMultiLabels("SuccessfulRecoveries", "Count of the different successful recoveries performed", recoveriesCounterLabels)
 
 	// recoveriesFailureCounter counts the number of failed recoveries that VTOrc has performed
-	recoveriesFailureCounter = stats.NewCountersWithSingleLabel("FailedRecoveries", "Count of the different failed recoveries performed", "RecoveryType", actionableRecoveriesNames...)
+	recoveriesFailureCounter = stats.NewCountersWithMultiLabels("FailedRecoveries", "Count of the different failed recoveries performed", recoveriesCounterLabels)
 
 	// vtops
 	vtopsExec         = external.NewExecVTOps()
@@ -793,17 +788,18 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		return err
 	}
 	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
-	recoveriesCounter.Add(recoveryName, 1)
+	recoveryLabels := []string{recoveryName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard}
+	recoveriesCounter.Add(recoveryLabels, 1)
 	if err != nil {
 		message := fmt.Sprintf("Recovery failed on %s (%s) for problem %s. Error: %s", analysisEntry.AnalyzedInstanceAlias, analysisEntry.AnalyzedInstanceHostname, analysisEntry.Analysis, err.Error())
 		vtopsExec.SendSlackMessage(message, vtopsSlackChannel)
 		logger.Errorf(message)
-		recoveriesFailureCounter.Add(recoveryName, 1)
+		recoveriesFailureCounter.Add(recoveryLabels, 1)
 	} else {
 		message := fmt.Sprintf("Recovery succeeded on %s (%s) for problem %s.", analysisEntry.AnalyzedInstanceAlias, analysisEntry.AnalyzedInstanceHostname, analysisEntry.Analysis)
 		logger.Info(message)
 		vtopsExec.SendSlackMessage(message, vtopsSlackChannel)
-		recoveriesSuccessfulCounter.Add(recoveryName, 1)
+		recoveriesSuccessfulCounter.Add(recoveryLabels, 1)
 	}
 	if topologyRecovery == nil {
 		logger.Error("Topology recovery is nil - recovery might have failed")
