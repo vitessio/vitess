@@ -73,7 +73,7 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 		replicaTabletArgs = append(replicaTabletArgs, XbArgs...)
 	}
 	replicaTabletArgs = append(replicaTabletArgs,
-		"--enable_replication_reporter=false",
+		utils.GetFlagVariantForTests("--enable-replication-reporter")+"=false",
 		utils.GetFlagVariantForTests("--init-tablet-type"), "replica",
 		utils.GetFlagVariantForTests("--init-keyspace"), restoreKSName,
 		utils.GetFlagVariantForTests("--init-shard"), shardName,

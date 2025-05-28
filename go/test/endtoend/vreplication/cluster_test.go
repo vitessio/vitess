@@ -505,7 +505,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	options = append(options, extraVTTabletArgs...)
 
 	if mainClusterConfig.vreplicationCompressGTID {
-		options = append(options, "--vreplication_store_compressed_gtid=true")
+		options = append(options, "--vreplication-store-compressed-gtid=true")
 	}
 
 	vttablet := cluster.VttabletProcessInstance(

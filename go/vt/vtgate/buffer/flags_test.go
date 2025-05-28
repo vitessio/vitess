@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/utils"
 )
 
 func TestVerifyFlags(t *testing.T) {
@@ -49,7 +51,7 @@ func TestVerifyFlags(t *testing.T) {
 
 	parse([]string{
 		"--enable_buffer",
-		"--enable_buffer_dry_run",
+		utils.GetFlagVariantForTests("--enable-buffer-dry-run"),
 	})
 	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "To avoid ambiguity") {
 		t.Fatalf("Dry-run and non-dry-run mode together require an explicit list of shards for actual buffering. err: %v", err)

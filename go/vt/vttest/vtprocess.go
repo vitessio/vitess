@@ -307,7 +307,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		"--mysql-auth-server-impl", "none",
 		"--mysql-server-port", fmt.Sprintf("%d", vtcomboMysqlPort),
-		"--mysql_server_bind_address", vtcomboMysqlBindAddress,
+		"--mysql-server-bind-address", vtcomboMysqlBindAddress,
 	}...)
 
 	if args.ExternalTopoImplementation != "" {

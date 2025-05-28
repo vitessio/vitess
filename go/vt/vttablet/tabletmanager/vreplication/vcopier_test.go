@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/utils"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
@@ -75,7 +76,7 @@ func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTe
 		// Run test case.
 		t.Run(
 			fmt.Sprintf(
-				"vreplication_experimental_flags=%d,vreplication_parallel_insert_workers=%d",
+				"%s=%d,vreplication_parallel_insert_workers=%d", utils.GetFlagVariantForTests("vreplication-experimental-flags"),
 				tc.vreplicationExperimentalFlags, tc.vreplicationParallelInsertWorkers,
 			),
 			test,

@@ -188,7 +188,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&maxPayloadSize, "max_payload_size", maxPayloadSize, "The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.")
 	fs.IntVar(&warnPayloadSize, "warn_payload_size", warnPayloadSize, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
 	fs.BoolVar(&sysVarSetEnabled, "enable_system_settings", sysVarSetEnabled, "This will enable the system settings to be changed per session at the database connection level")
-	fs.BoolVar(&setVarEnabled, "enable_set_var", setVarEnabled, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
+	utils.SetFlagBoolVar(fs, &setVarEnabled, "enable-set-var", setVarEnabled, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
 	fs.DurationVar(&lockHeartbeatTime, "lock_heartbeat_time", lockHeartbeatTime, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
 	fs.BoolVar(&warnShardedOnly, "warn_sharded_only", warnShardedOnly, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
 	fs.StringVar(&foreignKeyMode, "foreign_key_mode", foreignKeyMode, "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")

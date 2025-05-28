@@ -107,26 +107,23 @@ Flags:
       --disk-write-interval duration                                     how often to write to the disk to check whether it is stalled (default 5s)
       --disk-write-timeout duration                                      if writes exceed this duration, the disk is considered stalled (default 30s)
       --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
-      --enable-consolidator                                              Synonym to -enable_consolidator (default true)
-      --enable-consolidator-replicas                                     Synonym to -enable_consolidator_replicas
+      --enable-buffer-dry-run                                            Detect and log failover events, but do not actually buffer requests.
+      --enable-consolidator                                              This option enables the query consolidator. (default true)
+      --enable-consolidator-replicas                                     This option enables the query consolidator only on replicas.
+      --enable-hot-row-protection                                        If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.
+      --enable-hot-row-protection-dry-run                                If true, hot row protection is not enforced but logs if transactions would have been queued.
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
       --enable-per-workload-table-metrics                                If true, query counts and query error metrics include a label that identifies the workload
-      --enable-tx-throttler                                              Synonym to -enable_tx_throttler
+      --enable-replication-reporter                                      Use polling to track replication lag.
+      --enable-set-var                                                   This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections (default true)
+      --enable-transaction-limit                                         If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.
+      --enable-transaction-limit-dry-run                                 If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.
+      --enable-tx-throttler                                              If true replication-lag-based throttling on transactions will be enabled.
       --enable-views                                                     Enable views support in vtgate. (default true)
       --enable_buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
-      --enable_buffer_dry_run                                            Detect and log failover events, but do not actually buffer requests.
-      --enable_consolidator                                              This option enables the query consolidator. (default true)
-      --enable_consolidator_replicas                                     This option enables the query consolidator only on replicas.
       --enable_direct_ddl                                                Allow users to submit direct DDL statements (default true)
-      --enable_hot_row_protection                                        If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.
-      --enable_hot_row_protection_dry_run                                If true, hot row protection is not enforced but logs if transactions would have been queued.
       --enable_online_ddl                                                Allow users to submit, review and control Online DDL (default true)
-      --enable_replication_reporter                                      Use polling to track replication lag.
-      --enable_set_var                                                   This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections (default true)
       --enable_system_settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
-      --enable_transaction_limit                                         If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.
-      --enable_transaction_limit_dry_run                                 If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.
-      --enable_tx_throttler                                              If true replication-lag-based throttling on transactions will be enabled.
       --enforce_strict_trans_tables                                      If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database. (default true)
       --external-compressor string                                       command with arguments to use when compressing a backup.
       --external-compressor-extension string                             extension to use when using an external compressor.
@@ -217,14 +214,29 @@ Flags:
       --mycnf-slow-log-path string                                       mysql slow query log path
       --mycnf-socket-file string                                         mysql socket file
       --mycnf-tmp-dir string                                             mysql tmp directory
+      --mysql-allow-clear-text-without-tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql-auth-server-impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
+      --mysql-default-workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
       --mysql-port int                                                   mysql port (default 3306)
+      --mysql-server-bind-address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql-server-drain-onterm                                        If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work
+      --mysql-server-flush-delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
       --mysql-server-keepalive-period duration                           TCP period between keep-alives
       --mysql-server-multi-query-protocol                                If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.
       --mysql-server-pool-conn-read-buffers                              If set, the server will pool incoming connection read buffers
       --mysql-server-port int                                            If set, also listen for MySQL binary protocol connections on this port. (default -1)
+      --mysql-server-query-timeout duration                              mysql query timeout
+      --mysql-server-read-timeout duration                               connection read timeout
+      --mysql-server-require-secure-transport                            Reject insecure connections but only if mysql-server-ssl-cert and mysql-server-ssl-key are provided
+      --mysql-server-socket-path string                                  This option specifies the Unix socket file to use when listening for local connections. By default it will be empty and it won't listen to a unix socket
+      --mysql-server-ssl-ca string                                       Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.
+      --mysql-server-ssl-cert string                                     Path to the ssl cert for mysql server plugin SSL
+      --mysql-server-ssl-crl string                                      Path to ssl CRL for mysql server plugin SSL
+      --mysql-server-ssl-key string                                      Path to ssl key for mysql server plugin SSL
+      --mysql-server-ssl-server-ca string                                path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
+      --mysql-server-tls-min-version string                              Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
       --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
+      --mysql-server-write-timeout duration                              connection write timeout
       --mysql-shell-backup-location string                               location where the backup will be stored
       --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
       --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
@@ -232,23 +244,8 @@ Flags:
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql-shutdown-timeout duration                                  Timeout to use when MySQL is being shut down. (default 5m0s)
-      --mysql_allow_clear_text_without_tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
-      --mysql_default_workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
-      --mysql_server_bind_address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
-      --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
-      --mysql_server_query_timeout duration                              mysql query timeout
-      --mysql_server_read_timeout duration                               connection read timeout
-      --mysql_server_require_secure_transport                            Reject insecure connections but only if mysql_server_ssl_cert and mysql_server_ssl_key are provided
-      --mysql_server_socket_path string                                  This option specifies the Unix socket file to use when listening for local connections. By default it will be empty and it won't listen to a unix socket
-      --mysql_server_ssl_ca string                                       Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.
-      --mysql_server_ssl_cert string                                     Path to the ssl cert for mysql server plugin SSL
-      --mysql_server_ssl_crl string                                      Path to ssl CRL for mysql server plugin SSL
-      --mysql_server_ssl_key string                                      Path to ssl key for mysql server plugin SSL
-      --mysql_server_ssl_server_ca string                                path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
-      --mysql_server_tls_min_version string                              Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --mysql_server_write_timeout duration                              connection write timeout
-      --mysql_slow_connect_warn_threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish
-      --mysql_tcp_version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
+      --mysql-slow-connect-warn-threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish
+      --mysql-tcp-version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --no_scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
@@ -408,19 +405,19 @@ Flags:
       --v Level                                                          log level for V logs
   -v, --version                                                          print binary version
       --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
+      --vreplication-copy-phase-duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
+      --vreplication-copy-phase-max-innodb-history-list-length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 1000000)
+      --vreplication-copy-phase-max-mysql-replication-lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 43200)
       --vreplication-enable-http-log                                     Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.
+      --vreplication-experimental-flags int                              (Bitmask) of experimental features in vreplication to enable (default 7)
+      --vreplication-heartbeat-update-interval int                       Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
+      --vreplication-max-time-to-retry-on-error duration                 stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence
+      --vreplication-net-read-timeout int                                Session value of net_read_timeout for vreplication, in seconds (default 300)
+      --vreplication-net-write-timeout int                               Session value of net_write_timeout for vreplication, in seconds (default 600)
       --vreplication-parallel-insert-workers int                         Number of parallel insertion workers to use during copy phase. Set <= 1 to disable parallelism, or > 1 to enable concurrent insertion during copy phase. (default 1)
-      --vreplication_copy_phase_duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
-      --vreplication_copy_phase_max_innodb_history_list_length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 1000000)
-      --vreplication_copy_phase_max_mysql_replication_lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 43200)
-      --vreplication_experimental_flags int                              (Bitmask) of experimental features in vreplication to enable (default 7)
-      --vreplication_heartbeat_update_interval int                       Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
-      --vreplication_max_time_to_retry_on_error duration                 stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence
-      --vreplication_net_read_timeout int                                Session value of net_read_timeout for vreplication, in seconds (default 300)
-      --vreplication_net_write_timeout int                               Session value of net_write_timeout for vreplication, in seconds (default 600)
-      --vreplication_replica_lag_tolerance duration                      Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase (default 1m0s)
-      --vreplication_retry_delay duration                                delay before retrying a failed workflow event in the replication phase (default 5s)
-      --vreplication_store_compressed_gtid                               Store compressed gtids in the pos column of the sidecar database's vreplication table
+      --vreplication-replica-lag-tolerance duration                      Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase (default 1m0s)
+      --vreplication-retry-delay duration                                delay before retrying a failed workflow event in the replication phase (default 5s)
+      --vreplication-store-compressed-gtid                               Store compressed gtids in the pos column of the sidecar database's vreplication table
       --vschema-persistence-dir string                                   If set, per-keyspace vschema will be persisted in this directory and reloaded into the in-memory topology server across restarts. Bookkeeping is performed using a simple watcher goroutine. This is useful when running vtcombo as an application development container (e.g. vttestserver) where you want to keep the same vschema even if developer's machine reboots. This works in tandem with vttestserver's --persistent_mode flag. Needless to say, this is neither a perfect nor a production solution for vschema persistence. Consider using the --external-topo-server flag if you require a more complete solution. This flag is ignored if --external-topo-server is set.
       --vschema_ddl_authorized_users string                              List of users authorized to execute vschema ddl operations, or '%' to allow all users.
       --vstream-binlog-rotation-threshold int                            Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer) (default 67108864)

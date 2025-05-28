@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -44,7 +45,7 @@ var (
 
 func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&bufferEnabled, "enable_buffer", false, "Enable buffering (stalling) of primary traffic during failovers.")
-	fs.BoolVar(&bufferEnabledDryRun, "enable_buffer_dry_run", false, "Detect and log failover events, but do not actually buffer requests.")
+	utils.SetFlagBoolVar(fs, &bufferEnabledDryRun, "enable-buffer-dry-run", false, "Detect and log failover events, but do not actually buffer requests.")
 
 	fs.DurationVar(&bufferWindow, "buffer_window", 10*time.Second, "Duration for how long a request should be buffered at most.")
 	fs.IntVar(&bufferSize, "buffer_size", 1000, "Maximum number of buffered requests in flight (across all ongoing failovers).")
