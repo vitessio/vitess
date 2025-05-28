@@ -114,7 +114,7 @@ func TestMain(m *testing.M) {
 			utils.GetFlagVariantForTests("--mysql-auth-server-impl"), "static",
 			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
 			utils.GetFlagVariantForTests("--mysql-server-version"), "8.0.16-7",
-			"--warn_sharded_only=true",
+			utils.GetFlagVariantForTests("--warn-sharded-only") + "=true",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{

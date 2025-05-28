@@ -52,7 +52,7 @@ var (
 		utils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
-		"--watch_replication_stream",
+		utils.GetFlagVariantForTests("--watch-replication-stream"),
 		utils.GetFlagVariantForTests("--enable-replication-reporter"),
 		"--serving_state_grace_period", "1s",
 		"--binlog_player_protocol", "grpc",

@@ -60,7 +60,7 @@ var (
 		vtutils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
 		"--degraded_threshold", "5s",
 		"--lock_tables_timeout", "5s",
-		"--watch_replication_stream",
+		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
 		// Frequently reload schema, generating some tablet traffic,
 		//   so we can speed up token refresh
 		"--queryserver-config-schema-reload-time", "5s",

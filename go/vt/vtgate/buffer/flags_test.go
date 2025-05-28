@@ -42,7 +42,7 @@ func TestVerifyFlags(t *testing.T) {
 	// Verify that the non-allowed (non-trivial) flag combinations are caught.
 	defer resetFlagsForTesting()
 
-	parse([]string{"--buffer_keyspace_shards", "ks1/0"})
+	parse([]string{utils.GetFlagVariantForTests("--buffer-keyspace-shards"), "ks1/0"})
 	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "also requires that") {
 		t.Fatalf("List of shards requires --enable_buffer. err: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestVerifyFlags(t *testing.T) {
 
 	parse([]string{
 		"--enable_buffer",
-		"--buffer_keyspace_shards", "ks1//0",
+		utils.GetFlagVariantForTests("--buffer-keyspace-shards"), "ks1//0",
 	})
 	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "invalid shard path") {
 		t.Fatalf("Invalid shard names are not allowed. err: %v", err)
@@ -71,7 +71,7 @@ func TestVerifyFlags(t *testing.T) {
 
 	parse([]string{
 		"--enable_buffer",
-		"--buffer_keyspace_shards", "ks1,ks1/0",
+		utils.GetFlagVariantForTests("--buffer-keyspace-shards"), "ks1,ks1/0",
 	})
 	if err := verifyFlags(); err == nil || !strings.Contains(err.Error(), "has overlapping entries") {
 		t.Fatalf("Listed keyspaces and shards must not overlap. err: %v", err)
