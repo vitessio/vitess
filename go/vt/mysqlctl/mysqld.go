@@ -147,12 +147,12 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 }
 
 func registerReparentFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&DisableActiveReparents, "disable_active_reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
+	utils.SetFlagBoolVar(fs, &DisableActiveReparents, "disable-active-reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
 }
 
 func registerPoolFlags(fs *pflag.FlagSet) {
-	fs.IntVar(&dbaPoolSize, "dba_pool_size", dbaPoolSize, "Size of the connection pool for dba connections")
-	fs.DurationVar(&DbaIdleTimeout, "dba_idle_timeout", DbaIdleTimeout, "Idle timeout for dba connections")
+	utils.SetFlagIntVar(fs, &dbaPoolSize, "dba-pool-size", dbaPoolSize, "Size of the connection pool for dba connections")
+	utils.SetFlagDurationVar(fs, &DbaIdleTimeout, "dba-idle-timeout", DbaIdleTimeout, "Idle timeout for dba connections")
 	fs.DurationVar(&appIdleTimeout, "app_idle_timeout", appIdleTimeout, "Idle timeout for app connections")
 	fs.IntVar(&appPoolSize, "app_pool_size", appPoolSize, "Size of the connection pool for app connections")
 }

@@ -3,7 +3,7 @@ The VTTablet server _controls_ a running MySQL server. VTTablet supports two pri
 * Managed MySQL (most common)
 * External MySQL
 
-In addition to these deployment types, a partially managed VTTablet is also possible by setting `--disable_active_reparents`.
+In addition to these deployment types, a partially managed VTTablet is also possible by setting `--disable-active-reparents`.
 
 ### Managed MySQL
 
@@ -69,7 +69,7 @@ Flags:
       --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
       --builtinbackup-progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
-      --ceph_backup_storage_config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
+      --ceph-backup-storage-config string                                Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
       --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
       --compression-level int                                            what level to pass to the compressor. (default 1)
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -131,8 +131,8 @@ Flags:
       --db-ssl-key string                                                connection ssl key
       --db-ssl-mode SslMode                                              SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
       --db-tls-min-version string                                        Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
-      --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
+      --dba-idle-timeout duration                                        Idle timeout for dba connections (default 1m0s)
+      --dba-pool-size int                                                Size of the connection pool for dba connections (default 20)
       --degraded_threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
       --disk-write-dir string                                            if provided, tablet will attempt to write a file to this directory to check if the disk is stalled
       --disk-write-interval duration                                     how often to write to the disk to check whether it is stalled (default 5s)
@@ -212,11 +212,11 @@ Flags:
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --lock_tables_timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
       --log-err-stacks                                                   log stack traces for errors
+      --log-queries-to-file string                                       Enable query logging to the specified file
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log_backtrace_at traceLocations                                  when logging hits line file:N, emit a stack trace
       --log_dir string                                                   If non-empty, write log files in this directory
       --log_queries                                                      Enable query logging to syslog.
-      --log_queries_to_file string                                       Enable query logging to the specified file
       --logtostderr                                                      log to standard error instead of files
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
@@ -252,7 +252,7 @@ Flags:
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
-      --opentsdb_uri string                                              URI of opentsdb /api/put method
+      --opentsdb-uri string                                              URI of opentsdb /api/put method
       --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --pool-hostname-resolve-interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --port int                                                         port for the server
