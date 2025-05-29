@@ -8198,6 +8198,13 @@ func (d InjectedExpr) walkSubtree(visit Visit) error {
 	return nil
 }
 
+// OrderedInjectedExpr is an InjectedExpr that has an OrderBy clause associated with it
+type OrderedInjectedExpr struct {
+	InjectedExpr
+	OrderBy OrderBy
+	Name    ColIdent
+}
+
 // InjectedStatement allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
 // MySQL's dialect.
 type InjectedStatement struct {
