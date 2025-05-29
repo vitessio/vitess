@@ -23,7 +23,8 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-	// "vitess.io/vitess/go/vt/log"
+
+	"vitess.io/vitess/go/flagutil"
 )
 
 /*
@@ -82,9 +83,7 @@ func SetFlagDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def ti
 }
 
 func SetFlagFloatDurationVar(fs *pflag.FlagSet, p *time.Duration, name string, def time.Duration, usage string) {
-	setFlagVar(fs, p, name, time.Duration(float64(def)*float64(time.Second)), usage, func(fs *pflag.FlagSet, p *time.Duration, name string, def time.Duration, usage string) {
-		fs.DurationVar(p, name, def, usage)
-	})
+	setFlagVar(fs, p, name, def, usage, flagutil.FloatDuration)
 }
 
 func SetFlagUint32Var(fs *pflag.FlagSet, p *uint32, name string, def uint32, usage string) {
