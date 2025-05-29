@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -84,12 +85,11 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 	require.NoError(t, err)
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--lock_tables_timeout", "5s",
+		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		// Fast health checks help find corner cases.
 		utils.GetFlagVariantForTests("--health-check-interval"), "1s",
 		"--track_schema_versions=true",
-		"--queryserver_enable_online_ddl"+"=false")
+		utils.GetFlagVariantForTests("--queryserver-enable-online-ddl")+"=false")
 
 	if len(extraVttabletFlags) > 0 {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, extraVttabletFlags...)
