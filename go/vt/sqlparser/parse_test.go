@@ -3095,22 +3095,36 @@ var (
 		}, {
 			input:  "CREATE USER 'UserName'@'%' IDENTIFIED WITH 'caching_sha2_password' AS 'xyz0123'",
 			output: "create user `UserName`@`%` identified with caching_sha2_password as 'xyz0123'",
-		}, {
+		},
+		{
 			input:  "ALTER USER IF EXISTS foo@bar IDENTIFIED BY 'password1';",
 			output: "alter user if exists `foo`@`bar` identified by 'password1'",
-		}, {
+		},
+		{
 			input:  "ALTER USER foo@bar IDENTIFIED BY 'password1';",
 			output: "alter user `foo`@`bar` identified by 'password1'",
-		}, {
+		},
+		{
 			input:  "ALTER USER foo@bar IDENTIFIED BY RANDOM PASSWORD;",
 			output: "alter user `foo`@`bar` identified by random password",
-		}, {
+		},
+		{
 			input:  "ALTER USER foo@bar IDENTIFIED WITH some_plugin;",
 			output: "alter user `foo`@`bar` identified with some_plugin",
-		}, {
+		},
+		{
 			input:  "ALTER USER foo@bar IDENTIFIED WITH some_plugin BY 'auth_string';",
 			output: "alter user `foo`@`bar` identified with some_plugin by 'auth_string'",
-		}, {
+		},
+		{
+			input:  "ALTER USER foo@bar IDENTIFIED WITH some_plugin BY 'auth_string' with MAX_QUERIES_PER_HOUR 123;",
+			output: "alter user `foo`@`bar` identified with some_plugin by 'auth_string' with max_queries_per_hour 123",
+		},
+		{
+			input:  "ALTER USER foo@bar with max_queries_per_hour 123 max_updates_per_hour 456 max_connections_per_hour 789 max_user_connections 321;",
+			output: "alter user `foo`@`bar` identified by '' with max_queries_per_hour 123 max_updates_per_hour 456 max_connections_per_hour 789 max_user_connections 321",
+		},
+		{
 			input:  "RENAME USER UserName1@localhost TO UserName2@localhost, UserName3 TO UserName4",
 			output: "rename user `UserName1`@`localhost` to `UserName2`@`localhost`, `UserName3`@`%` to `UserName4`@`%`",
 		}, {
@@ -3277,52 +3291,116 @@ var (
 		}, {
 			input:  "GRANT REPLICATION_SLAVE_ADMIN, GROUP_REPLICATION_ADMIN, BINLOG_ADMIN ON *.* TO 'u1'@'localhost'",
 			output: "grant replication_slave_admin, group_replication_admin, binlog_admin on *.* to `u1`@`localhost`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL ON * FROM UserName",
 			output: "revoke all on * from `UserName`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL ON *.* FROM UserName",
 			output: "revoke all on *.* from `UserName`@`%`",
-		}, {
+		},
+		{
+			input:  "REVOKE IF EXISTS ALL ON *.* FROM UserName",
+			output: "revoke if exists all on *.* from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE ALL ON *.* FROM UserName IGNORE UNKNOWN USER",
+			output: "revoke all on *.* from `UserName`@`%` ignore unknown user",
+		},
+		{
 			input:  "REVOKE ALL ON db.* FROM UserName",
 			output: "revoke all on `db`.* from `UserName`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL ON db.tbl FROM UserName",
 			output: "revoke all on `db`.`tbl` from `UserName`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL ON `db`.`tbl` FROM UserName",
 			output: "revoke all on `db`.`tbl` from `UserName`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL ON tbl FROM UserName",
 			output: "revoke all on `tbl` from `UserName`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL ON TABLE tbl FROM UserName",
 			output: "revoke all on table `tbl` from `UserName`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE SELECT (col1, col2), UPDATE (col2) ON db.tbl FROM UserName",
 			output: "revoke select (`col1`, `col2`), update (`col2`) on `db`.`tbl` from `UserName`@`%`",
-		}, {
+		},
+		{
+			input:  "REVOKE IF EXISTS SELECT (col1, col2), UPDATE (col2) ON db.tbl FROM UserName",
+			output: "revoke if exists select (`col1`, `col2`), update (`col2`) on `db`.`tbl` from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE SELECT (col1, col2), UPDATE (col2) ON db.tbl FROM UserName IGNORE UNKNOWN USER",
+			output: "revoke select (`col1`, `col2`), update (`col2`) on `db`.`tbl` from `UserName`@`%` ignore unknown user",
+		},
+		{
 			input:  "REVOKE ALL ON tbl FROM UserName1@localhost, UserName2",
 			output: "revoke all on `tbl` from `UserName1`@`localhost`, `UserName2`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE ALL, GRANT OPTION FROM UserName",
-			output: "revoke all privileges, grant option from `UserName`@`%`",
-		}, {
+			output: "revoke all on *.* from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE IF EXISTS ALL, GRANT OPTION FROM UserName",
+			output: "revoke if exists all on *.* from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE ALL, GRANT OPTION FROM UserName IGNORE UNKNOWN USER",
+			output: "revoke all on *.* from `UserName`@`%` ignore unknown user",
+		},
+		{
 			input:  "REVOKE ALL PRIVILEGES, GRANT OPTION FROM UserName",
-			output: "revoke all privileges, grant option from `UserName`@`%`",
-		}, {
+			output: "revoke all on *.* from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE IF EXISTS ALL PRIVILEGES, GRANT OPTION FROM UserName",
+			output: "revoke if exists all on *.* from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE ALL PRIVILEGES, GRANT OPTION FROM UserName IGNORE UNKNOWN USER",
+			output: "revoke all on *.* from `UserName`@`%` ignore unknown user",
+		},
+		{
 			input:  "REVOKE Role1 FROM UserName",
 			output: "revoke `Role1`@`%` from `UserName`@`%`",
-		}, {
+		},
+		{
+			input:  "REVOKE IF EXISTS Role1 FROM UserName",
+			output: "revoke if exists `Role1`@`%` from `UserName`@`%`",
+		},
+		{
+			input:  "REVOKE Role1 FROM UserName IGNORE UNKNOWN USER",
+			output: "revoke `Role1`@`%` from `UserName`@`%` ignore unknown user",
+		},
+		{
 			input:  "REVOKE Role1, Role2 FROM UserName1, UserName2",
 			output: "revoke `Role1`@`%`, `Role2`@`%` from `UserName1`@`%`, `UserName2`@`%`",
-		}, {
+		},
+		{
 			input:  "REVOKE PROXY ON UserName FROM Role1, Role2",
 			output: "revoke proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%`",
-		}, {
+		},
+		{
+			input:  "REVOKE IF EXISTS PROXY ON UserName FROM Role1, Role2",
+			output: "revoke if exists proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%`",
+		},
+		{
+			input:  "REVOKE PROXY ON UserName FROM Role1, Role2 IGNORE UNKNOWN USER",
+			output: "revoke proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%` ignore unknown user",
+		},
+		{
 			input:  "REVOKE PROXY ON UserName FROM Role1, Role2",
 			output: "revoke proxy on `UserName`@`%` from `Role1`@`%`, `Role2`@`%`",
-		}, {
+		},
+		{
 			input:  "FLUSH PRIVILEGES",
 			output: "flush privileges",
 		}, {
@@ -3337,40 +3415,64 @@ var (
 		}, {
 			input:  "PURGE BINARY LOGS BEFORE DATE_SUB(NOW(), INTERVAL 1 MONTH);",
 			output: "purge binary logs before DATE_SUB(NOW(), interval 1 MONTH)",
-		}, {
+		},
+		{
 			input:  "FLUSH USER_RESOURCES",
 			output: "flush user_resources",
-		}, {
+		},
+		{
 			input:  "FLUSH RELAY LOGS",
 			output: "flush relay logs",
-		}, {
+		},
+		{
 			input:  "FLUSH LOCAL RELAY LOGS FOR CHANNEL 'connections'",
 			output: "flush local relay logs for channel connections",
-		}, {
+		},
+		{
 			input:  "FLUSH LOCAL reLay lOgs FOR CHANNEL 'connections'",
 			output: "flush local relay logs for channel connections",
-		}, {
+		},
+		{
 			input:  "FLUSH LOCAL OPTIMIZER_COSTS",
 			output: "flush local optimizer_costs",
-		}, {
+		},
+		{
+			input:  "FLUSH NO_WRITE_TO_BINLOG TABLES",
+			output: "flush no_write_to_binlog tables",
+		},
+		{
 			input:  "FLUSH NO_WRITE_TO_BINLOG HOSTS",
 			output: "flush no_write_to_binlog hosts",
-		}, {
+		},
+		{
 			input:  "FLUSH TABLE `inventory`.`customers` WITH READ LOCK",
 			output: "flush table inventory.customers with read lock",
-		}, {
+		},
+		{
 			input:  "FLUSH TABLES `inventory`.`customers` WITH READ LOCK",
 			output: "flush tables inventory.customers with read lock",
-		}, {
+		},
+		{
 			input:  "FLUSH TABLES `inventory`.`customers`",
 			output: "flush tables inventory.customers",
-		}, {
+		},
+		{
+			input:  "FLUSH TABLE WITH READ LOCK",
+			output: "flush table",
+		},
+		{
+			input:  "FLUSH TABLES WITH READ LOCK",
+			output: "flush tables",
+		},
+		{
 			input:  "FLUSH TABLE table1, foo.table2 WITH READ LOCK",
 			output: "flush table table1, foo.table2 with read lock",
-		}, {
+		},
+		{
 			input:  "FLUSH TABLES table1, foo.table2 WITH READ LOCK",
 			output: "flush tables table1, foo.table2 with read lock",
-		}, {
+		},
+		{
 			input:  "SHOW GRANTS",
 			output: "show grants",
 		}, {

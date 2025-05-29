@@ -1069,11 +1069,13 @@ func (g *GrantProxy) SetExtra(extra any) {
 
 // RevokePrivilege represents the REVOKE...ON...FROM statement.
 type RevokePrivilege struct {
-	Privileges     []Privilege
-	ObjectType     GrantObjectType
-	PrivilegeLevel PrivilegeLevel
-	From           []AccountName
-	Auth           AuthInformation
+	Privileges        []Privilege
+	ObjectType        GrantObjectType
+	PrivilegeLevel    PrivilegeLevel
+	From              []AccountName
+	Auth              AuthInformation
+	IfExists          bool
+	IgnoreUnknownUser bool
 }
 
 var _ Statement = (*RevokePrivilege)(nil)
@@ -1085,6 +1087,9 @@ func (r *RevokePrivilege) iStatement() {}
 // Format implements the interface Statement.
 func (r *RevokePrivilege) Format(buf *TrackedBuffer) {
 	buf.Myprintf("revoke")
+	if r.IfExists {
+		buf.Myprintf(" if exists")
+	}
 	for i, privilege := range r.Privileges {
 		if i > 0 {
 			buf.Myprintf(",")
@@ -1108,6 +1113,9 @@ func (r *RevokePrivilege) Format(buf *TrackedBuffer) {
 			buf.Myprintf(",")
 		}
 		buf.Myprintf(" %s", user.String())
+	}
+	if r.IgnoreUnknownUser {
+		buf.Myprintf(" ignore unknown user")
 	}
 }
 
@@ -1136,59 +1144,13 @@ func (r *RevokePrivilege) SetExtra(extra any) {
 	r.Auth.Extra = extra
 }
 
-// RevokeAllPrivileges represents the REVOKE ALL statement.
-type RevokeAllPrivileges struct {
-	From []AccountName
-	Auth AuthInformation
-}
-
-var _ Statement = (*RevokeAllPrivileges)(nil)
-var _ AuthNode = (*RevokeAllPrivileges)(nil)
-
-// iStatement implements the interface Statement.
-func (r *RevokeAllPrivileges) iStatement() {}
-
-// Format implements the interface Statement.
-func (r *RevokeAllPrivileges) Format(buf *TrackedBuffer) {
-	buf.Myprintf("revoke all privileges, grant option from")
-	for i, user := range r.From {
-		if i > 0 {
-			buf.Myprintf(",")
-		}
-		buf.Myprintf(" %s", user.String())
-	}
-}
-
-// GetAuthInformation implements the AuthNode interface.
-func (r *RevokeAllPrivileges) GetAuthInformation() AuthInformation {
-	return r.Auth
-}
-
-// SetAuthType implements the AuthNode interface.
-func (r *RevokeAllPrivileges) SetAuthType(authType string) {
-	r.Auth.AuthType = authType
-}
-
-// SetAuthTargetType implements the AuthNode interface.
-func (r *RevokeAllPrivileges) SetAuthTargetType(targetType string) {
-	r.Auth.TargetType = targetType
-}
-
-// SetAuthTargetNames implements the AuthNode interface.
-func (r *RevokeAllPrivileges) SetAuthTargetNames(targetNames []string) {
-	r.Auth.TargetNames = targetNames
-}
-
-// SetExtra implements the AuthNode interface.
-func (r *RevokeAllPrivileges) SetExtra(extra any) {
-	r.Auth.Extra = extra
-}
-
 // RevokeRole represents the REVOKE...FROM statement.
 type RevokeRole struct {
-	Roles []AccountName
-	From  []AccountName
-	Auth  AuthInformation
+	Roles             []AccountName
+	From              []AccountName
+	Auth              AuthInformation
+	IfExists          bool
+	IgnoreUnknownUser bool
 }
 
 var _ Statement = (*RevokeRole)(nil)
@@ -1200,6 +1162,9 @@ func (r *RevokeRole) iStatement() {}
 // Format implements the interface Statement.
 func (r *RevokeRole) Format(buf *TrackedBuffer) {
 	buf.Myprintf("revoke")
+	if r.IfExists {
+		buf.Myprintf(" if exists")
+	}
 	for i, role := range r.Roles {
 		if i > 0 {
 			buf.Myprintf(",")
@@ -1212,6 +1177,9 @@ func (r *RevokeRole) Format(buf *TrackedBuffer) {
 			buf.Myprintf(",")
 		}
 		buf.Myprintf(" %s", user.String())
+	}
+	if r.IgnoreUnknownUser {
+		buf.Myprintf(" ignore unknown user")
 	}
 }
 
@@ -1245,6 +1213,9 @@ type RevokeProxy struct {
 	On   AccountName
 	From []AccountName
 	Auth AuthInformation
+
+	IfExists          bool
+	IgnoreUnknownUser bool
 }
 
 var _ Statement = (*RevokeProxy)(nil)
@@ -1255,12 +1226,19 @@ func (r *RevokeProxy) iStatement() {}
 
 // Format implements the interface Statement.
 func (r *RevokeProxy) Format(buf *TrackedBuffer) {
-	buf.Myprintf("revoke proxy on %s from", r.On.String())
+	buf.Myprintf("revoke")
+	if r.IfExists {
+		buf.Myprintf(" if exists")
+	}
+	buf.Myprintf(" proxy on %s from", r.On.String())
 	for i, user := range r.From {
 		if i > 0 {
 			buf.Myprintf(",")
 		}
 		buf.Myprintf(" %s", user.String())
+	}
+	if r.IgnoreUnknownUser {
+		buf.Myprintf(" ignore unknown user")
 	}
 }
 
@@ -1350,7 +1328,7 @@ func (s *ShowGrants) SetExtra(extra any) {
 }
 
 // ShowPrivileges represents the SHOW PRIVILEGES statement.
-type ShowPrivileges struct{
+type ShowPrivileges struct {
 	Auth AuthInformation
 }
 
