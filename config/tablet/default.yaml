@@ -77,7 +77,7 @@ oltp:
   warnRows: 0             # queryserver-config-warn-result-size
 
 healthcheck:
-  intervalSeconds: 20             # health_check_interval
+  intervalSeconds: 20             # health-check-interval
   degradedThresholdSeconds: 30    # degraded_threshold
   unhealthyThresholdSeconds: 7200 # unhealthy_threshold
 
@@ -86,21 +86,21 @@ gracePeriods:
   transitionSeconds: 0 # serving_state_grace_period
 
 replicationTracker:
-  mode: disable                    # enable_replication_reporter
+  mode: disable                    # enable-replication-reporter
   heartbeatIntervalMilliseconds: 0 # heartbeat-enable, heartbeat-interval
 
 hotRowProtection:
-  mode: disable|dryRun|enable # enable_hot_row_protection, enable_hot_row_protection_dry_run
+  mode: disable|dryRun|enable # enable-hot-row-protection, enable-hot-row-protection-dry-run
   # Recommended value: same as txPool.size.
-  maxQueueSize: 20            # hot_row_protection_max_queue_size
-  maxGlobalQueueSize: 1000    # hot_row_protection_max_global_queue_size
-  maxConcurrency: 5           # hot_row_protection_concurrent_transactions
+  maxQueueSize: 20            # hot-row-protection-max-queue-size
+  maxGlobalQueueSize: 1000    # hot-row-protection-max-global-queue-size
+  maxConcurrency: 5           # hot-row-protection-concurrent-transactions
 
 consolidator: enable|disable|notOnPrimary # enable-consolidator, enable-consolidator-replicas
 passthroughDML: false                    # queryserver-config-passthrough-dmls
 streamBufferSize: 32768                  # queryserver-config-stream-buffer-size
 schemaReloadIntervalSeconds: 1800        # queryserver-config-schema-reload-time
-watchReplication: false                  # watch_replication_stream
+watchReplication: false                  # watch-replication-stream
 terseErrors: false                       # queryserver-config-terse-errors
 truncateErrorLen: 0                      # queryserver-config-truncate-error-len
 messagePostponeParallelism: 4            # queryserver-config-message-postpone-cap
@@ -115,10 +115,10 @@ messagePostponeParallelism: 4            # queryserver-config-message-postpone-c
 # tx-throttler-config
 # tx-throttler-healthcheck-cells
 # tx-throttler-tablet-types
-# enable_transaction_limit
-# enable_transaction_limit_dry_run
-# transaction_limit_per_user
-# transaction_limit_by_username
-# transaction_limit_by_principal
-# transaction_limit_by_component
-# transaction_limit_by_subcomponent
+# enable-transaction-limit
+# enable-transaction-limit-dry-run
+# transaction-limit-per-user
+# transaction-limit-by-username
+# transaction-limit-by-principal
+# transaction-limit-by-component
+# transaction-limit-by-subcomponent

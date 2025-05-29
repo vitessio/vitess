@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -86,7 +87,7 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 		"--lock_tables_timeout", "5s",
 		// Fast health checks help find corner cases.
-		"--health_check_interval", "1s",
+		utils.GetFlagVariantForTests("--health-check-interval"), "1s",
 		"--track_schema_versions=true",
 		"--queryserver_enable_online_ddl=false")
 
@@ -97,9 +98,9 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 		"--enable_buffer",
 		// Long timeout in case failover is slow.
-		"--buffer_window", "10m",
-		"--buffer_max_failover_duration", "10m",
-		"--buffer_min_time_between_failovers", "20m",
+		utils.GetFlagVariantForTests("--buffer-window"), "10m",
+		utils.GetFlagVariantForTests("--buffer-max-failover-duration"), "10m",
+		utils.GetFlagVariantForTests("--buffer-min-time-between-failovers"), "20m",
 	)
 
 	// Start keyspace

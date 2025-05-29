@@ -55,9 +55,9 @@ var (
 	sidecarDBIdentifier   = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
-	extraVTGateArgs       = []string{utils.GetFlagVariantForTests("--tablet-refresh-interval"), "10ms", "--enable_buffer", "--buffer_window", loadTestBufferingWindowDuration.String(),
-		"--buffer_size", "250000", "--buffer_min_time_between_failovers", "1s", "--buffer_max_failover_duration", loadTestBufferingWindowDuration.String(),
-		"--buffer_drain_concurrency", "10"}
+	extraVTGateArgs       = []string{utils.GetFlagVariantForTests("--tablet-refresh-interval"), "10ms", "--enable_buffer", utils.GetFlagVariantForTests("--buffer-window"), loadTestBufferingWindowDuration.String(),
+		utils.GetFlagVariantForTests("--buffer-size"), "250000", utils.GetFlagVariantForTests("--buffer-min-time-between-failovers"), "1s", utils.GetFlagVariantForTests("--buffer-max-failover-duration"), loadTestBufferingWindowDuration.String(),
+		utils.GetFlagVariantForTests("--buffer-drain-concurrency"), "10"}
 	extraVtctldArgs = []string{utils.GetFlagVariantForTests("--remote-operation-timeout"), "600s", "--topo-etcd-lease-ttl", "120"}
 	// This variable can be used within specific tests to alter vttablet behavior.
 	extraVTTabletArgs = []string{}
@@ -495,7 +495,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	tablet := &Tablet{}
 	var options []string
 	defaultHeartbeatOptions := []string{
-		"--heartbeat_on_demand_duration", "5s",
+		utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
 		utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
 	}
 	if !mainClusterConfig.overrideHeartbeatOptions {
@@ -505,7 +505,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	options = append(options, extraVTTabletArgs...)
 
 	if mainClusterConfig.vreplicationCompressGTID {
-		options = append(options, "--vreplication_store_compressed_gtid=true")
+		options = append(options, "--vreplication-store-compressed-gtid=true")
 	}
 
 	vttablet := cluster.VttabletProcessInstance(

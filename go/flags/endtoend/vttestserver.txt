@@ -164,7 +164,7 @@ Flags:
       --vtgate-grpc-crl string                                           the server crl to use to validate server certificates when connecting
       --vtgate-grpc-key string                                           the key to use to connect
       --vtgate-grpc-server-name string                                   the server name to use to validate server certificate
-      --xbstream_restore_flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
+      --xbstream-restore-flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
       --xtrabackup-backup-flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
       --xtrabackup-prepare-flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command
       --xtrabackup-root-path string                                      Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin

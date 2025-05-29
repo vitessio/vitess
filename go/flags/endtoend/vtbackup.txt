@@ -249,7 +249,7 @@ Flags:
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
       --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging
-      --xbstream_restore_flags string                               Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
+      --xbstream-restore-flags string                               Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
       --xtrabackup-backup-flags string                              Flags to pass to backup command. These should be space separated and will be added to the end of the command
       --xtrabackup-prepare-flags string                             Flags to pass to prepare command. These should be space separated and will be added to the end of the command
       --xtrabackup-root-path string                                 Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
