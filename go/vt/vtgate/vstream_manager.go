@@ -688,10 +688,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			for i, event := range events {
 				switch event.Type {
 				case binlogdatapb.VEventType_FIELD:
-					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.ExcludeKeyspaceFromTableName, extractFieldTableName)
+					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.GetExcludeKeyspaceFromTableName(), extractFieldTableName)
 					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_ROW:
-					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.ExcludeKeyspaceFromTableName, extractRowTableName)
+					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.GetExcludeKeyspaceFromTableName(), extractRowTableName)
 					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
 					sendevents = append(sendevents, event)
