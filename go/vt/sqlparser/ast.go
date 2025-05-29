@@ -8137,7 +8137,7 @@ type Injectable interface {
 // MySQL's dialect.
 type InjectedExpr struct {
 	Expression Injectable
-	Children   Exprs
+	Children   SelectExprs
 	Auth       AuthInformation
 }
 
