@@ -458,7 +458,14 @@ func (be *MySQLShellBackupEngine) restorePreCheck(ctx context.Context, params Re
 			return false, fmt.Errorf("%w: failed to fetch MySQL version: %v", ErrMySQLShellPreCheck, err)
 		}
 
-		capableOf := mysql.ServerVersionCapableOf(version)
+		_, sv, err := ParseVersionString(version)
+		if err != nil {
+			return false, fmt.Errorf("%w: failed to parse MySQL version (version: %s): %v", ErrMySQLShellPreCheck, version, err)
+		}
+
+		versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
+
+		capableOf := mysql.ServerVersionCapableOf(versionStr)
 		capable, err := capableOf(capabilities.DisableRedoLogFlavorCapability)
 		if err != nil {
 			return false, fmt.Errorf("%w: error checking if server supports disabling redo log: %v", ErrMySQLShellPreCheck, err)
