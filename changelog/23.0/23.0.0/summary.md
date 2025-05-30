@@ -7,9 +7,11 @@
         - [Metrics](#deleted-metrics)
     - **[New Metrics](#new-metrics)**
         - [VTGate](#new-vtgate-metrics)
-        - **[VTTablet](#minor-changes-vttablet)**
-            - [CLI Flags](#flags-vttablet)
-            - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password)
+    - **[Topology](#minor-changes-topo)**
+        - [`--consul_auth_static_file` requires 1 or more credentials](#consul_auth_static_file-check-creds)
+    - **[VTTablet](#minor-changes-vttablet)**
+        - [CLI Flags](#flags-vttablet)
+        - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password)
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
@@ -31,6 +33,12 @@
 |          Name           |   Dimensions    |                                     Description                                     |                           PR                            |
 |:-----------------------:|:---------------:|:-----------------------------------------------------------------------------------:|:-------------------------------------------------------:|
 | `TransactionsProcessed` | `Shard`, `Type` | Counts transactions processed at VTGate by shard distribution and transaction type. | [#18171](https://github.com/vitessio/vitess/pull/18171) |
+
+### <a id="minor-changes-topo"/>Topology</a>
+
+#### <a id="consul_auth_static_file-check-creds"/>`--consul_auth_static_file` requires 1 or more credentials</a>
+
+The `--consul_auth_static_file` flag used in several components now requires that 1 or more credentials can be loaded from the provided json file.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
