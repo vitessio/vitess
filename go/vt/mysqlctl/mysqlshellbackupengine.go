@@ -472,7 +472,7 @@ func (be *MySQLShellBackupEngine) restorePreCheck(ctx context.Context, params Re
 		}
 
 		if !capable {
-			return false, fmt.Errorf("%w: MySQL version doesn't support disabling the redo log (must be >=8.0.21)", ErrMySQLShellPreCheck)
+			return false, fmt.Errorf("%w: MySQL version doesn't support disabling the redo log (must be >=8.0.21, current version: %s)", ErrMySQLShellPreCheck, versionStr)
 		}
 	}
 
