@@ -270,10 +270,14 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 
 	// Remove stream from map and decrement wg when it ends.
 	defer func() {
+		log.Info("VStreamer engine: locking for close")
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
+		log.Info("VStreamer engine: deleting streamers")
 		delete(vse.streamers, idx)
+		log.Info("VStreamer engine: decrementing wait group")
 		vse.wg.Done()
+		log.Info("VStreamer engine: unlocking")
 	}()
 
 	// No lock is held while streaming, but wg is incremented.
