@@ -163,6 +163,9 @@ func (e *Executor) newExecute(
 			return err
 		}
 
+		// Set the session variable to indicate if the query is a read query or not.
+		safeSession.SetExecReadQuery(plan.QueryType.IsReadStatement())
+
 		// Execute the plan.
 		if plan.Instructions.NeedsTransaction() {
 			err = e.insideTransaction(ctx, safeSession, logStats,
