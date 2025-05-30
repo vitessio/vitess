@@ -824,6 +824,44 @@ func TestFilteredVarBinary(t *testing.T) {
 	ts.Run()
 }
 
+// TestPartialFilteredInt confirms that adding a filter using an int column results in the correct set of events.
+func TestPartialFilteredInt(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, id2 int, primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select id1, id2 from t1 where id2 > 100 and id2 < 200",
+				}},
+			},
+		},
+	}
+	defer ts.Close()
+	fe := &TestFieldEvent{
+		table: "stream1",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+		},
+	}
+	_ = fe
+	ts.Init()
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 150)", nil},
+		{"update t1 set id2 = 100 where id1 = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "150"}, after: []string{"1", "100"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	ts.Run()
+}
+
 // TestFilteredInt confirms that adding a filter using an int column results in the correct set of events.
 func TestFilteredInt(t *testing.T) {
 	ts := &TestSpec{
