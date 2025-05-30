@@ -17,11 +17,14 @@ limitations under the License.
 package servenv
 
 import (
+	"fmt"
+	"net"
 	"testing"
 
 	"context"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/orca"
 )
 
 func TestEmpty(t *testing.T) {
@@ -58,6 +61,109 @@ func TestDoubleInterceptor(t *testing.T) {
 	}
 	if len(interceptors.unaryInterceptors) != 2 {
 		t.Fatalf("expected 1 server options to be available")
+	}
+}
+
+func TestOrcaMetricsRecorder(t *testing.T) {
+	recorder := orca.NewServerMetricsRecorder()
+
+	recorder.SetCPUUtilization(0.25)
+	recorder.SetMemoryUtilization(0.5)
+
+	snap := recorder.ServerMetrics()
+
+	if snap.CPUUtilization != 0.25 {
+		t.Errorf("expected cpu 0.25, got %v", snap.CPUUtilization)
+	}
+	if snap.MemUtilization != 0.5 {
+		t.Errorf("expected memory 0.5, got %v", snap.MemUtilization)
+	}
+}
+
+func TestEnableOrcaMetrics(t *testing.T) {
+	// Set the port to enable gRPC server.
+	withTempVar(&gRPCPort, getFreePort())
+	withTempVar(&gRPCEnableOrcaMetrics, true)
+	withTempVar(&GRPCServerMetricsRecorder, nil)
+
+	gRPCEnableOrcaMetrics = true
+	GRPCServerMetricsRecorder = nil
+	createGRPCServer()
+	if GRPCServerMetricsRecorder == nil {
+		t.Errorf("GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is true")
+	}
+
+	called := false
+	registerORCA = func(s grpc.ServiceRegistrar, o orca.ServiceOptions) error {
+		called = true
+		return nil
+	}
+	defer func() { registerORCA = orca.Register }()
+	serveGRPC()
+	if !called {
+		t.Errorf("registerORCA should have been called when ORCA metrics are enabled")
+	}
+}
+
+func TestDisableOrcaMetrics(t *testing.T) {
+	// Set the port to enable gRPC server.
+	withTempVar(&gRPCPort, getFreePort())
+	withTempVar(&gRPCEnableOrcaMetrics, false)
+	withTempVar(&GRPCServerMetricsRecorder, nil)
+
+	createGRPCServer()
+	if GRPCServerMetricsRecorder != nil {
+		t.Errorf("GRPCServerMetricsRecorder should NOT be initialized when gRPCEnableOrcaMetrics is false")
+	}
+
+	called := false
+	registerORCA = func(s grpc.ServiceRegistrar, o orca.ServiceOptions) error {
+		called = true
+		return nil
+	}
+	defer func() { registerORCA = orca.Register }()
+	serveGRPC()
+	if called {
+		t.Errorf("registerORCA should NOT have been called when ORCA metrics are enabled")
+	}
+}
+
+func TestReportedOrcaMetrics(t *testing.T) {
+	// Set the port to enable gRPC server.
+	withTempVar(&gRPCPort, getFreePort())
+	withTempVar(&gRPCEnableOrcaMetrics, true)
+	withTempVar(&GRPCServerMetricsRecorder, nil)
+
+	createGRPCServer()
+	if GRPCServerMetricsRecorder == nil {
+		t.Errorf("GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is false")
+	}
+
+	serveGRPC()
+	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
+	if cpuUsage := serverMetrics.CPUUtilization; cpuUsage < 0 {
+		t.Errorf("CPU Utilization is not set %.2f", cpuUsage)
+	}
+
+	if memUsage := serverMetrics.MemUtilization; memUsage < 0 {
+		t.Errorf("Mem Utilization is not set %.2f", memUsage)
+	}
+}
+
+func getFreePort() int {
+	l, err := net.Listen("tcp", ":0")
+	if err != nil {
+		panic(fmt.Sprintf("could not get free port: %v", err))
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
+
+func withTempVar[T any](set *T, temp T) (restore func()) {
+	original := *set
+	*set = temp
+	return func() {
+		*set = original
 	}
 }
 
