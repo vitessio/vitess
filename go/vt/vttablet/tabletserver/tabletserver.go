@@ -2034,22 +2034,22 @@ func (tsv *TabletServer) QueryPlanCacheLen() int {
 
 // SetMaxResultSize changes the max result size to the specified value.
 func (tsv *TabletServer) SetMaxResultSize(val int) {
-	tsv.qe.maxResultSize.Store(int64(val))
+	tsv.qe.maxResultSize.Set(int64(val))
 }
 
 // MaxResultSize returns the max result size.
 func (tsv *TabletServer) MaxResultSize() int {
-	return int(tsv.qe.maxResultSize.Load())
+	return int(tsv.qe.maxResultSize.Get())
 }
 
 // SetWarnResultSize changes the warn result size to the specified value.
 func (tsv *TabletServer) SetWarnResultSize(val int) {
-	tsv.qe.warnResultSize.Store(int64(val))
+	tsv.qe.warnResultSize.Set(int64(val))
 }
 
 // WarnResultSize returns the warn result size.
 func (tsv *TabletServer) WarnResultSize() int {
-	return int(tsv.qe.warnResultSize.Load())
+	return int(tsv.qe.warnResultSize.Get())
 }
 
 // SetThrottleMetricThreshold changes the throttler metric threshold
