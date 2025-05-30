@@ -1898,7 +1898,7 @@ func (node *Set) walkSubtree(visit Visit) error {
 }
 
 type CharsetAndCollate struct {
-	Type      string //Charset = true, Collate = false
+	Type      string // Charset = true, Collate = false
 	Value     string
 	IsDefault bool
 }
@@ -2784,7 +2784,7 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	case RemoveStr:
 		buf.Myprintf(" %s partitioning", node.Action)
 	default:
-		//panic("unimplemented")
+		// panic("unimplemented")
 	}
 }
 
@@ -2863,7 +2863,7 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" %v", ts.PartitionOpt)
 	}
 
-	//buf.Myprintf("\n)%s", strings.Replace(ts.TableOpts, ", ", ",\n  ", -1))
+	// buf.Myprintf("\n)%s", strings.Replace(ts.TableOpts, ", ", ",\n  ", -1))
 }
 
 // AddColumn appends the given column to the list in the spec
@@ -4717,7 +4717,7 @@ func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 			// we use the alias expression for the column in the return schema.
 			buf.Myprintf("%v %v", node.Expr, node.As)
 		} else {
-			//buf.Myprintf("%s", node.InputExpression)
+			// buf.Myprintf("%s", node.InputExpression)
 			buf.Myprintf("%v", node.Expr)
 		}
 	} else if !node.As.IsEmpty() {
@@ -8140,9 +8140,16 @@ type Injectable interface {
 // InjectedExpr allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
 // MySQL's dialect.
 type InjectedExpr struct {
-	Expression Injectable
-	Children   Exprs
-	Auth       AuthInformation
+	// Expression is an expression that implements the Expr interface. It can be any expression type.
+	Expression         Injectable
+	// Children are the children of the expression, which can be any Expr type. This is a union type, and either this
+	// or SelectExprChildren will be set.
+	Children           Exprs
+	// SelectExprChildren are the children of the expression, which can be any SelectExpr type. This is a union type, 
+	// and either this or Children will be set.
+	SelectExprChildren SelectExprs
+	// Auth contains the authentication information for the expression.
+	Auth               AuthInformation
 }
 
 var _ Expr = InjectedExpr{}
@@ -8200,6 +8207,12 @@ func (d InjectedExpr) walkSubtree(visit Visit) error {
 	}
 
 	return nil
+}
+
+// OrderedInjectedExpr is an InjectedExpr that has an OrderBy clause associated with it
+type OrderedInjectedExpr struct {
+	InjectedExpr
+	OrderBy OrderBy
 }
 
 // InjectedStatement allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
