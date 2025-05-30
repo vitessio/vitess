@@ -55,12 +55,12 @@ var (
 `
 	commonTabletArg = []string{
 		utils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
-		"--degraded_threshold", "5s",
-		"--lock_tables_timeout", "5s",
+		utils.GetFlagVariantForTests("--degraded-threshold"), "5s",
+		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		utils.GetFlagVariantForTests("--watch-replication-stream"),
 		utils.GetFlagVariantForTests("--enable-replication-reporter"),
 		"--serving_state_grace_period", "1s",
-		"--binlog_player_protocol", "grpc",
+		utils.GetFlagVariantForTests("--binlog-player-protocol"), "grpc",
 	}
 	vSchema = `
 		{

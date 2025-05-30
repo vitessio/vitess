@@ -42,8 +42,8 @@ vttablet \
 
 Flags:
       --alsologtostderr                                                  log to standard error as well as files
-      --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)
-      --app_pool_size int                                                Size of the connection pool for app connections (default 40)
+      --app-idle-timeout duration                                        Idle timeout for app connections (default 1m0s)
+      --app-pool-size int                                                Size of the connection pool for app connections (default 40)
       --azblob-backup-account-key-file string                            Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
       --azblob-backup-account-name string                                Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
       --azblob-backup-buffer-size int                                    The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service. (default 104857600)
@@ -57,12 +57,12 @@ Flags:
       --backup-storage-number-blocks int                                 if backup-storage-compress is true, backup-storage-number-blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --binlog-in-memory-decompressor-max-size uint                      This value sets the uncompressed transaction payload size at which we switch from in-memory buffer based decompression to the slower streaming mode. (default 134217728)
+      --binlog-player-protocol string                                    the protocol to download binlogs from a vttablet (default "grpc")
       --binlog_player_grpc_ca string                                     the server ca to use to validate servers when connecting
       --binlog_player_grpc_cert string                                   the cert to use to connect
       --binlog_player_grpc_crl string                                    the server crl to use to validate server certificates when connecting
       --binlog_player_grpc_key string                                    the key to use to connect
       --binlog_player_grpc_server_name string                            the server name to use to validate server certificate
-      --binlog_player_protocol string                                    the protocol to download binlogs from a vttablet (default "grpc")
       --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
       --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
@@ -133,7 +133,7 @@ Flags:
       --db-tls-min-version string                                        Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
       --dba-idle-timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba-pool-size int                                                Size of the connection pool for dba connections (default 20)
-      --degraded_threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
+      --degraded-threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
       --disk-write-dir string                                            if provided, tablet will attempt to write a file to this directory to check if the disk is stalled
       --disk-write-interval duration                                     how often to write to the disk to check whether it is stalled (default 5s)
       --disk-write-timeout duration                                      if writes exceed this duration, the disk is considered stalled (default 30s)
@@ -147,8 +147,8 @@ Flags:
       --enable-transaction-limit                                         If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.
       --enable-transaction-limit-dry-run                                 If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.
       --enable-tx-throttler                                              If true replication-lag-based throttling on transactions will be enabled.
+      --enforce-strict-trans-tables                                      If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database. (default true)
       --enforce-tableacl-config                                          if this flag is true, vttablet will fail to start if a valid tableacl config does not exist
-      --enforce_strict_trans_tables                                      If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database. (default true)
       --external-compressor string                                       command with arguments to use when compressing a backup.
       --external-compressor-extension string                             extension to use when using an external compressor.
       --external-decompressor string                                     command with arguments to use when decompressing a backup.
@@ -201,13 +201,13 @@ Flags:
       --init-shard string                                                (init parameter) shard to use for this tablet
       --init-tablet-type string                                          (init parameter) tablet type to use for this tablet. Valid values are: PRIMARY, REPLICA, SPARE, and RDONLY. The default is REPLICA.
       --init-tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
-      --init_timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)
+      --init-timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
       --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
+      --lock-tables-timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
       --lock-timeout duration                                            Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
-      --lock_tables_timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
       --log-err-stacks                                                   log stack traces for errors
       --log-queries-to-file string                                       Enable query logging to the specified file
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
@@ -216,9 +216,9 @@ Flags:
       --log_queries                                                      Enable query logging to syslog.
       --logtostderr                                                      log to standard error instead of files
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
+      --max-concurrent-online-ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
-      --max_concurrent_online_ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
-      --migration_check_interval duration                                Interval between migration checks (default 1m0s)
+      --migration-check-interval duration                                Interval between migration checks (default 1m0s)
       --mycnf-bin-log-path string                                        mysql binlog path
       --mycnf-data-dir string                                            data directory for mysql
       --mycnf-error-log-path string                                      mysql error log path
@@ -245,8 +245,8 @@ Flags:
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql-shutdown-timeout duration                                  Timeout to use when MySQL is being shut down. (default 5m0s)
-      --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
-      --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
+      --mysqlctl-mycnf-template string                                   template file to use for generating the my.cnf file during server init
+      --mysqlctl-socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --opentsdb-uri string                                              URI of opentsdb /api/put method
@@ -255,7 +255,7 @@ Flags:
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
       --pprof-http                                                       enable pprof http endpoints
-      --publish_retry_interval duration                                  how long vttablet waits to retry publishing the tablet record (default 30s)
+      --publish-retry-interval duration                                  how long vttablet waits to retry publishing the tablet record (default 30s)
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
@@ -291,8 +291,8 @@ Flags:
       --queryserver-config-txpool-max-idle-count int                     query server transaction pool - maximum number of idle connections to retain in the pool. Use this to balance between faster response times during traffic bursts and resource efficiency during low-traffic periods.
       --queryserver-config-txpool-timeout duration                       query server transaction pool timeout, it is how long vttablet waits if tx pool is full (default 1s)
       --queryserver-config-warn-result-size int                          query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this
+      --queryserver-enable-online-ddl                                    Enable online DDL. (default true)
       --queryserver-enable-views                                         Enable views support in vttablet.
-      --queryserver_enable_online_ddl                                    Enable online DDL. (default true)
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --relay_log_max_items int                                          Maximum number of rows for vreplication target buffering. (default 5000)
       --relay_log_max_size int                                           Maximum buffer size (in bytes) for vreplication target buffering. If single rows are larger than this, a single row is buffered at a time. (default 250000)

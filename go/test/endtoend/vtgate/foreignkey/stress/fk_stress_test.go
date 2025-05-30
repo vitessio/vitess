@@ -358,7 +358,7 @@ func TestMain(m *testing.M) {
 			vtutils.GetFlagVariantForTests("--heartbeat-enable"),
 			vtutils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
 			vtutils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
-			"--migration_check_interval", "3s",
+			vtutils.GetFlagVariantForTests("--migration-check-interval"), "3s",
 			vtutils.GetFlagVariantForTests("--watch-replication-stream"),
 		}
 		clusterInstance.VtGateExtraArgs = []string{}

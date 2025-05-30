@@ -116,7 +116,7 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().IntVar(&basePort, "port", 0,
 		"Port to use for vtcombo. If this is 0, a random port will be chosen.")
 
-	cmd.Flags().StringVar(&protoTopo, "proto_topo", "",
+	cmd.Flags().StringVar(&protoTopo, "proto-topo", "",
 		"Define the fake cluster topology as a compact text format encoded"+
 			" vttest proto. See vttest.proto for more information.")
 
@@ -213,7 +213,7 @@ func New() (cmd *cobra.Command) {
 
 	cmd.Flags().StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
 
-	cmd.Flags().StringVar(&config.ForeignKeyMode, "foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
+	utils.SetFlagStringVar(cmd.Flags(), &config.ForeignKeyMode, "foreign-key-mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
 	cmd.Flags().BoolVar(&config.EnableOnlineDDL, "enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
 	cmd.Flags().BoolVar(&config.EnableDirectDDL, "enable_direct_ddl", true, "Allow users to submit direct DDL statements")
 
@@ -226,7 +226,7 @@ func New() (cmd *cobra.Command) {
 
 	cmd.Flags().BoolVar(&doCreateTCPUser, "initialize-with-vt-dba-tcp", false, "If this flag is enabled, MySQL will be initialized with an additional user named vt_dba_tcp, who will have access via TCP/IP connection.")
 
-	cmd.Flags().BoolVar(&config.NoScatter, "no_scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
+	utils.SetFlagBoolVar(cmd.Flags(), &config.NoScatter, "no-scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
 	acl.RegisterFlags(cmd.Flags())
 
 	return cmd

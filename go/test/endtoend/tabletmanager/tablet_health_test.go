@@ -63,7 +63,7 @@ func TestTabletReshuffle(t *testing.T) {
 	// We have to disable active reparenting to prevent the tablet from trying to fix replication.
 	// We also have to disable replication reporting because we're pointed at the primary.
 	clusterInstance.VtTabletExtraArgs = []string{
-		"--lock_tables_timeout", "5s",
+		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		vtutils.GetFlagVariantForTests("--mycnf-server-id"), fmt.Sprintf("%d", rTablet.TabletUID),
 		vtutils.GetFlagVariantForTests("--db-socket"), fmt.Sprintf("%s/mysql.sock", primaryTablet.VttabletProcess.Directory),
 		vtutils.GetFlagVariantForTests("--enable-replication-reporter") + "=false",

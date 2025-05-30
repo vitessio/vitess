@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -47,7 +48,7 @@ import (
 var publishRetryInterval = 30 * time.Second
 
 func registerStateFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&publishRetryInterval, "publish_retry_interval", publishRetryInterval, "how long vttablet waits to retry publishing the tablet record")
+	utils.SetFlagDurationVar(fs, &publishRetryInterval, "publish-retry-interval", publishRetryInterval, "how long vttablet waits to retry publishing the tablet record")
 }
 
 func init() {
