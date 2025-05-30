@@ -8140,7 +8140,7 @@ type Injectable interface {
 // InjectedExpr allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
 // MySQL's dialect.
 type InjectedExpr struct {
-	// Expression is an expression that implements the Expr interface. It can be any expression type, such as
+	// Expression is an expression that implements the Expr interface. It can be any expression type.
 	Expression         Injectable
 	// Children are the children of the expression, which can be any Expr type. This is a union type, and either this
 	// or SelectExprChildren will be set.
