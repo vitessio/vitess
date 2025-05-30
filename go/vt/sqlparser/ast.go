@@ -8213,7 +8213,6 @@ func (d InjectedExpr) walkSubtree(visit Visit) error {
 type OrderedInjectedExpr struct {
 	InjectedExpr
 	OrderBy OrderBy
-	Name    ColIdent
 }
 
 // InjectedStatement allows bypassing AST analysis. This is used by projects that rely on Vitess, but may not implement
