@@ -55,6 +55,7 @@ func TestSchemaMigrationStrategyName(t *testing.T) {
 
 			out := SchemaMigrationStrategyName(test.in)
 			assert.Equal(t, test.out, out)
+			
 		})
 	}
 }
