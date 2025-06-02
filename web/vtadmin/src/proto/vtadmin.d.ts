@@ -32420,6 +32420,12 @@ export namespace binlogdata {
 
         /** VStreamOptions internal_tables */
         internal_tables?: (string[]|null);
+
+        /** VStreamOptions config_overrides */
+        config_overrides?: ({ [k: string]: string }|null);
+
+        /** VStreamOptions tables_to_copy */
+        tables_to_copy?: (string[]|null);
     }
 
     /** Represents a VStreamOptions. */
@@ -32433,6 +32439,12 @@ export namespace binlogdata {
 
         /** VStreamOptions internal_tables. */
         public internal_tables: string[];
+
+        /** VStreamOptions config_overrides. */
+        public config_overrides: { [k: string]: string };
+
+        /** VStreamOptions tables_to_copy. */
+        public tables_to_copy: string[];
 
         /**
          * Creates a new VStreamOptions instance using the specified properties.

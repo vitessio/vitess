@@ -478,6 +478,10 @@ message MinimalSchema {
 
 message VStreamOptions {
   repeated string internal_tables = 1;
+  map<string, string> config_overrides = 2;
+  // Copy only these tables, skip the rest in the filter.
+  // If not provided, the default behaviour is to copy all tables.
+  repeated string tables_to_copy = 3;
 }
 
 // VStreamRequest is the payload for VStreamer

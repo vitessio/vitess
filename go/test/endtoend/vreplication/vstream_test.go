@@ -26,8 +26,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/log"
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
@@ -37,6 +39,166 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
+
+func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
+	vc = NewVitessCluster(t, nil)
+	defer vc.TearDown()
+
+	require.NotNil(t, vc)
+	defaultReplicas = 2
+	defaultRdonly = 0
+
+	defaultCell := vc.Cells[vc.CellNames[0]]
+	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
+	verifyClusterHealth(t, vc)
+
+	ctx := context.Background()
+	vstreamConn, err := vtgateconn.Dial(ctx, fmt.Sprintf("%s:%d", vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateGrpcPort))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer vstreamConn.Close()
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: "product",
+			Shard:    "0",
+			Gtid:     "",
+		}}}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{
+			{
+				Match:  "customer",
+				Filter: "select * from customer",
+			}, {
+				Match:  "product",
+				Filter: "select * from product",
+			}, {
+				Match:  "merchant",
+				Filter: "select * from merchant",
+			},
+		},
+	}
+	flags := &vtgatepb.VStreamFlags{
+		TablesToCopy: []string{"product", "customer"},
+	}
+	id := 0
+	vtgateConn := vc.GetVTGateConn(t)
+	defer vtgateConn.Close()
+
+	// To test the copy phase, let's insert 10 rows intitally in each table
+	// present in the filter before running the VStream.
+	for range 10 {
+		id++
+		execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("insert into customer (cid, name) values (%d, 'customer%d')", id+100, id))
+		execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("insert into product (pid, description) values (%d, 'description%d')", id+100, id))
+		execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("insert into merchant (mname, category) values ('mname%d', 'category%d')", id+100, id))
+	}
+
+	// Stream events from the VStream API
+	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+	require.NoError(t, err)
+	var numRowEvents int64
+
+	copyPhaseCompleted := atomic.Bool{}
+	copyPhaseCompleted.Store(false)
+
+	done := atomic.Bool{}
+	done.Store(false)
+
+	copiedTables := make(sets.Set[string])
+	// Start reading events from the VStream.
+	go func() {
+		for {
+			evs, err := reader.Recv()
+			switch err {
+			case nil:
+				for _, ev := range evs {
+					if ev.Type == binlogdatapb.VEventType_ROW {
+						if !copyPhaseCompleted.Load() {
+							escapedTableNameParts := strings.Split(ev.RowEvent.TableName, ".")
+							require.Len(t, escapedTableNameParts, 2)
+							copiedTables.Insert(escapedTableNameParts[1])
+						}
+						numRowEvents++
+					}
+					if ev.Type == binlogdatapb.VEventType_COPY_COMPLETED {
+						copyPhaseCompleted.Store(true)
+					}
+				}
+			case io.EOF:
+				log.Infof("Stream Ended")
+			default:
+				log.Infof("%s:: remote error: %v", time.Now(), err)
+			}
+
+			if done.Load() {
+				return
+			}
+		}
+	}()
+
+	// Wait for copy phase to complete.
+	ticker := time.NewTicker(100 * time.Millisecond)
+	for {
+		<-ticker.C
+		if copyPhaseCompleted.Load() {
+			break
+		}
+	}
+
+	stopInserting := atomic.Bool{}
+	stopInserting.Store(false)
+	var insertMu sync.Mutex
+	go func() {
+		for {
+			if stopInserting.Load() {
+				return
+			}
+			insertMu.Lock()
+			id++
+			execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("insert into customer (cid, name) values (%d, 'customer%d')", id+100, id))
+			execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("insert into product (pid, description) values (%d, 'description%d')", id+100, id))
+			execVtgateQuery(t, vtgateConn, "product", fmt.Sprintf("insert into merchant (mname, category) values ('mname%d', 'category%d')", id+100, id))
+			insertMu.Unlock()
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	stopInserting.Store(true)
+	time.Sleep(10 * time.Second) // Give the vstream plenty of time to catchup
+	done.Store(true)
+
+	qr1 := execVtgateQuery(t, vtgateConn, "product", "select count(*) from customer")
+	qr2 := execVtgateQuery(t, vtgateConn, "product", "select count(*) from product")
+	qr3 := execVtgateQuery(t, vtgateConn, "product", "select count(*) from merchant")
+	require.NotNil(t, qr1)
+	require.NotNil(t, qr2)
+	require.NotNil(t, qr3)
+
+	// Total number of rows.
+	insertedRows1, err := qr1.Rows[0][0].ToCastInt64()
+	require.NoError(t, err)
+	require.NotZero(t, insertedRows1)
+	insertedRows2, err := qr2.Rows[0][0].ToCastInt64()
+	require.NoError(t, err)
+	require.NotZero(t, insertedRows2)
+	insertedRows3, err := qr3.Rows[0][0].ToCastInt64()
+	require.NoError(t, err)
+	require.NotZero(t, insertedRows3)
+
+	assert.Len(t, copiedTables, 2)
+	for _, expectedCopiedTableName := range flags.TablesToCopy {
+		assert.Truef(t, copiedTables.Has(expectedCopiedTableName), "expected table %s to be copied", expectedCopiedTableName)
+	}
+	// We don't expect merchant table to be part of copy phase.
+	assert.False(t, copiedTables.Has("merchant"), "expected table merchant not to be copied")
+
+	// Since we don't expect merchant table to be part of copy phase, we can
+	// subtract 10 from the total rows found in the 3 tables.
+	wantTotalRows := insertedRows1 + insertedRows2 + insertedRows3 - 10
+	assert.Equal(t, wantTotalRows, numRowEvents)
+}
 
 // Validates that we have a working VStream API
 // If Failover is enabled:

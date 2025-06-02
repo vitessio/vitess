@@ -306,6 +306,9 @@ message VStreamFlags {
   bool stream_keyspace_heartbeats = 7;
   // Include reshard journal events in the stream.
   bool include_reshard_journal_events = 8;
+  // Copy only these tables, skip the rest in the filter.
+  // If not provided, the default behaviour is to copy all tables.
+  repeated string tables_to_copy = 9;
 }
 
 // VStreamRequest is the payload for VStream.

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -159,12 +160,23 @@ func (uvs *uvstreamer) buildTablePlan() error {
 			}
 		}
 	}
+
+	// Set of tables to copy during the copy phase. Only if we need to copy
+	// specific tables, else keep it nil if we need to copy every table.
+	var tablesToCopySet sets.Set[string]
+	if len(uvs.options.GetTablesToCopy()) > 0 {
+		tablesToCopySet = sets.New(uvs.options.GetTablesToCopy()...)
+	}
+
 	for tableName := range tables {
 		rule, err := matchTable(tableName, uvs.filter, tables)
 		if err != nil {
 			return err
 		}
 		if rule == nil {
+			continue
+		}
+		if tablesToCopySet != nil && !tablesToCopySet.Has(tableName) {
 			continue
 		}
 		plan := &tablePlan{
@@ -397,8 +409,11 @@ func (uvs *uvstreamer) currentPosition() (replication.Position, error) {
 // 2. TablePKs nil, startPos empty => full table copy of tables matching filter
 // 3. TablePKs not nil, startPos empty => table copy (for pks > lastPK)
 // 4. TablePKs not nil, startPos set => run catchup from startPos, then table copy  (for pks > lastPK)
+//
+// If TablesToCopy option is not nil, copy only the tables listed in TablesToCopy.
+// For other tables not in TablesToCopy, if startPos is set, perform catchup starting from startPos.
 func (uvs *uvstreamer) init() error {
-	if uvs.startPos == "" /* full copy */ || len(uvs.inTablePKs) > 0 /* resume copy */ {
+	if uvs.startPos == "" /* full copy */ || len(uvs.inTablePKs) > 0 /* resume copy */ || len(uvs.options.GetTablesToCopy()) > 0 /* copy specific tables */ {
 		if err := uvs.buildTablePlan(); err != nil {
 			return err
 		}
