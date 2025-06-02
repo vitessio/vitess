@@ -239,13 +239,9 @@ func compare(comparison Opcode, columnValue, filterValue sqltypes.Value, collati
 	return false, nil
 }
 
-// filter filters the row against the plan. It returns false if the row did not match.
-// The output of the filtering operation is stored in the 'result' argument because
-// filtering cannot be performed in-place. The result argument must be a slice of
-// length equal to ColExprs
-func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.ID) (bool, error) {
-	if len(result) != len(plan.ColExprs) {
-		return false, fmt.Errorf("expected %d values in result slice", len(plan.ColExprs))
+func (plan *Plan) checkFilters(values []sqltypes.Value, charsets []collations.ID) (bool, error) {
+	if len(values) == 0 {
+		return false, nil
 	}
 	for _, filter := range plan.Filters {
 		switch filter.Opcode {
@@ -313,25 +309,36 @@ func (plan *Plan) filter(values, result []sqltypes.Value, charsets []collations.
 			}
 		}
 	}
+	return true, nil
+}
+
+// filter filters the row against the plan. It returns false if the row did not match.
+// The output of the filtering operation is stored in the 'result' argument because
+// filtering cannot be performed in-place. The result argument must be a slice of
+// length equal to ColExprs
+func (plan *Plan) filter(values []sqltypes.Value) ([]sqltypes.Value, error) {
+
+	result := make([]sqltypes.Value, len(plan.ColExprs))
+
 	for i, colExpr := range plan.ColExprs {
 		if colExpr.ColNum == -1 {
 			result[i] = colExpr.FixedValue
 			continue
 		}
 		if colExpr.ColNum >= len(values) {
-			return false, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values): %d", colExpr.ColNum, len(values))
+			return nil, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values): %d", colExpr.ColNum, len(values))
 		}
 		if colExpr.Vindex == nil {
 			result[i] = values[colExpr.ColNum]
 		} else {
 			ksid, err := getKeyspaceID(values, colExpr.Vindex, colExpr.VindexColumns, plan.Table.Fields)
 			if err != nil {
-				return false, err
+				return nil, err
 			}
-			result[i] = sqltypes.MakeTrusted(sqltypes.VarBinary, []byte(ksid))
+			result[i] = sqltypes.MakeTrusted(sqltypes.VarBinary, ksid)
 		}
 	}
-	return true, nil
+	return result, nil
 }
 
 func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int, fields []*querypb.Field) (key.DestinationKeyspaceID, error) {

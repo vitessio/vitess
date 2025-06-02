@@ -441,8 +441,8 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		for i, pk := range rs.pkColumns {
 			lastpk[i] = mysqlrow[pk]
 		}
-		// Reuse the vstreamer's filter.
-		ok, err := rs.plan.filter(mysqlrow, filtered, charsets)
+
+		ok, err := rs.plan.checkFilters(mysqlrow, charsets)
 		if err != nil {
 			return err
 		}

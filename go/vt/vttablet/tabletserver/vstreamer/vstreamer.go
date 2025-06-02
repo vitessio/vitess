@@ -977,14 +977,12 @@ func (vs *vstreamer) processJournalEvent(vevents []*binlogdatapb.VEvent, plan *s
 	}
 nextrow:
 	for _, row := range rows.Rows {
-		afterOK, afterValues, _, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns, row.JSONPartialValues)
+		afterValues, _, _, err := vs.getValues(plan, row.Data, rows.DataColumns, row.NullColumns, row.JSONPartialValues)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "failed to extract journal from binlog event and apply filters")
 		}
-		if !afterOK {
-			// This can happen if someone manually deleted rows.
-			continue
-		}
+		//FIXME (Rohit): there was a check for afterOK, understand and restore if required
+
 		// Exclude events that don't match the db_name.
 		for i, fld := range plan.fields() {
 			if fld.Name == "db_name" && afterValues[i].ToString() != params.DbName {
@@ -1016,24 +1014,44 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 	rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
 	for _, row := range rows.Rows {
 		// The BEFORE image does not have partial JSON values so we pass an empty bitmap.
-		beforeOK, beforeValues, _, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns, mysql.Bitmap{})
+		beforeRawValues, beforeCharsets, _, err := vs.getValues(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns, mysql.Bitmap{})
 		if err != nil {
-			return nil, vterrors.Wrap(err, "failed to extract row's before values from binlog event and apply filters")
+			return nil, err
 		}
+		beforeOK, err := plan.checkFilters(beforeRawValues, beforeCharsets)
+		if err != nil {
+			return nil, err
+		}
+
 		// The AFTER image is where we may have partial JSON values, as reflected in the
 		// row's JSONPartialValues bitmap.
-		afterOK, afterValues, partial, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns, row.JSONPartialValues)
+		afterRawValues, afterCharsets, partial, err := vs.getValues(plan, row.Data, rows.DataColumns, row.NullColumns, row.JSONPartialValues)
 		if err != nil {
-			return nil, vterrors.Wrap(err, "failed to extract row's after values from binlog event and apply filters")
+			return nil, err
 		}
-		if !beforeOK && !afterOK {
+		afterOK, err := plan.checkFilters(afterRawValues, afterCharsets)
+		if err != nil {
+			return nil, err
+		}
+
+		if !afterOK && !beforeOK {
+			// both before and after images are filtered out
 			continue
 		}
+
 		rowChange := &binlogdatapb.RowChange{}
-		if beforeOK {
+		if len(beforeRawValues) > 0 {
+			beforeValues, err := plan.filter(beforeRawValues)
+			if err != nil {
+				return nil, err
+			}
 			rowChange.Before = sqltypes.RowToProto3(beforeValues)
 		}
-		if afterOK {
+		if len(afterRawValues) > 0 {
+			afterValues, err := plan.filter(afterRawValues)
+			if err != nil {
+				return nil, err
+			}
 			rowChange.After = sqltypes.RowToProto3(afterValues)
 			if ((vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && partial) ||
 				(row.JSONPartialValues.Count() > 0) {
@@ -1090,13 +1108,10 @@ func (vs *vstreamer) rebuildPlans() error {
 	return nil
 }
 
-// extractRowAndFilter takes the data and bitmaps from the binlog events and returns the following
-//   - true, if row needs to be skipped because of workflow filter rules
-//   - data values, array of one value per column
-//   - true, if the row image was partial (i.e. binlog_row_image=noblob and dml doesn't update one or more blob/text columns)
-func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataColumns, nullColumns mysql.Bitmap, jsonPartialValues mysql.Bitmap) (bool, []sqltypes.Value, bool, error) {
+func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
+	dataColumns, nullColumns mysql.Bitmap, jsonPartialValues mysql.Bitmap) ([]sqltypes.Value, []collations.ID, bool, error) {
 	if len(data) == 0 {
-		return false, nil, false, nil
+		return nil, nil, false, nil
 	}
 	values := make([]sqltypes.Value, dataColumns.Count())
 	charsets := make([]collations.ID, len(values))
@@ -1107,7 +1122,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 	for colNum := 0; colNum < dataColumns.Count(); colNum++ {
 		if !dataColumns.Bit(colNum) {
 			if vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage == 0 {
-				return false, nil, false, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
+				return nil, nil, false, fmt.Errorf("partial row image encountered: ensure binlog_row_image is set to 'full'")
 			} else {
 				partial = true
 			}
@@ -1129,7 +1144,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		if err != nil {
 			log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
 				err, plan.Table.Name, colNum, plan.Table.Fields, values)
-			return false, nil, false, vterrors.Wrapf(err, "failed to extract row's value for column %s from binlog event",
+			return nil, nil, false, vterrors.Wrapf(err, "failed to extract row's value for column %s from binlog event",
 				plan.Table.Fields[colNum].Name)
 		}
 		pos += l
@@ -1147,13 +1162,13 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			if plan.Table.Fields[colNum].Type == querypb.Type_ENUM || mysqlType == mysqlbinlog.TypeEnum {
 				value, err = buildEnumStringValue(vs.se.Environment(), plan, colNum, value)
 				if err != nil {
-					return false, nil, false, vterrors.Wrapf(err, "failed to perform ENUM column integer to string value mapping")
+					return nil, nil, false, vterrors.Wrapf(err, "failed to perform ENUM column integer to string value mapping")
 				}
 			}
 			if plan.Table.Fields[colNum].Type == querypb.Type_SET || mysqlType == mysqlbinlog.TypeSet {
 				value, err = buildSetStringValue(vs.se.Environment(), plan, colNum, value)
 				if err != nil {
-					return false, nil, false, vterrors.Wrapf(err, "failed to perform SET column integer to string value mapping")
+					return nil, nil, false, vterrors.Wrapf(err, "failed to perform SET column integer to string value mapping")
 				}
 			}
 		}
@@ -1162,9 +1177,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		values[colNum] = value
 		valueIndex++
 	}
-	filtered := make([]sqltypes.Value, len(plan.ColExprs))
-	ok, err := plan.filter(values, filtered, charsets)
-	return ok, filtered, partial, err
+	return values, charsets, partial, nil
 }
 
 // addEnumAndSetMappingstoPlan sets up any necessary ENUM and SET integer to string mappings.
