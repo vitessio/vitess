@@ -407,7 +407,6 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		mysqlrow []sqltypes.Value
 	)
 
-	filtered := make([]sqltypes.Value, len(rs.plan.ColExprs))
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
 	logger := logutil.NewThrottledLogger(rs.vse.GetTabletInfo(), throttledLoggerInterval)
@@ -447,7 +446,12 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		if err != nil {
 			return err
 		}
+		log.Infof("rowstreamer filter returned ok %v", ok)
 		if ok {
+			filtered, err := rs.plan.filter(mysqlrow)
+			if err != nil {
+				return err
+			}
 			if rowCount >= len(rows) {
 				rows = append(rows, &querypb.Row{})
 			}
