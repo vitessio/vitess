@@ -262,8 +262,21 @@ func Init(
 	// TabletGateway can create it's own healthcheck
 	gw := NewTabletGateway(ctx, hc, serv, cell)
 	gw.RegisterStats()
-	if err := gw.WaitForTablets(ctx, tabletTypesToWait); err != nil {
-		log.Fatalf("tabletGateway.WaitForTablets failed: %v", err)
+
+	// Retry loop for potential time-outs waiting for all tablets.
+OuterLoop:
+	for {
+		err := gw.WaitForTablets(ctx, tabletTypesToWait)
+		switch {
+		case err == nil:
+			break OuterLoop
+		case errors.Is(err, context.DeadlineExceeded):
+			log.Warning("TabletGateway timed out waiting for tablets to become available - retrying.")
+
+			continue
+		default:
+			log.Fatalf("tabletGateway.WaitForTablets failed: %v", err)
+		}
 	}
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a
