@@ -4942,10 +4942,10 @@ end`,
 
 // TestSingleSQL is a helper function to test a single SQL statement.
 func TestSingleSQL(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 	tests := []parseTest{
 		{
-			input:  "select @`user var`",
+			input:  "insert into t1 values(1) returning value",
 			output: "select @`user var`",
 		},
 	}
@@ -4972,15 +4972,6 @@ func TestAnsiQuotesMode(t *testing.T) {
 			require.NotNil(t, err)
 			assert.Equal(t, tcase.output, err.Error())
 		})
-	}
-}
-
-func TestSingle(t *testing.T) {
-	validSQL = append(validSQL, validMultiStatementSql...)
-	for _, tcase := range validSQL {
-		if tcase.input == "select /* use */ 1 from t1 for system_time as of '2019-01-01'" {
-			runParseTestCase(t, tcase)
-		}
 	}
 }
 
