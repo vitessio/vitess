@@ -403,7 +403,7 @@ func TestReparenting(t *testing.T) {
 	// Verify connection has migrated.
 	// The wait must be at least 6s which is how long vtgate will
 	// wait before retrying: that is 30s/5 where 30s is the default
-	// message_stream_grace_period.
+	// message-stream-grace-period.
 	time.Sleep(10 * time.Second)
 	assertClientCount(t, 0, shard0Primary)
 	assertClientCount(t, 1, shard0Replica)

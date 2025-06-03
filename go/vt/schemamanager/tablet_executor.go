@@ -466,7 +466,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	if exec.batchSize > 1 {
 		// Before we proceed to batch, we need to validate there's no conflicts.
 		if !exec.isDirectStrategy() {
-			return errorExecResult(fmt.Errorf("--batch-size requires 'direct' ddl-strategy"))
+			return errorExecResult(fmt.Errorf("--batch-size requires 'direct' ddl_strategy"))
 		}
 		if exec.hasProvidedUUIDs() {
 			return errorExecResult(fmt.Errorf("--batch-size conflicts with --uuid-list. Batching does not support UUIDs."))

@@ -34,9 +34,9 @@ var (
 		Use:   "vtorc",
 		Short: "VTOrc is the automated fault detection and repair tool in Vitess.",
 		Example: `vtorc \
-	--topo_implementation etcd2 \
-	--topo_global_server_address localhost:2379 \
-	--topo_global_root /vitess/global \
+	--topo-implementation etcd2 \
+	--topo-global-server-address localhost:2379 \
+	--topo-global-root /vitess/global \
 	--log_dir $VTDATAROOT/tmp \
 	--port 15000 \
 	--instance-poll-time "1s" \

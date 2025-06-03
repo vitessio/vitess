@@ -69,7 +69,7 @@ func init() {
 
 func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
+		return fmt.Errorf("active reparent commands disabled (unset the --disable-active-reparents flag to enable)")
 	}
 
 	if err := subFlags.Parse(args); err != nil {
@@ -87,7 +87,7 @@ func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 
 func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
+		return fmt.Errorf("active reparent commands disabled (unset the --disable-active-reparents flag to enable)")
 	}
 
 	force := subFlags.Bool("force", false, "will force the reparent even if the provided tablet is not writable or the shard primary")
@@ -111,7 +111,7 @@ func commandInitShardPrimary(ctx context.Context, wr *wrangler.Wrangler, subFlag
 
 func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
+		return fmt.Errorf("active reparent commands disabled (unset the --disable-active-reparents flag to enable)")
 	}
 
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up on replication before and after reparenting")
@@ -164,7 +164,7 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 
 func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if mysqlctl.DisableActiveReparents {
-		return fmt.Errorf("active reparent commands disabled (unset the --disable_active_reparents flag to enable)")
+		return fmt.Errorf("active reparent commands disabled (unset the --disable-active-reparents flag to enable)")
 	}
 
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")

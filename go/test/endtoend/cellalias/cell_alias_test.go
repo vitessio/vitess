@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -53,13 +54,13 @@ var (
 					) Engine=InnoDB
 `
 	commonTabletArg = []string{
-		"--vreplication_retry_delay", "1s",
-		"--degraded_threshold", "5s",
-		"--lock_tables_timeout", "5s",
-		"--watch_replication_stream",
-		"--enable_replication_reporter",
+		utils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
+		utils.GetFlagVariantForTests("--degraded-threshold"), "5s",
+		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		utils.GetFlagVariantForTests("--watch-replication-stream"),
+		utils.GetFlagVariantForTests("--enable-replication-reporter"),
 		"--serving_state_grace_period", "1s",
-		"--binlog_player_protocol", "grpc",
+		utils.GetFlagVariantForTests("--binlog-player-protocol"), "grpc",
 	}
 	vSchema = `
 		{

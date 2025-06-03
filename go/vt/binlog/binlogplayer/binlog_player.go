@@ -788,9 +788,9 @@ func (r *StatsHistoryRecord) IsDuplicate(other any) bool {
 	return false
 }
 
-const binlogPlayerProtocolFlagName = "binlog_player_protocol"
+const binlogPlayerProtocolFlagName = "binlog-player-protocol"
 
-// SetProtocol is a helper function to set the binlogplayer --binlog_player_protocol
+// SetProtocol is a helper function to set the binlogplayer --binlog-player-protocol
 // flag value for tests. If successful, it returns a function that, when called,
 // returns the flag to its previous value.
 //

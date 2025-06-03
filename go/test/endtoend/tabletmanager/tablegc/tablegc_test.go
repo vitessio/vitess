@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -97,12 +98,12 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--lock_tables_timeout", "5s",
-			"--watch_replication_stream",
-			"--enable_replication_reporter",
-			"--heartbeat_interval", "250ms",
-			"--gc_check_interval", gcCheckInterval.String(),
-			"--gc_purge_check_interval", gcPurgeCheckInterval.String(),
+			utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+			utils.GetFlagVariantForTests("--watch-replication-stream"),
+			utils.GetFlagVariantForTests("--enable-replication-reporter"),
+			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
+			utils.GetFlagVariantForTests("--gc-check-interval"), gcCheckInterval.String(),
+			utils.GetFlagVariantForTests("--gc-purge-check-interval"), gcPurgeCheckInterval.String(),
 			"--table_gc_lifecycle", "hold,purge,evac,drop",
 		}
 

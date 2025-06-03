@@ -39,6 +39,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -126,14 +127,14 @@ func init() {
 }
 
 func registerXtraBackupEngineFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&xtrabackupEnginePath, "xtrabackup_root_path", xtrabackupEnginePath, "Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin")
-	fs.StringVar(&xtrabackupBackupFlags, "xtrabackup_backup_flags", xtrabackupBackupFlags, "Flags to pass to backup command. These should be space separated and will be added to the end of the command")
-	fs.StringVar(&xtrabackupPrepareFlags, "xtrabackup_prepare_flags", xtrabackupPrepareFlags, "Flags to pass to prepare command. These should be space separated and will be added to the end of the command")
-	fs.StringVar(&xbstreamRestoreFlags, "xbstream_restore_flags", xbstreamRestoreFlags, "Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
-	fs.StringVar(&xtrabackupStreamMode, "xtrabackup_stream_mode", xtrabackupStreamMode, "Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0")
-	fs.StringVar(&xtrabackupUser, "xtrabackup_user", xtrabackupUser, "User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.")
-	fs.UintVar(&xtrabackupStripes, "xtrabackup_stripes", xtrabackupStripes, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
-	fs.UintVar(&xtrabackupStripeBlockSize, "xtrabackup_stripe_block_size", xtrabackupStripeBlockSize, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
+	utils.SetFlagStringVar(fs, &xbstreamRestoreFlags, "xbstream-restore-flags", xbstreamRestoreFlags, "Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt")
+	utils.SetFlagStringVar(fs, &xtrabackupEnginePath, "xtrabackup-root-path", xtrabackupEnginePath, "Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin")
+	utils.SetFlagStringVar(fs, &xtrabackupBackupFlags, "xtrabackup-backup-flags", xtrabackupBackupFlags, "Flags to pass to backup command. These should be space separated and will be added to the end of the command")
+	utils.SetFlagStringVar(fs, &xtrabackupPrepareFlags, "xtrabackup-prepare-flags", xtrabackupPrepareFlags, "Flags to pass to prepare command. These should be space separated and will be added to the end of the command")
+	utils.SetFlagStringVar(fs, &xtrabackupStreamMode, "xtrabackup-stream-mode", xtrabackupStreamMode, "Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0")
+	utils.SetFlagStringVar(fs, &xtrabackupUser, "xtrabackup-user", xtrabackupUser, "User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.")
+	utils.SetFlagUintVar(fs, &xtrabackupStripes, "xtrabackup-stripes", xtrabackupStripes, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
+	utils.SetFlagUintVar(fs, &xtrabackupStripeBlockSize, "xtrabackup-stripe-block-size", xtrabackupStripeBlockSize, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
 }
 
 func (be *XtrabackupEngine) backupFileName() string {
@@ -740,7 +741,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 			return vterrors.Wrap(err, "xbstream failed")
 		}
 	default:
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v is not a valid value for xtrabackup_stream_mode, supported modes are tar and xbstream", streamMode)
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v is not a valid value for xtrabackup-stream-mode, supported modes are tar and xbstream", streamMode)
 	}
 	return nil
 }

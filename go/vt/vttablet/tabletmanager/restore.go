@@ -38,6 +38,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -60,7 +61,7 @@ func registerRestoreFlags(fs *pflag.FlagSet) {
 	fs.StringSliceVar(&restoreFromBackupAllowedEngines, "restore-from-backup-allowed-engines", restoreFromBackupAllowedEngines, "(init restore parameter) if set, only backups taken with the specified engines are eligible to be restored")
 	fs.StringVar(&restoreFromBackupTsStr, "restore_from_backup_ts", restoreFromBackupTsStr, "(init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'")
 	fs.IntVar(&restoreConcurrency, "restore_concurrency", restoreConcurrency, "(init restore parameter) how many concurrent files to restore at once")
-	fs.DurationVar(&waitForBackupInterval, "wait_for_backup_interval", waitForBackupInterval, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
+	utils.SetFlagDurationVar(fs, &waitForBackupInterval, "wait-for-backup-interval", waitForBackupInterval, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
 }
 
 var (
@@ -252,7 +253,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			break
 		}
 
-		log.Infof("No backup found. Waiting %v (from -wait_for_backup_interval flag) to check again.", waitForBackupInterval)
+		log.Infof("No backup found. Waiting %v (from -wait-for-backup-interval flag) to check again.", waitForBackupInterval)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -303,7 +304,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		return vterrors.Wrap(err, "Can't restore backup")
 	}
 
-	// If we had type BACKUP or RESTORE it's better to set our type to the init_tablet_type to make result of the restore
+	// If we had type BACKUP or RESTORE it's better to set our type to the init-tablet-type to make result of the restore
 	// similar to completely clean start from scratch.
 	if (originalType == topodatapb.TabletType_BACKUP || originalType == topodatapb.TabletType_RESTORE) && initTabletType != "" {
 		initType, err := topoproto.ParseTabletType(initTabletType)
