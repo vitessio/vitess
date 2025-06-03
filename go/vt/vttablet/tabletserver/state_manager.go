@@ -447,7 +447,6 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 }
 
 func (sm *stateManager) servePrimary() error {
-	log.Info("servePrimary: closing binlog watcher")
 	sm.watcher.Close()
 	log.Info("servePrimary: binlog watcher closed")
 
