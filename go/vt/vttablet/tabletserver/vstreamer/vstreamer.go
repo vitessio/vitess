@@ -1010,6 +1010,12 @@ nextrow:
 	return vevents, nil
 }
 
+// processRowEvent converts binlog rows into row vevents using the following steps:
+//   - converts the raw before and after binlog images into Values
+//   - checks if the workflow has a sharded target // FIXME
+//   - finds which before or after images passes the filter criterion
+//   - if the target is sharded, pass only images that pass
+//   - if the target is not sharded, pass both images if either after or before passes
 func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
 	rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
 	for _, row := range rows.Rows {
@@ -1018,10 +1024,11 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		if err != nil {
 			return nil, err
 		}
-		beforeOK, err := plan.checkFilters(beforeRawValues, beforeCharsets)
+		beforeOK, beforeHasVindex, err := plan.shouldFilter(beforeRawValues, beforeCharsets)
 		if err != nil {
 			return nil, err
 		}
+		log.Infof("beforeOK %t, beforeHasVindex %t, beforeRawValues %+v", beforeOK, beforeHasVindex, beforeRawValues)
 
 		// The AFTER image is where we may have partial JSON values, as reflected in the
 		// row's JSONPartialValues bitmap.
@@ -1029,42 +1036,60 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		if err != nil {
 			return nil, err
 		}
-		afterOK, err := plan.checkFilters(afterRawValues, afterCharsets)
+		afterOK, afterHasVindex, err := plan.shouldFilter(afterRawValues, afterCharsets)
 		if err != nil {
 			return nil, err
 		}
+		log.Infof("afterOK %t, afterHasVindex %t, afterRawValues %+v", afterOK, afterHasVindex, afterRawValues)
 
+		hasVindex := beforeHasVindex || afterHasVindex
 		if !afterOK && !beforeOK {
+			log.Infof("both before and after images are filtered out")
 			// both before and after images are filtered out
 			continue
 		}
+		// at least one image passes the filter
+		if !hasVindex {
+			log.Infof("setting both afterOK and beforeOK as true")
+			// we want both images to be part of the row event if either passes and we are not in a sharded situation
+			afterOK = true
+			beforeOK = true
+		}
 
 		rowChange := &binlogdatapb.RowChange{}
-		if len(beforeRawValues) > 0 {
-			beforeValues, err := plan.filter(beforeRawValues)
-			if err != nil {
-				return nil, err
-			}
-			rowChange.Before = sqltypes.RowToProto3(beforeValues)
-		}
-		if len(afterRawValues) > 0 {
-			afterValues, err := plan.filter(afterRawValues)
-			if err != nil {
-				return nil, err
-			}
-			rowChange.After = sqltypes.RowToProto3(afterValues)
-			if ((vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && partial) ||
-				(row.JSONPartialValues.Count() > 0) {
-
-				rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
-					Count: int64(rows.DataColumns.Count()),
-					Cols:  rows.DataColumns.Bits(),
+		if beforeOK {
+			log.Infof("beforeOK")
+			if len(beforeRawValues) > 0 {
+				log.Infof("beforeRawValues %+v", beforeRawValues)
+				beforeValues, err := plan.filter(beforeRawValues)
+				if err != nil {
+					return nil, err
 				}
+				rowChange.Before = sqltypes.RowToProto3(beforeValues)
 			}
-			if row.JSONPartialValues.Count() > 0 {
-				rowChange.JsonPartialValues = &binlogdatapb.RowChange_Bitmap{
-					Count: int64(row.JSONPartialValues.Count()),
-					Cols:  row.JSONPartialValues.Bits(),
+		}
+		if afterOK {
+			log.Infof("afterOK")
+			if len(afterRawValues) > 0 {
+				log.Infof("afterRawValues %+v", afterRawValues)
+				afterValues, err := plan.filter(afterRawValues)
+				if err != nil {
+					return nil, err
+				}
+				rowChange.After = sqltypes.RowToProto3(afterValues)
+				if ((vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && partial) ||
+					(row.JSONPartialValues.Count() > 0) {
+
+					rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
+						Count: int64(rows.DataColumns.Count()),
+						Cols:  rows.DataColumns.Bits(),
+					}
+				}
+				if row.JSONPartialValues.Count() > 0 {
+					rowChange.JsonPartialValues = &binlogdatapb.RowChange_Bitmap{
+						Count: int64(row.JSONPartialValues.Count()),
+						Cols:  row.JSONPartialValues.Bits(),
+					}
 				}
 			}
 		}

@@ -442,7 +442,8 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 			lastpk[i] = mysqlrow[pk]
 		}
 
-		ok, err := rs.plan.checkFilters(mysqlrow, charsets)
+		// verify that the row should be sent
+		ok, _, err := rs.plan.shouldFilter(mysqlrow, charsets)
 		if err != nil {
 			return err
 		}

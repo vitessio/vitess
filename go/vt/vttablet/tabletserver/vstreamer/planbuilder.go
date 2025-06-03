@@ -239,37 +239,40 @@ func compare(comparison Opcode, columnValue, filterValue sqltypes.Value, collati
 	return false, nil
 }
 
-func (plan *Plan) checkFilters(values []sqltypes.Value, charsets []collations.ID) (bool, error) {
+// shouldFilter returns true if the row passes the filter, if specified, and matches the target shard's keyrange, if applicable
+func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID) (bool, bool, error) {
+	hasVindex := false
 	if len(values) == 0 {
-		return false, nil
+		return false, false, nil
 	}
 	for _, filter := range plan.Filters {
 		switch filter.Opcode {
 		case VindexMatch:
 			ksid, err := getKeyspaceID(values, filter.Vindex, filter.VindexColumns, plan.Table.Fields)
 			if err != nil {
-				return false, err
+				return false, false, err
 			}
+			hasVindex = true
 			if !key.KeyRangeContains(filter.KeyRange, ksid) {
-				return false, nil
+				return false, false, nil
 			}
 		case IsNotNull:
 			if values[filter.ColNum].IsNull() {
-				return false, nil
+				return false, false, nil
 			}
 		case IsNull:
 			if !values[filter.ColNum].IsNull() {
-				return false, nil
+				return false, false, nil
 			}
 		case In:
 			if filter.Values == nil {
-				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected empty filter values when performing IN operator")
+				return false, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected empty filter values when performing IN operator")
 			}
 			found := false
 			for _, filterValue := range filter.Values {
 				match, err := compare(Equal, values[filter.ColNum], filterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
 				if err != nil {
-					return false, err
+					return false, false, err
 				}
 				if match {
 					found = true
@@ -277,7 +280,7 @@ func (plan *Plan) checkFilters(values []sqltypes.Value, charsets []collations.ID
 				}
 			}
 			if !found {
-				return false, nil
+				return false, false, nil
 			}
 		case NotBetween:
 			// Note that we do not implement filtering for BETWEEN because
@@ -285,31 +288,31 @@ func (plan *Plan) checkFilters(values []sqltypes.Value, charsets []collations.ID
 			// This is the filtering for NOT BETWEEN since we don't have support
 			// for OR yet.
 			if filter.Values == nil || len(filter.Values) != 2 {
-				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected 2 filter values when performing NOT BETWEEN")
+				return false, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected 2 filter values when performing NOT BETWEEN")
 			}
 			leftFilterValue, rightFilterValue := filter.Values[0], filter.Values[1]
 			isValueLessThanLeftFilter, err := compare(LessThan, values[filter.ColNum], leftFilterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
 			if err != nil {
-				return false, err
+				return false, false, err
 			}
 			if isValueLessThanLeftFilter {
 				continue
 			}
 			isValueGreaterThanRightFilter, err := compare(GreaterThan, values[filter.ColNum], rightFilterValue, plan.env.CollationEnv(), charsets[filter.ColNum])
 			if err != nil || !isValueGreaterThanRightFilter {
-				return false, err
+				return false, false, err
 			}
 		default:
 			match, err := compare(filter.Opcode, values[filter.ColNum], filter.Value, plan.env.CollationEnv(), charsets[filter.ColNum])
 			if err != nil {
-				return false, err
+				return false, false, err
 			}
 			if !match {
-				return false, nil
+				return false, false, nil
 			}
 		}
 	}
-	return true, nil
+	return true, hasVindex, nil
 }
 
 // filter filters the row against the plan. It returns false if the row did not match.
