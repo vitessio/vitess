@@ -141,13 +141,17 @@ func TestReportedOrcaMetrics(t *testing.T) {
 
 	serveGRPC()
 	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
-	if cpuUsage := serverMetrics.CPUUtilization; cpuUsage < 0 {
+	cpuUsage := serverMetrics.CPUUtilization
+	if cpuUsage < 0 {
 		t.Errorf("CPU Utilization is not set %.2f", cpuUsage)
 	}
+	t.Logf("CPU Utilization is %.2f", cpuUsage)
 
-	if memUsage := serverMetrics.MemUtilization; memUsage < 0 {
+	memUsage := serverMetrics.MemUtilization
+	if memUsage < 0 {
 		t.Errorf("Mem Utilization is not set %.2f", memUsage)
 	}
+	t.Logf("Memory utilization is %.2f", memUsage)
 }
 
 func getFreePort() int {

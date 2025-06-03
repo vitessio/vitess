@@ -115,6 +115,16 @@ require (
 )
 
 require (
+	github.com/cilium/ebpf v0.16.0 // indirect
+	github.com/containerd/log v0.1.0 // indirect
+	github.com/docker/go-units v0.5.0 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/moby/sys/userns v0.1.0 // indirect
+	github.com/opencontainers/runtime-spec v1.2.0 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
+)
+
+require (
 	cel.dev/expr v0.24.0 // indirect
 	cloud.google.com/go v0.121.1 // indirect
 	cloud.google.com/go/auth v0.16.1 // indirect
@@ -149,6 +159,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.19 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443 // indirect
+	github.com/containerd/cgroups v1.1.0
+	github.com/containerd/cgroups/v3 v3.0.5
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
