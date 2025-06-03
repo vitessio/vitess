@@ -414,7 +414,6 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> ins_column
 %type <val> ins_column_list ins_column_list_opt column_list paren_column_list column_list_opt
 %type <val> opt_partition_clause partition_list
-%type <val> opt_returning_clause select_expression_list
 %type <val> variable_list
 %type <val> system_variable_list
 %type <val> system_variable
@@ -907,7 +906,7 @@ common_table_expression:
   }
 
 insert_statement:
-  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_alias on_dup_opt opt_returning_clause
+  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_alias on_dup_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $7.(*Insert)
@@ -927,13 +926,12 @@ insert_statement:
     }
     ins.Partitions = $6.(Partitions)
     ins.OnDup = OnDup($8.(AssignmentExprs))
-    ins.Returning = $9.(SelectExprs)
     with := $1.(*With)
     handleCTEAuth(ins, with)
     ins.With = with
     $$ = ins
   }
-| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_select on_dup_opt opt_returning_clause
+| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_select on_dup_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $7.(*Insert)
@@ -953,13 +951,12 @@ insert_statement:
     }
     ins.Partitions = $6.(Partitions)
     ins.OnDup = OnDup($8.(AssignmentExprs))
-    ins.Returning = $9.(SelectExprs)
     with := $1.(*With)
     handleCTEAuth(ins, with)
     ins.With = with
     $$ = ins
   }
-| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET assignment_list on_dup_opt opt_returning_clause
+| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET assignment_list on_dup_opt
   {
     cols := make(Columns, 0, len($8.(AssignmentExprs)))
     vals := make(ValTuple, 0, len($9.(AssignmentExprs)))
@@ -981,7 +978,6 @@ insert_statement:
 	Columns: cols,
 	Rows: &AliasedValues{Values: Values{vals}},
 	OnDup: OnDup($9.(AssignmentExprs)),
-	ins.Returning = $9.(SelectExprs)
 	Auth: AuthInformation{
 	  AuthType: authType,
 	  TargetType: AuthTargetType_SingleTableIdentifier,
@@ -1132,16 +1128,7 @@ opt_partition_clause:
   }
 | PARTITION openb partition_list closeb
   {
-    $$ = $3.(Partitions)
-  }
-
-opt_returning_clause:
-  {
-    $$ = SelectExprs(nil)
-  }
-| RETURNING select_expression_list
-  {
-    $$ = $2.(SelectExprs)
+  $$ = $3.(Partitions)
   }
 
 set_statement:
@@ -10930,7 +10917,6 @@ reserved_keyword:
 | RESIGNAL
 | RESTRICT
 | RETURN
-| RETURNING
 | REVOKE
 | RIGHT
 | RLIKE
