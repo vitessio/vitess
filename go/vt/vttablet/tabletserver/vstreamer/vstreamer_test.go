@@ -805,16 +805,16 @@ func TestFilteredVarBinary(t *testing.T) {
 		{"insert into t1 values (4, 'kepler')", noEvents},
 		{"insert into t1 values (5, 'newton')", nil},
 		{"update t1 set val = 'newton' where id1 = 1", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "newton"}}}}},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "kepler"}, after: []string{"1", "newton"}}}}},
 		}},
 		{"update t1 set val = 'kepler' where id1 = 2", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "newton"}}}}},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "newton"}, after: []string{"2", "kepler"}}}}},
 		}},
 		{"update t1 set val = 'newton' where id1 = 2", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"2", "newton"}}}}},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "kepler"}, after: []string{"2", "newton"}}}}},
 		}},
 		{"update t1 set val = 'kepler' where id1 = 1", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "newton"}}}}},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "newton"}, after: []string{"1", "kepler"}}}}},
 		}},
 		{"delete from t1 where id1 in (2,3)", []TestRowEvent{
 			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "newton"}}, {before: []string{"3", "newton"}}}}},
