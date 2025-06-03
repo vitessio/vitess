@@ -21,9 +21,11 @@ package servenv
 
 import (
 	"testing"
+	"time"
 )
 
 func TestGetCpu(t *testing.T) {
+	time.Sleep(2 * time.Second)
 	cpuUsage, err := getHostCpuUsage()
 	if err != nil || cpuUsage < 0 {
 		t.Errorf("Error reading CPU: %v, value %.2f", err, cpuUsage)

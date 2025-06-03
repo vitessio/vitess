@@ -28,7 +28,7 @@ func getHostMemory() (float64, error) {
 }
 
 func getCgroupCpu() (float64, error) {
-	return getCgroupCpuUsage(cpuSampleInterval)
+	return getCgroupCpuUsage()
 }
 
 func getCgroupMemory() (float64, error) {

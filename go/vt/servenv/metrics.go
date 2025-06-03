@@ -16,12 +16,7 @@ limitations under the License.
 
 package servenv
 
-import "time"
-
-var cpuSampleInterval time.Duration = 2 * time.Second
-
 func getCpuUsage() float64 {
-	cpuSampleInterval = 1 * time.Second
 	value, err := getCgroupCpu()
 	if err == nil {
 		return value

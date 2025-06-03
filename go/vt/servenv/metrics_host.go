@@ -24,7 +24,7 @@ import (
 )
 
 func getHostCpuUsage() (float64, error) {
-	percentages, err := cpu.Percent(cpuSampleInterval, true)
+	percentages, err := cpu.Percent(0, false)
 	if err != nil || len(percentages) == 0 {
 		return -1, fmt.Errorf("Failed to get cpu usage %v", err)
 	}

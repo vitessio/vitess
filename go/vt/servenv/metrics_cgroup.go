@@ -21,36 +21,46 @@ package servenv
 
 import (
 	"fmt"
-	"log"
 	"runtime"
 	"time"
 
 	"github.com/containerd/cgroups"
 	"github.com/containerd/cgroups/v3/cgroup1"
 	"github.com/containerd/cgroups/v3/cgroup2"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
 	cgroup2Manager *cgroup2.Manager
 	cgroup1Manager cgroup1.Cgroup
+	lastCpu        uint64
+	lastTime       time.Time
 )
 
 func init() {
 	if cgroups.Mode() == cgroups.Unified {
 		manager, err := getCGroup2()
 		if err != nil {
-			log.Printf("Failed to load cgroup2 manager: %v", err)
-			return
+			log.Errorf("Failed to init cgroup2 manager: %v", err)
 		}
 		cgroup2Manager = manager
+		lastCpu, err = getCgroup2CpuUsage()
+		if err != nil {
+			log.Errorf("Failed to init cgroup2 cpu %v", err)
+		}
 	} else {
 		cgroup, err := getCGroup1()
 		if err != nil {
-			log.Printf("Failed to load cgroup1 manager: %v", err)
-			return
+			log.Errorf("Failed to init cgroup1 manager: %v", err)
 		}
 		cgroup1Manager = cgroup
+		lastCpu, err = getCgroup2CpuUsage()
+		if err != nil {
+			log.Errorf("Failed to init cgroup1 cpu %v", err)
+		}
 	}
+	lastTime = time.Now()
 }
 
 func isCgroupV2() bool {
@@ -78,12 +88,28 @@ func getCGroup2() (*cgroup2.Manager, error) {
 	return cgroupManager, nil
 }
 
-func getCgroupCpuUsage(interval time.Duration) (float64, error) {
+func getCgroupCpuUsage() (float64, error) {
+	var (
+		currentUsage uint64
+		err          error
+	)
+	currentTime := time.Now()
 	if isCgroupV2() {
-		return getCgroup2CpuUsage(interval)
+		currentUsage, err = getCgroup2CpuUsage()
 	} else {
-		return getCgroup1CpuUsage(interval)
+		currentUsage, err = getCgroup1CpuUsage()
 	}
+	if err != nil {
+		return -1, fmt.Errorf("Could not read cpu usage")
+	}
+	duration := currentTime.Sub(lastTime)
+	usage, err := getCpuUsageFromSamples(lastCpu, currentUsage, duration)
+	if err != nil {
+		return -1, err
+	}
+	lastCpu = currentUsage
+	lastTime = currentTime
+	return usage, nil
 }
 
 func getCgroupMemoryUsage() (float64, error) {
@@ -94,22 +120,22 @@ func getCgroupMemoryUsage() (float64, error) {
 	}
 }
 
-func getCgroup1CpuUsage(interval time.Duration) (float64, error) {
+func getCgroup1CpuUsage() (uint64, error) {
 	stat1, err := cgroup1Manager.Stat()
 	if err != nil {
-		return -1, fmt.Errorf("failed to get initial CPU stat: %w", err)
+		return 0, fmt.Errorf("failed to get initial CPU stat: %w", err)
 	}
-	usage1 := stat1.CPU.Usage.Total
+	currentUsage := stat1.CPU.Usage.Total
+	return currentUsage, nil
+}
 
-	time.Sleep(interval)
-
-	stat2, err := cgroup1Manager.Stat()
+func getCgroup2CpuUsage() (uint64, error) {
+	stat1, err := cgroup2Manager.Stat()
 	if err != nil {
-		return -1, fmt.Errorf("failed to get second CPU stat: %w", err)
+		return 0, fmt.Errorf("failed to get initial CPU stat: %w", err)
 	}
-	usage2 := stat2.CPU.Usage.Total
-
-	return getCpuUsageFromSamples(usage1, usage2, interval)
+	currentUsage := stat1.CPU.UsageUsec
+	return currentUsage, nil
 }
 
 func getCpuUsageFromSamples(usage1 uint64, usage2 uint64, interval time.Duration) (float64, error) {
@@ -137,24 +163,6 @@ func getCgroup1MemoryUsage() (float64, error) {
 		return -1, fmt.Errorf("Failed to compute memory usage with invalid limit: %d", limit)
 	}
 	return float64(usage) / float64(limit), nil
-}
-
-func getCgroup2CpuUsage(interval time.Duration) (float64, error) {
-	stat1, err := cgroup2Manager.Stat()
-	if err != nil {
-		return -1, fmt.Errorf("failed to get initial CPU stat: %w", err)
-	}
-	usage1 := stat1.CPU.UsageUsec
-
-	time.Sleep(interval)
-
-	stat2, err := cgroup2Manager.Stat()
-	if err != nil {
-		return -1, fmt.Errorf("failed to get second CPU stat: %w", err)
-	}
-	usage2 := stat2.CPU.UsageUsec
-
-	return getCpuUsageFromSamples(usage1, usage2, interval)
 }
 
 func getCgroup2MemoryUsage() (float64, error) {
