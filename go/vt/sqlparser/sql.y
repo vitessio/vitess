@@ -100,7 +100,7 @@ func tryCastStatement(v interface{}) Statement {
 %left <bytes> EXCEPT
 %left <bytes> UNION
 %left <bytes> INTERSECT
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
+%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL RETURNING
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
@@ -414,7 +414,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> ins_column
 %type <val> ins_column_list ins_column_list_opt column_list paren_column_list column_list_opt
 %type <val> opt_partition_clause partition_list
-%type <val> opt_returning_clause select_expression_list
+%type <val> returning_clause_opt
 %type <val> variable_list
 %type <val> system_variable_list
 %type <val> system_variable
@@ -907,7 +907,7 @@ common_table_expression:
   }
 
 insert_statement:
-  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_alias on_dup_opt opt_returning_clause
+  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_alias on_dup_opt returning_clause_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $7.(*Insert)
@@ -933,7 +933,7 @@ insert_statement:
     ins.With = with
     $$ = ins
   }
-| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_select on_dup_opt opt_returning_clause
+| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_select on_dup_opt returning_clause_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $7.(*Insert)
@@ -959,7 +959,7 @@ insert_statement:
     ins.With = with
     $$ = ins
   }
-| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET assignment_list on_dup_opt opt_returning_clause
+| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET assignment_list on_dup_opt returning_clause_opt
   {
     cols := make(Columns, 0, len($8.(AssignmentExprs)))
     vals := make(ValTuple, 0, len($9.(AssignmentExprs)))
@@ -981,7 +981,7 @@ insert_statement:
 	Columns: cols,
 	Rows: &AliasedValues{Values: Values{vals}},
 	OnDup: OnDup($9.(AssignmentExprs)),
-	ins.Returning = $9.(SelectExprs)
+	Returning: $10.(SelectExprs),
 	Auth: AuthInformation{
 	  AuthType: authType,
 	  TargetType: AuthTargetType_SingleTableIdentifier,
@@ -1135,7 +1135,7 @@ opt_partition_clause:
     $$ = $3.(Partitions)
   }
 
-opt_returning_clause:
+returning_clause_opt:
   {
     $$ = SelectExprs(nil)
   }
@@ -10930,7 +10930,6 @@ reserved_keyword:
 | RESIGNAL
 | RESTRICT
 | RETURN
-| RETURNING
 | REVOKE
 | RIGHT
 | RLIKE
@@ -11499,6 +11498,7 @@ non_reserved_keyword:
 | RESPECT
 | RESTART
 | RETAIN
+| RETURNING
 | REUSE
 | ROLE
 | ROLLBACK

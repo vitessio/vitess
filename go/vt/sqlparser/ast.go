@@ -1714,7 +1714,7 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 	}
 	buf.Myprintf("%v %v%v", node.Columns, node.Rows, node.OnDup)
 	if len(node.Returning) > 0 {
-		buf.Myprintf(" returning (%v)", node.Returning)
+		buf.Myprintf(" returning %v", node.Returning)
 	}
 }
 
