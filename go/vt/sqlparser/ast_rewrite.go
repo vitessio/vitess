@@ -2322,11 +2322,6 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	}) {
 		return false
 	}
-	if !a.rewriteExpr(node, node.Fsp, func(newNode, parent SQLNode) {
-		parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
-	}) {
-		return false
-	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

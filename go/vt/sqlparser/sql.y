@@ -551,7 +551,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> partition_comment partition_data_directory partition_index_directory
 %type <intPtr> length_opt
-%type <expr> func_datetime_precision
+%type <integer> func_datetime_precision
 %type <columnCharset> charset_opt
 %type <str> collate_opt
 %type <boolean> binary_opt
@@ -6999,20 +6999,16 @@ func_paren_opt:
 func_datetime_precision:
   /* empty */
   {
-  	$$ = nil
+  	$$ = 0
   }
 | openb closeb
   {
-    $$ = nil
+    $$ = 0
   }
 | openb INTEGRAL closeb
-   {
-     $$ = NewIntLiteral($2)
-   }
- | openb VALUE_ARG closeb
-   {
-     $$ = parseBindVariable(yylex, $2[1:])
-   }
+  {
+      $$ = convertStringToInt($2)
+  }
 
 /*
   Function calls using non reserved keywords with *normal* syntax forms. Because

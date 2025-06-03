@@ -2498,7 +2498,7 @@ type (
 	// supported functions are documented in the grammar
 	CurTimeFuncExpr struct {
 		Name IdentifierCI
-		Fsp  Expr // fractional seconds precision, integer from 0 to 6 or an Argument
+		Fsp  int // fractional seconds precision, integer from 0 to 6 or an Argument
 	}
 
 	// JSONPrettyExpr represents the function and argument for JSON_PRETTY()

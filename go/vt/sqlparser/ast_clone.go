@@ -1135,7 +1135,6 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 	}
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Fsp = CloneExpr(n.Fsp)
 	return &out
 }
 
