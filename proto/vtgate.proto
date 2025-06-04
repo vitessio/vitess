@@ -117,7 +117,7 @@ message Session {
   map<string, query.BindVariable> user_defined_variables = 13;
 
   // system_variables keeps track of all session variables set for this connection
-  // TODO: systay should we keep this so we can apply it ordered? 
+  // TODO: systay should we keep this so we can apply it ordered?
   map<string, string> system_variables = 14;
 
   // row_count keeps track of the last seen rows affected for this session
@@ -309,6 +309,8 @@ message VStreamFlags {
   // Copy only these tables, skip the rest in the filter.
   // If not provided, the default behaviour is to copy all tables.
   repeated string tables_to_copy = 9;
+  // Exclude the keyspace from the table name that is sent to the vstream client
+  bool exclude_keyspace_from_table_name = 10;
 }
 
 // VStreamRequest is the payload for VStream.
