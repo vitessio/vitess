@@ -5799,6 +5799,10 @@ func TestInvalid(t *testing.T) {
 			input: "select date concat('2001-', '02-', '03')",
 			err:   "syntax error",
 		},
+		{
+			input: "insert into t (a) values (1) returning",
+			err:   "syntax error",
+		},
 	}
 
 	for _, tcase := range invalidSQL {

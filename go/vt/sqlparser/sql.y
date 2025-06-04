@@ -934,7 +934,7 @@ insert_statement:
     ins.With = with
     $$ = ins
   }
-| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_select on_dup_opt returning_clause_opt
+| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_select on_dup_opt // returning_clause_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $7.(*Insert)
@@ -954,7 +954,7 @@ insert_statement:
     }
     ins.Partitions = $6.(Partitions)
     ins.OnDup = OnDup($8.(AssignmentExprs))
-    ins.Returning = $9.(SelectExprs)
+    // ins.Returning = $9.(SelectExprs)
     with := $1.(*With)
     handleCTEAuth(ins, with)
     ins.With = with
@@ -11499,7 +11499,6 @@ non_reserved_keyword:
 | RESPECT
 | RESTART
 | RETAIN
-| RETURNING
 | REUSE
 | ROLE
 | ROLLBACK
@@ -11602,6 +11601,7 @@ non_reserved_keyword2:
 | PASSWORD_LOCK_TIME
 | PROCESS
 | RELOAD
+| RETURNING // causes conflict with table_alias in insert_statement
 | SHUTDOWN
 | SUPER
 | TIMESTAMPADD
