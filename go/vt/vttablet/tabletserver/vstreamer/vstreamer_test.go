@@ -857,6 +857,10 @@ func TestPartialFilteredInt(t *testing.T) {
 		{"update t1 set id2 = 100 where id1 = 1", []TestRowEvent{
 			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "150"}, after: []string{"1", "100"}}}}},
 		}},
+		{"update t1 set id2 = 200 where id1 = 1", noEvents},
+		{"update t1 set id2 = 110 where id1 = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "200"}, after: []string{"1", "110"}}}}},
+		}},
 		{"commit", nil},
 	}}
 	ts.Run()
