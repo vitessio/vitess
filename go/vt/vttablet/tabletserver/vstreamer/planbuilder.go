@@ -239,7 +239,10 @@ func compare(comparison Opcode, columnValue, filterValue sqltypes.Value, collati
 	return false, nil
 }
 
-// shouldFilter returns true if the row passes the filter, if specified, and matches the target shard's keyrange, if applicable
+// shouldFilter evaluates whether a binlog (before or after) image should be included in the stream based on the plan's filters.
+// It returns:
+// - bool: true if the row should be included in the stream (passes all filters)
+// - bool: true if a vindex filter was applied (indicates sharded filtering)
 func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID) (bool, bool, error) {
 	hasVindex := false
 	if len(values) == 0 {
@@ -315,11 +318,11 @@ func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID
 	return true, hasVindex, nil
 }
 
-// filter filters the row against the plan. It returns false if the row did not match.
+// filter maps the row values against the plan.
 // The output of the filtering operation is stored in the 'result' argument because
 // filtering cannot be performed in-place. The result argument must be a slice of
 // length equal to ColExprs
-func (plan *Plan) filter(values []sqltypes.Value) ([]sqltypes.Value, error) {
+func (plan *Plan) mapValues(values []sqltypes.Value) ([]sqltypes.Value, error) {
 
 	result := make([]sqltypes.Value, len(plan.ColExprs))
 

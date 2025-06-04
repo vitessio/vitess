@@ -981,8 +981,9 @@ nextrow:
 		if err != nil {
 			return nil, vterrors.Wrap(err, "failed to extract journal from binlog event and apply filters")
 		}
-		//FIXME (Rohit): there was a check for afterOK, understand and restore if required
-
+		if len(afterValues) == 0 {
+			continue
+		}
 		// Exclude events that don't match the db_name.
 		for i, fld := range plan.fields() {
 			if fld.Name == "db_name" && afterValues[i].ToString() != params.DbName {
@@ -1012,7 +1013,6 @@ nextrow:
 
 // processRowEvent converts binlog rows into row vevents using the following steps:
 //   - converts the raw before and after binlog images into Values
-//   - checks if the workflow has a sharded target // FIXME
 //   - finds which before or after images passes the filter criterion
 //   - if the target is sharded, pass only images that pass
 //   - if the target is not sharded, pass both images if either after or before passes
@@ -1045,7 +1045,8 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 			// both before and after images are filtered out
 			continue
 		}
-		// at least one image passes the filter
+
+		// at least one image passes the filter and is not a sharded filter
 		if !hasVindex {
 			// we want both images to be part of the row event if either passes and we are not in a sharded situation
 			afterOK = true
@@ -1055,7 +1056,7 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		rowChange := &binlogdatapb.RowChange{}
 		if beforeOK {
 			if len(beforeRawValues) > 0 {
-				beforeValues, err := plan.filter(beforeRawValues)
+				beforeValues, err := plan.mapValues(beforeRawValues)
 				if err != nil {
 					return nil, err
 				}
@@ -1064,7 +1065,7 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		}
 		if afterOK {
 			if len(afterRawValues) > 0 {
-				afterValues, err := plan.filter(afterRawValues)
+				afterValues, err := plan.mapValues(afterRawValues)
 				if err != nil {
 					return nil, err
 				}
