@@ -522,6 +522,7 @@ var keywords = map[string]int{
 	"resource_group_user":           RESOURCE_GROUP_USER,
 	"restrict":                      RESTRICT,
 	"return":                        RETURN,
+	"returning":                     RETURNING,
 	"reuse":                         REUSE,
 	"revoke":                        REVOKE,
 	"right":                         RIGHT,

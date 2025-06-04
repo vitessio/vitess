@@ -101,6 +101,7 @@ func tryCastStatement(v interface{}) Statement {
 %left <bytes> UNION
 %left <bytes> INTERSECT
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
+%token <bytes> RETURNING
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %token <bytes> OUTFILE DUMPFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
@@ -414,6 +415,7 @@ func tryCastStatement(v interface{}) Statement {
 %type <val> ins_column
 %type <val> ins_column_list ins_column_list_opt column_list paren_column_list column_list_opt
 %type <val> opt_partition_clause partition_list
+%type <val> returning_clause_opt
 %type <val> variable_list
 %type <val> system_variable_list
 %type <val> system_variable
@@ -906,7 +908,7 @@ common_table_expression:
   }
 
 insert_statement:
-  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_alias on_dup_opt
+  with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data_alias on_dup_opt returning_clause_opt
   {
     // insert_data returns a *Insert pre-filled with Columns & Values
     ins := $7.(*Insert)
@@ -926,6 +928,7 @@ insert_statement:
     }
     ins.Partitions = $6.(Partitions)
     ins.OnDup = OnDup($8.(AssignmentExprs))
+    ins.Returning = $9.(SelectExprs)
     with := $1.(*With)
     handleCTEAuth(ins, with)
     ins.With = with
@@ -956,7 +959,7 @@ insert_statement:
     ins.With = with
     $$ = ins
   }
-| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET assignment_list on_dup_opt
+| with_clause_opt insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET assignment_list on_dup_opt returning_clause_opt
   {
     cols := make(Columns, 0, len($8.(AssignmentExprs)))
     vals := make(ValTuple, 0, len($9.(AssignmentExprs)))
@@ -978,6 +981,7 @@ insert_statement:
 	Columns: cols,
 	Rows: &AliasedValues{Values: Values{vals}},
 	OnDup: OnDup($9.(AssignmentExprs)),
+	Returning: $10.(SelectExprs),
 	Auth: AuthInformation{
 	  AuthType: authType,
 	  TargetType: AuthTargetType_SingleTableIdentifier,
@@ -1128,7 +1132,16 @@ opt_partition_clause:
   }
 | PARTITION openb partition_list closeb
   {
-  $$ = $3.(Partitions)
+    $$ = $3.(Partitions)
+  }
+
+returning_clause_opt:
+  {
+    $$ = SelectExprs(nil)
+  }
+| RETURNING select_expression_list
+  {
+    $$ = $2.(SelectExprs)
   }
 
 set_statement:
@@ -11587,6 +11600,7 @@ non_reserved_keyword2:
 | PASSWORD_LOCK_TIME
 | PROCESS
 | RELOAD
+| RETURNING // causes conflict with table_alias in insert_statement
 | SHUTDOWN
 | SUPER
 | TIMESTAMPADD

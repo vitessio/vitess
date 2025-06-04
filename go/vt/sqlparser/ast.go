@@ -1688,8 +1688,8 @@ type Insert struct {
 	With       *With
 	Partitions Partitions
 	Columns    Columns
-	// Returning is specific to PostgreSQL syntax, and allows Insert statements to return
-	// results via a set of select expressions that are evaluated on the inserted rows.
+	// Returning is specific to PostgreSQL and MariaDB syntax, and allows Insert statements
+	//to return results via a set of select expressions that are evaluated on the inserted rows.
 	Returning SelectExprs
 	Rows      InsertRows
 	OnDup     OnDup
@@ -1713,6 +1713,9 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" partition (%v)", node.Partitions)
 	}
 	buf.Myprintf("%v %v%v", node.Columns, node.Rows, node.OnDup)
+	if len(node.Returning) > 0 {
+		buf.Myprintf(" returning %v", node.Returning)
+	}
 }
 
 // GetAuthInformation implements the AuthNode interface.
@@ -8141,15 +8144,15 @@ type Injectable interface {
 // MySQL's dialect.
 type InjectedExpr struct {
 	// Expression is an expression that implements the Expr interface. It can be any expression type.
-	Expression         Injectable
+	Expression Injectable
 	// Children are the children of the expression, which can be any Expr type. This is a union type, and either this
 	// or SelectExprChildren will be set.
-	Children           Exprs
-	// SelectExprChildren are the children of the expression, which can be any SelectExpr type. This is a union type, 
+	Children Exprs
+	// SelectExprChildren are the children of the expression, which can be any SelectExpr type. This is a union type,
 	// and either this or Children will be set.
 	SelectExprChildren SelectExprs
 	// Auth contains the authentication information for the expression.
-	Auth               AuthInformation
+	Auth AuthInformation
 }
 
 var _ Expr = InjectedExpr{}

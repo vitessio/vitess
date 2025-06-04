@@ -4613,6 +4613,22 @@ var (
 		{
 			input: "set @@session.validate_password.length = 1",
 		},
+		{
+			input:  "insert into t1 values(1) returning pk",
+			output: "insert into t1 values (1) returning pk",
+		},
+		{
+			input:  "insert into t2 (id) values (2),(3) returning id,t",
+			output: "insert into t2(id) values (2), (3) returning id, t",
+		},
+		{
+			input:  "insert into t2(id,animal) values (1,'Dog'),(2,'Lion'),(3,'Tiger') returning id,id+id,id&id,id||id",
+			output: "insert into t2(id, animal) values (1, 'Dog'), (2, 'Lion'), (3, 'Tiger') returning id, id + id, id & id, id or id",
+		},
+		{
+			input:  "insert into t1 set id1=1, animal1='Bear' returning f(id1), upper(animal1)",
+			output: "insert into t1(id1, animal1) values (1, 'Bear') returning f(id1), upper(animal1)",
+		},
 	}
 
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
@@ -4945,8 +4961,8 @@ func TestSingleSQL(t *testing.T) {
 	t.Skip()
 	tests := []parseTest{
 		{
-			input:  "select @`user var`",
-			output: "select @`user var`",
+			input:  "insert into t1 values(1) returning pk",
+			output: "insert into t1 values (1) returning pk",
 		},
 	}
 	for _, tcase := range tests {
@@ -4972,15 +4988,6 @@ func TestAnsiQuotesMode(t *testing.T) {
 			require.NotNil(t, err)
 			assert.Equal(t, tcase.output, err.Error())
 		})
-	}
-}
-
-func TestSingle(t *testing.T) {
-	validSQL = append(validSQL, validMultiStatementSql...)
-	for _, tcase := range validSQL {
-		if tcase.input == "select /* use */ 1 from t1 for system_time as of '2019-01-01'" {
-			runParseTestCase(t, tcase)
-		}
 	}
 }
 
@@ -5790,6 +5797,10 @@ func TestInvalid(t *testing.T) {
 		},
 		{
 			input: "select date concat('2001-', '02-', '03')",
+			err:   "syntax error",
+		},
+		{
+			input: "insert into t (a) values (1) returning",
 			err:   "syntax error",
 		},
 	}
