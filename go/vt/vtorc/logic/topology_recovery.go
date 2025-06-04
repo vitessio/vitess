@@ -702,6 +702,20 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		return err
 	}
 
+	// Prioritise primary recovery.
+	// If we are performing some other action, first ensure that it is not because of primary issues.
+	// This step is only meant to improve the time taken to detect and fix cluster wide recoveries, it does not impact correctness.
+	// If a VTOrc detects an issue on a replica like ReplicationStopped, the underlying cause could be a dead primary instead.
+	// So, we try to reload that primary's information before proceeding with the replication stopped fix. We do this before acquiring the shard lock
+	// to allow another VTOrc instance to proceed with the dead primary recovery if it is indeed the case and it detects it before us. If however, the primary
+	// is not dead, then we will proceed with the fix for the replica. Essentially, we are trading off speed in replica recoveries (by doing an additional primary tablet reload)
+	// for speed in cluster-wide recoveries (by not holding the shard lock before reloading the primary tablet information).
+	if !isClusterWideRecovery(checkAndRecoverFunctionCode) {
+		if err = recheckPrimaryHealth(analysisEntry, DiscoverInstance); err != nil {
+			return err
+		}
+	}
+
 	// We lock the shard here and then refresh the tablets information
 	ctx, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
 		getLockAction(analysisEntry.AnalyzedInstanceAlias, analysisEntry.Analysis),
@@ -825,6 +839,36 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		DiscoverInstance(analysisEntry.AnalyzedInstanceAlias, true)
 	}
 	return err
+}
+
+// recheckPrimaryHealth check the health of the primary node.
+// It then checks whether, given the re-discovered primary health, the original recovery is still valid.
+// If not valid then it will abort the current analysis.
+func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc func(string, bool)) error {
+	originalAnalysisEntry := analysisEntry.Analysis
+	primaryTabletAlias := analysisEntry.AnalyzedInstancePrimaryAlias
+
+	// re-check if there are any mitigation required for the leader node.
+	// if the current problem is because of dead primary, this call will update the analysis entry
+	discoveryFunc(primaryTabletAlias, true)
+
+	// checking if the original analysis is valid even after the primary refresh.
+	recoveryRequired, err := checkIfAlreadyFixed(analysisEntry)
+	if err != nil {
+		log.Infof("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err)
+		return err
+	}
+
+	// The original analysis for the tablet has changed.
+	// This could mean that either the original analysis has changed or some other Vtorc instance has already performing the mitigation.
+	// In either case, the original analysis is stale which can be safely aborted.
+	if recoveryRequired {
+		log.Infof("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
+		// original analysis is stale, abort.
+		return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
+	}
+
+	return nil
 }
 
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not
