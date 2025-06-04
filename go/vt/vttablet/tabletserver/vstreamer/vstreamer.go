@@ -1028,7 +1028,6 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("beforeOK %t, beforeHasVindex %t, beforeRawValues %+v", beforeOK, beforeHasVindex, beforeRawValues)
 
 		// The AFTER image is where we may have partial JSON values, as reflected in the
 		// row's JSONPartialValues bitmap.
@@ -1040,17 +1039,14 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("afterOK %t, afterHasVindex %t, afterRawValues %+v", afterOK, afterHasVindex, afterRawValues)
 
 		hasVindex := beforeHasVindex || afterHasVindex
 		if !afterOK && !beforeOK {
-			log.Infof("both before and after images are filtered out")
 			// both before and after images are filtered out
 			continue
 		}
 		// at least one image passes the filter
 		if !hasVindex {
-			log.Infof("setting both afterOK and beforeOK as true")
 			// we want both images to be part of the row event if either passes and we are not in a sharded situation
 			afterOK = true
 			beforeOK = true
@@ -1058,9 +1054,7 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 
 		rowChange := &binlogdatapb.RowChange{}
 		if beforeOK {
-			log.Infof("beforeOK")
 			if len(beforeRawValues) > 0 {
-				log.Infof("beforeRawValues %+v", beforeRawValues)
 				beforeValues, err := plan.filter(beforeRawValues)
 				if err != nil {
 					return nil, err
@@ -1069,9 +1063,7 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 			}
 		}
 		if afterOK {
-			log.Infof("afterOK")
 			if len(afterRawValues) > 0 {
-				log.Infof("afterRawValues %+v", afterRawValues)
 				afterValues, err := plan.filter(afterRawValues)
 				if err != nil {
 					return nil, err
@@ -1079,7 +1071,6 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 				rowChange.After = sqltypes.RowToProto3(afterValues)
 				if ((vs.config.ExperimentalFlags /**/ & /**/ vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage != 0) && partial) ||
 					(row.JSONPartialValues.Count() > 0) {
-
 					rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
 						Count: int64(rows.DataColumns.Count()),
 						Cols:  rows.DataColumns.Bits(),

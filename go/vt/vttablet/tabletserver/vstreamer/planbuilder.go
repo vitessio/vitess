@@ -245,17 +245,13 @@ func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID
 	if len(values) == 0 {
 		return false, false, nil
 	}
-	log.Infof("In shouldFilter")
 	for _, filter := range plan.Filters {
-		log.Infof("Filter: %v", filter)
 		switch filter.Opcode {
 		case VindexMatch:
-			log.Infof("VIndex match filter: %v", filter.Vindex.String())
 			ksid, err := getKeyspaceID(values, filter.Vindex, filter.VindexColumns, plan.Table.Fields)
 			if err != nil {
 				return false, false, err
 			}
-			log.Infof("VIndex match ksid: %v", ksid)
 			hasVindex = true
 			if !key.KeyRangeContains(filter.KeyRange, ksid) {
 				return false, true, nil
@@ -316,7 +312,6 @@ func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID
 			}
 		}
 	}
-	log.Infof("Finally returning from shouldFilter with ok %t, hasVindex %v", true, hasVindex)
 	return true, hasVindex, nil
 }
 

@@ -446,7 +446,6 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		if err != nil {
 			return err
 		}
-		log.Infof("rowstreamer filter returned ok %v", ok)
 		if ok {
 			filtered, err := rs.plan.filter(mysqlrow)
 			if err != nil {
