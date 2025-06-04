@@ -32,9 +32,9 @@ func getHostMemory() (float64, error) {
 }
 
 func getCgroupCpu() (float64, error) {
-	return -1, fmt.Errorf("CGroup not supported on nonlinux platform")
+	return -1, fmt.Errorf("Cgroup not supported on nonlinux platform")
 }
 
 func getCgroupMemory() (float64, error) {
-	return -1, fmt.Errorf("CGroup not supported on nonlinux platform")
+	return -1, fmt.Errorf("Cgroup not supported on nonlinux platform")
 }

@@ -40,7 +40,7 @@ var (
 
 func init() {
 	if cgroups.Mode() == cgroups.Unified {
-		manager, err := getCGroup2()
+		manager, err := getCgroup2()
 		if err != nil {
 			log.Errorf("Failed to init cgroup2 manager: %v", err)
 		}
@@ -50,12 +50,12 @@ func init() {
 			log.Errorf("Failed to init cgroup2 cpu %v", err)
 		}
 	} else {
-		cgroup, err := getCGroup1()
+		cgroup, err := getCgroup1()
 		if err != nil {
 			log.Errorf("Failed to init cgroup1 manager: %v", err)
 		}
 		cgroup1Manager = cgroup
-		lastCpu, err = getCgroup2CpuUsage()
+		lastCpu, err = getCgroup1CpuUsage()
 		if err != nil {
 			log.Errorf("Failed to init cgroup1 cpu %v", err)
 		}
@@ -67,7 +67,7 @@ func isCgroupV2() bool {
 	return cgroups.Mode() == cgroups.Unified
 }
 
-func getCGroup1() (cgroup1.Cgroup, error) {
+func getCgroup1() (cgroup1.Cgroup, error) {
 	path := cgroup1.NestedPath("")
 	cgroup, err := cgroup1.Load(path)
 	if err != nil {
@@ -76,7 +76,7 @@ func getCGroup1() (cgroup1.Cgroup, error) {
 	return cgroup, nil
 }
 
-func getCGroup2() (*cgroup2.Manager, error) {
+func getCgroup2() (*cgroup2.Manager, error) {
 	path, err := cgroup2.NestedGroupPath("")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cgroup2 manager: %w", err)
