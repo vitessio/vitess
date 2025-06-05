@@ -17,7 +17,9 @@ limitations under the License.
 package workflow
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -169,11 +171,22 @@ func TestReshardCreate(t *testing.T) {
 
 			for i, target := range tc.targetKeyspace.ShardNames {
 				tabletUID := startingTargetTabletUID + (tabletUIDStep * i)
+				rawQuery := `\(` +
+					`'` + workflowName + `', ` +
+					(`'keyspace:"` + targetKeyspaceName + `" shard:"0" ` +
+						`filter:{` +
+						`rules:{match:"/.*" filter:"` + target + `"} ` +
+						`}', `) +
+					`'', [0-9]*, [0-9]*, '` + env.cell + `', '` + tabletTypesStr + `', [0-9]*, 0, 'Stopped', 'vt_` + targetKeyspaceName + `', 4, 0, false, '{}'` +
+					`\)` + eol
+				var buf bytes.Buffer
+				err := json.Compact(&buf, []byte(rawQuery))
+				require.NoError(t, err)
+				query := buf.String()
+
 				env.tmc.expectVRQuery(
 					tabletUID,
-					insertPrefix+
-						`\('`+workflowName+`', 'keyspace:"`+targetKeyspaceName+`" shard:"0" filter:{rules:{match:"/.*" filter:"`+target+`"}}', '', [0-9]*, [0-9]*, '`+
-						env.cell+`', '`+tabletTypesStr+`', [0-9]*, 0, 'Stopped', 'vt_`+targetKeyspaceName+`', 4, 0, false, '{}'\)`+eol,
+					insertPrefix+query,
 					&sqltypes.Result{},
 				)
 				env.tmc.expectVRQuery(
