@@ -17,7 +17,9 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -2001,12 +2003,16 @@ func TestExternalizeLookupVindex(t *testing.T) {
 	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 
-	options := `{
-      "lookup_vindexes": [
-        "owned_lookup",
-        "owned_lookup2"
-      ]
-    }`
+	raw := `{
+		"lookup_vindexes": [
+		  "owned_lookup",
+		  "owned_lookup2"
+		]
+	  }`
+	var buf bytes.Buffer
+	json.Compact(&buf, []byte(raw))
+	options := buf.String()
+
 	ownedMultipleRunning := sqltypes.MakeTestResult(fields, "1|Running|msg|"+ownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|"+options)
 	testcases := []struct {
 		request         *vtctldatapb.LookupVindexExternalizeRequest
