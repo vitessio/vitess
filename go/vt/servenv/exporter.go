@@ -326,6 +326,12 @@ func (e *Exporter) NewGaugeFloat64(name string, help string) *stats.GaugeFloat64
 // NewCounterFunc creates a name-spaced equivalent for stats.NewCounterFunc.
 func (e *Exporter) NewCounterFunc(name string, help string, f func() int64) *stats.CounterFunc {
 	if e.name == "" || name == "" {
+		// Before exporting a new unnamed variable, make sure it doesn't already exist,
+		// and reuse it if it does.
+		if v := unnamedExports[name]; v != nil {
+			return v.(*stats.CounterFunc)
+		}
+
 		v := stats.NewCounterFunc(name, help, f)
 		addUnnamedExport(name, v)
 		return v
@@ -338,6 +344,12 @@ func (e *Exporter) NewCounterFunc(name string, help string, f func() int64) *sta
 // NewGaugeFunc creates a name-spaced equivalent for stats.NewGaugeFunc.
 func (e *Exporter) NewGaugeFunc(name string, help string, f func() int64) *stats.GaugeFunc {
 	if e.name == "" || name == "" {
+		// Before exporting a new unnamed variable, make sure it doesn't already exist,
+		// and reuse it if it does.
+		if v := unnamedExports[name]; v != nil {
+			return v.(*stats.GaugeFunc)
+		}
+
 		v := stats.NewGaugeFunc(name, help, f)
 		addUnnamedExport(name, v)
 		return v
@@ -350,6 +362,12 @@ func (e *Exporter) NewGaugeFunc(name string, help string, f func() int64) *stats
 // NewCounterDurationFunc creates a name-spaced equivalent for stats.NewCounterDurationFunc.
 func (e *Exporter) NewCounterDurationFunc(name string, help string, f func() time.Duration) *stats.CounterDurationFunc {
 	if e.name == "" || name == "" {
+		// Before exporting a new unnamed variable, make sure it doesn't already exist,
+		// and reuse it if it does.
+		if v := unnamedExports[name]; v != nil {
+			return v.(*stats.CounterDurationFunc)
+		}
+
 		v := stats.NewCounterDurationFunc(name, help, f)
 		addUnnamedExport(name, v)
 		return v
@@ -362,6 +380,12 @@ func (e *Exporter) NewCounterDurationFunc(name string, help string, f func() tim
 // NewGaugeDurationFunc creates a name-spaced equivalent for stats.NewGaugeDurationFunc.
 func (e *Exporter) NewGaugeDurationFunc(name string, help string, f func() time.Duration) *stats.GaugeDurationFunc {
 	if e.name == "" || name == "" {
+		// Before exporting a new unnamed variable, make sure it doesn't already exist,
+		// and reuse it if it does.
+		if v := unnamedExports[name]; v != nil {
+			return v.(*stats.GaugeDurationFunc)
+		}
+
 		v := stats.NewGaugeDurationFunc(name, help, f)
 		addUnnamedExport(name, v)
 		return v
@@ -436,6 +460,16 @@ func (e *Exporter) NewGaugesWithMultiLabels(name, help string, labels []string) 
 // The function currently just returns an unexported variable.
 func (e *Exporter) NewTimings(name string, help string, label string) *TimingsWrapper {
 	if e.name == "" || name == "" {
+		// Before exporting a new unnamed variable, make sure it doesn't already exist,
+		// and reuse it if it does.
+		if v := unnamedExports[name]; v != nil {
+			tw := &TimingsWrapper{
+				timings: v.(*stats.MultiTimings),
+			}
+
+			return tw
+		}
+
 		v := &TimingsWrapper{
 			timings: stats.NewMultiTimings(name, help, []string{label}),
 		}
@@ -730,4 +764,17 @@ func addUnnamedExport(name string, v expvar.Var) {
 
 func combineLabels(label string, labels []string) []string {
 	return append(append(make([]string, 0, len(labels)+1), label), labels...)
+}
+
+func timing(name string) *TimingsWrapper {
+	exporterMu.Lock()
+	defer exporterMu.Unlock()
+
+	if v, ok := unnamedExports[name]; ok {
+		return &TimingsWrapper{
+			timings: v.(*stats.MultiTimings),
+		}
+	}
+
+	return nil
 }
