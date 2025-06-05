@@ -1250,20 +1250,22 @@ create_statement:
     $1.(*DDL).OptLike = &OptLike{LikeTables: []TableName{$3.(TableName)}}
     $$ = $1.(*DDL)
   }
-| CREATE key_type_opt INDEX sql_id using_opt ON table_name '(' index_column_list ')' index_option_list_opt
+| CREATE key_type_opt INDEX not_exists_opt sql_id using_opt ON table_name '(' index_column_list ')' index_option_list_opt
   {
     // For consistency, we always return AlterTable for any ALTER TABLE-equivalent statements
-    tableName := $7.(TableName)
+    tableName := $8.(TableName)
     ddl := &DDL{
       Action: AlterStr,
       Table: tableName,
+      IfNotExists: $4.(int) != 0,
       IndexSpec: &IndexSpec{
         Action: CreateStr,
-        ToName: $4.(ColIdent),
-        Using: $5.(ColIdent),
+        ToName: $5.(ColIdent),
+        Using: $6.(ColIdent),
         Type: $2.(string),
-        Columns: $9.([]*IndexColumn),
-        Options: $11.([]*IndexOption),
+        Columns: $10.([]*IndexColumn),
+        Options: $12.([]*IndexOption),
+        ifNotExists: $4.(int) != 0,
       },
       Auth: AuthInformation{
         AuthType: AuthType_INDEX,
@@ -1272,24 +1274,25 @@ create_statement:
       },
     }
     $$ = &AlterTable{
-      Table: $7.(TableName),
+      Table: $8.(TableName),
       Statements: []*DDL{ddl},
       Auth: AuthInformation{AuthType: AuthType_IGNORE},
     }
   }
-| CREATE view_opts VIEW table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
+| CREATE view_opts VIEW not_exists_opt table_name ins_column_list_opt AS lexer_position special_comment_mode select_statement_with_no_trailing_into lexer_position opt_with_check_option
   {
-    viewName := $4.(TableName)
+    viewName := $5.(TableName)
     $2.(*ViewSpec).ViewName = viewName.ToViewName()
-    $2.(*ViewSpec).ViewExpr = $9.(SelectStatement)
-    $2.(*ViewSpec).Columns = $5.(Columns)
-    $2.(*ViewSpec).CheckOption = $11.(ViewCheckOption)
+    $2.(*ViewSpec).ViewExpr = $10.(SelectStatement)
+    $2.(*ViewSpec).Columns = $6.(Columns)
+    $2.(*ViewSpec).CheckOption = $12.(ViewCheckOption)
     $$ = &DDL{
       Action: CreateStr,
       ViewSpec: $2.(*ViewSpec),
-      SpecialCommentMode: $8.(bool),
-      SubStatementPositionStart: $7.(int),
-      SubStatementPositionEnd: $10.(int) - 1,
+      IfNotExists: $4.(int) != 0,
+      SpecialCommentMode: $9.(bool),
+      SubStatementPositionStart: $8.(int),
+      SubStatementPositionEnd: $11.(int) - 1,
       Auth: AuthInformation{
         AuthType: AuthType_CREATE_VIEW,
         TargetType: AuthTargetType_DatabaseIdentifiers,
@@ -5398,42 +5401,46 @@ alter_table_statement_part:
     }
     $$ = ddl
   }
-| ADD index_or_key name_opt using_opt '(' index_column_list ')' index_option_list_opt
+| ADD index_or_key not_exists_opt name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
     $$ = &DDL{
     	Action: AlterStr,
+    	IfNotExists: $3.(int) != 0,
     	IndexSpec: &IndexSpec{
     		Action: CreateStr,
-    		ToName: NewColIdent($3.(string)),
-    		Using: $4.(ColIdent),
-    		Columns: $6.([]*IndexColumn),
-    		Options: $8.([]*IndexOption),
-	},
-	Auth: AuthInformation{
+    		ToName: NewColIdent($4.(string)),
+    		Using: $5.(ColIdent),
+    		Columns: $7.([]*IndexColumn),
+    		Options: $9.([]*IndexOption),
+    		ifNotExists: $3.(int) != 0,
+	    },
+	    Auth: AuthInformation{
         	AuthType: AuthType_INDEX,
         	TargetType: AuthTargetType_SingleTableIdentifier,
         },
     }
   }
-| ADD constraint_symbol_opt key_type index_or_key_opt name_opt using_opt '(' index_column_list ')' index_option_list_opt
+| ADD constraint_symbol_opt key_type index_or_key_opt not_exists_opt name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
-    idxName := $5.(string)
+    idxName := $6.(string)
     if len(idxName) == 0 {
       idxName = $2.(string)
     }
     $$ = &DDL{
     	Action: AlterStr,
+    	IfNotExists: $5.(int) != 0,
     	IndexSpec: &IndexSpec{
     		Action: CreateStr,
     		ToName: NewColIdent(idxName),
     		Type: $3.(string),
-    		Using: $6.(ColIdent),
-    		Columns: $8.([]*IndexColumn),
-    		Options: $10.([]*IndexOption),
-	},
-	Auth: AuthInformation{
-        	AuthType: AuthType_INDEX,
-        	TargetType: AuthTargetType_SingleTableIdentifier,
+    		Using: $7.(ColIdent),
+    		Columns: $9.([]*IndexColumn),
+    		Options: $11.([]*IndexOption),
+    		ifNotExists: $5.(int) != 0,
+        },
+        Auth: AuthInformation{
+            AuthType: AuthType_INDEX,
+            TargetType: AuthTargetType_SingleTableIdentifier,
         },
     }
   }
@@ -5445,19 +5452,19 @@ alter_table_statement_part:
     	Action: AlterStr,
     	IndexSpec: &IndexSpec{
     		Action: CreateStr,
-	},
-	Auth: AuthInformation{
+        },
+        Auth: AuthInformation{
             AuthType: AuthType_INDEX,
             TargetType: AuthTargetType_SingleTableIdentifier,
         },
     }
     ddl.IndexSpec = &IndexSpec{
     	Action: CreateStr,
-	Using: NewColIdent(""),
-	ToName: NewColIdent($2.(string)),
-	Type: PrimaryStr,
-	Columns: $7.([]*IndexColumn),
-	Options: $9.([]*IndexOption),
+        Using: NewColIdent(""),
+        ToName: NewColIdent($2.(string)),
+        Type: PrimaryStr,
+        Columns: $7.([]*IndexColumn),
+        Options: $9.([]*IndexOption),
     }
     $$ = ddl
   }
@@ -5493,15 +5500,15 @@ alter_table_statement_part:
   {
     $$ = &DDL{
     	Action: AlterStr,
-	ConstraintAction: DropStr,
-	TableSpec: &TableSpec{
-		Constraints: []*ConstraintDefinition{
-	    		&ConstraintDefinition{
-	    			Name: string($3),
-			},
-		},
-	},
-	Auth: AuthInformation{
+        ConstraintAction: DropStr,
+        TableSpec: &TableSpec{
+            Constraints: []*ConstraintDefinition{
+                &ConstraintDefinition{
+                    Name: string($3),
+                },
+            },
+        },
+        Auth: AuthInformation{
             AuthType: AuthType_ALTER,
             TargetType: AuthTargetType_SingleTableIdentifier,
         },
@@ -5801,15 +5808,17 @@ alter_table_statement_part:
         },
     }
   }
-| DROP index_or_key sql_id
+| DROP index_or_key exists_opt sql_id
   {
     $$ = &DDL{
     	Action: AlterStr,
+    	IfExists: $3.(int) != 0,
     	IndexSpec: &IndexSpec{
     		Action: DropStr,
-    		ToName: $3.(ColIdent),
-	},
-	Auth: AuthInformation{
+    		ToName: $4.(ColIdent),
+    		ifExists: $3.(int) != 0,
+        },
+        Auth: AuthInformation{
             AuthType: AuthType_INDEX,
             TargetType: AuthTargetType_SingleTableIdentifier,
         },
@@ -6633,14 +6642,19 @@ drop_statement:
       },
     }
   }
-| DROP INDEX sql_id ON table_name
+| DROP INDEX exists_opt sql_id ON table_name
   {
     // For consistency, we always use a AlterTable for ALTER TABLE equivalent statements
-    tableName := $5.(TableName)
+    tableName := $6.(TableName)
     ddl := &DDL{
       Action: AlterStr,
       Table: tableName,
-      IndexSpec: &IndexSpec{Action: DropStr, ToName: $3.(ColIdent)},
+      IndexSpec: &IndexSpec{
+        Action: DropStr,
+        ToName: $4.(ColIdent),
+        ifExists: $3.(int) != 0,
+      },
+      IfExists: $3.(int) != 0,
       Auth: AuthInformation{
         AuthType: AuthType_INDEX,
         TargetType: AuthTargetType_SingleTableIdentifier,

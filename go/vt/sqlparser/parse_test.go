@@ -1831,6 +1831,9 @@ var (
 			input: "alter table a add index idx (id)",
 		},
 		{
+			input: "alter table a add index if not exists idx (id)",
+		},
+		{
 			input: "alter table a add fulltext index idx (id)",
 		},
 		{
@@ -1840,35 +1843,58 @@ var (
 			input: "alter table a add vector index idx (id)",
 		},
 		{
+			input:  "alter table a add constraint unique index idx (id)",
+			output: "alter table a add unique index idx (id)",
+		},
+		{
+			input:  "alter table a add constraint unique index if not exists idx (id)",
+			output: "alter table a add unique index if not exists idx (id)",
+		},
+		{
 			input:  "alter table a add foreign key (x) references y(z)",
 			output: "alter table a add foreign key (x) references y (z)",
-		}, {
+		},
+		{
 			input:  "alter table a add constraint foreign key (x) references y(z)",
 			output: "alter table a add foreign key (x) references y (z)",
-		}, {
+		},
+		{
 			input:  "alter table a add constraint abc foreign key country_code (country_code) REFERENCES premium_country (country_code)",
 			output: "alter table a add constraint abc foreign key country_code (country_code) references premium_country (country_code)",
-		}, {
+		},
+		{
 			input:  "alter table a add constraint abc foreign key country_code (country_code) REFERENCES premium_country (country_code) on delete cascade",
 			output: "alter table a add constraint abc foreign key country_code (country_code) references premium_country (country_code) on delete cascade",
-		}, {
+		},
+		{
 			input:  "alter table a add constraint abc foreign key country_code (country_code) REFERENCES premium_country (country_code) on update set null",
 			output: "alter table a add constraint abc foreign key country_code (country_code) references premium_country (country_code) on update set null",
-		}, {
+		},
+		{
 			input: "alter table a add primary key (a, b)",
-		}, {
+		},
+		{
 			input: "alter table a add constraint a_pk primary key (a, b)",
-		}, {
+		},
+		{
 			input: "alter table a add constraint a_pk primary key (value)",
-		}, {
+		},
+		{
 			input: "alter table a add primary key (value)",
-		}, {
+		},
+		{
 			input: "alter table a drop primary key",
-		}, {
+		},
+		{
 			input: "alter table a drop column id",
-		}, {
+		},
+		{
 			input: "alter table a drop index idx",
-		}, {
+		},
+		{
+			input: "alter table a drop index if exists idx",
+		},
+		{
 			input:  "alter table a add constraint check (b > 0)",
 			output: "alter table a add check (b > 0)",
 		}, {
@@ -1963,19 +1989,24 @@ var (
 		}, {
 			input:  "create temporary table if not exists a (\n\t`a` int\n)",
 			output: "create temporary table if not exists a (\n\ta int\n)",
-		}, {
+		},
+		{
 			input:  "create index a on b (id)",
 			output: "alter table b add index a (id)",
-		}, {
-			input:  "CREATE INDEX a ON b (id)",
-			output: "alter table b add index a (id)",
-		}, {
+		},
+		{
+			input:  "create index if not exists a ON b (id)",
+			output: "alter table b add index if not exists a (id)",
+		},
+		{
 			input:  "create index a on b (foo(6) desc, foo asc)",
 			output: "alter table b add index a (foo(6) desc, foo)",
-		}, {
+		},
+		{
 			input:  "CREATE INDEX `c` on `dolt_test`.`a`(`b` ASC) INVISIBLE",
 			output: "alter table dolt_test.a add index c (b) INVISIBLE",
-		}, {
+		},
+		{
 			input:  "CREATE INDEX `c` on `dolt_test`.`a`(`b` ASC) VISIBLE",
 			output: "alter table dolt_test.a add index c (b) VISIBLE",
 		},
@@ -2020,13 +2051,20 @@ var (
 		}, {
 			input:  "create SQL SECURITY INVOKER view a as select current_timestamp()",
 			output: "create sql security invoker view a as select current_timestamp(0)",
-		}, {
+		},
+		{
 			input:  "CREATE VIEW a AS SELECT current_timestamp()",
 			output: "create view a as select current_timestamp(0)",
-		}, {
+		},
+		{
+			input:  "CREATE VIEW IF NOT EXISTS a AS SELECT 1",
+			output: "create view if not exists a as select 1",
+		},
+		{
 			input:  "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
 			output: "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
-		}, {
+		},
+		{
 			input:  "CREATE OR REPLACE VIEW a AS SELECT current_timestamp()",
 			output: "create or replace view a as select current_timestamp(0)",
 		},
@@ -2098,13 +2136,20 @@ var (
 		}, {
 			input:  "drop table b        ",
 			output: "drop table b",
-		}, {
+		},
+		{
 			input:  "drop view if exists a",
 			output: "drop view if exists a",
-		}, {
+		},
+		{
 			input:  "drop index b on a",
 			output: "alter table a drop index b",
-		}, {
+		},
+		{
+			input:  "drop index if exists b on a",
+			output: "alter table a drop index if exists b",
+		},
+		{
 			input:  "analyze table a",
 			output: "analyze table a",
 		}, {

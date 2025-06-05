@@ -2360,7 +2360,11 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			if view.CheckOption != ViewCheckOptionUnspecified {
 				checkOpt = fmt.Sprintf(" with %s check option", view.CheckOption)
 			}
-			buf.Myprintf("%s %sview %v%v as %v%s", node.Action, afterCreate, view.ViewName, view.Columns, view.ViewExpr, checkOpt)
+			notExists := ""
+			if node.IfNotExists {
+				notExists = " if not exists"
+			}
+			buf.Myprintf("%s %sview%s %v%v as %v%s", node.Action, afterCreate, notExists, view.ViewName, view.Columns, view.ViewExpr, checkOpt)
 		} else if node.TriggerSpec != nil {
 			trigger := node.TriggerSpec
 			triggerDef := ""
@@ -3480,6 +3484,11 @@ type IndexSpec struct {
 	Columns []*IndexColumn
 	// Options contains the index options when creating an index
 	Options []*IndexOption
+
+	// ifExists and ifNotExists states whether `IF [NOT] EXISTS` was present in query
+	//   This is solely for printing purposes; we rely on the one in ast.DDL for actual logic
+	ifExists    bool
+	ifNotExists bool
 }
 
 func (idx *IndexSpec) Format(buf *TrackedBuffer) {
@@ -3497,9 +3506,13 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 				buf.Myprintf("%s ", idx.Type)
 			}
 		}
+		notExists := ""
+		if idx.ifNotExists {
+			notExists = " if not exists"
+		}
 
 		if idx.Type != PrimaryStr {
-			buf.Myprintf("index %s ", idx.ToName.val)
+			buf.Myprintf("index%s %s ", notExists, idx.ToName.val)
 		}
 
 		if idx.Using.val != "" {
@@ -3530,10 +3543,14 @@ func (idx *IndexSpec) Format(buf *TrackedBuffer) {
 			}
 		}
 	case "drop":
+		exists := ""
+		if idx.ifExists {
+			exists = " if exists"
+		}
 		if idx.Type == PrimaryStr {
 			buf.Myprintf("drop primary key")
 		} else {
-			buf.Myprintf("drop index %s", idx.ToName.val)
+			buf.Myprintf("drop index%s %s", exists, idx.ToName.val)
 		}
 	case "rename":
 		buf.Myprintf("rename index %s to %s", idx.FromName.val, idx.ToName.val)
