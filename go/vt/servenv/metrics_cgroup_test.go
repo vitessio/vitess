@@ -23,15 +23,15 @@ import (
 	"testing"
 )
 
-func TestGetCpuMetrics(t *testing.T) {
+func TestGetCGroupCpuUsageMetrics(t *testing.T) {
 	sleepBeforeCpuSample()
-	cpuUsage, err := getHostCpuUsage()
-	validateCpu(t, cpuUsage, err)
-	t.Logf("CPU Utilization is %.2f", cpuUsage)
+	cpu, err := getCgroupCpuUsage()
+	validateCpu(t, cpu, err)
+	t.Logf("cpu %.5f", cpu)
 }
 
-func TestGetMemoryMetrics(t *testing.T) {
-	memoryUsage, err := getHostMemoryUsage()
-	validateMem(t, memoryUsage, err)
-	t.Logf("Memory Utilization is %.2f", memoryUsage)
+func TestGetCgroupMemoryUsageMetrics(t *testing.T) {
+	mem, err := getCgroupMemoryUsage()
+	validateMem(t, mem, err)
+	t.Logf("mem %.5f", mem)
 }

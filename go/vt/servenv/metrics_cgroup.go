@@ -21,12 +21,14 @@ package servenv
 
 import (
 	"fmt"
+	"math"
 	"runtime"
 	"time"
 
 	"github.com/containerd/cgroups"
 	"github.com/containerd/cgroups/v3/cgroup1"
 	"github.com/containerd/cgroups/v3/cgroup2"
+	"github.com/shirou/gopsutil/v4/mem"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -159,10 +161,7 @@ func getCgroup1MemoryUsage() (float64, error) {
 	}
 	usage := stats.Memory.Usage.Usage
 	limit := stats.Memory.Usage.Limit
-	if limit == 0 || limit == ^uint64(0) {
-		return -1, fmt.Errorf("Failed to compute memory usage with invalid limit: %d", limit)
-	}
-	return float64(usage) / float64(limit), nil
+	return computeMemoryUsage(usage, limit)
 }
 
 func getCgroup2MemoryUsage() (float64, error) {
@@ -172,8 +171,22 @@ func getCgroup2MemoryUsage() (float64, error) {
 	}
 	usage := stats.Memory.Usage
 	limit := stats.Memory.UsageLimit
-	if limit == 0 || limit == ^uint64(0) {
+	return computeMemoryUsage(usage, limit)
+}
+
+func computeMemoryUsage(usage uint64, limit uint64) (float64, error) {
+	if usage == 0 || usage == math.MaxUint64 {
+		return -1, fmt.Errorf("Failed to find memory usage with invalid value: %d", usage)
+	}
+	if limit == 0 {
 		return -1, fmt.Errorf("Failed to compute memory usage with invalid limit: %d", limit)
+	}
+	if limit == math.MaxUint64 {
+		vmem, err := mem.VirtualMemory()
+		if err != nil {
+			return -1, fmt.Errorf("Failed to fall back to system max memory: %w", err)
+		}
+		limit = vmem.Total
 	}
 	return float64(usage) / float64(limit), nil
 }

@@ -20,18 +20,15 @@ import (
 	"testing"
 )
 
-func TestReportCpu(t *testing.T) {
+func TestReportCpuMetrics(t *testing.T) {
+	sleepBeforeCpuSample()
 	cpuUsage, err := getHostCpuUsage()
-	if err != nil {
-		t.Errorf("Error reading CPU: %v, value %.2f", err, cpuUsage)
-	}
-	t.Logf("CPU Utilization is %.2f", cpuUsage)
+	validateCpu(t, cpuUsage, err)
+	t.Logf("CPU Utilization is %.10f", cpuUsage)
 }
 
-func TestReportMemory(t *testing.T) {
+func TestReportMemoryMetrics(t *testing.T) {
 	memoryUsage, err := getHostMemoryUsage()
-	if err != nil {
-		t.Errorf("Error reading memory: %v, value %.2f", err, memoryUsage)
-	}
-	t.Logf("Memory Utilization is %.2f", memoryUsage)
+	validateMem(t, memoryUsage, err)
+	t.Logf("Memory Utilization is %.10f", memoryUsage)
 }

@@ -64,7 +64,7 @@ func TestDoubleInterceptor(t *testing.T) {
 	}
 }
 
-func TestOrcaMetricsRecorder(t *testing.T) {
+func TestOrcaRecorder(t *testing.T) {
 	recorder := orca.NewServerMetricsRecorder()
 
 	recorder.SetCPUUtilization(0.25)
@@ -80,7 +80,7 @@ func TestOrcaMetricsRecorder(t *testing.T) {
 	}
 }
 
-func TestEnableOrcaMetrics(t *testing.T) {
+func TestEnableOrca(t *testing.T) {
 	// Set the port to enable gRPC server.
 	withTempVar(&gRPCPort, getFreePort())
 	withTempVar(&gRPCEnableOrcaMetrics, true)
@@ -105,7 +105,7 @@ func TestEnableOrcaMetrics(t *testing.T) {
 	}
 }
 
-func TestDisableOrcaMetrics(t *testing.T) {
+func TestDisableOrca(t *testing.T) {
 	// Set the port to enable gRPC server.
 	withTempVar(&gRPCPort, getFreePort())
 	withTempVar(&gRPCEnableOrcaMetrics, false)
@@ -128,7 +128,7 @@ func TestDisableOrcaMetrics(t *testing.T) {
 	}
 }
 
-func TestReportedOrcaMetrics(t *testing.T) {
+func TestReportedOrca(t *testing.T) {
 	// Set the port to enable gRPC server.
 	withTempVar(&gRPCPort, getFreePort())
 	withTempVar(&gRPCEnableOrcaMetrics, true)

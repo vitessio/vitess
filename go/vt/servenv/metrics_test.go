@@ -17,21 +17,42 @@ limitations under the License.
 package servenv
 
 import (
+	"runtime"
 	"testing"
+	"time"
 )
 
-func TestGetCpuUsage(t *testing.T) {
-	value := getCpuUsage()
-	t.Logf("CPU usage %v", value)
-	if value < 0 || value > 1 {
-		t.Errorf("Got invalid CPU value %v", value)
+func sleepBeforeCpuSample() {
+	time.Sleep(750 * time.Millisecond)
+}
+
+func validateCpu(t *testing.T, cpu float64, err error) {
+	if err != nil {
+		t.Errorf("Error reading CPU: %v, value %.10f", err, cpu)
+	}
+	if cpu <= 0 || cpu > float64(runtime.NumCPU()) {
+		t.Errorf("CPU value out of range %5.f", cpu)
 	}
 }
 
-func TestGetMemoryUsage(t *testing.T) {
+func validateMem(t *testing.T, mem float64, err error) {
+	if err != nil {
+		t.Errorf("Error reading memory: %v, value %.10f", err, mem)
+	}
+	if mem <= 0 || mem > 1 {
+		t.Errorf("Mem value out of range %5.f", mem)
+	}
+}
+
+func TestGetCpuUsageMetrics(t *testing.T) {
+	sleepBeforeCpuSample()
+	value := getCpuUsage()
+	t.Logf("CPU usage %v", value)
+	validateCpu(t, value, nil)
+}
+
+func TestGetMemoryUsageMetrics(t *testing.T) {
 	value := getMemoryUsage()
 	t.Logf("Memory usage %v", value)
-	if value < 0 || value > 1 {
-		t.Errorf("Got invalid memory value %v", value)
-	}
+	validateMem(t, value, nil)
 }
