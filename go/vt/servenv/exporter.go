@@ -765,16 +765,3 @@ func addUnnamedExport(name string, v expvar.Var) {
 func combineLabels(label string, labels []string) []string {
 	return append(append(make([]string, 0, len(labels)+1), label), labels...)
 }
-
-func timing(name string) *TimingsWrapper {
-	exporterMu.Lock()
-	defer exporterMu.Unlock()
-
-	if v, ok := unnamedExports[name]; ok {
-		return &TimingsWrapper{
-			timings: v.(*stats.MultiTimings),
-		}
-	}
-
-	return nil
-}
