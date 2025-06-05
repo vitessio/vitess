@@ -466,12 +466,6 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 		cell.Keyspaces[ksName] = keyspace
 		cellsToWatch = cellsToWatch + cell.Name
 	}
-	for _, cell := range cells {
-		if len(cell.Vtgates) == 0 {
-			log.Infof("Starting vtgate")
-			vc.StartVtgate(t, cell, cellsToWatch)
-		}
-	}
 
 	require.NoError(t, vc.AddShards(t, cells, keyspace, shards, numReplicas, numRdonly, tabletIDBase, opts))
 	if schema != "" {
@@ -487,6 +481,14 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 
 	err = vc.VtctldClient.ExecuteCommand("RebuildKeyspaceGraph", ksName)
 	require.NoError(t, err)
+
+	for _, cell := range cells {
+		if len(cell.Vtgates) == 0 {
+			log.Infof("Starting vtgate")
+			vc.StartVtgate(t, cell, cellsToWatch)
+		}
+	}
+
 	return keyspace, nil
 }
 
