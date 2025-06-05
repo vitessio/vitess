@@ -1822,7 +1822,8 @@ type Session_ShardSession struct {
 	TabletAlias   *topodata.TabletAlias  `protobuf:"bytes,3,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
 	// reserved connection if a dedicated connection is needed
 	ReservedId int64 `protobuf:"varint,4,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
-	VindexOnly bool  `protobuf:"varint,5,opt,name=vindex_only,json=vindexOnly,proto3" json:"vindex_only,omitempty"`
+	// read_only is true if the session has only executed read queries.
+	ReadOnly bool `protobuf:"varint,5,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
 	// rows_affected tracks if any query has modified the rows.
 	RowsAffected  bool `protobuf:"varint,6,opt,name=rows_affected,json=rowsAffected,proto3" json:"rows_affected,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1887,9 +1888,9 @@ func (x *Session_ShardSession) GetReservedId() int64 {
 	return 0
 }
 
-func (x *Session_ShardSession) GetVindexOnly() bool {
+func (x *Session_ShardSession) GetReadOnly() bool {
 	if x != nil {
-		return x.VindexOnly
+		return x.ReadOnly
 	}
 	return false
 }
@@ -1905,7 +1906,7 @@ var File_vtgate_proto protoreflect.FileDescriptor
 
 const file_vtgate_proto_rawDesc = "" +
 	"\n" +
-	"\fvtgate.proto\x12\x06vtgate\x1a\x10binlogdata.proto\x1a\vquery.proto\x1a\x0etopodata.proto\x1a\vvtrpc.proto\"\xd2\x0f\n" +
+	"\fvtgate.proto\x12\x06vtgate\x1a\x10binlogdata.proto\x1a\vquery.proto\x1a\x0etopodata.proto\x1a\vvtrpc.proto\"\xce\x0f\n" +
 	"\aSession\x12%\n" +
 	"\x0ein_transaction\x18\x01 \x01(\bR\rinTransaction\x12C\n" +
 	"\x0eshard_sessions\x18\x02 \x03(\v2\x1c.vtgate.Session.ShardSessionR\rshardSessions\x12\x1e\n" +
@@ -1939,15 +1940,14 @@ const file_vtgate_proto_rawDesc = "" +
 	"\rquery_timeout\x18\x19 \x01(\x03R\fqueryTimeout\x12R\n" +
 	"\x11prepare_statement\x18\x1a \x03(\v2%.vtgate.Session.PrepareStatementEntryR\x10prepareStatement\x12+\n" +
 	"\x11migration_context\x18\x1b \x01(\tR\x10migrationContext\x120\n" +
-	"\x14error_until_rollback\x18\x1c \x01(\bR\x12errorUntilRollback\x1a\xfd\x01\n" +
+	"\x14error_until_rollback\x18\x1c \x01(\bR\x12errorUntilRollback\x1a\xf9\x01\n" +
 	"\fShardSession\x12%\n" +
 	"\x06target\x18\x01 \x01(\v2\r.query.TargetR\x06target\x12%\n" +
 	"\x0etransaction_id\x18\x02 \x01(\x03R\rtransactionId\x128\n" +
 	"\ftablet_alias\x18\x03 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12\x1f\n" +
 	"\vreserved_id\x18\x04 \x01(\x03R\n" +
-	"reservedId\x12\x1f\n" +
-	"\vvindex_only\x18\x05 \x01(\bR\n" +
-	"vindexOnly\x12#\n" +
+	"reservedId\x12\x1b\n" +
+	"\tread_only\x18\x05 \x01(\bR\breadOnly\x12#\n" +
 	"\rrows_affected\x18\x06 \x01(\bR\frowsAffected\x1a\\\n" +
 	"\x19UserDefinedVariablesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12)\n" +
