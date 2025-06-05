@@ -94,11 +94,11 @@ func TestEnableOrca(t *testing.T) {
 	}
 
 	called := false
-	registerORCA = func(s grpc.ServiceRegistrar, o orca.ServiceOptions) error {
+	orcaRegisterFunc = func(s grpc.ServiceRegistrar, o orca.ServiceOptions) error {
 		called = true
 		return nil
 	}
-	defer func() { registerORCA = orca.Register }()
+	defer func() { orcaRegisterFunc = orca.Register }()
 	serveGRPC()
 	if !called {
 		t.Errorf("registerORCA should have been called when ORCA metrics are enabled")
@@ -117,11 +117,11 @@ func TestDisableOrca(t *testing.T) {
 	}
 
 	called := false
-	registerORCA = func(s grpc.ServiceRegistrar, o orca.ServiceOptions) error {
+	orcaRegisterFunc = func(s grpc.ServiceRegistrar, o orca.ServiceOptions) error {
 		called = true
 		return nil
 	}
-	defer func() { registerORCA = orca.Register }()
+	defer func() { orcaRegisterFunc = orca.Register }()
 	serveGRPC()
 	if called {
 		t.Errorf("registerORCA should NOT have been called when ORCA metrics are enabled")

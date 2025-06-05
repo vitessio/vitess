@@ -114,7 +114,7 @@ var (
 
 // Injectable behavior for testing.
 var (
-	registerORCA = orca.Register
+	orcaRegisterFunc = orca.Register
 )
 
 // TLS variables.
@@ -349,7 +349,7 @@ func serveGRPC() {
 }
 
 func registerOrca() {
-	if err := registerORCA(GRPCServer, orca.ServiceOptions{
+	if err := orcaRegisterFunc(GRPCServer, orca.ServiceOptions{
 		// The minimum interval of orca is 30 seconds, unless we enable a testing flag.
 		MinReportingInterval:  30 * time.Second,
 		ServerMetricsProvider: GRPCServerMetricsRecorder,
