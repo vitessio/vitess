@@ -17,10 +17,6 @@
 package inst
 
 import (
-	"encoding/json"
-	"time"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 

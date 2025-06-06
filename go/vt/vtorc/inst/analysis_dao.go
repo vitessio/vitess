@@ -24,6 +24,7 @@ import (
 	"github.com/patrickmn/go-cache"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
@@ -56,6 +57,13 @@ type clusterAnalysis struct {
 	totalTablets         int
 	primaryAlias         string
 	durability           policy.Durabler
+}
+
+func gtidModeToProto(gtidMode string) vtorcdatapb.GTIDMode {
+	if i, found := vtorcdatapb.GTIDMode_value[gtidMode]; found {
+		return vtorcdatapb.GTIDMode(i)
+	}
+	return vtorcdatapb.GTIDMode_OFF
 }
 
 // GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
@@ -314,7 +322,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			return nil
 		}
 
-		a.ShardPrimaryTermTimestamp = m.GetString("shard_primary_term_timestamp")
+		a.ShardPrimaryTermTimestamp = protoutil.TimeToProto(m.GetTime("shard_primary_term_timestamp"))
 		a.IsPrimary = m.GetBool("is_primary")
 		a.AnalyzedInstanceAlias = topoproto.TabletAliasString(tablet.Alias)
 		a.AnalyzedInstancePrimaryAlias = topoproto.TabletAliasString(primaryTablet.Alias)
@@ -324,7 +332,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			Type:    vtorcdatapb.BinlogType_BinaryLog,
 		}
 		isStaleBinlogCoordinates := m.GetBool("is_stale_binlog_coordinates")
-		a.GtidMode = m.GetString("gtid_mode")
+		a.GtidMode = gtidModeToProto(m.GetString("gtid_mode"))
 		a.LastCheckValid = m.GetBool("is_last_check_valid")
 		a.LastCheckPartialSuccess = m.GetBool("last_check_partial_success")
 		a.CountReplicas = m.GetUint32("count_replicas")
@@ -346,8 +354,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.CountSemiSyncPrimaryWaitForReplica = m.GetUint32("semi_sync_primary_wait_for_replica_count")
 		a.SemiSyncPrimaryClients = m.GetUint32("semi_sync_primary_clients")
 
-		a.MinReplicaGtidMode = m.GetString("min_replica_gtid_mode")
-		a.MaxReplicaGtidMode = m.GetString("max_replica_gtid_mode")
+		a.MinReplicaGtidMode = gtidModeToProto(m.GetString("min_replica_gtid_mode"))
+		a.MaxReplicaGtidMode = gtidModeToProto(m.GetString("max_replica_gtid_mode"))
 		a.MaxReplicaErrantGtid = m.GetString("max_replica_gtid_errant")
 
 		a.CountLoggingReplicas = m.GetUint32("count_logging_replicas")
@@ -457,18 +465,18 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		} else if topo.IsReplicaType(a.TabletType) && a.ErrantGtid != "" {
 			a.Analysis = vtorcdatapb.AnalysisType_ErrantGtidDetected
 			a.Description = "Tablet has errant GTIDs"
-		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp == "" {
+		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp == nil {
 			// ClusterHasNoPrimary should only be detected when the shard record doesn't have any primary term start time specified either.
 			a.Analysis = vtorcdatapb.AnalysisType_ClusterHasNoPrimary
 			a.Description = "Cluster has no primary"
 			ca.hasClusterwideAction = true
-		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp != "" {
+		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp != nil {
 			// If there are no primary tablets, but the shard primary start time isn't empty, then we know
 			// the primary tablet was deleted.
 			a.Analysis = vtorcdatapb.AnalysisType_PrimaryTabletDeleted
 			a.Description = "Primary tablet has been deleted"
 			ca.hasClusterwideAction = true
-		} else if a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount {
+		} else if a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.CountSemiSyncPrimaryWaitForReplica {
 			// The primary is reporting that semi-sync monitor is blocked on writes.
 			// There are enough replicas configured to send semi-sync ACKs such that the primary shouldn't be blocked.
 			// There is some network diruption in progress. We should run an ERS.
@@ -513,7 +521,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = vtorcdatapb.AnalysisType_UnreachablePrimary
 			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
 			//
-		} else if a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount {
+		} else if a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.CountSemiSyncPrimaryWaitForReplica > 0 && a.SemiSyncPrimaryClients < a.CountSemiSyncPrimaryWaitForReplica {
 			if isStaleBinlogCoordinates {
 				a.Analysis = vtorcdatapb.AnalysisType_LockedSemiSyncPrimary
 				a.Description = "Semi sync primary is locked since it doesn't get enough replica acknowledgements"
@@ -547,39 +555,39 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			// Moving on to structure analysis
 			// We also do structural checks. See if there's potential danger in promotions
 			if a.IsPrimary && a.CountLoggingReplicas == 0 && a.CountReplicas > 1 {
-				a.StructureAnalysis = append(a.StructureAnalysis, NoLoggingReplicasStructureWarning)
+				a.StructureAnalysis = append(a.StructureAnalysis, vtorcdatapb.StructureAnalysisType_NoLoggingReplicasStructureWarning)
 			}
 			if a.IsPrimary && a.CountReplicas > 1 &&
 				!a.OracleGtidImmediateTopology &&
 				!a.BinlogServerImmediateTopology {
-				a.StructureAnalysis = append(a.StructureAnalysis, NoFailoverSupportStructureWarning)
+				a.StructureAnalysis = append(a.StructureAnalysis, vtorcdatapb.StructureAnalysisType_NoFailoverSupportStructureWarning)
 			}
 			if a.IsPrimary && a.CountStatementBasedLoggingReplicas > 0 && a.CountMixedBasedLoggingReplicas > 0 {
-				a.StructureAnalysis = append(a.StructureAnalysis, StatementAndMixedLoggingReplicasStructureWarning)
+				a.StructureAnalysis = append(a.StructureAnalysis, vtorcdatapb.StructureAnalysisType_StatementAndMixedLoggingReplicasStructureWarning)
 			}
 			if a.IsPrimary && a.CountStatementBasedLoggingReplicas > 0 && a.CountRowBasedLoggingReplicas > 0 {
-				a.StructureAnalysis = append(a.StructureAnalysis, StatementAndRowLoggingReplicasStructureWarning)
+				a.StructureAnalysis = append(a.StructureAnalysis, vtorcdatapb.StructureAnalysisType_StatementAndRowLoggingReplicasStructureWarning)
 			}
 			if a.IsPrimary && a.CountMixedBasedLoggingReplicas > 0 && a.CountRowBasedLoggingReplicas > 0 {
-				a.StructureAnalysis = append(a.StructureAnalysis, MixedAndRowLoggingReplicasStructureWarning)
+				a.StructureAnalysis = append(a.StructureAnalysis, vtorcdatapb.StructureAnalysisType_MixedAndRowLoggingReplicasStructureWarning)
 			}
 			if a.IsPrimary && a.CountDistinctMajorVersionsLoggingReplicas > 1 {
-				a.StructureAnalysis = append(a.StructureAnalysis, MultipleMajorVersionsLoggingReplicasStructureWarning)
+				a.StructureAnalysis = append(a.StructureAnalysis, vtorcdatapb.StructureAnalysisType_MultipleMajorVersionsLoggingReplicasStructureWarning)
 			}
 
 			if a.CountReplicas > 0 && (a.GtidMode != a.MinReplicaGtidMode || a.GtidMode != a.MaxReplicaGtidMode) {
-				a.StructureAnalysis = append(a.StructureAnalysis, DifferentGtidModesStructureWarning)
+				a.StructureAnalysis = append(a.StructureAnalysis, vtorcdatapb.StructureAnalysisType_DifferentGtidModesStructureWarning)
 			}
-			if a.MaxReplicaGtidErrant != "" {
-				a.StructureAnalysis = append(a.StructureAnalysis, ErrantGtidStructureWarning)
+			if a.MaxReplicaErrantGtid != "" {
+				a.StructureAnalysis = append(a.StructureAnalysis, vtorcdatapb.StructureAnalysisType_ErrantGtidStructureWarning)
 			}
 
 			if a.IsPrimary && a.IsReadOnly {
-				a.StructureAnalysis = append(a.StructureAnalysis, NoWriteablePrimaryStructureWarning)
+				a.StructureAnalysis = append(a.StructureAnalysis, vtorcdatapb.StructureAnalysisType_NoWriteablePrimaryStructureWarning)
 			}
 
-			if a.IsPrimary && a.SemiSyncPrimaryEnabled && !a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount {
-				a.StructureAnalysis = append(a.StructureAnalysis, NotEnoughValidSemiSyncReplicasStructureWarning)
+			if a.IsPrimary && a.SemiSyncPrimaryEnabled && !a.SemiSyncPrimaryStatus && a.CountSemiSyncPrimaryWaitForReplica > 0 && a.SemiSyncPrimaryClients < a.CountSemiSyncPrimaryWaitForReplica {
+				a.StructureAnalysis = append(a.StructureAnalysis, vtorcdatapb.StructureAnalysisType_NotEnoughValidSemiSyncReplicasStructureWarning)
 			}
 		}
 		appendAnalysis(a)
@@ -612,7 +620,7 @@ func postProcessAnalyses(result []*vtorcdatapb.ReplicationAnalysis, clusters map
 		for _, analysis := range result {
 			// If one of them is an InvalidPrimary, then we see if all the other tablets in this keyspace shard are
 			// unable to replicate or not.
-			if analysis.Analysis == InvalidPrimary {
+			if analysis.Analysis == vtorcdatapb.AnalysisType_InvalidPrimary {
 				keyspaceName := analysis.AnalyzedKeyspace
 				shardName := analysis.AnalyzedShard
 				keyspaceShard := getKeyspaceShardName(keyspaceName, shardName)
@@ -631,7 +639,7 @@ func postProcessAnalyses(result []*vtorcdatapb.ReplicationAnalysis, clusters map
 				// In this case, we update the analysis for the primary tablet and remove all the analyses of the replicas.
 				if totalReplicas > 0 && len(notReplicatingReplicas) == totalReplicas {
 					resultChanged = true
-					analysis.Analysis = DeadPrimary
+					analysis.Analysis = vtorcdatapb.AnalysisType_DeadPrimary
 					for i := len(notReplicatingReplicas) - 1; i >= 0; i-- {
 						idxToRemove := notReplicatingReplicas[i]
 						result = append(result[0:idxToRemove], result[idxToRemove+1:]...)
