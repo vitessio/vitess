@@ -691,14 +691,12 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					// Update table names and send.
 					// If we're streaming from multiple keyspaces, this will disambiguate
 					// duplicate table names.
-					ev := event.CloneVT()
-					ev.FieldEvent.TableName = sgtid.Keyspace + "." + ev.FieldEvent.TableName
-					sendevents = append(sendevents, ev)
+					event.FieldEvent.TableName = sgtid.Keyspace + "." + event.FieldEvent.TableName
+					sendevents = append(sendevents, event)
 				case binlogdatapb.VEventType_ROW:
 					// Update table names and send.
-					ev := event.CloneVT()
-					ev.RowEvent.TableName = sgtid.Keyspace + "." + ev.RowEvent.TableName
-					sendevents = append(sendevents, ev)
+					event.FieldEvent.TableName = sgtid.Keyspace + "." + event.FieldEvent.TableName
+					sendevents = append(sendevents, event)
 				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
 					sendevents = append(sendevents, event)
 					eventss = append(eventss, sendevents)
