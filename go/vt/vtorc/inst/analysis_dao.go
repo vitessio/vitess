@@ -343,7 +343,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.SemiSyncBlocked = m.GetBool("semi_sync_blocked")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint32("count_semi_sync_replicas")
-		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
 		a.CountSemiSyncPrimaryWaitForReplica = m.GetUint32("semi_sync_primary_wait_for_replica_count")
 		a.CountSemiSyncPrimaryClients = m.GetUint32("semi_sync_primary_clients")
 
@@ -664,6 +663,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisType vtorcdata
 	// Find if the lastAnalysisHasChanged or not while updating the row if it has.
 	lastAnalysisChanged := false
 	{
+		analysisTypeStr := AnalysisTypeProtoToString(analysisType)
 		sqlResult, err := db.ExecVTOrc(`UPDATE database_instance_last_analysis
 			SET
 				analysis = ?,
@@ -672,7 +672,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisType vtorcdata
 				alias = ?
 				AND analysis != ?
 			`,
-			AnalysisTypeProtoToString(analysisType), tabletAlias, analysisType.String(),
+			analysisTypeStr, tabletAlias, analysisTypeStr,
 		)
 		if err != nil {
 			log.Error(err)
