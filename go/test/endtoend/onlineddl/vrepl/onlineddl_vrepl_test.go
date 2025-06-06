@@ -358,6 +358,31 @@ func TestVreplSchemaChanges(t *testing.T) {
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
+
+	t.Run("successful online alter, postponed, vtgate, with shards", func(t *testing.T) {
+		insertRows(t, 2)
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess -postpone-completion", providedUUID, providedMigrationContext, "vtgate", "test_val", "", false)
+		// Should be still running!
+		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusRunning)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
+
+		// Try to complete with irrelevant shards (should fail)
+		onlineddl.CheckCompleteMigrationShards(t, &vtParams, shards, uuid, "x,y,z", false)
+		// Migration should still be running
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
+
+		// Issue a complete with relevant shards and wait for successful completion
+		onlineddl.CheckCompleteMigrationShards(t, &vtParams, shards, uuid, "x, y, 1", true)
+		// This part may take a while, because we depend on vreplicatoin polling
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+		testRows(t)
+		testMigrationRowCount(t, uuid)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+	})
 	// Notes about throttling:
 	// In this endtoend test we test both direct tablet API for throttling, as well as VTGate queries.
 	// - VTGate queries (`ALTER VITESS_MIGRATION THROTTLE ALL ...`) are sent to all relevant shards/tablets via QueryExecutor
