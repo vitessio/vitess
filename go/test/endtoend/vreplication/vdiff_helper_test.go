@@ -263,17 +263,27 @@ type vdiffResult struct {
 }
 
 // execVDiffWithRetry will ignore transient errors that can occur during workflow state changes.
+<<<<<<< HEAD
 func execVDiffWithRetry(t *testing.T, expectError bool, useVtctldClient bool, args []string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), vdiffRetryTimeout)
+=======
+func execVDiffWithRetry(t *testing.T, expectError bool, args []string) (string, error) {
+	log.Infof("Executing vdiff with retry with args: %+v", args)
+	ctx, cancel := context.WithTimeout(context.Background(), vdiffRetryTimeout*3)
+>>>>>>> 2520f7f67b (Split workflow with flaky vdiff2 e2e test. Skip flaky Migrate test. (#18300))
 	defer cancel()
 	vdiffResultCh := make(chan vdiffResult)
 	go func() {
 		var output string
 		var err error
 		retry := false
+		log.Infof("vdiff attempt: args=%+v", args)
 		for {
 			select {
 			case <-ctx.Done():
+				vdiffResultCh <- vdiffResult{
+					output: "", err: fmt.Errorf("context done before vdiff completed: %v", ctx.Err()),
+				}
 				return
 			default:
 			}
@@ -281,11 +291,17 @@ func execVDiffWithRetry(t *testing.T, expectError bool, useVtctldClient bool, ar
 				time.Sleep(vdiffRetryInterval)
 			}
 			retry = false
+<<<<<<< HEAD
 			if useVtctldClient {
 				output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
 			} else {
 				output, err = vc.VtctlClient.ExecuteCommandWithOutput(args...)
 			}
+=======
+			log.Infof("Calling vtctldclient with args: %+v", args)
+			output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
+			log.Infof("vtctldclient finished: err=%v output=%q", err, output)
+>>>>>>> 2520f7f67b (Split workflow with flaky vdiff2 e2e test. Skip flaky Migrate test. (#18300))
 			if err != nil {
 				if expectError {
 					result := vdiffResult{output: output, err: err}
@@ -313,7 +329,7 @@ func execVDiffWithRetry(t *testing.T, expectError bool, useVtctldClient bool, ar
 	}()
 	select {
 	case <-ctx.Done():
-		return "", fmt.Errorf("timed out waiting for vdiff to complete")
+		return "", fmt.Errorf("timed out waiting for vdiff to complete: %+v", args)
 	case result := <-vdiffResultCh:
 		return result.output, result.err
 	}

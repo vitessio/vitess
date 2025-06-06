@@ -1,16 +1,9 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-<<<<<<<< HEAD:.github/workflows/cluster_endtoend_vreplication_migrate_vdiff2_convert_tz.yml
-name: Cluster (vreplication_migrate_vdiff2_convert_tz)
+name: Cluster (vreplication_vdiff2)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_migrate_vdiff2_convert_tz)')
-========
-name: Cluster (vreplication_vtctldclient_movetables_tz)
-on: [push, pull_request]
-concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_vtctldclient_movetables_tz)')
->>>>>>>> 2520f7f67b (Split workflow with flaky vdiff2 e2e test. Skip flaky Migrate test. (#18300)):.github/workflows/cluster_endtoend_vreplication_vtctldclient_movetables_tz.yml
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_vdiff2)')
   cancel-in-progress: true
 
 permissions: read-all
@@ -23,13 +16,8 @@ env:
 jobs:
   build:
     timeout-minutes: 60
-<<<<<<<< HEAD:.github/workflows/cluster_endtoend_vreplication_migrate_vdiff2_convert_tz.yml
-    name: Run endtoend tests on Cluster (vreplication_migrate_vdiff2_convert_tz)
-    runs-on: gh-hosted-runners-16cores-1-24.04
-========
-    name: Run endtoend tests on Cluster (vreplication_vtctldclient_movetables_tz)
+    name: Run endtoend tests on Cluster (vreplication_vdiff2)
     runs-on: ubuntu-24.04
->>>>>>>> 2520f7f67b (Split workflow with flaky vdiff2 e2e test. Skip flaky Migrate test. (#18300)):.github/workflows/cluster_endtoend_vreplication_vtctldclient_movetables_tz.yml
 
     steps:
     - name: Skip CI
@@ -83,11 +71,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-<<<<<<<< HEAD:.github/workflows/cluster_endtoend_vreplication_migrate_vdiff2_convert_tz.yml
-            - '.github/workflows/cluster_endtoend_vreplication_migrate_vdiff2_convert_tz.yml'
-========
-            - '.github/workflows/cluster_endtoend_vreplication_vtctldclient_movetables_tz.yml'
->>>>>>>> 2520f7f67b (Split workflow with flaky vdiff2 e2e test. Skip flaky Migrate test. (#18300)):.github/workflows/cluster_endtoend_vreplication_vtctldclient_movetables_tz.yml
+            - '.github/workflows/cluster_endtoend_vreplication_vdiff2.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -187,12 +171,14 @@ jobs:
         binlog-transaction-compression=ON
         EOF
         
+        cat <<-EOF>>./config/mycnf/mysql8026.cnf
+        binlog-row-value-options=PARTIAL_JSON
+        EOF
+        
+        # Some of these tests require specific locales to be installed.
+        # See https://github.com/cncf/automation/commit/49f2ad7a791a62ff7d038002bbb2b1f074eed5d5
         # run the tests however you normally do, then produce a JUnit XML file
-<<<<<<<< HEAD:.github/workflows/cluster_endtoend_vreplication_migrate_vdiff2_convert_tz.yml
-        eatmydata -- go run test.go -docker=false -follow -shard vreplication_migrate_vdiff2_convert_tz | tee -a output.txt | go-junit-report -set-exit-code > report.xml
-========
-        eatmydata -- go run test.go -docker=false -follow -shard vreplication_vtctldclient_movetables_tz | tee -a output.txt | go-junit-report -set-exit-code > report.xml
->>>>>>>> 2520f7f67b (Split workflow with flaky vdiff2 e2e test. Skip flaky Migrate test. (#18300)):.github/workflows/cluster_endtoend_vreplication_vtctldclient_movetables_tz.yml
+        eatmydata -- go run test.go -docker=false -follow -shard vreplication_vdiff2 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable if PR is not a draft
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && always()

@@ -1340,7 +1340,20 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
+<<<<<<< HEAD
 			"Shard": "vreplication_migrate_vdiff2_convert_tz",
+=======
+			"Shard": "vreplication_vdiff2",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_vtctldclient_cli": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldclientCLI", "-timeout", "20m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_vtctldclient_movetables_tz",
+>>>>>>> 2520f7f67b (Split workflow with flaky vdiff2 e2e test. Skip flaky Migrate test. (#18300))
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1349,7 +1362,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesTZ"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_vtctldclient_vdiff2_movetables_tz",
+			"Shard": "vreplication_vtctldclient_movetables_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1358,7 +1371,20 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestLookupIndex"],
 			"Command": [],
 			"Manual": false,
+<<<<<<< HEAD
 			"Shard": "vreplication_migrate_vdiff2_convert_tz",
+=======
+			"Shard": "vreplication_vtctldclient_movetables_tz",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtadmin": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtadmin"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "15",
+>>>>>>> 2520f7f67b (Split workflow with flaky vdiff2 e2e test. Skip flaky Migrate test. (#18300))
 			"RetryMax": 1,
 			"Tags": []
 		},
