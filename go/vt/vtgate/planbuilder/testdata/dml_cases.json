@@ -12,6 +12,50 @@
     "skip_e2e": true
   },
   {
+    "comment": "delete none",
+    "query": "delete from user where 1 = 0",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "DELETE",
+      "Original": "delete from user where 1 = 0",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "None",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "delete from `user` where 0",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "update none",
+    "query": "update user set name = 'xyz' where 1 = 0",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "UPDATE",
+      "Original": "update user set name = 'xyz' where 1 = 0",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "None",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "update `user` set `name` = 'xyz' where 0",
+        "Table": "user"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "explicit keyspace reference",
     "query": "update main.m1 set val = 1",
     "plan": {
