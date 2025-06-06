@@ -31,6 +31,8 @@ import (
 
 var _ Conn = (*StatsConn)(nil)
 
+// topoReadConsolidator is used to consolidate duplicated
+// topo reads for the same action + dir/path.
 var topoReadConsolidator singleflight.Group
 
 var (
