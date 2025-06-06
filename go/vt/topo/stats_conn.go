@@ -52,7 +52,7 @@ var (
 		"TopologyConnReadWait timings",
 		[]string{"Operation", "Cell"})
 
-	topoStatsConnReadConsolidatorWaitsTimings = stats.NewMultiTimings(
+	topoStatsConnReadConsolidatorWaitTimings = stats.NewMultiTimings(
 		"topoStatsConnReadConsolidatorWaits",
 		"topoStatsConnReadConsolidatorWait timings",
 		[]string{"Operation", "Cell"})
@@ -99,7 +99,7 @@ func (st *StatsConn) ListDir(ctx context.Context, dirPath string, full bool) ([]
 		return res, err
 	})
 	if shared {
-		topoStatsConnReadConsolidatorWaitsTimings.Record(statsKey, startTime)
+		topoStatsConnReadConsolidatorWaitTimings.Record(statsKey, startTime)
 	}
 	if r == nil {
 		return nil, err
@@ -165,7 +165,7 @@ func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version,
 		return result{bytes: bytes, version: version}, err
 	})
 	if shared {
-		topoStatsConnReadConsolidatorWaitsTimings.Record(statsKey, startTime)
+		topoStatsConnReadConsolidatorWaitTimings.Record(statsKey, startTime)
 	}
 	if r == nil {
 		return nil, nil, err
@@ -195,7 +195,7 @@ func (st *StatsConn) GetVersion(ctx context.Context, filePath string, version in
 		return bytes, err
 	})
 	if shared {
-		topoStatsConnReadConsolidatorWaitsTimings.Record(statsKey, startTime)
+		topoStatsConnReadConsolidatorWaitTimings.Record(statsKey, startTime)
 	}
 	if r == nil {
 		return nil, err
@@ -224,7 +224,7 @@ func (st *StatsConn) List(ctx context.Context, filePathPrefix string) ([]KVInfo,
 		return bytes, err
 	})
 	if shared {
-		topoStatsConnReadConsolidatorWaitsTimings.Record(statsKey, startTime)
+		topoStatsConnReadConsolidatorWaitTimings.Record(statsKey, startTime)
 	}
 	if r == nil {
 		return nil, err
