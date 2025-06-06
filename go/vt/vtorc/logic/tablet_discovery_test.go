@@ -568,22 +568,22 @@ func verifyTabletCount(t *testing.T, countWanted int) {
 func TestGetLockAction(t *testing.T) {
 	tests := []struct {
 		analysedInstance string
-		code             vtorcdatapb.AnalysisType
+		analysisType     vtorcdatapb.AnalysisType
 		want             string
 	}{
 		{
 			analysedInstance: "zone1-100",
-			code:             vtorcdatapb.AnalysisType_DeadPrimary,
+			analysisType:     vtorcdatapb.AnalysisType_DeadPrimary,
 			want:             "VTOrc Recovery for DeadPrimary on zone1-100",
 		}, {
 			analysedInstance: "zone1-200",
-			code:             vtorcdatapb.AnalysisType_ReplicationStopped,
+			analysisType:     vtorcdatapb.AnalysisType_ReplicationStopped,
 			want:             "VTOrc Recovery for ReplicationStopped on zone1-200",
 		},
 	}
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%v-%v", tt.analysedInstance, tt.code), func(t *testing.T) {
-			require.Equal(t, tt.want, getLockAction(tt.analysedInstance, tt.code))
+		t.Run(fmt.Sprintf("%v-%v", tt.analysedInstance, tt.analysisType), func(t *testing.T) {
+			require.Equal(t, tt.want, getLockAction(tt.analysedInstance, tt.analysisType))
 		})
 	}
 }
