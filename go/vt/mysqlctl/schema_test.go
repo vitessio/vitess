@@ -113,16 +113,31 @@ func TestColumnList(t *testing.T) {
 	defer db.Close()
 	fields, _, err := GetColumns("test", "t1", mockExec)
 	require.NoError(t, err)
-	require.Equal(t, `[name:"col1" type:VARCHAR name:"col2" type:INT64 name:"col3" type:VARBINARY]`, fmt.Sprintf("%+v", fields))
+
+	want := []*querypb.Field{
+		{
+			Name: "col1",
+			Type: sqltypes.VarChar,
+		},
+		{
+			Name: "col2",
+			Type: sqltypes.Int64,
+		},
+		{
+			Name: "col3",
+			Type: sqltypes.VarBinary,
+		},
+	}
+
+	require.Equal(t, want, fields)
 
 	fields, _, err = GetColumns("", "t2", mockExec)
 	require.NoError(t, err)
-	require.Equal(t, `[name:"col1" type:VARCHAR]`, fmt.Sprintf("%+v", fields))
+	require.Equal(t, want[:1], fields)
 
 	fields, _, err = GetColumns("", "with ' quote", mockExec)
 	require.NoError(t, err)
-	require.Equal(t, `[name:"col1" type:VARCHAR]`, fmt.Sprintf("%+v", fields))
-
+	require.Equal(t, want[:1], fields)
 }
 
 func TestGetSchemaAndSchemaChange(t *testing.T) {
@@ -187,7 +202,29 @@ func TestGetSchemaAndSchemaChange(t *testing.T) {
 	ctx := context.Background()
 	res, err := testMysqld.GetSchema(ctx, db.Name(), &tabletmanagerdata.GetSchemaRequest{})
 	assert.NoError(t, err)
-	assert.Equal(t, res.String(), `database_schema:"create_db_cmd" table_definitions:{name:"test_table" schema:"create_table_cmd" columns:"col1" columns:"col2" type:"test_type" row_count:2 fields:{name:"col1" type:VARCHAR} fields:{name:"col2" type:VARCHAR}}`)
+	want := &tabletmanagerdata.SchemaDefinition{
+		DatabaseSchema: "create_db_cmd",
+		TableDefinitions: []*tabletmanagerdata.TableDefinition{
+			{
+				Name:     "test_table",
+				Schema:   "create_table_cmd",
+				Columns:  []string{"col1", "col2"},
+				Type:     "test_type",
+				RowCount: 2,
+				Fields: []*querypb.Field{
+					{
+						Name: "col1",
+						Type: sqltypes.VarChar,
+					},
+					{
+						Name: "col2",
+						Type: sqltypes.VarChar,
+					},
+				},
+			},
+		},
+	}
+	assert.Equal(t, res, want)
 
 	// Test ApplySchemaChange
 	db.AddQuery("\nSET sql_log_bin = 0", &sqltypes.Result{})
@@ -195,7 +232,7 @@ func TestGetSchemaAndSchemaChange(t *testing.T) {
 	r, err := testMysqld.ApplySchemaChange(ctx, db.Name(), &tmutils.SchemaChange{})
 	assert.NoError(t, err)
 	assert.Equal(t, r.BeforeSchema, r.AfterSchema, "BeforeSchema should be equal to AfterSchema as no schema change was passed")
-	assert.Equal(t, `database_schema:"create_db_cmd" table_definitions:{name:"test_table" schema:"create_table_cmd" columns:"col1" columns:"col2" type:"test_type" row_count:2 fields:{name:"col1" type:VARCHAR} fields:{name:"col2" type:VARCHAR}}`, r.BeforeSchema.String())
+	assert.Equal(t, want, r.BeforeSchema)
 
 	r, err = testMysqld.ApplySchemaChange(ctx, db.Name(), &tmutils.SchemaChange{
 		BeforeSchema: &tabletmanagerdata.SchemaDefinition{
