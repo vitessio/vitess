@@ -99,7 +99,7 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.1) from t1 where id1 = 1")
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "context deadline exceeded")
+	assert.ErrorContains(t, err, "DeadlineExceeded")
 	assert.ErrorContains(t, err, "(errno 1317) (sqlstate 70100)")
 }
 

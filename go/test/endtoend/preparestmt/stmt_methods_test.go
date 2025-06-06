@@ -31,6 +31,33 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
+// TestDMLNone tests that impossible query run without an error.
+func TestDMLNone(t *testing.T) {
+	dbo := Connect(t)
+	defer dbo.Close()
+
+	t.Run("delete none", func(t *testing.T) {
+		dmlquery(t, dbo, "delete from sks.t1 where 1 = 0")
+	})
+	t.Run("update none", func(t *testing.T) {
+		dmlquery(t, dbo, "update sks.t1 set age = 5 where 1 = 0")
+	})
+}
+
+func dmlquery(t *testing.T, dbo *sql.DB, query string) {
+	stmt, err := dbo.Prepare(query)
+	require.NoError(t, err)
+	defer stmt.Close()
+
+	qr, err := stmt.Exec()
+	require.NoError(t, err)
+
+	ra, err := qr.RowsAffected()
+	require.NoError(t, err)
+
+	require.Zero(t, ra)
+}
+
 // TestSelect simple select the data without any condition.
 func TestSelect(t *testing.T) {
 	dbo := Connect(t)
