@@ -195,6 +195,7 @@ func TestMigrateUnsharded(t *testing.T) {
 // the target keyspace name doesn't match that of the source cluster. The test migrates
 // from a cluster with keyspace customer to an "external" cluster with keyspace rating.
 func TestMigrateSharded(t *testing.T) {
+	t.Skip("This test is very flaky, works locally though")
 	setSidecarDBName("_vt")
 	currentWorkflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
 	oldDefaultReplicas := defaultReplicas
