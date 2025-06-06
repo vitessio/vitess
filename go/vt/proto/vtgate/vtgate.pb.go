@@ -1340,11 +1340,9 @@ type VStreamFlags struct {
 	IncludeReshardJournalEvents bool `protobuf:"varint,8,opt,name=include_reshard_journal_events,json=includeReshardJournalEvents,proto3" json:"include_reshard_journal_events,omitempty"`
 	// Copy only these tables, skip the rest in the filter.
 	// If not provided, the default behaviour is to copy all tables.
-	TablesToCopy []string `protobuf:"bytes,9,rep,name=tables_to_copy,json=tablesToCopy,proto3" json:"tables_to_copy,omitempty"`
-	// Exclude the keyspace from the table name that is sent to the vstream client
-	ExcludeKeyspaceFromTableName bool `protobuf:"varint,10,opt,name=exclude_keyspace_from_table_name,json=excludeKeyspaceFromTableName,proto3" json:"exclude_keyspace_from_table_name,omitempty"`
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	TablesToCopy  []string `protobuf:"bytes,9,rep,name=tables_to_copy,json=tablesToCopy,proto3" json:"tables_to_copy,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VStreamFlags) Reset() {
@@ -1438,13 +1436,6 @@ func (x *VStreamFlags) GetTablesToCopy() []string {
 		return x.TablesToCopy
 	}
 	return nil
-}
-
-func (x *VStreamFlags) GetExcludeKeyspaceFromTableName() bool {
-	if x != nil {
-		return x.ExcludeKeyspaceFromTableName
-	}
-	return false
 }
 
 // VStreamRequest is the payload for VStream.
@@ -2013,7 +2004,7 @@ const file_vtgate_proto_rawDesc = "" +
 	"\x19ResolveTransactionRequest\x12,\n" +
 	"\tcaller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\bcallerId\x12\x12\n" +
 	"\x04dtid\x18\x02 \x01(\tR\x04dtid\"\x1c\n" +
-	"\x1aResolveTransactionResponse\"\xdd\x03\n" +
+	"\x1aResolveTransactionResponse\"\x95\x03\n" +
 	"\fVStreamFlags\x12#\n" +
 	"\rminimize_skew\x18\x01 \x01(\bR\fminimizeSkew\x12-\n" +
 	"\x12heartbeat_interval\x18\x02 \x01(\rR\x11heartbeatInterval\x12&\n" +
@@ -2023,9 +2014,7 @@ const file_vtgate_proto_rawDesc = "" +
 	"\ftablet_order\x18\x06 \x01(\tR\vtabletOrder\x12<\n" +
 	"\x1astream_keyspace_heartbeats\x18\a \x01(\bR\x18streamKeyspaceHeartbeats\x12C\n" +
 	"\x1einclude_reshard_journal_events\x18\b \x01(\bR\x1bincludeReshardJournalEvents\x12$\n" +
-	"\x0etables_to_copy\x18\t \x03(\tR\ftablesToCopy\x12F\n" +
-	" exclude_keyspace_from_table_name\x18\n" +
-	" \x01(\bR\x1cexcludeKeyspaceFromTableName\"\xf6\x01\n" +
+	"\x0etables_to_copy\x18\t \x03(\tR\ftablesToCopy\"\xf6\x01\n" +
 	"\x0eVStreamRequest\x12,\n" +
 	"\tcaller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\bcallerId\x125\n" +
 	"\vtablet_type\x18\x02 \x01(\x0e2\x14.topodata.TabletTypeR\n" +
