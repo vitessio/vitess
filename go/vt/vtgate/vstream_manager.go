@@ -695,7 +695,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					sendevents = append(sendevents, event)
 				case binlogdatapb.VEventType_ROW:
 					// Update table names and send.
-					event.FieldEvent.TableName = sgtid.Keyspace + "." + event.FieldEvent.TableName
+					event.RowEvent.TableName = sgtid.Keyspace + "." + event.RowEvent.TableName
 					sendevents = append(sendevents, event)
 				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
 					sendevents = append(sendevents, event)
