@@ -1009,7 +1009,7 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	case sqlparser.LaunchAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.LaunchMigrations(qre.ctx)
 	case sqlparser.CompleteMigrationType:
-		return qre.tsv.onlineDDLExecutor.CompleteMigration(qre.ctx, alterMigration.UUID)
+		return qre.tsv.onlineDDLExecutor.CompleteMigration(qre.ctx, alterMigration.UUID, alterMigration.Shards)
 	case sqlparser.CompleteAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.CompletePendingMigrations(qre.ctx)
 	case sqlparser.PostponeCompleteMigrationType:
