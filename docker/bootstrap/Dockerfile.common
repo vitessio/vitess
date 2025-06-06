@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 golang:1.23.8-bullseye
+FROM --platform=linux/amd64 golang:1.23.10-bullseye
 
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
