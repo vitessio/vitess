@@ -2294,7 +2294,7 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.MaxResultSize(); val != newSize {
 		t.Errorf("MaxResultSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.qe.maxResultSize.Load()); val != newSize {
+	if val := int(tsv.qe.maxResultSize.Get()); val != newSize {
 		t.Errorf("tsv.qe.maxResultSize.Get: %d, want %d", val, newSize)
 	}
 
@@ -2302,7 +2302,7 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.WarnResultSize(); val != newSize {
 		t.Errorf("WarnResultSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.qe.warnResultSize.Load()); val != newSize {
+	if val := int(tsv.qe.warnResultSize.Get()); val != newSize {
 		t.Errorf("tsv.qe.warnResultSize.Get: %d, want %d", val, newSize)
 	}
 }

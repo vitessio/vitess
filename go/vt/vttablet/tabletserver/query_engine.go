@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -170,8 +171,8 @@ type QueryEngine struct {
 	txSerializer *txserializer.TxSerializer
 
 	// Vars
-	maxResultSize    atomic.Int64
-	warnResultSize   atomic.Int64
+	maxResultSize    viperutil.Value[int64]
+	warnResultSize   viperutil.Value[int64]
 	streamBufferSize atomic.Int64
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
@@ -259,16 +260,16 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 		}
 	}
 
-	qe.maxResultSize.Store(int64(config.Oltp.MaxRows))
-	qe.warnResultSize.Store(int64(config.Oltp.WarnRows))
+	qe.maxResultSize = config.Oltp.MaxRows
+	qe.warnResultSize = config.Oltp.WarnRows
 	qe.streamBufferSize.Store(int64(config.StreamBufferSize))
 
 	planbuilder.PassthroughDMLs = config.PassthroughDML
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
-	env.Exporter().NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Load)
-	env.Exporter().NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Load)
+	env.Exporter().NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
+	env.Exporter().NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
 	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Load)
 	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Load)
 
