@@ -114,7 +114,13 @@ var (
 		"vreplication_v2",
 		"vreplication_partial_movetables_and_materialize",
 		"vreplication_foreign_key_stress",
+<<<<<<< HEAD
 		"vreplication_migrate_vdiff2_convert_tz",
+=======
+		"vreplication_migrate",
+		"vreplication_vtctldclient_movetables_tz",
+		"vreplication_vdiff2",
+>>>>>>> 2520f7f67b (Split workflow with flaky vdiff2 e2e test. Skip flaky Migrate test. (#18300))
 		"vreplication_multi_tenant",
 		"schemadiff_vrepl",
 		"topo_connection_cache",
