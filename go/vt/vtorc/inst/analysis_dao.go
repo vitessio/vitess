@@ -59,13 +59,6 @@ type clusterAnalysis struct {
 	durability           policy.Durabler
 }
 
-func gtidModeToProto(gtidMode string) vtorcdatapb.GTIDMode {
-	if i, found := vtorcdatapb.GTIDMode_value[gtidMode]; found {
-		return vtorcdatapb.GTIDMode(i)
-	}
-	return vtorcdatapb.GTIDMode_OFF
-}
-
 // GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
 func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAnalysisHints) ([]*vtorcdatapb.ReplicationAnalysis, error) {
 	var result []*vtorcdatapb.ReplicationAnalysis
@@ -352,7 +345,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.CountSemiSyncReplicasEnabled = m.GetUint32("count_semi_sync_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
 		a.CountSemiSyncPrimaryWaitForReplica = m.GetUint32("semi_sync_primary_wait_for_replica_count")
-		a.SemiSyncPrimaryClients = m.GetUint32("semi_sync_primary_clients")
+		a.CountSemiSyncPrimaryClients = m.GetUint32("semi_sync_primary_clients")
 
 		a.MinReplicaGtidMode = gtidModeToProto(m.GetString("min_replica_gtid_mode"))
 		a.MaxReplicaGtidMode = gtidModeToProto(m.GetString("max_replica_gtid_mode"))
@@ -367,7 +360,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.CountDelayedReplicas = m.GetUint32("count_delayed_replicas")
 		a.CountLaggingReplicas = m.GetUint32("count_lagging_replicas")
 		a.ReplicaNetTimeout = m.GetInt32("replica_net_timeout")
-		a.HeartbeatInterval = m.GetFloat("heartbeat_interval")
+		a.HeartbeatInterval = float32(m.GetFloat64("heartbeat_interval"))
 
 		a.IsReadOnly = m.GetUint32("read_only") == 1
 		a.IsDiskStalled = m.GetBool("is_disk_stalled")
@@ -491,7 +484,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = vtorcdatapb.AnalysisType_NotConnectedToPrimary
 			a.Description = "Not connected to the primary"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout) {
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(float64(a.HeartbeatInterval*2)) != float64(a.ReplicaNetTimeout) {
 			a.Analysis = vtorcdatapb.AnalysisType_ReplicaMisconfigured
 			a.Description = "Replica has been misconfigured"
 			//
@@ -521,7 +514,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = vtorcdatapb.AnalysisType_UnreachablePrimary
 			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
 			//
-		} else if a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.CountSemiSyncPrimaryWaitForReplica > 0 && a.SemiSyncPrimaryClients < a.CountSemiSyncPrimaryWaitForReplica {
+		} else if a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.CountSemiSyncPrimaryWaitForReplica > 0 && a.CountSemiSyncPrimaryClients < a.CountSemiSyncPrimaryWaitForReplica {
 			if isStaleBinlogCoordinates {
 				a.Analysis = vtorcdatapb.AnalysisType_LockedSemiSyncPrimary
 				a.Description = "Semi sync primary is locked since it doesn't get enough replica acknowledgements"
@@ -586,7 +579,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				a.StructureAnalysis = append(a.StructureAnalysis, vtorcdatapb.StructureAnalysisType_NoWriteablePrimaryStructureWarning)
 			}
 
-			if a.IsPrimary && a.SemiSyncPrimaryEnabled && !a.SemiSyncPrimaryStatus && a.CountSemiSyncPrimaryWaitForReplica > 0 && a.SemiSyncPrimaryClients < a.CountSemiSyncPrimaryWaitForReplica {
+			if a.IsPrimary && a.SemiSyncPrimaryEnabled && !a.SemiSyncPrimaryStatus && a.CountSemiSyncPrimaryWaitForReplica > 0 && a.CountSemiSyncPrimaryClients < a.CountSemiSyncPrimaryWaitForReplica {
 				a.StructureAnalysis = append(a.StructureAnalysis, vtorcdatapb.StructureAnalysisType_NotEnoughValidSemiSyncReplicasStructureWarning)
 			}
 		}
@@ -679,8 +672,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisType vtorcdata
 				alias = ?
 				AND analysis != ?
 			`,
-			// TODO: confirm .String() is desired format
-			analysisType.String(), tabletAlias, analysisType.String(),
+			AnalysisTypeProtoToString(analysisType), tabletAlias, analysisType.String(),
 		)
 		if err != nil {
 			log.Error(err)
@@ -709,8 +701,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisType vtorcdata
 				DATETIME('now'),
 				?
 			)`,
-			// TODO: confirm .String() is desired format
-			tabletAlias, analysisType.String(),
+			tabletAlias, AnalysisTypeProtoToString(analysisType),
 		)
 		if err != nil {
 			log.Error(err)
@@ -739,8 +730,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisType vtorcdata
 			DATETIME('now'),
 			?
 		)`,
-		// TODO: confirm .String() is desired format
-		tabletAlias, analysisType.String(),
+		tabletAlias, AnalysisTypeProtoToString(analysisType),
 	)
 	if err == nil {
 		analysisChangeWriteCounter.Add(1)

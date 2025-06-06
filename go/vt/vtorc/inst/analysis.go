@@ -17,6 +17,7 @@
 package inst
 
 import (
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
@@ -32,4 +33,28 @@ type ReplicationAnalysisHints struct {
 // between last_attempted_check to last_checked before we consider the instance as invalid.
 func ValidSecondsFromSeenToLastAttemptedCheck() uint {
 	return config.GetInstancePollSeconds()
+}
+
+// AnalysisTypeStringToProto converts an analysis type string to a vtorcdatapb.AnalysisType.
+func AnalysisTypeStringToProto(analysisType string) vtorcdatapb.AnalysisType {
+	if i, found := vtorcdatapb.AnalysisType_value[analysisType]; found {
+		return vtorcdatapb.AnalysisType(i)
+	}
+	return vtorcdatapb.AnalysisType_NoProblem
+}
+
+// AnalysisTypeProtoToString converts an vtorcdatapb.AnalysisType to a string.
+func AnalysisTypeProtoToString(analysisType vtorcdatapb.AnalysisType) string {
+	if str, found := vtorcdatapb.AnalysisType_name[int32(analysisType)]; found {
+		return str
+	}
+	return vtorcdatapb.AnalysisType_name[0]
+}
+
+// gtidModeToProto converts a gtid_mode string to a vtorcdatapb.GTIDMode.
+func gtidModeToProto(gtidMode string) vtorcdatapb.GTIDMode {
+	if i, found := vtorcdatapb.GTIDMode_value[gtidMode]; found {
+		return vtorcdatapb.GTIDMode(i)
+	}
+	return vtorcdatapb.GTIDMode_OFF
 }
