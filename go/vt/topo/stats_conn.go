@@ -80,7 +80,7 @@ func (st *StatsConn) ListDir(ctx context.Context, dirPath string, full bool) ([]
 	startTime := time.Now()
 	statsKey := []string{"ListDir", st.cell}
 	consolidatorKey := fmt.Sprintf("ListDir:%s:%v", dirPath, full)
-	res, err, shared := topoReadConsolidator.Do(consolidatorKey, func() (interface{}, error) {
+	r, err, shared := topoReadConsolidator.Do(consolidatorKey, func() (interface{}, error) {
 		if err := st.readSem.Acquire(ctx, 1); err != nil {
 			return nil, err
 		}
@@ -98,10 +98,10 @@ func (st *StatsConn) ListDir(ctx context.Context, dirPath string, full bool) ([]
 	if shared {
 		topoStatsConnReadConsolidatorWaitsTimings.Record(statsKey, startTime)
 	}
-	if res == nil {
+	if r == nil {
 		return nil, err
 	}
-	return res.([]DirEntry), err
+	return r.([]DirEntry), err
 }
 
 // Create is part of the Conn interface
