@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/faketopo"
@@ -567,16 +568,16 @@ func verifyTabletCount(t *testing.T, countWanted int) {
 func TestGetLockAction(t *testing.T) {
 	tests := []struct {
 		analysedInstance string
-		code             inst.AnalysisCode
+		code             vtorcdatapb.AnalysisType
 		want             string
 	}{
 		{
 			analysedInstance: "zone1-100",
-			code:             inst.DeadPrimary,
+			code:             vtorcdatapb.AnalysisType_DeadPrimary,
 			want:             "VTOrc Recovery for DeadPrimary on zone1-100",
 		}, {
 			analysedInstance: "zone1-200",
-			code:             inst.ReplicationStopped,
+			code:             vtorcdatapb.AnalysisType_ReplicationStopped,
 			want:             "VTOrc Recovery for ReplicationStopped on zone1-200",
 		},
 	}

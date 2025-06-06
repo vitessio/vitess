@@ -1080,9 +1080,9 @@ func GetIntFromValue(val any) int {
 }
 
 // WaitForDetectedProblems waits until the given analysis code, alias, keyspace and shard count matches the count expected.
-func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, code, alias, ks, shard string, expect int) {
+func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, analysisType vtorcdatapb.AnalysisType, alias, ks, shard string, expect int) {
 	t.Helper()
-	key := strings.Join([]string{code, alias, ks, shard}, ".")
+	key := strings.Join([]string{inst.AnalysisTypeProtoToString(analysisType), alias, ks, shard}, ".")
 	timeout := 15 * time.Second
 	startTime := time.Now()
 
