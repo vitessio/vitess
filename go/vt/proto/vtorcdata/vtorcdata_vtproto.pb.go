@@ -144,12 +144,10 @@ func (m *BinlogCoordinates) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x18
 	}
-	if len(m.LogPos) > 0 {
-		i -= len(m.LogPos)
-		copy(dAtA[i:], m.LogPos)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.LogPos)))
+	if m.LogPos != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.LogPos))
 		i--
-		dAtA[i] = 0x12
+		dAtA[i] = 0x10
 	}
 	if len(m.LogFile) > 0 {
 		i -= len(m.LogFile)
@@ -619,9 +617,8 @@ func (m *BinlogCoordinates) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	l = len(m.LogPos)
-	if l > 0 {
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	if m.LogPos != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.LogPos))
 	}
 	if m.Type != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.Type))
@@ -857,10 +854,10 @@ func (m *BinlogCoordinates) UnmarshalVT(dAtA []byte) error {
 			m.LogFile = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
-			if wireType != 2 {
+			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LogPos", wireType)
 			}
-			var stringLen uint64
+			m.LogPos = 0
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -870,24 +867,11 @@ func (m *BinlogCoordinates) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				m.LogPos |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.LogPos = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
 		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Type", wireType)

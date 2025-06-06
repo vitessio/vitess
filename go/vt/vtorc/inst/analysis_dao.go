@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -58,10 +59,10 @@ type clusterAnalysis struct {
 }
 
 // GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
-func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAnalysisHints) ([]*ReplicationAnalysis, error) {
-	var result []*ReplicationAnalysis
-	appendAnalysis := func(analysis *ReplicationAnalysis) {
-		if analysis.Analysis == NoProblem && len(analysis.StructureAnalysis) == 0 {
+func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAnalysisHints) ([]*vtorcdatapb.ReplicationAnalysis, error) {
+	var result []*vtorcdatapb.ReplicationAnalysis
+	appendAnalysis := func(analysis *vtorcdatapb.ReplicationAnalysis) {
+		if analysis.Analysis == vtorcdatapb.AnalysisType_NoProblem && len(analysis.StructureAnalysis) == 0 {
 			return
 		}
 		result = append(result, analysis)
@@ -278,8 +279,8 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 	clusters := make(map[string]*clusterAnalysis)
 	err := db.Db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		a := &ReplicationAnalysis{
-			Analysis: NoProblem,
+		a := &vtorcdatapb.ReplicationAnalysis{
+			Analysis: vtorcdatapb.AnalysisType_NoProblem,
 		}
 
 		tablet := &topodatapb.Tablet{}
@@ -306,7 +307,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.CurrentTabletType = topodatapb.TabletType(m.GetInt("current_tablet_type"))
 		a.AnalyzedKeyspace = m.GetString("keyspace")
 		a.AnalyzedShard = m.GetString("shard")
-		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
+		a.PrimaryTimestamp = protoutil.TimeToProto(m.GetTime("primary_timestamp"))
 
 		if keyspaceType := topodatapb.KeyspaceType(m.GetInt32("keyspace_type")); keyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
 			log.Errorf("keyspace %v is a snapshot keyspace. Skipping.", a.AnalyzedKeyspace)
@@ -317,63 +318,61 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.IsPrimary = m.GetBool("is_primary")
 		a.AnalyzedInstanceAlias = topoproto.TabletAliasString(tablet.Alias)
 		a.AnalyzedInstancePrimaryAlias = topoproto.TabletAliasString(primaryTablet.Alias)
-		a.AnalyzedInstanceBinlogCoordinates = BinlogCoordinates{
+		a.AnalyzedInstanceBinlogCoordinates = &vtorcdatapb.BinlogCoordinates{
 			LogFile: m.GetString("binary_log_file"),
 			LogPos:  m.GetUint64("binary_log_pos"),
-			Type:    BinaryLog,
+			Type:    vtorcdatapb.BinlogType_BinaryLog,
 		}
 		isStaleBinlogCoordinates := m.GetBool("is_stale_binlog_coordinates")
-		a.ClusterDetails.Keyspace = m.GetString("keyspace")
-		a.ClusterDetails.Shard = m.GetString("shard")
-		a.GTIDMode = m.GetString("gtid_mode")
+		a.GtidMode = m.GetString("gtid_mode")
 		a.LastCheckValid = m.GetBool("is_last_check_valid")
 		a.LastCheckPartialSuccess = m.GetBool("last_check_partial_success")
-		a.CountReplicas = m.GetUint("count_replicas")
-		a.CountValidReplicas = m.GetUint("count_valid_replicas")
-		a.CountValidReplicatingReplicas = m.GetUint("count_valid_replicating_replicas")
+		a.CountReplicas = m.GetUint32("count_replicas")
+		a.CountValidReplicas = m.GetUint32("count_valid_replicas")
+		a.CountValidReplicatingReplicas = m.GetUint32("count_valid_replicating_replicas")
 		a.ReplicationStopped = m.GetBool("replication_stopped")
-		a.ErrantGTID = m.GetString("gtid_errant")
+		a.ErrantGtid = m.GetString("gtid_errant")
 
-		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
-		a.OracleGTIDImmediateTopology = countValidOracleGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
-		countValidBinlogServerReplicas := m.GetUint("count_valid_binlog_server_replicas")
+		countValidOracleGtidReplicas := m.GetUint32("count_valid_oracle_gtid_replicas")
+		a.OracleGtidImmediateTopology = countValidOracleGtidReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
+		countValidBinlogServerReplicas := m.GetUint32("count_valid_binlog_server_replicas")
 		a.BinlogServerImmediateTopology = countValidBinlogServerReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
 		a.SemiSyncPrimaryStatus = m.GetBool("semi_sync_primary_status")
 		a.SemiSyncBlocked = m.GetBool("semi_sync_blocked")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
-		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
+		a.CountSemiSyncReplicasEnabled = m.GetUint32("count_semi_sync_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
-		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
-		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
+		a.CountSemiSyncPrimaryWaitForReplica = m.GetUint32("semi_sync_primary_wait_for_replica_count")
+		a.SemiSyncPrimaryClients = m.GetUint32("semi_sync_primary_clients")
 
-		a.MinReplicaGTIDMode = m.GetString("min_replica_gtid_mode")
-		a.MaxReplicaGTIDMode = m.GetString("max_replica_gtid_mode")
-		a.MaxReplicaGTIDErrant = m.GetString("max_replica_gtid_errant")
+		a.MinReplicaGtidMode = m.GetString("min_replica_gtid_mode")
+		a.MaxReplicaGtidMode = m.GetString("max_replica_gtid_mode")
+		a.MaxReplicaErrantGtid = m.GetString("max_replica_gtid_errant")
 
-		a.CountLoggingReplicas = m.GetUint("count_logging_replicas")
-		a.CountStatementBasedLoggingReplicas = m.GetUint("count_statement_based_logging_replicas")
-		a.CountMixedBasedLoggingReplicas = m.GetUint("count_mixed_based_logging_replicas")
-		a.CountRowBasedLoggingReplicas = m.GetUint("count_row_based_logging_replicas")
-		a.CountDistinctMajorVersionsLoggingReplicas = m.GetUint("count_distinct_logging_major_versions")
+		a.CountLoggingReplicas = m.GetUint32("count_logging_replicas")
+		a.CountStatementBasedLoggingReplicas = m.GetUint32("count_statement_based_logging_replicas")
+		a.CountMixedBasedLoggingReplicas = m.GetUint32("count_mixed_based_logging_replicas")
+		a.CountRowBasedLoggingReplicas = m.GetUint32("count_row_based_logging_replicas")
+		a.CountDistinctMajorVersionsLoggingReplicas = m.GetUint32("count_distinct_logging_major_versions")
 
-		a.CountDelayedReplicas = m.GetUint("count_delayed_replicas")
-		a.CountLaggingReplicas = m.GetUint("count_lagging_replicas")
+		a.CountDelayedReplicas = m.GetUint32("count_delayed_replicas")
+		a.CountLaggingReplicas = m.GetUint32("count_lagging_replicas")
 		a.ReplicaNetTimeout = m.GetInt32("replica_net_timeout")
-		a.HeartbeatInterval = m.GetFloat64("heartbeat_interval")
+		a.HeartbeatInterval = m.GetFloat("heartbeat_interval")
 
-		a.IsReadOnly = m.GetUint("read_only") == 1
+		a.IsReadOnly = m.GetUint32("read_only") == 1
 		a.IsDiskStalled = m.GetBool("is_disk_stalled")
 
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
-				a.AnalyzedInstanceAlias, a.ClusterDetails.Keyspace, a.ClusterDetails.Shard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
+				a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
 				log.Infof(analysisMessage)
 			}
 		}
-		keyspaceShard := getKeyspaceShardName(a.ClusterDetails.Keyspace, a.ClusterDetails.Shard)
+		keyspaceShard := getKeyspaceShardName(a.AnalyzedKeyspace, a.AnalyzedShard)
 		if clusters[keyspaceShard] == nil {
 			clusters[keyspaceShard] = &clusterAnalysis{}
 			if a.TabletType == topodatapb.TabletType_PRIMARY {
@@ -406,141 +405,141 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		}
 		isInvalid := m.GetBool("is_invalid")
 		if a.IsClusterPrimary && isInvalid {
-			a.Analysis = InvalidPrimary
+			a.Analysis = vtorcdatapb.AnalysisType_InvalidPrimary
 			a.Description = "VTOrc hasn't been able to reach the primary even once since restart/shutdown"
 		} else if isInvalid {
-			a.Analysis = InvalidReplica
+			a.Analysis = vtorcdatapb.AnalysisType_InvalidReplica
 			a.Description = "VTOrc hasn't been able to reach the replica even once since restart/shutdown"
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskStalled {
-			a.Analysis = PrimaryDiskStalled
+			a.Analysis = vtorcdatapb.AnalysisType_PrimaryDiskStalled
 			a.Description = "Primary has a stalled disk"
 			ca.hasClusterwideAction = true
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
-			a.Analysis = DeadPrimaryWithoutReplicas
+			a.Analysis = vtorcdatapb.AnalysisType_DeadPrimaryWithoutReplicas
 			a.Description = "Primary cannot be reached by vtorc and has no replica"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = DeadPrimary
+			a.Analysis = vtorcdatapb.AnalysisType_DeadPrimary
 			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = DeadPrimaryAndReplicas
+			a.Analysis = vtorcdatapb.AnalysisType_DeadPrimaryAndReplicas
 			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = DeadPrimaryAndSomeReplicas
+			a.Analysis = vtorcdatapb.AnalysisType_DeadPrimaryAndSomeReplicas
 			a.Description = "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.IsPrimary {
-			a.Analysis = PrimaryHasPrimary
+			a.Analysis = vtorcdatapb.AnalysisType_PrimaryHasPrimary
 			a.Description = "Primary is replicating from somewhere else"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && a.IsReadOnly {
-			a.Analysis = PrimaryIsReadOnly
+			a.Analysis = vtorcdatapb.AnalysisType_PrimaryIsReadOnly
 			a.Description = "Primary is read-only"
 			//
 		} else if a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled {
-			a.Analysis = PrimarySemiSyncMustBeSet
+			a.Analysis = vtorcdatapb.AnalysisType_PrimarySemiSyncMustBeSet
 			a.Description = "Primary semi-sync must be set"
 			//
 		} else if a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled {
-			a.Analysis = PrimarySemiSyncMustNotBeSet
+			a.Analysis = vtorcdatapb.AnalysisType_PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
 		} else if a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY {
-			a.Analysis = PrimaryCurrentTypeMismatch
+			a.Analysis = vtorcdatapb.AnalysisType_PrimaryCurrentTypeMismatch
 			a.Description = "Primary tablet's current type is not PRIMARY"
-		} else if topo.IsReplicaType(a.TabletType) && a.ErrantGTID != "" {
-			a.Analysis = ErrantGTIDDetected
+		} else if topo.IsReplicaType(a.TabletType) && a.ErrantGtid != "" {
+			a.Analysis = vtorcdatapb.AnalysisType_ErrantGtidDetected
 			a.Description = "Tablet has errant GTIDs"
 		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp == "" {
 			// ClusterHasNoPrimary should only be detected when the shard record doesn't have any primary term start time specified either.
-			a.Analysis = ClusterHasNoPrimary
+			a.Analysis = vtorcdatapb.AnalysisType_ClusterHasNoPrimary
 			a.Description = "Cluster has no primary"
 			ca.hasClusterwideAction = true
 		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp != "" {
 			// If there are no primary tablets, but the shard primary start time isn't empty, then we know
 			// the primary tablet was deleted.
-			a.Analysis = PrimaryTabletDeleted
+			a.Analysis = vtorcdatapb.AnalysisType_PrimaryTabletDeleted
 			a.Description = "Primary tablet has been deleted"
 			ca.hasClusterwideAction = true
 		} else if a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount {
 			// The primary is reporting that semi-sync monitor is blocked on writes.
 			// There are enough replicas configured to send semi-sync ACKs such that the primary shouldn't be blocked.
 			// There is some network diruption in progress. We should run an ERS.
-			a.Analysis = PrimarySemiSyncBlocked
+			a.Analysis = vtorcdatapb.AnalysisType_PrimarySemiSyncBlocked
 			a.Description = "Writes seem to be blocked on semi-sync acks on the primary, even though sufficient replicas are configured to send ACKs"
 			ca.hasClusterwideAction = true
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsReadOnly {
-			a.Analysis = ReplicaIsWritable
+			a.Analysis = vtorcdatapb.AnalysisType_ReplicaIsWritable
 			a.Description = "Replica is writable"
 			//
 		} else if topo.IsReplicaType(a.TabletType) && a.IsPrimary {
-			a.Analysis = NotConnectedToPrimary
+			a.Analysis = vtorcdatapb.AnalysisType_NotConnectedToPrimary
 			a.Description = "Not connected to the primary"
 			//
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && math.Round(a.HeartbeatInterval*2) != float64(a.ReplicaNetTimeout) {
-			a.Analysis = ReplicaMisconfigured
+			a.Analysis = vtorcdatapb.AnalysisType_ReplicaMisconfigured
 			a.Description = "Replica has been misconfigured"
 			//
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != "" && a.AnalyzedInstancePrimaryAlias != ca.primaryAlias {
-			a.Analysis = ConnectedToWrongPrimary
+			a.Analysis = vtorcdatapb.AnalysisType_ConnectedToWrongPrimary
 			a.Description = "Connected to wrong primary"
 			//
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped {
-			a.Analysis = ReplicationStopped
+			a.Analysis = vtorcdatapb.AnalysisType_ReplicationStopped
 			a.Description = "Replication is stopped"
 			//
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && policy.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && !a.SemiSyncReplicaEnabled {
-			a.Analysis = ReplicaSemiSyncMustBeSet
+			a.Analysis = vtorcdatapb.AnalysisType_ReplicaSemiSyncMustBeSet
 			a.Description = "Replica semi-sync must be set"
 			//
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !policy.IsReplicaSemiSync(ca.durability, primaryTablet, tablet) && a.SemiSyncReplicaEnabled {
-			a.Analysis = ReplicaSemiSyncMustNotBeSet
+			a.Analysis = vtorcdatapb.AnalysisType_ReplicaSemiSyncMustNotBeSet
 			a.Description = "Replica semi-sync must not be set"
 			//
 			// TODO(sougou): Events below here are either ignored or not possible.
 		} else if a.IsPrimary && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0 {
-			a.Analysis = UnreachablePrimaryWithLaggingReplicas
+			a.Analysis = vtorcdatapb.AnalysisType_UnreachablePrimaryWithLaggingReplicas
 			a.Description = "Primary cannot be reached by vtorc and all of its replicas are lagging"
 			//
 		} else if a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
 			// partial success is here to reduce noise
-			a.Analysis = UnreachablePrimary
+			a.Analysis = vtorcdatapb.AnalysisType_UnreachablePrimary
 			a.Description = "Primary cannot be reached by vtorc but it has replicating replicas; possibly a network/host issue"
 			//
 		} else if a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount {
 			if isStaleBinlogCoordinates {
-				a.Analysis = LockedSemiSyncPrimary
+				a.Analysis = vtorcdatapb.AnalysisType_LockedSemiSyncPrimary
 				a.Description = "Semi sync primary is locked since it doesn't get enough replica acknowledgements"
 			} else {
-				a.Analysis = LockedSemiSyncPrimaryHypothesis
+				a.Analysis = vtorcdatapb.AnalysisType_LockedSemiSyncPrimaryHypothesis
 				a.Description = "Semi sync primary seems to be locked, more samplings needed to validate"
 			}
 			//
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = PrimarySingleReplicaNotReplicating
+			a.Analysis = vtorcdatapb.AnalysisType_PrimarySingleReplicaNotReplicating
 			a.Description = "Primary is reachable but its single replica is not replicating"
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == 0 {
-			a.Analysis = PrimarySingleReplicaDead
+			a.Analysis = vtorcdatapb.AnalysisType_PrimarySingleReplicaDead
 			a.Description = "Primary is reachable but its single replica is dead"
 			//
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = AllPrimaryReplicasNotReplicating
+			a.Analysis = vtorcdatapb.AnalysisType_AllPrimaryReplicasNotReplicating
 			a.Description = "Primary is reachable but none of its replicas is replicating"
 			//
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
-			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
+			a.Analysis = vtorcdatapb.AnalysisType_AllPrimaryReplicasNotReplicatingOrDead
 			a.Description = "Primary is reachable but none of its replicas is replicating"
 			//
 		}
 		//		 else if a.IsPrimary && a.CountReplicas == 0 {
-		//			a.Analysis = PrimaryWithoutReplicas
+		//			a.Analysis = vtorcdatapb.AnalysisType_PrimaryWithoutReplicas
 		//			a.Description = "Primary has no replicas"
 		//		}
 
@@ -551,7 +550,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				a.StructureAnalysis = append(a.StructureAnalysis, NoLoggingReplicasStructureWarning)
 			}
 			if a.IsPrimary && a.CountReplicas > 1 &&
-				!a.OracleGTIDImmediateTopology &&
+				!a.OracleGtidImmediateTopology &&
 				!a.BinlogServerImmediateTopology {
 				a.StructureAnalysis = append(a.StructureAnalysis, NoFailoverSupportStructureWarning)
 			}
@@ -568,11 +567,11 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				a.StructureAnalysis = append(a.StructureAnalysis, MultipleMajorVersionsLoggingReplicasStructureWarning)
 			}
 
-			if a.CountReplicas > 0 && (a.GTIDMode != a.MinReplicaGTIDMode || a.GTIDMode != a.MaxReplicaGTIDMode) {
-				a.StructureAnalysis = append(a.StructureAnalysis, DifferentGTIDModesStructureWarning)
+			if a.CountReplicas > 0 && (a.GtidMode != a.MinReplicaGtidMode || a.GtidMode != a.MaxReplicaGtidMode) {
+				a.StructureAnalysis = append(a.StructureAnalysis, DifferentGtidModesStructureWarning)
 			}
-			if a.MaxReplicaGTIDErrant != "" {
-				a.StructureAnalysis = append(a.StructureAnalysis, ErrantGTIDStructureWarning)
+			if a.MaxReplicaGtidErrant != "" {
+				a.StructureAnalysis = append(a.StructureAnalysis, ErrantGtidStructureWarning)
 			}
 
 			if a.IsPrimary && a.IsReadOnly {
@@ -604,7 +603,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 }
 
 // postProcessAnalyses is used to update different analyses based on the information gleaned from looking at all the analyses together instead of individual data.
-func postProcessAnalyses(result []*ReplicationAnalysis, clusters map[string]*clusterAnalysis) []*ReplicationAnalysis {
+func postProcessAnalyses(result []*vtorcdatapb.ReplicationAnalysis, clusters map[string]*clusterAnalysis) []*vtorcdatapb.ReplicationAnalysis {
 	for {
 		// Store whether we have changed the result of replication analysis or not.
 		resultChanged := false
@@ -614,14 +613,14 @@ func postProcessAnalyses(result []*ReplicationAnalysis, clusters map[string]*clu
 			// If one of them is an InvalidPrimary, then we see if all the other tablets in this keyspace shard are
 			// unable to replicate or not.
 			if analysis.Analysis == InvalidPrimary {
-				keyspaceName := analysis.ClusterDetails.Keyspace
-				shardName := analysis.ClusterDetails.Shard
+				keyspaceName := analysis.AnalyzedKeyspace
+				shardName := analysis.AnalyzedShard
 				keyspaceShard := getKeyspaceShardName(keyspaceName, shardName)
 				totalReplicas := clusters[keyspaceShard].totalTablets - 1
 				var notReplicatingReplicas []int
 				for idx, replicaAnalysis := range result {
-					if replicaAnalysis.ClusterDetails.Keyspace == keyspaceName &&
-						replicaAnalysis.ClusterDetails.Shard == shardName && topo.IsReplicaType(replicaAnalysis.TabletType) {
+					if replicaAnalysis.AnalyzedKeyspace == keyspaceName &&
+						replicaAnalysis.AnalyzedShard == shardName && topo.IsReplicaType(replicaAnalysis.TabletType) {
 						// If the replica's last check is invalid or its replication is stopped, then we consider as not replicating.
 						if !replicaAnalysis.LastCheckValid || replicaAnalysis.ReplicationStopped {
 							notReplicatingReplicas = append(notReplicatingReplicas, idx)
@@ -651,12 +650,12 @@ func postProcessAnalyses(result []*ReplicationAnalysis, clusters map[string]*clu
 // auditInstanceAnalysisInChangelog will write down an instance's analysis in the database_instance_analysis_changelog table.
 // To not repeat recurring analysis code, the database_instance_last_analysis table is used, so that only changes to
 // analysis codes are written.
-func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisCode) error {
+func auditInstanceAnalysisInChangelog(tabletAlias string, analysisType vtorcdatapb.AnalysisType) error {
 	if lastWrittenAnalysis, found := recentInstantAnalysis.Get(tabletAlias); found {
-		if lastWrittenAnalysis == analysisCode {
+		if lastWrittenAnalysis == analysisType {
 			// Surely nothing new.
 			// And let's expand the timeout
-			recentInstantAnalysis.Set(tabletAlias, analysisCode, cache.DefaultExpiration)
+			recentInstantAnalysis.Set(tabletAlias, analysisType, cache.DefaultExpiration)
 			return nil
 		}
 	}
@@ -672,7 +671,8 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 				alias = ?
 				AND analysis != ?
 			`,
-			string(analysisCode), tabletAlias, string(analysisCode),
+			// TODO: confirm .String() is desired format
+			analysisType.String(), tabletAlias, analysisType.String(),
 		)
 		if err != nil {
 			log.Error(err)
@@ -701,7 +701,8 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 				DATETIME('now'),
 				?
 			)`,
-			tabletAlias, string(analysisCode),
+			// TODO: confirm .String() is desired format
+			tabletAlias, analysisType.String(),
 		)
 		if err != nil {
 			log.Error(err)
@@ -714,7 +715,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 		}
 		firstInsertion = rows > 0
 	}
-	recentInstantAnalysis.Set(tabletAlias, analysisCode, cache.DefaultExpiration)
+	recentInstantAnalysis.Set(tabletAlias, analysisType, cache.DefaultExpiration)
 	// If the analysis has changed or if it is the first insertion, we need to make sure we write this change to the database.
 	if !lastAnalysisChanged && !firstInsertion {
 		return nil
@@ -730,7 +731,8 @@ func auditInstanceAnalysisInChangelog(tabletAlias string, analysisCode AnalysisC
 			DATETIME('now'),
 			?
 		)`,
-		tabletAlias, string(analysisCode),
+		// TODO: confirm .String() is desired format
+		tabletAlias, analysisType.String(),
 	)
 	if err == nil {
 		analysisChangeWriteCounter.Add(1)

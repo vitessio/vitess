@@ -55,7 +55,7 @@ enum AnalysisType {
   LockedSemiSyncPrimaryHypothesis = 27;
   LockedSemiSyncPrimary = 28;
   PrimarySemiSyncBlocked = 29;
-  ErrantGTIDDetected = 30;
+  ErrantGtidDetected = 30;
   PrimaryDiskStalled = 31;
 }
 
@@ -66,8 +66,8 @@ enum StructureAnalysisType {
   MixedAndRowLoggingReplicasStructureWarning = 3;
   MultipleMajorVersionsLoggingReplicasStructureWarning = 4;
   NoLoggingReplicasStructureWarning = 5;
-  DifferentGTIDModesStructureWarning = 6;
-  ErrantGTIDStructureWarning = 7;
+  DifferentGtidModesStructureWarning = 6;
+  ErrantGtidStructureWarning = 7;
   NoFailoverSupportStructureWarning = 8;
   NoWriteablePrimaryStructureWarning = 9;
   NotEnoughValidSemiSyncReplicasStructureWarning = 10;
@@ -87,7 +87,7 @@ enum BinlogType {
 
 message BinlogCoordinates {
   string LogFile = 1;
-  string LogPos = 2;
+  uint64 LogPos = 2;
   BinlogType type = 3;
 }
 

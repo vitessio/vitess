@@ -73,7 +73,7 @@ const (
 	AnalysisType_LockedSemiSyncPrimaryHypothesis        AnalysisType = 27
 	AnalysisType_LockedSemiSyncPrimary                  AnalysisType = 28
 	AnalysisType_PrimarySemiSyncBlocked                 AnalysisType = 29
-	AnalysisType_ErrantGTIDDetected                     AnalysisType = 30
+	AnalysisType_ErrantGtidDetected                     AnalysisType = 30
 	AnalysisType_PrimaryDiskStalled                     AnalysisType = 31
 )
 
@@ -110,7 +110,7 @@ var (
 		27: "LockedSemiSyncPrimaryHypothesis",
 		28: "LockedSemiSyncPrimary",
 		29: "PrimarySemiSyncBlocked",
-		30: "ErrantGTIDDetected",
+		30: "ErrantGtidDetected",
 		31: "PrimaryDiskStalled",
 	}
 	AnalysisType_value = map[string]int32{
@@ -144,7 +144,7 @@ var (
 		"LockedSemiSyncPrimaryHypothesis":        27,
 		"LockedSemiSyncPrimary":                  28,
 		"PrimarySemiSyncBlocked":                 29,
-		"ErrantGTIDDetected":                     30,
+		"ErrantGtidDetected":                     30,
 		"PrimaryDiskStalled":                     31,
 	}
 )
@@ -185,8 +185,8 @@ const (
 	StructureAnalysisType_MixedAndRowLoggingReplicasStructureWarning           StructureAnalysisType = 3
 	StructureAnalysisType_MultipleMajorVersionsLoggingReplicasStructureWarning StructureAnalysisType = 4
 	StructureAnalysisType_NoLoggingReplicasStructureWarning                    StructureAnalysisType = 5
-	StructureAnalysisType_DifferentGTIDModesStructureWarning                   StructureAnalysisType = 6
-	StructureAnalysisType_ErrantGTIDStructureWarning                           StructureAnalysisType = 7
+	StructureAnalysisType_DifferentGtidModesStructureWarning                   StructureAnalysisType = 6
+	StructureAnalysisType_ErrantGtidStructureWarning                           StructureAnalysisType = 7
 	StructureAnalysisType_NoFailoverSupportStructureWarning                    StructureAnalysisType = 8
 	StructureAnalysisType_NoWriteablePrimaryStructureWarning                   StructureAnalysisType = 9
 	StructureAnalysisType_NotEnoughValidSemiSyncReplicasStructureWarning       StructureAnalysisType = 10
@@ -201,8 +201,8 @@ var (
 		3:  "MixedAndRowLoggingReplicasStructureWarning",
 		4:  "MultipleMajorVersionsLoggingReplicasStructureWarning",
 		5:  "NoLoggingReplicasStructureWarning",
-		6:  "DifferentGTIDModesStructureWarning",
-		7:  "ErrantGTIDStructureWarning",
+		6:  "DifferentGtidModesStructureWarning",
+		7:  "ErrantGtidStructureWarning",
 		8:  "NoFailoverSupportStructureWarning",
 		9:  "NoWriteablePrimaryStructureWarning",
 		10: "NotEnoughValidSemiSyncReplicasStructureWarning",
@@ -214,8 +214,8 @@ var (
 		"MixedAndRowLoggingReplicasStructureWarning":           3,
 		"MultipleMajorVersionsLoggingReplicasStructureWarning": 4,
 		"NoLoggingReplicasStructureWarning":                    5,
-		"DifferentGTIDModesStructureWarning":                   6,
-		"ErrantGTIDStructureWarning":                           7,
+		"DifferentGtidModesStructureWarning":                   6,
+		"ErrantGtidStructureWarning":                           7,
 		"NoFailoverSupportStructureWarning":                    8,
 		"NoWriteablePrimaryStructureWarning":                   9,
 		"NotEnoughValidSemiSyncReplicasStructureWarning":       10,
@@ -350,7 +350,7 @@ func (BinlogType) EnumDescriptor() ([]byte, []int) {
 type BinlogCoordinates struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	LogFile       string                 `protobuf:"bytes,1,opt,name=LogFile,proto3" json:"LogFile,omitempty"`
-	LogPos        string                 `protobuf:"bytes,2,opt,name=LogPos,proto3" json:"LogPos,omitempty"`
+	LogPos        uint64                 `protobuf:"varint,2,opt,name=LogPos,proto3" json:"LogPos,omitempty"`
 	Type          BinlogType             `protobuf:"varint,3,opt,name=type,proto3,enum=vtorcdata.BinlogType" json:"type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -393,11 +393,11 @@ func (x *BinlogCoordinates) GetLogFile() string {
 	return ""
 }
 
-func (x *BinlogCoordinates) GetLogPos() string {
+func (x *BinlogCoordinates) GetLogPos() uint64 {
 	if x != nil {
 		return x.LogPos
 	}
-	return ""
+	return 0
 }
 
 func (x *BinlogCoordinates) GetType() BinlogType {
@@ -826,7 +826,7 @@ const file_vtorcdata_proto_rawDesc = "" +
 	"\x0fvtorcdata.proto\x12\tvtorcdata\x1a\x0etopodata.proto\x1a\fvttime.proto\"p\n" +
 	"\x11BinlogCoordinates\x12\x18\n" +
 	"\aLogFile\x18\x01 \x01(\tR\aLogFile\x12\x16\n" +
-	"\x06LogPos\x18\x02 \x01(\tR\x06LogPos\x12)\n" +
+	"\x06LogPos\x18\x02 \x01(\x04R\x06LogPos\x12)\n" +
 	"\x04type\x18\x03 \x01(\x0e2\x15.vtorcdata.BinlogTypeR\x04type\"\xe1\x15\n" +
 	"\x13ReplicationAnalysis\x12\x1f\n" +
 	"\vrecovery_id\x18\x01 \x01(\x03R\n" +
@@ -914,7 +914,7 @@ const file_vtorcdata_proto_rawDesc = "" +
 	"\x1fLockedSemiSyncPrimaryHypothesis\x10\x1b\x12\x19\n" +
 	"\x15LockedSemiSyncPrimary\x10\x1c\x12\x1a\n" +
 	"\x16PrimarySemiSyncBlocked\x10\x1d\x12\x16\n" +
-	"\x12ErrantGTIDDetected\x10\x1e\x12\x16\n" +
+	"\x12ErrantGtidDetected\x10\x1e\x12\x16\n" +
 	"\x12PrimaryDiskStalled\x10\x1f*\xf6\x03\n" +
 	"\x15StructureAnalysisType\x12\x17\n" +
 	"\x13NoStructureAnalysis\x10\x00\x124\n" +
@@ -923,8 +923,8 @@ const file_vtorcdata_proto_rawDesc = "" +
 	"*MixedAndRowLoggingReplicasStructureWarning\x10\x03\x128\n" +
 	"4MultipleMajorVersionsLoggingReplicasStructureWarning\x10\x04\x12%\n" +
 	"!NoLoggingReplicasStructureWarning\x10\x05\x12&\n" +
-	"\"DifferentGTIDModesStructureWarning\x10\x06\x12\x1e\n" +
-	"\x1aErrantGTIDStructureWarning\x10\a\x12%\n" +
+	"\"DifferentGtidModesStructureWarning\x10\x06\x12\x1e\n" +
+	"\x1aErrantGtidStructureWarning\x10\a\x12%\n" +
 	"!NoFailoverSupportStructureWarning\x10\b\x12&\n" +
 	"\"NoWriteablePrimaryStructureWarning\x10\t\x122\n" +
 	".NotEnoughValidSemiSyncReplicasStructureWarning\x10\n" +
