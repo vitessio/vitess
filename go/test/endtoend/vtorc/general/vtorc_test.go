@@ -31,8 +31,8 @@ import (
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	vtutils "vitess.io/vitess/go/vt/utils"
-	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
 
@@ -317,7 +317,7 @@ func TestVTOrcRepairs(t *testing.T) {
 
 		// Wait for problems to be set.
 		utils.WaitForDetectedProblems(t, vtOrcProcess,
-			string(inst.PrimaryIsReadOnly),
+			vtorcdatapb.AnalysisType_PrimaryIsReadOnly,
 			curPrimary.Alias,
 			keyspace.Name,
 			shard0.Name,
@@ -331,7 +331,7 @@ func TestVTOrcRepairs(t *testing.T) {
 
 		// wait for detected problem to be cleared.
 		utils.WaitForDetectedProblems(t, vtOrcProcess,
-			string(inst.PrimaryIsReadOnly),
+			vtorcdatapb.AnalysisType_PrimaryIsReadOnly,
 			curPrimary.Alias,
 			keyspace.Name,
 			shard0.Name,
