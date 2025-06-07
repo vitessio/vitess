@@ -111,7 +111,7 @@ const (
 // TopologyRecovery represents an entry in the topology_recovery table
 type TopologyRecovery struct {
 	ID                     int64
-	AnalysisEntry          vtorcdatapb.ReplicationAnalysis
+	AnalysisEntry          *vtorcdatapb.ReplicationAnalysis
 	SuccessorAlias         string
 	IsSuccessful           bool
 	AllErrors              []string
@@ -120,7 +120,7 @@ type TopologyRecovery struct {
 	DetectionID            int64
 }
 
-func NewTopologyRecovery(replicationAnalysis vtorcdatapb.ReplicationAnalysis) *TopologyRecovery {
+func NewTopologyRecovery(replicationAnalysis *vtorcdatapb.ReplicationAnalysis) *TopologyRecovery {
 	topologyRecovery := &TopologyRecovery{}
 	topologyRecovery.AnalysisEntry = replicationAnalysis
 	topologyRecovery.AllErrors = []string{}

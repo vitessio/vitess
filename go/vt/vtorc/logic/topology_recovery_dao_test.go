@@ -39,7 +39,7 @@ func TestTopologyRecovery(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	replicationAnalysis := vtorcdatapb.ReplicationAnalysis{
+	replicationAnalysis := &vtorcdatapb.ReplicationAnalysis{
 		AnalyzedInstanceAlias: "zone1-0000000101",
 		TabletType:            tab101.Type,
 		AnalyzedKeyspace:      keyspace,

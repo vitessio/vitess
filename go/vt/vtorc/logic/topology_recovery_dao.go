@@ -123,7 +123,7 @@ func AttemptRecoveryRegistration(analysisEntry *vtorcdatapb.ReplicationAnalysis)
 		return nil, errors.New(errMsg)
 	}
 
-	topologyRecovery := NewTopologyRecovery(*analysisEntry)
+	topologyRecovery := NewTopologyRecovery(analysisEntry)
 
 	topologyRecovery, err = writeTopologyRecovery(topologyRecovery)
 	if err != nil {
@@ -181,7 +181,7 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		limit,
 	)
 	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		topologyRecovery := *NewTopologyRecovery(vtorcdatapb.ReplicationAnalysis{})
+		topologyRecovery := *NewTopologyRecovery(&vtorcdatapb.ReplicationAnalysis{})
 		topologyRecovery.ID = m.GetInt64("recovery_id")
 
 		topologyRecovery.RecoveryStartTimestamp = m.GetString("start_recovery")
