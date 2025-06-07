@@ -33,7 +33,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	vtutils "vitess.io/vitess/go/vt/utils"
-	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 )
 
