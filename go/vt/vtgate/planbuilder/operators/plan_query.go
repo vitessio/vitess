@@ -90,13 +90,17 @@ func checkSingleRouteError(ctx *plancontext.PlanningContext, op Operator) error 
 		err = ctx.SemTable.NotSingleShardErr
 	}
 	routes := 0
-	var singleShard bool
+	singleShard := true
+	extraRoutesFromUnion := 0
 	visitF := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		switch op := op.(type) {
+		case *Union:
+			extraRoutesFromUnion += len(op.Sources) - 1
 		case *Route:
-
 			routes++
-			singleShard = op.IsSingleShard()
+			if singleShard {
+				singleShard = op.IsSingleShard()
+			}
 		}
 		return op, NoRewrite
 	}
@@ -104,7 +108,7 @@ func checkSingleRouteError(ctx *plancontext.PlanningContext, op Operator) error 
 	// we'll walk the tree and count the number of routes
 	TopDown(op, TableID, visitF, stopAtRoute)
 
-	if routes > 1 {
+	if routes-extraRoutesFromUnion > 1 {
 		return err
 	}
 

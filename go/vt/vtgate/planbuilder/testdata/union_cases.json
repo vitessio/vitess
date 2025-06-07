@@ -1929,5 +1929,50 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "window function in simple union",
+    "query": "SELECT id, name, city, age, RANK() OVER (PARTITION BY city ORDER BY age DESC) AS age_rank_in_city FROM user WHERE id = 2 union all SELECT id, name, city, age, RANK() OVER (PARTITION BY city ORDER BY age DESC) AS age_rank_in_city FROM user WHERE id = 3",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "SELECT id, name, city, age, RANK() OVER (PARTITION BY city ORDER BY age DESC) AS age_rank_in_city FROM user WHERE id = 2 union all SELECT id, name, city, age, RANK() OVER (PARTITION BY city ORDER BY age DESC) AS age_rank_in_city FROM user WHERE id = 3",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, `name`, city, age, rank() over ( partition by city order by age desc) as age_rank_in_city from `user` where 1 != 1",
+            "Query": "select id, `name`, city, age, rank() over ( partition by city order by age desc) as age_rank_in_city from `user` where id = 2",
+            "Values": [
+              "2"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, `name`, city, age, rank() over ( partition by city order by age desc) as age_rank_in_city from `user` where 1 != 1",
+            "Query": "select id, `name`, city, age, rank() over ( partition by city order by age desc) as age_rank_in_city from `user` where id = 3",
+            "Values": [
+              "3"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
