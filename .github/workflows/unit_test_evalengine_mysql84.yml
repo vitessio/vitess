@@ -16,9 +16,14 @@ env:
 jobs:
   test:
     name: Unit Test (evalengine_mysql84)
-    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
 
     steps:
+    - name: Check architecture
+      run: uname -m
     - name: Skip CI
       run: |
         if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
