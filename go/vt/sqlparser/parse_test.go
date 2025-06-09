@@ -4674,6 +4674,10 @@ var (
 			input:  "insert into t1 set id1=1, animal1='Bear' returning f(id1), upper(animal1)",
 			output: "insert into t1(id1, animal1) values (1, 'Bear') returning f(id1), upper(animal1)",
 		},
+		{
+			input:  "insert into t2 (id,animal) select id,animal from live_data where flag = 'old' returning id,animal",
+			output: "insert into t2(id, animal) select id, animal from live_data where flag = 'old' returning id, animal",
+		},
 	}
 
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
