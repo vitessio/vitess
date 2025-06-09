@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -110,7 +111,7 @@ const (
 // TopologyRecovery represents an entry in the topology_recovery table
 type TopologyRecovery struct {
 	ID                     int64
-	AnalysisEntry          inst.ReplicationAnalysis
+	AnalysisEntry          *vtorcdatapb.ReplicationAnalysis
 	SuccessorAlias         string
 	IsSuccessful           bool
 	AllErrors              []string
@@ -119,7 +120,7 @@ type TopologyRecovery struct {
 	DetectionID            int64
 }
 
-func NewTopologyRecovery(replicationAnalysis inst.ReplicationAnalysis) *TopologyRecovery {
+func NewTopologyRecovery(replicationAnalysis *vtorcdatapb.ReplicationAnalysis) *TopologyRecovery {
 	topologyRecovery := &TopologyRecovery{}
 	topologyRecovery.AnalysisEntry = replicationAnalysis
 	topologyRecovery.AllErrors = []string{}
@@ -165,8 +166,8 @@ func initializeTopologyRecoveryPostConfiguration() {
 	config.WaitForConfigurationToBeLoaded()
 }
 
-func getLockAction(analysedInstance string, code inst.AnalysisCode) string {
-	return fmt.Sprintf("VTOrc Recovery for %v on %v", code, analysedInstance)
+func getLockAction(analysedInstance string, analysisType vtorcdatapb.AnalysisType) string {
+	return fmt.Sprintf("VTOrc Recovery for %v on %v", analysisType, analysedInstance)
 }
 
 // LockShard locks the keyspace-shard preventing others from performing conflicting actions.
@@ -224,7 +225,7 @@ func resolveRecovery(topologyRecovery *TopologyRecovery, successorInstance *inst
 }
 
 // recoverPrimaryHasPrimary resets the replication on the primary instance
-func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *vtorcdatapb.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixPrimaryHasPrimary.", analysisEntry.AnalyzedInstanceAlias)
@@ -253,7 +254,7 @@ func recoverPrimaryHasPrimary(ctx context.Context, analysisEntry *inst.Replicati
 
 // runEmergencyReparentOp runs a recovery for which we have to run ERS. Here waitForAllTablets is a boolean telling ERS whether it should wait for all the tablets
 // or is it okay to skip 1.
-func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, recoveryName string, waitForAllTablets bool, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func runEmergencyReparentOp(ctx context.Context, analysisEntry *vtorcdatapb.ReplicationAnalysis, recoveryName string, waitForAllTablets bool, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	// Read the tablet information from the database to find the shard and keyspace of the tablet
 	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceAlias)
 	if err != nil {
@@ -312,16 +313,16 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.Replication
 
 // recoverDeadPrimary checks a given analysis, decides whether to take action, and possibly takes action
 // Returns true when action was taken.
-func recoverDeadPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func recoverDeadPrimary(ctx context.Context, analysisEntry *vtorcdatapb.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	return runEmergencyReparentOp(ctx, analysisEntry, "RecoverDeadPrimary", false, logger)
 }
 
 // recoverPrimaryTabletDeleted tries to run a recovery for the case where the primary tablet has been deleted.
-func recoverPrimaryTabletDeleted(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func recoverPrimaryTabletDeleted(ctx context.Context, analysisEntry *vtorcdatapb.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	return runEmergencyReparentOp(ctx, analysisEntry, "PrimaryTabletDeleted", true, logger)
 }
 
-func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.ReplicationAnalysis, recoveryName string, promotedReplica *inst.Instance) {
+func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *vtorcdatapb.ReplicationAnalysis, recoveryName string, promotedReplica *inst.Instance) {
 	if promotedReplica != nil {
 		message := fmt.Sprintf("promoted replica: %+v", promotedReplica.InstanceAlias)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
@@ -331,68 +332,68 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.R
 }
 
 // checkAndRecoverGenericProblem is a general-purpose recovery function
-func checkAndRecoverLockedSemiSyncPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func checkAndRecoverLockedSemiSyncPrimary(ctx context.Context, analysisEntry *vtorcdatapb.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	logger.Warning("No actions in checkAndRecoverLockedSemiSyncPrimary")
 	return false, nil, nil
 }
 
 // checkAndRecoverGenericProblem is a general-purpose recovery function
-func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
+func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *vtorcdatapb.ReplicationAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
 	logger.Warning("No actions in checkAndRecoverGenericProblem")
 	return false, nil, nil
 }
 
 // getCheckAndRecoverFunctionCode gets the recovery function code to use for the given analysis.
-func getCheckAndRecoverFunctionCode(analysisCode inst.AnalysisCode, tabletAlias string) recoveryFunction {
-	switch analysisCode {
+func getCheckAndRecoverFunctionCode(analysisType vtorcdatapb.AnalysisType, tabletAlias string) recoveryFunction {
+	switch analysisType {
 	// primary
-	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
+	case vtorcdatapb.AnalysisType_DeadPrimary, vtorcdatapb.AnalysisType_DeadPrimaryAndSomeReplicas, vtorcdatapb.AnalysisType_PrimaryDiskStalled, vtorcdatapb.AnalysisType_PrimarySemiSyncBlocked:
 		// If ERS is disabled, we have no way of repairing the cluster.
 		if !config.ERSEnabled() {
-			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
+			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisType)
 			return noRecoveryFunc
 		}
 		return recoverDeadPrimaryFunc
-	case inst.PrimaryTabletDeleted:
+	case vtorcdatapb.AnalysisType_PrimaryTabletDeleted:
 		// If ERS is disabled, we have no way of repairing the cluster.
 		if !config.ERSEnabled() {
-			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisCode)
+			log.Infof("VTOrc not configured to run ERS, skipping recovering %v", analysisType)
 			return noRecoveryFunc
 		}
 		return recoverPrimaryTabletDeletedFunc
-	case inst.ErrantGTIDDetected:
+	case vtorcdatapb.AnalysisType_ErrantGtidDetected:
 		if !config.ConvertTabletWithErrantGTIDs() {
-			log.Infof("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisCode)
+			log.Infof("VTOrc not configured to do anything on detecting errant GTIDs, skipping recovering %v", analysisType)
 			return noRecoveryFunc
 		}
 		return recoverErrantGTIDDetectedFunc
-	case inst.PrimaryHasPrimary:
+	case vtorcdatapb.AnalysisType_PrimaryHasPrimary:
 		return recoverPrimaryHasPrimaryFunc
-	case inst.LockedSemiSyncPrimary:
+	case vtorcdatapb.AnalysisType_LockedSemiSyncPrimary:
 		return recoverLockedSemiSyncPrimaryFunc
-	case inst.ClusterHasNoPrimary:
+	case vtorcdatapb.AnalysisType_ClusterHasNoPrimary:
 		return electNewPrimaryFunc
-	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
+	case vtorcdatapb.AnalysisType_PrimaryIsReadOnly, vtorcdatapb.AnalysisType_PrimarySemiSyncMustBeSet, vtorcdatapb.AnalysisType_PrimarySemiSyncMustNotBeSet, vtorcdatapb.AnalysisType_PrimaryCurrentTypeMismatch:
 		return fixPrimaryFunc
 	// replica
-	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
-		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured:
+	case vtorcdatapb.AnalysisType_NotConnectedToPrimary, vtorcdatapb.AnalysisType_ConnectedToWrongPrimary, vtorcdatapb.AnalysisType_ReplicationStopped, vtorcdatapb.AnalysisType_ReplicaIsWritable,
+		vtorcdatapb.AnalysisType_ReplicaSemiSyncMustBeSet, vtorcdatapb.AnalysisType_ReplicaSemiSyncMustNotBeSet, vtorcdatapb.AnalysisType_ReplicaMisconfigured:
 		return fixReplicaFunc
 	// primary, non actionable
-	case inst.DeadPrimaryAndReplicas:
+	case vtorcdatapb.AnalysisType_DeadPrimaryAndReplicas:
 		return recoverGenericProblemFunc
-	case inst.UnreachablePrimary:
+	case vtorcdatapb.AnalysisType_UnreachablePrimary:
 		return recoverGenericProblemFunc
-	case inst.UnreachablePrimaryWithLaggingReplicas:
+	case vtorcdatapb.AnalysisType_UnreachablePrimaryWithLaggingReplicas:
 		return recoverGenericProblemFunc
-	case inst.AllPrimaryReplicasNotReplicating:
+	case vtorcdatapb.AnalysisType_AllPrimaryReplicasNotReplicating:
 		return recoverGenericProblemFunc
-	case inst.AllPrimaryReplicasNotReplicatingOrDead:
+	case vtorcdatapb.AnalysisType_AllPrimaryReplicasNotReplicatingOrDead:
 		return recoverGenericProblemFunc
 	}
 	// Right now this is mostly causing noise with no clear action.
 	// Will revisit this in the future.
-	// case inst.AllPrimaryReplicasStale:
+	// case vtorcdatapb.AnalysisType_AllPrimaryReplicasStale:
 	//   return recoverGenericProblemFunc
 
 	return noRecoveryFunc
@@ -428,7 +429,7 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 
 // getCheckAndRecoverFunction gets the recovery function for the given code.
 func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
-	checkAndRecoverFunction func(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error),
+	checkAndRecoverFunction func(ctx context.Context, analysisEntry *vtorcdatapb.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error),
 ) {
 	switch recoveryFunctionCode {
 	case noRecoveryFunc:
@@ -496,7 +497,7 @@ func isClusterWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 }
 
 // analysisEntriesHaveSameRecovery tells whether the two analysis entries have the same recovery function or not
-func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.ReplicationAnalysis) bool {
+func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *vtorcdatapb.ReplicationAnalysis) bool {
 	prevRecoveryFunctionCode := getCheckAndRecoverFunctionCode(prevAnalysis.Analysis, prevAnalysis.AnalyzedInstanceAlias)
 	newRecoveryFunctionCode := getCheckAndRecoverFunctionCode(newAnalysis.Analysis, newAnalysis.AnalyzedInstanceAlias)
 	return prevRecoveryFunctionCode == newRecoveryFunctionCode
@@ -504,7 +505,7 @@ func analysisEntriesHaveSameRecovery(prevAnalysis, newAnalysis *inst.Replication
 
 // executeCheckAndRecoverFunction will choose the correct check & recovery function based on analysis.
 // It executes the function synchronously
-func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (err error) {
+func executeCheckAndRecoverFunction(analysisEntry *vtorcdatapb.ReplicationAnalysis) (err error) {
 	countPendingRecoveries.Add(1)
 	defer countPendingRecoveries.Add(-1)
 
@@ -518,7 +519,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	if checkAndRecoverFunctionCode == noRecoveryFunc {
 		logger.Warning("No recovery strategies for problem, aborting recovery")
 		// Unhandled problem type
-		if analysisEntry.Analysis != inst.NoProblem {
+		if analysisEntry.Analysis != vtorcdatapb.AnalysisType_NoProblem {
 			if util.ClearToLog("executeCheckAndRecoverFunction", analysisEntry.AnalyzedInstanceAlias) {
 				logger.Warningf("executeCheckAndRecoverFunction: ignoring analysisEntry that has no action plan: tablet: %+v",
 					analysisEntry.AnalyzedInstanceAlias)
@@ -688,7 +689,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 // recheckPrimaryHealth check the health of the primary node.
 // It then checks whether, given the re-discovered primary health, the original recovery is still valid.
 // If not valid then it will abort the current analysis.
-func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc func(string, bool)) error {
+func recheckPrimaryHealth(analysisEntry *vtorcdatapb.ReplicationAnalysis, discoveryFunc func(string, bool)) error {
 	originalAnalysisEntry := analysisEntry.Analysis
 	primaryTabletAlias := analysisEntry.AnalyzedInstancePrimaryAlias
 
@@ -716,9 +717,9 @@ func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc
 }
 
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not
-func checkIfAlreadyFixed(analysisEntry *inst.ReplicationAnalysis) (bool, error) {
+func checkIfAlreadyFixed(analysisEntry *vtorcdatapb.ReplicationAnalysis) (bool, error) {
 	// Run a replication analysis again. We will check if the problem persisted
-	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, &inst.ReplicationAnalysisHints{})
+	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, &inst.ReplicationAnalysisHints{})
 	if err != nil {
 		return false, err
 	}
@@ -748,7 +749,7 @@ func CheckAndRecover() {
 	// then we reset any counter that is not present in the current analysis.
 	active := make(map[string]struct{})
 	for _, e := range replicationAnalysis {
-		if e.Analysis != inst.NoProblem {
+		if e.Analysis != vtorcdatapb.AnalysisType_NoProblem {
 			names := [...]string{
 				string(e.Analysis),
 				e.AnalyzedInstanceAlias,
@@ -781,7 +782,7 @@ func CheckAndRecover() {
 	}
 }
 
-func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.ReplicationAnalysis, promotedReplica *inst.Instance) {
+func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *vtorcdatapb.ReplicationAnalysis, promotedReplica *inst.Instance) {
 	if promotedReplica != nil {
 		message := fmt.Sprintf("promoted replica: %+v", promotedReplica.InstanceAlias)
 		_ = AuditTopologyRecovery(topologyRecovery, message)
@@ -791,7 +792,7 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.R
 }
 
 // electNewPrimary elects a new primary while none were present before.
-func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func electNewPrimary(ctx context.Context, analysisEntry *vtorcdatapb.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil || err != nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewPrimary.", analysisEntry.AnalyzedInstanceAlias)
@@ -799,7 +800,7 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysi
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Infof("Analysis: %v, will elect a new primary for %v:%v", analysisEntry.Analysis, analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard)
+	logger.Infof("Analysis: %v, will elect a new primary for %v:%v", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
@@ -843,7 +844,7 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysi
 }
 
 // fixPrimary sets the primary as read-write.
-func fixPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func fixPrimary(ctx context.Context, analysisEntry *vtorcdatapb.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixPrimary.", analysisEntry.AnalyzedInstanceAlias)
@@ -877,7 +878,7 @@ func fixPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, lo
 }
 
 // fixReplica sets the replica as read-only and points it at the current primary.
-func fixReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func fixReplica(ctx context.Context, analysisEntry *vtorcdatapb.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another fixReplica.", analysisEntry.AnalyzedInstanceAlias)
@@ -921,7 +922,7 @@ func fixReplica(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, lo
 }
 
 // recoverErrantGTIDDetected changes the tablet type of a replica tablet that has errant GTIDs.
-func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *inst.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
+func recoverErrantGTIDDetected(ctx context.Context, analysisEntry *vtorcdatapb.ReplicationAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
 		message := fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another recoverErrantGTIDDetected.", analysisEntry.AnalyzedInstanceAlias)

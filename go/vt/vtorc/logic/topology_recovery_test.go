@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -38,77 +39,80 @@ import (
 
 func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 	tests := []struct {
-		prevAnalysisCode inst.AnalysisCode
-		newAnalysisCode  inst.AnalysisCode
+		prevAnalysisCode vtorcdatapb.AnalysisType
+		newAnalysisCode  vtorcdatapb.AnalysisType
 		shouldBeEqual    bool
 	}{
 		{
 			// DeadPrimary and DeadPrimaryAndSomeReplicas have the same recovery
-			prevAnalysisCode: inst.DeadPrimary,
-			newAnalysisCode:  inst.DeadPrimaryAndSomeReplicas,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_DeadPrimary,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_DeadPrimaryAndSomeReplicas,
 			shouldBeEqual:    true,
 		}, {
 			// DeadPrimary and StalledDiskPrimary have the same recovery
-			prevAnalysisCode: inst.DeadPrimary,
-			newAnalysisCode:  inst.PrimaryDiskStalled,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_DeadPrimary,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_PrimaryDiskStalled,
 			shouldBeEqual:    true,
 		}, {
 			// PrimarySemiSyncBlocked and PrimaryDiskStalled have the same recovery
-			prevAnalysisCode: inst.PrimarySemiSyncBlocked,
-			newAnalysisCode:  inst.PrimaryDiskStalled,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_PrimarySemiSyncBlocked,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_PrimaryDiskStalled,
 			shouldBeEqual:    true,
 		}, {
 			// DeadPrimary and PrimaryTabletDeleted are different recoveries.
-			prevAnalysisCode: inst.DeadPrimary,
-			newAnalysisCode:  inst.PrimaryTabletDeleted,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_DeadPrimary,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_PrimaryTabletDeleted,
 			shouldBeEqual:    false,
 		}, {
 			// same codes will always have same recovery
-			prevAnalysisCode: inst.DeadPrimary,
-			newAnalysisCode:  inst.DeadPrimary,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_DeadPrimary,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_DeadPrimary,
 			shouldBeEqual:    true,
 		}, {
-			prevAnalysisCode: inst.PrimaryHasPrimary,
-			newAnalysisCode:  inst.DeadPrimaryAndSomeReplicas,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_PrimaryHasPrimary,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_DeadPrimaryAndSomeReplicas,
 			shouldBeEqual:    false,
 		}, {
-			prevAnalysisCode: inst.DeadPrimary,
-			newAnalysisCode:  inst.PrimaryHasPrimary,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_DeadPrimary,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_PrimaryHasPrimary,
 			shouldBeEqual:    false,
 		}, {
-			prevAnalysisCode: inst.LockedSemiSyncPrimary,
-			newAnalysisCode:  inst.PrimaryHasPrimary,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_LockedSemiSyncPrimary,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_PrimaryHasPrimary,
 			shouldBeEqual:    false,
 		}, {
-			prevAnalysisCode: inst.PrimaryIsReadOnly,
-			newAnalysisCode:  inst.PrimarySemiSyncMustNotBeSet,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_PrimaryIsReadOnly,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_PrimarySemiSyncMustNotBeSet,
 			shouldBeEqual:    true,
 		}, {
-			prevAnalysisCode: inst.PrimarySemiSyncMustBeSet,
-			newAnalysisCode:  inst.PrimarySemiSyncMustNotBeSet,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_PrimarySemiSyncMustBeSet,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_PrimarySemiSyncMustNotBeSet,
 			shouldBeEqual:    true,
 		}, {
-			prevAnalysisCode: inst.PrimaryCurrentTypeMismatch,
-			newAnalysisCode:  inst.PrimarySemiSyncMustNotBeSet,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_PrimaryCurrentTypeMismatch,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_PrimarySemiSyncMustNotBeSet,
 			shouldBeEqual:    true,
 		}, {
-			prevAnalysisCode: inst.PrimaryIsReadOnly,
-			newAnalysisCode:  inst.DeadPrimary,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_PrimaryIsReadOnly,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_DeadPrimary,
 			shouldBeEqual:    false,
 		}, {
-			prevAnalysisCode: inst.NotConnectedToPrimary,
-			newAnalysisCode:  inst.ConnectedToWrongPrimary,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_NotConnectedToPrimary,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_ConnectedToWrongPrimary,
 			shouldBeEqual:    true,
 		}, {
-			prevAnalysisCode: inst.ConnectedToWrongPrimary,
-			newAnalysisCode:  inst.ReplicaIsWritable,
+			prevAnalysisCode: vtorcdatapb.AnalysisType_ConnectedToWrongPrimary,
+			newAnalysisCode:  vtorcdatapb.AnalysisType_ReplicaIsWritable,
 			shouldBeEqual:    true,
 		},
 	}
 	t.Parallel()
 	for _, tt := range tests {
 		t.Run(string(tt.prevAnalysisCode)+","+string(tt.newAnalysisCode), func(t *testing.T) {
-			res := analysisEntriesHaveSameRecovery(&inst.ReplicationAnalysis{Analysis: tt.prevAnalysisCode}, &inst.ReplicationAnalysis{Analysis: tt.newAnalysisCode})
+			res := analysisEntriesHaveSameRecovery(
+				&vtorcdatapb.ReplicationAnalysis{Analysis: tt.prevAnalysisCode},
+				&vtorcdatapb.ReplicationAnalysis{Analysis: tt.newAnalysisCode},
+			)
 			require.Equal(t, tt.shouldBeEqual, res)
 		})
 	}
@@ -138,7 +142,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	}
 	err = inst.SaveTablet(tablet)
 	require.NoError(t, err)
-	analysisEntry := &inst.ReplicationAnalysis{
+	analysisEntry := &vtorcdatapb.ReplicationAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(tablet.Alias),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -188,13 +192,13 @@ func TestRecoveryRegistration(t *testing.T) {
 	require.NoError(t, err)
 	err = inst.SaveTablet(replica)
 	require.NoError(t, err)
-	primaryAnalysisEntry := inst.ReplicationAnalysis{
+	primaryAnalysisEntry := vtorcdatapb.ReplicationAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(primary.Alias),
-		Analysis:              inst.ReplicationStopped,
+		Analysis:              vtorcdatapb.AnalysisType_ReplicationStopped,
 	}
-	replicaAnalysisEntry := inst.ReplicationAnalysis{
+	replicaAnalysisEntry := vtorcdatapb.ReplicationAnalysis{
 		AnalyzedInstanceAlias: topoproto.TabletAliasString(replica.Alias),
-		Analysis:              inst.DeadPrimary,
+		Analysis:              vtorcdatapb.AnalysisType_DeadPrimary,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -221,80 +225,80 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		name                         string
 		ersEnabled                   bool
 		convertTabletWithErrantGTIDs bool
-		analysisCode                 inst.AnalysisCode
+		analysisType                 vtorcdatapb.AnalysisType
 		wantRecoveryFunction         recoveryFunction
 	}{
 		{
 			name:                 "DeadPrimary with ERS enabled",
 			ersEnabled:           true,
-			analysisCode:         inst.DeadPrimary,
+			analysisType:         vtorcdatapb.AnalysisType_DeadPrimary,
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 		}, {
 			name:                 "DeadPrimary with ERS disabled",
 			ersEnabled:           false,
-			analysisCode:         inst.DeadPrimary,
+			analysisType:         vtorcdatapb.AnalysisType_DeadPrimary,
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
 			name:                 "StalledDiskPrimary with ERS enabled",
 			ersEnabled:           true,
-			analysisCode:         inst.PrimaryDiskStalled,
+			analysisType:         vtorcdatapb.AnalysisType_PrimaryDiskStalled,
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 		}, {
 			name:                 "StalledDiskPrimary with ERS disabled",
 			ersEnabled:           false,
-			analysisCode:         inst.PrimaryDiskStalled,
+			analysisType:         vtorcdatapb.AnalysisType_PrimaryDiskStalled,
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
 			name:                 "PrimarySemiSyncBlocked with ERS enabled",
 			ersEnabled:           true,
-			analysisCode:         inst.PrimarySemiSyncBlocked,
+			analysisType:         vtorcdatapb.AnalysisType_PrimarySemiSyncBlocked,
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 		}, {
 			name:                 "PrimarySemiSyncBlocked with ERS disabled",
 			ersEnabled:           false,
-			analysisCode:         inst.PrimarySemiSyncBlocked,
+			analysisType:         vtorcdatapb.AnalysisType_PrimarySemiSyncBlocked,
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
 			name:                 "PrimaryTabletDeleted with ERS enabled",
 			ersEnabled:           true,
-			analysisCode:         inst.PrimaryTabletDeleted,
+			analysisType:         vtorcdatapb.AnalysisType_PrimaryTabletDeleted,
 			wantRecoveryFunction: recoverPrimaryTabletDeletedFunc,
 		}, {
 			name:                 "PrimaryTabletDeleted with ERS disabled",
 			ersEnabled:           false,
-			analysisCode:         inst.PrimaryTabletDeleted,
+			analysisType:         vtorcdatapb.AnalysisType_PrimaryTabletDeleted,
 			wantRecoveryFunction: noRecoveryFunc,
 		}, {
 			name:                 "PrimaryHasPrimary",
 			ersEnabled:           false,
-			analysisCode:         inst.PrimaryHasPrimary,
+			analysisType:         vtorcdatapb.AnalysisType_PrimaryHasPrimary,
 			wantRecoveryFunction: recoverPrimaryHasPrimaryFunc,
 		}, {
 			name:                 "ClusterHasNoPrimary",
 			ersEnabled:           false,
-			analysisCode:         inst.ClusterHasNoPrimary,
+			analysisType:         vtorcdatapb.AnalysisType_ClusterHasNoPrimary,
 			wantRecoveryFunction: electNewPrimaryFunc,
 		}, {
 			name:                 "ReplicationStopped",
 			ersEnabled:           false,
-			analysisCode:         inst.ReplicationStopped,
+			analysisType:         vtorcdatapb.AnalysisType_ReplicationStopped,
 			wantRecoveryFunction: fixReplicaFunc,
 		}, {
 			name:                 "PrimarySemiSyncMustBeSet",
 			ersEnabled:           false,
-			analysisCode:         inst.PrimarySemiSyncMustBeSet,
+			analysisType:         vtorcdatapb.AnalysisType_PrimarySemiSyncMustBeSet,
 			wantRecoveryFunction: fixPrimaryFunc,
 		}, {
 			name:                         "ErrantGTIDDetected",
 			ersEnabled:                   false,
 			convertTabletWithErrantGTIDs: true,
-			analysisCode:                 inst.ErrantGTIDDetected,
+			analysisType:                 vtorcdatapb.AnalysisType_ErrantGtidDetected,
 			wantRecoveryFunction:         recoverErrantGTIDDetectedFunc,
 		}, {
 			name:                         "ErrantGTIDDetected with --change-tablets-with-errant-gtid-to-drained false",
 			ersEnabled:                   false,
 			convertTabletWithErrantGTIDs: false,
-			analysisCode:                 inst.ErrantGTIDDetected,
+			analysisType:                 vtorcdatapb.AnalysisType_ErrantGtidDetected,
 			wantRecoveryFunction:         noRecoveryFunc,
 		},
 	}
@@ -309,7 +313,7 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			config.SetConvertTabletWithErrantGTIDs(tt.convertTabletWithErrantGTIDs)
 			defer config.SetConvertTabletWithErrantGTIDs(convertErrantVal)
 
-			gotFunc := getCheckAndRecoverFunctionCode(tt.analysisCode, "")
+			gotFunc := getCheckAndRecoverFunctionCode(tt.analysisType, "")
 			require.EqualValues(t, tt.wantRecoveryFunction, gotFunc)
 		})
 	}
@@ -400,9 +404,9 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			// set replication analysis in Vtorc DB.
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
-			err := recheckPrimaryHealth(&inst.ReplicationAnalysis{
+			err := recheckPrimaryHealth(&vtorcdatapb.ReplicationAnalysis{
 				AnalyzedInstanceAlias: "zon1-0000000100",
-				Analysis:              inst.ReplicationStopped,
+				Analysis:              vtorcdatapb.AnalysisType_ReplicationStopped,
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
 			}, func(s string, b bool) {

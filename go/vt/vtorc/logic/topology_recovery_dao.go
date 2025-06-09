@@ -23,13 +23,14 @@ import (
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 // InsertRecoveryDetection inserts the recovery analysis that has been detected.
-func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
+func InsertRecoveryDetection(analysisEntry *vtorcdatapb.ReplicationAnalysis) error {
 	sqlResult, err := db.ExecVTOrc(`INSERT OR IGNORE
 		INTO recovery_detection (
 			alias,
@@ -46,8 +47,8 @@ func InsertRecoveryDetection(analysisEntry *inst.ReplicationAnalysis) error {
 		)`,
 		analysisEntry.AnalyzedInstanceAlias,
 		string(analysisEntry.Analysis),
-		analysisEntry.ClusterDetails.Keyspace,
-		analysisEntry.ClusterDetails.Shard,
+		analysisEntry.AnalyzedKeyspace,
+		analysisEntry.AnalyzedShard,
 	)
 	if err != nil {
 		log.Error(err)
@@ -85,8 +86,8 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 		sqlutils.NilIfZero(topologyRecovery.ID),
 		analysisEntry.AnalyzedInstanceAlias,
 		string(analysisEntry.Analysis),
-		analysisEntry.ClusterDetails.Keyspace,
-		analysisEntry.ClusterDetails.Shard,
+		analysisEntry.AnalyzedKeyspace,
+		analysisEntry.AnalyzedShard,
 		analysisEntry.AnalyzedInstanceAlias,
 		analysisEntry.RecoveryId,
 	)
@@ -109,20 +110,20 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 }
 
 // AttemptRecoveryRegistration tries to add a recovery entry; if this fails that means recovery is already in place.
-func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis) (*TopologyRecovery, error) {
+func AttemptRecoveryRegistration(analysisEntry *vtorcdatapb.ReplicationAnalysis) (*TopologyRecovery, error) {
 	// Check if there is an active recovery in progress for the cluster of the given instance.
-	recoveries, err := ReadActiveClusterRecoveries(analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard)
+	recoveries, err := ReadActiveClusterRecoveries(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
 		log.Error(err)
 		return nil, err
 	}
 	if len(recoveries) > 0 {
-		errMsg := fmt.Sprintf("AttemptRecoveryRegistration: Active recovery (id:%v) in the cluster %s:%s for %s", recoveries[0].ID, analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, recoveries[0].AnalysisEntry.Analysis)
+		errMsg := fmt.Sprintf("AttemptRecoveryRegistration: Active recovery (id:%v) in the cluster %s:%s for %s", recoveries[0].ID, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, recoveries[0].AnalysisEntry.Analysis)
 		log.Errorf(errMsg)
 		return nil, errors.New(errMsg)
 	}
 
-	topologyRecovery := NewTopologyRecovery(*analysisEntry)
+	topologyRecovery := NewTopologyRecovery(analysisEntry)
 
 	topologyRecovery, err = writeTopologyRecovery(topologyRecovery)
 	if err != nil {
@@ -180,7 +181,7 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		limit,
 	)
 	err := db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
-		topologyRecovery := *NewTopologyRecovery(inst.ReplicationAnalysis{})
+		topologyRecovery := *NewTopologyRecovery(&vtorcdatapb.ReplicationAnalysis{})
 		topologyRecovery.ID = m.GetInt64("recovery_id")
 
 		topologyRecovery.RecoveryStartTimestamp = m.GetString("start_recovery")
@@ -188,9 +189,9 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.IsSuccessful = m.GetBool("is_successful")
 
 		topologyRecovery.AnalysisEntry.AnalyzedInstanceAlias = m.GetString("alias")
-		topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
-		topologyRecovery.AnalysisEntry.ClusterDetails.Keyspace = m.GetString("keyspace")
-		topologyRecovery.AnalysisEntry.ClusterDetails.Shard = m.GetString("shard")
+		topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisTypeStringToProto(m.GetString("analysis"))
+		topologyRecovery.AnalysisEntry.AnalyzedKeyspace = m.GetString("keyspace")
+		topologyRecovery.AnalysisEntry.AnalyzedShard = m.GetString("shard")
 
 		topologyRecovery.SuccessorAlias = m.GetString("successor_alias")
 
