@@ -761,6 +761,10 @@ func buildUpdatePrimitive(
 	upd := dmlOp.(*operators.Update)
 	var vindexes []*vindexes.ColumnVindex
 	vQuery := ""
+	if rb.Routing.OpCode() == engine.None {
+		// reset as no modification will happen for an impossible query.
+		upd.ChangedVindexValues = nil
+	}
 	if len(upd.ChangedVindexValues) > 0 {
 		upd.OwnedVindexQuery.From = stmt.GetFrom()
 		upd.OwnedVindexQuery.Where = stmt.Where
@@ -811,7 +815,12 @@ func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, h
 		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
 	}
 
-	if rb.Routing.OpCode() != engine.Unsharded && vindexQuery != "" {
+	if rb.Routing.OpCode() == engine.None {
+		// reset as no modification will happen for an impossible query.
+		edml.OwnedVindexQuery = ""
+		edml.Vindex = nil
+		edml.Values = nil
+	} else if rb.Routing.OpCode() != engine.Unsharded && vindexQuery != "" {
 		primary := vTbl.ColumnVindexes[0]
 		edml.KsidVindex = primary.Vindex
 		edml.KsidLength = len(primary.Columns)
