@@ -128,10 +128,17 @@ func TestHistorian(t *testing.T) {
 		},
 	})
 	require.Nil(t, se.RegisterVersionEvent())
-	exp1 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1" charset:63 flags:32768} fields:{name:"id2" type:INT32 table:"t1" charset:63 flags:32768} p_k_columns:0`
+	exp1 := &binlogdatapb.MinimalTable{
+		Name: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id1", Type: querypb.Type_INT32, Table: "t1", Charset: 63, Flags: 32768},
+			{Name: "id2", Type: querypb.Type_INT32, Table: "t1", Charset: 63, Flags: 32768},
+		},
+		PKColumns: []int64{0},
+	}
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.NoError(t, err)
-	require.Equal(t, exp1, fmt.Sprintf("%v", tab))
+	require.Equal(t, exp1, tab)
 	gtid2 := gtidPrefix + "1-20"
 	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
@@ -148,10 +155,17 @@ func TestHistorian(t *testing.T) {
 		},
 	})
 	require.Nil(t, se.RegisterVersionEvent())
-	exp2 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1" charset:63 flags:32768} fields:{name:"id2" type:VARBINARY table:"t1" charset:63 flags:128} p_k_columns:0`
+	exp2 := &binlogdatapb.MinimalTable{
+		Name: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id1", Type: querypb.Type_INT32, Table: "t1", Charset: 63, Flags: 32768},
+			{Name: "id2", Type: querypb.Type_VARBINARY, Table: "t1", Charset: 63, Flags: 128},
+		},
+		PKColumns: []int64{0},
+	}
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
-	require.Equal(t, exp2, fmt.Sprintf("%v", tab))
+	require.Equal(t, exp2, tab)
 	gtid3 := gtidPrefix + "1-30"
 	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid3)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
@@ -168,20 +182,28 @@ func TestHistorian(t *testing.T) {
 		},
 	})
 	require.Nil(t, se.RegisterVersionEvent())
-	exp3 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1" charset:63 flags:32768} fields:{name:"id2" type:VARBINARY table:"t1" charset:63 flags:128} fields:{name:"id3" type:INT32 table:"t1" charset:63 flags:32768} p_k_columns:0`
+	exp3 := &binlogdatapb.MinimalTable{
+		Name: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id1", Type: querypb.Type_INT32, Table: "t1", Charset: 63, Flags: 32768},
+			{Name: "id2", Type: querypb.Type_VARBINARY, Table: "t1", Charset: 63, Flags: 128},
+			{Name: "id3", Type: querypb.Type_INT32, Table: "t1", Charset: 63, Flags: 32768},
+		},
+		PKColumns: []int64{0},
+	}
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid3)
 	require.NoError(t, err)
-	require.Equal(t, exp3, fmt.Sprintf("%v", tab))
+	require.Equal(t, exp3, tab)
 
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.NoError(t, err)
-	require.Equal(t, exp1, fmt.Sprintf("%v", tab))
+	require.Equal(t, exp1, tab)
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
-	require.Equal(t, exp2, fmt.Sprintf("%v", tab))
+	require.Equal(t, exp2, tab)
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid3)
 	require.NoError(t, err)
-	require.Equal(t, exp3, fmt.Sprintf("%v", tab))
+	require.Equal(t, exp3, tab)
 }
 
 func TestHistorianPurgeOldSchemas(t *testing.T) {
@@ -252,9 +274,16 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 		},
 	})
 	require.Nil(t, se.RegisterVersionEvent())
-	exp2 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1" charset:63 flags:32768} fields:{name:"id2" type:VARBINARY table:"t1" charset:63 flags:128} p_k_columns:0`
+	exp2 := &binlogdatapb.MinimalTable{
+		Name: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id1", Type: querypb.Type_INT32, Table: "t1", Charset: 63, Flags: 32768},
+			{Name: "id2", Type: querypb.Type_VARBINARY, Table: "t1", Charset: 63, Flags: 128},
+		},
+		PKColumns: []int64{0},
+	}
 	tab, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
-	require.Equal(t, exp2, fmt.Sprintf("%v", tab))
+	require.Equal(t, exp2, tab)
 	require.Equal(t, 1, len(se.historian.schemas))
 }

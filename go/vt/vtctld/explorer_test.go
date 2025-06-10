@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"testing"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -158,7 +159,7 @@ func TestHandlePathTablet(t *testing.T) {
 
 	ex := newBackendExplorer(ts)
 	result := ex.HandlePath(input, nil)
-	if got := result.Data; got != want {
+	if got := result.Data; textutil.Normalize(got) != textutil.Normalize(want) {
 		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
 	}
 	if got, want := result.Children, []string(nil); !reflect.DeepEqual(got, want) {

@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -544,13 +545,14 @@ func TestMigrateVSchema(t *testing.T) {
 	vschema, err := env.ws.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
 	got := fmt.Sprintf("%v", vschema)
+
 	want := []string{`keyspaces:{key:"sourceks" value:{}}`,
 		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
 		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
 		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,
 	}
 	for _, wantstr := range want {
-		require.Contains(t, got, wantstr)
+		require.Contains(t, textutil.Normalize(got), textutil.Normalize(wantstr))
 	}
 }
 
@@ -593,8 +595,6 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			require.NoError(t, err)
 			sourceShard, err := env.topoServ.GetShardNames(ctx, ms.SourceKeyspace)
 			require.NoError(t, err)
-			want := fmt.Sprintf("shard_streams:{key:\"%s/%s\" value:{streams:{id:1 tablet:{cell:\"%s\" uid:200} source_shard:\"%s/%s\" position:\"%s\" status:\"Running\" info:\"VStream Lag: 0s\"}}} traffic_state:\"Reads Not Switched. Writes Not Switched\"",
-				ms.TargetKeyspace, targetShard[0], env.cell, ms.SourceKeyspace, sourceShard[0], gtid(position))
 
 			res, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 				Workflow:       ms.Workflow,
@@ -603,8 +603,29 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 				IncludeTables:  []string{"t1"},
 				OnDdl:          onDDLAction,
 			})
+			key := fmt.Sprintf("%s/%s", ms.TargetKeyspace, targetShard[0])
+			want := &vtctldatapb.WorkflowStatusResponse{
+				ShardStreams: map[string]*vtctldatapb.WorkflowStatusResponse_ShardStreams{
+					key: {
+						Streams: []*vtctldatapb.WorkflowStatusResponse_ShardStreamState{
+							{
+								Id: 1,
+								Tablet: &topodatapb.TabletAlias{
+									Cell: env.cell,
+									Uid:  200,
+								},
+								SourceShard: fmt.Sprintf("%s/%s", ms.SourceKeyspace, sourceShard[0]),
+								Position:    gtid(position),
+								Status:      "Running",
+								Info:        "VStream Lag: 0s",
+							},
+						},
+					},
+				},
+				TrafficState: "Reads Not Switched. Writes Not Switched",
+			}
 			require.NoError(t, err)
-			require.Equal(t, want, fmt.Sprintf("%+v", res))
+			require.Equal(t, want, res)
 		})
 	}
 }

@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/servenv/testutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -375,7 +376,7 @@ func TestAPI(t *testing.T) {
 				// For unknown reasons errors have a trailing "\n\t\t". Remove it.
 				got = strings.TrimSpace(string(body))
 			}
-			if !strings.HasPrefix(got, want) {
+			if !strings.HasPrefix(textutil.Normalize(got), textutil.Normalize(want)) {
 				t.Fatalf("For path [%v] got\n'%v', want\n'%v'", in.path, got, want)
 				return
 			}
