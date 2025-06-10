@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vschema"
@@ -664,7 +665,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			}
 			got, err := ts.getTargetSequenceMetadata(ctx)
 			if tc.err != "" {
-				require.EqualError(t, err, tc.err)
+				require.Equal(t, textutil.Normalize(err.Error()), textutil.Normalize(tc.err))
 			} else {
 				require.NoError(t, err)
 			}
