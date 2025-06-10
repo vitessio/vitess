@@ -371,12 +371,20 @@ func TestVreplSchemaChanges(t *testing.T) {
 		// Migration should still be running
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 
-		// Issue a complete with relevant shards and wait for successful completion
-		onlineddl.CheckCompleteMigrationShards(t, &vtParams, shards, uuid, "x, y, 1", true)
-		// This part may take a while, because we depend on vreplicatoin polling
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		// Issue a complete with a relevant shard and wait for successful completion.
+		onlineddl.CheckCompleteMigrationShards(t, &vtParams, shards, uuid, "-80", true)
+		{
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[:1], uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			// Shard which is passed as args will have state complete.
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards[:1], uuid, schema.OnlineDDLStatusComplete)
+		}
+		{
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[1:], uuid, extendedMigrationWait, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			// Shard which is not passed as args will still have status queued,ready or running.
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards[:1], uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
+		}
 
 		testRows(t)
 		testMigrationRowCount(t, uuid)
