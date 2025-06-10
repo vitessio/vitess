@@ -6184,7 +6184,7 @@ type ValidateVReplicationPermissionsResponse struct {
 	// Does the user have the minimum privileges needed to manage
 	// vreplication metadata.
 	Ok bool `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
-	// The error is passed from the tablet so that we can send the tablet-specific sidecar db name.
+	// The error has to be passed from the tablet since the sidecar name is tablet-specific
 	Error         string `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
