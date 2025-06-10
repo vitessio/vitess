@@ -1112,7 +1112,7 @@ var defaultConfig = TabletConfig{
 	EnableTableGC:            true,
 
 	RowStreamer: RowStreamerConfig{
-		MaxInnoDBTrxHistLen: 1000000,
+		MaxInnoDBTrxHistLen: 10000000,
 		MaxMySQLReplLagSecs: 43200,
 	},
 
