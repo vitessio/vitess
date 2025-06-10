@@ -383,7 +383,7 @@ func TestVreplSchemaChanges(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[1:], uuid, extendedMigrationWait, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			// Shard which is not passed as args will still have status queued,ready or running.
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards[:1], uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards[1:], uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
 		}
 
 		testRows(t)
