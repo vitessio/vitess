@@ -2386,12 +2386,15 @@ func TestInternalizeLookupVindex(t *testing.T) {
 	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 
-	options := `{
+	raw := `{
 		"lookup_vindexes": [
 		  "owned_lookup",
 		  "owned_lookup2"
 		]
 	  }`
+	buf := bytes.Buffer{}
+	json.Compact(&buf, []byte(raw))
+	options := buf.String()
 	ownedMultipleStopped := sqltypes.MakeTestResult(fields, "1|Stopped|"+workflow.Frozen+"|"+ownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|"+options)
 
 	testcases := []struct {
@@ -2706,12 +2709,15 @@ func TestCompleteLookupVindex(t *testing.T) {
 	unownedRunning := sqltypes.MakeTestResult(fields, "2|Running|msg|"+unownedSourceKeepRunningAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 	unownedStopped := sqltypes.MakeTestResult(fields, "2|Stopped|Stopped after copy|"+unownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|{}")
 
-	options := `{
+	raw := `{
 		"lookup_vindexes": [
 		  "owned_lookup",
 		  "owned_lookup2"
 		]
 	  }`
+	buf := bytes.Buffer{}
+	json.Compact(&buf, []byte(raw))
+	options := buf.String()
 	ownedMultipleStopped := sqltypes.MakeTestResult(fields, "1|Stopped|"+workflow.Frozen+"|"+ownedSourceStopAfterCopy+"|"+wftype+"|0|0|0|0|0|0|"+trxTS+"|5|"+options)
 
 	testcases := []struct {
