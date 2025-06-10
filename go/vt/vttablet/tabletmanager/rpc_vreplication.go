@@ -75,7 +75,9 @@ const (
 	sqlGetVReplicationCopyStatus = "select distinct vrepl_id from %s.copy_state where vrepl_id = %d"
 	// Validate the minimum set of permissions needed to manage vreplication metadata.
 	// This is a simple check for a matching user rather than any specific user@host
-	// combination.
+	// combination. Also checks for wildcards. Note the, seemingly reverse check, `%a LIKE d.db`,
+	// which is required since %a replaces the actual sidecar db name and
+	// d.db is where a (potential) wildcard match is specified in a privilege grant.
 	sqlValidateVReplicationPermissions = `
 select count(*)>0 as good from mysql.user as u
   left join mysql.db as d on (u.user = d.user)
@@ -83,8 +85,8 @@ select count(*)>0 as good from mysql.user as u
 where u.user = %a
   and (
     (u.select_priv = 'y' and u.insert_priv = 'y' and u.update_priv = 'y' and u.delete_priv = 'y') /* user has global privs */
-    or (d.db = %a and d.select_priv = 'y' and d.insert_priv = 'y' and d.update_priv = 'y' and d.delete_priv = 'y') /* user has db privs */
-    or (t.db = %a and t.table_name = 'vreplication' /* user has table privs */
+    or (%a LIKE d.db escape '\\' and d.select_priv = 'y' and d.insert_priv = 'y' and d.update_priv = 'y' and d.delete_priv = 'y') /* user has db privs */
+    or (%a LIKE t.db escape '\\' and t.table_name = 'vreplication'
       and find_in_set('select', t.table_priv)
       and find_in_set('insert', t.table_priv)
       and find_in_set('update', t.table_priv)
@@ -92,6 +94,7 @@ where u.user = %a
     )
   )
 limit 1
+
 `
 	sqlGetMaxSequenceVal   = "select max(%a) as maxval from %a.%a"
 	sqlInitSequenceTable   = "insert into %a.%a (id, next_id, cache) values (0, %d, 1000) on duplicate key update next_id = if(next_id < %d, %d, next_id)"
@@ -848,6 +851,7 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Validating VReplication permissions on %s using query %s", tm.tabletAlias, query)
 	conn, err := tm.MysqlDaemon.GetAllPrivsConnection(ctx)
 	if err != nil {
 		return nil, err
@@ -866,9 +870,16 @@ func (tm *TabletManager) ValidateVReplicationPermissions(ctx context.Context, re
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result for query %s: expected boolean-like value, got: %q",
 			query, qr.Rows[0][0].ToString())
 	}
+	var errorString string
+	if !val {
+		errorString = fmt.Sprintf("user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
+			tm.DBConfigs.Filtered.User, sidecar.GetName(), topoproto.TabletAliasString(tm.tabletAlias))
+		log.Errorf("validateVReplicationPermissions returning error: %s. Permission query run was %s", errorString, query)
+	}
 	return &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
-		User: tm.DBConfigs.Filtered.User,
-		Ok:   val,
+		User:  tm.DBConfigs.Filtered.User,
+		Ok:    val,
+		Error: errorString,
 	}, nil
 }
 
