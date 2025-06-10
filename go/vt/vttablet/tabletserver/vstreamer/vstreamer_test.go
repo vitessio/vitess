@@ -805,19 +805,61 @@ func TestFilteredVarBinary(t *testing.T) {
 		{"insert into t1 values (4, 'kepler')", noEvents},
 		{"insert into t1 values (5, 'newton')", nil},
 		{"update t1 set val = 'newton' where id1 = 1", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "newton"}}}}},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "kepler"}, after: []string{"1", "newton"}}}}},
 		}},
 		{"update t1 set val = 'kepler' where id1 = 2", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "newton"}}}}},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "newton"}, after: []string{"2", "kepler"}}}}},
 		}},
 		{"update t1 set val = 'newton' where id1 = 2", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"2", "newton"}}}}},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "kepler"}, after: []string{"2", "newton"}}}}},
 		}},
 		{"update t1 set val = 'kepler' where id1 = 1", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "newton"}}}}},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "newton"}, after: []string{"1", "kepler"}}}}},
 		}},
 		{"delete from t1 where id1 in (2,3)", []TestRowEvent{
 			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "newton"}}, {before: []string{"3", "newton"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	ts.Run()
+}
+
+// TestPartialFilteredInt confirms that adding a filter using an int column results in the correct set of events.
+func TestPartialFilteredInt(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id1 int, id2 int, primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select id1, id2 from t1 where id2 > 100 and id2 < 200",
+				}},
+			},
+		},
+	}
+	defer ts.Close()
+	fe := &TestFieldEvent{
+		table: "stream1",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "id2", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+		},
+	}
+	_ = fe
+	ts.Init()
+	ts.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t1 values (1, 150)", nil},
+		{"update t1 set id2 = 100 where id1 = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "150"}, after: []string{"1", "100"}}}}},
+		}},
+		{"update t1 set id2 = 200 where id1 = 1", noEvents},
+		{"update t1 set id2 = 110 where id1 = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "200"}, after: []string{"1", "110"}}}}},
 		}},
 		{"commit", nil},
 	}}
@@ -854,16 +896,16 @@ func TestFilteredInt(t *testing.T) {
 			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"4", "ddd"}, after: []string{"4", "newddd"}}}}},
 		}},
 		{"update t1 set id2 = 200 where id1 = 1", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"1", "aaa"}}}}},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"1", "aaa"}}}}},
 		}},
 		{"update t1 set id2 = 100 where id1 = 2", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "bbb"}}}}},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "bbb"}, after: []string{"2", "bbb"}}}}},
 		}},
 		{"update t1 set id2 = 100 where id1 = 1", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "aaa"}}}}},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"1", "aaa"}, after: []string{"1", "aaa"}}}}},
 		}},
 		{"update t1 set id2 = 200 where id1 = 2", []TestRowEvent{
-			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{after: []string{"2", "bbb"}}}}},
+			{spec: &TestRowEventSpec{table: "t1", changes: []TestRowChange{{before: []string{"2", "bbb"}, after: []string{"2", "bbb"}}}}},
 		}},
 		{"commit", nil},
 	}}
