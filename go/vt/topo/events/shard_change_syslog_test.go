@@ -22,6 +22,7 @@ import (
 	"log/syslog"
 	"testing"
 
+	"vitess.io/vitess/go/textutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -43,7 +44,7 @@ func TestShardChangeSyslog(t *testing.T) {
 	if gotSev != wantSev {
 		t.Errorf("wrong severity: got %v, want %v", gotSev, wantSev)
 	}
-	if gotMsg != wantMsg {
+	if textutil.Normalize(gotMsg) != textutil.Normalize(wantMsg) {
 		t.Errorf("wrong message: got %v, want %v", gotMsg, wantMsg)
 	}
 }

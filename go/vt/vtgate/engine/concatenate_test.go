@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/textutil"
 
 	"github.com/stretchr/testify/require"
 
@@ -188,10 +189,6 @@ func TestConcatenateTypes(t *testing.T) {
 		{t1: "varchar", t2: "varbinary", expected: `[name:"id" type:varbinary charset:63 flags:128]`},
 	}
 
-	normalize := func(s string) string {
-		return strings.ToLower(strings.Join(strings.Fields(s), " "))
-	}
-
 	for _, test := range tests {
 		name := fmt.Sprintf("%s - %s", test.t1, test.t2)
 		t.Run(name, func(t *testing.T) {
@@ -207,8 +204,8 @@ func TestConcatenateTypes(t *testing.T) {
 			res, err := concatenate.GetFields(context.Background(), &noopVCursor{}, nil)
 			require.NoError(t, err)
 
-			gotString := normalize(fmt.Sprintf("%v", res.Fields))
-			require.Equal(t, test.expected, gotString)
+			gotString := strings.ToLower(fmt.Sprintf("%v", res.Fields))
+			require.Equal(t, textutil.Normalize(test.expected), textutil.Normalize(gotString))
 		})
 	}
 }
