@@ -52,6 +52,8 @@ The following recovery-related stats now include labels for keyspaces and shards
 3. `RecoveriesCount`
 4. `SuccessfulRecoveries`
 
+Previous to this release, only the recovery "type" was included in labels.
+
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
 #### <a id="flags-vttablet"/>CLI Flags</a>
