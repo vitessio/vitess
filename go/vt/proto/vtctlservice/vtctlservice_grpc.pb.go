@@ -161,6 +161,8 @@ type VtctldClient interface {
 	BackupShard(ctx context.Context, in *vtctldata.BackupShardRequest, opts ...grpc.CallOption) (Vtctld_BackupShardClient, error)
 	// CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
 	CancelSchemaMigration(ctx context.Context, in *vtctldata.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error)
+	// ChangeTabletTags changes the tags of the specified tablet, if possible.
+	ChangeTabletTags(ctx context.Context, in *vtctldata.ChangeTabletTagsRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTagsResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -585,6 +587,15 @@ func (x *vtctldBackupShardClient) Recv() (*vtctldata.BackupResponse, error) {
 func (c *vtctldClient) CancelSchemaMigration(ctx context.Context, in *vtctldata.CancelSchemaMigrationRequest, opts ...grpc.CallOption) (*vtctldata.CancelSchemaMigrationResponse, error) {
 	out := new(vtctldata.CancelSchemaMigrationResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/CancelSchemaMigration", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ChangeTabletTags(ctx context.Context, in *vtctldata.ChangeTabletTagsRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTagsResponse, error) {
+	out := new(vtctldata.ChangeTabletTagsResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ChangeTabletTags", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1570,6 +1581,8 @@ type VtctldServer interface {
 	BackupShard(*vtctldata.BackupShardRequest, Vtctld_BackupShardServer) error
 	// CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
 	CancelSchemaMigration(context.Context, *vtctldata.CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error)
+	// ChangeTabletTags changes the tags of the specified tablet, if possible.
+	ChangeTabletTags(context.Context, *vtctldata.ChangeTabletTagsRequest) (*vtctldata.ChangeTabletTagsResponse, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -1896,6 +1909,9 @@ func (UnimplementedVtctldServer) BackupShard(*vtctldata.BackupShardRequest, Vtct
 }
 func (UnimplementedVtctldServer) CancelSchemaMigration(context.Context, *vtctldata.CancelSchemaMigrationRequest) (*vtctldata.CancelSchemaMigrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CancelSchemaMigration not implemented")
+}
+func (UnimplementedVtctldServer) ChangeTabletTags(context.Context, *vtctldata.ChangeTabletTagsRequest) (*vtctldata.ChangeTabletTagsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletTags not implemented")
 }
 func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletType not implemented")
@@ -2383,6 +2399,24 @@ func _Vtctld_CancelSchemaMigration_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).CancelSchemaMigration(ctx, req.(*vtctldata.CancelSchemaMigrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ChangeTabletTags_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ChangeTabletTagsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ChangeTabletTags(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ChangeTabletTags",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ChangeTabletTags(ctx, req.(*vtctldata.ChangeTabletTagsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -4278,6 +4312,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelSchemaMigration",
 			Handler:    _Vtctld_CancelSchemaMigration_Handler,
+		},
+		{
+			MethodName: "ChangeTabletTags",
+			Handler:    _Vtctld_ChangeTabletTags_Handler,
 		},
 		{
 			MethodName: "ChangeTabletType",

@@ -127,6 +127,15 @@ func (s *server) SetReadWrite(ctx context.Context, request *tabletmanagerdatapb.
 	return response, s.tm.SetReadOnly(ctx, false)
 }
 
+func (s *server) ChangeTags(ctx context.Context, request *tabletmanagerdatapb.ChangeTagsRequest) (response *tabletmanagerdatapb.ChangeTagsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "ChangeTags", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	afterTags, err := s.tm.ChangeTags(ctx, request.Tags, request.Replace)
+	return &tabletmanagerdatapb.ChangeTagsResponse{
+		Tags: afterTags,
+	}, err
+}
+
 func (s *server) ChangeType(ctx context.Context, request *tabletmanagerdatapb.ChangeTypeRequest) (response *tabletmanagerdatapb.ChangeTypeResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "ChangeType", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

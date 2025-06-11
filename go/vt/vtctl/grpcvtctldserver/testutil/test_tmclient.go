@@ -187,6 +187,11 @@ type TabletManagerClient struct {
 	// Backing Up - keyed by tablet alias.
 	TabletsBackupState map[string]bool
 	// keyed by tablet alias.
+	ChangeTagsResult map[string]struct {
+		Response *tabletmanagerdatapb.ChangeTagsResponse
+		Error    error
+	}
+	ChangeTagsDelays       map[string]time.Duration
 	ChangeTabletTypeResult map[string]error
 	ChangeTabletTypeDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -459,6 +464,39 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 	}()
 
 	return stream, nil
+}
+
+// ChangeTags is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ChangeTags(ctx context.Context, tablet *topodatapb.Tablet, tabletTags map[string]string, replace bool) (*tabletmanagerdatapb.ChangeTagsResponse, error) {
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.ChangeTagsDelays != nil {
+		if delay, ok := fake.ChangeTagsDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.ChangeTagsResult[key]; ok {
+		return result.Response, result.Error
+	}
+
+	if fake.TopoServer == nil {
+		return nil, assert.AnError
+	}
+
+	tablet, err := topotools.ChangeTags(ctx, fake.TopoServer, tablet.Alias, tabletTags, replace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tabletmanagerdatapb.ChangeTagsResponse{
+		Tags: tablet.Tags,
+	}, nil
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.

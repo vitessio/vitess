@@ -57,6 +57,9 @@ service TabletManager {
 
   rpc SetReadWrite(tabletmanagerdata.SetReadWriteRequest) returns (tabletmanagerdata.SetReadWriteResponse) {};
 
+  // ChangeTags asks the remote tablet to change its tags
+  rpc ChangeTags(tabletmanagerdata.ChangeTagsRequest) returns (tabletmanagerdata.ChangeTagsResponse) {};
+
   // ChangeType asks the remote tablet to change its type
   rpc ChangeType(tabletmanagerdata.ChangeTypeRequest) returns (tabletmanagerdata.ChangeTypeResponse) {};
 

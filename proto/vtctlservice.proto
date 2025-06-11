@@ -56,6 +56,8 @@ service Vtctld {
   rpc BackupShard(vtctldata.BackupShardRequest) returns (stream vtctldata.BackupResponse) {};
   // CancelSchemaMigration cancels one or all migrations, terminating any running ones as needed.
   rpc CancelSchemaMigration(vtctldata.CancelSchemaMigrationRequest) returns (vtctldata.CancelSchemaMigrationResponse) {};
+  // ChangeTabletTags changes the tags of the specified tablet, if possible.
+  rpc ChangeTabletTags(vtctldata.ChangeTabletTagsRequest) returns (vtctldata.ChangeTabletTagsResponse) {};
   // ChangeTabletType changes the db type for the specified tablet, if possible.
   // This is used primarily to arrange replicas, and it will not convert a
   // primary. For that, use InitShardPrimary.

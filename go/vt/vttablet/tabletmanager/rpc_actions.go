@@ -81,6 +81,30 @@ func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
 	return tm.MysqlDaemon.SetReadOnly(rdonly)
 }
 
+// ChangeTags changes the tablet tags
+func (tm *TabletManager) ChangeTags(ctx context.Context, tabletTags map[string]string, replace bool) (map[string]string, error) {
+	if err := tm.lock(ctx); err != nil {
+		return nil, err
+	}
+	defer tm.unlock()
+
+	tags := tm.tmState.Tablet().Tags
+	if replace || len(tags) == 0 {
+		tags = tabletTags
+	} else {
+		for key, val := range tabletTags {
+			if val == "" {
+				delete(tags, key)
+				continue
+			}
+			tags[key] = val
+		}
+	}
+
+	tm.tmState.ChangeTabletTags(ctx, tags)
+	return tags, nil
+}
+
 // ChangeType changes the tablet type
 func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.TabletType, semiSync bool) error {
 	if err := tm.lock(ctx); err != nil {
@@ -96,7 +120,7 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 	return tm.changeTypeLocked(ctx, tabletType, DBActionNone, semiSyncAction)
 }
 
-// ChangeType changes the tablet type
+// changeTypeLocked changes the tablet type under a lock
 func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, semiSync SemiSyncAction) error {
 	// We don't want to allow multiple callers to claim a tablet as drained.
 	if tabletType == topodatapb.TabletType_DRAINED && tm.Tablet().Type == topodatapb.TabletType_DRAINED {

@@ -29751,6 +29751,206 @@ export namespace tabletmanagerdata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of a ChangeTagsRequest. */
+    interface IChangeTagsRequest {
+
+        /** ChangeTagsRequest tags */
+        tags?: ({ [k: string]: string }|null);
+
+        /** ChangeTagsRequest replace */
+        replace?: (boolean|null);
+    }
+
+    /** Represents a ChangeTagsRequest. */
+    class ChangeTagsRequest implements IChangeTagsRequest {
+
+        /**
+         * Constructs a new ChangeTagsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IChangeTagsRequest);
+
+        /** ChangeTagsRequest tags. */
+        public tags: { [k: string]: string };
+
+        /** ChangeTagsRequest replace. */
+        public replace: boolean;
+
+        /**
+         * Creates a new ChangeTagsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ChangeTagsRequest instance
+         */
+        public static create(properties?: tabletmanagerdata.IChangeTagsRequest): tabletmanagerdata.ChangeTagsRequest;
+
+        /**
+         * Encodes the specified ChangeTagsRequest message. Does not implicitly {@link tabletmanagerdata.ChangeTagsRequest.verify|verify} messages.
+         * @param message ChangeTagsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IChangeTagsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ChangeTagsRequest message, length delimited. Does not implicitly {@link tabletmanagerdata.ChangeTagsRequest.verify|verify} messages.
+         * @param message ChangeTagsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IChangeTagsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ChangeTagsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ChangeTagsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ChangeTagsRequest;
+
+        /**
+         * Decodes a ChangeTagsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ChangeTagsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ChangeTagsRequest;
+
+        /**
+         * Verifies a ChangeTagsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ChangeTagsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ChangeTagsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ChangeTagsRequest;
+
+        /**
+         * Creates a plain object from a ChangeTagsRequest message. Also converts values to other types if specified.
+         * @param message ChangeTagsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ChangeTagsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ChangeTagsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ChangeTagsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ChangeTagsResponse. */
+    interface IChangeTagsResponse {
+
+        /** ChangeTagsResponse tags */
+        tags?: ({ [k: string]: string }|null);
+    }
+
+    /** Represents a ChangeTagsResponse. */
+    class ChangeTagsResponse implements IChangeTagsResponse {
+
+        /**
+         * Constructs a new ChangeTagsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IChangeTagsResponse);
+
+        /** ChangeTagsResponse tags. */
+        public tags: { [k: string]: string };
+
+        /**
+         * Creates a new ChangeTagsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ChangeTagsResponse instance
+         */
+        public static create(properties?: tabletmanagerdata.IChangeTagsResponse): tabletmanagerdata.ChangeTagsResponse;
+
+        /**
+         * Encodes the specified ChangeTagsResponse message. Does not implicitly {@link tabletmanagerdata.ChangeTagsResponse.verify|verify} messages.
+         * @param message ChangeTagsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IChangeTagsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ChangeTagsResponse message, length delimited. Does not implicitly {@link tabletmanagerdata.ChangeTagsResponse.verify|verify} messages.
+         * @param message ChangeTagsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IChangeTagsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ChangeTagsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ChangeTagsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.ChangeTagsResponse;
+
+        /**
+         * Decodes a ChangeTagsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ChangeTagsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.ChangeTagsResponse;
+
+        /**
+         * Verifies a ChangeTagsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ChangeTagsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ChangeTagsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.ChangeTagsResponse;
+
+        /**
+         * Creates a plain object from a ChangeTagsResponse message. Also converts values to other types if specified.
+         * @param message ChangeTagsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.ChangeTagsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ChangeTagsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ChangeTagsResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }
 
 /** Namespace binlogdata. */
@@ -47387,6 +47587,218 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for CancelSchemaMigrationResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ChangeTabletTagsRequest. */
+    interface IChangeTabletTagsRequest {
+
+        /** ChangeTabletTagsRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ChangeTabletTagsRequest tags */
+        tags?: ({ [k: string]: string }|null);
+
+        /** ChangeTabletTagsRequest replace */
+        replace?: (boolean|null);
+    }
+
+    /** Represents a ChangeTabletTagsRequest. */
+    class ChangeTabletTagsRequest implements IChangeTabletTagsRequest {
+
+        /**
+         * Constructs a new ChangeTabletTagsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IChangeTabletTagsRequest);
+
+        /** ChangeTabletTagsRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ChangeTabletTagsRequest tags. */
+        public tags: { [k: string]: string };
+
+        /** ChangeTabletTagsRequest replace. */
+        public replace: boolean;
+
+        /**
+         * Creates a new ChangeTabletTagsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ChangeTabletTagsRequest instance
+         */
+        public static create(properties?: vtctldata.IChangeTabletTagsRequest): vtctldata.ChangeTabletTagsRequest;
+
+        /**
+         * Encodes the specified ChangeTabletTagsRequest message. Does not implicitly {@link vtctldata.ChangeTabletTagsRequest.verify|verify} messages.
+         * @param message ChangeTabletTagsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IChangeTabletTagsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ChangeTabletTagsRequest message, length delimited. Does not implicitly {@link vtctldata.ChangeTabletTagsRequest.verify|verify} messages.
+         * @param message ChangeTabletTagsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IChangeTabletTagsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ChangeTabletTagsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ChangeTabletTagsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ChangeTabletTagsRequest;
+
+        /**
+         * Decodes a ChangeTabletTagsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ChangeTabletTagsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ChangeTabletTagsRequest;
+
+        /**
+         * Verifies a ChangeTabletTagsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ChangeTabletTagsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ChangeTabletTagsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ChangeTabletTagsRequest;
+
+        /**
+         * Creates a plain object from a ChangeTabletTagsRequest message. Also converts values to other types if specified.
+         * @param message ChangeTabletTagsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ChangeTabletTagsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ChangeTabletTagsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ChangeTabletTagsRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ChangeTabletTagsResponse. */
+    interface IChangeTabletTagsResponse {
+
+        /** ChangeTabletTagsResponse before_tags */
+        before_tags?: ({ [k: string]: string }|null);
+
+        /** ChangeTabletTagsResponse after_tags */
+        after_tags?: ({ [k: string]: string }|null);
+    }
+
+    /** Represents a ChangeTabletTagsResponse. */
+    class ChangeTabletTagsResponse implements IChangeTabletTagsResponse {
+
+        /**
+         * Constructs a new ChangeTabletTagsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IChangeTabletTagsResponse);
+
+        /** ChangeTabletTagsResponse before_tags. */
+        public before_tags: { [k: string]: string };
+
+        /** ChangeTabletTagsResponse after_tags. */
+        public after_tags: { [k: string]: string };
+
+        /**
+         * Creates a new ChangeTabletTagsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ChangeTabletTagsResponse instance
+         */
+        public static create(properties?: vtctldata.IChangeTabletTagsResponse): vtctldata.ChangeTabletTagsResponse;
+
+        /**
+         * Encodes the specified ChangeTabletTagsResponse message. Does not implicitly {@link vtctldata.ChangeTabletTagsResponse.verify|verify} messages.
+         * @param message ChangeTabletTagsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IChangeTabletTagsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ChangeTabletTagsResponse message, length delimited. Does not implicitly {@link vtctldata.ChangeTabletTagsResponse.verify|verify} messages.
+         * @param message ChangeTabletTagsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IChangeTabletTagsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ChangeTabletTagsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ChangeTabletTagsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ChangeTabletTagsResponse;
+
+        /**
+         * Decodes a ChangeTabletTagsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ChangeTabletTagsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ChangeTabletTagsResponse;
+
+        /**
+         * Verifies a ChangeTabletTagsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ChangeTabletTagsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ChangeTabletTagsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ChangeTabletTagsResponse;
+
+        /**
+         * Creates a plain object from a ChangeTabletTagsResponse message. Also converts values to other types if specified.
+         * @param message ChangeTabletTagsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ChangeTabletTagsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ChangeTabletTagsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ChangeTabletTagsResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

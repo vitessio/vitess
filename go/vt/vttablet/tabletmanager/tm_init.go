@@ -123,6 +123,9 @@ var (
 	// statsIsInSrvKeyspace is set to 1 (true), 0 (false) whether the tablet is in the serving keyspace
 	statsIsInSrvKeyspace *stats.Gauge
 
+	// statsTabletTags is set to 1 (true) if a tablet tag exists.
+	statsTabletTags *stats.GaugesWithMultiLabels
+
 	statsKeyspace      = stats.NewString("TabletKeyspace")
 	statsShard         = stats.NewString("TabletShard")
 	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
@@ -142,6 +145,7 @@ func init() {
 	statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 	statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 	statsIsInSrvKeyspace = stats.NewGauge("IsInSrvKeyspace", "Whether the vttablet is in the serving keyspace (1 = true / 0 = false)")
+	statsTabletTags = stats.NewGaugesWithMultiLabels("TabletTags", "Tablet tags key/values", []string{"key", "value"})
 }
 
 // TabletManager is the main class for the tablet manager.
@@ -342,6 +346,13 @@ func mergeTags(a, b map[string]string) map[string]string {
 	}
 
 	return result
+}
+
+func setTabletTagsStats(tablet *topodatapb.Tablet) {
+	statsTabletTags.ResetAll()
+	for key, val := range tablet.Tags {
+		statsTabletTags.Set([]string{key, val}, 1)
+	}
 }
 
 // Start starts the TabletManager.
@@ -890,6 +901,7 @@ func (tm *TabletManager) exportStats() {
 		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))
 	}
 	statsAlias.Set(topoproto.TabletAliasString(tablet.Alias))
+	setTabletTagsStats(tablet)
 }
 
 // withRetry will exponentially back off and retry a function upon

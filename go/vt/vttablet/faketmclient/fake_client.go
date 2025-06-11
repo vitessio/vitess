@@ -145,6 +145,11 @@ func (client *FakeTabletManagerClient) SetReadWrite(ctx context.Context, tablet 
 	return nil
 }
 
+// ChangeTags is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) ChangeTags(ctx context.Context, tablet *topodatapb.Tablet, tabletTags map[string]string, replace bool) (*tabletmanagerdatapb.ChangeTagsResponse, error) {
+	return &tabletmanagerdatapb.ChangeTagsResponse{}, nil
+}
+
 // ChangeType is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType, semiSync bool) error {
 	return nil

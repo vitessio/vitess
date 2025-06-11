@@ -17,6 +17,7 @@ Available Commands:
   ApplyVSchema                Applies the VTGate routing schema to the provided keyspace. Shows the result after application.
   Backup                      Uses the BackupStorage service on the given tablet to create and store a new backup.
   BackupShard                 Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
+  ChangeTabletTags            Changes the tablet tags for the specified tablet, if possible.
   ChangeTabletType            Changes the db type for the specified tablet, if possible.
   CreateKeyspace              Creates the specified keyspace in the topology.
   CreateShard                 Creates the specified shard in the topology.

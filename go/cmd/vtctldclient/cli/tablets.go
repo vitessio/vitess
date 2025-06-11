@@ -17,9 +17,11 @@ limitations under the License.
 package cli
 
 import (
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"fmt"
+	"strings"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // TabletAliasesFromPosArgs takes a list of positional (non-flag) arguments and
@@ -37,4 +39,23 @@ func TabletAliasesFromPosArgs(args []string) ([]*topodatapb.TabletAlias, error) 
 	}
 
 	return aliases, nil
+}
+
+// TabletTagsFromPosArgs takes a list of positional (non-flag) arguements and
+// converts them to a map of tablet tags.
+func TabletTagsFromPosArgs(args []string) (map[string]string, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("no tablet tags specified")
+	}
+
+	tags := make(map[string]string, len(args))
+	for _, kvPair := range args {
+		if !strings.Contains(kvPair, "=") {
+			return nil, fmt.Errorf("invalid tablet tag %q specified. tablet tags must be specified in key=value format", kvPair)
+		}
+		fields := strings.SplitN(kvPair, "=", 2)
+		tags[fields[0]] = fields[1]
+	}
+
+	return tags, nil
 }

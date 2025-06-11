@@ -689,3 +689,12 @@ message CheckThrottlerResponse {
   // that heartbeats lease should be renwed.
   bool recently_checked = 6;
 }
+
+message ChangeTagsRequest {
+  map<string, string> tags = 1;
+  bool replace = 2;
+}
+
+message ChangeTagsResponse {
+  map<string, string> tags = 1;
+}

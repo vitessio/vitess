@@ -425,6 +425,30 @@ func tmRPCTestSetReadOnlyPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "SetReadWrite", true /*verbose*/, err)
 }
 
+var testChangeTagsValue = map[string]string{
+	"test": "12345",
+}
+
+func (fra *fakeRPCTM) ChangeTags(ctx context.Context, tabletTags map[string]string, replace bool) (map[string]string, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "ChangeTags tabletType", tabletTags, testChangeTagsValue)
+	return tabletTags, nil
+}
+
+func tmRPCTestChangeTags(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.ChangeTags(ctx, tablet, testChangeTagsValue, false)
+	if err != nil {
+		t.Errorf("ChangeTags failed: %v", err)
+	}
+}
+
+func tmRPCTestChangeTagsPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.ChangeTags(ctx, tablet, testChangeTagsValue, false)
+	expectHandleRPCPanic(t, "ChangeTags", true /*verbose*/, err)
+}
+
 var testChangeTypeValue = topodatapb.TabletType_REPLICA
 
 func (fra *fakeRPCTM) ChangeType(ctx context.Context, tabletType topodatapb.TabletType, semiSync bool) error {

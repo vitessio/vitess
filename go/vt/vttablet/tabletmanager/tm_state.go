@@ -239,6 +239,17 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 	return err
 }
 
+func (ts *tmState) ChangeTabletTags(ctx context.Context, tabletTags map[string]string) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	log.Infof("Changing Tablet Tags: %v for %s", tabletTags, ts.tablet.Alias.String())
+
+	ts.tablet.Tags = tabletTags
+	ts.publishStateLocked(ctx)
+	ts.publishForDisplay()
+	setTabletTagsStats(ts.tablet)
+}
+
 func (ts *tmState) SetMysqlPort(mport int32) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()

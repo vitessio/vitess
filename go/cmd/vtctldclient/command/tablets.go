@@ -34,6 +34,17 @@ import (
 )
 
 var (
+	// ChangeTabletTags makes a ChangeTabletTags gRPC call to a vtctld.
+	ChangeTabletTags = &cobra.Command{
+		Use:   "ChangeTabletTags <alias> <tablet-tag> [ <tablet-tag> ... ]",
+		Short: "Changes the tablet tags for the specified tablet, if possible.",
+		Long: `Changes the tablet tags for the specified tablet, if possible.
+
+Tags must be specified as key=value pairs.`,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.MinimumNArgs(2),
+		RunE:                  commandChangeTabletTags,
+	}
 	// ChangeTabletType makes a ChangeTabletType gRPC call to a vtctld.
 	ChangeTabletType = &cobra.Command{
 		Use:   "ChangeTabletType [--dry-run] <alias> <tablet-type>",
@@ -211,6 +222,40 @@ Note that, in the SleepTablet implementation, the value should be positively-sig
 		RunE:                  commandStopReplication,
 	}
 )
+
+var changeTabletTagsOptions = struct {
+	Replace bool
+}{}
+
+func commandChangeTabletTags(cmd *cobra.Command, args []string) error {
+	allArgs := cmd.Flags().Args()
+
+	alias, err := topoproto.ParseTabletAlias(allArgs[0])
+	if err != nil {
+		return err
+	}
+
+	tags, err := cli.TabletTagsFromPosArgs(allArgs[1:])
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.ChangeTabletTags(commandCtx, &vtctldatapb.ChangeTabletTagsRequest{
+		TabletAlias: alias,
+		Tags:        tags,
+		Replace:     changeTabletTagsOptions.Replace,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("- %v\n", cli.MarshalMapAWK(resp.BeforeTags))
+	fmt.Printf("+ %v\n", cli.MarshalMapAWK(resp.AfterTags))
+
+	return nil
+}
 
 var changeTabletTypeOptions = struct {
 	DryRun bool
@@ -629,6 +674,9 @@ func commandStopReplication(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	ChangeTabletTags.Flags().BoolVarP(&changeTabletTagsOptions.Replace, "replace", "r", false, "Replace all tablet tags with the tags provided. By default tags are merged/updated.")
+	Root.AddCommand(ChangeTabletTags)
+
 	ChangeTabletType.Flags().BoolVarP(&changeTabletTypeOptions.DryRun, "dry-run", "d", false, "Shows the proposed change without actually executing it.")
 	Root.AddCommand(ChangeTabletType)
 

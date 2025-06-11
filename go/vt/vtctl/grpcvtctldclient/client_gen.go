@@ -110,6 +110,15 @@ func (client *gRPCVtctldClient) CancelSchemaMigration(ctx context.Context, in *v
 	return client.c.CancelSchemaMigration(ctx, in, opts...)
 }
 
+// ChangeTabletTags is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ChangeTabletTags(ctx context.Context, in *vtctldatapb.ChangeTabletTagsRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTagsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ChangeTabletTags(ctx, in, opts...)
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	if client.c == nil {
