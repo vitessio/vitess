@@ -168,12 +168,13 @@ const (
 )
 
 // Cursor Types. They are received on COM_STMT_EXECUTE()
-// See https://mariadb.com/kb/en/com_stmt_execute/
+// See https://dev.mysql.com/doc/dev/mysql-server/9.3.0/mysql__com_8h.html#a3e5e9e744ff6f7b989a604fd669977da
 const (
-	NoCursor = iota
-	ReadOnly
-	CursorForUpdate
-	ScrollableCursor
+	NoCursor uint8 = 0x00
+	ReadOnly uint8 = 0x01
+	ForUpdate uint8 = 0x02
+	Scrollable uint8 = 0x04
+	ParameterCountAvailable uint8 = 0x08
 )
 
 // State Change Information
