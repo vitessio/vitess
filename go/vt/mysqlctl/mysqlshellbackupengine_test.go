@@ -159,25 +159,57 @@ func TestMySQLShellBackupRestorePreCheckDisableRedolog(t *testing.T) {
 	mysqlShellSpeedUpRestore = true
 	engine := MySQLShellBackupEngine{}
 
+	tests := []struct {
+		version string
+		err     error
+	}{
+		{
+			version: "mysqld  Ver 5.7.27-0ubuntu0.19.04.1 for Linux on x86_64 ((Ubuntu))",
+			err:     MySQLShellPreCheckError,
+		},
+		{
+			version: "mysqld  Ver 5.7.26 for linux-glibc2.12 on x86_64 (MySQL Community Server (GPL))",
+			err:     MySQLShellPreCheckError,
+		},
+		{
+			version: "mysqld  Ver 5.7.26-29 for Linux on x86_64 (Percona Server (GPL), Release 29, Revision 11ad961)",
+			err:     MySQLShellPreCheckError,
+		},
+		{
+			version: "mysqld  Ver 8.0.16 for linux-glibc2.12 on x86_64 (MySQL Community Server - GPL)",
+			err:     MySQLShellPreCheckError,
+		},
+		{
+			version: "mysqld  Ver 8.0.15-6 for Linux on x86_64 (Percona Server (GPL), Release 6, Revision 63abd08)",
+			err:     MySQLShellPreCheckError,
+		},
+		{
+			version: "mysqld  Ver 8.0.42-0ubuntu0.22.04.1 for Linux on x86_64 ((Ubuntu))",
+			err:     nil,
+		},
+		{
+			version: "mysqld  Ver 8.0.42-33 for Linux on x86_64 (Percona Server (GPL), Release '33', Revision '9dc49998')",
+			err:     nil,
+		},
+	}
+
 	fakedb := fakesqldb.New(t)
 	defer fakedb.Close()
-	fakeMysqld := NewFakeMysqlDaemon(fakedb) // defaults to 8.0.32
+	fakeMysqld := NewFakeMysqlDaemon(fakedb)
 	defer fakeMysqld.Close()
 
 	params := RestoreParams{
 		Mysqld: fakeMysqld,
 	}
 
-	// this should work as it is supported since 8.0.21
-	_, err := engine.restorePreCheck(context.Background(), params)
-	require.NoError(t, err, params)
+	for _, tt := range tests {
+		t.Run(tt.version, func(t *testing.T) {
+			fakeMysqld.Version = tt.version
 
-	// it should error out if we change to an older version
-	fakeMysqld.Version = "8.0.20"
-
-	_, err = engine.restorePreCheck(context.Background(), params)
-	require.ErrorIs(t, err, MySQLShellPreCheckError)
-	require.ErrorContains(t, err, "doesn't support disabling the redo log")
+			_, err := engine.restorePreCheck(context.Background(), params)
+			require.ErrorIs(t, err, tt.err)
+		})
+	}
 }
 
 func TestShouldDrainForBackupMySQLShell(t *testing.T) {
