@@ -35,7 +35,7 @@ func (cfg MaxReplicationLagModuleConfig) Clone() MaxReplicationLagModuleConfig {
 }
 
 // Most of the values are based on the assumption that vttablet is started
-// with the flag --health_check_interval=20s.
+// with the flag --health-check-interval=20s.
 const healthCheckInterval = 20
 
 var defaultMaxReplicationLagModuleConfig = MaxReplicationLagModuleConfig{

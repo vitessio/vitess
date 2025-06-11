@@ -349,17 +349,17 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtctldExtraArgs = []string{
-			"--schema_change_dir", schemaChangeDirectory,
-			"--schema_change_controller", "local",
-			"--schema_change_check_interval", "1s",
+			"--schema-change-dir", schemaChangeDirectory,
+			"--schema-change-controller", "local",
+			"--schema-change-check-interval", "1s",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
 			vtutils.GetFlagVariantForTests("--heartbeat-enable"),
 			vtutils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			"--heartbeat_on_demand_duration", "5s",
-			"--migration_check_interval", "3s",
-			"--watch_replication_stream",
+			vtutils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
+			vtutils.GetFlagVariantForTests("--migration-check-interval"), "3s",
+			vtutils.GetFlagVariantForTests("--watch-replication-stream"),
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 

@@ -1,9 +1,14 @@
 ## Summary
 
 ### Table of Contents
+
 - **[Minor Changes](#minor-changes)**
     - **[Deletions](#deletions)**
         - [Metrics](#deleted-metrics)
+    - **[New Metrics](#new-metrics)**
+        - [VTGate](#new-vtgate-metrics)
+    - **[Topology](#minor-changes-topo)**
+        - [`--consul_auth_static_file` requires 1 or more credentials](#consul_auth_static_file-check-creds)
     - **[VTTablet](#minor-changes-vttablet)**
         - [CLI Flags](#flags-vttablet)
         - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password)
@@ -20,6 +25,20 @@
 | `vtgate`  |      `QueriesRouted`      |     `v22.0.0`     | [#17727](https://github.com/vitessio/vitess/pull/17727) |
 | `vtgate`  | `QueriesProcessedByTable` |     `v22.0.0`     | [#17727](https://github.com/vitessio/vitess/pull/17727) |
 | `vtgate`  |  `QueriesRoutedByTable`   |     `v22.0.0`     | [#17727](https://github.com/vitessio/vitess/pull/17727) |
+
+### <a id="new-metrics"/>New Metrics
+
+#### <a id="new-vtgate-metrics"/>VTGate
+
+|          Name           |   Dimensions    |                                     Description                                     |                           PR                            |
+|:-----------------------:|:---------------:|:-----------------------------------------------------------------------------------:|:-------------------------------------------------------:|
+| `TransactionsProcessed` | `Shard`, `Type` | Counts transactions processed at VTGate by shard distribution and transaction type. | [#18171](https://github.com/vitessio/vitess/pull/18171) |
+
+### <a id="minor-changes-topo"/>Topology</a>
+
+#### <a id="consul_auth_static_file-check-creds"/>`--consul_auth_static_file` requires 1 or more credentials</a>
+
+The `--consul_auth_static_file` flag used in several components now requires that 1 or more credentials can be loaded from the provided json file.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 

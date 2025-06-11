@@ -29,12 +29,13 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var lockTablesTimeout = 1 * time.Minute
 
 func registerLockTablesFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&lockTablesTimeout, "lock_tables_timeout", lockTablesTimeout, "How long to keep the table locked before timing out")
+	utils.SetFlagDurationVar(fs, &lockTablesTimeout, "lock-tables-timeout", lockTablesTimeout, "How long to keep the table locked before timing out")
 }
 
 func init() {

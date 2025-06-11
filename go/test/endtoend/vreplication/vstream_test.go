@@ -1103,7 +1103,7 @@ func TestVStreamStopOnReshardFalse(t *testing.T) {
 
 func TestVStreamWithKeyspacesToWatch(t *testing.T) {
 	extraVTGateArgs = append(extraVTGateArgs, []string{
-		"--keyspaces_to_watch", "product",
+		utils.GetFlagVariantForTests("--keyspaces-to-watch"), "product",
 	}...)
 
 	testVStreamWithFailover(t, false)
@@ -1200,7 +1200,7 @@ func TestVStreamHeartbeats(t *testing.T) {
 	extraVTTabletArgs = append(extraVTTabletArgs,
 		utils.GetFlagVariantForTests("--heartbeat-enable"),
 		utils.GetFlagVariantForTests("--heartbeat-interval"), "1s",
-		"--heartbeat_on_demand_duration", "0",
+		utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "0",
 	)
 	setSidecarDBName("_vt")
 	config := *mainClusterConfig

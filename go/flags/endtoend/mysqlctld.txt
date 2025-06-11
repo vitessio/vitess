@@ -20,8 +20,8 @@ mysqlctld \
 
 Flags:
       --alsologtostderr                                                  log to standard error as well as files
-      --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)
-      --app_pool_size int                                                Size of the connection pool for app connections (default 40)
+      --app-idle-timeout duration                                        Idle timeout for app connections (default 1m0s)
+      --app-pool-size int                                                Size of the connection pool for app connections (default 40)
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
@@ -59,8 +59,8 @@ Flags:
       --db-ssl-key string                                                connection ssl key
       --db-ssl-mode SslMode                                              SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
       --db-tls-min-version string                                        Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
-      --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
+      --dba-idle-timeout duration                                        Idle timeout for dba connections (default 1m0s)
+      --dba-pool-size int                                                Size of the connection pool for dba connections (default 20)
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc-auth-mtls-allowed-substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc-auth-static-client-creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -101,8 +101,8 @@ Flags:
       --mysql-port int                                                   MySQL port (default 3306)
       --mysql-server-version string                                      MySQL server version to advertise. (default "8.0.40-Vitess")
       --mysql-socket string                                              Path to the mysqld socket file
-      --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
-      --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
+      --mysqlctl-mycnf-template string                                   template file to use for generating the my.cnf file during server init
+      --mysqlctl-socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 5m10s)
       --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.

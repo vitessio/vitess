@@ -1680,6 +1680,103 @@
     "skip_e2e": true
   },
   {
+    "comment": "union with the same target shard (using `IN` with multiple matching values)",
+    "query": "SELECT id FROM music WHERE music.user_id IN (1, 2, 3) UNION SELECT id FROM music WHERE music.user_id IN (1, 2, 3)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "SELECT id FROM music WHERE music.user_id IN (1, 2, 3) UNION SELECT id FROM music WHERE music.user_id IN (1, 2, 3)",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from music where 1 != 1 union select id from music where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from music where music.user_id in ::__vals union select id from music where music.user_id in (1, 2, 3)) as dt(c0)",
+            "Values": [
+              "(1, 2, 3)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "union with the same target shard (using `IN` with the same normalized value)",
+    "query": "SELECT id FROM music WHERE music.user_id IN ::vtg1 UNION SELECT id FROM music WHERE music.user_id IN ::vtg1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "SELECT id FROM music WHERE music.user_id IN ::vtg1 UNION SELECT id FROM music WHERE music.user_id IN ::vtg1",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from music where 1 != 1 union select id from music where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from music where music.user_id in ::__vals union select id from music where music.user_id in ::vtg1) as dt(c0)",
+            "Values": [
+              "::vtg1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "union with the same target shard (using a mix of `IN` and `=` conditions)",
+    "query": "SELECT id FROM music WHERE music.user_id IN (1) UNION SELECT id FROM music WHERE music.user_id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT id FROM music WHERE music.user_id IN (1) UNION SELECT id FROM music WHERE music.user_id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from music where 1 != 1 union select id from music where 1 != 1",
+        "Query": "select id from music where music.user_id in (1) union select id from music where music.user_id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
     "comment": "union with the same target shard last_insert_id",
     "query": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
     "plan": {

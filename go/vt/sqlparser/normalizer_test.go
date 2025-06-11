@@ -317,7 +317,13 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
 		},
 	}, {
-		// EXPLAIN query will be normalized and not parameterized
+		// repeated IN clause with vals
+		in:      "select * from t where v1 in (1, '2') OR v2 in (1, '2')",
+		outstmt: "select * from t where v1 in ::bv1 or v2 in ::bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.TestBindVariable([]any{1, "2"}),
+		},
+	}, { // EXPLAIN query will be normalized and not parameterized
 		in:      "explain select @x from t where v1 in (1, '2')",
 		outstmt: "explain select :__vtudvx as `@x` from t where v1 in (1, '2')",
 		outbv:   map[string]*querypb.BindVariable{},
@@ -441,6 +447,11 @@ func TestNormalize(t *testing.T) {
 			"bv1": sqltypes.Int64BindVariable(1),
 			"bv2": sqltypes.Int64BindVariable(0),
 		},
+	}, {
+		// Verify we don't change anything in the normalization of create procedures.
+		in:      "CREATE PROCEDURE p2 (in x BIGINT) BEGIN declare y DECIMAL(14,2); START TRANSACTION; set y = 4.2; SELECT 128 from dual; COMMIT; END",
+		outstmt: "create procedure p2 (in x BIGINT) begin declare y DECIMAL(14,2); start transaction; set y = 4.2; select 128 from dual; commit; end;",
+		outbv:   map[string]*querypb.BindVariable{},
 	}}
 	parser := NewTestParser()
 	for _, tc := range testcases {
@@ -1320,9 +1331,9 @@ JOIN warehouse%d AS w ON c_w_id=w_id
 WHERE w_id = %d
 AND c_d_id = %d
 AND c_id = %d`,
-		`SELECT d_next_o_id, d_tax 
-FROM district%d 
-WHERE d_w_id = %d 
+		`SELECT d_next_o_id, d_tax
+FROM district%d
+WHERE d_w_id = %d
 AND d_id = %d FOR UPDATE`,
 		`UPDATE district%d
 SET d_next_o_id = %d
@@ -1332,58 +1343,58 @@ WHERE d_id = %d AND d_w_id= %d`,
 VALUES (%d,%d,%d,%d,NOW(),%d,%d)`,
 		`INSERT INTO new_orders%d (no_o_id, no_d_id, no_w_id)
 VALUES (%d,%d,%d)`,
-		`SELECT i_price, i_name, i_data 
+		`SELECT i_price, i_name, i_data
 FROM item%d
 WHERE i_id = %d`,
-		`SELECT s_quantity, s_data, s_dist_%s s_dist 
-FROM stock%d  
+		`SELECT s_quantity, s_data, s_dist_%s s_dist
+FROM stock%d
 WHERE s_i_id = %d AND s_w_id= %d FOR UPDATE`,
 		`UPDATE stock%d
 SET s_quantity = %d
-WHERE s_i_id = %d 
+WHERE s_i_id = %d
 AND s_w_id= %d`,
 		`INSERT INTO order_line%d
 (ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_dist_info)
 VALUES (%d,%d,%d,%d,%d,%d,%d,%d,'%s')`,
 		`UPDATE warehouse%d
-SET w_ytd = w_ytd + %d 
+SET w_ytd = w_ytd + %d
 WHERE w_id = %d`,
 		`SELECT w_street_1, w_street_2, w_city, w_state, w_zip, w_name
 FROM warehouse%d
 WHERE w_id = %d`,
-		`UPDATE district%d 
-SET d_ytd = d_ytd + %d 
-WHERE d_w_id = %d 
+		`UPDATE district%d
+SET d_ytd = d_ytd + %d
+WHERE d_w_id = %d
 AND d_id= %d`,
-		`SELECT d_street_1, d_street_2, d_city, d_state, d_zip, d_name 
+		`SELECT d_street_1, d_street_2, d_city, d_state, d_zip, d_name
 FROM district%d
-WHERE d_w_id = %d 
+WHERE d_w_id = %d
 AND d_id = %d`,
 		`SELECT count(c_id) namecnt
 FROM customer%d
-WHERE c_w_id = %d 
+WHERE c_w_id = %d
 AND c_d_id= %d
 AND c_last='%s'`,
 		`SELECT c_first, c_middle, c_last, c_street_1,
 c_street_2, c_city, c_state, c_zip, c_phone,
 c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since
 FROM customer%d
-WHERE c_w_id = %d 
+WHERE c_w_id = %d
 AND c_d_id= %d
 AND c_id=%d FOR UPDATE`,
 		`SELECT c_data
 FROM customer%d
-WHERE c_w_id = %d 
+WHERE c_w_id = %d
 AND c_d_id=%d
 AND c_id= %d`,
 		`UPDATE customer%d
 SET c_balance=%f, c_ytd_payment=%f, c_data='%s'
-WHERE c_w_id = %d 
+WHERE c_w_id = %d
 AND c_d_id=%d
 AND c_id=%d`,
 		`UPDATE customer%d
 SET c_balance=%f, c_ytd_payment=%f
-WHERE c_w_id = %d 
+WHERE c_w_id = %d
 AND c_d_id=%d
 AND c_id=%d`,
 		`INSERT INTO history%d
@@ -1391,71 +1402,71 @@ AND c_id=%d`,
 VALUES (%d,%d,%d,%d,%d,NOW(),%d,'%s')`,
 		`SELECT count(c_id) namecnt
 FROM customer%d
-WHERE c_w_id = %d 
+WHERE c_w_id = %d
 AND c_d_id= %d
 AND c_last='%s'`,
 		`SELECT c_balance, c_first, c_middle, c_id
 FROM customer%d
-WHERE c_w_id = %d 
+WHERE c_w_id = %d
 AND c_d_id= %d
 AND c_last='%s' ORDER BY c_first`,
 		`SELECT c_balance, c_first, c_middle, c_last
 FROM customer%d
-WHERE c_w_id = %d 
+WHERE c_w_id = %d
 AND c_d_id=%d
 AND c_id=%d`,
 		`SELECT o_id, o_carrier_id, o_entry_d
-FROM orders%d 
-WHERE o_w_id = %d 
-AND o_d_id = %d 
-AND o_c_id = %d 
+FROM orders%d
+WHERE o_w_id = %d
+AND o_d_id = %d
+AND o_c_id = %d
 ORDER BY o_id DESC`,
 		`SELECT ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d
 FROM order_line%d WHERE ol_w_id = %d AND ol_d_id = %d  AND ol_o_id = %d`,
 		`SELECT no_o_id
-FROM new_orders%d 
-WHERE no_d_id = %d 
-AND no_w_id = %d 
+FROM new_orders%d
+WHERE no_d_id = %d
+AND no_w_id = %d
 ORDER BY no_o_id ASC LIMIT 1 FOR UPDATE`,
 		`DELETE FROM new_orders%d
-WHERE no_o_id = %d 
-AND no_d_id = %d  
+WHERE no_o_id = %d
+AND no_d_id = %d
 AND no_w_id = %d`,
 		`SELECT o_c_id
-FROM orders%d 
-WHERE o_id = %d 
-AND o_d_id = %d 
+FROM orders%d
+WHERE o_id = %d
+AND o_d_id = %d
 AND o_w_id = %d`,
-		`UPDATE orders%d 
+		`UPDATE orders%d
 SET o_carrier_id = %d
-WHERE o_id = %d 
-AND o_d_id = %d 
+WHERE o_id = %d
+AND o_d_id = %d
 AND o_w_id = %d`,
-		`UPDATE order_line%d 
+		`UPDATE order_line%d
 SET ol_delivery_d = NOW()
-WHERE ol_o_id = %d 
-AND ol_d_id = %d 
+WHERE ol_o_id = %d
+AND ol_d_id = %d
 AND ol_w_id = %d`,
 		`SELECT SUM(ol_amount) sm
-FROM order_line%d 
-WHERE ol_o_id = %d 
-AND ol_d_id = %d 
+FROM order_line%d
+WHERE ol_o_id = %d
+AND ol_d_id = %d
 AND ol_w_id = %d`,
-		`UPDATE customer%d 
+		`UPDATE customer%d
 SET c_balance = c_balance + %f,
 c_delivery_cnt = c_delivery_cnt + 1
-WHERE c_id = %d 
-AND c_d_id = %d 
+WHERE c_id = %d
+AND c_d_id = %d
 AND c_w_id = %d`,
-		`SELECT d_next_o_id 
+		`SELECT d_next_o_id
 FROM district%d
 WHERE d_id = %d AND d_w_id= %d`,
 		`SELECT COUNT(DISTINCT(s.s_i_id))
 FROM stock%d AS s
-JOIN order_line%d AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id			
-WHERE ol.ol_w_id = %d 
+JOIN order_line%d AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id
+WHERE ol.ol_w_id = %d
 AND ol.ol_d_id = %d
-AND ol.ol_o_id < %d 
+AND ol.ol_o_id < %d
 AND ol.ol_o_id >= %d
 AND s.s_w_id= %d
 AND s.s_quantity < %d `,
@@ -1466,7 +1477,7 @@ AND ol_o_id < %d AND ol_o_id >= %d`,
 WHERE s_w_id = %d AND s_i_id = %d
 AND s_quantity < %d`,
 		`SELECT min(no_o_id) mo
-FROM new_orders%d 
+FROM new_orders%d
 WHERE no_w_id = %d AND no_d_id = %d`,
 		`SELECT o_id FROM orders%d o, (SELECT o_c_id,o_w_id,o_d_id,count(distinct o_id) FROM orders%d WHERE o_w_id=%d AND o_d_id=%d AND o_id > 2100 AND o_id < %d GROUP BY o_c_id,o_d_id,o_w_id having count( distinct o_id) > 1 limit 1) t WHERE t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1 `,
 		`DELETE FROM order_line%d where ol_w_id=%d AND ol_d_id=%d AND ol_o_id=%d`,
