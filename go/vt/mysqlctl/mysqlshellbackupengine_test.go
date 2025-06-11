@@ -204,8 +204,6 @@ func TestMySQLShellBackupRestorePreCheckDisableRedolog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.version, func(t *testing.T) {
-
-			// it should error out if we change to an older version
 			fakeMysqld.Version = tt.version
 
 			_, err := engine.restorePreCheck(context.Background(), params)
