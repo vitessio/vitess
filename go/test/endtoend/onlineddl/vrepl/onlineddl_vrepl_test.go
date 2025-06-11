@@ -372,7 +372,7 @@ func TestVreplSchemaChanges(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 
 		// Issue a complete with a relevant shard and wait for successful completion.
-		onlineddl.CheckCompleteMigrationShards(t, &vtParams, shards, uuid, "-80", true)
+		onlineddl.CheckCompleteMigrationShards(t, &vtParams, shards[0:1], uuid, "-80", true)
 		{
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[:1], uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
@@ -388,8 +388,10 @@ func TestVreplSchemaChanges(t *testing.T) {
 
 		testRows(t)
 		testMigrationRowCount(t, uuid)
-		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
-		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+		// schema change for shard "-80" is completed so it can't be cancelled or retried.
+		// schema change for shard "80-" is not completed so it can be cancelled or retried.
+		onlineddl.CheckCancelMigration(t, &vtParams, shards[1:], uuid, true)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards[1:], uuid, true)
 	})
 	// Notes about throttling:
 	// In this endtoend test we test both direct tablet API for throttling, as well as VTGate queries.
