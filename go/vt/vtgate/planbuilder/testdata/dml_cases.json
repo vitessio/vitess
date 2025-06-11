@@ -25,7 +25,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "delete from `user` where 0"
+        "Query": "delete from `user` where 0",
+        "Table": "user"
       },
       "TablesUsed": [
         "user.user"
@@ -46,7 +47,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "update `user` set `name` = 'xyz' where 0"
+        "Query": "update `user` set `name` = 'xyz' where 0",
+        "Table": "user"
       },
       "TablesUsed": [
         "user.user"
