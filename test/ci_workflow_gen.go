@@ -195,6 +195,7 @@ type clusterTest struct {
 	EnablePartialJSON                  bool
 	PartialKeyspace                    bool
 	NeedsMinio                         bool
+	ArchMatrixEnabled                  bool
 }
 
 type vitessTesterTest struct {
@@ -279,11 +280,12 @@ func generateClusterWorkflows(list []string, tpl string) {
 	for _, cluster := range clusters {
 		for _, mysqlVersion := range clusterMySQLVersions() {
 			test := &clusterTest{
-				Name:      fmt.Sprintf("Cluster (%s)", cluster),
-				Shard:     cluster,
-				BuildTag:  buildTag[cluster],
-				RunsOn:    defaultRunnerName,
-				GoPrivate: goPrivate,
+				Name:               fmt.Sprintf("Cluster (%s)", cluster),
+				Shard:              cluster,
+				BuildTag:           buildTag[cluster],
+				RunsOn:             defaultRunnerName,
+				GoPrivate:          goPrivate,
+				ArchMatrixEnabled:  true,
 			}
 			cores16Clusters := canonnizeList(clusterRequiring16CoresMachines)
 			for _, cores16Cluster := range cores16Clusters {
