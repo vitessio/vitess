@@ -672,7 +672,7 @@ func generateVtgate(opts vtOptions) string {
         --cells_to_watch %[5]s \
         --tablet-types-to-wait PRIMARY,REPLICA,RDONLY \
         --service-map 'grpc-vtgateservice' \
-        --normalize_queries=true \
+        --normalize-queries=true \
         "]
     volumes:
       - .:/script

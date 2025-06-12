@@ -72,7 +72,7 @@ func TestMain(m *testing.M) {
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 			"--twopc_abandon_age", "1",
-			"--migration_check_interval", "2s",
+			vtutils.GetFlagVariantForTests("--migration-check-interval"), "2s",
 		)
 
 		// Start keyspace

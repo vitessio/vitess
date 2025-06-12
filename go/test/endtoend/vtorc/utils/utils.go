@@ -40,6 +40,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	// Register topo implementations.
@@ -133,7 +134,7 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 		}
 	}
 	clusterInstance.VtTabletExtraArgs = []string{
-		"--lock_tables_timeout", "5s",
+		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 	}
 	// Initialize Cluster
 	shard0.Vttablets = tablets
@@ -811,7 +812,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 	shard.Vttablets = tablets
 
 	clusterInstance.VtTabletExtraArgs = []string{
-		"--lock_tables_timeout", "5s",
+		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 	}
 
 	// Initialize Cluster
@@ -885,7 +886,7 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 		clusterInfo.ClusterInstance.VtTabletExtraArgs = oldVttabletArgs
 	}()
 	clusterInfo.ClusterInstance.VtTabletExtraArgs = []string{
-		"--lock_tables_timeout", "5s",
+		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 	}
 
 	// Initialize Cluster

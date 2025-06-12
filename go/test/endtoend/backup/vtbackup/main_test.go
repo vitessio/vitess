@@ -45,8 +45,8 @@ var (
 	dbCredentialFile string
 	commonTabletArg  = []string{
 		vtutils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
-		"--degraded_threshold", "5s",
-		"--lock_tables_timeout", "5s",
+		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
+		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
 		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
 		vtutils.GetFlagVariantForTests("--enable-replication-reporter"),
 		"--serving_state_grace_period", "1s"}

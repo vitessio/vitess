@@ -118,8 +118,8 @@ func init() {
 		"this is neither a perfect nor a production solution for vschema persistence. Consider using the --external-topo-server flag if "+
 		"you require a more complete solution. This flag is ignored if --external-topo-server is set.")
 
-	Main.Flags().Var(vttest.TextTopoData(&tpb), "proto_topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
-	Main.Flags().Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
+	utils.SetFlagVar(Main.Flags(), vttest.TextTopoData(&tpb), "proto-topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
+	utils.SetFlagVar(Main.Flags(), vttest.JSONTopoData(&tpb), "json-topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
 
 	utils.SetFlagVar(Main.Flags(), (*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet-types-to-wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
 

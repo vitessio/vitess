@@ -34,7 +34,7 @@ func (m *Session_ShardSession) CloneVT() *Session_ShardSession {
 	r.TransactionId = m.TransactionId
 	r.TabletAlias = m.TabletAlias.CloneVT()
 	r.ReservedId = m.ReservedId
-	r.VindexOnly = m.VindexOnly
+	r.ReadOnly = m.ReadOnly
 	r.RowsAffected = m.RowsAffected
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -435,6 +435,7 @@ func (m *VStreamFlags) CloneVT() *VStreamFlags {
 	r.TabletOrder = m.TabletOrder
 	r.StreamKeyspaceHeartbeats = m.StreamKeyspaceHeartbeats
 	r.IncludeReshardJournalEvents = m.IncludeReshardJournalEvents
+	r.ExcludeKeyspaceFromTableName = m.ExcludeKeyspaceFromTableName
 	if rhs := m.TablesToCopy; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -615,9 +616,9 @@ func (m *Session_ShardSession) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		i--
 		dAtA[i] = 0x30
 	}
-	if m.VindexOnly {
+	if m.ReadOnly {
 		i--
-		if m.VindexOnly {
+		if m.ReadOnly {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -1846,6 +1847,16 @@ func (m *VStreamFlags) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.ExcludeKeyspaceFromTableName {
+		i--
+		if m.ExcludeKeyspaceFromTableName {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x50
+	}
 	if len(m.TablesToCopy) > 0 {
 		for iNdEx := len(m.TablesToCopy) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.TablesToCopy[iNdEx])
@@ -2296,7 +2307,7 @@ func (m *Session_ShardSession) SizeVT() (n int) {
 	if m.ReservedId != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.ReservedId))
 	}
-	if m.VindexOnly {
+	if m.ReadOnly {
 		n += 2
 	}
 	if m.RowsAffected {
@@ -2780,6 +2791,9 @@ func (m *VStreamFlags) SizeVT() (n int) {
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
+	if m.ExcludeKeyspaceFromTableName {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -3051,7 +3065,7 @@ func (m *Session_ShardSession) UnmarshalVT(dAtA []byte) error {
 			}
 		case 5:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field VindexOnly", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field ReadOnly", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -3068,7 +3082,7 @@ func (m *Session_ShardSession) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.VindexOnly = bool(v != 0)
+			m.ReadOnly = bool(v != 0)
 		case 6:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field RowsAffected", wireType)
@@ -6484,6 +6498,26 @@ func (m *VStreamFlags) UnmarshalVT(dAtA []byte) error {
 			}
 			m.TablesToCopy = append(m.TablesToCopy, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 10:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ExcludeKeyspaceFromTableName", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ExcludeKeyspaceFromTableName = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -137,7 +137,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
 
-	cluster, err := startCluster("--foreign_key_mode=allow", "--enable_online_ddl=true", "--enable_direct_ddl=true")
+	cluster, err := startCluster("--foreign-key-mode=allow", "--enable_online_ddl=true", "--enable_direct_ddl=true")
 	require.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -163,7 +163,7 @@ func TestForeignKeysAndDDLModes(t *testing.T) {
 	assert.NoError(t, err)
 
 	cluster.TearDown()
-	cluster, err = startCluster("--foreign_key_mode=disallow", "--enable_online_ddl=false", "--enable_direct_ddl=false")
+	cluster, err = startCluster("--foreign-key-mode=disallow", "--enable_online_ddl=false", "--enable_direct_ddl=false")
 	require.NoError(t, err)
 	defer cluster.TearDown()
 
@@ -191,7 +191,7 @@ func TestNoScatter(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
 
-	cluster, err := startCluster("--no_scatter")
+	cluster, err := startCluster(utils.GetFlagVariantForTests("--no-scatter"))
 	require.NoError(t, err)
 	defer cluster.TearDown()
 
