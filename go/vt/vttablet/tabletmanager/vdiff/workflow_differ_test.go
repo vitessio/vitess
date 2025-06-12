@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -1005,6 +1006,6 @@ func TestBuildPlanFailure(t *testing.T) {
 		require.NoError(t, err)
 		dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 		err = wd.buildPlan(dbc, filter, testSchema)
-		assert.EqualError(t, err, tcase.err, tcase.input)
+		assert.Equal(t, textutil.Normalize(err.Error()), textutil.Normalize(tcase.err), tcase.input)
 	}
 }
