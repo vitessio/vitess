@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -129,7 +130,7 @@ Dry run: Skipping update of VSchema`,
 			err := commandApplyVSchema(ctx, env.wr, subFlags, tt.args)
 			require.NoError(t, err)
 			if strings.HasPrefix(tt.want, "/") {
-				require.Regexp(t, regexp.MustCompile(tt.want[1:]), env.cmdlog.String())
+				require.Regexp(t, regexp.MustCompile(textutil.Normalize(tt.want[1:])), textutil.Normalize(env.cmdlog.String()))
 			} else {
 				require.Equal(t, tt.want, env.cmdlog.String())
 			}

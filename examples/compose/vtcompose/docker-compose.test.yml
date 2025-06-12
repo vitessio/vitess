@@ -189,8 +189,8 @@ services:
       - -c
       - /script/vtorc-up.sh
     depends_on:
-      - set_keyspace_durability_policy_unsharded_keyspace
       - set_keyspace_durability_policy_test_keyspace
+      - set_keyspace_durability_policy_unsharded_keyspace
       - vtctld
     environment:
       - WEB_PORT=8080
