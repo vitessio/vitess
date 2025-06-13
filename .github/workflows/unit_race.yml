@@ -15,8 +15,13 @@ jobs:
 
   build:
     name: Unit Test (Race)
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'gh-hosted-runners-16cores-1-24.04' }}
     steps:
+    - name: Check architecture
+      run: uname -m
     - name: Skip CI
       run: |
         if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
@@ -41,6 +46,12 @@ jobs:
         draft=$(echo "$PR_DATA" | jq .draft -r)
         echo "is_draft=${draft}" >> $GITHUB_OUTPUT
 
+    - name: Setup etcd
+      run: |
+        mkdir -p dist bin
+        ARCH=${{ matrix.arch }}
+        curl -sL https://github.com/coreos/etcd/releases/download/v3.5.17/etcd-v3.5.17-linux-${ARCH}.tar.gz | tar zxC dist
+        mv dist/etcd-v3.5.17-linux-${ARCH}/{etcd,etcdctl} bin/
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -100,8 +111,9 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
 
         mkdir -p dist bin
-        curl -s -L https://github.com/coreos/etcd/releases/download/v3.5.17/etcd-v3.5.17-linux-amd64.tar.gz | tar -zxC dist
-        mv dist/etcd-v3.5.17-linux-amd64/{etcd,etcdctl} bin/
+        ARCH=${{ matrix.arch }}
+        curl -sL https://github.com/coreos/etcd/releases/download/v3.5.17/etcd-v3.5.17-linux-${ARCH}.tar.gz | tar -zxC dist
+        mv dist/etcd-v3.5.17-linux-${ARCH}/{etcd,etcdctl} bin/
 
         go mod download
         go install golang.org/x/tools/cmd/goimports@latest
