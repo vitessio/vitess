@@ -1,0 +1,122 @@
+#!/bin/bash
+
+# Copyright 2025 The Vitess Authors.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This is a unified script that manages vtctld service (start/stop)
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${CURRENT_DIR}/utils.sh"
+
+topo_script="${CURRENT_DIR}/topo"
+vtctld_web_port=$(get_config_value "vtctld" "web-port" "15000")
+
+# Read topo configuration from config file
+topo_implementation=$(get_config_value "global" "topo-implementation" "etcd2")
+topo_global_server_address=$(get_config_value "global" "topo-global-server-address" "localhost:2379")
+topo_global_root=$(get_config_value "global" "topo-global-root" "/vitess/global")
+
+start_vtctld() {
+
+  # TODO: right now we require that the topo server is running before we start vtctld
+  # but in future we might want to change this to a retry-loop with a timeout,
+  # so that if these are started from a system init they can be started in parallel,
+  # and figure themselves out.
+  "${topo_script}" status || {
+    echo "Can't connect to the topo server. Did you forget to start it?"
+    exit 1
+  }
+
+  # Check if vtctld is already running
+  if [ -f "$VTDATAROOT/tmp/vtctld.pid" ]; then
+    PID=$(cat "$VTDATAROOT/tmp/vtctld.pid")
+    if ps -p "$PID" > /dev/null; then
+      echo "vtctld is already running (PID: $PID)"
+      return 0
+    else
+      rm "$VTDATAROOT/tmp/vtctld.pid"
+    fi
+  fi
+
+  echo "Starting vtctld..."
+
+  vtctld \
+   --topo_implementation "${topo_implementation}" \
+   --topo_global_server_address "${topo_global_server_address}" \
+   --topo_global_root "${topo_global_root}" \
+   --service_map 'grpc-vtctl,grpc-vtctld' \
+   --backup_storage_implementation file \
+   --file_backup_storage_root $VTDATAROOT/backups \
+   --log_dir $VTDATAROOT/tmp \
+   --port $vtctld_web_port \
+   --grpc_port 15999 \
+   --pid_file $VTDATAROOT/tmp/vtctld.pid \
+   --pprof-http \
+    > $VTDATAROOT/tmp/vtctld.out 2>&1 &
+
+  echo "Curling \"http://${hostname}:${vtctld_web_port}/debug/status\" to check if vtctld is up"
+
+  for _ in {0..50}; do
+   curl -I "http://${hostname}:${vtctld_web_port}/debug/status" &>/dev/null && break
+   sleep 0.1
+  done
+
+  # check one last time
+  curl -I "http://${hostname}:${vtctld_web_port}/debug/status" &>/dev/null || fail "vtctld could not be started, see log: $VTDATAROOT/tmp/vtctld.out"
+  echo -e "vtctld is running!"
+  disown -a
+}
+
+stop_vtctld() {
+  stop_process "vtctld" "$VTDATAROOT/tmp/vtctld.pid"
+}
+
+status_vtctld() {
+  if curl -s -o /dev/null -w "%{http_code}" "http://${hostname}:${vtctld_web_port}/debug/status" | grep -q "200"; then
+    echo "vtctld is running and responding on http://${hostname}:${vtctld_web_port}/debug/status"
+    return 0
+  else
+    echo "vtctld is not running or not responding"
+    return 1
+  fi
+}
+
+# Check if we have a command
+if [ $# -eq 0 ]; then
+  echo "Usage: $0 {start|stop|status|restart}"
+  exit 1
+fi
+
+# Process the command
+case "$1" in
+  start)
+    start_vtctld
+    ;;
+  stop)
+    stop_vtctld
+    ;;
+  status)
+    status_vtctld
+    ;;
+  restart)
+    stop_vtctld
+    sleep 2
+    start_vtctld
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|status|restart}"
+    exit 1
+    ;;
+esac
+
+exit 0

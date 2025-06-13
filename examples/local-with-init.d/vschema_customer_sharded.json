@@ -1,0 +1,34 @@
+{
+    "sharded": true,
+    "vindexes": {
+        "xxhash": {
+            "type": "xxhash"
+        }
+    },
+    "tables": {
+        "customer": {
+            "column_vindexes": [
+                {
+                    "column": "customer_id",
+                    "name": "xxhash"
+                }
+            ],
+            "auto_increment": {
+                "column": "customer_id",
+                "sequence": "customer_seq"
+            }
+        },
+        "corder": {
+            "column_vindexes": [
+                {
+                    "column": "customer_id",
+                    "name": "xxhash"
+                }
+            ],
+            "auto_increment": {
+                "column": "order_id",
+                "sequence": "order_seq"
+            }
+        }
+    }
+}

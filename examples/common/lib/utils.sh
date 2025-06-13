@@ -30,14 +30,14 @@ function wait_for_shard_tablets() {
 	local wait_secs=180
 
 	for _ in $(seq 1 ${wait_secs}); do
-		cur_tablets=$(vtctldclient GetTablets --keyspace "${keyspace}" --shard "${shard}" | wc -l)
+		cur_tablets=$(vtctldclient --server=localhost:15999 GetTablets --keyspace "${keyspace}" --shard "${shard}" | wc -l)
 		if [[ ${cur_tablets} -eq ${num_tablets} ]]; then
 			break
 		fi
 		sleep 1
 	done;
 
-	cur_tablets=$(vtctldclient GetTablets --keyspace "${keyspace}" --shard "${shard}" | wc -l)
+	cur_tablets=$(vtctldclient --server=localhost:15999 GetTablets --keyspace "${keyspace}" --shard "${shard}" | wc -l)
 	if [[ ${cur_tablets} -lt ${num_tablets} ]]; then
 		fail "Timed out after ${wait_secs} seconds waiting for tablets to come up in ${keyspace}/${shard}"
 	fi
@@ -154,7 +154,7 @@ function wait_for_workflow_running() {
     echo "Waiting for the ${workflow} workflow in the ${keyspace} keyspace to finish the copy phase..." 
 
     for _ in $(seq 1 ${wait_secs}); do
-        result=$(vtctldclient Workflow --keyspace="${keyspace}" show --workflow="${workflow}" 2>/dev/null | grep "Copy phase completed")
+        result=$(vtctldclient --server=localhost:15999 Workflow --keyspace="${keyspace}" show --workflow="${workflow}" 2>/dev/null | grep "Copy phase completed")
         if [[ ${result} != "" ]]; then
             break
         fi
@@ -183,21 +183,32 @@ function stop_process() {
 
 	if [[ -e "${pidfile}" ]]; then
 		pid=$(cat "${pidfile}")
-		echo "Stopping ${binary_name}..."
-		kill "${pid}"
-
-		# Wait for the process to terminate
-		for _ in $(seq 1 ${wait_secs}); do
-			if ! ps -p "${pid}" > /dev/null; then
-				break
-			fi
-			sleep 1
-		done
 		if ps -p "${pid}" > /dev/null; then
-			fail "Timed out after ${wait_secs} seconds waiting for the ${binary_name} using PID file ${pidfile} to terminate"
+			echo "Stopping ${binary_name}..."
+			kill "${pid}"
+
+			# Wait for the process to terminate
+			for _ in $(seq 1 ${wait_secs}); do
+				if ! ps -p "${pid}" > /dev/null; then
+					break
+				fi
+				sleep 1
+			done
+			if ps -p "${pid}" > /dev/null; then
+				echo "Warning: Timed out after ${wait_secs} seconds waiting for ${binary_name} (PID: ${pid}) to terminate"
+			else
+				echo "${binary_name} stopped successfully"
+				# Remove the PID file after successful stop
+				if [[ -e "${pidfile}" ]]; then
+					rm "${pidfile}"
+				fi
+			fi
+		else
+			echo "${binary_name} is not running (stale PID file exists)"
+			rm "${pidfile}"
 		fi
 	else
-		echo "Skipping stopping ${binary_name} because the specified PID file (${pidfile}) does not exist."
+		echo "${binary_name} is not running (no PID file)"
 	fi
 }
 
