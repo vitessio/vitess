@@ -61,7 +61,10 @@ func (ts *Server) GetMetadata(ctx context.Context, keyFilter string) (map[string
 	}
 
 	keys, err := ts.globalCell.ListDir(ctx, MetadataPath, false)
-	if err != nil {
+	switch {
+	case IsErrType(err, NoNode):
+		return make(map[string]string), nil
+	case err != nil:
 		return nil, err
 	}
 

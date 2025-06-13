@@ -200,10 +200,14 @@ func (ts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
 	// Note we use the global read-only cell here, as the result
 	// is not time sensitive.
 	entries, err := ts.globalReadOnlyCell.ListDir(ctx, CellsPath, false /*full*/)
-	if err != nil {
+	switch {
+	case IsErrType(err, NoNode):
+		return nil, nil
+	case err == nil:
+		return DirEntriesToStringArray(entries), nil
+	default:
 		return nil, err
 	}
-	return DirEntriesToStringArray(entries), nil
 }
 
 // ExpandCells takes a comma-separated list of cells and returns an array of cell names

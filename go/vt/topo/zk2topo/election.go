@@ -39,8 +39,8 @@ func (zs *Server) NewLeaderParticipation(name, id string) (topo.LeaderParticipat
 	zkPath := path.Join(zs.root, electionsPath, name)
 
 	// Create the toplevel directory, OK if it exists already.
-	// We will create the parent directory as well, but not more.
-	if _, err := CreateRecursive(ctx, zs.conn, zkPath, nil, 0, zk.WorldACL(PermDirectory), 1); err != nil && err != zk.ErrNodeExists {
+	// We will create all necessary parent directories.
+	if _, err := CreateRecursive(ctx, zs.conn, zkPath, nil, 0, zk.WorldACL(PermDirectory), -1); err != nil && err != zk.ErrNodeExists {
 		return nil, convertError(err, zkPath)
 	}
 
