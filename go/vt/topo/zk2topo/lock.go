@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/z-division/go-zookeeper/zk"
@@ -84,12 +85,29 @@ func (zs *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.L
 
 // Lock is part of the topo.Conn interface.
 func (zs *Server) lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	// For named locks, ensure the target directory exists by creating it recursively if needed.
+	// This is necessary because named locks can have deep nested paths that don't exist yet.
+	// For regular locks (like keyspace locks), we still check that the directory exists first.
+	if strings.Contains(dirPath, "internal/named_locks") {
+		targetDir := path.Join(zs.root, dirPath)
+		_, err := CreateRecursive(ctx, zs.conn, targetDir, nil, 0, zk.WorldACL(PermDirectory), -1)
+		if err != nil && err != zk.ErrNodeExists {
+			return nil, convertError(err, dirPath)
+		}
+	} else {
+		// Check if the target directory exists, similar to etcd2topo behavior
+		if _, err := zs.ListDir(ctx, dirPath, false /*full*/); err != nil {
+			return nil, convertError(err, dirPath)
+		}
+	}
+
 	// Lock paths end in a trailing slash so that when we create
 	// sequential nodes, they are created as children, not siblings.
 	locksDir := path.Join(zs.root, dirPath, locksPath) + "/"
 
-	// Create the locks path, possibly creating the parent.
-	nodePath, err := CreateRecursive(ctx, zs.conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
+	// Create the locks path, creating all necessary parent directories.
+	// This ensures the internal topology structure exists.
+	nodePath, err := CreateRecursive(ctx, zs.conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), -1)
 	if err != nil {
 		return nil, convertError(err, locksDir)
 	}
