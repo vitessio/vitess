@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# Copyright 2025 The Vitess Authors.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This is a unified script that manages vtgate service (start/stop)
+
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${CURRENT_DIR}/utils.sh"
+
+vtgate_web_port=$(get_config_value "vtgate" "web-port" "15001")
+cell=$(get_config_value "global" "cell" "test")
+
+start_vtgate() {
+  echo "Starting vtgate..."
+  vtgate \
+  --topo-implementation $(get_config_value "global" "topo-implementation" "etcd2")\
+  --topo-global-server-address $(get_config_value "global" "topo-global-server-address" "localhost:2379") \
+  --topo-global-root $(get_config_value "global" "topo-global-root" "/vitess/global") \
+  --log_dir $VTDATAROOT/tmp \
+  --log_queries_to_file $VTDATAROOT/tmp/vtgate_querylog.txt \
+  --port $vtgate_web_port \
+  --grpc_port $(get_config_value "vtgate" "grpc-port" "15991") \
+  --mysql_server_port $(get_config_value "vtgate" "mysql-server-port" "15306") \
+  --mysql_server_socket_path $(get_config_value "vtgate" "mysql-server-socket-path" ""/tmp/mysql.sock"") \
+  --cell $cell \
+  --cells_to_watch $(get_config_value "vtgate" "cells_to_watch" "$cell") \
+  --tablet-types-to-wait $(get_config_value "vtgate" "tablet-types-to-wait" "PRIMARY,REPLICA") \
+  --service_map $(get_config_value "vtgate" "service_map" "'grpc-vtgateservice'") \
+  --pid_file $VTDATAROOT/tmp/vtgate.pid \
+  --enable_buffer \
+  --mysql_auth_server_impl $(get_config_value "vtgate" "mysql_auth_server_impl" "none") \
+  --pprof-http \
+  > $VTDATAROOT/tmp/vtgate.out 2>&1 &
+  # Block waiting for vtgate to be listening
+  # Not the same as healthy
+  for _ in {0..50}; do
+   curl -I "http://$hostname:$vtgate_web_port/debug/status" >/dev/null 2>&1 && break
+   sleep 0.1
+  done
+
+  # check one last time
+  curl -I "http://$hostname:$vtgate_web_port/debug/status" &>/dev/null || fail "vtgate could not be started, see log: $VTDATAROOT/tmp/vtgate.out"
+  echo "vtgate is up!"
+  echo "Access vtgate at http://$hostname:$vtgate_web_port/debug/status"
+  
+  disown -a
+}
+
+stop_vtgate() {
+  stop_process "vtgate" "$VTDATAROOT/tmp/vtgate.pid"
+}
+
+status_vtgate() {
+  if curl -s -o /dev/null -w "%{http_code}" "http://${hostname}:${vtgate_web_port}/debug/status" | grep -q "200"; then
+    echo "vtgate is running and responding on http://${hostname}:${vtgate_web_port}/debug/status"
+    return 0
+  else
+    echo "vtgate is not running or not responding"
+    return 1
+  fi
+}
+
+# Check if we have a command
+if [ $# -eq 0 ]; then
+  echo "Usage: $0 {start|stop|status|restart}"
+  exit 1
+fi
+
+# Process the command
+case "$1" in
+  start)
+    start_vtgate
+    ;;
+  stop)
+    stop_vtgate
+    ;;
+  status)
+    status_vtgate
+    ;;
+  restart)
+    stop_vtgate
+    sleep 2
+    start_vtgate
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|status|restart}"
+    exit 1
+    ;;
+esac
+
+exit 0

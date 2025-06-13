@@ -1,0 +1,111 @@
+#!/bin/bash
+
+# Copyright 2025 The Vitess Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This is a unified script that manages vtorc service (start/stop)
+
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${CURRENT_DIR}/utils.sh"
+port=$(get_config_value "vtorc" "port" "16000")
+port_check_timeout=10
+# Read topo configuration from config file
+topo_implementation=$(get_config_value "global" "topo-implementation" "etcd2")
+topo_global_server_address=$(get_config_value "global" "topo-global-server-address" "localhost:2379")
+topo_global_root=$(get_config_value "global" "topo-global-root" "/vitess/global")
+
+
+start_vtorc() {
+  echo "Starting vtorc..."
+
+  # Start vtorc, most arguments are fetched directly from the config file.
+  vtorc \
+    --topo_implementation "${topo_implementation}" \
+    --topo_global_server_address "${topo_global_server_address}" \
+    --topo_global_root "${topo_global_root}" \
+    --logtostderr \
+    --alsologtostderr \
+    --port "$port" \
+    --config-file $CONFIG_FILE \
+    > "${VTDATAROOT}/tmp/vtorc.out" 2>&1 &
+  vtorc_pid=$!
+  echo ${vtorc_pid} > "${VTDATAROOT}/tmp/vtorc.pid"
+
+  # Wait for vtorc to start
+  echo "Waiting for vtorc to start (timeout: ${port_check_timeout}s)..."
+  
+  for i in $(seq 1 $port_check_timeout); do
+    if curl -s "http://${hostname}:${port}/debug/vars" &> /dev/null; then
+      break
+    fi
+    sleep 1
+    if [ $i -eq $port_check_timeout ]; then
+      echo "Warning: vtorc did not respond within ${port_check_timeout} seconds, but process is running"
+    fi
+  done
+
+  echo "\
+vtorc is running!
+  - UI: http://${hostname}:${port}
+  - Logs: ${VTDATAROOT}/tmp/vtorc.out
+  - PID: ${vtorc_pid}
+"
+  disown -a
+
+}
+
+stop_vtorc() {
+  stop_process "vtorc" "$VTDATAROOT/tmp/vtorc.pid"
+}
+
+status_vtorc() {
+  local port=$(get_config_value "vtorc" "port" "16000")
+  if curl -s -o /dev/null -w "%{http_code}" "http://${hostname}:${port}/debug/status" | grep -q "200"; then
+    echo "vtorc is running and responding on http://${hostname}:${port}/debug/status"
+    return 0
+  else
+    echo "vtorc is not running or not responding"
+    return 1
+  fi
+}
+
+# Check if we have a command
+if [ $# -eq 0 ]; then
+  echo "Usage: $0 {start|stop|status|restart}"
+  exit 1
+fi
+
+# Process the command
+case "$1" in
+  start)
+    start_vtorc
+    ;;
+  stop)
+    stop_vtorc
+    ;;
+  status)
+    status_vtorc
+    ;;
+  restart)
+    stop_vtorc
+    sleep 2
+    start_vtorc
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|status|restart}"
+    exit 1
+    ;;
+esac
+
+exit 0

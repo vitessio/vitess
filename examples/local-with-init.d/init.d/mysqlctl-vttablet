@@ -1,0 +1,670 @@
+#!/bin/bash
+
+# Copyright 2025 The Vitess Authors.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This is a unified script that manages MySQL and vttablet services (start/stop)
+# based on the configuration in vitess.yaml
+
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${CURRENT_DIR}/utils.sh"
+
+# Read topo configuration from config file
+topo_implementation=$(get_config_value "global" "topo-implementation" "etcd2")
+topo_global_server_address=$(get_config_value "global" "topo-global-server-address" "localhost:2379")
+topo_global_root=$(get_config_value "global" "topo-global-root" "/vitess/global")
+
+# Global variables to track status
+MYSQL_STATUS=0
+VTTABLET_STATUS=0
+
+# Function to start MySQL instances
+start_mysql_instances() {
+  # Only get tablet UIDs if not already set (e.g., by specific tablet UID argument)
+  if [ -z "$TABLET_UIDS" ]; then
+    if ! get_tablet_uids; then
+      echo "No tablets defined in $CONFIG_FILE"
+      return 1
+    fi
+  fi
+  
+  local all_started=true
+  local any_started=false
+  
+  # Start each MySQL instance
+  for uid in $TABLET_UIDS; do
+    # Get MySQL port from config or use default
+    local mysql_port=$(get_tablet_config $uid "mysql_port" "$[17000 + $uid]")
+    local tablet_dir="vt_$(printf '%010d' $uid)"
+    # Check if this is an unmanaged tablet
+    local unmanaged=$(get_tablet_config $uid "unmanaged" "false")
+    local action="init"
+    
+    if [ "$unmanaged" = "true" ]; then
+      continue
+    fi
+
+    # Check if MySQL is already running by checking the port and connection
+    local mysql_port=$(get_tablet_config $uid "mysql_port" "$[17000 + $uid]")
+    local mysql_running=false
+    
+    # Method 1: Check if MySQL port is listening
+    if lsof -i:$mysql_port > /dev/null 2>&1; then
+      mysql_running=true
+    else
+      # Method 2: Try to connect to MySQL without starting it
+      if timeout 2 mysql -h 127.0.0.1 -P $mysql_port -e "SELECT 1" > /dev/null 2>&1; then
+        mysql_running=true
+      fi
+    fi
+    
+    if [ "$mysql_running" = true ]; then
+      # MySQL is already running, skip
+      continue
+    fi
+
+    # MySQL is not running, so we need to start it
+    echo "Starting MySQL for tablet UID: $uid"
+    any_started=true
+
+    if [ -d $VTDATAROOT/$tablet_dir ]; then
+      action="start"
+    fi
+
+    # Start MySQL
+    mkdir -p $VTDATAROOT/$tablet_dir
+    mysqlctl \
+      --tablet-uid $uid \
+      --mysql-port $mysql_port \
+      --config-file $CONFIG_FILE \
+      $action
+    if [ $? -ne 0 ]; then
+      echo "Failed to start MySQL for tablet UID: $uid"
+       all_started=false
+    fi
+  done
+  
+  if $any_started; then
+    if $all_started; then
+      echo "All MySQL instances started successfully"
+      return 0
+    else
+      echo "Some MySQL instances failed to start"
+      return 1
+    fi
+  else
+    # No instances needed to be started
+    return 0
+  fi
+}
+
+# Function to stop MySQL instances
+stop_mysql_instances() {
+  # Only get tablet UIDs if not already set (e.g., by specific tablet UID argument)
+  if [ -z "$TABLET_UIDS" ]; then
+    if ! get_tablet_uids; then
+      echo "No tablets defined in $CONFIG_FILE"
+      return 1
+    fi
+  fi
+  
+  local all_stopped=true
+  local any_stopped=false
+  
+  # Stop each MySQL instance
+  for uid in $TABLET_UIDS; do
+    # Check if this is an unmanaged tablet
+    local unmanaged=$(get_tablet_config $uid "unmanaged" "false")
+    
+    if [ "$unmanaged" = "true" ]; then
+      continue
+    fi
+    
+    # Check if the tablet was actually provisioned. If not we can skip shutdown
+    # as the instance was likely never started
+    my_cnf="$VTDATAROOT/vt_$(printf '%010d' $uid)/my.cnf"
+    if [ ! -f "$my_cnf" ]; then
+      continue
+    fi
+
+    # Check if MySQL is actually running before trying to stop it
+    # Use a more robust method to check if MySQL is running without trying to start it
+    local mysql_port=$(get_tablet_config $uid "mysql_port" "$[17000 + $uid]")
+    local mysql_running=false
+    
+    # Method 1: Check if MySQL port is listening
+    if lsof -i:$mysql_port > /dev/null 2>&1; then
+      mysql_running=true
+    else
+      # Method 2: Try to connect to MySQL without starting it
+      if timeout 2 mysql -h 127.0.0.1 -P $mysql_port -e "SELECT 1" > /dev/null 2>&1; then
+        mysql_running=true
+      fi
+    fi
+    
+    if [ "$mysql_running" = false ]; then
+      # MySQL is not running, skip
+      continue
+    fi
+
+    # MySQL is running, so we need to stop it
+    echo "Stopping MySQL for tablet UID: $uid"
+    any_stopped=true
+
+    # Stop MySQL gracefully first
+    mysqlctl \
+      --tablet-uid $uid \
+      --config-file $CONFIG_FILE \
+      shutdown
+    
+    local shutdown_result=$?
+    
+    # Wait for MySQL to actually stop, with timeout
+    local wait_count=0
+    local max_wait=30
+    while [ $wait_count -lt $max_wait ]; do
+      if ! lsof -i:$mysql_port > /dev/null 2>&1; then
+        # MySQL has stopped
+        break
+      fi
+      sleep 1
+      wait_count=$((wait_count + 1))
+    done
+    
+    # Check if MySQL is still running after graceful shutdown attempt
+    if lsof -i:$mysql_port > /dev/null 2>&1; then
+      echo "Warning: MySQL for tablet UID $uid did not stop gracefully, attempting force kill"
+      
+      # Find and kill MySQL processes
+      local mysql_pids=$(lsof -t -i:$mysql_port 2>/dev/null)
+      if [ -n "$mysql_pids" ]; then
+        for pid in $mysql_pids; do
+          echo "Force killing MySQL process $pid for tablet UID $uid"
+          kill -9 "$pid"
+        done
+        
+        # Wait a bit more for force kill to take effect
+        sleep 2
+        
+        # Final check
+        if lsof -i:$mysql_port > /dev/null 2>&1; then
+          echo "Error: Failed to stop MySQL for tablet UID: $uid"
+          all_stopped=false
+        else
+          echo "MySQL for tablet UID $uid stopped (force killed)"
+        fi
+      else
+        echo "Error: Could not find MySQL process for tablet UID: $uid"
+        all_stopped=false
+      fi
+    else
+      if [ $shutdown_result -eq 0 ]; then
+        echo "MySQL for tablet UID $uid stopped gracefully"
+      else
+        echo "MySQL for tablet UID $uid stopped (shutdown command failed but process terminated)"
+      fi
+    fi
+  done
+  
+  if $any_stopped; then
+    if $all_stopped; then
+      echo "All MySQL instances stopped successfully"
+      return 0
+    else
+      echo "Some MySQL instances failed to stop"
+      return 1
+    fi
+  else
+    # No instances needed to be stopped
+    return 0
+  fi
+}
+
+# Function to start vttablet instances
+start_vttablet_instances() {
+  # Only get tablet UIDs if not already set (e.g., by specific tablet UID argument)
+  if [ -z "$TABLET_UIDS" ]; then
+    if ! get_tablet_uids; then
+      echo "No tablets defined in $CONFIG_FILE"
+      return 1
+    fi
+  fi
+  
+  # Get global configuration
+  local cell=$(get_config_value "global" "cell" "test")
+  local all_started=true
+  local any_started=false
+  
+  # Start each vttablet instance
+  for uid in $TABLET_UIDS; do
+    # Get configuration values
+    local keyspace=$(get_tablet_config $uid "keyspace" "test_keyspace")
+    local shard=$(get_tablet_config $uid "shard" "0")
+    local tablet_type=$(get_tablet_config $uid "tablet_type" "replica")
+    local port=$(get_tablet_config $uid "port" "$[15000 + $uid]")
+    local grpc_port=$(get_tablet_config $uid "grpc_port" "$[16000 + $uid]")
+    local mysql_port=$(get_tablet_config $uid "mysql_port" "$[17000 + $uid]")
+
+    # Check if this is an unmanaged tablet
+    local unmanaged=$(get_tablet_config $uid "unmanaged" "false")
+    local db_flags=""
+    
+    if [ "$unmanaged" = "true" ]; then
+      # Add database connection parameters for unmanaged tablets
+      local db_host=$(get_tablet_config $uid "db_host" "localhost")
+      local db_port=$(get_tablet_config $uid "db_port" "3306")
+      local db_app_user=$(get_tablet_config $uid "db_app_user" "msandbox")
+      local db_app_password=$(get_tablet_config $uid "db_app_password" "msandbox")
+      local db_dba_user=$(get_tablet_config $uid "db_dba_user" "msandbox")
+      local db_dba_password=$(get_tablet_config $uid "db_dba_password" "msandbox")
+      local db_repl_user=$(get_tablet_config $uid "db_repl_user" "msandbox")
+      local db_repl_password=$(get_tablet_config $uid "db_repl_password" "msandbox")
+      local db_filtered_user=$(get_tablet_config $uid "db_filtered_user" "msandbox")
+      local db_filtered_password=$(get_tablet_config $uid "db_filtered_password" "msandbox")
+      local db_allprivs_user=$(get_tablet_config $uid "db_allprivs_user" "msandbox")
+      local db_allprivs_password=$(get_tablet_config $uid "db_allprivs_password" "msandbox")
+      local init_db_name_override=$(get_tablet_config $uid "init_db_name_override" "")
+      
+      # Build the database flags string
+      db_flags="--db_host=$db_host --db_port=$db_port --db_app_user=$db_app_user"
+      [ -n "$db_app_password" ] && db_flags="$db_flags --db_app_password=$db_app_password"
+      [ -n "$db_dba_user" ] && db_flags="$db_flags --db_dba_user=$db_dba_user"
+      [ -n "$db_dba_password" ] && db_flags="$db_flags --db_dba_password=$db_dba_password"
+      [ -n "$db_repl_user" ] && db_flags="$db_flags --db_repl_user=$db_repl_user"
+      [ -n "$db_repl_password" ] && db_flags="$db_flags --db_repl_password=$db_repl_password"
+      [ -n "$db_filtered_user" ] && db_flags="$db_flags --db_filtered_user=$db_filtered_user"
+      [ -n "$db_filtered_password" ] && db_flags="$db_flags --db_filtered_password=$db_filtered_password"
+      [ -n "$db_allprivs_user" ] && db_flags="$db_flags --db_allprivs_user=$db_allprivs_user"
+      [ -n "$db_allprivs_password" ] && db_flags="$db_flags --db_allprivs_password=$db_allprivs_password"
+      [ -n "$init_db_name_override" ] && db_flags="$db_flags --init_db_name_override=$init_db_name_override"
+      
+      # Add unmanaged flag
+      db_flags="$db_flags --unmanaged"
+    fi
+    
+    # Build tablet path
+    local tablet_path="$cell-$uid"
+    
+    # Check if vttablet is already running
+    if lsof -i:$port > /dev/null 2>&1; then
+      continue
+    fi
+    
+    # vttablet is not running, so we need to start it
+    echo "Starting vttablet for tablet UID: $uid"
+    any_started=true
+    
+    # Create the directory for vttablet output if it doesn't exist
+    local tablet_dir="vt_$(printf '%010d' $uid)"
+    mkdir -p $VTDATAROOT/$tablet_dir
+    
+    # Start vttablet
+    vttablet \
+      --topo_implementation "${topo_implementation}" \
+      --topo_global_server_address "${topo_global_server_address}" \
+      --topo_global_root "${topo_global_root}" \
+      --tablet-path $tablet_path \
+      --tablet-hostname $hostname \
+      --init-keyspace $keyspace \
+      --init-shard $shard \
+      --init-tablet-type $tablet_type \
+      --port $port \
+      --grpc-port $grpc_port \
+      --service-map $(get_tablet_config $uid "service-map" "grpc-queryservice,grpc-tabletmanager,grpc-updatestream") \
+      --health_check_interval $(get_tablet_config $uid "health_check_interval" "5s") \
+      --backup_storage_implementation $(get_tablet_config $uid "backup_storage_implementation" "file") \
+      --file_backup_storage_root $VTDATAROOT/backups \
+      --restore_from_backup \
+      --heartbeat_on_demand_duration=5s \
+      --pprof-http \
+      $db_flags \
+      > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
+    # Save the PID
+    echo $! > $VTDATAROOT/$tablet_dir/vttablet.pid
+    
+    # Wait for the tablet to start
+    for i in $(seq 0 300); do
+      curl -I "http://localhost:$port/debug/status" >/dev/null 2>&1 && break
+      sleep 0.1
+    done
+    
+    # Check one last time
+    if curl -I "http://localhost:$port/debug/status" >/dev/null 2>&1; then
+      echo "vttablet for $tablet_path is running!"
+    else
+      echo "vttablet for $tablet_path failed to start!"
+      all_started=false
+    fi
+  done
+  
+  if $any_started; then
+    if $all_started; then
+      echo "All vttablet instances started successfully"
+      return 0
+    else
+      echo "Some vttablet instances failed to start"
+      return 1
+    fi
+  else
+    # No instances needed to be started
+    return 0
+  fi
+}
+
+# Function to stop vttablet instances
+stop_vttablet_instances() {
+  # Only get tablet UIDs if not already set (e.g., by specific tablet UID argument)
+  if [ -z "$TABLET_UIDS" ]; then
+    if ! get_tablet_uids; then
+      echo "No tablets defined in $CONFIG_FILE"
+      return 1
+    fi
+  fi
+  
+  local all_stopped=true
+  local any_stopped=false
+  
+  # Stop each vttablet instance
+  for uid in $TABLET_UIDS; do
+    # Get port from config or use default
+    local port=$(get_tablet_config $uid "port" "$[15000 + $uid]")
+    local tablet_dir="vt_$(printf '%010d' $uid)"
+    
+    # Check if vttablet is actually running before trying to stop it
+    local pid_file="$VTDATAROOT/$tablet_dir/vttablet.pid"
+    local is_running=false
+    
+    if [ -f "$pid_file" ]; then
+      local pid=$(cat "$pid_file")
+      if ps -p "$pid" > /dev/null; then
+        is_running=true
+      fi
+    else
+      # Try to find by port
+      local pid=$(lsof -t -i:$port 2>/dev/null)
+      if [ -n "$pid" ]; then
+        is_running=true
+      fi
+    fi
+    
+    if [ "$is_running" = false ]; then
+      # vttablet is not running, skip
+      continue
+    fi
+    
+    # vttablet is running, so we need to stop it
+    echo "Stopping vttablet for tablet UID: $uid"
+    any_stopped=true
+    
+    # Find and kill the process
+    if [ -f "$pid_file" ]; then
+      local pid=$(cat "$pid_file")
+      if ps -p "$pid" > /dev/null; then
+        kill "$pid"
+        # Wait for the process to terminate
+        for _ in $(seq 1 30); do
+          if ! ps -p "$pid" > /dev/null; then
+            break
+          fi
+          sleep 1
+        done
+        if ps -p "$pid" > /dev/null; then
+          echo "Warning: vttablet for tablet UID $uid did not terminate after 30 seconds"
+          all_stopped=false
+        else
+          echo "vttablet for tablet UID $uid stopped successfully"
+          # Remove the PID file after successful stop
+          rm "$pid_file"
+        fi
+      else
+        echo "vttablet for tablet UID $uid is not running (stale PID file exists)"
+        # Remove stale PID file
+        rm "$pid_file"
+      fi
+    else
+      # Try to find by port
+      local pid=$(lsof -t -i:$port 2>/dev/null)
+      if [ -n "$pid" ]; then
+        kill "$pid"
+        echo "vttablet for tablet UID $uid stopped"
+      else
+        echo "vttablet for tablet UID $uid is not running"
+      fi
+    fi
+  done
+  
+  if $any_stopped; then
+    if $all_stopped; then
+      return 0
+    else
+      echo "Some vttablet instances failed to stop"
+      return 1
+    fi
+  else
+    # No instances needed to be stopped
+    return 0
+  fi
+}
+
+# Function to check status of MySQL instances
+status_mysql_instances() {
+  echo "Checking status of MySQL instances..."
+  
+  # Only get tablet UIDs if not already set (e.g., by specific tablet UID argument)
+  if [ -z "$TABLET_UIDS" ]; then
+    if ! get_tablet_uids; then
+      echo "No tablets defined in $CONFIG_FILE"
+      MYSQL_STATUS=1
+      return 1
+    fi
+  fi
+  
+  local all_running=true
+  
+  # Check status of each MySQL instance
+  for uid in $TABLET_UIDS; do
+    echo -n "Status of MySQL for tablet UID: $uid - "
+    
+    # Check if this is an unmanaged tablet
+    local unmanaged=$(get_tablet_config $uid "unmanaged" "false")
+    
+    if [ "$unmanaged" = "true" ]; then
+      echo "UNMANAGED (external MySQL)"
+      continue
+    fi
+    
+    # Check status - use a more robust method to check if MySQL is running without trying to start it
+    local mysql_port=$(get_tablet_config $uid "mysql_port" "$[17000 + $uid]")
+    local mysql_running=false
+    
+    # Method 1: Check if MySQL port is listening
+    if lsof -i:$mysql_port > /dev/null 2>&1; then
+      mysql_running=true
+    else
+      # Method 2: Try to connect to MySQL without starting it
+      if timeout 2 mysql -h 127.0.0.1 -P $mysql_port -e "SELECT 1" > /dev/null 2>&1; then
+        mysql_running=true
+      fi
+    fi
+    
+    if [ "$mysql_running" = true ]; then
+      echo "RUNNING"
+    else
+      echo "NOT RUNNING"
+      all_running=false
+    fi
+  done
+  
+  if $all_running; then
+    echo "All MySQL instances are running"
+    MYSQL_STATUS=0
+    return 0
+  else
+    echo "Some MySQL instances are not running"
+    MYSQL_STATUS=1
+    return 1
+  fi
+}
+
+# Function to check status of vttablet instances
+status_vttablet_instances() {
+  echo "Checking status of vttablet instances..."
+  
+  # Only get tablet UIDs if not already set (e.g., by specific tablet UID argument)
+  if [ -z "$TABLET_UIDS" ]; then
+    if ! get_tablet_uids; then
+      echo "No tablets defined in $CONFIG_FILE"
+      VTTABLET_STATUS=1
+      return 1
+    fi
+  fi
+  
+  local all_running=true
+  
+  # Check status of each vttablet instance
+  for uid in $TABLET_UIDS; do
+    echo -n "Status of vttablet for tablet UID: $uid - "
+    
+    # Get port from config or use default
+    local port=$(get_tablet_config $uid "port" "$[15000 + $uid]")
+    local tablet_dir="vt_$(printf '%010d' $uid)"
+    
+    # Check if the process is running
+    local pid_file="$VTDATAROOT/$tablet_dir/vttablet.pid"
+    if [ -f "$pid_file" ]; then
+      local pid=$(cat "$pid_file")
+      if ps -p "$pid" > /dev/null; then
+        echo "RUNNING (PID: $pid)"
+      else
+        echo "NOT RUNNING (stale PID file exists)"
+        all_running=false
+      fi
+    else
+      # Try to find by port
+      local pid=$(lsof -t -i:$port 2>/dev/null)
+      if [ -n "$pid" ]; then
+        echo "RUNNING (PID: $pid)"
+      else
+        echo "NOT RUNNING"
+        all_running=false
+      fi
+    fi
+  done
+  
+  if $all_running; then
+    echo "All vttablet instances are running"
+    VTTABLET_STATUS=0
+    return 0
+  else
+    echo "Some vttablet instances are not running"
+    VTTABLET_STATUS=1
+    return 1
+  fi
+}
+
+# Check if we have a command
+if [ $# -eq 0 ]; then
+  echo "Usage: $0 {start|stop|status|restart} [tablet_uid]"
+  exit 1
+fi
+
+# Parse arguments
+COMMAND="$1"
+TABLET_UID="$2"
+
+# If a specific tablet UID is provided, validate it and override TABLET_UIDS
+if [ -n "$TABLET_UID" ]; then
+  # Validate that the tablet UID exists in the configuration
+  if ! get_tablet_uids; then
+    echo "No tablets defined in $CONFIG_FILE"
+    exit 1
+  fi
+  
+  # Check if the specified UID exists in the configuration
+  if ! echo "$TABLET_UIDS" | grep -q "^$TABLET_UID$"; then
+    echo "Error: Tablet UID $TABLET_UID not found in configuration"
+    echo "Available tablet UIDs: $(echo $TABLET_UIDS | tr '\n' ' ')"
+    exit 1
+  fi
+  
+  # Override TABLET_UIDS to only include the specified tablet
+  TABLET_UIDS="$TABLET_UID"
+fi
+
+# Process the command
+case "$COMMAND" in
+  start)
+    start_mysql_instances
+    MYSQL_RESULT=$?
+    sleep 2
+    start_vttablet_instances
+    VTTABLET_RESULT=$?
+    
+    # Return success only if both succeeded
+    if [ $MYSQL_RESULT -eq 0 ] && [ $VTTABLET_RESULT -eq 0 ]; then
+      exit 0
+    else
+      exit 1
+    fi
+    ;;
+  stop)
+    stop_vttablet_instances
+    VTTABLET_RESULT=$?
+    sleep 2
+    stop_mysql_instances
+    MYSQL_RESULT=$?
+    
+    # Return success only if both succeeded
+    if [ $MYSQL_RESULT -eq 0 ] && [ $VTTABLET_RESULT -eq 0 ]; then
+      exit 0
+    else
+      exit 1
+    fi
+    ;;
+  status)
+    status_mysql_instances
+    status_vttablet_instances
+    
+    # Return success only if both are running
+    if [ $MYSQL_STATUS -eq 0 ] && [ $VTTABLET_STATUS -eq 0 ]; then
+      echo "All services are running"
+      exit 0
+    else
+      echo "Some services are not running"
+      exit 1
+    fi
+    ;;
+  restart)
+    stop_vttablet_instances
+    sleep 2
+    stop_mysql_instances
+    sleep 2
+    start_mysql_instances
+    MYSQL_RESULT=$?
+    sleep 2
+    start_vttablet_instances
+    VTTABLET_RESULT=$?
+    
+    # Return success only if both succeeded
+    if [ $MYSQL_RESULT -eq 0 ] && [ $VTTABLET_RESULT -eq 0 ]; then
+      exit 0
+    else
+      exit 1
+    fi
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|status|restart} [tablet_uid]"
+    exit 1
+    ;;
+esac

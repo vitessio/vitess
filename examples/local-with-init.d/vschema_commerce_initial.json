@@ -1,0 +1,7 @@
+{
+    "tables": {
+        "product": {},
+        "customer": {},
+        "corder": {}
+    }
+}

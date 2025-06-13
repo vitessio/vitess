@@ -1,0 +1,367 @@
+#!/bin/bash
+
+# Copyright 2025 The Vitess Authors.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This is a generic script that manages the Vitess topology service (start/stop/status)
+# It looks at the vitess configuration file and decides if it needs to start
+# a Consul, Etcd or ZK for the topology service.
+#
+# It also provides status, so the other scripts can check if the topology service is
+# running first, since they often depend on it.
+
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${CURRENT_DIR}/utils.sh"
+
+# Get configuration values from YAML
+consul_http_port=${CONSUL_HTTP_PORT:-'8500'}
+consul_server_port=${CONSUL_SERVER_PORT:-'8300'}
+cell=$(get_config_value "global" "cell" "zone1")
+topo_server=$(get_config_value "global" "topo-global-server-address" "localhost:2379")
+topo_type=$(get_config_value "global" "topo-implementation" "etcd2")
+topo_root=$(get_config_value "global" "topo-global-root" "/vitess/${cell}")
+
+start_zk() {
+  # Start ZooKeeper servers.
+  # The "zkctl init" command won't return until the server is able to contact its
+  # peers, so we need to start them all in the background and then wait for them.
+  echo "Starting zk servers..."
+  for zkid in $zkids; do
+    action='init'
+    printf -v zkdir 'zk_%03d' $zkid
+    if [ -f $VTDATAROOT/$zkdir/myid ]; then
+      echo "Resuming from existing ZK data dir:"
+      echo "    $VTDATAROOT/$zkdir"
+      action='start'
+    fi
+    zkctl --zk.myid $zkid --zk.cfg $zkcfg --log_dir $VTDATAROOT/tmp $action \
+      > $VTDATAROOT/tmp/zkctl_$zkid.out 2>&1 &
+    pids[$zkid]=$!
+  done
+
+  # Wait for all the zkctl commands to return.
+  echo "Waiting for zk servers to be ready..."
+
+  for zkid in $zkids; do
+    if ! wait ${pids[$zkid]}; then
+      echo "ZK server number $zkid failed to start. See log:"
+      echo "    $VTDATAROOT/tmp/zkctl_$zkid.out"
+    fi
+  done
+
+  echo "Started zk servers."
+
+  # Add the CellInfo description for the $CELL cell.
+  # If the node already exists, it's fine, means we used existing data.
+  set +e
+  command vtctldclient --server internal --topo-implementation zk2 --topo-global-server-address "${topo_server}" AddCellInfo \
+    --root "${topo_root}" \
+    --server-address "${topo_server}" \
+    "${cell}"
+  set -e
+
+  echo "Configured zk servers."
+}
+
+stop_zk() {
+  echo "Stopping zk servers..."
+  for zkid in $zkids; do
+    zkctl --zk.myid $zkid --zk.cfg $zkcfg --log_dir $VTDATAROOT/tmp shutdown
+    # Remove any PID files that might have been created
+    printf -v zkdir 'zk_%03d' $zkid
+    if [ -f "$VTDATAROOT/$zkdir/zk.pid" ]; then
+      rm "$VTDATAROOT/$zkdir/zk.pid"
+    fi
+  done
+  echo "zk servers stopped."
+}
+
+status_zk() {
+  local all_running=true
+ 
+  for zkid in $zkids; do
+    printf -v zkdir 'zk_%03d' $zkid
+    if zkctl --zk.myid $zkid --zk.cfg $zkcfg --log_dir $VTDATAROOT/tmp status > /dev/null 2>&1; then
+      echo "ZK server $zkid is running"
+    else
+      echo "ZK server $zkid is not running"
+      all_running=false
+    fi
+  done
+  
+  if $all_running; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+
+start_etcd() {
+  echo "Starting etcd..."
+
+  # Check that etcd is not already running
+  curl "http://${topo_server}/health" > /dev/null 2>&1 && {
+    echo "etcd is already running."
+    return 0
+  }
+
+  mkdir -p "${VTDATAROOT}/etcd"
+  nohup etcd --data-dir "${VTDATAROOT}/etcd/"  --listen-client-urls "http://${topo_server}" --advertise-client-urls "http://${topo_server}" > "${VTDATAROOT}"/tmp/etcd.out 2>&1 &
+  PID=$!
+  echo $PID > "${VTDATAROOT}/tmp/etcd.pid"
+  disown $PID
+  sleep 5
+
+  # Verify etcd is actually running and listening
+  for _ in {1..10}; do
+    if curl -s "http://${topo_server}/health" > /dev/null; then
+      break
+    fi
+    sleep 1
+  done
+
+  if ! curl -s "http://${topo_server}/health" > /dev/null; then
+    echo "etcd failed to start properly. Check logs at ${VTDATAROOT}/tmp/etcd.out"
+    return 1
+  fi
+
+  # And also add the CellInfo description for the cell.
+  # If the node already exists, it's fine, means we used existing data.
+  echo "add ${cell} CellInfo"
+  command vtctldclient --server internal AddCellInfo \
+    --root "${topo_root}" \
+    --server-address "${topo_server}" \
+    "${cell}"
+  echo "etcd is running (PID: $PID)"
+}
+
+stop_etcd() {
+  echo "Stopping etcd..."
+  stop_process "etcd" "$VTDATAROOT/tmp/etcd.pid"
+  echo "etcd stopped."
+}
+
+status_etcd() {
+  if curl -s "http://${topo_server}/health" > /dev/null; then
+    if [ -f "$VTDATAROOT/tmp/etcd.pid" ]; then
+      PID=$(cat "$VTDATAROOT/tmp/etcd.pid")
+      echo "etcd is running (PID: $PID)"
+    else
+      echo "etcd is running (PID file missing)"
+    fi
+    return 0
+  else
+    echo "etcd is not running"
+    return 1
+  fi
+}
+
+start_consul() {
+  echo "Starting consul..."
+  
+  # Extract hostname from topo_server (remove port if present)
+  local consul_bind_addr=$(echo "${topo_server}" | cut -d':' -f1)
+  
+  # Convert localhost to 127.0.0.1 for better compatibility
+  if [ "$consul_bind_addr" = "localhost" ]; then
+    consul_bind_addr="127.0.0.1"
+  fi
+  
+  # Check that consul is not already running
+  curl "http://${consul_bind_addr}:${consul_http_port}" &> /dev/null && fail "consul is already running. Exiting."
+
+  echo "Starting Consul with bind address: ${consul_bind_addr}"
+  consul agent \
+      -server \
+      -bootstrap-expect=1 \
+      -node=vitess-consul \
+      -bind="${consul_bind_addr}" \
+      -client="${consul_bind_addr}" \
+      -server-port="${consul_server_port}" \
+      -http-port="${consul_http_port}" \
+      -data-dir="${VTDATAROOT}/consul/" \
+      -ui \
+      > "${VTDATAROOT}/tmp/consul.out" 2>&1 &
+  PID=$!
+  echo $PID > "${VTDATAROOT}/tmp/consul.pid"
+  
+  # Wait for Consul to start
+  echo "Waiting for Consul to start..."
+  for _ in {1..30}; do
+    if curl -s "http://${consul_bind_addr}:${consul_http_port}/v1/status/leader" > /dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+
+  # Verify Consul is running
+  if ! curl -s "http://${consul_bind_addr}:${consul_http_port}/v1/status/leader" > /dev/null 2>&1; then
+    echo "Consul failed to start properly. Check logs at ${VTDATAROOT}/tmp/consul.out"
+    return 1
+  fi
+
+  # Add the CellInfo description for the cell.
+  # If the node already exists, it's fine, means we used existing data.
+  echo "add ${cell} CellInfo"
+  set +e
+  # shellcheck disable=SC2086
+  command vtctldclient --server internal --topo-implementation consul --topo-global-server-address "${consul_bind_addr}:${consul_http_port}"  AddCellInfo \
+    --root "${topo_root}" \
+    --server-address "${consul_bind_addr}:${consul_http_port}" \
+    "${cell}"
+  set -e
+
+  echo "consul is running (PID: $PID)!"
+  echo "  - HTTP API: http://${consul_bind_addr}:${consul_http_port}"
+  echo "  - UI: http://${consul_bind_addr}:${consul_http_port}/ui"
+}
+
+stop_consul() {
+  echo "Stopping consul..."
+  stop_process "consul" "$VTDATAROOT/tmp/consul.pid"
+  echo "consul stopped."
+}
+
+status_consul() {
+  # Extract hostname from topo_server (remove port if present)
+  local consul_bind_addr=$(echo "${topo_server}" | cut -d':' -f1)
+  
+  # Convert localhost to 127.0.0.1 for better compatibility
+  if [ "$consul_bind_addr" = "localhost" ]; then
+    consul_bind_addr="127.0.0.1"
+  fi
+  
+  if [ -f "$VTDATAROOT/tmp/consul.pid" ]; then
+    PID=$(cat "$VTDATAROOT/tmp/consul.pid")
+    if ps -p "$PID" > /dev/null; then
+      # Also check if Consul is responding
+      if curl -s "http://${consul_bind_addr}:${consul_http_port}/v1/status/leader" > /dev/null 2>&1; then
+        echo "consul is running (PID: $PID) and responding"
+        return 0
+      else
+        echo "consul process is running (PID: $PID) but not responding"
+        return 1
+      fi
+    else
+      echo "consul is not running (stale PID file exists)"
+      return 1
+    fi
+  else
+    # Try to find by port
+    local pid=$(lsof -t -i:${consul_http_port} 2>/dev/null)
+    if [ -n "$pid" ]; then
+      echo "consul is running (PID: $pid) - no PID file"
+      return 0
+    else
+      echo "consul is not running (no PID file)"
+      return 1
+    fi
+  fi
+}
+
+# Main function to handle start/stop/status commands
+main() {
+  # Check if a command was provided
+  if [ $# -lt 1 ]; then
+    echo "Usage: $0 {start|stop|status|restart}"
+    exit 1
+  fi
+
+  # Validate that the topology type is supported
+  case "$topo_type" in
+    etcd2|zk2|consul)
+      # Supported topology types
+      ;;
+    *)
+      echo "Error: Unsupported topology type '$topo_type'"
+      echo "Supported topology types are: etcd2, zk2, consul"
+      echo "Please check your configuration file and set 'topo-implementation' to one of the supported values."
+      exit 1
+      ;;
+  esac
+
+  # Handle the command
+  case "$1" in
+    start)
+      echo "Starting Vitess topology server ($topo_type)..."
+      case "$topo_type" in
+        zk2)
+          start_zk
+          ;;
+        etcd2)
+          start_etcd
+          ;;
+        consul)
+          start_consul
+          ;;
+      esac
+      ;;
+    stop)
+      echo "Stopping Vitess topology server ($topo_type)..."
+      case "$topo_type" in
+        zk2)
+          stop_zk
+          ;;
+        etcd2)
+          stop_etcd
+          ;;
+        consul)
+          stop_consul
+          ;;
+      esac
+      ;;
+    status)
+      case "$topo_type" in
+        zk2)
+          status_zk
+          exit $?
+          ;;
+        etcd2)
+          status_etcd
+          exit $?
+          ;;
+        consul)
+          status_consul
+          exit $?
+          ;;
+      esac
+      ;;
+    restart)
+      echo "Restarting Vitess topology server ($topo_type)..."
+      case "$topo_type" in
+        zk2)
+          stop_zk
+          start_zk
+          ;;
+        etcd2)
+          stop_etcd
+          start_etcd
+          ;;
+        consul)
+          stop_consul
+          start_consul
+          ;;
+      esac
+      ;;
+    *)
+      echo "Unknown command: $1"
+      echo "Usage: $0 {start|stop|status|restart}"
+      exit 1
+      ;;
+  esac
+}
+
+# Execute main function with all arguments
+main "$@"

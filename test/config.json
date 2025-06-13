@@ -80,6 +80,17 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"local_example_initd": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"test/local_example_initd.sh"
+			],
+			"Manual": false,
+			"Shard": "",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"region_example": {
 			"File": "",
 			"Args": [],
