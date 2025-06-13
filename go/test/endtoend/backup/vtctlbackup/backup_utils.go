@@ -166,6 +166,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		mysqlShellArgs := []string{
 			"--backup_engine_implementation", "mysqlshell",
 			"--mysql-shell-backup-location", mysqlShellBackupLocation,
+			"--mysql-shell-speedup-restore=true",
 		}
 		commonTabletArg = append(commonTabletArg, mysqlShellArgs...)
 	}
