@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -239,7 +240,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 			if len(evs) == numExpectedEvents {
 				sortCopyCompletedEvents(completedEvs)
 				for i, ev := range completedEvs {
-					require.Regexp(t, expectedCompletedEvents[i], ev.String())
+					require.Regexp(t, expectedCompletedEvents[i], textutil.Normalize(ev.String()))
 				}
 				t.Logf("TestVStreamCopyBasic was successful")
 				return
@@ -361,7 +362,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 					if len(evs) == c.expectedEventNum {
 						sortCopyCompletedEvents(completedEvs)
 						for i, ev := range completedEvs {
-							require.Equal(t, c.expectedCompletedEvents[i], ev.String())
+							require.Equal(t, c.expectedCompletedEvents[i], textutil.Normalize(ev.String()))
 						}
 						t.Logf("TestVStreamCopyUnspecifiedShardGtid was successful")
 						return
@@ -490,14 +491,14 @@ func TestVStreamCopyResume(t *testing.T) {
 					// at least one shard has copied rows and thus has a full TableLastPK proto
 					// message.
 					eventStr := ev.String()
-					require.True(t, redash80.MatchString(eventStr) || re80dash.MatchString(eventStr) || both.MatchString(eventStr),
-						"VGTID event does not have a complete TableLastPK proto message for either shard; event: %s", eventStr)
+					require.True(t, redash80.MatchString(textutil.Normalize(eventStr)) || re80dash.MatchString(textutil.Normalize(eventStr)) || both.MatchString(textutil.Normalize(eventStr)),
+						"VGTID event does not have a complete TableLastPK proto message for either shard; event: %s", textutil.Normalize(eventStr))
 				}
 			}
 			if expectedCatchupEvents == replCatchupEvents && expectedRowCopyEvents == rowCopyEvents {
 				sort.Sort(VEventSorter(evs))
 				for i, ev := range evs {
-					require.Regexp(t, expectedEvents[i], ev.String())
+					require.Regexp(t, expectedEvents[i], textutil.Normalize(ev.String()))
 				}
 				t.Logf("TestVStreamCopyResume was successful")
 				return
@@ -637,7 +638,7 @@ func TestVStreamSharded(t *testing.T) {
 				for _, ev := range evs {
 					s := fmt.Sprintf("%v", ev)
 					for _, expectedEv := range expectedEvents {
-						if removeAnyDeprecatedDisplayWidths(expectedEv.ev) == removeAnyDeprecatedDisplayWidths(s) {
+						if removeAnyDeprecatedDisplayWidths(textutil.Normalize(expectedEv.ev)) == removeAnyDeprecatedDisplayWidths(textutil.Normalize(s)) {
 							expectedEv.received = true
 							break
 						}

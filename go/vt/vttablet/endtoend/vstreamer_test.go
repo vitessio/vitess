@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -463,7 +464,7 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 				evs[i].RowEvent.Keyspace = ""
 				evs[i].RowEvent.Shard = ""
 			}
-			if got := fmt.Sprintf("%v", evs[i]); got != want {
+			if got := fmt.Sprintf("%v", evs[i]); textutil.Normalize(got) != textutil.Normalize(want) {
 				t.Fatalf("%v (%d): event:\n%q, want\n%q", query, i, got, want)
 			}
 		}
