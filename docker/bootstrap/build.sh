@@ -63,6 +63,7 @@ if [ -f "docker/bootstrap/Dockerfile.$flavor" ]; then
     docker build \
       -f docker/bootstrap/Dockerfile.$flavor \
       -t $image \
+      --build-arg GH_ACCESS_TOKEN="$GH_ACCESS_TOKEN" \
       --build-arg bootstrap_version=$version \
       --build-arg image=$base_image \
       .

@@ -25,6 +25,14 @@ ENV VTPORTSTART 15000
 ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$PATH
 ENV USER vitess
 
+# Allows private repo go dependencies
+ARG GH_ACCESS_TOKEN
+ENV GH_ACCESS_TOKEN=${GH_ACCESS_TOKEN}
+
+# Allow checkout of github.com/slackhq/vitess-addons (private repo)
+ENV GOPRIVATE=github.com/slackhq/vitess-addons
+RUN git config --system url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
+
 # Copy files needed for bootstrap
 COPY bootstrap.sh dev.env build.env go.mod go.sum /vt/src/vitess.io/vitess/
 COPY config /vt/src/vitess.io/vitess/config
