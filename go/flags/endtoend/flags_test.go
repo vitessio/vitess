@@ -29,6 +29,7 @@ import (
 	"text/template"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/textutil"
 )
 
