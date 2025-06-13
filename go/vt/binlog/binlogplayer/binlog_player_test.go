@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/textutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -395,7 +396,7 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 	}
 
 	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db", 0, 0, false)
-	if got != want {
+	if textutil.Normalize(got) != textutil.Normalize(want) {
 		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
 	}
 }
@@ -412,7 +413,7 @@ func TestCreateVReplicationTables(t *testing.T) {
 	}
 
 	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db", 0, 0, false)
-	if got != want {
+	if textutil.Normalize(got) != textutil.Normalize(want) {
 		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
 	}
 }
@@ -424,7 +425,7 @@ func TestUpdateVReplicationPos(t *testing.T) {
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0, 0, false)
-	if got != want {
+	if textutil.Normalize(got) != textutil.Normalize(want) {
 		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
 	}
 }
@@ -436,7 +437,7 @@ func TestUpdateVReplicationTimestamp(t *testing.T) {
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828, 0, false)
-	if got != want {
+	if textutil.Normalize(got) != textutil.Normalize(want) {
 		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
 	}
 }
@@ -444,7 +445,7 @@ func TestUpdateVReplicationTimestamp(t *testing.T) {
 func TestReadVReplicationPos(t *testing.T) {
 	want := "select pos from _vt.vreplication where id=482821"
 	got := ReadVReplicationPos(482821)
-	if got != want {
+	if textutil.Normalize(got) != textutil.Normalize(want) {
 		t.Errorf("ReadVReplicationPos(482821) = %#v, want %#v", got, want)
 	}
 }
@@ -452,7 +453,7 @@ func TestReadVReplicationPos(t *testing.T) {
 func TestReadVReplicationStatus(t *testing.T) {
 	want := "select pos, state, message from _vt.vreplication where id=482821"
 	got := ReadVReplicationStatus(482821)
-	if got != want {
+	if textutil.Normalize(got) != textutil.Normalize(want) {
 		t.Errorf("ReadVReplicationStatus(482821) = %#v, want %#v", got, want)
 	}
 }

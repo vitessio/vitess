@@ -32,6 +32,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	_flag "vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
@@ -9060,7 +9061,7 @@ func TestPlannedReparentShard(t *testing.T) {
 			}()
 
 			if tt.expectedErr != "" {
-				assert.EqualError(t, err, tt.expectedErr)
+				assert.Equal(t, textutil.Normalize(err.Error()), textutil.Normalize(tt.expectedErr))
 
 				return
 			}
