@@ -19,14 +19,6 @@ limitations under the License.
 
 package servenv
 
-func getHostCpu() (float64, error) {
-	return getHostCpuUsage()
-}
-
-func getHostMemory() (float64, error) {
-	return getHostMemoryUsage()
-}
-
 func getCgroupCpu() (float64, error) {
 	return getCgroupCpuUsage()
 }

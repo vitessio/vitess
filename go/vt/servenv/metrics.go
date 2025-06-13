@@ -21,7 +21,7 @@ func getCpuUsage() float64 {
 	if err == nil {
 		return value
 	}
-	value, err = getHostCpu()
+	value, err = getHostCpuUsage()
 	if err == nil {
 		return value
 	}
@@ -33,7 +33,7 @@ func getMemoryUsage() float64 {
 	if err == nil {
 		return value
 	}
-	value, err = getHostMemory()
+	value, err = getHostMemoryUsage()
 	if err == nil {
 		return value
 	}
