@@ -222,6 +222,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		"VTROOT":      "/vt/src/vitess.io/vitess",
 		"VTDATAROOT":  dataDir,
 		"VTPORTSTART": strconv.FormatInt(int64(getPortStart(100)), 10),
+		"TOPO":        os.Getenv("TOPO"),
 	})
 
 	// Capture test output.
