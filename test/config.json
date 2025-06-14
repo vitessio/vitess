@@ -1256,7 +1256,7 @@
 		},
 		"vstream_with_keyspaces_to_watch": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamWithKeyspacesToWatch"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamWithKeyspacesToWatch", "-timeout", "2m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream",
