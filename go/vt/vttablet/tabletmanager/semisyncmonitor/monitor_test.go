@@ -19,6 +19,7 @@ package semisyncmonitor
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -28,7 +29,9 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -60,6 +63,7 @@ func createFakeDBAndMonitor(t *testing.T) (*fakesqldb.DB, *Monitor) {
 
 // TestMonitorIsSemiSyncBlocked tests the functionality of isSemiSyncBlocked.
 func TestMonitorIsSemiSyncBlocked(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	tests := []struct {
 		name    string
 		res     *sqltypes.Result
@@ -96,7 +100,10 @@ func TestMonitorIsSemiSyncBlocked(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db, m := createFakeDBAndMonitor(t)
 			defer db.Close()
-			defer m.Close()
+			defer func() {
+				m.Close()
+				waitUntilWritingStopped(t, m)
+			}()
 			db.AddQuery(semiSyncWaitSessionsRead, tt.res)
 			got, err := m.isSemiSyncBlocked(context.Background())
 			if tt.wantErr != "" {
@@ -110,6 +117,7 @@ func TestMonitorIsSemiSyncBlocked(t *testing.T) {
 }
 
 func TestMonitorBindSideCarDBName(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	tests := []struct {
 		query    string
 		expected string
@@ -132,9 +140,13 @@ func TestMonitorBindSideCarDBName(t *testing.T) {
 }
 
 func TestMonitorClearAllData(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	db, m := createFakeDBAndMonitor(t)
 	defer db.Close()
-	defer m.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
 	db.SetNeverFail(true)
 	m.clearAllData()
 	ql := db.QueryLog()
@@ -144,9 +156,13 @@ func TestMonitorClearAllData(t *testing.T) {
 // TestMonitorWaitMechanism tests that the wait mechanism works as intended.
 // Setting the monitor to unblock state should unblock the waiters.
 func TestMonitorWaitMechanism(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	db, m := createFakeDBAndMonitor(t)
 	defer db.Close()
-	defer m.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
 
 	// Add a waiter.
 	ch := m.addWaiter()
@@ -175,6 +191,7 @@ func TestMonitorWaitMechanism(t *testing.T) {
 }
 
 func TestMonitorIncrementWriteCount(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	tests := []struct {
 		initVal  int
 		finalVal int
@@ -202,7 +219,10 @@ func TestMonitorIncrementWriteCount(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", tt.initVal), func(t *testing.T) {
 			db, m := createFakeDBAndMonitor(t)
 			defer db.Close()
-			defer m.Close()
+			defer func() {
+				m.Close()
+				waitUntilWritingStopped(t, m)
+			}()
 			m.mu.Lock()
 			m.inProgressWriteCount = tt.initVal
 			m.mu.Unlock()
@@ -217,6 +237,7 @@ func TestMonitorIncrementWriteCount(t *testing.T) {
 }
 
 func TestMonitorDecrementWriteCount(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	tests := []struct {
 		initVal  int
 		finalVal int
@@ -236,7 +257,10 @@ func TestMonitorDecrementWriteCount(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", tt.initVal), func(t *testing.T) {
 			db, m := createFakeDBAndMonitor(t)
 			defer db.Close()
-			defer m.Close()
+			defer func() {
+				m.Close()
+				waitUntilWritingStopped(t, m)
+			}()
 			m.mu.Lock()
 			m.inProgressWriteCount = tt.initVal
 			m.mu.Unlock()
@@ -250,6 +274,7 @@ func TestMonitorDecrementWriteCount(t *testing.T) {
 }
 
 func TestMonitorAllWritesBlocked(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	tests := []struct {
 		initVal  int
 		expected bool
@@ -269,7 +294,10 @@ func TestMonitorAllWritesBlocked(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", tt.initVal), func(t *testing.T) {
 			db, m := createFakeDBAndMonitor(t)
 			defer db.Close()
-			defer m.Close()
+			defer func() {
+				m.Close()
+				waitUntilWritingStopped(t, m)
+			}()
 			m.mu.Lock()
 			m.inProgressWriteCount = tt.initVal
 			m.mu.Unlock()
@@ -279,6 +307,7 @@ func TestMonitorAllWritesBlocked(t *testing.T) {
 }
 
 func TestMonitorWrite(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	tests := []struct {
 		initVal  int
 		queryLog string
@@ -301,7 +330,10 @@ func TestMonitorWrite(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", tt.initVal), func(t *testing.T) {
 			db, m := createFakeDBAndMonitor(t)
 			defer db.Close()
-			defer m.Close()
+			defer func() {
+				m.Close()
+				waitUntilWritingStopped(t, m)
+			}()
 			db.SetNeverFail(true)
 			m.mu.Lock()
 			m.inProgressWriteCount = tt.initVal
@@ -319,6 +351,7 @@ func TestMonitorWrite(t *testing.T) {
 
 // TestMonitorWriteBlocked tests the write function when the writes are blocked.
 func TestMonitorWriteBlocked(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	initialVal := waitBetweenWrites
 	waitBetweenWrites = 250 * time.Millisecond
 	defer func() {
@@ -326,7 +359,10 @@ func TestMonitorWriteBlocked(t *testing.T) {
 	}()
 	db, m := createFakeDBAndMonitor(t)
 	defer db.Close()
-	defer m.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
 
 	// Check the initial value of the inProgressWriteCount.
 	m.mu.Lock()
@@ -367,9 +403,13 @@ func TestMonitorWriteBlocked(t *testing.T) {
 
 // TestIsWriting checks the transitions for the isWriting field.
 func TestIsWriting(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	db, m := createFakeDBAndMonitor(t)
 	defer db.Close()
-	defer m.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
 
 	// Check the initial value of the isWriting field.
 	m.mu.Lock()
@@ -404,6 +444,7 @@ func TestIsWriting(t *testing.T) {
 }
 
 func TestStartWrites(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	initialVal := waitBetweenWrites
 	waitBetweenWrites = 250 * time.Millisecond
 	defer func() {
@@ -411,7 +452,10 @@ func TestStartWrites(t *testing.T) {
 	}()
 	db, m := createFakeDBAndMonitor(t)
 	defer db.Close()
-	defer m.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
 
 	// Add a universal insert query pattern that would block until we make it unblock.
 	ch := make(chan int)
@@ -469,6 +513,7 @@ func TestStartWrites(t *testing.T) {
 }
 
 func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	initialVal := waitBetweenWrites
 	waitBetweenWrites = 250 * time.Millisecond
 	defer func() {
@@ -476,7 +521,10 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 	}()
 	db, m := createFakeDBAndMonitor(t)
 	defer db.Close()
-	defer m.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
 
 	// Initially everything is unblocked.
 	db.AddQuery(semiSyncWaitSessionsRead, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_value", "varchar"), "0"))
@@ -530,6 +578,7 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 }
 
 func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	initialVal := waitBetweenWrites
 	waitBetweenWrites = 250 * time.Millisecond
 	defer func() {
@@ -537,7 +586,10 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	}()
 	db, m := createFakeDBAndMonitor(t)
 	defer db.Close()
-	defer m.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
 
 	db.SetNeverFail(true)
 	// Initially everything is unblocked.
@@ -622,6 +674,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 // TestDeadlockOnClose tests the deadlock that can occur when calling Close().
 // Look at https://github.com/vitessio/vitess/issues/18275 for more details.
 func TestDeadlockOnClose(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	db := fakesqldb.New(t)
 	defer db.Close()
 	params := db.ConnParams()
@@ -643,7 +696,10 @@ func TestDeadlockOnClose(t *testing.T) {
 
 	// Open the monitor
 	m.Open()
-	defer m.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
 
 	// We will now try to close and open the monitor multiple times to see if we can trigger a deadlock.
 	finishCh := make(chan int)
@@ -662,6 +718,9 @@ func TestDeadlockOnClose(t *testing.T) {
 		// The test finished without deadlocking.
 	case <-time.After(5 * time.Second):
 		// The test timed out, which means we deadlocked.
+		buf := make([]byte, 1<<16) // 64 KB buffer size
+		stackSize := runtime.Stack(buf, true)
+		log.Errorf("Stack trace:\n%s", string(buf[:stackSize]))
 		t.Fatalf("Deadlock occurred while closing the monitor")
 	}
 }
@@ -669,6 +728,7 @@ func TestDeadlockOnClose(t *testing.T) {
 // TestSemiSyncMonitor tests the semi-sync monitor as a black box.
 // It only calls the exported methods to see they work as intended.
 func TestSemiSyncMonitor(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
 	initialVal := waitBetweenWrites
 	waitBetweenWrites = 250 * time.Millisecond
 	defer func() {
@@ -686,7 +746,10 @@ func TestSemiSyncMonitor(t *testing.T) {
 		},
 	}
 	m := NewMonitor(config, exporter)
-	defer m.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
 
 	db.SetNeverFail(true)
 	// Initially everything is unblocked.
@@ -772,4 +835,29 @@ func TestSemiSyncMonitor(t *testing.T) {
 		defer m.mu.Unlock()
 		return !m.isWriting
 	}, 2*time.Second, 100*time.Millisecond)
+}
+
+// waitUntilWritingStopped is a utility functions that waits until all the go-routines of a semi-sync monitor
+// have stopped. This is useful to prevent data-race errors. After a monitor has been closed, it stops writing
+// in the next check of stillBlocked.
+func waitUntilWritingStopped(t *testing.T, m *Monitor) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer tick.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Timed out waiting for writing to stop: %v", ctx.Err())
+		case <-tick.C:
+			m.mu.Lock()
+			if !m.isWriting {
+				m.mu.Unlock()
+				return
+			}
+			m.mu.Unlock()
+		}
+	}
 }
