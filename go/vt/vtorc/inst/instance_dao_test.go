@@ -38,9 +38,9 @@ func stripSpaces(s string) string {
 }
 
 func mkTestInstances() []*Instance {
-	i710 := Instance{InstanceAlias: "zone1-i710", Hostname: "i710", Port: 3306, TabletType: topodatapb.TabletType_PRIMARY, ServerID: 710, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 10}}
-	i720 := Instance{InstanceAlias: "zone1-i720", Hostname: "i720", Port: 3306, TabletType: topodatapb.TabletType_REPLICA, ServerID: 720, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 20}}
-	i730 := Instance{InstanceAlias: "zone1-i730", Hostname: "i730", Port: 3306, TabletType: topodatapb.TabletType_REPLICA, ServerID: 730, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 30}}
+	i710 := Instance{InstanceAlias: "zone1-i710", Hostname: "i710", Port: 3306, Cell: "zone1", TabletType: topodatapb.TabletType_PRIMARY, ServerID: 710, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 10}}
+	i720 := Instance{InstanceAlias: "zone1-i720", Hostname: "i720", Port: 3306, Cell: "zone1", TabletType: topodatapb.TabletType_REPLICA, ServerID: 720, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 20}}
+	i730 := Instance{InstanceAlias: "zone1-i730", Hostname: "i730", Port: 3306, Cell: "zone1", TabletType: topodatapb.TabletType_REPLICA, ServerID: 730, ExecBinlogCoordinates: BinlogCoordinates{LogFile: "mysql.000007", LogPos: 30}}
 	instances := []*Instance{&i710, &i720, &i730}
 	for _, instance := range instances {
 		instance.Version = "5.6.7"
@@ -61,17 +61,17 @@ func TestMkInsertSingle(t *testing.T) {
 
 	// one instance
 	s1 := `INSERT OR IGNORE INTO database_instance
-				(alias, hostname, port, last_checked, last_attempted_check, last_check_partial_success, tablet_type, server_id, server_uuid,
+				(alias, hostname, port, cell, last_checked, last_attempted_check, last_check_partial_success, tablet_type, server_id, server_uuid,
 				version, major_version, version_comment, binlog_server, read_only, binlog_format,
 				binlog_row_image, log_bin, log_replica_updates, binary_log_file, binary_log_pos, source_host, source_port, replica_net_timeout, heartbeat_interval,
 				replica_sql_running, replica_io_running, replication_sql_thread_state, replication_io_thread_state, has_replication_filters, supports_oracle_gtid, oracle_gtid, source_uuid, ancestry_uuid, executed_gtid_set, gtid_mode, gtid_purged, gtid_errant,
-				source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos, relay_log_file, relay_log_pos, last_sql_error, last_io_error, replication_lag_seconds, replica_lag_seconds, sql_delay, data_center, region, physical_environment, replication_depth, is_co_primary, has_replication_credentials, allow_tls, semi_sync_enforced, semi_sync_primary_enabled, semi_sync_primary_timeout, semi_sync_primary_wait_for_replica_count, semi_sync_replica_enabled, semi_sync_primary_status, semi_sync_primary_clients, semi_sync_replica_status, semi_sync_blocked, last_discovery_latency, is_disk_stalled, last_seen)
+				source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos, relay_log_file, relay_log_pos, last_sql_error, last_io_error, replication_lag_seconds, replica_lag_seconds, sql_delay, replication_depth, is_co_primary, has_replication_credentials, allow_tls, semi_sync_enforced, semi_sync_primary_enabled, semi_sync_primary_timeout, semi_sync_primary_wait_for_replica_count, semi_sync_replica_enabled, semi_sync_primary_status, semi_sync_primary_clients, semi_sync_replica_status, semi_sync_blocked, last_discovery_latency, is_disk_stalled, last_seen)
 		VALUES
-				(?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
+				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
        `
-	a1 := `zone1-i710, i710, 3306, 1, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT,
+	a1 := `zone1-i710, i710, 3306, zone1, 1, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT,
 	FULL, false, false, , 0, , 0, 0, 0,
-	false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, , , , 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,`
+	false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,`
 
 	sql1, args1, err := mkInsertForInstances(instances[:1], false, true)
 	require.NoError(t, err)
@@ -84,20 +84,20 @@ func TestMkInsertThree(t *testing.T) {
 
 	// three instances
 	s3 := `REPLACE INTO database_instance
-				(alias, hostname, port, last_checked, last_attempted_check, last_check_partial_success, tablet_type, server_id, server_uuid,
+				(alias, hostname, port, cell, last_checked, last_attempted_check, last_check_partial_success, tablet_type, server_id, server_uuid,
 				version, major_version, version_comment, binlog_server, read_only, binlog_format,
 				binlog_row_image, log_bin, log_replica_updates, binary_log_file, binary_log_pos, source_host, source_port, replica_net_timeout, heartbeat_interval,
 				replica_sql_running, replica_io_running, replication_sql_thread_state, replication_io_thread_state, has_replication_filters, supports_oracle_gtid, oracle_gtid, source_uuid, ancestry_uuid, executed_gtid_set, gtid_mode, gtid_purged, gtid_errant,
-				source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos, relay_log_file, relay_log_pos, last_sql_error, last_io_error, replication_lag_seconds, replica_lag_seconds, sql_delay, data_center, region, physical_environment, replication_depth, is_co_primary, has_replication_credentials, allow_tls, semi_sync_enforced, semi_sync_primary_enabled, semi_sync_primary_timeout, semi_sync_primary_wait_for_replica_count, semi_sync_replica_enabled, semi_sync_primary_status, semi_sync_primary_clients, semi_sync_replica_status, semi_sync_blocked, last_discovery_latency, is_disk_stalled, last_seen)
+				source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos, relay_log_file, relay_log_pos, last_sql_error, last_io_error, replication_lag_seconds, replica_lag_seconds, sql_delay, replication_depth, is_co_primary, has_replication_credentials, allow_tls, semi_sync_enforced, semi_sync_primary_enabled, semi_sync_primary_timeout, semi_sync_primary_wait_for_replica_count, semi_sync_replica_enabled, semi_sync_primary_status, semi_sync_primary_clients, semi_sync_replica_status, semi_sync_blocked, last_discovery_latency, is_disk_stalled, last_seen)
 		VALUES
-				(?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now')),
-				(?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now')),
-				(?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
+				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now')),
+				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now')),
+				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
        `
 	a3 := `
-		zone1-i710, i710, 3306, 1, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, , , , 0, false, false, false, false, false, 0, 0, false, false, 0, false ,false, 0, false,
-		zone1-i720, i720, 3306, 2, 720, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 20, , 0, , , {0 false}, {0 false}, 0, , , , 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,
-		zone1-i730, i730, 3306, 2, 730, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 30, , 0, , , {0 false}, {0 false}, 0, , , , 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,
+		zone1-i710, i710, 3306, zone1, 1, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false ,false, 0, false,
+		zone1-i720, i720, 3306, zone1, 2, 720, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 20, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,
+		zone1-i730, i730, 3306, zone1, 2, 730, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 30, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,
 		`
 
 	sql3, args3, err := mkInsertForInstances(instances[:3], true, true)
@@ -372,6 +372,7 @@ func TestReadInstanceAllFields(t *testing.T) {
 		Port:                         6711,
 		InstanceAlias:                "zone1-0000000100",
 		TabletType:                   topodatapb.TabletType_REPLICA,
+		Cell:                         "zone1",
 		ServerID:                     1094500338,
 		ServerUUID:                   "729a5138-8680-11ed-acf8-d6b0ef9f4eaa",
 		Version:                      "8.0.31",
@@ -427,9 +428,6 @@ func TestReadInstanceAllFields(t *testing.T) {
 		ReplicationLagSeconds: sql.NullInt64{
 			Valid: true,
 		},
-		DataCenter:                         "zone1",
-		Region:                             "",
-		PhysicalEnvironment:                "",
 		ReplicationDepth:                   1,
 		IsCoPrimary:                        false,
 		HasReplicationCredentials:          true,
@@ -475,11 +473,6 @@ func TestReadInstancesByCondition(t *testing.T) {
 			name:              "All instances with no sort",
 			condition:         "1=1",
 			instancesRequired: []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"},
-		}, {
-			name:              "All instances sort by data_center descending and then alias ascending",
-			condition:         "1=1",
-			sort:              "data_center desc, alias asc",
-			instancesRequired: []string{"zone2-0000000200", "zone1-0000000100", "zone1-0000000101", "zone1-0000000112"},
 		}, {
 			name:              "Filtering by replication_depth",
 			condition:         "replication_depth=1",
