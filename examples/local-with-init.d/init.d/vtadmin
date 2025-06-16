@@ -1,0 +1,387 @@
+#!/bin/bash
+
+# Copyright 2025 The Vitess Authors.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This script manages VTAdmin API and Web services (start/stop/status)
+# based on the configuration in vitess.yaml
+
+CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${CURRENT_DIR}/utils.sh"
+
+# Get configuration values from YAML
+vtadmin_api_port=$(get_config_value "vtadmin" "api_port" "14200")
+vtadmin_web_port=$(get_config_value "vtadmin" "web_port" "14201")
+cluster_name=$(get_config_value "vtadmin" "cluster_name" "local")
+
+# Currently not in the global config file, but can be added later
+vtadmin_config_dir=$(get_config_value "vtadmin" "config_dir" "${CURRENT_DIR}/../common/vtadmin")
+web_dir=$(get_config_value "vtadmin" "web_dir" "${CURRENT_DIR}/../../web/vtadmin")
+
+# Convert hostname to lowercase for consistency
+case_insensitive_hostname=$(echo "$hostname" | tr '[:upper:]' '[:lower:]')
+
+# Global variables to track status
+VTADMIN_API_STATUS=0
+VTADMIN_WEB_STATUS=0
+
+# Function to start VTAdmin API
+start_vtadmin_api() {
+  echo "Starting VTAdmin API..."
+  
+  # Check if VTAdmin API is already running
+  if lsof -i:$vtadmin_api_port > /dev/null 2>&1; then
+    echo "VTAdmin API is already running on port $vtadmin_api_port"
+    return 0
+  fi
+  
+  # Ensure log directory exists
+  mkdir -p "$VTDATAROOT/tmp"
+  
+  # Validate that required config files exist
+  if [ ! -f "$vtadmin_config_dir/discovery.json" ]; then
+    echo "Error: VTAdmin discovery config not found at $vtadmin_config_dir/discovery.json"
+    return 1
+  fi
+  
+  if [ ! -f "$vtadmin_config_dir/rbac.yaml" ]; then
+    echo "Error: VTAdmin RBAC config not found at $vtadmin_config_dir/rbac.yaml"
+    return 1
+  fi
+  
+  echo "VTAdmin API expects VTAdmin Web at http://${case_insensitive_hostname}:${vtadmin_web_port}"
+  
+  # Start VTAdmin API
+  vtadmin \
+    --addr "${case_insensitive_hostname}:${vtadmin_api_port}" \
+    --http-origin "http://${case_insensitive_hostname}:${vtadmin_web_port}" \
+    --http-tablet-url-tmpl "http://{{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }}" \
+    --tracer "opentracing-jaeger" \
+    --grpc-tracing \
+    --http-tracing \
+    --logtostderr \
+    --alsologtostderr \
+    --rbac \
+    --rbac-config="${vtadmin_config_dir}/rbac.yaml" \
+    --cluster "id=${cluster_name},name=${cluster_name},discovery=staticfile,discovery-staticfile-path=${vtadmin_config_dir}/discovery.json,tablet-fqdn-tmpl=http://{{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }},schema-cache-default-expiration=1m" \
+    > "$VTDATAROOT/tmp/vtadmin-api.out" 2>&1 &
+  
+  local vtadmin_api_pid=$!
+  echo $vtadmin_api_pid > "$VTDATAROOT/tmp/vtadmin-api.pid"
+  
+  # Wait for VTAdmin API to start
+  echo "Waiting for VTAdmin API to start..."
+  for i in $(seq 0 300); do
+    if curl -s "http://${case_insensitive_hostname}:${vtadmin_api_port}/api/clusters" > /dev/null 2>&1; then
+      break
+    fi
+    sleep 0.1
+  done
+  
+  # Verify VTAdmin API is running
+  if curl -s "http://${case_insensitive_hostname}:${vtadmin_api_port}/api/clusters" > /dev/null 2>&1; then
+    echo "VTAdmin API started successfully!"
+    echo "  - API: http://${case_insensitive_hostname}:${vtadmin_api_port}"
+    echo "  - Logs: $VTDATAROOT/tmp/vtadmin-api.out"
+    echo "  - PID: $vtadmin_api_pid"
+    
+    # Wait for vtadmin to successfully discover the cluster
+    echo "Waiting for VTAdmin API to discover the cluster..."
+    local expected_cluster_result="{\"result\":{\"clusters\":[{\"id\":\"${cluster_name}\",\"name\":\"${cluster_name}\"}]},\"ok\":true}"
+    for _ in {0..100}; do
+      local result=$(curl -s "http://${case_insensitive_hostname}:${vtadmin_api_port}/api/clusters" 2>/dev/null)
+      if [[ ${result} == "${expected_cluster_result}" ]]; then
+        echo "VTAdmin API successfully discovered the cluster"
+        break
+      fi
+      sleep 0.1
+    done
+    
+    return 0
+  else
+    echo "Failed to start VTAdmin API"
+    echo "Check logs at: $VTDATAROOT/tmp/vtadmin-api.out"
+    return 1
+  fi
+}
+
+# Function to stop VTAdmin API
+stop_vtadmin_api() {
+  echo "Stopping VTAdmin API..."
+  stop_process "vtadmin-api" "$VTDATAROOT/tmp/vtadmin-api.pid"
+}
+
+# Function to check VTAdmin API status
+status_vtadmin_api() {
+  echo -n "VTAdmin API status: "
+  
+  local pid_file="$VTDATAROOT/tmp/vtadmin-api.pid"
+  if [ -f "$pid_file" ]; then
+    local pid=$(cat "$pid_file")
+    if ps -p "$pid" > /dev/null; then
+      if curl -s "http://${case_insensitive_hostname}:${vtadmin_api_port}/api/clusters" > /dev/null 2>&1; then
+        echo "RUNNING (PID: $pid, Port: $vtadmin_api_port)"
+        VTADMIN_API_STATUS=0
+        return 0
+      else
+        echo "NOT RESPONDING (PID: $pid exists but API not responding)"
+        VTADMIN_API_STATUS=1
+        return 1
+      fi
+    else
+      echo "NOT RUNNING (stale PID file exists)"
+      VTADMIN_API_STATUS=1
+      return 1
+    fi
+  else
+    # Try to find by port
+    local pid=$(lsof -t -i:$vtadmin_api_port 2>/dev/null)
+    if [ -n "$pid" ]; then
+      echo "RUNNING (PID: $pid, Port: $vtadmin_api_port) - no PID file"
+      VTADMIN_API_STATUS=0
+      return 0
+    else
+      echo "NOT RUNNING"
+      VTADMIN_API_STATUS=1
+      return 1
+    fi
+  fi
+}
+
+# Function to start VTAdmin Web
+start_vtadmin_web() {
+  echo "Starting VTAdmin Web..."
+  
+  # Check if VTAdmin Web is already running
+  if lsof -i:$vtadmin_web_port > /dev/null 2>&1; then
+    echo "VTAdmin Web is already running on port $vtadmin_web_port"
+    return 0
+  fi
+  
+  # Ensure log directory exists
+  mkdir -p "$VTDATAROOT/tmp"
+  
+  # Check if web directory exists
+  if [ ! -d "$web_dir" ]; then
+    echo "Error: VTAdmin web directory not found at $web_dir"
+    return 1
+  fi
+  
+  # Check if build directory exists
+  if [ ! -d "$web_dir/build" ]; then
+    echo "Error: VTAdmin web build directory not found at $web_dir/build"
+    echo "Please run 'make build' in the web/vtadmin directory first"
+    return 1
+  fi
+  
+  # Check if serve binary exists
+  if [ ! -f "$web_dir/node_modules/.bin/serve" ]; then
+    echo "Error: serve binary not found at $web_dir/node_modules/.bin/serve"
+    echo "Please run 'npm install' in the web/vtadmin directory first"
+    return 1
+  fi
+  
+  # Start VTAdmin Web
+  "$web_dir/node_modules/.bin/serve" --no-clipboard -l $vtadmin_web_port -s "$web_dir/build" \
+    > "$VTDATAROOT/tmp/vtadmin-web.out" 2>&1 &
+  
+  local vtadmin_web_pid=$!
+  echo $vtadmin_web_pid > "$VTDATAROOT/tmp/vtadmin-web.pid"
+  
+  # Wait for VTAdmin Web to start
+  echo "Waiting for VTAdmin Web to start..."
+  for i in $(seq 0 300); do
+    if curl -s "http://${case_insensitive_hostname}:${vtadmin_web_port}" > /dev/null 2>&1; then
+      break
+    fi
+    sleep 0.1
+  done
+  
+  # Verify VTAdmin Web is running
+  if curl -s "http://${case_insensitive_hostname}:${vtadmin_web_port}" > /dev/null 2>&1; then
+    echo "VTAdmin Web started successfully!"
+    echo "  - Browser: http://${case_insensitive_hostname}:${vtadmin_web_port}"
+    echo "  - Logs: $VTDATAROOT/tmp/vtadmin-web.out"
+    echo "  - PID: $vtadmin_web_pid"
+    return 0
+  else
+    echo "Failed to start VTAdmin Web"
+    echo "Check logs at: $VTDATAROOT/tmp/vtadmin-web.out"
+    return 1
+  fi
+}
+
+# Function to stop VTAdmin Web
+stop_vtadmin_web() {
+  echo "Stopping VTAdmin Web..."
+  stop_process "vtadmin-web" "$VTDATAROOT/tmp/vtadmin-web.pid"
+}
+
+# Function to check VTAdmin Web status
+status_vtadmin_web() {
+  echo -n "VTAdmin Web status: "
+  
+  local pid_file="$VTDATAROOT/tmp/vtadmin-web.pid"
+  if [ -f "$pid_file" ]; then
+    local pid=$(cat "$pid_file")
+    if ps -p "$pid" > /dev/null; then
+      if curl -s "http://${case_insensitive_hostname}:${vtadmin_web_port}" > /dev/null 2>&1; then
+        echo "RUNNING (PID: $pid, Port: $vtadmin_web_port)"
+        VTADMIN_WEB_STATUS=0
+        return 0
+      else
+        echo "NOT RESPONDING (PID: $pid exists but web server not responding)"
+        VTADMIN_WEB_STATUS=1
+        return 1
+      fi
+    else
+      echo "NOT RUNNING (stale PID file exists)"
+      VTADMIN_WEB_STATUS=1
+      return 1
+    fi
+  else
+    # Try to find by port
+    local pid=$(lsof -t -i:$vtadmin_web_port 2>/dev/null)
+    if [ -n "$pid" ]; then
+      echo "RUNNING (PID: $pid, Port: $vtadmin_web_port) - no PID file"
+      VTADMIN_WEB_STATUS=0
+      return 0
+    else
+      echo "NOT RUNNING"
+      VTADMIN_WEB_STATUS=1
+      return 1
+    fi
+  fi
+}
+
+# Function to build VTAdmin Web if needed
+build_vtadmin_web() {
+  echo "Building VTAdmin Web..."
+  
+  if [ ! -d "$web_dir" ]; then
+    echo "Error: VTAdmin web directory not found at $web_dir"
+    return 1
+  fi
+  
+  # Change to web directory and run build script
+  cd "$web_dir"
+  if [ -f "build.sh" ]; then
+    echo "Running build.sh..."
+    source "./build.sh"
+  else
+    echo "build.sh not found, attempting npm build..."
+    if command -v npm > /dev/null; then
+      npm run build
+    else
+      echo "Error: npm not found and build.sh not available"
+      return 1
+    fi
+  fi
+  
+  cd - > /dev/null
+  echo "VTAdmin Web build completed"
+  return 0
+}
+
+# Check if we have a command
+if [ $# -eq 0 ]; then
+  echo "Usage: $0 {start|stop|status|restart|build}"
+  exit 1
+fi
+
+# Parse arguments
+COMMAND="$1"
+
+# Process the command
+case "$COMMAND" in
+  start)
+    echo "Starting VTAdmin services..."
+    start_vtadmin_api
+    API_RESULT=$?
+    sleep 2
+    start_vtadmin_web
+    WEB_RESULT=$?
+    
+    # Return success only if both succeeded
+    if [ $API_RESULT -eq 0 ] && [ $WEB_RESULT -eq 0 ]; then
+      echo "All VTAdmin services started successfully"
+      exit 0
+    else
+      echo "Some VTAdmin services failed to start"
+      exit 1
+    fi
+    ;;
+  stop)
+    echo "Stopping VTAdmin services..."
+    stop_vtadmin_web
+    WEB_RESULT=$?
+    sleep 2
+    stop_vtadmin_api
+    API_RESULT=$?
+    
+    # Return success only if both succeeded
+    if [ $API_RESULT -eq 0 ] && [ $WEB_RESULT -eq 0 ]; then
+      echo "All VTAdmin services stopped successfully"
+      exit 0
+    else
+      echo "Some VTAdmin services failed to stop"
+      exit 1
+    fi
+    ;;
+  status)
+    echo "Checking VTAdmin services status..."
+    status_vtadmin_api
+    status_vtadmin_web
+    
+    # Return success only if both are running
+    if [ $VTADMIN_API_STATUS -eq 0 ] && [ $VTADMIN_WEB_STATUS -eq 0 ]; then
+      echo "All VTAdmin services are running"
+      exit 0
+    else
+      echo "Some VTAdmin services are not running"
+      exit 1
+    fi
+    ;;
+  restart)
+    echo "Restarting VTAdmin services..."
+    stop_vtadmin_web
+    sleep 2
+    stop_vtadmin_api
+    sleep 2
+    start_vtadmin_api
+    API_RESULT=$?
+    sleep 2
+    start_vtadmin_web
+    WEB_RESULT=$?
+    
+    # Return success only if both succeeded
+    if [ $API_RESULT -eq 0 ] && [ $WEB_RESULT -eq 0 ]; then
+      echo "All VTAdmin services restarted successfully"
+      exit 0
+    else
+      echo "Some VTAdmin services failed to restart"
+      exit 1
+    fi
+    ;;
+  build)
+    echo "Building VTAdmin Web..."
+    build_vtadmin_web
+    exit $?
+    ;;
+  *)
+    echo "Unknown command: $COMMAND"
+    echo "Usage: $0 {start|stop|status|restart|build}"
+    exit 1
+    ;;
+esac

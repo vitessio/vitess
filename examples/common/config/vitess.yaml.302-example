@@ -1,0 +1,143 @@
+# Vitess Configuration File
+# This file contains configuration for all Vitess components
+
+global:
+  cell: zone1
+  vtdataroot: ~/vtdataroot
+  hostname: localhost
+  topo-implementation: etcd2
+  topo-global-server-address: localhost:2379
+  topo-global-root: /vitess/global
+
+vtgate:
+  web-port: 15001
+  grpc-port: 15991
+  mysql-server-port: 15306
+  tablet-types-to-wait: PRIMARY,REPLICA
+  cell: zone1
+  cells_to_watch: zone1
+  service_map: grpc-vtgateservice
+  mysql_auth_server_impl: none
+
+vtorc:
+  port: 16000
+  instance-poll-time: 1s
+  prevent-cross-cell-failover: false
+  snapshot-topology-interval: 0h
+  reasonable-replication-lag: 10s
+  audit-to-backend: false
+  audit-to-syslog: false
+  audit-purge-duration: 168h
+  wait-replicas-timeout: 30s
+  tolerable-replication-lag: 0s
+  topo-information-refresh-duration: 15s
+  recovery-poll-duration: 1s
+  allow-emergency-reparent: true
+  change-tablets-with-errant-gtid-to-drained: false
+
+vtctldclient:
+  server: localhost:15999
+
+vtadmin:
+  api_port: 14200
+  web_port: 14201
+  cluster_name: "local"
+
+# Tablets
+# Tablet instances configuration
+tablets:
+  - uid: 100
+    keyspace: commerce
+    shard: "0"
+    tablet_type: replica
+    port: 15100
+    grpc_port: 16100
+    mysql_port: 17100
+    
+  - uid: 101
+    keyspace: commerce
+    shard: "0"
+    tablet_type: replica
+    port: 15101
+    grpc_port: 16101
+    mysql_port: 17101
+    
+  - uid: 102
+    keyspace: commerce
+    shard: "0"
+    tablet_type: rdonly
+    port: 15102
+    grpc_port: 16102
+    mysql_port: 17102
+
+  - uid: 200
+    keyspace: customer
+    shard: "0"
+    tablet_type: replica
+    port: 15200
+    grpc_port: 16200
+    mysql_port: 17200
+    
+  - uid: 201
+    keyspace: customer
+    shard: "0"
+    tablet_type: replica
+    port: 15201
+    grpc_port: 16201
+    mysql_port: 17201
+    
+  - uid: 202
+    keyspace: customer
+    shard: "0"
+    tablet_type: rdonly
+    port: 15202
+    grpc_port: 16202
+    mysql_port: 17202
+
+  - uid: 300
+    keyspace: customer
+    shard: "-80"
+    tablet_type: replica
+    port: 15300
+    grpc_port: 16300
+    mysql_port: 17300
+    
+  - uid: 301
+    keyspace: customer
+    shard: "-80"
+    tablet_type: replica
+    port: 15301
+    grpc_port: 16301
+    mysql_port: 17301
+    
+  - uid: 302
+    keyspace: customer
+    shard: "-80"
+    tablet_type: rdonly
+    port: 15302
+    grpc_port: 16302
+    mysql_port: 17302
+
+  - uid: 400
+    keyspace: customer
+    shard: "80-"
+    tablet_type: replica
+    port: 15400
+    grpc_port: 16400
+    mysql_port: 17400
+    
+  - uid: 401
+    keyspace: customer
+    shard: "80-"
+    tablet_type: replica
+    port: 15401
+    grpc_port: 16401
+    mysql_port: 17401
+    
+  - uid: 402
+    keyspace: customer
+    shard: "80-"
+    tablet_type: rdonly
+    port: 15402
+    grpc_port: 16402
+    mysql_port: 17402
