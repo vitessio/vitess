@@ -11,14 +11,20 @@ permissions: read-all
 
 jobs:
   upgrade_downgrade_test_e2e:
-    timeout-minutes: 60
     name: Run Upgrade Downgrade Test - Backups - E2E
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        os: ["ubuntu-24.04"]
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'amd64' && matrix.os || format('{0}-arm', matrix.os) }}
+    env:
+      ARCH: ${{ matrix.arch }}
 
     steps:
     - name: Skip CI
       run: |
-        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+        if [[ "${{ contains( github.event.pull_request.labels.*.name, 'Skip CI') }}" == "true" ]]; then
           echo "skipping CI due to the 'Skip CI' label"
           exit 1
         fi
@@ -27,15 +33,17 @@ jobs:
       id: skip-workflow
       run: |
         skip='false'
-        if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
-        skip='true'
+        if [[ "${{ github.event.pull_request }}" ==  "" ]] && [[ "${{ github.ref }}" != "refs/heads/main" ]] && [[ ! "${{ github.ref }}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{ github.ref }}" =~ "refs/tags/.*" ]]; then
+          skip='true'
         fi
-        echo Skip ${skip}
         echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
+
+    - name: Print architecture
+      run: uname -m
 
     - name: Check out commit's code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
         persist-credentials: 'false'
@@ -45,12 +53,11 @@ jobs:
       id: output-previous-release-ref
       run: |
         previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
-        echo $previous_release_ref
         echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: dorny/paths-filter@ebc4d7e9ebcb0b1eb21480bb8f43113e996ac77a # v3.0.1
+      uses: dorny/paths-filter@v3
       id: changes
       with:
         token: ''
@@ -72,33 +79,45 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+      uses: actions/setup-go@v5
       with:
         go-version: 1.23.7
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f # v5.1.1
+      uses: actions/setup-python@v5
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
-    - name: Get base dependencies
+    - name: Get base dependencies (ARCH aware)
       timeout-minutes: 10
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata
-        
+        if [ "$ARCH" = "arm64" ]; then
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/mysql-server_8.0.35_arm64.deb
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/libaio1_0.3.112-5_arm64.deb
+          sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb libaio1_0.3.112-5_arm64.deb
+          sudo dpkg -i mysql-server_8.0.35_arm64.deb
+          export PATH=$PATH:/usr/local/mysql/bin
+        else
+          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
+          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
+          echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+          sudo apt-get update
+          sudo apt-get install -y mysql-server mysql-client
+        fi
+
+        sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
-
-        # install JUnit report formatter
         go install github.com/vitessio/go-junit-report@HEAD
 
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb

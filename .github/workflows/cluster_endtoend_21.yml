@@ -21,7 +21,7 @@ jobs:
       matrix:
         os: ["ubuntu-24.04"]
         arch: [amd64, arm64]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.arch == 'amd64' && matrix.os || format('{0}-arm', matrix.os) }}
     env:
       ARCH: ${{ matrix.arch }}
     steps:
@@ -108,7 +108,15 @@ jobs:
       run: |
         
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        if [ "$ARCH" = "amd64" ]; then
+        if [ "$ARCH" = "arm64" ]; then
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/mysql-server_8.0.35_arm64.deb
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/libaio1_0.3.112-5_arm64.deb
+          sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb libaio1_0.3.112-5_arm64.deb
+          sudo dpkg -i mysql-server_8.0.35_arm64.deb
+          export PATH=$PATH:/usr/local/mysql/bin
+        
+        else
           wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
           echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
           sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
@@ -117,6 +125,8 @@ jobs:
           sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
           curl -L -O http://mirrors.kernel.org/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
           sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          sudo apt-get -qq install -y mysql-server mysql-shell mysql-client  
+
         fi
         sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
         
@@ -130,15 +140,12 @@ jobs:
         go install github.com/vitessio/go-junit-report@HEAD
 
     - name: Install Minio
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: |
-       if [ "$ARCH" = "amd64" ]; then
-         wget https://dl.min.io/server/minio/release/linux-amd64/minio
-       else
-         wget https://dl.min.io/server/minio/release/linux-arm64/minio
-       fi
-       chmod +x minio
-       mv minio /usr/local/bin
-      
+        wget https://dl.min.io/server/minio/release/linux-amd64/minio
+        chmod +x minio
+        mv minio /usr/local/bin
+    
     - name: Setup launchable dependencies
       if: steps.skip-workflow.outputs.is_draft == 'false' && steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
       run: |
