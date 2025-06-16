@@ -81,14 +81,14 @@ func TestSingleDbUpdateToMultiShard(t *testing.T) {
 	})
 
 	// shard session s0 due to a vindex query
-	session.queryFromVindex = true
+	session.execReadQuery = true
 	err := session.AppendOrUpdate(
 		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
 		info(1, 0),
 		nil,
 		vtgatepb.TransactionMode_SINGLE)
 	require.NoError(t, err)
-	session.queryFromVindex = false
+	session.execReadQuery = false
 
 	// shard session s1
 	err = session.AppendOrUpdate(
@@ -115,14 +115,14 @@ func TestSingleDbPreFailOnFind(t *testing.T) {
 	})
 
 	// shard session s0 due to a vindex query
-	session.queryFromVindex = true
+	session.execReadQuery = true
 	err := session.AppendOrUpdate(
 		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
 		info(1, 0),
 		nil,
 		vtgatepb.TransactionMode_SINGLE)
 	require.NoError(t, err)
-	session.queryFromVindex = false
+	session.execReadQuery = false
 
 	// shard session s1
 	err = session.AppendOrUpdate(
@@ -140,7 +140,7 @@ func TestSingleDbPreFailOnFind(t *testing.T) {
 		vtgatepb.TransactionMode_SINGLE)
 	require.NoError(t, err)
 	require.NotNil(t, ss)
-	require.False(t, ss.VindexOnly)
+	require.False(t, ss.ReadOnly)
 	require.EqualValues(t, 1, ss.TabletAlias.Uid)
 
 	// shard session s0 for normal query

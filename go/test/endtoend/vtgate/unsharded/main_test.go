@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -151,7 +152,10 @@ BEGIN
 	insert into allDefaults(id) values (128);
 	select 128 into val from dual;
 END;
-`}
+`,
+		`CREATE PROCEDURE p1 (in x BIGINT) BEGIN declare y DECIMAL(14,2); set y = 4.2; END`,
+		`CREATE PROCEDURE p2 (in x BIGINT) BEGIN START TRANSACTION; SELECT 128 from dual; COMMIT; END`,
+	}
 )
 
 func TestMain(m *testing.M) {
@@ -179,7 +183,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--warn_sharded_only=true"}
+		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--warn-sharded-only") + "=true"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			log.Fatal(err.Error())
 			return 1

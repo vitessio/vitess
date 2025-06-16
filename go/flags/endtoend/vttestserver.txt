@@ -5,8 +5,8 @@ Usage:
 
 Flags:
       --alsologtostderr                                                  log to standard error as well as files
-      --app_idle_timeout duration                                        Idle timeout for app connections (default 1m0s)
-      --app_pool_size int                                                Size of the connection pool for app connections (default 40)
+      --app-idle-timeout duration                                        Idle timeout for app connections (default 1m0s)
+      --app-pool-size int                                                Size of the connection pool for app connections (default 40)
       --backup-engine-implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
       --backup-storage-block-size int                                    if backup-storage-compress is true, backup-storage-block-size sets the byte size for each block while compressing (default is 250000). (default 250000)
       --backup-storage-compress                                          if set, the backup files will be compressed. (default true)
@@ -29,8 +29,8 @@ Flags:
       --config-type string                                               Config file type (omit to infer config type from file extension).
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
       --data_dir string                                                  Directory where the data files will be placed, defaults to a random directory under /vt/vtdataroot
-      --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
-      --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
+      --dba-idle-timeout duration                                        Idle timeout for dba connections (default 1m0s)
+      --dba-pool-size int                                                Size of the connection pool for dba connections (default 20)
       --default_schema_dir string                                        Default directory for initial schema files. If no schema is found in schema_dir, default to this location.
       --enable_direct_ddl                                                Allow users to submit direct DDL statements (default true)
       --enable_online_ddl                                                Allow users to submit, review and control Online DDL (default true)
@@ -42,7 +42,7 @@ Flags:
       --external_topo_global_server_address string                       the address of the global topology server for vtcombo process
       --external_topo_implementation string                              the topology implementation to use for vtcombo process
       --extra_my_cnf string                                              extra files to add to the config, separated by ':'
-      --foreign_key_mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")
+      --foreign-key-mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc-auth-mtls-allowed-substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
       --grpc-auth-static-client-creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
@@ -98,9 +98,9 @@ Flags:
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql_bind_host string                                           which host to bind vtgate mysql listener to (default "localhost")
       --mysql_only                                                       If this flag is set only mysql is initialized. The rest of the vitess components are not started. Also, the output specifies the mysql unix socket instead of the vtgate port.
-      --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
-      --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
-      --no_scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
+      --mysqlctl-mycnf-template string                                   template file to use for generating the my.cnf file during server init
+      --mysqlctl-socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
+      --no-scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --null_probability float                                           The probability to initialize a field with 'NULL'  if --initialize-with-random-data is true. Only applies to fields that can contain NULL values. (default 0.1)
       --num_shards strings                                               Comma separated shard count (one per keyspace) (default [2])
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
@@ -112,7 +112,7 @@ Flags:
       --port int                                                         Port to use for vtcombo. If this is 0, a random port will be chosen.
       --pprof strings                                                    enable profiling
       --pprof-http                                                       enable pprof http endpoints
-      --proto_topo string                                                Define the fake cluster topology as a compact text format encoded vttest proto. See vttest.proto for more information.
+      --proto-topo string                                                Define the fake cluster topology as a compact text format encoded vttest proto. See vttest.proto for more information.
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --queryserver-config-transaction-timeout duration                  query server transaction timeout, a transaction will be killed if it takes longer than this value (default 30s)
       --rdonly_count int                                                 Rdonly tablets per shard (default 1)
@@ -154,18 +154,18 @@ Flags:
       --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
       --vschema_ddl_authorized_users string                              Comma separated list of users authorized to execute vschema ddl operations via vtgate
       --vtcombo-bind-host string                                         which host to bind vtcombo servenv listener to (default "localhost")
-      --vtctl_client_protocol string                                     Protocol to use to talk to the vtctl server. (default "grpc")
-      --vtctld_grpc_ca string                                            the server ca to use to validate servers when connecting
-      --vtctld_grpc_cert string                                          the cert to use to connect
-      --vtctld_grpc_crl string                                           the server crl to use to validate server certificates when connecting
-      --vtctld_grpc_key string                                           the key to use to connect
-      --vtctld_grpc_server_name string                                   the server name to use to validate server certificate
-      --vtgate_grpc_ca string                                            the server ca to use to validate servers when connecting
-      --vtgate_grpc_cert string                                          the cert to use to connect
-      --vtgate_grpc_crl string                                           the server crl to use to validate server certificates when connecting
-      --vtgate_grpc_key string                                           the key to use to connect
-      --vtgate_grpc_server_name string                                   the server name to use to validate server certificate
-      --xbstream_restore_flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
+      --vtctl-client-protocol string                                     Protocol to use to talk to the vtctl server. (default "grpc")
+      --vtctld-grpc-ca string                                            the server ca to use to validate servers when connecting
+      --vtctld-grpc-cert string                                          the cert to use to connect
+      --vtctld-grpc-crl string                                           the server crl to use to validate server certificates when connecting
+      --vtctld-grpc-key string                                           the key to use to connect
+      --vtctld-grpc-server-name string                                   the server name to use to validate server certificate
+      --vtgate-grpc-ca string                                            the server ca to use to validate servers when connecting
+      --vtgate-grpc-cert string                                          the cert to use to connect
+      --vtgate-grpc-crl string                                           the server crl to use to validate server certificates when connecting
+      --vtgate-grpc-key string                                           the key to use to connect
+      --vtgate-grpc-server-name string                                   the server name to use to validate server certificate
+      --xbstream-restore-flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
       --xtrabackup-backup-flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
       --xtrabackup-prepare-flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command
       --xtrabackup-root-path string                                      Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin

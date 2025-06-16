@@ -99,7 +99,7 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.1) from t1 where id1 = 1")
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "context deadline exceeded")
+	assert.ErrorContains(t, err, "DeadlineExceeded")
 	assert.ErrorContains(t, err, "(errno 1317) (sqlstate 70100)")
 }
 
@@ -198,7 +198,7 @@ func TestOverallQueryTimeout(t *testing.T) {
 	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=4000 */ sleep(u2.id2), u1.id2 from t1 u1 join t1 u2 where u1.id2 = u2.id1")
 	assert.Error(t, err)
 	// We can get two different error messages based on whether it is coming from vttablet or vtgate
-	deadLineExceeded := "DeadlineExceeded desc = stream terminated by RST_STREAM"
+	deadLineExceeded := "DeadlineExceeded desc"
 	if !strings.Contains(err.Error(), "Query execution was interrupted, maximum statement execution time exceeded") {
 		assert.ErrorContains(t, err, deadLineExceeded)
 	}

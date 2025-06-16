@@ -108,18 +108,18 @@ func init() {
 	Main.Flags().StringVar(&schemaDir, "schema_dir", schemaDir, "Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.")
 	Main.Flags().BoolVar(&startMysql, "start_mysql", startMysql, "Should vtcombo also start mysql")
 	utils.SetFlagIntVar(Main.Flags(), &mysqlPort, "mysql-port", mysqlPort, "mysql port")
-	Main.Flags().BoolVar(&externalTopoServer, "external_topo_server", externalTopoServer, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
+	utils.SetFlagBoolVar(Main.Flags(), &externalTopoServer, "external-topo-server", externalTopoServer, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
 		"If true, vtcombo will use the flags defined in topo/server.go to open topo server")
 	Main.Flags().StringVar(&plannerName, "planner-version", plannerName, "Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right")
 	Main.Flags().StringVar(&vschemaPersistenceDir, "vschema-persistence-dir", vschemaPersistenceDir, "If set, per-keyspace vschema will be persisted in this directory "+
 		"and reloaded into the in-memory topology server across restarts. Bookkeeping is performed using a simple watcher goroutine. "+
 		"This is useful when running vtcombo as an application development container (e.g. vttestserver) where you want to keep the same "+
 		"vschema even if developer's machine reboots. This works in tandem with vttestserver's --persistent_mode flag. Needless to say, "+
-		"this is neither a perfect nor a production solution for vschema persistence. Consider using the --external_topo_server flag if "+
-		"you require a more complete solution. This flag is ignored if --external_topo_server is set.")
+		"this is neither a perfect nor a production solution for vschema persistence. Consider using the --external-topo-server flag if "+
+		"you require a more complete solution. This flag is ignored if --external-topo-server is set.")
 
-	Main.Flags().Var(vttest.TextTopoData(&tpb), "proto_topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
-	Main.Flags().Var(vttest.JSONTopoData(&tpb), "json_topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
+	utils.SetFlagVar(Main.Flags(), vttest.TextTopoData(&tpb), "proto-topo", "vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.")
+	utils.SetFlagVar(Main.Flags(), vttest.JSONTopoData(&tpb), "json-topo", "vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.")
 
 	utils.SetFlagVar(Main.Flags(), (*topoproto.TabletTypeListFlag)(&tabletTypesToWait), "tablet-types-to-wait", "Wait till connected for specified tablet types during Gateway initialization. Should be provided as a comma-separated set of tablet types.")
 

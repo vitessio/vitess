@@ -19,6 +19,9 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"os"
+	"reflect"
+	"runtime/pprof"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -127,6 +130,82 @@ func TestVStreamSkew(t *testing.T) {
 	}
 }
 
+func TestVStreamEventsExcludeKeyspaceFromTableName(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, ks, "-20", sbc0.Tablet())
+
+	send1 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
+		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "f0"}},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t0"}},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}
+	want1 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: ks,
+				Shard:    "-20",
+				Gtid:     "gtid01",
+			}},
+		}},
+		// Verify that the table names lack the keyspace
+		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "f0"}},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t0"}},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}
+	sbc0.AddVStreamEvents(send1, nil)
+
+	send2 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid02"},
+		{Type: binlogdatapb.VEventType_DDL},
+	}
+	want2 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: ks,
+				Shard:    "-20",
+				Gtid:     "gtid02",
+			}},
+		}},
+		{Type: binlogdatapb.VEventType_DDL},
+	}}
+	sbc0.AddVStreamEvents(send2, nil)
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: ks,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}},
+	}
+	ch := make(chan *binlogdatapb.VStreamResponse)
+	go func() {
+		err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{ExcludeKeyspaceFromTableName: true}, func(events []*binlogdatapb.VEvent) error {
+			ch <- &binlogdatapb.VStreamResponse{Events: events}
+			return nil
+		})
+		wantErr := "context canceled"
+		if err == nil || !strings.Contains(err.Error(), wantErr) {
+			t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
+		}
+		ch <- nil
+	}()
+	verifyEvents(t, ch, want1, want2)
+
+	// Ensure the go func error return was verified.
+	cancel()
+	<-ch
+}
+
 func TestVStreamEvents(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -200,6 +279,115 @@ func TestVStreamEvents(t *testing.T) {
 	// Ensure the go func error return was verified.
 	cancel()
 	<-ch
+}
+
+func BenchmarkVStreamEvents(b *testing.B) {
+	tests := []struct {
+		name                         string
+		excludeKeyspaceFromTableName bool
+	}{
+		{"ExcludeKeyspaceFromTableName=true", true},
+		{"ExcludeKeyspaceFromTableName=false", false},
+	}
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			var f *os.File
+			var err error
+			if os.Getenv("PROFILE_CPU") == "true" {
+				f, err = os.Create("cpu.prof")
+				if err != nil {
+					b.Fatal(err)
+				}
+				defer f.Close()
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			cell := "aa"
+			ks := "TestVStream"
+			_ = createSandbox(ks)
+			hc := discovery.NewFakeHealthCheck(nil)
+			st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+
+			vsm := newTestVStreamManager(ctx, hc, st, cell)
+			sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+			addTabletToSandboxTopo(b, ctx, st, ks, "-20", sbc0.Tablet())
+
+			const totalEvents = 100_000
+			batchSize := 10_000
+			for i := 0; i < totalEvents; i += batchSize {
+				var events []*binlogdatapb.VEvent
+				events = append(events, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_GTID,
+					Gtid: fmt.Sprintf("gtid-%d", i),
+				})
+				for j := 0; j < batchSize-2; j++ {
+					events = append(events, &binlogdatapb.VEvent{
+						Type: binlogdatapb.VEventType_ROW,
+						RowEvent: &binlogdatapb.RowEvent{
+							TableName: fmt.Sprintf("t%d", j),
+						},
+					})
+				}
+				events = append(events, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT})
+				sbc0.AddVStreamEvents(events, nil)
+			}
+
+			vgtid := &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{{
+					Keyspace: ks,
+					Shard:    "-20",
+					Gtid:     "pos",
+				}},
+			}
+			start := make(chan struct{})
+			ch := make(chan *binlogdatapb.VStreamResponse)
+			go func() {
+				close(start)
+				err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil,
+					&vtgatepb.VStreamFlags{ExcludeKeyspaceFromTableName: tt.excludeKeyspaceFromTableName}, func(events []*binlogdatapb.VEvent) error {
+						ch <- &binlogdatapb.VStreamResponse{Events: events}
+						return nil
+					})
+				wantErr := "context canceled"
+				if err == nil || !strings.Contains(err.Error(), wantErr) {
+					b.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
+				}
+				ch <- nil
+			}()
+
+			// Start the timer when the VStream begins
+			<-start
+			b.ResetTimer()
+			if os.Getenv("PROFILE_CPU") == "true" {
+				pprof.StartCPUProfile(f)
+			}
+
+			received := 0
+			for {
+				resp := <-ch
+				if resp == nil {
+					close(ch)
+					break
+				}
+				received += len(resp.Events)
+				if received >= totalEvents {
+					b.Logf("Received events %d, expected total %d", received, totalEvents)
+					b.StopTimer()
+					if os.Getenv("PROFILE_CPU") == "true" {
+						pprof.StopCPUProfile()
+					}
+					cancel()
+				}
+			}
+
+			if received < totalEvents {
+				b.Errorf("expected at least %d events, got %d", totalEvents, received)
+			}
+
+			cancel()
+			<-ch
+		})
+	}
 }
 
 // TestVStreamChunks ensures that a transaction that's broken
@@ -382,30 +570,47 @@ func TestVStreamsMetrics(t *testing.T) {
 	<-ch
 	expectedLabels1 := "TestVStream.-20.PRIMARY"
 	expectedLabels2 := "TestVStream.20-40.PRIMARY"
-	wantVStreamsCreated := make(map[string]int64)
-	wantVStreamsCreated[expectedLabels1] = 1
-	wantVStreamsCreated[expectedLabels2] = 1
-	assert.Equal(t, wantVStreamsCreated, vsm.vstreamsCreated.Counts(), "vstreamsCreated matches")
 
-	wantVStreamsLag := make(map[string]int64)
-	wantVStreamsLag[expectedLabels1] = 5
-	wantVStreamsLag[expectedLabels2] = 7
-	assert.Equal(t, wantVStreamsLag, vsm.vstreamsLag.Counts(), "vstreamsLag matches")
+	wantVStreamsCreated := map[string]int64{
+		expectedLabels1: 1,
+		expectedLabels2: 1,
+	}
+	waitForMetricsMatch(t, vsm.vstreamsCreated.Counts, wantVStreamsCreated)
 
-	wantVStreamsCount := make(map[string]int64)
-	wantVStreamsCount[expectedLabels1] = 1
-	wantVStreamsCount[expectedLabels2] = 1
-	assert.Equal(t, wantVStreamsCount, vsm.vstreamsCount.Counts(), "vstreamsCount matches")
+	wantVStreamsLag := map[string]int64{
+		expectedLabels1: 5,
+		expectedLabels2: 7,
+	}
+	waitForMetricsMatch(t, vsm.vstreamsLag.Counts, wantVStreamsLag)
 
-	wantVStreamsEventsStreamed := make(map[string]int64)
-	wantVStreamsEventsStreamed[expectedLabels1] = 2
-	wantVStreamsEventsStreamed[expectedLabels2] = 2
-	assert.Equal(t, wantVStreamsEventsStreamed, vsm.vstreamsEventsStreamed.Counts(), "vstreamsEventsStreamed matches")
+	wantVStreamsCount := map[string]int64{
+		expectedLabels1: 1,
+		expectedLabels2: 1,
+	}
+	waitForMetricsMatch(t, vsm.vstreamsCount.Counts, wantVStreamsCount)
 
-	wantVStreamsEndedWithErrors := make(map[string]int64)
-	wantVStreamsEndedWithErrors[expectedLabels1] = 0
-	wantVStreamsEndedWithErrors[expectedLabels2] = 0
-	assert.Equal(t, wantVStreamsEndedWithErrors, vsm.vstreamsEndedWithErrors.Counts(), "vstreamsEndedWithErrors matches")
+	wantVEventsCount := map[string]int64{
+		expectedLabels1: 2,
+		expectedLabels2: 2,
+	}
+	waitForMetricsMatch(t, vsm.vstreamsEventsStreamed.Counts, wantVEventsCount)
+
+	wantVStreamsEndedWithErrors := map[string]int64{
+		expectedLabels1: 0,
+		expectedLabels2: 0,
+	}
+	waitForMetricsMatch(t, vsm.vstreamsEndedWithErrors.Counts, wantVStreamsEndedWithErrors)
+}
+
+func waitForMetricsMatch(t *testing.T, getActual func() map[string]int64, want map[string]int64) {
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		if reflect.DeepEqual(getActual(), want) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.Equal(t, want, getActual(), "metrics did not match within timeout")
 }
 
 func TestVStreamsMetricsErrors(t *testing.T) {
@@ -1866,12 +2071,12 @@ func getSandboxTopoMultiCell(ctx context.Context, cells []string, keyspace strin
 	return st
 }
 
-func addTabletToSandboxTopo(t *testing.T, ctx context.Context, st *sandboxTopo, ks, shard string, tablet *topodatapb.Tablet) {
+func addTabletToSandboxTopo(tb testing.TB, ctx context.Context, st *sandboxTopo, ks, shard string, tablet *topodatapb.Tablet) {
 	_, err := st.topoServer.UpdateShardFields(ctx, ks, shard, func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = tablet.Alias
 		return nil
 	})
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	err = st.topoServer.CreateTablet(ctx, tablet)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 }

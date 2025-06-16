@@ -90,7 +90,7 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 	flags.StringVar(&disco.vtgatePoolTag, "vtgate-pool-tag", "pool", "consul service tag to group vtgates by pool")
 	flags.StringVar(&disco.vtgateCellTag, "vtgate-cell-tag", "cell", "consul service tag to group vtgates by cell")
 	flags.StringVar(&disco.vtgateKeyspacesToWatchTag, "vtgate-keyspaces-to-watch-tag", "keyspaces",
-		"consul service tag identifying -keyspaces_to_watch for vtgates")
+		"consul service tag identifying -keyspaces-to-watch for vtgates")
 
 	vtgateAddrTmplStr := flags.String("vtgate-addr-tmpl", "{{ .Hostname }}",
 		"Go template string to produce a dialable address from a *vtadminpb.VTGate "+

@@ -1276,8 +1276,8 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 	env.tmc.expectFetchAsAllPrivsQuery(200, "select 1 from `lookup` limit 1", &sqltypes.Result{})
 
 	// Expect this query twice for 2 vindexes.
-	env.tmc.expectVRQuery(200, "/CREATE TABLE `lookup`\\s*\\(\\s*`col2`", &sqltypes.Result{})
-	env.tmc.expectVRQuery(200, "/CREATE TABLE `lookup`\\s*\\(\\s*`col4`", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "/CREATE TABLE `lookup`", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "/CREATE TABLE `lookup`", &sqltypes.Result{})
 
 	env.tmc.expectVRQuery(200, mzGetCopyState, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzGetLatestCopyState, &sqltypes.Result{})

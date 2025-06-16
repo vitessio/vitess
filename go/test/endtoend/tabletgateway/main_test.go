@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -65,7 +66,7 @@ func TestMain(m *testing.M) {
 
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(cell, "localhost")
-		clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval", "1s", "--shutdown_grace_period", "3s"}
+		clusterInstance.VtTabletExtraArgs = []string{utils.GetFlagVariantForTests("--health-check-interval"), "1s", "--shutdown_grace_period", "3s"}
 		defer clusterInstance.Teardown()
 
 		// Start topo server

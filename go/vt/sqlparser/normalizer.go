@@ -45,6 +45,7 @@ type (
 		bindVars  map[string]*querypb.BindVariable
 		reserved  *ReservedVars
 		vals      map[Literal]string
+		tupleVals map[string]string
 		err       error
 		inDerived int
 		inSelect  int
@@ -145,6 +146,7 @@ func newNormalizer(
 		bindVars:      bindVars,
 		reserved:      reserved,
 		vals:          make(map[Literal]string),
+		tupleVals:     make(map[string]string),
 		bindVarNeeds:  &BindVarNeeds{},
 		keyspace:      keyspace,
 		selectLimit:   selectLimit,
@@ -174,7 +176,7 @@ func (nz *normalizer) determineQueryRewriteStrategy(in Statement) {
 func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 	switch node := node.(type) {
 	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release, *OtherAdmin, *Analyze,
-		*PrepareStmt, *ExecuteStmt, *FramePoint, *ColName, TableName, *ConvertType:
+		*PrepareStmt, *ExecuteStmt, *FramePoint, *ColName, TableName, *ConvertType, *CreateProcedure:
 		// These statement do not need normalizing
 		return false
 	case *AssignmentExpr:
@@ -470,8 +472,22 @@ func (nz *normalizer) rewriteInComparisons(node *ComparisonExpr) {
 			Value: bval.Value,
 		})
 	}
-	bvname := nz.reserved.nextUnusedVar()
-	nz.bindVars[bvname] = bvals
+
+	var bvname string
+
+	if key, err := bvals.MarshalVT(); err != nil {
+		bvname = nz.reserved.nextUnusedVar()
+		nz.bindVars[bvname] = bvals
+	} else {
+		// Check if we can find key in tuplevals
+		if bvname, ok = nz.tupleVals[string(key)]; !ok {
+			bvname = nz.reserved.nextUnusedVar()
+		}
+
+		nz.bindVars[bvname] = bvals
+		nz.tupleVals[string(key)] = bvname
+	}
+
 	node.Right = ListArg(bvname)
 }
 

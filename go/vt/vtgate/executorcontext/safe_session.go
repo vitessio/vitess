@@ -59,9 +59,9 @@ type (
 		// and doesn't have to be updated by the executor
 		foundRowsHandled bool
 
-		// queryFromVindex is used to avoid erroring out on multi-db transaction
+		// execReadQuery is used to avoid erroring out on multi-db transaction
 		// as the query that started a new transaction on the shard belong to a vindex.
-		queryFromVindex bool
+		execReadQuery bool
 
 		logging *ExecuteLogger
 
@@ -241,18 +241,11 @@ func (session *SafeSession) GetRollbackOnPartialExec() string {
 	return session.rollbackOnPartialExec
 }
 
-// SetQueryFromVindex set the queryFromVindex value.
-func (session *SafeSession) SetQueryFromVindex(value bool) {
+// SetExecReadQuery set the execReadQuery value.
+func (session *SafeSession) SetExecReadQuery(value bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.queryFromVindex = value
-}
-
-// GetQueryFromVindex returns the queryFromVindex value.
-func (session *SafeSession) GetQueryFromVindex() bool {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	return session.queryFromVindex
+	session.execReadQuery = value
 }
 
 // SetQueryTimeout sets the query timeout
@@ -427,8 +420,8 @@ func (session *SafeSession) InTransaction() bool {
 // Key behavior:
 // 1. Retrieves the appropriate list of sessions (PreSessions, PostSessions, or default ShardSessions) based on the commit order.
 // 2. Identifies a matching session by keyspace, shard, and tablet type.
-// 3. If the session meets specific conditions (e.g., non-vindex-only, single transaction mode), it updates the session state:
-//   - Converts a vindex-only session to a standard session if required by the transaction type.
+// 3. If the session meets specific conditions (e.g., dml, single transaction mode), it updates the session state:
+//   - Converts a non-dml session to a standard session if required by the transaction type.
 //   - If a multi-shard transaction is detected in Single mode, marks the session for rollback and returns an error.
 //
 // Parameters:
@@ -446,11 +439,7 @@ func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard
 
 	shardSession := session.findSessionLocked(keyspace, shard, tabletType)
 
-	if shardSession == nil {
-		return nil, nil
-	}
-
-	if !shardSession.VindexOnly {
+	if shardSession == nil || !shardSession.ReadOnly || session.execReadQuery {
 		return shardSession, nil
 	}
 
@@ -458,9 +447,8 @@ func (session *SafeSession) FindAndChangeSessionIfInSingleTxMode(keyspace, shard
 		return nil, err
 	}
 
-	// the shard session is now used by non-vindex query as well,
-	// so it is not an exclusive vindex only shard session anymore.
-	shardSession.VindexOnly = false
+	// the shard session is now used by dml query as well.
+	shardSession.ReadOnly = false
 	return shardSession, nil
 }
 
@@ -518,8 +506,8 @@ func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info ShardAct
 		if !existingSession.RowsAffected {
 			existingSession.RowsAffected = info.RowsAffected()
 		}
-		if existingSession.VindexOnly {
-			existingSession.VindexOnly = session.queryFromVindex
+		if existingSession.ReadOnly {
+			existingSession.ReadOnly = session.execReadQuery
 		}
 		if err := session.singleModeErrorOnCrossShard(txMode, 1); err != nil {
 			return err
@@ -532,7 +520,7 @@ func (session *SafeSession) AppendOrUpdate(target *querypb.Target, info ShardAct
 		TransactionId: info.TransactionID(),
 		ReservedId:    info.ReservedID(),
 		RowsAffected:  info.RowsAffected(),
-		VindexOnly:    session.queryFromVindex,
+		ReadOnly:      session.execReadQuery,
 	}
 
 	// Always append, in order for rollback to succeed.
@@ -560,7 +548,7 @@ func (session *SafeSession) singleModeErrorOnCrossShard(txMode vtgatepb.Transact
 	// 1. The query comes from a lookup vindex.
 	// 2. The transaction mode is not Single.
 	// 3. The transaction is not in the normal shard session.
-	if session.queryFromVindex || session.commitOrder != vtgatepb.CommitOrder_NORMAL || !session.isSingleDB(txMode) {
+	if session.execReadQuery || session.commitOrder != vtgatepb.CommitOrder_NORMAL || !session.isSingleDB(txMode) {
 		return nil
 	}
 
@@ -576,7 +564,7 @@ func (session *SafeSession) singleModeErrorOnCrossShard(txMode vtgatepb.Transact
 func actualNoOfShardSession(sessions []*vtgatepb.Session_ShardSession) int {
 	actualSS := 0
 	for _, ss := range sessions {
-		if ss.VindexOnly {
+		if ss.ReadOnly {
 			continue
 		}
 		actualSS++
