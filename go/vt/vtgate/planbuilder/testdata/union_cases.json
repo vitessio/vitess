@@ -1849,5 +1849,84 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "Merged UNION with limit and offset",
+    "query": "(select id from user where id = 42) union (select id from user where id = 42) limit 3 offset 7",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "(select id from user where id = 42) union (select id from user where id = 42) limit 3 offset 7",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 42 union select id from `user` where id = 42 limit 7, 3",
+        "Table": "`user`",
+        "Values": [
+          "42"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Un-merged UNION with limit and offset",
+    "query": "(select id from user where id = 42) union all (select id from user where id = 234) limit 3 offset 7",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "(select id from user where id = 42) union all (select id from user where id = 234) limit 3 offset 7",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "3",
+        "Offset": "7",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id from `user` where 1 != 1",
+                "Query": "select id from `user` where id = 42 limit :__upper_limit",
+                "Table": "`user`",
+                "Values": [
+                  "42"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id from `user` where 1 != 1",
+                "Query": "select id from `user` where id = 234 limit :__upper_limit",
+                "Table": "`user`",
+                "Values": [
+                  "234"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
