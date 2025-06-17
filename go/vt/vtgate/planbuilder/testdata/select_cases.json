@@ -942,6 +942,29 @@
     "skip_e2e": true
   },
   {
+    "comment": "Comments with subquery",
+    "query": "select /* comment */ user.col from user where id IN (select id from user where id > 1 and id < 10)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select /* comment */ user.col from user where id IN (select id from user where id > 1 and id < 10)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select /* comment */ `user`.col from `user` where id in (select id from `user` where id > 1 and id < 10)"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "for update",
     "query": "select user.col from user join user_extra for update",
     "plan": {
