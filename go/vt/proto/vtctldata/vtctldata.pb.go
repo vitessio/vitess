@@ -3407,8 +3407,8 @@ type CreateKeyspaceRequest struct {
 	// SidecarDBName is the name of the sidecar database that
 	// each vttablet in the keyspace will use.
 	SidecarDbName string `protobuf:"bytes,11,opt,name=sidecar_db_name,json=sidecarDbName,proto3" json:"sidecar_db_name,omitempty"`
-	// VtorcConfig is the vtorc config for the keyspace.
-	VtorcConfig   *vtorcdata.KeyspaceConfig `protobuf:"bytes,12,opt,name=vtorc_config,json=vtorcConfig,proto3" json:"vtorc_config,omitempty"`
+	// Vtorc is the vtorc config/state for the keyspace.
+	Vtorc         *vtorcdata.Keyspace `protobuf:"bytes,12,opt,name=vtorc,proto3" json:"vtorc,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3499,9 +3499,9 @@ func (x *CreateKeyspaceRequest) GetSidecarDbName() string {
 	return ""
 }
 
-func (x *CreateKeyspaceRequest) GetVtorcConfig() *vtorcdata.KeyspaceConfig {
+func (x *CreateKeyspaceRequest) GetVtorc() *vtorcdata.Keyspace {
 	if x != nil {
-		return x.VtorcConfig
+		return x.Vtorc
 	}
 	return nil
 }
@@ -3563,8 +3563,8 @@ type CreateShardRequest struct {
 	// IncludeParent creates the parent keyspace as an empty BASE keyspace, if it
 	// doesn't already exist.
 	IncludeParent bool `protobuf:"varint,4,opt,name=include_parent,json=includeParent,proto3" json:"include_parent,omitempty"`
-	// VtorcConfig is the vtorc config for the shard.
-	VtorcConfig   *vtorcdata.ShardConfig `protobuf:"bytes,5,opt,name=vtorc_config,json=vtorcConfig,proto3" json:"vtorc_config,omitempty"`
+	// Vtorc is the vtorc config/state for the shard.
+	Vtorc         *vtorcdata.Shard `protobuf:"bytes,5,opt,name=vtorc,proto3" json:"vtorc,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3627,9 +3627,9 @@ func (x *CreateShardRequest) GetIncludeParent() bool {
 	return false
 }
 
-func (x *CreateShardRequest) GetVtorcConfig() *vtorcdata.ShardConfig {
+func (x *CreateShardRequest) GetVtorc() *vtorcdata.Shard {
 	if x != nil {
-		return x.VtorcConfig
+		return x.Vtorc
 	}
 	return nil
 }
@@ -17708,7 +17708,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x15wait_replicas_timeout\x18\x06 \x01(\v2\x10.vttime.DurationR\x13waitReplicasTimeout\x121\n" +
 	"\x14destination_keyspace\x18\a \x01(\tR\x13destinationKeyspace\x12+\n" +
 	"\x11destination_shard\x18\b \x01(\tR\x10destinationShard\"\x19\n" +
-	"\x17CopySchemaShardResponse\"\x9b\x03\n" +
+	"\x17CopySchemaShardResponse\"\x88\x03\n" +
 	"\x15CreateKeyspaceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05force\x18\x02 \x01(\bR\x05force\x12/\n" +
@@ -17718,17 +17718,17 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\rsnapshot_time\x18\t \x01(\v2\f.vttime.TimeR\fsnapshotTime\x12+\n" +
 	"\x11durability_policy\x18\n" +
 	" \x01(\tR\x10durabilityPolicy\x12&\n" +
-	"\x0fsidecar_db_name\x18\v \x01(\tR\rsidecarDbName\x12<\n" +
-	"\fvtorc_config\x18\f \x01(\v2\x19.vtorcdata.KeyspaceConfigR\vvtorcConfigJ\x04\b\x04\x10\x05J\x04\b\x05\x10\x06J\x04\b\x06\x10\a\"I\n" +
+	"\x0fsidecar_db_name\x18\v \x01(\tR\rsidecarDbName\x12)\n" +
+	"\x05vtorc\x18\f \x01(\v2\x13.vtorcdata.KeyspaceR\x05vtorcJ\x04\b\x04\x10\x05J\x04\b\x05\x10\x06J\x04\b\x06\x10\a\"I\n" +
 	"\x16CreateKeyspaceResponse\x12/\n" +
-	"\bkeyspace\x18\x01 \x01(\v2\x13.vtctldata.KeyspaceR\bkeyspace\"\xc7\x01\n" +
+	"\bkeyspace\x18\x01 \x01(\v2\x13.vtctldata.KeyspaceR\bkeyspace\"\xb4\x01\n" +
 	"\x12CreateShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x1d\n" +
 	"\n" +
 	"shard_name\x18\x02 \x01(\tR\tshardName\x12\x14\n" +
 	"\x05force\x18\x03 \x01(\bR\x05force\x12%\n" +
-	"\x0einclude_parent\x18\x04 \x01(\bR\rincludeParent\x129\n" +
-	"\fvtorc_config\x18\x05 \x01(\v2\x16.vtorcdata.ShardConfigR\vvtorcConfig\"\xa0\x01\n" +
+	"\x0einclude_parent\x18\x04 \x01(\bR\rincludeParent\x12&\n" +
+	"\x05vtorc\x18\x05 \x01(\v2\x10.vtorcdata.ShardR\x05vtorc\"\xa0\x01\n" +
 	"\x13CreateShardResponse\x12/\n" +
 	"\bkeyspace\x18\x01 \x01(\v2\x13.vtctldata.KeyspaceR\bkeyspace\x12&\n" +
 	"\x05shard\x18\x02 \x01(\v2\x10.vtctldata.ShardR\x05shard\x120\n" +
@@ -18982,8 +18982,8 @@ var file_vtctldata_proto_goTypes = []any{
 	(*topodata.Tablet)(nil),                                     // 332: topodata.Tablet
 	(*tabletmanagerdata.CheckThrottlerResponse)(nil),            // 333: tabletmanagerdata.CheckThrottlerResponse
 	(topodata.KeyspaceType)(0),                                  // 334: topodata.KeyspaceType
-	(*vtorcdata.KeyspaceConfig)(nil),                            // 335: vtorcdata.KeyspaceConfig
-	(*vtorcdata.ShardConfig)(nil),                               // 336: vtorcdata.ShardConfig
+	(*vtorcdata.Keyspace)(nil),                                  // 335: vtorcdata.Keyspace
+	(*vtorcdata.Shard)(nil),                                     // 336: vtorcdata.Shard
 	(*query.QueryResult)(nil),                                   // 337: query.QueryResult
 	(*tabletmanagerdata.ExecuteHookRequest)(nil),                // 338: tabletmanagerdata.ExecuteHookRequest
 	(*tabletmanagerdata.ExecuteHookResponse)(nil),               // 339: tabletmanagerdata.ExecuteHookResponse
@@ -19074,9 +19074,9 @@ var file_vtctldata_proto_depIdxs = []int32{
 	323, // 62: vtctldata.CopySchemaShardRequest.wait_replicas_timeout:type_name -> vttime.Duration
 	334, // 63: vtctldata.CreateKeyspaceRequest.type:type_name -> topodata.KeyspaceType
 	321, // 64: vtctldata.CreateKeyspaceRequest.snapshot_time:type_name -> vttime.Time
-	335, // 65: vtctldata.CreateKeyspaceRequest.vtorc_config:type_name -> vtorcdata.KeyspaceConfig
+	335, // 65: vtctldata.CreateKeyspaceRequest.vtorc:type_name -> vtorcdata.Keyspace
 	9,   // 66: vtctldata.CreateKeyspaceResponse.keyspace:type_name -> vtctldata.Keyspace
-	336, // 67: vtctldata.CreateShardRequest.vtorc_config:type_name -> vtorcdata.ShardConfig
+	336, // 67: vtctldata.CreateShardRequest.vtorc:type_name -> vtorcdata.Shard
 	9,   // 68: vtctldata.CreateShardResponse.keyspace:type_name -> vtctldata.Keyspace
 	11,  // 69: vtctldata.CreateShardResponse.shard:type_name -> vtctldata.Shard
 	11,  // 70: vtctldata.DeleteShardsRequest.shards:type_name -> vtctldata.Shard

@@ -1415,7 +1415,7 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		}
 	}
 
-	err = wr.TopoServer().CreateShard(ctx, keyspace, shard, &vtorcdatapb.ShardConfig{
+	err = wr.TopoServer().CreateShard(ctx, keyspace, shard, &vtorcdatapb.Shard{
 		DisableEmergencyReparent: *disableErs,
 	})
 	if *force && topo.IsErrType(err, topo.NodeExists) {
@@ -1874,7 +1874,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		SnapshotTime:     snapshotTime,
 		DurabilityPolicy: *durabilityPolicy,
 		SidecarDbName:    *sidecarDBName,
-		VtorcConfig: &vtorcdatapb.KeyspaceConfig{
+		Vtorc: &vtorcdatapb.Keyspace{
 			DisableEmergencyReparent: *disableErs,
 		},
 	}

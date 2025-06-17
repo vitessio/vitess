@@ -181,7 +181,7 @@ func TestReadKeyspaceShardStats(t *testing.T) {
 		require.NoError(t, SaveKeyspace(keyspaceInfo))
 
 		shardInfo := topo.NewShardInfo("test", "-40", &topodatapb.Shard{
-			VtorcConfig: &vtorcdatapb.ShardConfig{
+			Vtorc: &vtorcdatapb.Shard{
 				DisableEmergencyReparent: true,
 			},
 		}, nil)
@@ -222,7 +222,7 @@ func TestReadKeyspaceShardStats(t *testing.T) {
 			Keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
-				VtorcConfig: &vtorcdatapb.KeyspaceConfig{
+				Vtorc: &vtorcdatapb.Keyspace{
 					DisableEmergencyReparent: true,
 				},
 			},

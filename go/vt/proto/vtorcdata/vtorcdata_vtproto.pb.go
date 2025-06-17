@@ -19,11 +19,11 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-func (m *KeyspaceConfig) CloneVT() *KeyspaceConfig {
+func (m *Keyspace) CloneVT() *Keyspace {
 	if m == nil {
-		return (*KeyspaceConfig)(nil)
+		return (*Keyspace)(nil)
 	}
-	r := new(KeyspaceConfig)
+	r := new(Keyspace)
 	r.DisableEmergencyReparent = m.DisableEmergencyReparent
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -32,15 +32,15 @@ func (m *KeyspaceConfig) CloneVT() *KeyspaceConfig {
 	return r
 }
 
-func (m *KeyspaceConfig) CloneMessageVT() proto.Message {
+func (m *Keyspace) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *ShardConfig) CloneVT() *ShardConfig {
+func (m *Shard) CloneVT() *Shard {
 	if m == nil {
-		return (*ShardConfig)(nil)
+		return (*Shard)(nil)
 	}
-	r := new(ShardConfig)
+	r := new(Shard)
 	r.DisableEmergencyReparent = m.DisableEmergencyReparent
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -49,11 +49,11 @@ func (m *ShardConfig) CloneVT() *ShardConfig {
 	return r
 }
 
-func (m *ShardConfig) CloneMessageVT() proto.Message {
+func (m *Shard) CloneMessageVT() proto.Message {
 	return m.CloneVT()
 }
 
-func (m *KeyspaceConfig) MarshalVT() (dAtA []byte, err error) {
+func (m *Keyspace) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -66,12 +66,12 @@ func (m *KeyspaceConfig) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *KeyspaceConfig) MarshalToVT(dAtA []byte) (int, error) {
+func (m *Keyspace) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *KeyspaceConfig) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -96,7 +96,7 @@ func (m *KeyspaceConfig) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *ShardConfig) MarshalVT() (dAtA []byte, err error) {
+func (m *Shard) MarshalVT() (dAtA []byte, err error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -109,12 +109,12 @@ func (m *ShardConfig) MarshalVT() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ShardConfig) MarshalToVT(dAtA []byte) (int, error) {
+func (m *Shard) MarshalToVT(dAtA []byte) (int, error) {
 	size := m.SizeVT()
 	return m.MarshalToSizedBufferVT(dAtA[:size])
 }
 
-func (m *ShardConfig) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
+func (m *Shard) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m == nil {
 		return 0, nil
 	}
@@ -139,7 +139,7 @@ func (m *ShardConfig) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *KeyspaceConfig) SizeVT() (n int) {
+func (m *Keyspace) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -152,7 +152,7 @@ func (m *KeyspaceConfig) SizeVT() (n int) {
 	return n
 }
 
-func (m *ShardConfig) SizeVT() (n int) {
+func (m *Shard) SizeVT() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -165,7 +165,7 @@ func (m *ShardConfig) SizeVT() (n int) {
 	return n
 }
 
-func (m *KeyspaceConfig) UnmarshalVT(dAtA []byte) error {
+func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -188,10 +188,10 @@ func (m *KeyspaceConfig) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: KeyspaceConfig: wiretype end group for non-group")
+			return fmt.Errorf("proto: Keyspace: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: KeyspaceConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: Keyspace: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -236,7 +236,7 @@ func (m *KeyspaceConfig) UnmarshalVT(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ShardConfig) UnmarshalVT(dAtA []byte) error {
+func (m *Shard) UnmarshalVT(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -259,10 +259,10 @@ func (m *ShardConfig) UnmarshalVT(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ShardConfig: wiretype end group for non-group")
+			return fmt.Errorf("proto: Shard: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ShardConfig: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: Shard: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

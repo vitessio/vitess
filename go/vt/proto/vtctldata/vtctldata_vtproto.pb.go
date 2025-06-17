@@ -1197,7 +1197,7 @@ func (m *CreateKeyspaceRequest) CloneVT() *CreateKeyspaceRequest {
 	r.SnapshotTime = m.SnapshotTime.CloneVT()
 	r.DurabilityPolicy = m.DurabilityPolicy
 	r.SidecarDbName = m.SidecarDbName
-	r.VtorcConfig = m.VtorcConfig.CloneVT()
+	r.Vtorc = m.Vtorc.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1235,7 +1235,7 @@ func (m *CreateShardRequest) CloneVT() *CreateShardRequest {
 	r.ShardName = m.ShardName
 	r.Force = m.Force
 	r.IncludeParent = m.IncludeParent
-	r.VtorcConfig = m.VtorcConfig.CloneVT()
+	r.Vtorc = m.Vtorc.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -9698,8 +9698,8 @@ func (m *CreateKeyspaceRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.VtorcConfig != nil {
-		size, err := m.VtorcConfig.MarshalToSizedBufferVT(dAtA[:i])
+	if m.Vtorc != nil {
+		size, err := m.Vtorc.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -9847,8 +9847,8 @@ func (m *CreateShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.VtorcConfig != nil {
-		size, err := m.VtorcConfig.MarshalToSizedBufferVT(dAtA[:i])
+	if m.Vtorc != nil {
+		size, err := m.Vtorc.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -24020,8 +24020,8 @@ func (m *CreateKeyspaceRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.VtorcConfig != nil {
-		l = m.VtorcConfig.SizeVT()
+	if m.Vtorc != nil {
+		l = m.Vtorc.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -24062,8 +24062,8 @@ func (m *CreateShardRequest) SizeVT() (n int) {
 	if m.IncludeParent {
 		n += 2
 	}
-	if m.VtorcConfig != nil {
-		l = m.VtorcConfig.SizeVT()
+	if m.Vtorc != nil {
+		l = m.Vtorc.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -39118,7 +39118,7 @@ func (m *CreateKeyspaceRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 12:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field VtorcConfig", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Vtorc", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -39145,10 +39145,10 @@ func (m *CreateKeyspaceRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.VtorcConfig == nil {
-				m.VtorcConfig = &vtorcdata.KeyspaceConfig{}
+			if m.Vtorc == nil {
+				m.Vtorc = &vtorcdata.Keyspace{}
 			}
-			if err := m.VtorcConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.Vtorc.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
@@ -39396,7 +39396,7 @@ func (m *CreateShardRequest) UnmarshalVT(dAtA []byte) error {
 			m.IncludeParent = bool(v != 0)
 		case 5:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field VtorcConfig", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Vtorc", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -39423,10 +39423,10 @@ func (m *CreateShardRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.VtorcConfig == nil {
-				m.VtorcConfig = &vtorcdata.ShardConfig{}
+			if m.Vtorc == nil {
+				m.Vtorc = &vtorcdata.Shard{}
 			}
-			if err := m.VtorcConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.Vtorc.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

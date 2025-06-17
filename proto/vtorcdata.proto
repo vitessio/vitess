@@ -26,15 +26,15 @@ option java_package="io.vitess.proto";
 
 package vtorcdata;
 
-// KeyspaceConfig stores configuration for Vtorc.
-message KeyspaceConfig {
+// Keyspace stores keyspace-level configuration and state for Vtorc.
+message Keyspace {
   // DisableEmergencyReparent reflects if EmergencyReparentShard
   // can be used in Vtorc recoveries.
   bool disable_emergency_reparent = 1;
 }
 
-// ShardConfig stores configuration for Vtorc.
-message ShardConfig {
+// Shard stores shard-level configuration and state for Vtorc.
+message Shard {
   // DisableEmergencyReparent reflects if EmergencyReparentShard
   // can be used in Vtorc recoveries.
   bool disable_emergency_reparent = 1;

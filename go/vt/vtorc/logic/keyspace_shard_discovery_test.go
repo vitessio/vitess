@@ -39,21 +39,21 @@ var (
 	keyspaceDurabilityNone = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 		DurabilityPolicy: policy.DurabilityNone,
-		VtorcConfig:      vtorcconfig.DefaultKeyspaceTopoConfig,
+		Vtorc:            vtorcconfig.DefaultKeyspaceTopoConfig,
 	}
 	keyspaceDurabilitySemiSync = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 		DurabilityPolicy: policy.DurabilitySemiSync,
-		VtorcConfig:      vtorcconfig.DefaultKeyspaceTopoConfig,
+		Vtorc:            vtorcconfig.DefaultKeyspaceTopoConfig,
 	}
 	keyspaceDurabilityTest = &topodatapb.Keyspace{
 		KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 		DurabilityPolicy: policy.DurabilityTest,
-		VtorcConfig:      vtorcconfig.DefaultKeyspaceTopoConfig,
+		Vtorc:            vtorcconfig.DefaultKeyspaceTopoConfig,
 	}
 	keyspaceSnapshot = &topodatapb.Keyspace{
 		KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
-		VtorcConfig:  vtorcconfig.DefaultKeyspaceTopoConfig,
+		Vtorc:        vtorcconfig.DefaultKeyspaceTopoConfig,
 	}
 )
 
@@ -158,7 +158,7 @@ func TestRefreshKeyspace(t *testing.T) {
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilitySemiSync,
-				VtorcConfig:      vtorcconfig.DefaultKeyspaceTopoConfig,
+				Vtorc:            vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 			err: "",
 		}, {
@@ -169,7 +169,7 @@ func TestRefreshKeyspace(t *testing.T) {
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
-				VtorcConfig:  vtorcconfig.DefaultKeyspaceTopoConfig,
+				Vtorc:        vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 			err: "",
 		}, {
@@ -180,7 +180,7 @@ func TestRefreshKeyspace(t *testing.T) {
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
-				VtorcConfig:  vtorcconfig.DefaultKeyspaceTopoConfig,
+				Vtorc:        vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 			err: "",
 		}, {
@@ -194,7 +194,7 @@ func TestRefreshKeyspace(t *testing.T) {
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
-				VtorcConfig:      vtorcconfig.DefaultKeyspaceTopoConfig,
+				Vtorc:            vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 			err: "",
 		}, {

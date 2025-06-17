@@ -564,8 +564,8 @@ type Shard struct {
 	// is_primary_serving sets whether this shard primary is serving traffic or not.
 	// The keyspace lock is always taken when changing this.
 	IsPrimaryServing bool `protobuf:"varint,7,opt,name=is_primary_serving,json=isPrimaryServing,proto3" json:"is_primary_serving,omitempty"`
-	// VtorcConfig is the vtorc config for the shard.
-	VtorcConfig   *vtorcdata.ShardConfig `protobuf:"bytes,9,opt,name=vtorc_config,json=vtorcConfig,proto3" json:"vtorc_config,omitempty"`
+	// Vtorc is the vtorc config/state for the shard.
+	Vtorc         *vtorcdata.Shard `protobuf:"bytes,9,opt,name=vtorc,proto3" json:"vtorc,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -642,9 +642,9 @@ func (x *Shard) GetIsPrimaryServing() bool {
 	return false
 }
 
-func (x *Shard) GetVtorcConfig() *vtorcdata.ShardConfig {
+func (x *Shard) GetVtorc() *vtorcdata.Shard {
 	if x != nil {
-		return x.VtorcConfig
+		return x.Vtorc
 	}
 	return nil
 }
@@ -675,8 +675,8 @@ type Keyspace struct {
 	// used for various system metadata that is stored in each
 	// tablet's mysqld instance.
 	SidecarDbName string `protobuf:"bytes,10,opt,name=sidecar_db_name,json=sidecarDbName,proto3" json:"sidecar_db_name,omitempty"`
-	// VtorcConfig is the keyspace config for Vtorc.
-	VtorcConfig   *vtorcdata.KeyspaceConfig `protobuf:"bytes,11,opt,name=vtorc_config,json=vtorcConfig,proto3" json:"vtorc_config,omitempty"`
+	// Vtorc is the keyspace state for Vtorc.
+	Vtorc         *vtorcdata.Keyspace `protobuf:"bytes,11,opt,name=vtorc,proto3" json:"vtorc,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -753,9 +753,9 @@ func (x *Keyspace) GetSidecarDbName() string {
 	return ""
 }
 
-func (x *Keyspace) GetVtorcConfig() *vtorcdata.KeyspaceConfig {
+func (x *Keyspace) GetVtorc() *vtorcdata.Keyspace {
 	if x != nil {
-		return x.VtorcConfig
+		return x.Vtorc
 	}
 	return nil
 }
@@ -1813,15 +1813,15 @@ const file_topodata_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x03\x10\x04J\x04\b\v\x10\fJ\x04\b\x0f\x10\x10\"\xf7\x05\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x03\x10\x04J\x04\b\v\x10\fJ\x04\b\x0f\x10\x10\"\xe4\x05\n" +
 	"\x05Shard\x12:\n" +
 	"\rprimary_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\fprimaryAlias\x12C\n" +
 	"\x17primary_term_start_time\x18\b \x01(\v2\f.vttime.TimeR\x14primaryTermStartTime\x12/\n" +
 	"\tkey_range\x18\x02 \x01(\v2\x12.topodata.KeyRangeR\bkeyRange\x12@\n" +
 	"\rsource_shards\x18\x04 \x03(\v2\x1b.topodata.Shard.SourceShardR\fsourceShards\x12F\n" +
 	"\x0ftablet_controls\x18\x06 \x03(\v2\x1d.topodata.Shard.TabletControlR\x0etabletControls\x12,\n" +
-	"\x12is_primary_serving\x18\a \x01(\bR\x10isPrimaryServing\x129\n" +
-	"\fvtorc_config\x18\t \x01(\v2\x16.vtorcdata.ShardConfigR\vvtorcConfig\x1a\x9a\x01\n" +
+	"\x12is_primary_serving\x18\a \x01(\bR\x10isPrimaryServing\x12&\n" +
+	"\x05vtorc\x18\t \x01(\v2\x10.vtorcdata.ShardR\x05vtorc\x1a\x9a\x01\n" +
 	"\vSourceShard\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\x05R\x03uid\x12\x1a\n" +
 	"\bkeyspace\x18\x02 \x01(\tR\bkeyspace\x12\x14\n" +
@@ -1833,7 +1833,7 @@ const file_topodata_proto_rawDesc = "" +
 	"tabletType\x12\x14\n" +
 	"\x05cells\x18\x02 \x03(\tR\x05cells\x12#\n" +
 	"\rdenied_tables\x18\x04 \x03(\tR\fdeniedTables\x12\x16\n" +
-	"\x06frozen\x18\x05 \x01(\bR\x06frozenJ\x04\b\x03\x10\x04J\x04\b\x03\x10\x04J\x04\b\x05\x10\x06\"\x90\x03\n" +
+	"\x06frozen\x18\x05 \x01(\bR\x06frozenJ\x04\b\x03\x10\x04J\x04\b\x03\x10\x04J\x04\b\x05\x10\x06\"\xfd\x02\n" +
 	"\bKeyspace\x12;\n" +
 	"\rkeyspace_type\x18\x05 \x01(\x0e2\x16.topodata.KeyspaceTypeR\fkeyspaceType\x12#\n" +
 	"\rbase_keyspace\x18\x06 \x01(\tR\fbaseKeyspace\x121\n" +
@@ -1841,8 +1841,8 @@ const file_topodata_proto_rawDesc = "" +
 	"\x11durability_policy\x18\b \x01(\tR\x10durabilityPolicy\x12D\n" +
 	"\x10throttler_config\x18\t \x01(\v2\x19.topodata.ThrottlerConfigR\x0fthrottlerConfig\x12&\n" +
 	"\x0fsidecar_db_name\x18\n" +
-	" \x01(\tR\rsidecarDbName\x12<\n" +
-	"\fvtorc_config\x18\v \x01(\v2\x19.vtorcdata.KeyspaceConfigR\vvtorcConfigJ\x04\b\x01\x10\x02J\x04\b\x02\x10\x03J\x04\b\x03\x10\x04J\x04\b\x04\x10\x05\"\x8b\x01\n" +
+	" \x01(\tR\rsidecarDbName\x12)\n" +
+	"\x05vtorc\x18\v \x01(\v2\x13.vtorcdata.KeyspaceR\x05vtorcJ\x04\b\x01\x10\x02J\x04\b\x02\x10\x03J\x04\b\x03\x10\x04J\x04\b\x04\x10\x05\"\x8b\x01\n" +
 	"\x10ShardReplication\x125\n" +
 	"\x05nodes\x18\x01 \x03(\v2\x1f.topodata.ShardReplication.NodeR\x05nodes\x1a@\n" +
 	"\x04Node\x128\n" +
@@ -1980,8 +1980,8 @@ var file_topodata_proto_goTypes = []any{
 	nil,                                   // 28: topodata.ThrottlerConfig.MetricThresholdsEntry
 	(*SrvKeyspace_KeyspacePartition)(nil), // 29: topodata.SrvKeyspace.KeyspacePartition
 	(*vttime.Time)(nil),                   // 30: vttime.Time
-	(*vtorcdata.ShardConfig)(nil),         // 31: vtorcdata.ShardConfig
-	(*vtorcdata.KeyspaceConfig)(nil),      // 32: vtorcdata.KeyspaceConfig
+	(*vtorcdata.Shard)(nil),               // 31: vtorcdata.Shard
+	(*vtorcdata.Keyspace)(nil),            // 32: vtorcdata.Keyspace
 }
 var file_topodata_proto_depIdxs = []int32{
 	4,  // 0: topodata.Tablet.alias:type_name -> topodata.TabletAlias
@@ -1995,11 +1995,11 @@ var file_topodata_proto_depIdxs = []int32{
 	3,  // 8: topodata.Shard.key_range:type_name -> topodata.KeyRange
 	22, // 9: topodata.Shard.source_shards:type_name -> topodata.Shard.SourceShard
 	23, // 10: topodata.Shard.tablet_controls:type_name -> topodata.Shard.TabletControl
-	31, // 11: topodata.Shard.vtorc_config:type_name -> vtorcdata.ShardConfig
+	31, // 11: topodata.Shard.vtorc:type_name -> vtorcdata.Shard
 	0,  // 12: topodata.Keyspace.keyspace_type:type_name -> topodata.KeyspaceType
 	30, // 13: topodata.Keyspace.snapshot_time:type_name -> vttime.Time
 	13, // 14: topodata.Keyspace.throttler_config:type_name -> topodata.ThrottlerConfig
-	32, // 15: topodata.Keyspace.vtorc_config:type_name -> vtorcdata.KeyspaceConfig
+	32, // 15: topodata.Keyspace.vtorc:type_name -> vtorcdata.Keyspace
 	24, // 16: topodata.ShardReplication.nodes:type_name -> topodata.ShardReplication.Node
 	2,  // 17: topodata.ShardReplicationError.type:type_name -> topodata.ShardReplicationError.Type
 	4,  // 18: topodata.ShardReplicationError.tablet_alias:type_name -> topodata.TabletAlias

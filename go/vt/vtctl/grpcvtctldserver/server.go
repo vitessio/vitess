@@ -920,7 +920,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	span.Annotate("force", req.Force)
 	span.Annotate("allow_empty_vschema", req.AllowEmptyVSchema)
 	span.Annotate("durability_policy", req.DurabilityPolicy)
-	span.Annotate("vtorc_config", req.VtorcConfig)
+	span.Annotate("vtorc_config", req.Vtorc)
 
 	switch req.Type {
 	case topodatapb.KeyspaceType_NORMAL:
@@ -947,7 +947,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 		SnapshotTime:     req.SnapshotTime,
 		DurabilityPolicy: req.DurabilityPolicy,
 		SidecarDbName:    req.SidecarDbName,
-		VtorcConfig:      req.VtorcConfig,
+		Vtorc:            req.Vtorc,
 	}
 
 	err = s.ts.CreateKeyspace(ctx, req.Name, ki)
@@ -1033,7 +1033,7 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 	span.Annotate("shard", req.ShardName)
 	span.Annotate("force", req.Force)
 	span.Annotate("include_parent", req.IncludeParent)
-	span.Annotate("vtorc_config", req.VtorcConfig)
+	span.Annotate("vtorc_config", req.Vtorc)
 
 	if req.IncludeParent {
 		log.Infof("Creating empty keyspace for %s", req.Keyspace)
@@ -1049,7 +1049,7 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 
 	shardExists := false
 
-	if err = s.ts.CreateShard(ctx, req.Keyspace, req.ShardName, req.VtorcConfig); err != nil {
+	if err = s.ts.CreateShard(ctx, req.Keyspace, req.ShardName, req.Vtorc); err != nil {
 		if req.Force && topo.IsErrType(err, topo.NodeExists) {
 			log.Infof("shard %v/%v already exists; ignoring error because Force = true", req.Keyspace, req.ShardName)
 			shardExists = true
@@ -4013,10 +4013,10 @@ func (s *VtctldServer) SetVtorcEmergencyReparent(ctx context.Context, req *vtctl
 	// ERS-disabled on the keyspace record.
 	if req.Shard != "" && req.Shard != "0" && req.Shard != "-" {
 		_, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
-			if si.VtorcConfig != nil {
-				si.VtorcConfig.DisableEmergencyReparent = req.Disable
+			if si.Vtorc != nil {
+				si.Vtorc.DisableEmergencyReparent = req.Disable
 			} else if req.Disable {
-				si.VtorcConfig = &vtorcdatapb.ShardConfig{
+				si.Vtorc = &vtorcdatapb.Shard{
 					DisableEmergencyReparent: req.Disable,
 				}
 			}
@@ -4031,10 +4031,10 @@ func (s *VtctldServer) SetVtorcEmergencyReparent(ctx context.Context, req *vtctl
 			return nil, err
 		}
 
-		if ki.VtorcConfig != nil {
-			ki.VtorcConfig.DisableEmergencyReparent = req.Disable
+		if ki.Vtorc != nil {
+			ki.Vtorc.DisableEmergencyReparent = req.Disable
 		} else if req.Disable {
-			ki.VtorcConfig = &vtorcdatapb.KeyspaceConfig{
+			ki.Vtorc = &vtorcdatapb.Keyspace{
 				DisableEmergencyReparent: req.Disable,
 			}
 		}

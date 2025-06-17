@@ -55,7 +55,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilitySemiSync,
-				VtorcConfig:      vtorcconfig.DefaultKeyspaceTopoConfig,
+				Vtorc:            vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 			semiSyncAckersWanted: 1,
 		}, {
@@ -66,7 +66,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
-				VtorcConfig:  vtorcconfig.DefaultKeyspaceTopoConfig,
+				Vtorc:        vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 			errInDurabilityPolicy: "durability policy  not found",
 		}, {
@@ -77,7 +77,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
-				VtorcConfig:  vtorcconfig.DefaultKeyspaceTopoConfig,
+				Vtorc:        vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 		}, {
 			name:         "Success with fields that are not stored",
@@ -90,23 +90,23 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
-				VtorcConfig:      vtorcconfig.DefaultKeyspaceTopoConfig,
+				Vtorc:            vtorcconfig.DefaultKeyspaceTopoConfig,
 			},
 			semiSyncAckersWanted: 0,
 		}, {
-			name:         "Success with ERS disabled in VtorcConfig",
+			name:         "Success with ERS disabled in Vtorc",
 			keyspaceName: "ks4",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
-				VtorcConfig: &vtorcdatapb.KeyspaceConfig{
+				Vtorc: &vtorcdatapb.Keyspace{
 					DisableEmergencyReparent: true,
 				},
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
-				VtorcConfig: &vtorcdatapb.KeyspaceConfig{
+				Vtorc: &vtorcdatapb.Keyspace{
 					DisableEmergencyReparent: true,
 				},
 			},

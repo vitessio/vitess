@@ -27,7 +27,7 @@ import (
 )
 
 // DefaultKeyspaceTopoConfig is the default topo-based VTOrc config for a keyspace.
-var DefaultKeyspaceTopoConfig = &vtorcdatapb.KeyspaceConfig{
+var DefaultKeyspaceTopoConfig = &vtorcdatapb.Keyspace{
 	DisableEmergencyReparent: false,
 }
 

@@ -41,8 +41,8 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// KeyspaceConfig stores configuration for Vtorc.
-type KeyspaceConfig struct {
+// Keyspace stores keyspace-level configuration and state for Vtorc.
+type Keyspace struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// DisableEmergencyReparent reflects if EmergencyReparentShard
 	// can be used in Vtorc recoveries.
@@ -51,20 +51,20 @@ type KeyspaceConfig struct {
 	sizeCache                protoimpl.SizeCache
 }
 
-func (x *KeyspaceConfig) Reset() {
-	*x = KeyspaceConfig{}
+func (x *Keyspace) Reset() {
+	*x = Keyspace{}
 	mi := &file_vtorcdata_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *KeyspaceConfig) String() string {
+func (x *Keyspace) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*KeyspaceConfig) ProtoMessage() {}
+func (*Keyspace) ProtoMessage() {}
 
-func (x *KeyspaceConfig) ProtoReflect() protoreflect.Message {
+func (x *Keyspace) ProtoReflect() protoreflect.Message {
 	mi := &file_vtorcdata_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -76,20 +76,20 @@ func (x *KeyspaceConfig) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use KeyspaceConfig.ProtoReflect.Descriptor instead.
-func (*KeyspaceConfig) Descriptor() ([]byte, []int) {
+// Deprecated: Use Keyspace.ProtoReflect.Descriptor instead.
+func (*Keyspace) Descriptor() ([]byte, []int) {
 	return file_vtorcdata_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *KeyspaceConfig) GetDisableEmergencyReparent() bool {
+func (x *Keyspace) GetDisableEmergencyReparent() bool {
 	if x != nil {
 		return x.DisableEmergencyReparent
 	}
 	return false
 }
 
-// ShardConfig stores configuration for Vtorc.
-type ShardConfig struct {
+// Shard stores shard-level configuration and state for Vtorc.
+type Shard struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// DisableEmergencyReparent reflects if EmergencyReparentShard
 	// can be used in Vtorc recoveries.
@@ -98,20 +98,20 @@ type ShardConfig struct {
 	sizeCache                protoimpl.SizeCache
 }
 
-func (x *ShardConfig) Reset() {
-	*x = ShardConfig{}
+func (x *Shard) Reset() {
+	*x = Shard{}
 	mi := &file_vtorcdata_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ShardConfig) String() string {
+func (x *Shard) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ShardConfig) ProtoMessage() {}
+func (*Shard) ProtoMessage() {}
 
-func (x *ShardConfig) ProtoReflect() protoreflect.Message {
+func (x *Shard) ProtoReflect() protoreflect.Message {
 	mi := &file_vtorcdata_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -123,12 +123,12 @@ func (x *ShardConfig) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ShardConfig.ProtoReflect.Descriptor instead.
-func (*ShardConfig) Descriptor() ([]byte, []int) {
+// Deprecated: Use Shard.ProtoReflect.Descriptor instead.
+func (*Shard) Descriptor() ([]byte, []int) {
 	return file_vtorcdata_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *ShardConfig) GetDisableEmergencyReparent() bool {
+func (x *Shard) GetDisableEmergencyReparent() bool {
 	if x != nil {
 		return x.DisableEmergencyReparent
 	}
@@ -139,10 +139,10 @@ var File_vtorcdata_proto protoreflect.FileDescriptor
 
 const file_vtorcdata_proto_rawDesc = "" +
 	"\n" +
-	"\x0fvtorcdata.proto\x12\tvtorcdata\"N\n" +
-	"\x0eKeyspaceConfig\x12<\n" +
-	"\x1adisable_emergency_reparent\x18\x01 \x01(\bR\x18disableEmergencyReparent\"K\n" +
-	"\vShardConfig\x12<\n" +
+	"\x0fvtorcdata.proto\x12\tvtorcdata\"H\n" +
+	"\bKeyspace\x12<\n" +
+	"\x1adisable_emergency_reparent\x18\x01 \x01(\bR\x18disableEmergencyReparent\"E\n" +
+	"\x05Shard\x12<\n" +
 	"\x1adisable_emergency_reparent\x18\x01 \x01(\bR\x18disableEmergencyReparentB9\n" +
 	"\x0fio.vitess.protoZ&vitess.io/vitess/go/vt/proto/vtorcdatab\x06proto3"
 
@@ -160,8 +160,8 @@ func file_vtorcdata_proto_rawDescGZIP() []byte {
 
 var file_vtorcdata_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_vtorcdata_proto_goTypes = []any{
-	(*KeyspaceConfig)(nil), // 0: vtorcdata.KeyspaceConfig
-	(*ShardConfig)(nil),    // 1: vtorcdata.ShardConfig
+	(*Keyspace)(nil), // 0: vtorcdata.Keyspace
+	(*Shard)(nil),    // 1: vtorcdata.Shard
 }
 var file_vtorcdata_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type

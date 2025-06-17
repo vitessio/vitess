@@ -165,5 +165,5 @@ func KeyspaceEquality(left, right *topodatapb.Keyspace) bool {
 		return false
 	}
 
-	return proto.Equal(left.VtorcConfig, right.VtorcConfig)
+	return proto.Equal(left.Vtorc, right.Vtorc)
 }
