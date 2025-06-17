@@ -303,7 +303,7 @@ message Keyspace {
   // tablet's mysqld instance.
   string sidecar_db_name = 10;
 
-  // Vtorc is the keyspace state for Vtorc.
+  // Vtorc is the vtorc keyspace config/state for the keyspace.
   vtorcdata.Keyspace vtorc = 11;
 }
 

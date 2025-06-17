@@ -675,7 +675,7 @@ type Keyspace struct {
 	// used for various system metadata that is stored in each
 	// tablet's mysqld instance.
 	SidecarDbName string `protobuf:"bytes,10,opt,name=sidecar_db_name,json=sidecarDbName,proto3" json:"sidecar_db_name,omitempty"`
-	// Vtorc is the keyspace state for Vtorc.
+	// Vtorc is the vtorc keyspace config/state for the keyspace.
 	Vtorc         *vtorcdata.Keyspace `protobuf:"bytes,11,opt,name=vtorc,proto3" json:"vtorc,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
