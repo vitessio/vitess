@@ -179,3 +179,7 @@ List of changes between bootstrap image versions.
 ## [43.1] - 2025-05-07
 ### Changes
 - Update build to golang 1.24.3
+
+## [43.2] - 2025-06-06
+### Changes
+- Update build to golang 1.24.4
