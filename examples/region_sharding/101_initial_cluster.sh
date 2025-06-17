@@ -30,10 +30,8 @@ fi
 CELL=zone1 ../common/scripts/vtctld-up.sh
 
 # start unsharded keyspace and tablet
-for T_UID in 100 101; do
-	CELL=zone1 TABLET_UID="${T_UID}" ../common/scripts/mysqlctl-up.sh
-	SHARD=0 CELL=zone1 KEYSPACE=main TABLET_UID="${T_UID}" ../common/scripts/vttablet-up.sh
-done
+CELL=zone1 TABLET_UID=100 ../common/scripts/mysqlctl-up.sh
+SHARD=0 CELL=zone1 KEYSPACE=main TABLET_UID=100 ../common/scripts/vttablet-up.sh
 
 # set the correct durability policy for the keyspace
 vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=none main || fail "Failed to set keyspace durability policy on the main keyspace"

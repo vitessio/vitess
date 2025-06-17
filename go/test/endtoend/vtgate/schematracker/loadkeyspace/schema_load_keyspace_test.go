@@ -19,9 +19,13 @@ package loadkeyspace
 import (
 	"os"
 	"path"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -29,8 +33,71 @@ import (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	hostname        = "localhost"
+	keyspaceName    = "ks"
 	cell            = "zone1"
+	sqlSchema       = `
+		create table vt_user (
+			id bigint,
+			name varchar(64),
+			primary key (id)
+		) Engine=InnoDB;
+			
+		create table main (
+			id bigint,
+			val varchar(128),
+			primary key(id)
+		) Engine=InnoDB;
+
+		create table test_table (
+			id bigint,
+			val varchar(128),
+			primary key(id)
+		) Engine=InnoDB;
+`
 )
+
+func TestLoadKeyspaceWithNoTablet(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	var err error
+
+	clusterInstance = cluster.NewCluster(cell, hostname)
+	defer clusterInstance.Teardown()
+
+	// Start topo server
+	err = clusterInstance.StartTopo()
+	require.NoError(t, err)
+
+	// create keyspace
+	keyspace := &cluster.Keyspace{
+		Name:      keyspaceName,
+		SchemaSQL: sqlSchema,
+	}
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-schema-change-signal")
+	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
+	require.NoError(t, err)
+
+	// teardown vttablets
+	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+		err = vttablet.VttabletProcess.TearDown()
+		require.NoError(t, err)
+		utils.TimeoutAction(t, 1*time.Minute, "timeout - teardown of VTTablet", func() bool {
+			return vttablet.VttabletProcess.GetStatus() == ""
+		})
+	}
+
+	// Start vtgate with the schema_change_signal flag
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema_change_signal")
+	err = clusterInstance.StartVtgate()
+	require.NoError(t, err)
+
+	// After starting VTGate we need to leave enough time for resolveAndLoadKeyspace to reach
+	// the schema tracking timeout (5 seconds).
+	utils.TimeoutAction(t, 5*time.Minute, "timeout - could not find 'Unable to get initial schema reload' in 'vtgate-stderr.txt'", func() bool {
+		logDir := clusterInstance.VtgateProcess.LogDir
+		all, _ := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
+		return strings.Contains(string(all), "Unable to get initial schema reload")
+	})
+}
 
 func TestNoInitialKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)

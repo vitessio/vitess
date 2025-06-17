@@ -207,8 +207,9 @@ func (gw *TabletGateway) WaitForTablets(ctx context.Context, tabletTypesToWait [
 		case context.DeadlineExceeded:
 			// In this scenario, we were able to reach the
 			// topology service, but some tablets may not be
-			// ready.
+			// ready. We just warn and keep going.
 			log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets of types %v, may be in degraded mode", tabletTypesToWait)
+			err = nil
 		}
 	}()
 
