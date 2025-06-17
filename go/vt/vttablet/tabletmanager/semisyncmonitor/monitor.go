@@ -66,6 +66,10 @@ type Monitor struct {
 	// the semisync_heartbeat table.
 	clearTicks *timer.Timer
 
+	// timerMu protects operations on the timers to prevent deadlocks
+	// This must be acquired before mu if both are needed.
+	timerMu sync.Mutex
+
 	// mu protects the fields below.
 	mu      sync.Mutex
 	appPool *dbconnpool.ConnectionPool
@@ -123,8 +127,13 @@ func CreateTestSemiSyncMonitor(db *fakesqldb.DB, exporter *servenv.Exporter) *Mo
 
 // Open starts the monitor.
 func (m *Monitor) Open() {
+	// First acquire the timer mutex to prevent deadlock - we acquire in a consistent order
+	m.timerMu.Lock()
+	defer m.timerMu.Unlock()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	// The check for config being nil is only requried for tests.
 	if m.isOpen || m.config == nil || m.config.DB == nil {
 		// If we are already open, then there is nothing to do
@@ -145,16 +154,19 @@ func (m *Monitor) Open() {
 
 // Close stops the monitor.
 func (m *Monitor) Close() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if !m.isOpen {
-		// If we are already closed, then there is nothing to do
-		return
-	}
-	m.isOpen = false
+	// First acquire the timer mutex to prevent deadlock - we acquire in a consistent order
+	m.timerMu.Lock()
+	defer m.timerMu.Unlock()
 	log.Info("SemiSync Monitor: closing")
+	// We close the ticks before we acquire the mu mutex to prevent deadlock.
+	// The timer Close should not be called while holding a mutex that the function
+	// the timer runs also acquires.
 	m.clearTicks.Stop()
 	m.ticks.Stop()
+	// Acquire the mu mutex to update the isOpen field.
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.isOpen = false
 	m.appPool.Close()
 }
 
@@ -345,8 +357,8 @@ func (m *Monitor) write() {
 		log.Errorf("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table: %v", err)
 		return
 	}
-	defer conn.Recycle()
 	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatWrite), 0, false)
+	conn.Recycle()
 	if err != nil {
 		m.errorCount.Add(1)
 		log.Errorf("SemiSync Monitor: failed to write to semisync_heartbeat table: %v", err)

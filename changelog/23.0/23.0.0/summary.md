@@ -1,13 +1,20 @@
 ## Summary
 
 ### Table of Contents
+
 - **[Major Changes](#major-changes)**
   - **[VTOrc](#vtorc)**
     - [Support dynamic control of ERS by keyspace/shard in VTOrc](#vtorc-dynamic-ers-disabled)
 - **[Minor Changes](#minor-changes)**
-  - **[VTTablet](#minor-changes-vttablet)**
-    - [CLI Flags](#flags-vttablet)
-    - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password)
+    - **[Deletions](#deletions)**
+        - [Metrics](#deleted-metrics)
+    - **[New Metrics](#new-metrics)**
+        - [VTGate](#new-vtgate-metrics)
+    - **[Topology](#minor-changes-topo)**
+        - [`--consul_auth_static_file` requires 1 or more credentials](#consul_auth_static_file-check-creds)
+    - **[VTTablet](#minor-changes-vttablet)**
+        - [CLI Flags](#flags-vttablet)
+        - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -21,9 +28,32 @@ The new `vtctldclient` RPC `SetVtorcEmergencyReparent` was introduced to allow V
 
 To provide observability of keyspace/shards with ERS-based VTOrc recoveries disabled, the label `ErsDisabled` was added to the `TabletsWatchedByShard` metric. This metric label can be used to create alerting to ensure ERS-based recoveries are not disabled for an undesired period of time.
 
----
-
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="deletions"/>Deletions</a>
+
+#### <a id="deleted-metrics"/>Metrics</a>
+
+| Component |        Metric Name        | Was Deprecated In |                     Deprecation PR                      |
+|:---------:|:-------------------------:|:-----------------:|:-------------------------------------------------------:|
+| `vtgate`  |    `QueriesProcessed`     |     `v22.0.0`     | [#17727](https://github.com/vitessio/vitess/pull/17727) |
+| `vtgate`  |      `QueriesRouted`      |     `v22.0.0`     | [#17727](https://github.com/vitessio/vitess/pull/17727) |
+| `vtgate`  | `QueriesProcessedByTable` |     `v22.0.0`     | [#17727](https://github.com/vitessio/vitess/pull/17727) |
+| `vtgate`  |  `QueriesRoutedByTable`   |     `v22.0.0`     | [#17727](https://github.com/vitessio/vitess/pull/17727) |
+
+### <a id="new-metrics"/>New Metrics
+
+#### <a id="new-vtgate-metrics"/>VTGate
+
+|          Name           |   Dimensions    |                                     Description                                     |                           PR                            |
+|:-----------------------:|:---------------:|:-----------------------------------------------------------------------------------:|:-------------------------------------------------------:|
+| `TransactionsProcessed` | `Shard`, `Type` | Counts transactions processed at VTGate by shard distribution and transaction type. | [#18171](https://github.com/vitessio/vitess/pull/18171) |
+
+### <a id="minor-changes-topo"/>Topology</a>
+
+#### <a id="consul_auth_static_file-check-creds"/>`--consul_auth_static_file` requires 1 or more credentials</a>
+
+The `--consul_auth_static_file` flag used in several components now requires that 1 or more credentials can be loaded from the provided json file.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 

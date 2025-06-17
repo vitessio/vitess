@@ -146,7 +146,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		workflowConfig = vttablet.DefaultVReplicationConfig
 	}
 	if workflowConfig.HeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
-		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
+		log.Warningf("The supplied value for vreplication-heartbeat-update-interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
 			workflowConfig.HeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
 	}
 	vttablet.InitVReplicationConfigDefaults()
@@ -305,6 +305,13 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 					return err
 				}
 			} else {
+				if vr.state != binlogdatapb.VReplicationWorkflowState_Copying {
+					if err := vr.setState(binlogdatapb.VReplicationWorkflowState_Copying, ""); err != nil {
+						vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
+						return err
+					}
+					vr.insertLog(LogCopyRestart, fmt.Sprintf("Copy phase restarted for %d table(s)", numTablesToCopy))
+				}
 				if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
 					vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 					return err
@@ -965,7 +972,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		select {
 		// Stop any further actions if the vreplicator's context is
 		// cancelled -- most likely due to hitting the
-		// vreplication_copy_phase_duration
+		// vreplication-copy-phase-duration
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:

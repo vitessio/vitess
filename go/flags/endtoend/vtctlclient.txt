@@ -9,31 +9,31 @@ Usage of vtctlclient:
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --datadog-agent-host string                                   host to send spans to. if empty, no tracing will be done
       --datadog-agent-port string                                   port to send spans to. if empty, no tracing will be done
+      --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
+      --grpc-compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
-      --grpc_auth_static_client_creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
-      --grpc_compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
-      --grpc_enable_tracing                                         Enable gRPC tracing.
-      --grpc_initial_conn_window_size int                           gRPC initial connection window size
-      --grpc_initial_window_size int                                gRPC initial window size
-      --grpc_keepalive_time duration                                After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)
-      --grpc_keepalive_timeout duration                             After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
-      --grpc_max_message_size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
-      --grpc_prometheus                                             Enable gRPC monitoring with Prometheus.
+      --grpc-enable-tracing                                         Enable gRPC tracing.
+      --grpc-initial-conn-window-size int                           gRPC initial connection window size
+      --grpc-initial-window-size int                                gRPC initial window size
+      --grpc-keepalive-time duration                                After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)
+      --grpc-keepalive-timeout duration                             After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
+      --grpc-max-message-size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
+      --grpc-prometheus                                             Enable gRPC monitoring with Prometheus.
   -h, --help                                                        display usage and exit
       --jaeger-agent-host string                                    host and port to send spans to. if empty, no tracing will be done
-      --keep_logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
-      --keep_logs_by_mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
+      --keep-logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
+      --keep-logs-by-mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
+      --log-err-stacks                                              log stack traces for errors
+      --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log_backtrace_at traceLocations                             when logging hits line file:N, emit a stack trace
       --log_dir string                                              If non-empty, write log files in this directory
-      --log_err_stacks                                              log stack traces for errors
       --log_link string                                             If non-empty, add symbolic links in this directory to the log files
-      --log_rotate_max_size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logbuflevel int                                             Buffer log messages logged at this level or lower (-1 means don't buffer; 0 means buffer INFO only; ...). Has limited applicability on non-prod platforms.
       --logtostderr                                                 log to standard error instead of files
       --pprof strings                                               enable profiling
       --pprof-http                                                  enable pprof http endpoints
-      --purge_logs_interval duration                                how often try to remove old logs (default 1h0m0s)
-      --security_policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --purge-logs-interval duration                                how often try to remove old logs (default 1h0m0s)
+      --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --server string                                               server to use for connection
       --stderrthreshold severityFlag                                logs at or above this threshold go to stderr (default 1)
       --tracer string                                               tracing service to use (default "noop")
@@ -43,9 +43,9 @@ Usage of vtctlclient:
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
       --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging
-      --vtctl_client_protocol string                                Protocol to use to talk to the vtctl server. (default "grpc")
-      --vtctld_grpc_ca string                                       the server ca to use to validate servers when connecting
-      --vtctld_grpc_cert string                                     the cert to use to connect
-      --vtctld_grpc_crl string                                      the server crl to use to validate server certificates when connecting
-      --vtctld_grpc_key string                                      the key to use to connect
-      --vtctld_grpc_server_name string                              the server name to use to validate server certificate
+      --vtctl-client-protocol string                                Protocol to use to talk to the vtctl server. (default "grpc")
+      --vtctld-grpc-ca string                                       the server ca to use to validate servers when connecting
+      --vtctld-grpc-cert string                                     the cert to use to connect
+      --vtctld-grpc-crl string                                      the server crl to use to validate server certificates when connecting
+      --vtctld-grpc-key string                                      the key to use to connect
+      --vtctld-grpc-server-name string                              the server name to use to validate server certificate

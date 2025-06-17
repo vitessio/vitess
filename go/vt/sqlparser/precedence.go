@@ -56,9 +56,7 @@ func precedenceFor(in Expr) Precendence {
 		return P13
 	case *BetweenExpr:
 		return P12
-	case *ComparisonExpr:
-		return P11
-	case *IsExpr:
+	case *ComparisonExpr, *IsExpr, *MemberOfExpr:
 		return P11
 	case *BinaryExpr:
 		switch node.Operator {

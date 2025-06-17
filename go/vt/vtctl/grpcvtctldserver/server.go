@@ -236,7 +236,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	defer panicHandler(&err)
 
 	span.Annotate("keyspace", req.Keyspace)
-	span.Annotate("ddl_strategy", req.DdlStrategy)
+	span.Annotate("ddl-strategy", req.DdlStrategy)
 
 	if len(req.Sql) == 0 {
 		err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Sql must be a non-empty array")
@@ -3123,6 +3123,21 @@ func (s *VtctldServer) MaterializeCreate(ctx context.Context, req *vtctldatapb.M
 	span.Annotate("table_settings", fmt.Sprintf("%+v", req.Settings.TableSettings))
 
 	err = s.ws.Materialize(ctx, req.Settings)
+	return resp, err
+}
+
+// WorkflowAddTables is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowAddTables(ctx context.Context, req *vtctldatapb.WorkflowAddTablesRequest) (resp *vtctldatapb.WorkflowAddTablesResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowAddTables")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("table_settings", req.TableSettings)
+
+	err = s.ws.WorkflowAddTables(ctx, req)
 	return resp, err
 }
 

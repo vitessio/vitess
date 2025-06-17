@@ -48,21 +48,6 @@ const (
 	ChildVerify  = "VerifyChild"
 )
 
-// RouteType implements the Primitive interface
-func (f *FkVerify) RouteType() string {
-	return "FKVerify"
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (f *FkVerify) GetKeyspaceName() string {
-	return f.Exec.GetKeyspaceName()
-}
-
-// GetTableName implements the Primitive interface
-func (f *FkVerify) GetTableName() string {
-	return f.Exec.GetTableName()
-}
-
 // TryExecute implements the Primitive interface
 func (f *FkVerify) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	for _, v := range f.Verify {
@@ -105,7 +90,7 @@ func (f *FkVerify) Inputs() ([]Primitive, []map[string]any) {
 }
 
 func (f *FkVerify) description() PrimitiveDescription {
-	return PrimitiveDescription{OperatorType: f.RouteType()}
+	return PrimitiveDescription{OperatorType: "FKVerify"}
 }
 
 var _ Primitive = (*FkVerify)(nil)

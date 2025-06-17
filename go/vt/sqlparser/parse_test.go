@@ -42,6 +42,8 @@ var (
 		partialDDL           bool
 		ignoreNormalizerTest bool
 	}{{
+		input: "select a and b member of (c) from dual",
+	}, {
 		input: "select * from foo limit 5 + 5",
 	}, {
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
@@ -1262,13 +1264,31 @@ var (
 	}, {
 		input: "insert /* multi-value list */ into a values (1, 2), (3, 4)",
 	}, {
-		input: "insert /* no values */ into a values ()",
+		input:  "insert /* simple */ into a value (1)",
+		output: "insert /* simple */ into a values (1)",
+	}, {
+		input:  "insert /* a.b */ into a.b value (1)",
+		output: "insert /* a.b */ into a.b values (1)",
+	}, {
+		input:  "insert /* multi-value */ into a value (1, 2)",
+		output: "insert /* multi-value */ into a values (1, 2)",
+	}, {
+		input:  "insert /* multi-value list */ into a value (1, 2), (3, 4)",
+		output: "insert /* multi-value list */ into a values (1, 2), (3, 4)",
+	}, {
+		input:  "insert /* no values */ into a value ()",
+		output: "insert /* no values */ into a values ()",
 	}, {
 		input:  "insert /* set */ into a set a = 1, b = 2",
 		output: "insert /* set */ into a(a, b) values (1, 2)",
 	}, {
 		input:  "insert /* set default */ into a set a = default, b = 2",
 		output: "insert /* set default */ into a(a, b) values (default, 2)",
+	}, {
+		input: "replace into a values (1, 2), (3, 4)",
+	}, {
+		input:  "replace into a value (1, 2), (3, 4)",
+		output: "replace into a values (1, 2), (3, 4)",
 	}, {
 		input: "insert /* value expression list */ into a values (a + 1, 2 * 3)",
 	}, {
@@ -2144,14 +2164,14 @@ var (
 		input:  "create procedure DeclareAndIfProcedure(in input_value int) begin declare message varchar(50); if input_value > 100 then set message = 'High'; elseif input_value > 50 then set message = 'Medium'; else set message = 'Low'; end if; select message; end;",
 		output: "create procedure DeclareAndIfProcedure (in input_value int) begin declare message varchar(50); if input_value > 100 then set message = 'High'; elseif input_value > 50 then set message = 'Medium'; else set message = 'Low'; end if; select message from dual; end;",
 	}, {
-		input:  "create procedure NestedIfProcedure(in value int) begin if value > 0 then if value > 100 then select 'Very High'; else select 'High'; end if; else select 'Low or Negative'; end if; end;",
-		output: "create procedure NestedIfProcedure (in value int) begin if value > 0 then if value > 100 then select 'Very High' from dual; else select 'High' from dual; end if; else select 'Low or Negative' from dual; end if; end;",
+		input:  "create procedure NestedIfProcedure(in test_value int) begin if test_value > 0 then if test_value > 100 then select 'Very High'; else select 'High'; end if; else select 'Low or Negative'; end if; end;",
+		output: "create procedure NestedIfProcedure (in test_value int) begin if test_value > 0 then if test_value > 100 then select 'Very High' from dual; else select 'High' from dual; end if; else select 'Low or Negative' from dual; end if; end;",
 	}, {
 		input:  "create procedure MultipleDeclareProcedure(in val1 int, in val2 int) begin declare sum_result int; declare diff_result int; set sum_result = val1 + val2; set diff_result = val1 - val2; select sum_result as Sum, diff_result as Difference; end;",
 		output: "create procedure MultipleDeclareProcedure (in val1 int, in val2 int) begin declare sum_result int; declare diff_result int; set sum_result = val1 + val2; set diff_result = val1 - val2; select sum_result as `Sum`, diff_result as Difference from dual; end;",
 	}, {
-		input:  "create procedure ErrorHandlingProcedure(in value int) begin declare exit handler for sqlexception begin select 'An error occurred'; end; if value < 0 then signal sqlstate '45000' set message_text = 'Negative values not allowed'; else select 'Valid value'; end if; end;",
-		output: "create procedure ErrorHandlingProcedure (in value int) begin declare exit handler for sqlexception begin select 'An error occurred' from dual; end; if value < 0 then signal sqlstate '45000' set message_text = 'Negative values not allowed'; else select 'Valid value' from dual; end if; end;",
+		input:  "create procedure ErrorHandlingProcedure(in test_value int) begin declare exit handler for sqlexception begin select 'An error occurred'; end; if test_value < 0 then signal sqlstate '45000' set message_text = 'Negative values not allowed'; else select 'Valid value'; end if; end;",
+		output: "create procedure ErrorHandlingProcedure (in test_value int) begin declare exit handler for sqlexception begin select 'An error occurred' from dual; end; if test_value < 0 then signal sqlstate '45000' set message_text = 'Negative values not allowed'; else select 'Valid value' from dual; end if; end;",
 	}, {
 		input:  "create procedure HandlerWithSQLEXCEPTION() begin declare undo handler for sqlexception begin select 'SQL Exception occurred'; end; insert into non_existing_table values (1); end;",
 		output: "create procedure HandlerWithSQLEXCEPTION () begin declare undo handler for sqlexception begin select 'SQL Exception occurred' from dual; end; insert into non_existing_table values (1); end;",
@@ -2206,6 +2226,8 @@ var (
 	}, {
 		input:  "create procedure ConditionWithSignalAndHandler() begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Handled with custom condition and signal'; end; signal sqlstate '45000' set message_text = 'Custom signal triggered'; end;",
 		output: "create procedure ConditionWithSignalAndHandler () begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Handled with custom condition and signal' from dual; end; signal sqlstate '45000' set message_text = 'Custom signal triggered'; end;",
+	}, {
+		input: "create procedure t1 (in x BIGINT) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;",
 	}, {
 		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {
@@ -2564,6 +2586,10 @@ var (
 	}, {
 		input: "alter vitess_migration complete all",
 	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' postpone complete",
+	}, {
+		input: "alter vitess_migration postpone complete all",
+	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
 	}, {
 		input: "alter vitess_migration force_cutover all",
@@ -2883,8 +2909,7 @@ var (
 		input:  "begin;",
 		output: "begin",
 	}, {
-		input:  "start transaction",
-		output: "begin",
+		input: "start transaction",
 	}, {
 		input: "start transaction with consistent snapshot",
 	}, {

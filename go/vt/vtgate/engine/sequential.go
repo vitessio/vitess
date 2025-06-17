@@ -41,29 +41,6 @@ func NewSequential(Sources []Primitive) *Sequential {
 	}
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (s *Sequential) RouteType() string {
-	return "Sequential"
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to
-func (s *Sequential) GetKeyspaceName() string {
-	res := s.Sources[0].GetKeyspaceName()
-	for i := 1; i < len(s.Sources); i++ {
-		res = formatTwoOptionsNicely(res, s.Sources[i].GetKeyspaceName())
-	}
-	return res
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (s *Sequential) GetTableName() string {
-	res := s.Sources[0].GetTableName()
-	for i := 1; i < len(s.Sources); i++ {
-		res = formatTwoOptionsNicely(res, s.Sources[i].GetTableName())
-	}
-	return res
-}
-
 // TryExecute performs a non-streaming exec.
 func (s *Sequential) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantFields bool) (*sqltypes.Result, error) {
 	finalRes := &sqltypes.Result{}
@@ -98,5 +75,5 @@ func (s *Sequential) Inputs() ([]Primitive, []map[string]any) {
 }
 
 func (s *Sequential) description() PrimitiveDescription {
-	return PrimitiveDescription{OperatorType: s.RouteType()}
+	return PrimitiveDescription{OperatorType: "Sequential"}
 }

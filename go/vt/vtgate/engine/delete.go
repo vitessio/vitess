@@ -51,6 +51,8 @@ func (del *Delete) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 	}
 
 	switch del.Opcode {
+	case None:
+		return &sqltypes.Result{}, nil
 	case Unsharded:
 		return del.execUnsharded(ctx, del, vcursor, bindVars, rss)
 	case Equal, IN, Scatter, ByDestination, SubShard, EqualUnique, MultiEqual:
@@ -121,7 +123,6 @@ func (del *Delete) isVindexModified() bool {
 func (del *Delete) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query":                del.Query,
-		"Table":                del.GetTableName(),
 		"OwnedVindexQuery":     del.OwnedVindexQuery,
 		"MultiShardAutocommit": del.MultiShardAutocommit,
 		"QueryTimeout":         del.QueryTimeout,

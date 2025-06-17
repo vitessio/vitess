@@ -30,9 +30,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"vitess.io/vitess/go/protoutil"
+
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
@@ -835,6 +841,113 @@ func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
 			sleepTillThresholdApplies()
 		})
 	})
+}
+
+func TestIsDialTCPError(t *testing.T) {
+	// Verify that IsDialTCPError actually recognizes grpc dial errors
+	cc, err := grpcclient.DialContext(t.Context(), ":0", true, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	defer cc.Close()
+
+	err = cc.Invoke(context.Background(), "/Fail", nil, nil)
+
+	require.True(t, base.IsDialTCPError(err))
+	require.True(t, base.IsDialTCPError(fmt.Errorf("wrapped: %w", err)))
+
+	nonDialErr := fmt.Errorf("rpc error: code = NotFound desc = method not found")
+	require.False(t, base.IsDialTCPError(nonDialErr))
+}
+
+func TestProbeWithUnavailableHost(t *testing.T) {
+	throttler := Throttler{
+		throttledApps:   cache.New(cache.NoExpiration, 0),
+		heartbeatWriter: &FakeHeartbeatWriter{},
+	}
+
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell1",
+		Uid:  100,
+	}
+
+	// The hostname used here is not routable, so the connection will fail.
+	tablet := &topo.TabletInfo{
+		Tablet: &topodatapb.Tablet{
+			Alias:         alias,
+			Hostname:      "192.0.2.0",
+			MysqlHostname: "192.0.2.0",
+			MysqlPort:     3306,
+			PortMap:       map[string]int32{"grpc": 5000},
+			Type:          topodatapb.TabletType_PRIMARY,
+		},
+	}
+
+	probe := &base.Probe{
+		Alias:       "cell1-100",
+		Tablet:      tablet.Tablet,
+		CacheMillis: 100,
+	}
+
+	tmClient := grpctmclient.NewClient()
+
+	probeFunc := throttler.generateTabletProbeFunction(base.ShardScope, probe)
+
+	metrics := probeFunc(t.Context(), tmClient)
+	require.True(t, base.IsDialTCPError(metrics["custom"].Err))
+
+	tabletResultsMap := base.TabletResultMap{
+		"cell1-100": base.MetricResultMap{
+			"custom": metrics["custom"],
+		},
+	}
+
+	worstMetric := base.AggregateTabletMetricResults("custom", tabletResultsMap, 0, true, 0.0)
+	require.Equal(t, base.NoHostsMetricResult, worstMetric)
+}
+
+func TestProbeWithEmptyHostAndPort(t *testing.T) {
+	throttler := Throttler{
+		throttledApps:   cache.New(cache.NoExpiration, 0),
+		heartbeatWriter: &FakeHeartbeatWriter{},
+	}
+
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell1",
+		Uid:  100,
+	}
+
+	// The hostname used here is not routable, so the connection will fail.
+	tablet := &topo.TabletInfo{
+		Tablet: &topodatapb.Tablet{
+			Alias:         alias,
+			Hostname:      "",
+			MysqlHostname: "192.0.2.0",
+			MysqlPort:     3306,
+			PortMap:       map[string]int32{"grpc": 0},
+			Type:          topodatapb.TabletType_PRIMARY,
+		},
+	}
+
+	probe := &base.Probe{
+		Alias:       "cell1-100",
+		Tablet:      tablet.Tablet,
+		CacheMillis: 100,
+	}
+
+	tmClient := grpctmclient.NewClient()
+
+	probeFunc := throttler.generateTabletProbeFunction(base.ShardScope, probe)
+
+	metrics := probeFunc(t.Context(), tmClient)
+	require.True(t, base.IsDialTCPError(metrics["custom"].Err))
+
+	tabletResultsMap := base.TabletResultMap{
+		"cell1-100": base.MetricResultMap{
+			"custom": metrics["custom"],
+		},
+	}
+
+	worstMetric := base.AggregateTabletMetricResults("custom", tabletResultsMap, 0, true, 0.0)
+	require.Equal(t, base.NoHostsMetricResult, worstMetric)
 }
 
 func TestIsAppThrottled(t *testing.T) {

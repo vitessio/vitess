@@ -246,9 +246,6 @@ type (
 	// During execution, the Primitive's pass Result objects up the tree structure, until reaching the root,
 	// and its result is passed to the client.
 	Primitive interface {
-		RouteType() string
-		GetKeyspaceName() string
-		GetTableName() string
 		GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 		NeedsTransaction() bool
 
@@ -290,6 +287,15 @@ func Find(isMatch Match, start Primitive) Primitive {
 		}
 	}
 	return nil
+}
+
+// Visit will traverse the Primitive tree structure, calling the visitor function on each node.
+func Visit(start Primitive, visitor func(node Primitive)) {
+	visitor(start)
+	inputs, _ := start.Inputs()
+	for _, input := range inputs {
+		Visit(input, visitor)
+	}
 }
 
 // Exists traverses recursively down the Primitive tree structure, and returns true when Match returns true

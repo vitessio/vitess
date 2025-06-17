@@ -14,8 +14,7 @@
           "Sharded": false
         },
         "FieldQuery": "select * from ambiguous_ref_with_source where 1 != 1",
-        "Query": "select * from ambiguous_ref_with_source",
-        "Table": "ambiguous_ref_with_source"
+        "Query": "select * from ambiguous_ref_with_source"
       },
       "TablesUsed": [
         "main.ambiguous_ref_with_source"
@@ -38,8 +37,7 @@
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user`, ambiguous_ref_with_source where 1 != 1",
-        "Query": "select `user`.col from `user`, ambiguous_ref_with_source",
-        "Table": "`user`, ambiguous_ref_with_source"
+        "Query": "select `user`.col from `user`, ambiguous_ref_with_source"
       },
       "TablesUsed": [
         "user.ambiguous_ref_with_source",
@@ -63,8 +61,7 @@
           "Sharded": false
         },
         "FieldQuery": "select r1.col from ambiguous_ref_with_source as r1 join ambiguous_ref_with_source where 1 != 1",
-        "Query": "select r1.col from ambiguous_ref_with_source as r1 join ambiguous_ref_with_source",
-        "Table": "ambiguous_ref_with_source"
+        "Query": "select r1.col from ambiguous_ref_with_source as r1 join ambiguous_ref_with_source"
       },
       "TablesUsed": [
         "main.ambiguous_ref_with_source"
@@ -87,8 +84,7 @@
           "Sharded": true
         },
         "FieldQuery": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source, `user` where 1 != 1",
-        "Query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source, `user`",
-        "Table": "`user`, ambiguous_ref_with_source"
+        "Query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source, `user`"
       },
       "TablesUsed": [
         "user.ambiguous_ref_with_source",
@@ -113,7 +109,6 @@
         },
         "FieldQuery": "select ambiguous_ref_with_source.col from (select aa from `user` where 1 != 1) as `user`, ambiguous_ref_with_source where 1 != 1",
         "Query": "select ambiguous_ref_with_source.col from (select aa from `user` where `user`.id = 1) as `user`, ambiguous_ref_with_source",
-        "Table": "`user`, ambiguous_ref_with_source",
         "Values": [
           "1"
         ],
@@ -141,8 +136,7 @@
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user`, ambiguous_ref_with_source where 1 != 1",
-        "Query": "select `user`.col from `user`, ambiguous_ref_with_source",
-        "Table": "`user`, ambiguous_ref_with_source"
+        "Query": "select `user`.col from `user`, ambiguous_ref_with_source"
       },
       "TablesUsed": [
         "user.ambiguous_ref_with_source",
@@ -165,8 +159,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into ambiguous_ref_with_source(col) values (1)",
-        "TableName": "ambiguous_ref_with_source"
+        "Query": "insert into ambiguous_ref_with_source(col) values (1)"
       },
       "TablesUsed": [
         "main.ambiguous_ref_with_source"
@@ -189,8 +182,7 @@
           "Sharded": true
         },
         "FieldQuery": "select u.id from (select a.id, a.u_id from ref_with_source as a where 1 != 1) as u left join ref_with_source as u0 on u.u_id = u0.u_uid where 1 != 1",
-        "Query": "select u.id from (select a.id, a.u_id from ref_with_source as a where a.id in (3) order by a.d_at asc limit 1) as u left join ref_with_source as u0 on u.u_id = u0.u_uid order by u.id asc",
-        "Table": "ref_with_source"
+        "Query": "select u.id from (select a.id, a.u_id from ref_with_source as a where a.id in (3) order by a.d_at asc limit 1) as u left join ref_with_source as u0 on u.u_id = u0.u_uid order by u.id asc"
       },
       "TablesUsed": [
         "user.ref_with_source"
@@ -212,8 +204,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into ambiguous_ref_with_source(col) values (1)",
-        "TableName": "ambiguous_ref_with_source"
+        "Query": "insert into ambiguous_ref_with_source(col) values (1)"
       },
       "TablesUsed": [
         "main.ambiguous_ref_with_source"
@@ -235,8 +226,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update ambiguous_ref_with_source set col = 1",
-        "Table": "ambiguous_ref_with_source"
+        "Query": "update ambiguous_ref_with_source set col = 1"
       },
       "TablesUsed": [
         "main.ambiguous_ref_with_source"
@@ -258,8 +248,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update ambiguous_ref_with_source set col = 1",
-        "Table": "ambiguous_ref_with_source"
+        "Query": "update ambiguous_ref_with_source set col = 1"
       },
       "TablesUsed": [
         "main.ambiguous_ref_with_source"
@@ -281,8 +270,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete from ambiguous_ref_with_source where col = 1",
-        "Table": "ambiguous_ref_with_source"
+        "Query": "delete from ambiguous_ref_with_source where col = 1"
       },
       "TablesUsed": [
         "main.ambiguous_ref_with_source"
@@ -304,8 +292,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete from ambiguous_ref_with_source where col = 1",
-        "Table": "ambiguous_ref_with_source"
+        "Query": "delete from ambiguous_ref_with_source where col = 1"
       },
       "TablesUsed": [
         "main.ambiguous_ref_with_source"
@@ -328,8 +315,7 @@
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user`, ref_with_source where 1 != 1",
-        "Query": "select `user`.col from `user`, ref_with_source",
-        "Table": "`user`, ref_with_source"
+        "Query": "select `user`.col from `user`, ref_with_source"
       },
       "TablesUsed": [
         "user.ref_with_source",
@@ -353,8 +339,7 @@
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user`, ref_with_source as source_of_ref where 1 != 1",
-        "Query": "select `user`.col from `user`, ref_with_source as source_of_ref",
-        "Table": "`user`, ref_with_source"
+        "Query": "select `user`.col from `user`, ref_with_source as source_of_ref"
       },
       "TablesUsed": [
         "user.ref_with_source",
@@ -378,8 +363,7 @@
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user`, ref as rerouted_ref where 1 != 1",
-        "Query": "select `user`.col from `user`, ref as rerouted_ref",
-        "Table": "`user`, ref"
+        "Query": "select `user`.col from `user`, ref as rerouted_ref"
       },
       "TablesUsed": [
         "user.ref",
@@ -403,8 +387,7 @@
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user`, global_ref where 1 != 1",
-        "Query": "select `user`.col from `user`, global_ref",
-        "Table": "`user`, global_ref"
+        "Query": "select `user`.col from `user`, global_ref"
       },
       "TablesUsed": [
         "user.global_ref",
@@ -427,8 +410,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into global_ref(col) values (1)",
-        "TableName": "global_ref"
+        "Query": "insert into global_ref(col) values (1)"
       },
       "TablesUsed": [
         "main.global_ref"
@@ -450,8 +432,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete from source_of_ref where col = 1",
-        "Table": "source_of_ref"
+        "Query": "delete from source_of_ref where col = 1"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -473,8 +454,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update source_of_ref set x = 4 where col = 1",
-        "Table": "source_of_ref"
+        "Query": "update source_of_ref set x = 4 where col = 1"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -496,8 +476,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into source_of_ref(x) values (4)",
-        "TableName": "source_of_ref"
+        "Query": "insert into source_of_ref(x) values (4)"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -519,8 +498,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete from source_of_ref where col = 1",
-        "Table": "source_of_ref"
+        "Query": "delete from source_of_ref where col = 1"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -542,8 +520,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update source_of_ref set x = 4 where col = 1",
-        "Table": "source_of_ref"
+        "Query": "update source_of_ref set x = 4 where col = 1"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -565,8 +542,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into source_of_ref(x) values (4)",
-        "TableName": "source_of_ref"
+        "Query": "insert into source_of_ref(x) values (4)"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -588,8 +564,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete from source_of_ref where col = 1",
-        "Table": "source_of_ref"
+        "Query": "delete from source_of_ref where col = 1"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -611,8 +586,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update source_of_ref set x = 4 where col = 1",
-        "Table": "source_of_ref"
+        "Query": "update source_of_ref set x = 4 where col = 1"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -634,8 +608,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into source_of_ref(x) values (4)",
-        "TableName": "source_of_ref"
+        "Query": "insert into source_of_ref(x) values (4)"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -657,8 +630,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "delete from source_of_ref where col = 1",
-        "Table": "source_of_ref"
+        "Query": "delete from source_of_ref where col = 1"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -680,8 +652,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update source_of_ref set x = 4 where col = 1",
-        "Table": "source_of_ref"
+        "Query": "update source_of_ref set x = 4 where col = 1"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -703,8 +674,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert into source_of_ref(x) values (4)",
-        "TableName": "source_of_ref"
+        "Query": "insert into source_of_ref(x) values (4)"
       },
       "TablesUsed": [
         "main.source_of_ref"
@@ -728,7 +698,6 @@
         },
         "FieldQuery": "select * from ref_with_source as ref, `user` as u where 1 != 1",
         "Query": "select * from ref_with_source as ref, `user` as u where u.id = 2 and ref.id = u.ref_id",
-        "Table": "`user`, ref_with_source",
         "Values": [
           "2"
         ],
@@ -757,7 +726,6 @@
         },
         "FieldQuery": "select * from ref_with_source as ref, `user` as u where 1 != 1",
         "Query": "select * from ref_with_source as ref, `user` as u where u.id = 2 and ref.id = u.ref_id",
-        "Table": "`user`, ref_with_source",
         "Values": [
           "2"
         ],
@@ -785,8 +753,7 @@
           "Sharded": true
         },
         "FieldQuery": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where 1 != 1",
-        "Query": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where rr.bar = sr.bar and u.id = ue.user_id and sr.foo = ue.foo",
-        "Table": "`user`, ref, ref_with_source, user_extra"
+        "Query": "select 1 from `user` as u, user_extra as ue, ref_with_source as sr, ref as rr where rr.bar = sr.bar and u.id = ue.user_id and sr.foo = ue.foo"
       },
       "TablesUsed": [
         "user.ref",
@@ -817,7 +784,6 @@
             "JoinVars": {
               "m_col": 0
             },
-            "TableName": "music_rerouted_ref, source_of_ref",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -828,7 +794,6 @@
                 },
                 "FieldQuery": "select m.col from music as m where 1 != 1",
                 "Query": "select m.col from music as m where m.user_id = 1 lock in share mode",
-                "Table": "music",
                 "Values": [
                   "1"
                 ],
@@ -842,8 +807,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select sr.id from source_of_ref as sr, rerouted_ref as rr where 1 != 1",
-                "Query": "select sr.id from source_of_ref as sr, rerouted_ref as rr where sr.col = :m_col and sr.id = rr.id lock in share mode",
-                "Table": "rerouted_ref, source_of_ref"
+                "Query": "select sr.id from source_of_ref as sr, rerouted_ref as rr where sr.col = :m_col and sr.id = rr.id lock in share mode"
               }
             ]
           },
@@ -854,8 +818,7 @@
               "Name": "main",
               "Sharded": false
             },
-            "Query": "update source_of_ref as sr set sr.tt = 5 where sr.id in ::dml_vals",
-            "Table": "source_of_ref"
+            "Query": "update source_of_ref as sr set sr.tt = 5 where sr.id in ::dml_vals"
           }
         ]
       },
@@ -886,7 +849,6 @@
             "JoinVars": {
               "m_col": 0
             },
-            "TableName": "music_rerouted_ref, source_of_ref",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -897,7 +859,6 @@
                 },
                 "FieldQuery": "select m.col from music as m where 1 != 1",
                 "Query": "select m.col from music as m where m.user_id = 1",
-                "Table": "music",
                 "Values": [
                   "1"
                 ],
@@ -911,8 +872,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select sr.id from source_of_ref as sr, rerouted_ref as rr where 1 != 1",
-                "Query": "select sr.id from source_of_ref as sr, rerouted_ref as rr where sr.col = :m_col and sr.id = rr.id",
-                "Table": "rerouted_ref, source_of_ref"
+                "Query": "select sr.id from source_of_ref as sr, rerouted_ref as rr where sr.col = :m_col and sr.id = rr.id"
               }
             ]
           },
@@ -923,8 +883,7 @@
               "Name": "main",
               "Sharded": false
             },
-            "Query": "delete from source_of_ref as sr where sr.id in ::dml_vals",
-            "Table": "source_of_ref"
+            "Query": "delete from source_of_ref as sr where sr.id in ::dml_vals"
           }
         ]
       },

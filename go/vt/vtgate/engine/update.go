@@ -61,6 +61,8 @@ func (upd *Update) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 	}
 
 	switch upd.Opcode {
+	case None:
+		return &sqltypes.Result{}, nil
 	case Unsharded:
 		return upd.execUnsharded(ctx, upd, vcursor, bindVars, rss)
 	case Equal, EqualUnique, IN, Scatter, ByDestination, SubShard, MultiEqual:
@@ -194,7 +196,6 @@ func (upd *Update) isVindexModified() bool {
 func (upd *Update) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query":                upd.Query,
-		"Table":                upd.GetTableName(),
 		"OwnedVindexQuery":     upd.OwnedVindexQuery,
 		"MultiShardAutocommit": upd.MultiShardAutocommit,
 		"QueryTimeout":         upd.QueryTimeout,

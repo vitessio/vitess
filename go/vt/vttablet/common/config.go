@@ -136,42 +136,42 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 			continue
 		}
 		switch k {
-		case "vreplication_experimental_flags":
+		case "vreplication-experimental-flags":
 			value, err := strconv.ParseInt(v, 10, 64)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
 				c.ExperimentalFlags = value
 			}
-		case "vreplication_net_read_timeout":
+		case "vreplication-net-read-timeout":
 			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
 				c.NetReadTimeout = value
 			}
-		case "vreplication_net_write_timeout":
+		case "vreplication-net-write-timeout":
 			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
 				c.NetWriteTimeout = value
 			}
-		case "vreplication_copy_phase_duration":
+		case "vreplication-copy-phase-duration":
 			value, err := time.ParseDuration(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
 				c.CopyPhaseDuration = value
 			}
-		case "vreplication_retry_delay":
+		case "vreplication-retry-delay":
 			value, err := time.ParseDuration(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
 				c.RetryDelay = value
 			}
-		case "vreplication_max_time_to_retry_on_error":
+		case "vreplication-max-time-to-retry-on-error":
 			value, err := time.ParseDuration(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
@@ -192,21 +192,21 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 			} else {
 				c.RelayLogMaxItems = value
 			}
-		case "vreplication_replica_lag_tolerance":
+		case "vreplication-replica-lag-tolerance":
 			value, err := time.ParseDuration(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
 				c.ReplicaLagTolerance = value
 			}
-		case "vreplication_heartbeat_update_interval":
+		case "vreplication-heartbeat-update-interval":
 			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
 			} else {
 				c.HeartbeatUpdateInterval = value
 			}
-		case "vreplication_store_compressed_gtid":
+		case "vreplication-store-compressed-gtid":
 			value, err := strconv.ParseBool(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
@@ -220,7 +220,7 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 			} else {
 				c.ParallelInsertWorkers = value
 			}
-		case "vstream_packet_size":
+		case "vstream-packet-size", "vstream_packet_size":
 			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
@@ -228,7 +228,7 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				c.VStreamPacketSizeOverride = true
 				c.VStreamPacketSize = value
 			}
-		case "vstream_dynamic_packet_size":
+		case "vstream-dynamic-packet-size", "vstream_dynamic_packet_size":
 			value, err := strconv.ParseBool(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
@@ -259,19 +259,21 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 // keys are one of those that are supported.
 func (c VReplicationConfig) Map() map[string]string {
 	return map[string]string{
-		"vreplication_experimental_flags":         strconv.FormatInt(c.ExperimentalFlags, 10),
-		"vreplication_net_read_timeout":           strconv.Itoa(c.NetReadTimeout),
-		"vreplication_net_write_timeout":          strconv.Itoa(c.NetWriteTimeout),
-		"vreplication_copy_phase_duration":        c.CopyPhaseDuration.String(),
-		"vreplication_retry_delay":                c.RetryDelay.String(),
-		"vreplication_max_time_to_retry_on_error": c.MaxTimeToRetryError.String(),
+		"vreplication-experimental-flags":         strconv.FormatInt(c.ExperimentalFlags, 10),
+		"vreplication-net-read-timeout":           strconv.Itoa(c.NetReadTimeout),
+		"vreplication-net-write-timeout":          strconv.Itoa(c.NetWriteTimeout),
+		"vreplication-copy-phase-duration":        c.CopyPhaseDuration.String(),
+		"vreplication-retry-delay":                c.RetryDelay.String(),
+		"vreplication-max-time-to-retry-on-error": c.MaxTimeToRetryError.String(),
 		"relay_log_max_size":                      strconv.Itoa(c.RelayLogMaxSize),
 		"relay_log_max_items":                     strconv.Itoa(c.RelayLogMaxItems),
-		"vreplication_replica_lag_tolerance":      c.ReplicaLagTolerance.String(),
-		"vreplication_heartbeat_update_interval":  strconv.Itoa(c.HeartbeatUpdateInterval),
-		"vreplication_store_compressed_gtid":      strconv.FormatBool(c.StoreCompressedGTID),
+		"vreplication-replica-lag-tolerance":      c.ReplicaLagTolerance.String(),
+		"vreplication-heartbeat-update-interval":  strconv.Itoa(c.HeartbeatUpdateInterval),
+		"vreplication-store-compressed-gtid":      strconv.FormatBool(c.StoreCompressedGTID),
 		"vreplication-parallel-insert-workers":    strconv.Itoa(c.ParallelInsertWorkers),
+		"vstream-packet-size":                     strconv.Itoa(c.VStreamPacketSize),
 		"vstream_packet_size":                     strconv.Itoa(c.VStreamPacketSize),
+		"vstream-dynamic-packet-size":             strconv.FormatBool(c.VStreamDynamicPacketSize),
 		"vstream_dynamic_packet_size":             strconv.FormatBool(c.VStreamDynamicPacketSize),
 		"vstream_binlog_rotation_threshold":       strconv.FormatInt(c.VStreamBinlogRotationThreshold, 10),
 	}

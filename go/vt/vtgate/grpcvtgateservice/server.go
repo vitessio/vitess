@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -35,6 +36,7 @@ import (
 	vtgateservicepb "vitess.io/vitess/go/vt/proto/vtgateservice"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -53,10 +55,10 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&useEffective, "grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
-	fs.BoolVar(&useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
-	fs.BoolVar(&useStaticAuthenticationIdentity, "grpc-use-static-authentication-callerid", false, "If set, will set the immediate caller id to the username authenticated by the static auth plugin.")
-	fs.BoolVar(&sendSessionInStreaming, "grpc-send-session-in-streaming", true, "If set, will send the session as last packet in streaming api to support transactions in streaming")
+	utils.SetFlagBoolVar(fs, &useEffective, "grpc-use-effective-callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
+	utils.SetFlagBoolVar(fs, &useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
+	utils.SetFlagBoolVar(fs, &useStaticAuthenticationIdentity, "grpc-use-static-authentication-callerid", false, "If set, will set the immediate caller id to the username authenticated by the static auth plugin.")
+	utils.SetFlagBoolVar(fs, &sendSessionInStreaming, "grpc-send-session-in-streaming", true, "If set, will send the session as last packet in streaming api to support transactions in streaming")
 	_ = fs.MarkDeprecated("grpc-send-session-in-streaming", "This option is deprecated and will be deleted in a future release")
 }
 
@@ -115,7 +117,7 @@ func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerI
 	// The client cert common name (if using mTLS)
 	immediate, securityGroups := immediateCallerIDFromCert(ctx)
 
-	// The effective caller id (if --grpc_use_effective_callerid=true)
+	// The effective caller id (if --grpc-use-effective-callerid=true)
 	if immediate == "" && useEffective && effectiveCallerID != nil {
 		immediate = effectiveCallerID.Principal
 		if useEffectiveGroups && len(effectiveCallerID.Groups) > 0 {
@@ -152,6 +154,62 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 		Session: session,
 		Error:   vterrors.ToVTRPC(err),
 	}, nil
+}
+
+// ExecuteMulti is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) ExecuteMulti(ctx context.Context, request *vtgatepb.ExecuteMultiRequest) (response *vtgatepb.ExecuteMultiResponse, err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx = withCallerIDContext(ctx, request.CallerId)
+
+	// Handle backward compatibility.
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{Autocommit: true}
+	}
+	newSession, qrs, err := vtg.server.ExecuteMulti(ctx, nil, session, request.Sql)
+	return &vtgatepb.ExecuteMultiResponse{
+		Results: sqltypes.ResultsToProto3(qrs),
+		Session: newSession,
+		Error:   vterrors.ToVTRPC(err),
+	}, nil
+}
+
+func (vtg *VTGate) StreamExecuteMulti(request *vtgatepb.StreamExecuteMultiRequest, stream vtgateservicepb.Vitess_StreamExecuteMultiServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+
+	session := request.Session
+	if session == nil {
+		session = &vtgatepb.Session{Autocommit: true}
+	}
+
+	session, vtgErr := vtg.server.StreamExecuteMulti(ctx, nil, session, request.Sql, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		// Send is not safe to call concurrently, but vtgate
+		// guarantees that it's not.
+		return stream.Send(&vtgatepb.StreamExecuteMultiResponse{
+			Result:      sqltypes.QueryResponseToProto3(qr),
+			MoreResults: more,
+			NewResult:   firstPacket,
+		})
+	})
+
+	var errs []error
+	if vtgErr != nil {
+		errs = append(errs, vtgErr)
+	}
+
+	if sendSessionInStreaming {
+		// even if there is an error, session could have been modified.
+		// So, this needs to be sent back to the client. Session is sent in the last stream response.
+		lastErr := stream.Send(&vtgatepb.StreamExecuteMultiResponse{
+			Session: session,
+		})
+		if lastErr != nil {
+			errs = append(errs, lastErr)
+		}
+	}
+
+	return vterrors.ToGRPC(vterrors.Aggregate(errs))
 }
 
 // ExecuteBatch is the RPC version of vtgateservice.VTGateService method
@@ -270,6 +328,9 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 				Events: events,
 			})
 		})
+	if vtgErr != nil {
+		log.Infof("VStream grpc error: %v", vtgErr)
+	}
 	return vterrors.ToGRPC(vtgErr)
 }
 

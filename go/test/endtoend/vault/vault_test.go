@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -56,10 +57,10 @@ var (
 	vtgateUser      = "vtgate_user"
 	vtgatePassword  = "password123"
 	commonTabletArg = []string{
-		"--vreplication_retry_delay", "1s",
-		"--degraded_threshold", "5s",
-		"--lock_tables_timeout", "5s",
-		"--watch_replication_stream",
+		vtutils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
+		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
+		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
 		// Frequently reload schema, generating some tablet traffic,
 		//   so we can speed up token refresh
 		"--queryserver-config-schema-reload-time", "5s",
@@ -79,7 +80,7 @@ var (
 		// Make this small, so we can get a renewal
 		"--db-credentials-vault-ttl", "21s"}
 	vaultVTGateArg = []string{
-		"--mysql_auth_server_impl", "vault",
+		vtutils.GetFlagVariantForTests("--mysql-auth-server-impl"), "vault",
 		"--mysql_auth_vault_timeout", "3s",
 		"--mysql_auth_vault_path", "kv/prod/vtgatecreds",
 		// This is overriden by our env VAULT_ADDR
@@ -93,7 +94,7 @@ var (
 		// Make this small, so we can get a renewal
 		"--mysql_auth_vault_ttl", "21s"}
 	mysqlctlArg = []string{
-		"--db_dba_password", mysqlPassword}
+		vtutils.GetFlagVariantForTests("--db-dba-password"), mysqlPassword}
 	vttabletLogFileName = "vttablet.INFO"
 	tokenRenewalString  = "Vault client status: token renewed"
 )

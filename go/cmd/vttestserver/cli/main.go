@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttest"
 
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -115,7 +116,7 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().IntVar(&basePort, "port", 0,
 		"Port to use for vtcombo. If this is 0, a random port will be chosen.")
 
-	cmd.Flags().StringVar(&protoTopo, "proto_topo", "",
+	cmd.Flags().StringVar(&protoTopo, "proto-topo", "",
 		"Define the fake cluster topology as a compact text format encoded"+
 			" vttest proto. See vttest.proto for more information.")
 
@@ -146,35 +147,35 @@ func New() (cmd *cobra.Command) {
 			" when LocalCluster.TearDown() is called. This is useful for running"+
 			" vttestserver as a database container in local developer environments. Note"+
 			" that db migration files (--schema_dir option) and seeding of"+
-			" random data (--initialize_with_random_data option) will only run during"+
+			" random data (--initialize-with-random-data option) will only run during"+
 			" cluster startup if the data directory does not already exist. "+
 			" Changes to VSchema are persisted across cluster restarts using a simple"+
 			" watcher if the --data_dir argument is specified.")
 
-	cmd.Flags().BoolVar(&doSeed, "initialize_with_random_data", false,
+	utils.SetFlagBoolVar(cmd.Flags(), &doSeed, "initialize-with-random-data", false,
 		"If this flag is each table-shard will be initialized"+
 			" with random data. See also the 'rng_seed' and 'min_shard_size'"+
 			" and 'max_shard_size' flags.")
 
 	cmd.Flags().IntVar(&seed.RngSeed, "rng_seed", 123,
 		"The random number generator seed to use when initializing"+
-			" with random data (see also --initialize_with_random_data)."+
+			" with random data (see also --initialize-with-random-data)."+
 			" Multiple runs with the same seed will result with the same"+
 			" initial data.")
 
 	cmd.Flags().IntVar(&seed.MinSize, "min_table_shard_size", 1000,
 		"The minimum number of initial rows in a table shard. Ignored if"+
-			"--initialize_with_random_data is false. The actual number is chosen"+
+			"--initialize-with-random-data is false. The actual number is chosen"+
 			" randomly.")
 
 	cmd.Flags().IntVar(&seed.MaxSize, "max_table_shard_size", 10000,
 		"The maximum number of initial rows in a table shard. Ignored if"+
-			"--initialize_with_random_data is false. The actual number is chosen"+
+			"--initialize-with-random-data is false. The actual number is chosen"+
 			" randomly")
 
 	cmd.Flags().Float64Var(&seed.NullProbability, "null_probability", 0.1,
 		"The probability to initialize a field with 'NULL' "+
-			" if --initialize_with_random_data is true. Only applies to fields"+
+			" if --initialize-with-random-data is true. Only applies to fields"+
 			" that can contain NULL values.")
 
 	cmd.Flags().StringVar(&config.MySQLBindHost, "mysql_bind_host", "localhost",
@@ -208,11 +209,11 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
 	cmd.Flags().DurationVar(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 30*time.Second, "query server transaction timeout, a transaction will be killed if it takes longer than this value")
 
-	cmd.Flags().StringVar(&config.TabletHostName, "tablet_hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
+	utils.SetFlagStringVar(cmd.Flags(), &config.TabletHostName, "tablet-hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
 
 	cmd.Flags().StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
 
-	cmd.Flags().StringVar(&config.ForeignKeyMode, "foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
+	utils.SetFlagStringVar(cmd.Flags(), &config.ForeignKeyMode, "foreign-key-mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
 	cmd.Flags().BoolVar(&config.EnableOnlineDDL, "enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
 	cmd.Flags().BoolVar(&config.EnableDirectDDL, "enable_direct_ddl", true, "Allow users to submit direct DDL statements")
 
@@ -221,11 +222,11 @@ func New() (cmd *cobra.Command) {
 	cmd.Flags().StringVar(&config.ExternalTopoGlobalServerAddress, "external_topo_global_server_address", "", "the address of the global topology server for vtcombo process")
 	cmd.Flags().StringVar(&config.ExternalTopoGlobalRoot, "external_topo_global_root", "", "the path of the global topology data in the global topology server for vtcombo process")
 
-	cmd.Flags().DurationVar(&config.VtgateTabletRefreshInterval, "tablet_refresh_interval", 10*time.Second, "Interval at which vtgate refreshes tablet information from topology server.")
+	utils.SetFlagDurationVar(cmd.Flags(), &config.VtgateTabletRefreshInterval, "tablet-refresh-interval", 10*time.Second, "Interval at which vtgate refreshes tablet information from topology server.")
 
 	cmd.Flags().BoolVar(&doCreateTCPUser, "initialize-with-vt-dba-tcp", false, "If this flag is enabled, MySQL will be initialized with an additional user named vt_dba_tcp, who will have access via TCP/IP connection.")
 
-	cmd.Flags().BoolVar(&config.NoScatter, "no_scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
+	utils.SetFlagBoolVar(cmd.Flags(), &config.NoScatter, "no-scatter", false, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
 	acl.RegisterFlags(cmd.Flags())
 
 	return cmd

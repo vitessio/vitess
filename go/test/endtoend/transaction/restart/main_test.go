@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -69,7 +70,7 @@ func TestMain(m *testing.M) {
 		// Start vtgate
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 			"--planner-version=gen4",
-			"--mysql_default_workload=olap")
+			vtutils.GetFlagVariantForTests("--mysql-default-workload")+"=olap")
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

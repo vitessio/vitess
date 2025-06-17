@@ -31,6 +31,33 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
+// TestDMLNone tests that impossible query run without an error.
+func TestDMLNone(t *testing.T) {
+	dbo := Connect(t)
+	defer dbo.Close()
+
+	t.Run("delete none", func(t *testing.T) {
+		dmlquery(t, dbo, "delete from sks.t1 where 1 = 0")
+	})
+	t.Run("update none", func(t *testing.T) {
+		dmlquery(t, dbo, "update sks.t1 set age = 5 where 1 = 0")
+	})
+}
+
+func dmlquery(t *testing.T, dbo *sql.DB, query string) {
+	stmt, err := dbo.Prepare(query)
+	require.NoError(t, err)
+	defer stmt.Close()
+
+	qr, err := stmt.Exec()
+	require.NoError(t, err)
+
+	ra, err := qr.RowsAffected()
+	require.NoError(t, err)
+
+	require.Zero(t, ra)
+}
+
 // TestSelect simple select the data without any condition.
 func TestSelect(t *testing.T) {
 	dbo := Connect(t)
@@ -444,6 +471,23 @@ func TestBinaryColumn(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestInsertTest inserts a row with empty json array.
+func TestInsertTest(t *testing.T) {
+	dbo := Connect(t, "interpolateParams=false")
+	defer dbo.Close()
+
+	stmt, err := dbo.Prepare(`insert into vt_prepare_stmt_test(id, keyspace_id, json_col) values( null, ?, ?)`)
+	require.NoError(t, err)
+
+	res, err := stmt.Exec(1, "[]")
+	require.NoError(t, err)
+
+	ra, err := res.RowsAffected()
+	require.NoError(t, err)
+
+	assert.Equal(t, int64(1), ra)
+}
+
 // TestSpecializedPlan tests the specialized plan generation for the query.
 func TestSpecializedPlan(t *testing.T) {
 	dbInfo.KeyspaceName = sks
@@ -467,6 +511,9 @@ func TestSpecializedPlan(t *testing.T) {
 	}, {
 		query: `select 1 from t1 tbl1, t1 tbl2, t1 tbl3, t1 tbl4 where tbl1.id = ? and tbl2.id = ? and tbl3.id = ? and tbl4.id = ?`,
 		args:  []any{1, 1, 1, 1},
+	}, {
+		query: `SELECT e.id, e.name, s.age, ROW_NUMBER() OVER (PARTITION BY e.age ORDER BY s.name DESC) AS age_rank FROM t1 e, t1 s where e.id = ? and s.id = ?`,
+		args:  []any{1, 1},
 	}}
 
 	for _, q := range queries {
@@ -484,12 +531,23 @@ func TestSpecializedPlan(t *testing.T) {
 	finalExecCount := getVarValue[float64](t, "Passthrough", func() map[string]any {
 		return oMap
 	})
-	require.EqualValues(t, 15, finalExecCount-initExecCount)
+	require.EqualValues(t, 20, finalExecCount-initExecCount)
 
-	// Validate specialized plan.
+	randomExec(t, dbo)
+
+	// Validate Join Query specialized plan.
 	p := getPlanWhenReady(t, queries[0].query, 100*time.Millisecond, clusterInstance.VtgateProcess.ReadQueryPlans)
 	require.NotNil(t, p, "plan not found")
+	validateJoinSpecializedPlan(t, p)
 
+	// Validate Window Function Query specialized plan with failing baseline plan.
+	p = getPlanWhenReady(t, queries[3].query, 100*time.Millisecond, clusterInstance.VtgateProcess.ReadQueryPlans)
+	require.NotNil(t, p, "plan not found")
+	validateBaselineErrSpecializedPlan(t, p)
+}
+
+func validateJoinSpecializedPlan(t *testing.T, p map[string]any) {
+	t.Helper()
 	plan, exist := p["Instructions"]
 	require.True(t, exist, "plan Instructions not found")
 
@@ -502,6 +560,43 @@ func TestSpecializedPlan(t *testing.T) {
 	require.Equal(t, "Optimized", pd.Inputs[1].InputName)
 	require.Equal(t, "Route", pd.Inputs[1].OperatorType)
 	require.Equal(t, "EqualUnique", pd.Inputs[1].Variant)
+}
+
+func validateBaselineErrSpecializedPlan(t *testing.T, p map[string]any) {
+	t.Helper()
+	plan, exist := p["Instructions"]
+	require.True(t, exist, "plan Instructions not found")
+
+	pm, ok := plan.(map[string]any)
+	require.True(t, ok, "plan is not of type map[string]any")
+	require.EqualValues(t, "PlanSwitcher", pm["OperatorType"])
+	require.EqualValues(t, "VT12001: unsupported: OVER CLAUSE with sharded keyspace", pm["BaselineErr"])
+
+	pd, err := engine.PrimitiveDescriptionFromMap(plan.(map[string]any))
+	require.NoError(t, err)
+	require.Equal(t, "PlanSwitcher", pd.OperatorType)
+	require.Len(t, pd.Inputs, 1, "Only Specialized plan should be available")
+
+	require.Equal(t, "Optimized", pd.Inputs[0].InputName)
+	require.Equal(t, "Route", pd.Inputs[0].OperatorType)
+	require.Equal(t, "EqualUnique", pd.Inputs[0].Variant)
+}
+
+// randomExec to make many plans so that plan cache is populated.
+func randomExec(t *testing.T, dbo *sql.DB) {
+	t.Helper()
+
+	for i := 1; i < 101; i++ {
+		// generate a random query
+		query := fmt.Sprintf("SELECT %d", i)
+		stmt, err := dbo.Prepare(query)
+		require.NoError(t, err)
+
+		rows, err := stmt.Query()
+		require.NoError(t, err)
+		require.NoError(t, rows.Close())
+		time.Sleep(5 * time.Millisecond)
+	}
 }
 
 // getPlanWhenReady polls for the query plan until it is ready or times out.

@@ -50,21 +50,6 @@ func (ps *UncorrelatedSubquery) Inputs() ([]Primitive, []map[string]any) {
 	}}
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (ps *UncorrelatedSubquery) RouteType() string {
-	return ps.Opcode.String()
-}
-
-// GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (ps *UncorrelatedSubquery) GetKeyspaceName() string {
-	return ps.Outer.GetKeyspaceName()
-}
-
-// GetTableName specifies the table that this primitive routes to.
-func (ps *UncorrelatedSubquery) GetTableName() string {
-	return ps.Outer.GetTableName()
-}
-
 // TryExecute satisfies the Primitive interface.
 func (ps *UncorrelatedSubquery) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)

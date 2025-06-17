@@ -78,22 +78,11 @@ func NewDBDDL(dbName string, create bool, timeout int) *DBDDL {
 	}
 }
 
-// RouteType implements the Primitive interface
-func (c *DBDDL) RouteType() string {
+func (c *DBDDL) routeType() string {
 	if c.create {
 		return "CreateDB"
 	}
 	return "DropDB"
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (c *DBDDL) GetKeyspaceName() string {
-	return c.name
-}
-
-// GetTableName implements the Primitive interface
-func (c *DBDDL) GetTableName() string {
-	return ""
 }
 
 // TryExecute implements the Primitive interface
@@ -199,7 +188,7 @@ func (c *DBDDL) GetFields(context.Context, VCursor, map[string]*querypb.BindVari
 // description implements the Primitive interface
 func (c *DBDDL) description() PrimitiveDescription {
 	return PrimitiveDescription{
-		OperatorType: strings.ToUpper(c.RouteType()),
+		OperatorType: strings.ToUpper(c.routeType()),
 		Keyspace:     &vindexes.Keyspace{Name: c.name},
 	}
 }

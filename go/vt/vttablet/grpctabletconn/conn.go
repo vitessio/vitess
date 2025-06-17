@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -49,11 +50,11 @@ var (
 )
 
 func registerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&cert, "tablet_grpc_cert", cert, "the cert to use to connect")
-	fs.StringVar(&key, "tablet_grpc_key", key, "the key to use to connect")
-	fs.StringVar(&ca, "tablet_grpc_ca", ca, "the server ca to use to validate servers when connecting")
-	fs.StringVar(&crl, "tablet_grpc_crl", crl, "the server crl to use to validate server certificates when connecting")
-	fs.StringVar(&name, "tablet_grpc_server_name", name, "the server name to use to validate server certificate")
+	utils.SetFlagStringVar(fs, &cert, "tablet-grpc-cert", cert, "the cert to use to connect")
+	utils.SetFlagStringVar(fs, &key, "tablet-grpc-key", key, "the key to use to connect")
+	utils.SetFlagStringVar(fs, &ca, "tablet-grpc-ca", ca, "the server ca to use to validate servers when connecting")
+	utils.SetFlagStringVar(fs, &crl, "tablet-grpc-crl", crl, "the server crl to use to validate server certificates when connecting")
+	utils.SetFlagStringVar(fs, &name, "tablet-grpc-server-name", name, "the server name to use to validate server certificate")
 }
 
 func init() {

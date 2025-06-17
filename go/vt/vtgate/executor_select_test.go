@@ -3290,6 +3290,28 @@ func TestOnlyOptimizedPlan(t *testing.T) {
 	require.ErrorContains(t, sp.BaselineErr, "VT12001: unsupported: subquery with aggregation in order by")
 }
 
+// TestPrepareWithUnsupportedQuery tests that the fields returned by the query on unsupported query.
+func TestPrepareWithUnsupportedQuery(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+
+	sql := "select a, b, c, row_number() over (partition by x) from user where c1 = ? and c2 = ?"
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
+	fields, paramsCount, err := executorPrepare(ctx, executor, session.Session, sql)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, paramsCount)
+	wantFields := []*querypb.Field{
+		{Name: "a", Type: querypb.Type_NULL_TYPE},
+		{Name: "b", Type: querypb.Type_NULL_TYPE},
+		{Name: "c", Type: querypb.Type_NULL_TYPE},
+		{Name: "row_number() over ( partition by x)", Type: querypb.Type_NULL_TYPE},
+	}
+	require.Equal(t, wantFields, fields)
+
+	sql = "select row_number over" // this is a syntax error. It should return an error.
+	_, _, err = executorPrepare(ctx, executor, session.Session, sql)
+	require.ErrorContains(t, err, "syntax error")
+}
+
 func TestSelectDatabasePrepare(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	logChan := executor.queryLogger.Subscribe("Test")
@@ -3311,33 +3333,17 @@ func TestSelectWithUnionAll(t *testing.T) {
 	bv1, _ := sqltypes.BuildBindVariable([]int64{1, 2})
 	bv2, _ := sqltypes.BuildBindVariable([]int64{3})
 	sbc1WantQueries := []*querypb.BoundQuery{{
-		Sql: "select id from `user` where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals union all select id from `user` where id in ::vtg1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": bv1,
 			"vtg1":   bv,
-			"vtg2":   bv,
-		},
-	}, {
-		Sql: "select id from `user` where id in ::__vals",
-		BindVariables: map[string]*querypb.BindVariable{
-			"__vals": bv1,
-			"vtg1":   bv,
-			"vtg2":   bv,
 		},
 	}}
 	sbc2WantQueries := []*querypb.BoundQuery{{
-		Sql: "select id from `user` where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals union all select id from `user` where id in ::vtg1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": bv2,
 			"vtg1":   bv,
-			"vtg2":   bv,
-		},
-	}, {
-		Sql: "select id from `user` where id in ::__vals",
-		BindVariables: map[string]*querypb.BindVariable{
-			"__vals": bv2,
-			"vtg1":   bv,
-			"vtg2":   bv,
 		},
 	}}
 	session := &vtgatepb.Session{
