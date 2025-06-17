@@ -4008,10 +4008,10 @@ func (s *VtctldServer) SetVtorcEmergencyReparent(ctx context.Context, req *vtctl
 
 	defer unlock(&err)
 
-	// set ERS-disabled on the shard record unless
-	// it is undef or "0" (an unsharded keyspace).
-	// otherwise set ERS-disabled on the keyspace.
-	if req.Shard != "" && req.Shard != "0" {
+	// set ERS-disabled on the shard record unless it is undef
+	// or "0"/- (unsharded/full-keyspace). otherwise set
+	// ERS-disabled on the keyspace record.
+	if req.Shard != "" && req.Shard != "0" && req.Shard != "-" {
 		_, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
 			if si.VtorcConfig != nil {
 				si.VtorcConfig.DisableEmergencyReparent = req.Disable
