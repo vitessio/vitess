@@ -20,6 +20,7 @@ import (
 	tabletmanagerdata "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	vschema "vitess.io/vitess/go/vt/proto/vschema"
+	vtorcdata "vitess.io/vitess/go/vt/proto/vtorcdata"
 	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
@@ -38917,7 +38918,7 @@ func (m *CreateKeyspaceRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.VtorcConfig == nil {
-				m.VtorcConfig = &topodata.KeyspaceVtorcConfig{}
+				m.VtorcConfig = &vtorcdata.KeyspaceConfig{}
 			}
 			if err := m.VtorcConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
@@ -39195,7 +39196,7 @@ func (m *CreateShardRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if m.VtorcConfig == nil {
-				m.VtorcConfig = &topodata.ShardVtorcConfig{}
+				m.VtorcConfig = &vtorcdata.ShardConfig{}
 			}
 			if err := m.VtorcConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err

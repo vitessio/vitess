@@ -119,6 +119,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/schema"
@@ -1414,7 +1415,7 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		}
 	}
 
-	err = wr.TopoServer().CreateShard(ctx, keyspace, shard, &topodatapb.ShardVtorcConfig{
+	err = wr.TopoServer().CreateShard(ctx, keyspace, shard, &vtorcdatapb.ShardConfig{
 		DisableEmergencyReparent: *disableErs,
 	})
 	if *force && topo.IsErrType(err, topo.NodeExists) {
@@ -1873,7 +1874,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		SnapshotTime:     snapshotTime,
 		DurabilityPolicy: *durabilityPolicy,
 		SidecarDbName:    *sidecarDBName,
-		VtorcConfig: &topodatapb.KeyspaceVtorcConfig{
+		VtorcConfig: &vtorcdatapb.KeyspaceConfig{
 			DisableEmergencyReparent: *disableErs,
 		},
 	}

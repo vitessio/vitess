@@ -18570,7 +18570,7 @@ export namespace topodata {
         is_primary_serving?: (boolean|null);
 
         /** Shard vtorc_config */
-        vtorc_config?: (topodata.IShardVtorcConfig|null);
+        vtorc_config?: (vtorcdata.IShardConfig|null);
     }
 
     /** Represents a Shard. */
@@ -18601,7 +18601,7 @@ export namespace topodata {
         public is_primary_serving: boolean;
 
         /** Shard vtorc_config. */
-        public vtorc_config?: (topodata.IShardVtorcConfig|null);
+        public vtorc_config?: (vtorcdata.IShardConfig|null);
 
         /**
          * Creates a new Shard instance using the specified properties.
@@ -18942,7 +18942,7 @@ export namespace topodata {
         sidecar_db_name?: (string|null);
 
         /** Keyspace vtorc_config */
-        vtorc_config?: (topodata.IKeyspaceVtorcConfig|null);
+        vtorc_config?: (vtorcdata.IKeyspaceConfig|null);
     }
 
     /** Represents a Keyspace. */
@@ -18973,7 +18973,7 @@ export namespace topodata {
         public sidecar_db_name: string;
 
         /** Keyspace vtorc_config. */
-        public vtorc_config?: (topodata.IKeyspaceVtorcConfig|null);
+        public vtorc_config?: (vtorcdata.IKeyspaceConfig|null);
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -19923,200 +19923,6 @@ export namespace topodata {
         }
     }
 
-    /** Properties of a KeyspaceVtorcConfig. */
-    interface IKeyspaceVtorcConfig {
-
-        /** KeyspaceVtorcConfig disable_emergency_reparent */
-        disable_emergency_reparent?: (boolean|null);
-    }
-
-    /** Represents a KeyspaceVtorcConfig. */
-    class KeyspaceVtorcConfig implements IKeyspaceVtorcConfig {
-
-        /**
-         * Constructs a new KeyspaceVtorcConfig.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IKeyspaceVtorcConfig);
-
-        /** KeyspaceVtorcConfig disable_emergency_reparent. */
-        public disable_emergency_reparent: boolean;
-
-        /**
-         * Creates a new KeyspaceVtorcConfig instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns KeyspaceVtorcConfig instance
-         */
-        public static create(properties?: topodata.IKeyspaceVtorcConfig): topodata.KeyspaceVtorcConfig;
-
-        /**
-         * Encodes the specified KeyspaceVtorcConfig message. Does not implicitly {@link topodata.KeyspaceVtorcConfig.verify|verify} messages.
-         * @param message KeyspaceVtorcConfig message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IKeyspaceVtorcConfig, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified KeyspaceVtorcConfig message, length delimited. Does not implicitly {@link topodata.KeyspaceVtorcConfig.verify|verify} messages.
-         * @param message KeyspaceVtorcConfig message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IKeyspaceVtorcConfig, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a KeyspaceVtorcConfig message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns KeyspaceVtorcConfig
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.KeyspaceVtorcConfig;
-
-        /**
-         * Decodes a KeyspaceVtorcConfig message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns KeyspaceVtorcConfig
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.KeyspaceVtorcConfig;
-
-        /**
-         * Verifies a KeyspaceVtorcConfig message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a KeyspaceVtorcConfig message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns KeyspaceVtorcConfig
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.KeyspaceVtorcConfig;
-
-        /**
-         * Creates a plain object from a KeyspaceVtorcConfig message. Also converts values to other types if specified.
-         * @param message KeyspaceVtorcConfig
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.KeyspaceVtorcConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this KeyspaceVtorcConfig to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for KeyspaceVtorcConfig
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
-    /** Properties of a ShardVtorcConfig. */
-    interface IShardVtorcConfig {
-
-        /** ShardVtorcConfig disable_emergency_reparent */
-        disable_emergency_reparent?: (boolean|null);
-    }
-
-    /** Represents a ShardVtorcConfig. */
-    class ShardVtorcConfig implements IShardVtorcConfig {
-
-        /**
-         * Constructs a new ShardVtorcConfig.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: topodata.IShardVtorcConfig);
-
-        /** ShardVtorcConfig disable_emergency_reparent. */
-        public disable_emergency_reparent: boolean;
-
-        /**
-         * Creates a new ShardVtorcConfig instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ShardVtorcConfig instance
-         */
-        public static create(properties?: topodata.IShardVtorcConfig): topodata.ShardVtorcConfig;
-
-        /**
-         * Encodes the specified ShardVtorcConfig message. Does not implicitly {@link topodata.ShardVtorcConfig.verify|verify} messages.
-         * @param message ShardVtorcConfig message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: topodata.IShardVtorcConfig, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ShardVtorcConfig message, length delimited. Does not implicitly {@link topodata.ShardVtorcConfig.verify|verify} messages.
-         * @param message ShardVtorcConfig message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: topodata.IShardVtorcConfig, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ShardVtorcConfig message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ShardVtorcConfig
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ShardVtorcConfig;
-
-        /**
-         * Decodes a ShardVtorcConfig message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ShardVtorcConfig
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ShardVtorcConfig;
-
-        /**
-         * Verifies a ShardVtorcConfig message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ShardVtorcConfig message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ShardVtorcConfig
-         */
-        public static fromObject(object: { [k: string]: any }): topodata.ShardVtorcConfig;
-
-        /**
-         * Creates a plain object from a ShardVtorcConfig message. Also converts values to other types if specified.
-         * @param message ShardVtorcConfig
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: topodata.ShardVtorcConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ShardVtorcConfig to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-
-        /**
-         * Gets the default type url for ShardVtorcConfig
-         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-         * @returns The default type url
-         */
-        public static getTypeUrl(typeUrlPrefix?: string): string;
-    }
-
     /** Properties of a SrvKeyspace. */
     interface ISrvKeyspace {
 
@@ -20829,6 +20635,204 @@ export namespace topodata {
 
         /**
          * Gets the default type url for ExternalClusters
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+}
+
+/** Namespace vtorcdata. */
+export namespace vtorcdata {
+
+    /** Properties of a KeyspaceConfig. */
+    interface IKeyspaceConfig {
+
+        /** KeyspaceConfig disable_emergency_reparent */
+        disable_emergency_reparent?: (boolean|null);
+    }
+
+    /** Represents a KeyspaceConfig. */
+    class KeyspaceConfig implements IKeyspaceConfig {
+
+        /**
+         * Constructs a new KeyspaceConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtorcdata.IKeyspaceConfig);
+
+        /** KeyspaceConfig disable_emergency_reparent. */
+        public disable_emergency_reparent: boolean;
+
+        /**
+         * Creates a new KeyspaceConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns KeyspaceConfig instance
+         */
+        public static create(properties?: vtorcdata.IKeyspaceConfig): vtorcdata.KeyspaceConfig;
+
+        /**
+         * Encodes the specified KeyspaceConfig message. Does not implicitly {@link vtorcdata.KeyspaceConfig.verify|verify} messages.
+         * @param message KeyspaceConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtorcdata.IKeyspaceConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified KeyspaceConfig message, length delimited. Does not implicitly {@link vtorcdata.KeyspaceConfig.verify|verify} messages.
+         * @param message KeyspaceConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtorcdata.IKeyspaceConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a KeyspaceConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns KeyspaceConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtorcdata.KeyspaceConfig;
+
+        /**
+         * Decodes a KeyspaceConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns KeyspaceConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtorcdata.KeyspaceConfig;
+
+        /**
+         * Verifies a KeyspaceConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a KeyspaceConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns KeyspaceConfig
+         */
+        public static fromObject(object: { [k: string]: any }): vtorcdata.KeyspaceConfig;
+
+        /**
+         * Creates a plain object from a KeyspaceConfig message. Also converts values to other types if specified.
+         * @param message KeyspaceConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtorcdata.KeyspaceConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this KeyspaceConfig to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for KeyspaceConfig
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a ShardConfig. */
+    interface IShardConfig {
+
+        /** ShardConfig disable_emergency_reparent */
+        disable_emergency_reparent?: (boolean|null);
+    }
+
+    /** Represents a ShardConfig. */
+    class ShardConfig implements IShardConfig {
+
+        /**
+         * Constructs a new ShardConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtorcdata.IShardConfig);
+
+        /** ShardConfig disable_emergency_reparent. */
+        public disable_emergency_reparent: boolean;
+
+        /**
+         * Creates a new ShardConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardConfig instance
+         */
+        public static create(properties?: vtorcdata.IShardConfig): vtorcdata.ShardConfig;
+
+        /**
+         * Encodes the specified ShardConfig message. Does not implicitly {@link vtorcdata.ShardConfig.verify|verify} messages.
+         * @param message ShardConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtorcdata.IShardConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardConfig message, length delimited. Does not implicitly {@link vtorcdata.ShardConfig.verify|verify} messages.
+         * @param message ShardConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtorcdata.IShardConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtorcdata.ShardConfig;
+
+        /**
+         * Decodes a ShardConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtorcdata.ShardConfig;
+
+        /**
+         * Verifies a ShardConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardConfig
+         */
+        public static fromObject(object: { [k: string]: any }): vtorcdata.ShardConfig;
+
+        /**
+         * Creates a plain object from a ShardConfig message. Also converts values to other types if specified.
+         * @param message ShardConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtorcdata.ShardConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardConfig to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardConfig
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */
@@ -56684,7 +56688,7 @@ export namespace vtctldata {
         sidecar_db_name?: (string|null);
 
         /** CreateKeyspaceRequest vtorc_config */
-        vtorc_config?: (topodata.IKeyspaceVtorcConfig|null);
+        vtorc_config?: (vtorcdata.IKeyspaceConfig|null);
     }
 
     /** Represents a CreateKeyspaceRequest. */
@@ -56721,7 +56725,7 @@ export namespace vtctldata {
         public sidecar_db_name: string;
 
         /** CreateKeyspaceRequest vtorc_config. */
-        public vtorc_config?: (topodata.IKeyspaceVtorcConfig|null);
+        public vtorc_config?: (vtorcdata.IKeyspaceConfig|null);
 
         /**
          * Creates a new CreateKeyspaceRequest instance using the specified properties.
@@ -56914,7 +56918,7 @@ export namespace vtctldata {
         include_parent?: (boolean|null);
 
         /** CreateShardRequest vtorc_config */
-        vtorc_config?: (topodata.IShardVtorcConfig|null);
+        vtorc_config?: (vtorcdata.IShardConfig|null);
     }
 
     /** Represents a CreateShardRequest. */
@@ -56939,7 +56943,7 @@ export namespace vtctldata {
         public include_parent: boolean;
 
         /** CreateShardRequest vtorc_config. */
-        public vtorc_config?: (topodata.IShardVtorcConfig|null);
+        public vtorc_config?: (vtorcdata.IShardConfig|null);
 
         /**
          * Creates a new CreateShardRequest instance using the specified properties.

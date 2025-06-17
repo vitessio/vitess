@@ -26,6 +26,7 @@ option java_package="io.vitess.proto";
 
 package topodata;
 
+import "vtorcdata.proto";
 import "vttime.proto";
 
 // KeyRange describes a range of sharding keys, when range-based
@@ -256,7 +257,7 @@ message Shard {
   reserved 5;
 
   // VtorcConfig is the vtorc config for the shard.
-  ShardVtorcConfig vtorc_config = 9;
+  vtorcdata.ShardConfig vtorc_config = 9;
 }
 
 // A Keyspace contains data about a keyspace.
@@ -303,7 +304,7 @@ message Keyspace {
   string sidecar_db_name = 10;
 
   // VtorcConfig is the keyspace config for Vtorc.
-  KeyspaceVtorcConfig vtorc_config = 11;
+  vtorcdata.KeyspaceConfig vtorc_config = 11;
 }
 
 // ShardReplication describes the MySQL replication relationships
@@ -400,20 +401,6 @@ message ThrottlerConfig {
 
   // MetricThresholds maps metric names to the threshold values that should be used for that metric
   map <string, double> metric_thresholds = 7;
-}
-
-// KeyspaceVtorcConfig stores configuration for Vtorc.
-message KeyspaceVtorcConfig {
-  // DisableEmergencyReparent reflects if EmergencyReparentShard
-  // can be used in Vtorc recoveries.
-  bool disable_emergency_reparent = 1;
-}
-
-// ShardVtorcConfig stores configuration for Vtorc.
-message ShardVtorcConfig {
-  // DisableEmergencyReparent reflects if EmergencyReparentShard
-  // can be used in Vtorc recoveries.
-  bool disable_emergency_reparent = 1;
 }
 
 // SrvKeyspace is a rollup node for the keyspace itself.

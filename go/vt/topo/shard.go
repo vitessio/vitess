@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/events"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -257,7 +258,7 @@ func (ts *Server) UpdateShardFields(ctx context.Context, keyspace, shard string,
 // CreateShard creates a new shard and tries to fill in the right information.
 // This will lock the Keyspace, as we may be looking at other shard servedTypes.
 // Using GetOrCreateShard is probably a better idea for most use cases.
-func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string, vtorcConfig *topodatapb.ShardVtorcConfig) (err error) {
+func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string, vtorcConfig *vtorcdatapb.ShardConfig) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -328,7 +329,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string, vtorc
 
 // GetOrCreateShard will return the shard object, or create one if it doesn't
 // already exist. Note the shard creation is protected by a keyspace Lock.
-func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string, vtorcConfig *topodatapb.ShardVtorcConfig) (si *ShardInfo, err error) {
+func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string, vtorcConfig *vtorcdatapb.ShardConfig) (si *ShardInfo, err error) {
 	si, err = ts.GetShard(ctx, keyspace, shard)
 	if !IsErrType(err, NoNode) {
 		return

@@ -63,6 +63,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemamanager"
@@ -3997,7 +3998,7 @@ func (s *VtctldServer) SetVtorcEmergencyReparent(ctx context.Context, req *vtctl
 			if si.VtorcConfig != nil {
 				si.VtorcConfig.DisableEmergencyReparent = req.Disable
 			} else if req.Disable {
-				si.VtorcConfig = &topodatapb.ShardVtorcConfig{
+				si.VtorcConfig = &vtorcdatapb.ShardConfig{
 					DisableEmergencyReparent: req.Disable,
 				}
 			}
@@ -4015,7 +4016,7 @@ func (s *VtctldServer) SetVtorcEmergencyReparent(ctx context.Context, req *vtctl
 		if ki.VtorcConfig != nil {
 			ki.VtorcConfig.DisableEmergencyReparent = req.Disable
 		} else if req.Disable {
-			ki.VtorcConfig = &topodatapb.KeyspaceVtorcConfig{
+			ki.VtorcConfig = &vtorcdatapb.KeyspaceConfig{
 				DisableEmergencyReparent: req.Disable,
 			}
 		}

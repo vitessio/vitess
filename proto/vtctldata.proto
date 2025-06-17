@@ -30,6 +30,7 @@ import "replicationdata.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
 import "vschema.proto";
+import "vtorcdata.proto";
 import "vtrpc.proto";
 import "vttime.proto";
 
@@ -620,7 +621,7 @@ message CreateKeyspaceRequest {
   // each vttablet in the keyspace will use.
   string sidecar_db_name = 11;
   // VtorcConfig is the vtorc config for the keyspace.
-  topodata.KeyspaceVtorcConfig vtorc_config = 12;
+  vtorcdata.KeyspaceConfig vtorc_config = 12;
 }
 
 message CreateKeyspaceResponse {
@@ -640,7 +641,7 @@ message CreateShardRequest {
   // doesn't already exist.
   bool include_parent = 4;
   // VtorcConfig is the vtorc config for the shard.
-  topodata.ShardVtorcConfig vtorc_config = 5;
+  vtorcdata.ShardConfig vtorc_config = 5;
 }
 
 message CreateShardResponse {

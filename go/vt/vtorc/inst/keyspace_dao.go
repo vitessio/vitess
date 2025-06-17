@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -51,7 +52,7 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt32("keyspace_type"))
 		keyspace.DurabilityPolicy = row.GetString("durability_policy")
-		keyspace.VtorcConfig = &topodatapb.KeyspaceVtorcConfig{
+		keyspace.VtorcConfig = &vtorcdatapb.KeyspaceConfig{
 			DisableEmergencyReparent: row.GetBool("disable_emergency_reparent"),
 		}
 		keyspace.SetKeyspaceName(keyspaceName)

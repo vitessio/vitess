@@ -36,6 +36,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 )
 
 func compactJSON(in []byte) string {
@@ -57,7 +58,7 @@ func TestAPI(t *testing.T) {
 	ks1 := &topodatapb.Keyspace{
 		DurabilityPolicy: policy.DurabilitySemiSync,
 		SidecarDbName:    "_vt_sidecar_ks1",
-		VtorcConfig: &topodatapb.KeyspaceVtorcConfig{
+		VtorcConfig: &vtorcdatapb.KeyspaceConfig{
 			DisableEmergencyReparent: true,
 		},
 	}

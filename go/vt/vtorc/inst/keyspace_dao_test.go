@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -98,14 +99,14 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
-				VtorcConfig: &topodatapb.KeyspaceVtorcConfig{
+				VtorcConfig: &vtorcdatapb.KeyspaceConfig{
 					DisableEmergencyReparent: true,
 				},
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
-				VtorcConfig: &topodatapb.KeyspaceVtorcConfig{
+				VtorcConfig: &vtorcdatapb.KeyspaceConfig{
 					DisableEmergencyReparent: true,
 				},
 			},
