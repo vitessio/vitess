@@ -253,7 +253,7 @@ func TestAPI(t *testing.T) {
 				"durability_policy":"semi_sync",
 				"throttler_config": null,
 				"sidecar_db_name":"_vt_sidecar_ks1",
-				"vtorc_config": {
+				"vtorc": {
 					"disable_emergency_reparent": true
 				}
 			}`, http.StatusOK},
@@ -277,7 +277,7 @@ func TestAPI(t *testing.T) {
 				"source_shards": [],
 				"tablet_controls": [],
 				"is_primary_serving": true,
-				"vtorc_config": null
+				"vtorc": null
 			}`, http.StatusOK},
 		{"GET", "shards/ks1/-DEAD", "", "404 page not found", http.StatusNotFound},
 		{"POST", "shards/ks1/-80?action=TestShardAction", "", `{
@@ -337,11 +337,11 @@ func TestAPI(t *testing.T) {
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt_sidecar_ks1\",\n  \"vtorc_config\": {\n    \"disable_emergency_reparent\": true\n  }\n}\n\n"
+		   "Output": "{\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt_sidecar_ks1\",\n  \"vtorc\": {\n    \"disable_emergency_reparent\": true\n  }\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt\",\n  \"vtorc_config\": {\n    \"disable_emergency_reparent\": false\n  }\n}\n\n"
+		   "Output": "{\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\",\n  \"throttler_config\": null,\n  \"sidecar_db_name\": \"_vt\",\n  \"vtorc\": {\n    \"disable_emergency_reparent\": false\n  }\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
 		   "Error": "",
