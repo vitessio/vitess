@@ -117,7 +117,7 @@ func (ts *tableStreamer) Stream() error {
 		return err
 	}
 	log.Infof("TableStreamer Stream() started with net read_timeout: %v, net write_timeout: %v",
-		ts.config.NetReadTimeout, ts.config.NetWriteTimeout)
+		vttablet.VReplicationNetReadTimeout, vttablet.VReplicationNetWriteTimeout)
 
 	rs, err := conn.ExecuteFetch("show full tables", -1, true)
 	if err != nil {
