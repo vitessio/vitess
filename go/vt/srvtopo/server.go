@@ -42,6 +42,9 @@ type Server interface {
 	// GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace.
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
 
+	// WatchSrvKeyspace starts watching the SrvKeyspace object for changes. The callback function is called upon change.
+	// The callback function should return `true` if it wishes to continue watching for further changes, or `false` if it
+	// is done and wants to stop watching.
 	WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool)
 
 	// WatchSrvVSchema starts watching the SrvVSchema object for
