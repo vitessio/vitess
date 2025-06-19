@@ -23,6 +23,7 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
@@ -53,6 +54,7 @@ var (
 // run by it. It only checks the analysis part after the rows have been read. This tests fakes the db and explicitly returns the
 // rows that are specified in the test.
 func TestGetReplicationAnalysisDecision(t *testing.T) {
+	now := time.Now()
 	tests := []struct {
 		name           string
 		info           []*test.InfoForRecoveryAnalysis
@@ -91,7 +93,7 @@ func TestGetReplicationAnalysisDecision(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
-				ShardPrimaryTermTimestamp: "2022-12-28 07:23:25.129898+00:00",
+				ShardPrimaryTermTimestamp: protoutil.TimeToProto(now),
 				DurabilityPolicy:          policy.DurabilityNone,
 				LastCheckValid:            1,
 			}},
