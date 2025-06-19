@@ -33,7 +33,7 @@ var ErrShardNotFound = errors.New("shard not found")
 // ReadShardNames reads the names of vitess shards for a single keyspace.
 func ReadShardNames(keyspaceName string) (shardNames []string, err error) {
 	shardNames = make([]string, 0)
-	query := `select shard from vitess_shard where keyspace = ?`
+	query := `SELECT shard FROM vitess_shard WHERE keyspace = ?`
 	args := sqlutils.Args(keyspaceName)
 	err = db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		shardNames = append(shardNames, row.GetString("shard"))
@@ -59,7 +59,7 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 			keyspace = ?
 			AND shard = ?`
 	args := sqlutils.Args(keyspaceName, shardName)
-	shardFound := false
+	var shardFound bool
 	err = db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		shardFound = true
 		primaryAlias = row.GetString("primary_alias")
@@ -70,21 +70,19 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 		return
 	}
 	if !shardFound {
-		return primaryAlias, primaryTimestamp, ErrShardNotFound
+		err = ErrShardNotFound
 	}
-	return primaryAlias, primaryTimestamp, nil
+	return primaryAlias, primaryTimestamp, err
 }
 
 // SaveShard saves the shard record against the shard name.
 func SaveShard(shard *topo.ShardInfo) error {
 	_, err := db.ExecVTOrc(`
-		replace
-			into vitess_shard (
-				keyspace, shard, primary_alias, primary_timestamp
-			) values (
-				?, ?, ?, ?
-			)
-		`,
+		REPLACE	INTO vitess_shard (
+			keyspace, shard, primary_alias, primary_timestamp
+		) VALUES (
+			?, ?, ?, ?
+		)`,
 		shard.Keyspace(),
 		shard.ShardName(),
 		getShardPrimaryAliasString(shard),
@@ -102,11 +100,12 @@ func getShardPrimaryAliasString(shard *topo.ShardInfo) string {
 }
 
 // getShardPrimaryAliasString gets the shard primary term start time to be stored as a time.Time in the database.
-func getShardPrimaryTermStartTime(shard *topo.ShardInfo) (t time.Time) {
+func getShardPrimaryTermStartTime(shard *topo.ShardInfo) *time.Time {
 	if shard.PrimaryTermStartTime != nil {
-		t = protoutil.TimeFromProto(shard.PrimaryTermStartTime).UTC()
+		t := protoutil.TimeFromProto(shard.PrimaryTermStartTime).UTC()
+		return &t
 	}
-	return t
+	return nil
 }
 
 // DeleteShard deletes a shard using a keyspace and shard name.
