@@ -4132,12 +4132,16 @@ func (e *Executor) SetMigrationCutOverThreshold(ctx context.Context, uuid string
 }
 
 // CompleteMigration clears the postpone_completion flag for a given migration, assuming it was set in the first place
-func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+func (e *Executor) CompleteMigration(ctx context.Context, uuid string, shardsArg string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	if !schema.IsOnlineDDLUUID(uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in COMPLETE: %s", uuid)
+	}
+	if !e.matchesShards(shardsArg) {
+		// Does not apply to this shard!
+		return &sqltypes.Result{}, nil
 	}
 	log.Infof("CompleteMigration: request to complete migration %s", uuid)
 
@@ -4175,7 +4179,7 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqlty
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
 		log.Infof("CompletePendingMigrations: completing %s", uuid)
-		res, err := e.CompleteMigration(ctx, uuid)
+		res, err := e.CompleteMigration(ctx, uuid, "")
 		if err != nil {
 			return result, err
 		}
