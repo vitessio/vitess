@@ -458,11 +458,6 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 	return err
 }
 
-// getKeyspaceShardName returns a single string having both the keyspace and shard
-func getKeyspaceShardName(keyspace, shard string) string {
-	return fmt.Sprintf("%v:%v", keyspace, shard)
-}
-
 func getBinlogCoordinatesFromPositionString(position string) (BinlogCoordinates, error) {
 	pos, err := replication.DecodePosition(position)
 	if err != nil || pos.GTIDSet == nil {

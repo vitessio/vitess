@@ -1152,10 +1152,10 @@ func TestPostProcessAnalyses(t *testing.T) {
 	shard0 := "0"
 	shard80 := "80-"
 	clusters := map[string]*clusterAnalysis{
-		getKeyspaceShardName(keyspace, shard0): {
+		topoproto.KeyspaceShardString(keyspace, shard0): {
 			totalTablets: 4,
 		},
-		getKeyspaceShardName(keyspace, shard80): {
+		topoproto.KeyspaceShardString(keyspace, shard80): {
 			totalTablets: 3,
 		},
 	}

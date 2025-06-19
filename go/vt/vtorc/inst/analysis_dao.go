@@ -376,7 +376,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				log.Infof(analysisMessage)
 			}
 		}
-		keyspaceShard := getKeyspaceShardName(a.AnalyzedKeyspace, a.AnalyzedShard)
+		keyspaceShard := topoproto.KeyspaceShardString(a.AnalyzedKeyspace, a.AnalyzedShard)
 		if clusters[keyspaceShard] == nil {
 			clusters[keyspaceShard] = &clusterAnalysis{}
 			if a.TabletType == topodatapb.TabletType_PRIMARY {
@@ -619,7 +619,7 @@ func postProcessAnalyses(result []*vtorcdatapb.ReplicationAnalysis, clusters map
 			if analysis.Analysis == vtorcdatapb.AnalysisType_InvalidPrimary {
 				keyspaceName := analysis.AnalyzedKeyspace
 				shardName := analysis.AnalyzedShard
-				keyspaceShard := getKeyspaceShardName(keyspaceName, shardName)
+				keyspaceShard := topoproto.KeyspaceShardString(keyspaceName, shardName)
 				totalReplicas := clusters[keyspaceShard].totalTablets - 1
 				var notReplicatingReplicas []int
 				for idx, replicaAnalysis := range result {
