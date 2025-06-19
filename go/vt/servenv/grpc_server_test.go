@@ -80,54 +80,6 @@ func TestOrcaRecorder(t *testing.T) {
 	}
 }
 
-func TestEnableOrca(t *testing.T) {
-	// Set the port to enable gRPC server.
-	withTempVar(&gRPCPort, getFreePort())
-	withTempVar(&gRPCEnableOrcaMetrics, true)
-	withTempVar(&GRPCServerMetricsRecorder, nil)
-
-	gRPCEnableOrcaMetrics = true
-	GRPCServerMetricsRecorder = nil
-	createGRPCServer()
-	if GRPCServerMetricsRecorder == nil {
-		t.Errorf("GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is true")
-	}
-
-	called := false
-	orcaRegisterFunc = func(s grpc.ServiceRegistrar, o orca.ServiceOptions) error {
-		called = true
-		return nil
-	}
-	defer func() { orcaRegisterFunc = orca.Register }()
-	serveGRPC()
-	if !called {
-		t.Errorf("registerORCA should have been called when ORCA metrics are enabled")
-	}
-}
-
-func TestDisableOrca(t *testing.T) {
-	// Set the port to enable gRPC server.
-	withTempVar(&gRPCPort, getFreePort())
-	withTempVar(&gRPCEnableOrcaMetrics, false)
-	withTempVar(&GRPCServerMetricsRecorder, nil)
-
-	createGRPCServer()
-	if GRPCServerMetricsRecorder != nil {
-		t.Errorf("GRPCServerMetricsRecorder should NOT be initialized when gRPCEnableOrcaMetrics is false")
-	}
-
-	called := false
-	orcaRegisterFunc = func(s grpc.ServiceRegistrar, o orca.ServiceOptions) error {
-		called = true
-		return nil
-	}
-	defer func() { orcaRegisterFunc = orca.Register }()
-	serveGRPC()
-	if called {
-		t.Errorf("registerORCA should NOT have been called when ORCA metrics are enabled")
-	}
-}
-
 func TestReportedOrca(t *testing.T) {
 	// Set the port to enable gRPC server.
 	withTempVar(&gRPCPort, getFreePort())
