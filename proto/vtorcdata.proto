@@ -1,0 +1,142 @@
+/*
+Copyright 2025 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// This file defines the replication related structures we use.
+
+syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/vtorcdata";
+
+package vtorcdata;
+
+import "topodata.proto";
+import "vttime.proto";
+
+enum AnalysisType {
+  NoProblem = 0;
+  ClusterHasNoPrimary = 1;
+  PrimaryTabletDeleted = 2;
+  InvalidPrimary = 3;
+  InvalidReplica = 4;
+  DeadPrimaryWithoutReplicas = 5;
+  DeadPrimary = 6;
+  DeadPrimaryAndReplicas = 7;
+  DeadPrimaryAndSomeReplicas = 8;
+  PrimaryHasPrimary = 9;
+  PrimaryIsReadOnly = 10;
+  PrimaryCurrentTypeMismatch = 11;
+  PrimarySemiSyncMustBeSet = 12;
+  PrimarySemiSyncMustNotBeSet = 13;
+  ReplicaIsWritable = 14;
+  NotConnectedToPrimary = 15;
+  ConnectedToWrongPrimary = 16;
+  ReplicationStopped = 17;
+  ReplicaSemiSyncMustBeSet = 18;
+  ReplicaSemiSyncMustNotBeSet = 19;
+  ReplicaMisconfigured = 20;
+  UnreachablePrimaryWithLaggingReplicas = 21;
+  UnreachablePrimary = 22;
+  PrimarySingleReplicaNotReplicating = 23;
+  PrimarySingleReplicaDead = 24;
+  AllPrimaryReplicasNotReplicating = 25;
+  AllPrimaryReplicasNotReplicatingOrDead = 26;
+  LockedSemiSyncPrimaryHypothesis = 27;
+  LockedSemiSyncPrimary = 28;
+  PrimarySemiSyncBlocked = 29;
+  ErrantGtidDetected = 30;
+  PrimaryDiskStalled = 31;
+}
+
+enum StructureAnalysisType {
+  NoStructureAnalysis = 0;
+  StatementAndMixedLoggingReplicasStructureWarning = 1;
+  StatementAndRowLoggingReplicasStructureWarning = 2;
+  MixedAndRowLoggingReplicasStructureWarning = 3;
+  MultipleMajorVersionsLoggingReplicasStructureWarning = 4;
+  NoLoggingReplicasStructureWarning = 5;
+  DifferentGtidModesStructureWarning = 6;
+  ErrantGtidStructureWarning = 7;
+  NoFailoverSupportStructureWarning = 8;
+  NoWriteablePrimaryStructureWarning = 9;
+  NotEnoughValidSemiSyncReplicasStructureWarning = 10;
+}
+
+enum GTIDMode {
+  OFF = 0;
+  OFF_PERMISSIVE = 1;
+  ON_PERMISSIVE = 2;
+  ON = 3;
+}
+
+enum BinlogType {
+  BinaryLog = 0;
+  RelayLog = 1;
+}
+
+message BinlogCoordinates {
+  string LogFile = 1;
+  uint64 LogPos = 2;
+  BinlogType type = 3;
+}
+
+message ReplicationAnalysis {
+  int64 recovery_id = 1;
+  string analyzed_instance_alias = 2;
+  string analyzed_instance_primary_alias = 3;
+  string analyzed_keyspace = 4;
+  string analyzed_shard = 5;
+  topodata.TabletType tablet_type = 6;
+  topodata.TabletType current_tablet_type = 7;
+  vttime.Time primary_timestamp = 8;
+  vttime.Time shard_primary_term_timestamp = 9;
+  BinlogCoordinates analyzed_instance_binlog_coordinates = 10;
+  bool is_primary = 11;
+  bool is_cluster_primary = 12;
+  bool is_read_only = 13;
+  bool is_disk_stalled = 14;
+  bool is_actionable_recovery = 15;
+  bool last_check_valid = 16;
+  bool last_check_partial_success = 17;
+  bool replication_stopped = 18;
+  GTIDMode gtid_mode = 19;
+  GTIDMode min_replica_gtid_mode = 20;
+  GTIDMode max_replica_gtid_mode = 21;
+  string errant_gtid = 22;
+  string max_replica_errant_gtid = 23;
+  int32 replica_net_timeout = 24;
+  float heartbeat_interval = 25;
+  AnalysisType analysis = 26;
+  string description = 27;
+  repeated StructureAnalysisType structure_analysis = 28;
+  bool oracle_gtid_immediate_topology = 29;
+  bool binlog_server_immediate_topology = 30;
+  bool semi_sync_primary_enabled = 31;
+  bool semi_sync_primary_status = 32;
+  bool semi_sync_replica_enabled = 33;
+  bool semi_sync_blocked = 34;
+  uint32 count_replicas = 35;
+  uint32 count_valid_replicas = 36;
+  uint32 count_valid_replicating_replicas = 37;
+  uint32 count_semi_sync_primary_wait_for_replica = 38;
+  uint32 count_semi_sync_primary_clients = 39;
+  uint32 count_semi_sync_replicas_enabled = 40;
+  uint32 count_logging_replicas = 41;
+  uint32 count_statement_based_logging_replicas = 42;
+  uint32 count_mixed_based_logging_replicas = 43;
+  uint32 count_row_based_logging_replicas = 44;
+  uint32 count_distinct_major_versions_logging_replicas = 45;
+  uint32 count_delayed_replicas = 46;
+  uint32 count_lagging_replicas = 47;
+}
