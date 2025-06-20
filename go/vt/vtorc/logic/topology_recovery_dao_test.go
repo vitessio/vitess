@@ -23,9 +23,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
-	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
 // TestTopologyRecovery tests various operations related to topology recovery like reading from and writing it to the database.
@@ -39,17 +39,13 @@ func TestTopologyRecovery(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
-	replicationAnalysis := inst.ReplicationAnalysis{
+	replicationAnalysis := &vtorcdatapb.ReplicationAnalysis{
 		AnalyzedInstanceAlias: "zone1-0000000101",
 		TabletType:            tab101.Type,
-		ClusterDetails: inst.ClusterInfo{
-			Keyspace: keyspace,
-			Shard:    shard,
-		},
-		AnalyzedKeyspace: keyspace,
-		AnalyzedShard:    shard,
-		Analysis:         inst.ReplicaIsWritable,
-		IsReadOnly:       false,
+		AnalyzedKeyspace:      keyspace,
+		AnalyzedShard:         shard,
+		Analysis:              vtorcdatapb.AnalysisType_ReplicaIsWritable,
+		IsReadOnly:            false,
 	}
 	topologyRecovery := NewTopologyRecovery(replicationAnalysis)
 
@@ -142,13 +138,11 @@ func TestInsertRecoveryDetection(t *testing.T) {
 	defer func() {
 		db.ClearVTOrcDatabase()
 	}()
-	ra := &inst.ReplicationAnalysis{
+	ra := &vtorcdatapb.ReplicationAnalysis{
 		AnalyzedInstanceAlias: "alias-1",
-		Analysis:              inst.ClusterHasNoPrimary,
-		ClusterDetails: inst.ClusterInfo{
-			Keyspace: keyspace,
-			Shard:    shard,
-		},
+		AnalyzedKeyspace:      keyspace,
+		AnalyzedShard:         shard,
+		Analysis:              vtorcdatapb.AnalysisType_ClusterHasNoPrimary,
 	}
 	err := InsertRecoveryDetection(ra)
 	require.NoError(t, err)

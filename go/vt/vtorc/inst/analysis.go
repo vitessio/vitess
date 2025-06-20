@@ -17,63 +17,8 @@
 package inst
 
 import (
-	"encoding/json"
-	"time"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/vtorc/config"
-)
-
-type AnalysisCode string
-
-const (
-	NoProblem                              AnalysisCode = "NoProblem"
-	ClusterHasNoPrimary                    AnalysisCode = "ClusterHasNoPrimary"
-	PrimaryTabletDeleted                   AnalysisCode = "PrimaryTabletDeleted"
-	InvalidPrimary                         AnalysisCode = "InvalidPrimary"
-	InvalidReplica                         AnalysisCode = "InvalidReplica"
-	DeadPrimaryWithoutReplicas             AnalysisCode = "DeadPrimaryWithoutReplicas"
-	DeadPrimary                            AnalysisCode = "DeadPrimary"
-	DeadPrimaryAndReplicas                 AnalysisCode = "DeadPrimaryAndReplicas"
-	DeadPrimaryAndSomeReplicas             AnalysisCode = "DeadPrimaryAndSomeReplicas"
-	PrimaryHasPrimary                      AnalysisCode = "PrimaryHasPrimary"
-	PrimaryIsReadOnly                      AnalysisCode = "PrimaryIsReadOnly"
-	PrimaryCurrentTypeMismatch             AnalysisCode = "PrimaryCurrentTypeMismatch"
-	PrimarySemiSyncMustBeSet               AnalysisCode = "PrimarySemiSyncMustBeSet"
-	PrimarySemiSyncMustNotBeSet            AnalysisCode = "PrimarySemiSyncMustNotBeSet"
-	ReplicaIsWritable                      AnalysisCode = "ReplicaIsWritable"
-	NotConnectedToPrimary                  AnalysisCode = "NotConnectedToPrimary"
-	ConnectedToWrongPrimary                AnalysisCode = "ConnectedToWrongPrimary"
-	ReplicationStopped                     AnalysisCode = "ReplicationStopped"
-	ReplicaSemiSyncMustBeSet               AnalysisCode = "ReplicaSemiSyncMustBeSet"
-	ReplicaSemiSyncMustNotBeSet            AnalysisCode = "ReplicaSemiSyncMustNotBeSet"
-	ReplicaMisconfigured                   AnalysisCode = "ReplicaMisconfigured"
-	UnreachablePrimaryWithLaggingReplicas  AnalysisCode = "UnreachablePrimaryWithLaggingReplicas"
-	UnreachablePrimary                     AnalysisCode = "UnreachablePrimary"
-	PrimarySingleReplicaNotReplicating     AnalysisCode = "PrimarySingleReplicaNotReplicating"
-	PrimarySingleReplicaDead               AnalysisCode = "PrimarySingleReplicaDead"
-	AllPrimaryReplicasNotReplicating       AnalysisCode = "AllPrimaryReplicasNotReplicating"
-	AllPrimaryReplicasNotReplicatingOrDead AnalysisCode = "AllPrimaryReplicasNotReplicatingOrDead"
-	LockedSemiSyncPrimaryHypothesis        AnalysisCode = "LockedSemiSyncPrimaryHypothesis"
-	LockedSemiSyncPrimary                  AnalysisCode = "LockedSemiSyncPrimary"
-	PrimarySemiSyncBlocked                 AnalysisCode = "PrimarySemiSyncBlocked"
-	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
-	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
-)
-
-type StructureAnalysisCode string
-
-const (
-	StatementAndMixedLoggingReplicasStructureWarning     StructureAnalysisCode = "StatementAndMixedLoggingReplicasStructureWarning"
-	StatementAndRowLoggingReplicasStructureWarning       StructureAnalysisCode = "StatementAndRowLoggingReplicasStructureWarning"
-	MixedAndRowLoggingReplicasStructureWarning           StructureAnalysisCode = "MixedAndRowLoggingReplicasStructureWarning"
-	MultipleMajorVersionsLoggingReplicasStructureWarning StructureAnalysisCode = "MultipleMajorVersionsLoggingReplicasStructureWarning"
-	NoLoggingReplicasStructureWarning                    StructureAnalysisCode = "NoLoggingReplicasStructureWarning"
-	DifferentGTIDModesStructureWarning                   StructureAnalysisCode = "DifferentGTIDModesStructureWarning"
-	ErrantGTIDStructureWarning                           StructureAnalysisCode = "ErrantGTIDStructureWarning"
-	NoFailoverSupportStructureWarning                    StructureAnalysisCode = "NoFailoverSupportStructureWarning"
-	NoWriteablePrimaryStructureWarning                   StructureAnalysisCode = "NoWriteablePrimaryStructureWarning"
-	NotEnoughValidSemiSyncReplicasStructureWarning       StructureAnalysisCode = "NotEnoughValidSemiSyncReplicasStructureWarning"
 )
 
 // PeerAnalysisMap indicates the number of peers agreeing on an analysis.
@@ -84,70 +29,32 @@ type ReplicationAnalysisHints struct {
 	AuditAnalysis bool
 }
 
-// ReplicationAnalysis notes analysis on replication chain status, per instance
-type ReplicationAnalysis struct {
-	AnalyzedInstanceAlias        string
-	AnalyzedInstancePrimaryAlias string
-	TabletType                   topodatapb.TabletType
-	CurrentTabletType            topodatapb.TabletType
-	PrimaryTimeStamp             time.Time
-	ClusterDetails               ClusterInfo
-	AnalyzedKeyspace             string
-	AnalyzedShard                string
-	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
-	ShardPrimaryTermTimestamp                 string
-	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
-	IsPrimary                                 bool
-	IsClusterPrimary                          bool
-	LastCheckValid                            bool
-	LastCheckPartialSuccess                   bool
-	CountReplicas                             uint
-	CountValidReplicas                        uint
-	CountValidReplicatingReplicas             uint
-	ReplicationStopped                        bool
-	ErrantGTID                                string
-	ReplicaNetTimeout                         int32
-	HeartbeatInterval                         float64
-	Analysis                                  AnalysisCode
-	Description                               string
-	StructureAnalysis                         []StructureAnalysisCode
-	OracleGTIDImmediateTopology               bool
-	BinlogServerImmediateTopology             bool
-	SemiSyncPrimaryEnabled                    bool
-	SemiSyncPrimaryStatus                     bool
-	SemiSyncPrimaryWaitForReplicaCount        uint
-	SemiSyncPrimaryClients                    uint
-	SemiSyncReplicaEnabled                    bool
-	SemiSyncBlocked                           bool
-	CountSemiSyncReplicasEnabled              uint
-	CountLoggingReplicas                      uint
-	CountStatementBasedLoggingReplicas        uint
-	CountMixedBasedLoggingReplicas            uint
-	CountRowBasedLoggingReplicas              uint
-	CountDistinctMajorVersionsLoggingReplicas uint
-	CountDelayedReplicas                      uint
-	CountLaggingReplicas                      uint
-	IsActionableRecovery                      bool
-	RecoveryId                                int64
-	GTIDMode                                  string
-	MinReplicaGTIDMode                        string
-	MaxReplicaGTIDMode                        string
-	MaxReplicaGTIDErrant                      string
-	IsReadOnly                                bool
-	IsDiskStalled                             bool
-}
-
-func (replicationAnalysis *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
-	i := struct {
-		ReplicationAnalysis
-	}{}
-	i.ReplicationAnalysis = *replicationAnalysis
-
-	return json.Marshal(i)
-}
-
 // ValidSecondsFromSeenToLastAttemptedCheck returns the maximum allowed elapsed time
 // between last_attempted_check to last_checked before we consider the instance as invalid.
 func ValidSecondsFromSeenToLastAttemptedCheck() uint {
 	return config.GetInstancePollSeconds()
+}
+
+// AnalysisTypeStringToProto converts an analysis type string to a vtorcdatapb.AnalysisType.
+func AnalysisTypeStringToProto(analysisType string) vtorcdatapb.AnalysisType {
+	if i, found := vtorcdatapb.AnalysisType_value[analysisType]; found {
+		return vtorcdatapb.AnalysisType(i)
+	}
+	return vtorcdatapb.AnalysisType_NoProblem
+}
+
+// AnalysisTypeProtoToString converts an vtorcdatapb.AnalysisType to a string.
+func AnalysisTypeProtoToString(analysisType vtorcdatapb.AnalysisType) string {
+	if str, found := vtorcdatapb.AnalysisType_name[int32(analysisType)]; found {
+		return str
+	}
+	return vtorcdatapb.AnalysisType_name[0]
+}
+
+// gtidModeToProto converts a gtid_mode string to a vtorcdatapb.GTIDMode.
+func gtidModeToProto(gtidMode string) vtorcdatapb.GTIDMode {
+	if i, found := vtorcdatapb.GTIDMode_value[gtidMode]; found {
+		return vtorcdatapb.GTIDMode(i)
+	}
+	return vtorcdatapb.GTIDMode_OFF
 }
