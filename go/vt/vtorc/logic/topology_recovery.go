@@ -800,7 +800,9 @@ func electNewPrimary(ctx context.Context, analysisEntry *vtorcdatapb.Replication
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Infof("Analysis: %v, will elect a new primary for %v:%v", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
+	logger.Infof("Analysis: %v, will elect a new primary for %s", analysisEntry.Analysis,
+		topoproto.KeyspaceShardString(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard),
+	)
 
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
