@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"golang.org/x/exp/slices"
 
@@ -552,7 +553,13 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		op.Source = newFilter(outer.Source, subQuery.Original)
 	}
 	if outer.Comments != nil {
-		op.Comments = outer.Comments
+		comments := outer.Comments.GetComments()
+		for _, comment := range comments {
+			if strings.Contains(comment, "MAX_EXECUTION_TIME") {
+				op.Comments = op.Comments.Prepend(comment).Parsed()
+				break
+			}
+		}
 	}
 	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery.originalSubquery)
 	return op, Rewrote("merged subquery with outer")
