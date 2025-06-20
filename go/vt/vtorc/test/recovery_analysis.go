@@ -123,7 +123,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["keyspace_type"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.KeyspaceType), Valid: true}
 	rowMap["keyspace"] = sqlutils.CellData{String: info.Keyspace, Valid: true}
 	rowMap["shard"] = sqlutils.CellData{String: info.Shard, Valid: true}
-	rowMap["shard_primary_term_timestamp"] = sqlutils.CellData{String: protoutil.TimeFromProto(info.ShardPrimaryTermTimestamp).Format(sqlutils.DateTimeFormat), Valid: true}
+	rowMap["shard_primary_term_timestamp"] = sqlutils.CellData{String: protoutil.TimeFromProto(info.ShardPrimaryTermTimestamp).UTC().Format(sqlutils.DateTimeFormat), Valid: true}
 	rowMap["last_check_partial_success"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LastCheckPartialSuccess), Valid: true}
 	rowMap["replica_net_timeout"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.ReplicaNetTimeout), Valid: true}
 	rowMap["heartbeat_interval"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.HeartbeatInterval), Valid: true}
