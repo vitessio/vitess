@@ -24,8 +24,8 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
-	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 type InfoForRecoveryAnalysis struct {
