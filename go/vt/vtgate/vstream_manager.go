@@ -688,11 +688,15 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			for i, event := range events {
 				switch event.Type {
 				case binlogdatapb.VEventType_FIELD:
-					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.GetExcludeKeyspaceFromTableName(), extractFieldTableName)
-					sendevents = append(sendevents, ev)
+					// Update table names and send.
+					// If we're streaming from multiple keyspaces, this will disambiguate
+					// duplicate table names.
+					event.FieldEvent.TableName = sgtid.Keyspace + "." + event.FieldEvent.TableName
+					sendevents = append(sendevents, event)
 				case binlogdatapb.VEventType_ROW:
-					ev := maybeUpdateTableName(event, sgtid.Keyspace, vs.flags.GetExcludeKeyspaceFromTableName(), extractRowTableName)
-					sendevents = append(sendevents, ev)
+					// Update table names and send.
+					event.RowEvent.TableName = sgtid.Keyspace + "." + event.RowEvent.TableName
+					sendevents = append(sendevents, event)
 				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
 					sendevents = append(sendevents, event)
 					eventss = append(eventss, sendevents)
@@ -832,29 +836,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		log.Infof("vstream for %s/%s error, retrying: %v", sgtid.Keyspace, sgtid.Shard, err)
 	}
 
-}
-
-// maybeUpdateTableNames updates table names when the ExcludeKeyspaceFromTableName flag is disabled.
-// If we're streaming from multiple keyspaces, updating the table names by inserting the keyspace will disambiguate
-// duplicate table names. If we enable the ExcludeKeyspaceFromTableName flag to not update the table names, there is no need to
-// clone the entire event, whcih improves performance. This is typically safely used by clients only streaming one keyspace.
-func maybeUpdateTableName(event *binlogdatapb.VEvent, keyspace string, excludeKeyspaceFromTableName bool,
-	tableNameExtractor func(ev *binlogdatapb.VEvent) *string) *binlogdatapb.VEvent {
-	if excludeKeyspaceFromTableName {
-		return event
-	}
-	ev := event.CloneVT()
-	tableName := tableNameExtractor(ev)
-	*tableName = keyspace + "." + *tableName
-	return ev
-}
-
-func extractFieldTableName(ev *binlogdatapb.VEvent) *string {
-	return &ev.FieldEvent.TableName
-}
-
-func extractRowTableName(ev *binlogdatapb.VEvent) *string {
-	return &ev.RowEvent.TableName
 }
 
 // shouldRetry determines whether we should exit immediately or retry the vstream.
