@@ -769,7 +769,7 @@ func newPickerTestEnv(t *testing.T, ctx context.Context, cells []string, extraCe
 	require.NoError(t, err)
 	err = te.topoServ.CreateKeyspace(ctx, te.keyspace, &topodatapb.Keyspace{})
 	require.NoError(t, err)
-	err = te.topoServ.CreateShard(ctx, te.keyspace, te.shard)
+	err = te.topoServ.CreateShard(ctx, te.keyspace, te.shard, nil)
 	require.NoError(t, err)
 	return te
 }

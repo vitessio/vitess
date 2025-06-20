@@ -337,7 +337,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 	defer cancel()
 
 	ts = memorytopo.NewServer(ctx, cell1)
-	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard, nil)
 	require.NoError(t, err)
 
 	// Add tablets to the topo-server
@@ -493,7 +493,7 @@ func TestShardPrimary(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			ts = memorytopo.NewServer(ctx, cell1)
-			_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+			_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard, nil)
 			require.NoError(t, err)
 
 			// Add tablets to the topo-server

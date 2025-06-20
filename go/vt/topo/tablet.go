@@ -602,7 +602,7 @@ func (ts *Server) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, all
 
 	if createShardAndKeyspace {
 		// create the parent keyspace and shard if needed
-		si, err = ts.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard)
+		si, err = ts.GetOrCreateShard(ctx, tablet.Keyspace, tablet.Shard, nil)
 	} else {
 		si, err = ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 		if IsErrType(err, NoNode) {
