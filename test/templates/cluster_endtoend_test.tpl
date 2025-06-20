@@ -16,8 +16,18 @@ jobs:
   build:
     timeout-minutes: 60
     name: Run endtoend tests on {{.Name}}
-    runs-on: {{.RunsOn}}
 
+{{- if .ArchMatrixEnabled }}
+    strategy:
+      matrix:
+        os: ["{{.RunsOn}}"]
+        arch: [amd64, arm64]
+    runs-on: ${{"{{"}} matrix.arch == 'amd64' && matrix.os || format('{0}-arm', matrix.os) {{"}}"}}
+    env:
+      ARCH: ${{"{{"}} matrix.arch {{"}}"}}
+{{- else }}
+    runs-on: {{.RunsOn}}
+{{- end }}
     steps:
     - name: Skip CI
       run: |
@@ -61,6 +71,10 @@ jobs:
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         persist-credentials: 'false'
+
+    - name: Print architecture
+      if: steps.skip-workflow.outputs.skip-workflow == 'false'
+      run: uname -m
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -119,12 +133,13 @@ jobs:
       timeout-minutes: 10
       run: |
         {{if .InstallXtraBackup}}
-
         # Setup Percona Server for MySQL 8.0
         sudo apt-get -qq update
         sudo apt-get -qq install -y lsb-release gnupg2 curl
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        if [ "$ARCH" = "amd64" ]; then
+          wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        fi
         sudo percona-release setup ps80
         sudo apt-get -qq update
 
@@ -132,26 +147,28 @@ jobs:
         sudo apt-get -qq install -y percona-server-server percona-server-client make unzip g++ etcd-client etcd-server git wget eatmydata xz-utils libncurses6
 
         {{else}}
-
-        # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        # Setup MySQL 8.0
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get -qq update
+        if [ "$ARCH" = "arm64" ]; then
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/mysql-server_8.0.35_arm64.deb
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/libaio1_0.3.112-5_arm64.deb
+          sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb libaio1_0.3.112-5_arm64.deb
+          sudo dpkg -i mysql-server_8.0.35_arm64.deb
+          export PATH=$PATH:/usr/local/mysql/bin
+        
+        else
+          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
+          echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+          sudo apt-get -qq update
+          curl -L -O http://mirrors.kernel.org/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb
+          sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
+          curl -L -O http://mirrors.kernel.org/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          sudo apt-get -qq install -y mysql-server mysql-shell mysql-client  
 
-        # We have to install this old version of libaio1 in case we end up testing with MySQL 5.7. See also:
-        # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
-        curl -L -O http://mirrors.kernel.org/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb
-        sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
-        # libtinfo5 is also needed for older MySQL 5.7 builds.
-        curl -L -O http://mirrors.kernel.org/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
-        sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
-
-        # Install everything else we need, and configure
+        fi
         sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
-
         {{end}}
 
         sudo service mysql stop

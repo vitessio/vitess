@@ -15,7 +15,13 @@ jobs:
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
     name: Run Upgrade Downgrade Test - Backups - Manual
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    strategy:
+      matrix:
+        os: ["ubuntu-24.04"]
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'amd64' && matrix.os || format('{0}-arm', matrix.os) }}
+    env:
+      ARCH: ${{ matrix.arch }}
 
     steps:
     - name: Skip CI
@@ -104,12 +110,21 @@ jobs:
         # sudo rm -rf /etc/mysql
 
         # Install MySQL 8.0
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
-        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
+        if [ "$ARCH" = "arm64" ]; then
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/mysql-server_8.0.35_arm64.deb
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/libaio1_0.3.112-5_arm64.deb
+          sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb libaio1_0.3.112-5_arm64.deb
+          sudo dpkg -i mysql-server_8.0.35_arm64.deb
+          export PATH=$PATH:/usr/local/mysql/bin
+        else
+          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
+          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
+          echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
+        fi
 
         # Install everything else we need, and configure
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata grep
