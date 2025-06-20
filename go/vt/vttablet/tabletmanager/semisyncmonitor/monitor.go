@@ -357,8 +357,8 @@ func (m *Monitor) write() {
 		log.Errorf("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table: %v", err)
 		return
 	}
-	defer conn.Recycle()
 	_, err = conn.Conn.ExecuteFetch(m.bindSideCarDBName(semiSyncHeartbeatWrite), 0, false)
+	conn.Recycle()
 	if err != nil {
 		m.errorCount.Add(1)
 		log.Errorf("SemiSync Monitor: failed to write to semisync_heartbeat table: %v", err)
