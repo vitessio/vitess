@@ -100,12 +100,11 @@ func getShardPrimaryAliasString(shard *topo.ShardInfo) string {
 }
 
 // getShardPrimaryAliasString gets the shard primary term start time to be stored as a time.Time in the database.
-func getShardPrimaryTermStartTime(shard *topo.ShardInfo) *time.Time {
+func getShardPrimaryTermStartTime(shard *topo.ShardInfo) (t time.Time) {
 	if shard.PrimaryTermStartTime != nil {
-		t := protoutil.TimeFromProto(shard.PrimaryTermStartTime).UTC()
-		return &t
+		t = protoutil.TimeFromProto(shard.PrimaryTermStartTime).UTC()
 	}
-	return nil
+	return t
 }
 
 // DeleteShard deletes a shard using a keyspace and shard name.

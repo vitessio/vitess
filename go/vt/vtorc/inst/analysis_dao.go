@@ -320,7 +320,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		if termTimestamp := m.GetTime("shard_primary_term_timestamp"); !termTimestamp.IsZero() {
 			a.ShardPrimaryTermTimestamp = protoutil.TimeToProto(termTimestamp)
 		}
-		fmt.Printf("ShardPrimaryTermTimestamp: %v\n", a.ShardPrimaryTermTimestamp)
 		a.IsPrimary = m.GetBool("is_primary")
 		a.AnalyzedInstanceAlias = topoproto.TabletAliasString(tablet.Alias)
 		a.AnalyzedInstancePrimaryAlias = topoproto.TabletAliasString(primaryTablet.Alias)
