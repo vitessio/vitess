@@ -1106,24 +1106,24 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 			}()
 
 			updates := []struct {
-				tabletAlias             string
+				tabletAlias             *topodatapb.TabletAlias
 				analysisCode            AnalysisCode
 				writeCounterExpectation int64
 				wantErr                 string
 			}{
 				{
 					// Store a new analysis for the zone1-100 tablet.
-					tabletAlias:             "zone1-100",
+					tabletAlias:             &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					analysisCode:            ReplicationStopped,
 					writeCounterExpectation: 1,
 				}, {
 					// Write the same analysis, no new write should happen.
-					tabletAlias:             "zone1-100",
+					tabletAlias:             &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					analysisCode:            ReplicationStopped,
 					writeCounterExpectation: 1,
 				}, {
 					// Change the analysis. This should trigger an update.
-					tabletAlias:             "zone1-100",
+					tabletAlias:             &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					analysisCode:            ReplicaSemiSyncMustBeSet,
 					writeCounterExpectation: 2,
 				},
@@ -1194,38 +1194,38 @@ func TestPostProcessAnalyses(t *testing.T) {
 			analyses: []*ReplicationAnalysis{
 				{
 					Analysis:              InvalidPrimary,
-					AnalyzedInstanceAlias: "zone1-100",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					TabletType:            topodatapb.TabletType_PRIMARY,
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-202",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 202},
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ClusterDetails:        ks80,
 				}, {
 					Analysis:              ConnectedToWrongPrimary,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-101",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					TabletType:            topodatapb.TabletType_REPLICA,
 					ReplicationStopped:    true,
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              ReplicationStopped,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-102",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ReplicationStopped:    true,
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              InvalidReplica,
-					AnalyzedInstanceAlias: "zone1-108",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 108},
 					TabletType:            topodatapb.TabletType_REPLICA,
 					LastCheckValid:        false,
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
-					AnalyzedInstanceAlias: "zone1-302",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 302},
 					LastCheckValid:        true,
 					TabletType:            topodatapb.TabletType_REPLICA,
 					ClusterDetails:        ks80,
@@ -1234,19 +1234,19 @@ func TestPostProcessAnalyses(t *testing.T) {
 			want: []*ReplicationAnalysis{
 				{
 					Analysis:              DeadPrimary,
-					AnalyzedInstanceAlias: "zone1-100",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					TabletType:            topodatapb.TabletType_PRIMARY,
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-202",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 202},
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ClusterDetails:        ks80,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-302",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 302},
 					TabletType:            topodatapb.TabletType_REPLICA,
 					ClusterDetails:        ks80,
 				},
@@ -1257,32 +1257,32 @@ func TestPostProcessAnalyses(t *testing.T) {
 			analyses: []*ReplicationAnalysis{
 				{
 					Analysis:              InvalidPrimary,
-					AnalyzedInstanceAlias: "zone1-100",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					TabletType:            topodatapb.TabletType_PRIMARY,
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
-					AnalyzedInstanceAlias: "zone1-202",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 202},
 					LastCheckValid:        true,
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ClusterDetails:        ks80,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-101",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					TabletType:            topodatapb.TabletType_REPLICA,
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              ReplicationStopped,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-102",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ReplicationStopped:    true,
 					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-302",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 302},
 					TabletType:            topodatapb.TabletType_REPLICA,
 					ClusterDetails:        ks80,
 				},
