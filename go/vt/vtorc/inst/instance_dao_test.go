@@ -530,8 +530,8 @@ func TestReadInstancesByCondition(t *testing.T) {
 	}
 }
 
-// TestReadOutdatedInstanceAliases is used to test the functionality of ReadOutdatedInstanceAliases and verify its failure modes and successes.
-func TestReadOutdatedInstanceAliases(t *testing.T) {
+// TestReadOutdatedInstances is used to test the functionality of ReadOutdatedInstances and verify its failure modes and successes.
+func TestReadOutdatedInstances(t *testing.T) {
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
 	tests := []struct {
 		name              string
@@ -592,7 +592,7 @@ func TestReadOutdatedInstanceAliases(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			tabletAliases, err := ReadOutdatedInstanceAliases()
+			tabletAliases, err := ReadOutdatedInstances()
 
 			errInDataCollection := db.QueryVTOrcRowsMap(`select alias,
 last_checked,

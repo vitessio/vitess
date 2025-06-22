@@ -243,7 +243,7 @@ func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) 
 
 // onHealthTick handles the actions to take to discover/poll instances
 func onHealthTick() {
-	tabletAliases, err := inst.ReadOutdatedInstanceAliases()
+	tabletAliases, err := inst.ReadOutdatedInstances()
 	if err != nil {
 		log.Error(err)
 	}

@@ -749,7 +749,7 @@ func GetKeyspaceShardName(tabletAlias *topodatapb.TabletAlias) (keyspace, shard 
 	return keyspace, shard, err
 }
 
-// ReadOutdatedInstanceAliases reads and returns tablet aliases for all instances that are not up to date (i.e.
+// ReadOutdatedInstances reads and returns tablet aliases for all instances that are not up to date (i.e.
 // pre-configured time has passed since they were last checked) or the ones whose tablet information was read
 // but not the mysql information. This could happen if the durability policy of the keyspace wasn't
 // available at the time it was discovered. This would lead to not having the record of the tablet in the
@@ -758,7 +758,7 @@ func GetKeyspaceShardName(tabletAlias *topodatapb.TabletAlias) (keyspace, shard 
 // resulted in an actual check! This can happen when TCP/IP connections are hung, in which case the "check"
 // never returns. In such case we multiply interval by a factor, so as not to open too many connections on
 // the instance.
-func ReadOutdatedInstanceAliases() ([]*topodatapb.TabletAlias, error) {
+func ReadOutdatedInstances() ([]*topodatapb.TabletAlias, error) {
 	res := make([]*topodatapb.TabletAlias, 0)
 	query := `SELECT
 		alias
