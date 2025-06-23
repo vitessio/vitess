@@ -561,11 +561,15 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	}()
 
 	// Set a very short heartbeat interval for testing (100ms)
-	rowStreamertHeartbeatInterval = 100 * time.Millisecond
+	rowStreamertHeartbeatInterval = 10 * time.Millisecond
 
 	execStatements(t, []string{
 		"create table t1(id int, val varchar(128), primary key(id))",
-		"insert into t1 values (1, 'test')",
+		"insert into t1 values (1, 'test1')",
+		"insert into t1 values (2, 'test2')",
+		"insert into t1 values (3, 'test3')",
+		"insert into t1 values (4, 'test4')",
+		"insert into t1 values (5, 'test5')",
 	})
 
 	defer execStatements(t, []string{
@@ -581,7 +585,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	var options binlogdatapb.VStreamOptions
 	options.ConfigOverrides = make(map[string]string)
 	options.ConfigOverrides["vstream_dynamic_packet_size"] = "false"
-	options.ConfigOverrides["vstream_packet_size"] = "1000"
+	options.ConfigOverrides["vstream_packet_size"] = "10"
 
 	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if rows.Heartbeat {
