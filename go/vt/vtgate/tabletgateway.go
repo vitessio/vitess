@@ -279,7 +279,9 @@ func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Req
 // withRetry also adds shard information to errors returned from the inner QueryService, so
 // withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
-	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	_ string, inTransaction bool,
+	inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+	bindVars map[string]*querypb.BindVariable) error {
 
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
 	if inTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
@@ -359,7 +361,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			break
 		}
 
-		var th *discovery.TabletHealth
+		th := make([]*discovery.TabletHealth, 0, len(tablets))
 
 		useBalancer := balancerEnabled
 		if balancerEnabled && len(balancerKeyspaces) > 0 {
@@ -374,7 +376,12 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 				})
 			}
 
-			th = gw.balancer.Pick(target, tablets)
+			th = append(th, gw.balancer.Pick(target, tablets))
+			for _, t := range tablets {
+				if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok && t != th[0] {
+					th = append(th, t)
+				}
+			}
 
 		} else {
 			gw.shuffleTablets(gw.localCell, tablets)
@@ -382,13 +389,12 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			// skip tablets we tried before
 			for _, t := range tablets {
 				if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
-					th = t
-					break
+					th = append(th, t)
 				}
 			}
 		}
 
-		if th == nil {
+		if len(th) == 0 {
 			// do not override error from last attempt.
 			if err == nil {
 				err = vterrors.VT14002()
@@ -396,9 +402,9 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			break
 		}
 
-		tabletLastUsed = th.Tablet
+		tabletLastUsed = th[0].Tablet
 		// execute
-		if th.Conn == nil {
+		if th[0].Conn == nil {
 			err = vterrors.VT14003(tabletLastUsed)
 			invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)] = true
 			continue
@@ -408,7 +414,15 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 		startTime := time.Now()
 		var canRetry bool
-		canRetry, err = inner(ctx, target, th.Conn)
+
+		if bindVars["hedgeMillis"] != nil {
+			var x int32
+			fmt.Sscan(string(bindVars["hedgeMillis"].Value[:]), &x)
+			canRetry, err = execHedge(ctx, target, th, x, inner)
+		} else {
+			canRetry, err = inner(ctx, target, th[0].Conn)
+		}
+
 		gw.updateStats(target, startTime, err)
 		if canRetry {
 			invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)] = true
@@ -419,9 +433,63 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 	return NewShardError(err, target)
 }
 
+func execHedge(ctx context.Context, target *querypb.Target, tablets []*discovery.TabletHealth, hedgeMillis int32,
+	inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) (bool, error) {
+
+	hedgeTimeout := time.Duration(hedgeMillis) * time.Millisecond
+
+	execCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ch := make(chan ReqReturn, 1)
+
+	go reqBody(execCtx, 0, target, tablets, ch, inner)
+
+	timer := time.NewTimer(hedgeTimeout)
+
+	select {
+	case v := <-ch:
+		return v.canRetry, v.err
+	case <-timer.C:
+		for i := 1; i < len(tablets); i++ {
+			fmt.Println("New hedge request!")
+			go reqBody(execCtx, i, target, tablets, ch, inner)
+		}
+	}
+	v := <-ch
+	return v.canRetry, v.err
+}
+
+type ReqReturn struct {
+	canRetry bool
+	err      error
+}
+
+func reqBody(ctx context.Context, i int, target *querypb.Target, tablets []*discovery.TabletHealth, ch chan ReqReturn,
+	inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) {
+	var (
+		canRetry bool
+		err      error
+	)
+
+	chInside := make(chan int, 1)
+	go func() {
+		canRetry, err = inner(ctx, target, tablets[i].Conn)
+		chInside <- 0
+		close(chInside)
+	}()
+
+	select {
+	case <-chInside:
+		ch <- ReqReturn{canRetry: canRetry, err: err}
+	case <-ctx.Done():
+		return
+	}
+}
+
 // withShardError adds shard information to errors returned from the inner QueryService.
 func (gw *TabletGateway) withShardError(ctx context.Context, target *querypb.Target, conn queryservice.QueryService,
-	_ string, _ bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	_ string, _ bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+	_ map[string]*querypb.BindVariable) error {
 	_, err := inner(ctx, target, conn)
 	return NewShardError(err, target)
 }

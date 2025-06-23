@@ -20,6 +20,7 @@ import (
 	"context"
 	"io"
 	"runtime/debug"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -219,6 +220,19 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			switch info.actionNeeded {
 			case nothing:
+				var route *engine.Route
+
+				if newRoute, ok := primitive.(*engine.Route); ok {
+					route = newRoute
+				}
+
+				if route != nil && route.HedgeTimeout > 0 {
+					queries[i].BindVariables["hedgeMillis"] = &querypb.BindVariable{
+						Type:  querypb.Type_INT64,
+						Value: []byte(strconv.Itoa(route.HedgeTimeout)),
+					}
+				}
+
 				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.transactionID, info.reservedID, opts)
 				if err != nil {
 					retryRequest(func() {

@@ -1,0 +1,6 @@
+--test=oltp
+--oltp-table-size=10000
+--db-driver=mysql
+--mysql-db=test
+--mysql-user=root
+--mysql-password=yourrootsqlpassword

@@ -540,6 +540,7 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, h
 	if hints != nil {
 		e.ScatterErrorsAsWarnings = hints.scatterErrorsAsWarnings
 		e.QueryTimeout = hints.queryTimeout
+		e.HedgeTimeout = hints.hedgeTimeout
 	}
 	return e, nil
 }
@@ -561,6 +562,7 @@ type queryHints struct {
 	scatterErrorsAsWarnings,
 	multiShardAutocommit bool
 	queryTimeout int
+	hedgeTimeout int
 }
 
 func getHints(cmt *sqlparser.ParsedComments) *queryHints {
@@ -570,11 +572,13 @@ func getHints(cmt *sqlparser.ParsedComments) *queryHints {
 	directives := cmt.Directives()
 	scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
 	timeout := queryTimeout(directives)
+	hedgeTime := hedgeTimeout(directives)
 	multiShardAutoCommit := directives.IsSet(sqlparser.DirectiveMultiShardAutocommit)
 	return &queryHints{
 		scatterErrorsAsWarnings: scatterAsWarns,
 		multiShardAutocommit:    multiShardAutoCommit,
 		queryTimeout:            timeout,
+		hedgeTimeout:            hedgeTime,
 	}
 }
 

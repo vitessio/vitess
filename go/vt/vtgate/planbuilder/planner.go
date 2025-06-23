@@ -85,3 +85,11 @@ func queryTimeout(d *sqlparser.CommentDirectives) int {
 	}
 	return 0
 }
+
+func hedgeTimeout(d *sqlparser.CommentDirectives) int {
+	val, _ := d.GetString(sqlparser.DirectiveHedgeTimeout, "0")
+	if intVal, err := strconv.Atoi(val); err == nil {
+		return intVal
+	}
+	return 0
+}

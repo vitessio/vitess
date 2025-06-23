@@ -19,6 +19,9 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"math"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,6 +59,8 @@ func waitForNewerVSchema(ctx context.Context, e *Executor, lastVSchemaCreated ti
 	}
 }
 
+var re *regexp.Regexp = regexp.MustCompile("hedge_millis=(\\d+)")
+
 func (e *Executor) newExecute(
 	ctx context.Context,
 	mysqlCtx vtgateservice.MySQLConnection,
@@ -79,6 +84,18 @@ func (e *Executor) newExecute(
 	}
 
 	query, comments := sqlparser.SplitMarginComments(sql)
+
+	//adding hedge request as an option
+
+	matches := re.FindStringSubmatch(comments.Leading)
+
+	if len(matches) > 1 {
+		x, err := strconv.ParseInt(matches[1], 10, 32)
+		if err == nil && x >= 0 && x < math.MaxInt32 {
+			bindVars["hedgeMillis"] = new(querypb.BindVariable)
+			bindVars["hedgeMillis"].Value = []byte(matches[1])
+		}
+	}
 
 	// 2: Parse and Validate query.
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())

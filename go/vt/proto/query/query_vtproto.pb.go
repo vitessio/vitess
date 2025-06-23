@@ -176,6 +176,7 @@ func (m *ExecuteOptions) CloneVT() *ExecuteOptions {
 	r.Consolidator = m.Consolidator
 	r.WorkloadName = m.WorkloadName
 	r.Priority = m.Priority
+	r.HedgeRequestMillis = m.HedgeRequestMillis
 	if rhs := m.TransactionAccessMode; rhs != nil {
 		tmpContainer := make([]ExecuteOptions_TransactionAccessMode, len(rhs))
 		copy(tmpContainer, rhs)
@@ -1891,6 +1892,13 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			return 0, err
 		}
 		i -= size
+	}
+	if m.HedgeRequestMillis != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.HedgeRequestMillis))
+		i--
+		dAtA[i] = 0x3e
+		i--
+		dAtA[i] = 0xc0
 	}
 	if len(m.Priority) > 0 {
 		i -= len(m.Priority)
@@ -6163,6 +6171,9 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if vtmsg, ok := m.Timeout.(interface{ SizeVT() int }); ok {
 		n += vtmsg.SizeVT()
 	}
+	if m.HedgeRequestMillis != 0 {
+		n += 2 + protohelpers.SizeOfVarint(uint64(m.HedgeRequestMillis))
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -8905,6 +8916,25 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.Timeout = &ExecuteOptions_AuthoritativeTimeout{AuthoritativeTimeout: v}
+		case 1000:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field HedgeRequestMillis", wireType)
+			}
+			m.HedgeRequestMillis = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.HedgeRequestMillis |= int32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

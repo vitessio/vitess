@@ -37,6 +37,7 @@ const (
 	DirectiveSkipQueryPlanCache = "SKIP_QUERY_PLAN_CACHE"
 	// DirectiveQueryTimeout sets a query timeout in vtgate. Only supported for SELECTS.
 	DirectiveQueryTimeout = "QUERY_TIMEOUT_MS"
+	DirectiveHedgeTimeout = "HEDGE_TIMEOUT_MS"
 	// DirectiveScatterErrorsAsWarnings enables partial success scatter select queries
 	DirectiveScatterErrorsAsWarnings = "SCATTER_ERRORS_AS_WARNINGS"
 	// DirectiveIgnoreMaxPayloadSize skips payload size validation when set.
@@ -569,6 +570,7 @@ type QueryHints struct {
 	ForeignKeyChecks    *bool
 	Priority            string
 	Timeout             *int
+	HedgeTimeout        *int
 }
 
 func BuildQueryHints(stmt Statement) (qh QueryHints, err error) {
@@ -590,6 +592,7 @@ func BuildQueryHints(stmt Statement) (qh QueryHints, err error) {
 	qh.Workload = getWorkload(directives)
 	qh.ForeignKeyChecks = getForeignKeyChecksState(comment)
 	qh.Timeout = getQueryTimeout(directives)
+	qh.HedgeTimeout = getHedgeTimeout(directives)
 
 	return qh, nil
 }
@@ -652,6 +655,20 @@ func getPriority(directives *CommentDirectives) (string, error) {
 // getQueryTimeout gets the query timeout from the provided Statement, using DirectiveQueryTimeout
 func getQueryTimeout(directives *CommentDirectives) *int {
 	timeoutString, ok := directives.GetString(DirectiveQueryTimeout, "")
+	if !ok || timeoutString == "" {
+		return nil
+	}
+
+	timeout, err := strconv.Atoi(timeoutString)
+	if err != nil || timeout < 0 {
+		return nil
+	}
+	return &timeout
+}
+
+// getQueryTimeout gets the query timeout from the provided Statement, using DirectiveQueryTimeout
+func getHedgeTimeout(directives *CommentDirectives) *int {
+	timeoutString, ok := directives.GetString(DirectiveHedgeTimeout, "")
 	if !ok || timeoutString == "" {
 		return nil
 	}

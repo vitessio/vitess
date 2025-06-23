@@ -53,7 +53,7 @@ fi
 
 # start mysqlctls for keyspace commerce
 # because MySQL takes time to start, we do this in parallel
-for i in 100 101 102; do
+for i in 100 101 102 103 104 105; do
 	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh &
 done
 
@@ -64,7 +64,7 @@ wait
 echo "mysqlctls are running!"
 
 # start vttablets for keyspace commerce
-for i in 100 101 102; do
+for i in 100 101 102 103 104 105; do
 	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/scripts/vttablet-up.sh
 done
 
@@ -73,7 +73,7 @@ done
 
 # Wait for all the tablets to be up and registered in the topology server
 # and for a primary tablet to be elected in the shard and become healthy/serving.
-wait_for_healthy_shard commerce 0 || exit 1
+wait_for_healthy_shard commerce 0 6 || exit 1
 
 # create the schema
 vtctldclient ApplySchema --sql-file create_commerce_schema.sql commerce || fail "Failed to apply schema for the commerce keyspace"

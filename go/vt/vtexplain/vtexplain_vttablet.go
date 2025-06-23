@@ -127,7 +127,8 @@ func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opt
 
 	tablet.QueryService = queryservice.Wrap(
 		nil,
-		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) (bool, error)) error {
+		func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, queryservice.QueryService) (bool, error),
+			_ map[string]*querypb.BindVariable) error {
 			return fmt.Errorf("explainTablet does not implement %s", name)
 		},
 	)

@@ -34,7 +34,9 @@ var _ QueryService = &wrappedService{}
 // The inner function returns err and canRetry.
 // If canRetry is true, the error is specific to the current vttablet and can be retried elsewhere.
 // The flag will be false if there was no error.
-type WrapperFunc func(ctx context.Context, target *querypb.Target, conn QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, QueryService) (canRetry bool, err error)) error
+type WrapperFunc func(ctx context.Context, target *querypb.Target, conn QueryService, name string, inTransaction bool, inner func(context.Context, *querypb.Target, QueryService) (canRetry bool, err error), bindVars map[string]*querypb.BindVariable) error
+
+// 3 locations were changed because WrapperFunc was modified to have options as an arg. Should be visible in commit
 
 // Wrap returns a wrapped version of the original QueryService implementation.
 // This lets you avoid repeating boiler-plate code by consolidating it in the
@@ -88,7 +90,7 @@ func (ws *wrappedService) Begin(ctx context.Context, target *querypb.Target, opt
 		var innerErr error
 		state, innerErr = conn.Begin(ctx, target, options)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 	return state, err
 }
 
@@ -98,7 +100,7 @@ func (ws *wrappedService) Commit(ctx context.Context, target *querypb.Target, tr
 		var innerErr error
 		rID, innerErr = conn.Commit(ctx, target, transactionID)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -111,7 +113,7 @@ func (ws *wrappedService) Rollback(ctx context.Context, target *querypb.Target, 
 		var innerErr error
 		rID, innerErr = conn.Rollback(ctx, target, transactionID)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -122,49 +124,49 @@ func (ws *wrappedService) Prepare(ctx context.Context, target *querypb.Target, t
 	return ws.wrapper(ctx, target, ws.impl, "Prepare", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.Prepare(ctx, target, transactionID, dtid)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) CommitPrepared(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return ws.wrapper(ctx, target, ws.impl, "CommitPrepared", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.CommitPrepared(ctx, target, dtid)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) (err error) {
 	return ws.wrapper(ctx, target, ws.impl, "RollbackPrepared", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.RollbackPrepared(ctx, target, dtid, originalID)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
 	return ws.wrapper(ctx, target, ws.impl, "CreateTransaction", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.CreateTransaction(ctx, target, dtid, participants)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) StartCommit(ctx context.Context, target *querypb.Target, transactionID int64, dtid string) (err error) {
 	return ws.wrapper(ctx, target, ws.impl, "StartCommit", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.StartCommit(ctx, target, transactionID, dtid)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) SetRollback(ctx context.Context, target *querypb.Target, dtid string, transactionID int64) (err error) {
 	return ws.wrapper(ctx, target, ws.impl, "SetRollback", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.SetRollback(ctx, target, dtid, transactionID)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error) {
 	return ws.wrapper(ctx, target, ws.impl, "ConcludeTransaction", true, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.ConcludeTransaction(ctx, target, dtid)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
@@ -172,7 +174,7 @@ func (ws *wrappedService) ReadTransaction(ctx context.Context, target *querypb.T
 		var innerErr error
 		metadata, innerErr = conn.ReadTransaction(ctx, target, dtid)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 	return metadata, err
 }
 
@@ -181,7 +183,7 @@ func (ws *wrappedService) UnresolvedTransactions(ctx context.Context, target *qu
 		var innerErr error
 		transactions, innerErr = conn.UnresolvedTransactions(ctx, target, abandonAgeSeconds)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 	return transactions, err
 }
 
@@ -193,7 +195,7 @@ func (ws *wrappedService) Execute(ctx context.Context, target *querypb.Target, q
 		// You cannot retry if you're in a transaction.
 		retryable := canRetry(ctx, innerErr) && (!inDedicatedConn)
 		return retryable, innerErr
-	})
+	}, bindVars)
 	return qr, err
 }
 
@@ -209,7 +211,7 @@ func (ws *wrappedService) StreamExecute(ctx context.Context, target *querypb.Tar
 		// You cannot restart a stream once it's sent results.
 		retryable := canRetry(ctx, innerErr) && (!streamingStarted)
 		return retryable, innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (state TransactionState, qr *sqltypes.Result, err error) {
@@ -218,7 +220,7 @@ func (ws *wrappedService) BeginExecute(ctx context.Context, target *querypb.Targ
 		var innerErr error
 		state, qr, innerErr = conn.BeginExecute(ctx, target, preQueries, query, bindVars, reservedID, options)
 		return canRetry(ctx, innerErr) && !inDedicatedConn, innerErr
-	})
+	}, nil)
 	return state, qr, err
 }
 
@@ -229,7 +231,7 @@ func (ws *wrappedService) BeginStreamExecute(ctx context.Context, target *queryp
 		var innerErr error
 		state, innerErr = conn.BeginStreamExecute(ctx, target, preQueries, query, bindVars, reservedID, options, callback)
 		return canRetry(ctx, innerErr) && !inDedicatedConn, innerErr
-	})
+	}, nil)
 	return state, err
 }
 
@@ -237,7 +239,7 @@ func (ws *wrappedService) MessageStream(ctx context.Context, target *querypb.Tar
 	return ws.wrapper(ctx, target, ws.impl, "MessageStream", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.MessageStream(ctx, target, name, callback)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error) {
@@ -245,7 +247,7 @@ func (ws *wrappedService) MessageAck(ctx context.Context, target *querypb.Target
 		var innerErr error
 		count, innerErr = conn.MessageAck(ctx, target, name, ids)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 	return count, err
 }
 
@@ -253,35 +255,35 @@ func (ws *wrappedService) VStream(ctx context.Context, request *binlogdatapb.VSt
 	return ws.wrapper(ctx, request.Target, ws.impl, "VStream", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.VStream(ctx, request, send)
 		return false, innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	return ws.wrapper(ctx, request.Target, ws.impl, "VStreamRows", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.VStreamRows(ctx, request, send)
 		return false, innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(response *binlogdatapb.VStreamTablesResponse) error) error {
 	return ws.wrapper(ctx, request.Target, ws.impl, "VStreamTables", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.VStreamTables(ctx, request, send)
 		return false, innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	return ws.wrapper(ctx, target, ws.impl, "VStreamResults", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.VStreamResults(ctx, target, query, send)
 		return false, innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	return ws.wrapper(ctx, nil, ws.impl, "StreamHealth", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.StreamHealth(ctx, callback)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) HandlePanic(err *error) {
@@ -294,7 +296,7 @@ func (ws *wrappedService) ReserveBeginExecute(ctx context.Context, target *query
 		var err error
 		state, res, err = conn.ReserveBeginExecute(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options)
 		return canRetry(ctx, err), err
-	})
+	}, nil)
 
 	return state, res, err
 }
@@ -305,7 +307,7 @@ func (ws *wrappedService) ReserveBeginStreamExecute(ctx context.Context, target 
 		var innerErr error
 		state, innerErr = conn.ReserveBeginStreamExecute(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options, callback)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 	return state, err
 }
 
@@ -316,7 +318,7 @@ func (ws *wrappedService) ReserveExecute(ctx context.Context, target *querypb.Ta
 		var err error
 		state, res, err = conn.ReserveExecute(ctx, target, preQueries, sql, bindVariables, transactionID, options)
 		return canRetry(ctx, err) && !inDedicatedConn, err
-	})
+	}, nil)
 
 	return state, res, err
 }
@@ -328,7 +330,7 @@ func (ws *wrappedService) ReserveStreamExecute(ctx context.Context, target *quer
 		var innerErr error
 		state, innerErr = conn.ReserveStreamExecute(ctx, target, preQueries, sql, bindVariables, transactionID, options, callback)
 		return canRetry(ctx, innerErr) && !inDedicatedConn, innerErr
-	})
+	}, nil)
 	return state, err
 }
 
@@ -337,14 +339,14 @@ func (ws *wrappedService) Release(ctx context.Context, target *querypb.Target, t
 	return ws.wrapper(ctx, target, ws.impl, "Release", inDedicatedConn, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		// No point retrying Release.
 		return false, conn.Release(ctx, target, transactionID, reservedID)
-	})
+	}, nil)
 }
 
 func (ws *wrappedService) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) (err error) {
 	err = ws.wrapper(ctx, target, ws.impl, "GetSchema", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.GetSchema(ctx, target, tableType, tableNames, callback)
 		return canRetry(ctx, innerErr), innerErr
-	})
+	}, nil)
 	return err
 }
 
@@ -352,5 +354,5 @@ func (ws *wrappedService) Close(ctx context.Context) error {
 	return ws.wrapper(ctx, nil, ws.impl, "Close", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		// No point retrying Close.
 		return false, conn.Close(ctx)
-	})
+	}, nil)
 }

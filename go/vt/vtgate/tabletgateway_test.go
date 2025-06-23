@@ -390,7 +390,7 @@ func TestWithRetry(t *testing.T) {
 	}
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tg.withRetry(ctx, tt.target, nil, "", tt.inTransaction, tt.inner)
+			err := tg.withRetry(ctx, tt.target, nil, "", tt.inTransaction, tt.inner, nil)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 			} else {

@@ -38990,6 +38990,9 @@ export namespace query {
 
         /** ExecuteOptions authoritative_timeout */
         authoritative_timeout?: (number|Long|null);
+
+        /** ExecuteOptions hedge_request_millis */
+        hedge_request_millis?: (number|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -39039,6 +39042,9 @@ export namespace query {
 
         /** ExecuteOptions authoritative_timeout. */
         public authoritative_timeout?: (number|Long|null);
+
+        /** ExecuteOptions hedge_request_millis. */
+        public hedge_request_millis: number;
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";
