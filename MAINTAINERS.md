@@ -15,7 +15,6 @@ The following is the full list, alphabetically ordered.
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
 * Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
 * Tim Vaillancourt ([timvaillancourt](https://github.com/timvaillancourt)) tim@timvaillancourt.com
-* Vicent Marti ([vmg](https://github.com/vmg)) vmg@planetscale.com
 
 ## Areas of expertise
 
@@ -23,7 +22,7 @@ The following is the full list, alphabetically ordered.
 deepthi, mattlord, derekperkins
 
 ### Builds
-shlomi-noach, vmg, GuptaManan100, frouioui
+shlomi-noach, GuptaManan100, frouioui
 
 ### Resharding
 rohit-nayak-ps, deepthi, mattlord
@@ -32,19 +31,16 @@ rohit-nayak-ps, deepthi, mattlord
 systay, harshit-gangal, vmg, GuptaManan100, dbussink
 
 ### Evaluation Engine
-vmg, dbussink, systay
+dbussink, systay
 
 ### Planner
 systay, harshit-gangal, GuptaManan100, frouioui 
 
 ### Query Serving
-systay, harshit-gangal, GuptaManan100, frouioui, vmg, dbussink
+systay, harshit-gangal, GuptaManan100, frouioui, dbussink
 
 ### Online DDL
 shlomi-noach, dbussink
-
-### Performance
-vmg
 
 ### Cluster Management
 deepthi, GuptaManan100, dbussink
@@ -81,3 +77,4 @@ We thank the following past maintainers for their contributions.
 * Rafael Chacon ([rafael](https://github.com/rafael))
 * Sara Bee ([doeg](https://github.com/doeg))
 * Sugu Sougoumarane ([sougou](https://github.com/sougou))
+* Vicent Marti ([vmg](https://github.com/vmg))
