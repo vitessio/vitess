@@ -51,10 +51,10 @@ func initializeAnalysisDaoPostConfiguration() {
 }
 
 type clusterAnalysis struct {
-	hasClusterwideAction bool
-	totalTablets         int
-	primaryAlias         string
-	durability           policy.Durabler
+	hasShardWideAction bool
+	totalTablets       int
+	primaryAlias       string
+	durability         policy.Durabler
 }
 
 // GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
@@ -396,7 +396,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		ca := clusters[keyspaceShard]
 		// Increment the total number of tablets.
 		ca.totalTablets += 1
-		if ca.hasClusterwideAction {
+		if ca.hasShardWideAction {
 			// We can only take one cluster level action at a time.
 			return nil
 		}
@@ -414,31 +414,31 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskStalled {
 			a.Analysis = PrimaryDiskStalled
 			a.Description = "Primary has a stalled disk"
-			ca.hasClusterwideAction = true
+			ca.hasShardWideAction = true
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
 			a.Analysis = DeadPrimaryWithoutReplicas
 			a.Description = "Primary cannot be reached by vtorc and has no replica"
-			ca.hasClusterwideAction = true
+			ca.hasShardWideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadPrimary
 			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
-			ca.hasClusterwideAction = true
+			ca.hasShardWideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadPrimaryAndReplicas
 			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
-			ca.hasClusterwideAction = true
+			ca.hasShardWideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadPrimaryAndSomeReplicas
 			a.Description = "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating"
-			ca.hasClusterwideAction = true
+			ca.hasShardWideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.IsPrimary {
 			a.Analysis = PrimaryHasPrimary
 			a.Description = "Primary is replicating from somewhere else"
-			ca.hasClusterwideAction = true
+			ca.hasShardWideAction = true
 			//
 		} else if a.IsClusterPrimary && a.IsReadOnly {
 			a.Analysis = PrimaryIsReadOnly
@@ -462,20 +462,20 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			// ClusterHasNoPrimary should only be detected when the shard record doesn't have any primary term start time specified either.
 			a.Analysis = ClusterHasNoPrimary
 			a.Description = "Cluster has no primary"
-			ca.hasClusterwideAction = true
+			ca.hasShardWideAction = true
 		} else if topo.IsReplicaType(a.TabletType) && ca.primaryAlias == "" && a.ShardPrimaryTermTimestamp != "" {
 			// If there are no primary tablets, but the shard primary start time isn't empty, then we know
 			// the primary tablet was deleted.
 			a.Analysis = PrimaryTabletDeleted
 			a.Description = "Primary tablet has been deleted"
-			ca.hasClusterwideAction = true
+			ca.hasShardWideAction = true
 		} else if a.IsPrimary && a.SemiSyncBlocked && a.CountSemiSyncReplicasEnabled >= a.SemiSyncPrimaryWaitForReplicaCount {
 			// The primary is reporting that semi-sync monitor is blocked on writes.
 			// There are enough replicas configured to send semi-sync ACKs such that the primary shouldn't be blocked.
 			// There is some network diruption in progress. We should run an ERS.
 			a.Analysis = PrimarySemiSyncBlocked
 			a.Description = "Writes seem to be blocked on semi-sync acks on the primary, even though sufficient replicas are configured to send ACKs"
-			ca.hasClusterwideAction = true
+			ca.hasShardWideAction = true
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsReadOnly {
 			a.Analysis = ReplicaIsWritable
 			a.Description = "Replica is writable"
