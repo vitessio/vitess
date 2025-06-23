@@ -80,7 +80,10 @@ func (q *Queue) QueueLen() int {
 // Push enqueues a tablet alias if it is not on a queue and is not being
 // processed; silently returns otherwise.
 func (q *Queue) Push(tabletAlias *topodatapb.TabletAlias) {
-	if q.checkAndSetEnqueued(tabletAlias) || tabletAlias == nil {
+	if tabletAlias == nil {
+		return
+	}
+	if q.checkAndSetEnqueued(tabletAlias) {
 		return
 	}
 	q.queue <- queueItem{
