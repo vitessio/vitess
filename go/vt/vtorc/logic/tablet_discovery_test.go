@@ -543,15 +543,10 @@ func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instan
 // is the same as the one provided or reading it gives the same error as expected
 func verifyTabletInfo(t *testing.T, tabletWanted *topodatapb.Tablet, errString string) {
 	t.Helper()
-	t.Logf("verifyTabletInfo tabletWanted.Alias: %v", topoproto.TabletAliasString(tabletWanted.Alias))
 	tablet, err := inst.ReadTablet(tabletWanted.Alias)
-	t.Logf("verifyTabletInfo tablet: %v", tablet)
 	if errString != "" {
 		assert.EqualError(t, err, errString)
 	} else {
-		t.Logf("verifyTabletInfo err: %v", err)
-		state, _ := inst.GetDatabaseState()
-		t.Logf("db state: %v", state)
 		assert.NoError(t, err)
 		assert.Equal(t, topoproto.TabletAliasString(tabletWanted.Alias), topoproto.TabletAliasString(tablet.Alias))
 		diff := cmp.Diff(tablet, tabletWanted, cmp.Comparer(proto.Equal))

@@ -33,8 +33,7 @@ var auditOperationCounter = stats.NewCounter("AuditWrite", "Number of audit oper
 
 // AuditOperation creates and writes a new audit entry by given params
 func AuditOperation(auditType string, tabletAlias *topodatapb.TabletAlias, message string) error {
-	keyspace := ""
-	shard := ""
+	var keyspace, shard string
 	if tabletAlias != nil {
 		keyspace, shard, _ = GetKeyspaceShardName(tabletAlias)
 	}

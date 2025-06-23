@@ -367,7 +367,17 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf("analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
-				a.AnalyzedInstanceAlias, a.ClusterDetails.Keyspace, a.ClusterDetails.Shard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
+				topoproto.TabletAliasString(a.AnalyzedInstanceAlias),
+				a.ClusterDetails.Keyspace,
+				a.ClusterDetails.Shard,
+				a.IsPrimary,
+				a.LastCheckValid,
+				a.LastCheckPartialSuccess,
+				a.CountReplicas,
+				a.CountValidReplicas,
+				a.CountValidReplicatingReplicas,
+				a.CountLaggingReplicas,
+				a.CountDelayedReplicas,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
 				log.Infof(analysisMessage)
@@ -673,7 +683,9 @@ func auditInstanceAnalysisInChangelog(tabletAlias *topodatapb.TabletAlias, analy
 				alias = ?
 				AND analysis != ?
 			`,
-			string(analysisCode), tabletAliasString, string(analysisCode),
+			string(analysisCode),
+			tabletAliasString,
+			string(analysisCode),
 		)
 		if err != nil {
 			log.Error(err)
@@ -702,7 +714,8 @@ func auditInstanceAnalysisInChangelog(tabletAlias *topodatapb.TabletAlias, analy
 				DATETIME('now'),
 				?
 			)`,
-			tabletAliasString, string(analysisCode),
+			tabletAliasString,
+			string(analysisCode),
 		)
 		if err != nil {
 			log.Error(err)
@@ -731,7 +744,8 @@ func auditInstanceAnalysisInChangelog(tabletAlias *topodatapb.TabletAlias, analy
 			DATETIME('now'),
 			?
 		)`,
-		tabletAliasString, string(analysisCode),
+		tabletAliasString,
+		string(analysisCode),
 	)
 	if err == nil {
 		analysisChangeWriteCounter.Add(1)

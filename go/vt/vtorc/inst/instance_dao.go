@@ -1212,8 +1212,8 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 		expireSeconds = config.StaleInstanceCoordinatesExpireSeconds
 	}
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`DELETE
-			FROM database_instance_stale_binlog_coordinates
+		_, err := db.ExecVTOrc(`DELETE FROM
+				database_instance_stale_binlog_coordinates
 			WHERE
 				first_seen < DATETIME('now', PRINTF('-%d SECOND', ?))
 			`,
