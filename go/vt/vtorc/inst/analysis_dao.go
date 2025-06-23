@@ -397,7 +397,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		// Increment the total number of tablets.
 		ca.totalTablets += 1
 		if ca.hasShardWideAction {
-			// We can only take one cluster level action at a time.
+			// We can only take one shard level action at a time.
 			return nil
 		}
 		if ca.durability == nil {
