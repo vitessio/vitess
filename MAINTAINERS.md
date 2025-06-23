@@ -8,7 +8,7 @@ The following is the full list, alphabetically ordered.
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io
 * Dirkjan Bussink ([dbussink](https://github.com/dbussink)) dbussink@planetscale.com
 * Florent Poinsard ([frouioui](https://github.com/frouioui)) florent@planetscale.com
-* Frances Thai ([notfelineit](https://github.com/notfelineit)) frances@planetscale.com
+* Frances Thai ([notfelineit](https://github.com/notfelineit)) notfelineit@gmail.com
 * Harshit Gangal ([harshit-gangal](https://github.com/harshit-gangal)) harshit.gangal@gmail.com
 * Manan Gupta ([GuptaManan100](https://github.com/GuptaManan100)) manan@planetscale.com
 * Matt Lord ([mattlord](https://github.com/mattlord)) mattalord@gmail.com
