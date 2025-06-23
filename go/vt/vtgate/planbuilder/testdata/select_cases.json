@@ -1700,8 +1700,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from music where 1 != 1 union select id from music where 1 != 1) as dt(c0) where 1 != 1",
-            "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from music where music.user_id in ::__vals union select id from music where music.user_id in (1, 2, 3)) as dt(c0)",
+            "FieldQuery": "select id, weight_string(id) from music where 1 != 1 union select id, weight_string(id) from music where 1 != 1",
+            "Query": "select id, weight_string(id) from music where music.user_id in ::__vals union select id, weight_string(id) from music where music.user_id in (1, 2, 3)",
             "Values": [
               "(1, 2, 3)"
             ],
@@ -1735,8 +1735,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from music where 1 != 1 union select id from music where 1 != 1) as dt(c0) where 1 != 1",
-            "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from music where music.user_id in ::__vals union select id from music where music.user_id in ::vtg1) as dt(c0)",
+            "FieldQuery": "select id, weight_string(id) from music where 1 != 1 union select id, weight_string(id) from music where 1 != 1",
+            "Query": "select id, weight_string(id) from music where music.user_id in ::__vals union select id, weight_string(id) from music where music.user_id in ::vtg1",
             "Values": [
               "::vtg1"
             ],
