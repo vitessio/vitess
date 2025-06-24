@@ -965,12 +965,12 @@
     "skip_e2e": true
   },
   {
-    "comment": "Subquery with a comment",
-    "query": "select user.col from user where id IN (select /* comment */ id from user where id > 1 and id < 10)",
+    "comment": "Comment with subquery not merged into a single route",
+    "query": "select /* comment */ user.col from user where foo IN (select id from user where id > 1 and id < 10)",
     "plan": {
       "Type": "Scatter",
       "QueryType": "SELECT",
-      "Original": "select user.col from user where id IN (select /* comment */ id from user where id > 1 and id < 10)",
+      "Original": "select /* comment */ user.col from user where foo IN (select id from user where id > 1 and id < 10)",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "Scatter",
@@ -979,7 +979,7 @@
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user` where id in (select /* comment */ id from `user` where id > 1 and id < 10)"
+        "Query": "select /* comment */ user.col from user where foo IN (select id from user where id > 1 and id < 10)"
       },
       "TablesUsed": [
         "user.user"
