@@ -204,8 +204,7 @@ func GetFlavor(serverVersion string, flavorFunc func(serverVersion string) flavo
 			f = mysqlFlavor8Legacy{mysqlFlavorLegacy{mysqlFlavor{serverVersion: serverVersion}}}
 		}
 	case strings.HasPrefix(serverVersion, mysql9VersionPrefix):
-		// MySQL 9.x uses the most modern flavor (mysqlFlavor82)
-		f = mysqlFlavor82{mysqlFlavor{serverVersion: serverVersion}}
+		f = mysqlFlavor9{mysqlFlavor{serverVersion: serverVersion}}
 	default:
 		// If unknown, return the most basic flavor: MySQL 57.
 		f = mysqlFlavor57{mysqlFlavorLegacy{mysqlFlavor{serverVersion: serverVersion}}}

@@ -207,31 +207,31 @@ func TestGetFlavor(t *testing.T) {
 			expectedType: "mysqlFlavor8",
 			description:  "MySQL 8.0.30 with suffix should use mysqlFlavor8 (has replica terminology, < 8.2.0)",
 		},
-		// MySQL 9.x versions should get mysqlFlavor82
+		// MySQL 9.x versions should get mysqlFlavor9
 		{
 			version:      "9.0.0",
-			expectedType: "mysqlFlavor82",
-			description:  "MySQL 9.0.0 should use mysqlFlavor82",
+			expectedType: "mysqlFlavor9",
+			description:  "MySQL 9.0.0 should use mysqlFlavor9",
 		},
 		{
 			version:      "9.1.0",
-			expectedType: "mysqlFlavor82",
-			description:  "MySQL 9.1.0 should use mysqlFlavor82",
+			expectedType: "mysqlFlavor9",
+			description:  "MySQL 9.1.0 should use mysqlFlavor9",
 		},
 		{
 			version:      "9.0.5-log",
-			expectedType: "mysqlFlavor82",
-			description:  "MySQL 9.0.5 with suffix should use mysqlFlavor82",
+			expectedType: "mysqlFlavor9",
+			description:  "MySQL 9.0.5 with suffix should use mysqlFlavor9",
 		},
 		{
 			version:      "9.2.1-debug",
-			expectedType: "mysqlFlavor82",
-			description:  "MySQL 9.2.1 with debug suffix should use mysqlFlavor82",
+			expectedType: "mysqlFlavor9",
+			description:  "MySQL 9.2.1 with debug suffix should use mysqlFlavor9",
 		},
 		{
 			version:      "9.10.15",
-			expectedType: "mysqlFlavor82",
-			description:  "MySQL 9.10.15 should use mysqlFlavor82",
+			expectedType: "mysqlFlavor9",
+			description:  "MySQL 9.10.15 should use mysqlFlavor9",
 		},
 		// MariaDB versions
 		{
@@ -290,6 +290,9 @@ func TestGetFlavor(t *testing.T) {
 			case "mysqlFlavor82":
 				_, ok := flavor.(mysqlFlavor82)
 				assert.True(t, ok, "Expected mysqlFlavor82 for version %s, but got %T. %s", tc.version, flavor, tc.description)
+			case "mysqlFlavor9":
+				_, ok := flavor.(mysqlFlavor9)
+				assert.True(t, ok, "Expected mysqlFlavor9 for version %s, but got %T. %s", tc.version, flavor, tc.description)
 			case "mariadbFlavor101":
 				_, ok := flavor.(mariadbFlavor101)
 				assert.True(t, ok, "Expected mariadbFlavor101 for version %s, but got %T. %s", tc.version, flavor, tc.description)
