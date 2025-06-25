@@ -171,12 +171,12 @@ func TestMultiQuery(t *testing.T) {
 // results obtained from the gRPC connection.
 func getMySqlResults(conn *mysql.Conn, sql string) ([]*sqltypes.Result, error) {
 	var results []*sqltypes.Result
-	mysqlQr, mysqlMore, mysqlErr := conn.ExecuteFetchMulti(sql, 1000, true)
+	mysqlQr, mysqlStatus, mysqlErr := conn.ExecuteFetchMulti(sql, 1000, true)
 	if mysqlQr != nil {
 		results = append(results, mysqlQr)
 	}
-	for mysqlMore {
-		mysqlQr, mysqlMore, _, mysqlErr = conn.ReadQueryResult(1000, true)
+	for (mysqlStatus & mysql.ServerMoreResultsExists) != 0 {
+		mysqlQr, mysqlStatus, _, mysqlErr = conn.ReadQueryResult(1000, true)
 		if mysqlQr != nil {
 			results = append(results, mysqlQr)
 		}
