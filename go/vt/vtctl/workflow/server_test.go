@@ -2474,8 +2474,9 @@ func TestValidateShardsHaveVReplicationPermissions(t *testing.T) {
 			name: "no permissions",
 			response: &validateVReplicationPermissionsResponse{
 				res: &tabletmanagerdatapb.ValidateVReplicationPermissionsResponse{
-					User: "vt_test_user",
-					Ok:   false,
+					User:  "vt_test_user",
+					Ok:    false,
+					Error: "vt_test_user does not have the required set of permissions",
 				},
 			},
 			expectedErrContains: "vt_test_user does not have the required set of permissions",
