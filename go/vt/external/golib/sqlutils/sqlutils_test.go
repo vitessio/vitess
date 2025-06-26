@@ -82,7 +82,7 @@ func TestRowMap(t *testing.T) {
 		},
 		{
 			"GetTime",
-			RowMap{"key": CellData{String: "2024-01-24 12:34:56.789"}},
+			RowMap{"key": CellData{String: "2024-01-24 12:34:56.789 +0000 UTC"}},
 			time.Date(2024, time.January, 24, 12, 34, 56, 789000000, time.UTC),
 		},
 		{
