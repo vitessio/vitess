@@ -306,7 +306,7 @@ CREATE TABLE vitess_shard (
 	keyspace varchar(128) NOT NULL,
 	shard varchar(128) NOT NULL,
 	primary_alias varchar(512) NOT NULL,
-	primary_timestamp varchar(512) NOT NULL,
+	primary_timestamp timestamp NOT NULL,
 	PRIMARY KEY (keyspace, shard)
 )`,
 	`

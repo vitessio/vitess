@@ -38,10 +38,12 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 
 	// Register topo implementations.
 	_ "vitess.io/vitess/go/vt/topo/consultopo"
@@ -1080,9 +1082,9 @@ func GetIntFromValue(val any) int {
 }
 
 // WaitForDetectedProblems waits until the given analysis code, alias, keyspace and shard count matches the count expected.
-func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, code, alias, ks, shard string, expect int) {
+func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, analysisType vtorcdatapb.AnalysisType, alias, ks, shard string, expect int) {
 	t.Helper()
-	key := strings.Join([]string{code, alias, ks, shard}, ".")
+	key := strings.Join([]string{inst.AnalysisTypeProtoToString(analysisType), alias, ks, shard}, ".")
 	timeout := 15 * time.Second
 	startTime := time.Now()
 
