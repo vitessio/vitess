@@ -12,8 +12,8 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
-func testRequireTabletAliasEqual(t *testing.T, a, b *topodatapb.TabletAlias) {
-	require.Equal(t, topoproto.TabletAliasString(a), topoproto.TabletAliasString(b))
+func testRequireTabletAliasEqual(t *testing.T, expected, got *topodatapb.TabletAlias) {
+	require.Equal(t, topoproto.TabletAliasString(expected), topoproto.TabletAliasString(got))
 }
 
 func TestSaveAndReadTablet(t *testing.T) {

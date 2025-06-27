@@ -335,8 +335,7 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		tabletAliasString := row.GetString("alias")
 		if !latestInstances[tabletAliasString] {
-			tabletAlias, err := topoproto.ParseTabletAlias(tabletAliasString)
-			if err == nil {
+			if tabletAlias, err := topoproto.ParseTabletAlias(tabletAliasString); err == nil {
 				toForget = append(toForget, tabletAlias)
 			}
 		}
