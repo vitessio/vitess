@@ -25,6 +25,7 @@ import (
 )
 
 func TestRowMap(t *testing.T) {
+	getTimeExpected := time.Date(2024, time.January, 24, 12, 34, 56, 789000000, time.UTC)
 	tt := []struct {
 		name     string
 		rowMap   RowMap
@@ -82,8 +83,8 @@ func TestRowMap(t *testing.T) {
 		},
 		{
 			"GetTime",
-			RowMap{"key": CellData{String: "2024-01-24 12:34:56.789"}},
-			time.Date(2024, time.January, 24, 12, 34, 56, 789000000, time.UTC),
+			RowMap{"key": CellData{String: getTimeExpected.UTC().String()}},
+			getTimeExpected,
 		},
 		{
 			"GetTime Error",
