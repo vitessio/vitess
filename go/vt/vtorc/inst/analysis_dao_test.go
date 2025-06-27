@@ -1147,19 +1147,14 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 
 // TestPostProcessAnalyses tests the functionality of the postProcessAnalyses function.
 func TestPostProcessAnalyses(t *testing.T) {
-	ks0 := ClusterInfo{
-		Keyspace: "ks",
-		Shard:    "0",
-	}
-	ks80 := ClusterInfo{
-		Keyspace: "ks",
-		Shard:    "80-",
-	}
+	keyspace := "ks"
+	shard0 := "0"
+	shard80 := "80-"
 	clusters := map[string]*clusterAnalysis{
-		getKeyspaceShardName(ks0.Keyspace, ks0.Shard): {
+		getKeyspaceShardName(keyspace, shard0): {
 			totalTablets: 4,
 		},
-		getKeyspaceShardName(ks80.Keyspace, ks80.Shard): {
+		getKeyspaceShardName(keyspace, shard80): {
 			totalTablets: 3,
 		},
 	}
@@ -1173,20 +1168,23 @@ func TestPostProcessAnalyses(t *testing.T) {
 			name: "No processing needed",
 			analyses: []*ReplicationAnalysis{
 				{
-					Analysis:       ReplicationStopped,
-					TabletType:     topodatapb.TabletType_REPLICA,
-					LastCheckValid: true,
-					ClusterDetails: ks0,
+					Analysis:         ReplicationStopped,
+					AnalyzedKeyspace: keyspace,
+					AnalyzedShard:    shard0,
+					TabletType:       topodatapb.TabletType_REPLICA,
+					LastCheckValid:   true,
 				}, {
-					Analysis:       ReplicaSemiSyncMustBeSet,
-					LastCheckValid: true,
-					TabletType:     topodatapb.TabletType_REPLICA,
-					ClusterDetails: ks0,
+					Analysis:         ReplicaSemiSyncMustBeSet,
+					AnalyzedKeyspace: keyspace,
+					AnalyzedShard:    shard0,
+					LastCheckValid:   true,
+					TabletType:       topodatapb.TabletType_REPLICA,
 				}, {
-					Analysis:       PrimaryHasPrimary,
-					LastCheckValid: true,
-					TabletType:     topodatapb.TabletType_REPLICA,
-					ClusterDetails: ks0,
+					Analysis:         PrimaryHasPrimary,
+					AnalyzedKeyspace: keyspace,
+					AnalyzedShard:    shard0,
+					LastCheckValid:   true,
+					TabletType:       topodatapb.TabletType_REPLICA,
 				},
 			},
 		}, {
@@ -1195,60 +1193,69 @@ func TestPostProcessAnalyses(t *testing.T) {
 				{
 					Analysis:              InvalidPrimary,
 					AnalyzedInstanceAlias: "zone1-100",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_PRIMARY,
-					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-202",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_RDONLY,
-					ClusterDetails:        ks80,
 				}, {
 					Analysis:              ConnectedToWrongPrimary,
 					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-101",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_REPLICA,
 					ReplicationStopped:    true,
-					ClusterDetails:        ks0,
 				}, {
 					Analysis:              ReplicationStopped,
 					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-102",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ReplicationStopped:    true,
-					ClusterDetails:        ks0,
 				}, {
 					Analysis:              InvalidReplica,
 					AnalyzedInstanceAlias: "zone1-108",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_REPLICA,
 					LastCheckValid:        false,
-					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
 					AnalyzedInstanceAlias: "zone1-302",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard80,
 					LastCheckValid:        true,
 					TabletType:            topodatapb.TabletType_REPLICA,
-					ClusterDetails:        ks80,
 				},
 			},
 			want: []*ReplicationAnalysis{
 				{
 					Analysis:              DeadPrimary,
 					AnalyzedInstanceAlias: "zone1-100",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_PRIMARY,
-					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-202",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_RDONLY,
-					ClusterDetails:        ks80,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-302",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_REPLICA,
-					ClusterDetails:        ks80,
 				},
 			},
 		},
@@ -1258,33 +1265,38 @@ func TestPostProcessAnalyses(t *testing.T) {
 				{
 					Analysis:              InvalidPrimary,
 					AnalyzedInstanceAlias: "zone1-100",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_PRIMARY,
-					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
 					AnalyzedInstanceAlias: "zone1-202",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard80,
 					LastCheckValid:        true,
 					TabletType:            topodatapb.TabletType_RDONLY,
-					ClusterDetails:        ks80,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-101",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_REPLICA,
-					ClusterDetails:        ks0,
 				}, {
 					Analysis:              ReplicationStopped,
 					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-102",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ReplicationStopped:    true,
-					ClusterDetails:        ks0,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
 					AnalyzedInstanceAlias: "zone1-302",
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_REPLICA,
-					ClusterDetails:        ks80,
 				},
 			},
 		},
