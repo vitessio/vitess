@@ -24,8 +24,7 @@ import (
 )
 
 const (
-	rewriteName   = "rewrite"
-	visitableName = "Visitable"
+	rewriteName = "rewrite"
 )
 
 type rewriteGen struct {
@@ -549,8 +548,4 @@ func returnTrue() jen.Code {
 
 func returnFalse() jen.Code {
 	return jen.Return(jen.False())
-}
-
-var noQualifier = func(p *types.Package) string {
-	return ""
 }

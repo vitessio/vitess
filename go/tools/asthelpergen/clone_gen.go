@@ -26,7 +26,11 @@ import (
 	"github.com/dave/jennifer/jen"
 )
 
+// CloneOptions configures the clone generator behavior.
 type CloneOptions struct {
+	// Exclude specifies type patterns that should not be deep cloned.
+	// Types matching these patterns will be returned as-is instead of being cloned.
+	// Patterns use glob-style matching (e.g., "*NoCloneType").
 	Exclude []string
 }
 
@@ -68,7 +72,7 @@ func (c *cloneGen) readValueOfType(t types.Type, expr jen.Code, spi generatorSPI
 	case *types.Basic:
 		return expr
 	case *types.Interface:
-		if types.TypeString(t, noQualifier) == "any" {
+		if types.TypeString(t, noQualifier) == anyTypeName {
 			// these fields have to be taken care of manually
 			return expr
 		}
