@@ -526,7 +526,8 @@ func TestVStreamMulti(t *testing.T) {
 func TestVStreamsMetrics(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cell := "aa"
+	// Use a unique cell to avoid parallel tests interfering with each other's metrics
+	cell := "ab"
 	ks := "TestVStream"
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
@@ -616,7 +617,8 @@ func waitForMetricsMatch(t *testing.T, getActual func() map[string]int64, want m
 func TestVStreamsMetricsErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cell := "aa"
+	// Use a unique cell to avoid parallel tests interfering with each other's metrics
+	cell := "ac"
 	ks := "TestVStream"
 	_ = createSandbox(ks)
 	hc := discovery.NewFakeHealthCheck(nil)
