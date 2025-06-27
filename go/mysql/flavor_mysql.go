@@ -55,6 +55,13 @@ type mysqlFlavor82 struct {
 	mysqlFlavor
 }
 
+// mysqlFlavor9 is for MySQL 9.x.y and later. It's the most modern
+// flavor but has an explicit name so that it's clear what versions
+// it is for.
+type mysqlFlavor9 struct {
+	mysqlFlavor
+}
+
 var _ flavor = (*mysqlFlavor8)(nil)
 var _ flavor = (*mysqlFlavor82)(nil)
 
