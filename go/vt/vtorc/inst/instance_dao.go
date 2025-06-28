@@ -342,7 +342,7 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	// No `goto Cleanup` after this point.
 	// -------------------------------------------------------------------------
 
-	instance.DataCenter = tablet.Alias.Cell
+	instance.Cell = tablet.Alias.Cell
 	instance.InstanceAlias = tablet.Alias
 
 	{
@@ -537,6 +537,7 @@ func readInstanceRow(m sqlutils.RowMap) (*Instance, error) {
 	instance.Hostname = m.GetString("hostname")
 	instance.Port = m.GetInt("port")
 	instance.TabletType = topodatapb.TabletType(m.GetInt("tablet_type"))
+	instance.Cell = m.GetString("cell")
 	instance.ServerID = m.GetUint("server_id")
 	instance.ServerUUID = m.GetString("server_uuid")
 	instance.Version = m.GetString("version")
@@ -578,9 +579,6 @@ func readInstanceRow(m sqlutils.RowMap) (*Instance, error) {
 	instance.SecondsBehindPrimary = m.GetNullInt64("replication_lag_seconds")
 	instance.ReplicationLagSeconds = m.GetNullInt64("replica_lag_seconds")
 	instance.SQLDelay = m.GetUint32("sql_delay")
-	instance.DataCenter = m.GetString("data_center")
-	instance.Region = m.GetString("region")
-	instance.PhysicalEnvironment = m.GetString("physical_environment")
 	instance.SemiSyncEnforced = m.GetBool("semi_sync_enforced")
 	instance.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
 	instance.SemiSyncPrimaryTimeout = m.GetUint64("semi_sync_primary_timeout")
@@ -850,6 +848,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"alias",
 		"hostname",
 		"port",
+		"cell",
 		"last_checked",
 		"last_attempted_check",
 		"last_check_partial_success",
@@ -895,9 +894,6 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"replication_lag_seconds",
 		"replica_lag_seconds",
 		"sql_delay",
-		"data_center",
-		"region",
-		"physical_environment",
 		"replication_depth",
 		"is_co_primary",
 		"has_replication_credentials",
@@ -919,9 +915,9 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 	for i := range columns {
 		values[i] = "?"
 	}
-	values[3] = "DATETIME('now')" // last_checked
-	values[4] = "DATETIME('now')" // last_attempted_check
-	values[5] = "1"               // last_check_partial_success
+	values[4] = "DATETIME('now')" // last_checked
+	values[5] = "DATETIME('now')" // last_attempted_check
+	values[6] = "1"               // last_check_partial_success
 
 	if updateLastSeen {
 		columns = append(columns, "last_seen")
@@ -935,6 +931,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, topoproto.TabletAliasString(instance.InstanceAlias))
 		args = append(args, instance.Hostname)
 		args = append(args, instance.Port)
+		args = append(args, instance.Cell)
 		args = append(args, int(instance.TabletType))
 		args = append(args, instance.ServerID)
 		args = append(args, instance.ServerUUID)
@@ -977,9 +974,6 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.SecondsBehindPrimary)
 		args = append(args, instance.ReplicationLagSeconds)
 		args = append(args, instance.SQLDelay)
-		args = append(args, instance.DataCenter)
-		args = append(args, instance.Region)
-		args = append(args, instance.PhysicalEnvironment)
 		args = append(args, instance.ReplicationDepth)
 		args = append(args, instance.IsCoPrimary)
 		args = append(args, instance.HasReplicationCredentials)

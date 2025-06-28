@@ -1,5 +1,5 @@
 * @deepthi
-bootstrap.sh @deepthi @frouioui @vmg
+bootstrap.sh @deepthi @frouioui
 go.mod @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 go.sum @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 /.github/ @deepthi @mattlord @rohit-nayak-ps @frouioui
@@ -14,7 +14,6 @@ go.sum @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 /examples/operator @GuptaManan100 @frouioui @mattlord
 /examples/region_sharding @deepthi @mattlord
 /java/ @harshit-gangal
-/go/cache @vmg
 /go/cmd @deepthi @mattlord
 /go/cmd/vtadmin @notfelineit
 /go/cmd/vtctldclient @mattlord @notfelineit
@@ -26,7 +25,7 @@ go.sum @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 /go/mysql @harshit-gangal @systay @mattlord
 /go/pools @deepthi @harshit-gangal
 /go/protoutil @deepthi @mattlord
-/go/sqltypes @harshit-gangal @shlomi-noach @vmg
+/go/sqltypes @harshit-gangal @shlomi-noach
 /go/test/endtoend/onlineddl @rohit-nayak-ps @shlomi-noach
 /go/test/endtoend/messaging @mattlord @rohit-nayak-ps @derekperkins
 /go/test/endtoend/schemadiff @shlomi-noach @mattlord
@@ -64,7 +63,7 @@ go.sum @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 /go/vt/vtgate/endtoend/*vstream* @rohit-nayak-ps @mattlord @shlomi-noach @notfelineit
 /go/vt/vtgate/planbuilder @harshit-gangal @systay @frouioui @GuptaManan100 @arthurschreiber
 /go/vt/vtgate/*vstream* @rohit-nayak-ps @mattlord @shlomi-noach @notfelineit
-/go/vt/vtgate/evalengine @dbussink @vmg @systay
+/go/vt/vtgate/evalengine @dbussink @systay
 /go/vt/vtorc @deepthi @shlomi-noach @GuptaManan100 @timvaillancourt
 /go/vt/vttablet/*conn* @harshit-gangal @systay
 /go/vt/vttablet/endtoend @harshit-gangal @mattlord @rohit-nayak-ps @systay

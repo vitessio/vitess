@@ -119,7 +119,18 @@ func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool
 }
 
 func (h *Horizon) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
-	panic(errNoNewColumns)
+	cols := h.GetColumns(ctx)
+	if offset >= len(cols) {
+		panic(errNoNewColumns)
+	}
+
+	sel, ok := h.Query.(*sqlparser.Select)
+	if !ok {
+		panic(errNoNewColumns)
+	}
+	wsOffset := len(cols)
+	sel.AddSelectExpr(aeWrap(weightStringFor(cols[offset].Expr)))
+	return wsOffset
 }
 
 var errNoNewColumns = vterrors.VT13001("can't add new columns to Horizon")

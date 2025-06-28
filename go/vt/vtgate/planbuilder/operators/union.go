@@ -160,7 +160,11 @@ func (u *Union) GetSelectFor(source int) *sqlparser.Select {
 }
 
 func (u *Union) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
-	return u.addWeightStringToOffset(ctx, offset)
+	outputOffset, err := u.addWeightStringToOffset(ctx, offset)
+	if err != nil {
+		panic(err)
+	}
+	return outputOffset
 }
 
 func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
@@ -193,7 +197,11 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 			panic(vterrors.VT13001(fmt.Sprintf("could not find the argument to the weight_string function: %s", sqlparser.String(wsArg))))
 		}
 
-		return u.addWeightStringToOffset(ctx, argIdx)
+		offset, err := u.addWeightStringToOffset(ctx, argIdx)
+		if err != nil {
+			panic(err)
+		}
+		return offset
 	case *sqlparser.Literal, *sqlparser.Argument:
 		return u.addConstantToUnion(ctx, expr)
 	default:
@@ -278,7 +286,7 @@ func (u *Union) addConstantToUnion(ctx *plancontext.PlanningContext, aexpr *sqlp
 	return
 }
 
-func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx int) (outputOffset int) {
+func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx int) (outputOffset int, err error) {
 	for i, src := range u.Sources {
 		thisOffset := src.AddWSColumn(ctx, argIdx, false)
 
@@ -287,7 +295,7 @@ func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx
 			outputOffset = thisOffset
 		} else {
 			if thisOffset != outputOffset {
-				panic(vterrors.VT13001("weight_string offsets did not line up for UNION"))
+				return 0, vterrors.VT13001("weight_string offsets did not line up for UNION")
 			}
 		}
 	}

@@ -28,6 +28,9 @@ import (
 
 // Create is part of the topo.Conn interface.
 func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
+	if err := s.checkClosed(); err != nil {
+		return nil, convertError(err, filePath)
+	}
 	nodePath := path.Join(s.root, filePath)
 
 	// We have to do a transaction, comparing existing version with 0.
@@ -47,6 +50,9 @@ func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (
 
 // Update is part of the topo.Conn interface.
 func (s *Server) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
+	if err := s.checkClosed(); err != nil {
+		return nil, convertError(err, filePath)
+	}
 	nodePath := path.Join(s.root, filePath)
 
 	if version != nil {
@@ -75,6 +81,9 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 
 // Get is part of the topo.Conn interface.
 func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	if err := s.checkClosed(); err != nil {
+		return nil, nil, convertError(err, filePath)
+	}
 	nodePath := path.Join(s.root, filePath)
 
 	resp, err := s.cli.Get(ctx, nodePath)
@@ -90,6 +99,9 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 
 // GetVersion is part of the topo.Conn interface.
 func (s *Server) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
+	if err := s.checkClosed(); err != nil {
+		return nil, convertError(err, filePath)
+	}
 	nodePath := path.Join(s.root, filePath)
 
 	resp, err := s.cli.Get(ctx, nodePath, clientv3.WithRev(version))
@@ -105,6 +117,9 @@ func (s *Server) GetVersion(ctx context.Context, filePath string, version int64)
 
 // List is part of the topo.Conn interface.
 func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
+	if err := s.checkClosed(); err != nil {
+		return []topo.KVInfo{}, convertError(err, filePathPrefix)
+	}
 	nodePathPrefix := path.Join(s.root, filePathPrefix)
 
 	resp, err := s.cli.Get(ctx, nodePathPrefix, clientv3.WithPrefix())
@@ -127,6 +142,9 @@ func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo
 
 // Delete is part of the topo.Conn interface.
 func (s *Server) Delete(ctx context.Context, filePath string, version topo.Version) error {
+	if err := s.checkClosed(); err != nil {
+		return convertError(err, filePath)
+	}
 	nodePath := path.Join(s.root, filePath)
 
 	if version != nil {
