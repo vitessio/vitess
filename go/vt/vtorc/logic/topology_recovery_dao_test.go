@@ -23,6 +23,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -40,7 +42,7 @@ func TestTopologyRecovery(t *testing.T) {
 	}()
 
 	replicationAnalysis := inst.ReplicationAnalysis{
-		AnalyzedInstanceAlias: "zone1-0000000101",
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 		TabletType:            tab101.Type,
 		ClusterDetails: inst.ClusterInfo{
 			Keyspace: keyspace,
@@ -143,7 +145,7 @@ func TestInsertRecoveryDetection(t *testing.T) {
 		db.ClearVTOrcDatabase()
 	}()
 	ra := &inst.ReplicationAnalysis{
-		AnalyzedInstanceAlias: "alias-1",
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 1},
 		Analysis:              inst.ClusterHasNoPrimary,
 		ClusterDetails: inst.ClusterInfo{
 			Keyspace: keyspace,
@@ -161,7 +163,9 @@ func TestInsertRecoveryDetection(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
-	require.EqualValues(t, ra.AnalyzedInstanceAlias, rows[0]["alias"].String)
+	tabletAlias, err := topoproto.ParseTabletAlias(rows[0]["alias"].String)
+	require.NoError(t, err)
+	require.EqualValues(t, ra.AnalyzedInstanceAlias, tabletAlias)
 	require.EqualValues(t, ra.Analysis, rows[0]["analysis"].String)
 	require.EqualValues(t, keyspace, rows[0]["keyspace"].String)
 	require.EqualValues(t, shard, rows[0]["shard"].String)

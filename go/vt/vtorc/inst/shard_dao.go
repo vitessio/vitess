@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -42,7 +43,7 @@ func ReadShardNames(keyspaceName string) (shardNames []string, err error) {
 }
 
 // ReadShardPrimaryInformation reads the vitess shard record and gets the shard primary alias and timestamp.
-func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias string, primaryTimestamp string, err error) {
+func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias *topodatapb.TabletAlias, primaryTimestamp string, err error) {
 	if err = topo.ValidateKeyspaceName(keyspaceName); err != nil {
 		return
 	}
@@ -50,18 +51,23 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 		return
 	}
 
-	query := `
-		select
+	query := `SELECT
 			primary_alias, primary_timestamp
-		from
+		FROM
 			vitess_shard
-		where keyspace=? and shard=?
-		`
+		WHERE
+			keyspace = ?
+			AND shard = ?`
 	args := sqlutils.Args(keyspaceName, shardName)
 	shardFound := false
-	err = db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, args, func(row sqlutils.RowMap) (err error) {
 		shardFound = true
-		primaryAlias = row.GetString("primary_alias")
+		if primaryAliasStr := row.GetString("primary_alias"); primaryAliasStr != "" {
+			primaryAlias, err = topoproto.ParseTabletAlias(primaryAliasStr)
+			if err != nil {
+				return err
+			}
+		}
 		primaryTimestamp = row.GetString("primary_timestamp")
 		return nil
 	})
@@ -69,9 +75,9 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 		return
 	}
 	if !shardFound {
-		return "", "", ErrShardNotFound
+		err = ErrShardNotFound
 	}
-	return primaryAlias, primaryTimestamp, nil
+	return primaryAlias, primaryTimestamp, err
 }
 
 // SaveShard saves the shard record against the shard name.
