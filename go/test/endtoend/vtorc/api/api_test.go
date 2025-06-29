@@ -134,7 +134,6 @@ func TestAPIEndpoints(t *testing.T) {
 		// Metrics registered in prometheus
 		utils.CheckMetricExists(t, vtorc, "vtorc_analysis_change_write")
 		utils.CheckMetricExists(t, vtorc, "vtorc_audit_write")
-		utils.CheckMetricExists(t, vtorc, "vtorc_current_errant_gtid_count")
 		utils.CheckMetricExists(t, vtorc, "vtorc_detected_problems")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_attempt")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discoveries_fail")
@@ -144,6 +143,7 @@ func TestAPIEndpoints(t *testing.T) {
 		utils.CheckMetricExists(t, vtorc, "vtorc_discovery_workers")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discovery_workers_active")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discovery_instance_timings")
+		utils.CheckMetricExists(t, vtorc, "vtorc_errant_gtid_tablet_count")
 		utils.CheckMetricExists(t, vtorc, "vtorc_failed_recoveries")
 		utils.CheckMetricExists(t, vtorc, "vtorc_instance_read")
 		utils.CheckMetricExists(t, vtorc, "vtorc_instance_read_topology")
