@@ -119,7 +119,7 @@ func TestAPIEndpoints(t *testing.T) {
 		utils.CheckVarExists(t, vtorc, "DiscoveriesRecentCount")
 		utils.CheckVarExists(t, vtorc, "DiscoveryWorkers")
 		utils.CheckVarExists(t, vtorc, "DiscoveryWorkersActive")
-		utils.CheckVarExists(t, vtorc, "DiscoverInstanceTimings")
+		utils.CheckVarExists(t, vtorc, "DiscoveryInstanceTimings")
 		utils.CheckVarExists(t, vtorc, "FailedRecoveries")
 		utils.CheckVarExists(t, vtorc, "InstanceRead")
 		utils.CheckVarExists(t, vtorc, "InstanceReadTopology")
