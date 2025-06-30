@@ -529,9 +529,9 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		case a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
 			a.Description = "Primary is reachable but none of its replicas is replicating"
-		// case a.IsPrimary && a.CountReplicas == 0:
-		//	a.Analysis = PrimaryWithoutReplicas
-		//	a.Description = "Primary has no replicas"
+			// case a.IsPrimary && a.CountReplicas == 0:
+			//	a.Analysis = PrimaryWithoutReplicas
+			//	a.Description = "Primary has no replicas"
 		}
 
 		{
