@@ -193,6 +193,7 @@ func permDiff(
 // Operations on SchemaDiff are not concurrency-safe.
 type SchemaDiff struct {
 	schema *Schema
+	from   *Schema
 	hints  *DiffHints
 	diffs  []EntityDiff
 
@@ -202,9 +203,10 @@ type SchemaDiff struct {
 	r *mathutil.EquivalenceRelation // internal structure to help determine diffs
 }
 
-func NewSchemaDiff(schema *Schema, hints *DiffHints) *SchemaDiff {
+func NewSchemaDiff(schema *Schema, to *Schema, hints *DiffHints) *SchemaDiff {
 	return &SchemaDiff{
 		schema:       schema,
+		from:         to,
 		hints:        hints,
 		dependencies: make(map[string]*DiffDependency),
 		diffMap:      make(map[string]EntityDiff),
@@ -450,4 +452,31 @@ func (d *SchemaDiff) InstantDDLCapability() InstantDDLCapability {
 		}
 	}
 	return capability
+}
+
+// RelatedForeignKeyTables returns the foreign key tables, either parent or child, that are affected by the
+// diffs in this schema diff, either explicitly (table is modified) or implicitly (table's parent or
+// child is modified).
+func (d *SchemaDiff) RelatedForeignKeyTables() (fkTables map[string]*CreateTableEntity) {
+	fkTables = make(map[string]*CreateTableEntity)
+
+	scanForAffectedFKs := func(entityName string) {
+		for _, schema := range []*Schema{d.from, d.schema} {
+			for _, child := range schema.fkParentToChildren[entityName] {
+				fkTables[entityName] = schema.Table(entityName) // this is a parent
+				fkTables[child.Name()] = child
+			}
+			for _, parent := range schema.fkChildToParents[entityName] {
+				fkTables[entityName] = schema.Table(entityName) // this is a child
+				fkTables[parent.Name()] = parent
+			}
+		}
+	}
+	for _, diff := range d.UnorderedDiffs() {
+		switch diff := diff.(type) {
+		case *CreateTableEntityDiff, *AlterTableEntityDiff, *DropTableEntityDiff:
+			scanForAffectedFKs(diff.EntityName())
+		}
+	}
+	return fkTables
 }
