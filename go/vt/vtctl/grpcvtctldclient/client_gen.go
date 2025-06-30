@@ -884,6 +884,15 @@ func (client *gRPCVtctldClient) SetShardTabletControl(ctx context.Context, in *v
 	return client.c.SetShardTabletControl(ctx, in, opts...)
 }
 
+// SetVtorcEmergencyReparent is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) SetVtorcEmergencyReparent(ctx context.Context, in *vtctldatapb.SetVtorcEmergencyReparentRequest, opts ...grpc.CallOption) (*vtctldatapb.SetVtorcEmergencyReparentResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.SetVtorcEmergencyReparent(ctx, in, opts...)
+}
+
 // SetWritable is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) SetWritable(ctx context.Context, in *vtctldatapb.SetWritableRequest, opts ...grpc.CallOption) (*vtctldatapb.SetWritableResponse, error) {
 	if client.c == nil {
