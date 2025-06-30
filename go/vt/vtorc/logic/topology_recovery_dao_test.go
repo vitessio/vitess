@@ -44,14 +44,10 @@ func TestTopologyRecovery(t *testing.T) {
 	replicationAnalysis := inst.ReplicationAnalysis{
 		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 		TabletType:            tab101.Type,
-		ClusterDetails: inst.ClusterInfo{
-			Keyspace: keyspace,
-			Shard:    shard,
-		},
-		AnalyzedKeyspace: keyspace,
-		AnalyzedShard:    shard,
-		Analysis:         inst.ReplicaIsWritable,
-		IsReadOnly:       false,
+		AnalyzedKeyspace:      keyspace,
+		AnalyzedShard:         shard,
+		Analysis:              inst.ReplicaIsWritable,
+		IsReadOnly:            false,
 	}
 	topologyRecovery := NewTopologyRecovery(replicationAnalysis)
 
@@ -146,11 +142,9 @@ func TestInsertRecoveryDetection(t *testing.T) {
 	}()
 	ra := &inst.ReplicationAnalysis{
 		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 1},
+		AnalyzedKeyspace:      keyspace,
+		AnalyzedShard:         shard,
 		Analysis:              inst.ClusterHasNoPrimary,
-		ClusterDetails: inst.ClusterInfo{
-			Keyspace: keyspace,
-			Shard:    shard,
-		},
 	}
 	err := InsertRecoveryDetection(ra)
 	require.NoError(t, err)

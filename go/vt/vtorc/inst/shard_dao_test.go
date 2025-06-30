@@ -40,7 +40,7 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 		shardName              string
 		shard                  *topodatapb.Shard
 		primaryAliasWanted     *topodatapb.TabletAlias
-		primaryTimestampWanted string
+		primaryTimestampWanted time.Time
 		err                    string
 	}{
 		{
@@ -54,8 +54,8 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 				},
 				PrimaryTermStartTime: protoutil.TimeToProto(timeToUse.Add(1 * time.Hour)),
 			},
-			primaryTimestampWanted: "2023-07-24 06:00:05.000001 +0000 UTC",
 			primaryAliasWanted:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 301},
+			primaryTimestampWanted: timeToUse.Add(1 * time.Hour).UTC(),
 		}, {
 			name:         "Success with empty primary alias",
 			keyspaceName: "ks1",
@@ -63,8 +63,8 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 			shard: &topodatapb.Shard{
 				PrimaryTermStartTime: protoutil.TimeToProto(timeToUse),
 			},
-			primaryTimestampWanted: "2023-07-24 05:00:05.000001 +0000 UTC",
 			primaryAliasWanted:     nil,
+			primaryTimestampWanted: timeToUse.UTC(),
 		}, {
 			name:         "Success with empty primary term start time",
 			keyspaceName: "ks1",
@@ -75,8 +75,8 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 					Uid:  301,
 				},
 			},
-			primaryTimestampWanted: "",
 			primaryAliasWanted:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 301},
+			primaryTimestampWanted: time.Time{},
 		},
 		{
 			name:         "No shard found",

@@ -26,7 +26,11 @@ import (
 
 const Comparator = "Comparator"
 
+// EqualsOptions configures the equals generator behavior.
 type EqualsOptions struct {
+	// AllowCustom specifies types that can have custom equality comparators.
+	// For these types, the generated Comparator struct will include function fields
+	// that allow custom comparison logic to be injected at runtime.
 	AllowCustom []string
 }
 
@@ -167,7 +171,7 @@ func compareAllStructFields(strct *types.Struct, spi generatorSPI) jen.Code {
 	var others []*jen.Statement
 	for i := 0; i < strct.NumFields(); i++ {
 		field := strct.Field(i)
-		if field.Type().Underlying().String() == "any" || strings.HasPrefix(field.Name(), "_") {
+		if field.Type().Underlying().String() == anyTypeName || strings.HasPrefix(field.Name(), "_") {
 			// we can safely ignore this, we do not want ast to contain `any` types.
 			continue
 		}

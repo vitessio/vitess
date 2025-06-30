@@ -18,6 +18,7 @@ package inst
 
 import (
 	"errors"
+	"time"
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -43,7 +44,11 @@ func ReadShardNames(keyspaceName string) (shardNames []string, err error) {
 }
 
 // ReadShardPrimaryInformation reads the vitess shard record and gets the shard primary alias and timestamp.
-func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias *topodatapb.TabletAlias, primaryTimestamp string, err error) {
+func ReadShardPrimaryInformation(keyspaceName, shardName string) (
+	primaryAlias *topodatapb.TabletAlias,
+	primaryTimestamp time.Time,
+	err error,
+) {
 	if err = topo.ValidateKeyspaceName(keyspaceName); err != nil {
 		return
 	}
@@ -68,7 +73,7 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias *
 				return err
 			}
 		}
-		primaryTimestamp = row.GetString("primary_timestamp")
+		primaryTimestamp = row.GetTime("primary_timestamp")
 		return nil
 	})
 	if err != nil {
@@ -93,7 +98,7 @@ func SaveShard(shard *topo.ShardInfo) error {
 		shard.Keyspace(),
 		shard.ShardName(),
 		getShardPrimaryAliasString(shard),
-		getShardPrimaryTermStartTimeString(shard),
+		getShardPrimaryTermStartTime(shard),
 	)
 	return err
 }
@@ -106,12 +111,12 @@ func getShardPrimaryAliasString(shard *topo.ShardInfo) string {
 	return topoproto.TabletAliasString(shard.PrimaryAlias)
 }
 
-// getShardPrimaryAliasString gets the shard primary term start time to be stored as a string in the database.
-func getShardPrimaryTermStartTimeString(shard *topo.ShardInfo) string {
+// getShardPrimaryTermStartTime gets the shard primary term start time to be stored as a string in the database.
+func getShardPrimaryTermStartTime(shard *topo.ShardInfo) time.Time {
 	if shard.PrimaryTermStartTime == nil {
-		return ""
+		return time.Time{}
 	}
-	return protoutil.TimeFromProto(shard.PrimaryTermStartTime).UTC().String()
+	return protoutil.TimeFromProto(shard.PrimaryTermStartTime).UTC()
 }
 
 // DeleteShard deletes a shard using a keyspace and shard name.

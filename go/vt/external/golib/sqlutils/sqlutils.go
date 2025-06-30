@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-const DateTimeFormat = "2006-01-02 15:04:05.999999"
+const DateTimeFormat = "2006-01-02 15:04:05.999999 +0000 UTC"
 
 // RowMap represents one row in a result set. Its objective is to allow
 // for easy, typed getters by column name.
