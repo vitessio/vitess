@@ -714,7 +714,7 @@ func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not
 func checkIfAlreadyFixed(analysisEntry *inst.ReplicationAnalysis) (bool, error) {
 	// Run a replication analysis again. We will check if the problem persisted
-	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, &inst.ReplicationAnalysisHints{})
+	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, &inst.ReplicationAnalysisHints{})
 	if err != nil {
 		return false, err
 	}
@@ -795,7 +795,7 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysi
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Infof("Analysis: %v, will elect a new primary for %v:%v", analysisEntry.Analysis, analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard)
+	logger.Infof("Analysis: %v, will elect a new primary for %v:%v", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.
