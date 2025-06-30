@@ -430,39 +430,31 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 			a.Analysis = DeadPrimaryWithoutReplicas
 			a.Description = "Primary cannot be reached by vtorc and has no replica"
 			ca.hasShardWideAction = true
-			//
 		case a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = DeadPrimary
 			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
 			ca.hasShardWideAction = true
-			//
 		case a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = DeadPrimaryAndReplicas
 			a.Description = "Primary cannot be reached by vtorc and none of its replicas is replicating"
 			ca.hasShardWideAction = true
-			//
 		case a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = DeadPrimaryAndSomeReplicas
 			a.Description = "Primary cannot be reached by vtorc; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			ca.hasShardWideAction = true
-			//
 		case a.IsClusterPrimary && !a.IsPrimary:
 			a.Analysis = PrimaryHasPrimary
 			a.Description = "Primary is replicating from somewhere else"
 			ca.hasShardWideAction = true
-			//
 		case a.IsClusterPrimary && a.IsReadOnly:
 			a.Analysis = PrimaryIsReadOnly
 			a.Description = "Primary is read-only"
-			//
 		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) != 0 && !a.SemiSyncPrimaryEnabled:
 			a.Analysis = PrimarySemiSyncMustBeSet
 			a.Description = "Primary semi-sync must be set"
-			//
 		case a.IsClusterPrimary && policy.SemiSyncAckers(ca.durability, tablet) == 0 && a.SemiSyncPrimaryEnabled:
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
-			//
 		case a.IsClusterPrimary && a.CurrentTabletType != topodatapb.TabletType_UNKNOWN && a.CurrentTabletType != topodatapb.TabletType_PRIMARY:
 			a.Analysis = PrimaryCurrentTypeMismatch
 			a.Description = "Primary tablet's current type is not PRIMARY"
@@ -537,9 +529,9 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		case a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0:
 			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
 			a.Description = "Primary is reachable but none of its replicas is replicating"
-			// case a.IsPrimary && a.CountReplicas == 0:
-			//	a.Analysis = PrimaryWithoutReplicas
-			//	a.Description = "Primary has no replicas"
+		// case a.IsPrimary && a.CountReplicas == 0:
+		//	a.Analysis = PrimaryWithoutReplicas
+		//	a.Description = "Primary has no replicas"
 		}
 
 		{
