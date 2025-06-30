@@ -197,7 +197,7 @@ var (
 		viperutil.Options[bool]{
 			FlagName: "allow-recovery",
 			Default:  true,
-			Dynamic:  false,
+			Dynamic:  true,
 		},
 	)
 
