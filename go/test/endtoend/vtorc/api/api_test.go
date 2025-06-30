@@ -144,7 +144,6 @@ func TestAPIEndpoints(t *testing.T) {
 		utils.CheckMetricExists(t, vtorc, "vtorc_discovery_workers")
 		utils.CheckMetricExists(t, vtorc, "vtorc_discovery_workers_active")
 		utils.CheckMetricExists(t, vtorc, "vtorc_errant_gtid_tablet_count")
-		utils.CheckMetricExists(t, vtorc, "vtorc_failed_recoveries")
 		utils.CheckMetricExists(t, vtorc, "vtorc_instance_read")
 		utils.CheckMetricExists(t, vtorc, "vtorc_instance_read_topology")
 		utils.CheckMetricExists(t, vtorc, "vtorc_pending_recoveries")
