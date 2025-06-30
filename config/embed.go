@@ -22,3 +22,6 @@ var MycnfMySQL8026 string
 
 //go:embed mycnf/mysql84.cnf
 var MycnfMySQL84 string
+
+//go:embed mycnf/mysql90.cnf
+var MycnfMySQL90 string
