@@ -16,7 +16,7 @@ env:
 jobs:
   build:
     timeout-minutes: 60
-    name: Run endtoend tests on Cluster (onlineddl_vrepl) - multi-arch
+    name: Run endtoend tests on Cluster (onlineddl_vrepl) - updated test to multi-arch
     strategy:
       matrix:
         arch: [amd64, arm64]
