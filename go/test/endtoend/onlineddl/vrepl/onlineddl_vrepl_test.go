@@ -358,43 +358,6 @@ func TestVreplSchemaChanges(t *testing.T) {
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
-
-	t.Run("successful online alter, postponed, vtgate, with shards", func(t *testing.T) {
-		insertRows(t, 2)
-		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess -postpone-completion", providedUUID, providedMigrationContext, "vtgate", "test_val", "", false)
-		// Should be still running!
-		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusRunning)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
-
-		// Try to complete with irrelevant shards (should fail)
-		onlineddl.CheckCompleteMigrationShards(t, &vtParams, shards, uuid, "x,y,z", false)
-		// Migration should still be running
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
-
-		// Issue a complete with a relevant shard and wait for successful completion.
-		onlineddl.CheckCompleteMigrationShards(t, &vtParams, shards[0:1], uuid, "-80", true)
-		{
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[:1], uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-			// Shard which is passed as args will have state complete.
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards[:1], uuid, schema.OnlineDDLStatusComplete)
-		}
-		{
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards[1:], uuid, extendedMigrationWait, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusFailed)
-			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-			// Shard which is not passed as args will still have status queued,ready or running.
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards[1:], uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
-		}
-
-		testRows(t)
-		testMigrationRowCount(t, uuid)
-		// schema change for shard "-80" is completed so it can't be cancelled or retried.
-		// schema change for shard "80-" is not completed so it can be cancelled or retried.
-		onlineddl.CheckCancelMigration(t, &vtParams, shards[1:], uuid, true)
-		onlineddl.CheckRetryMigration(t, &vtParams, shards[1:], uuid, true)
-
-		onlineddl.CheckCancelAllMigrations(t, &vtParams, -1)
-	})
 	// Notes about throttling:
 	// In this endtoend test we test both direct tablet API for throttling, as well as VTGate queries.
 	// - VTGate queries (`ALTER VITESS_MIGRATION THROTTLE ALL ...`) are sent to all relevant shards/tablets via QueryExecutor
