@@ -392,6 +392,8 @@ func TestVreplSchemaChanges(t *testing.T) {
 		// schema change for shard "80-" is not completed so it can be cancelled or retried.
 		onlineddl.CheckCancelMigration(t, &vtParams, shards[1:], uuid, true)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards[1:], uuid, true)
+
+		onlineddl.CheckCancelAllMigrations(t, &vtParams, -1)
 	})
 	// Notes about throttling:
 	// In this endtoend test we test both direct tablet API for throttling, as well as VTGate queries.
