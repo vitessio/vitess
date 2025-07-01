@@ -16,16 +16,14 @@ env:
 jobs:
   build:
     timeout-minutes: 60
-    name: Run endtoend tests on Cluster (onlineddl_vrepl) - updated test to multi-arch
+    name: Run endtoend tests on Cluster (onlineddl_vrepl)
     strategy:
       matrix:
+        os: ["gh-hosted-runners-16cores-1-24.04"]
         arch: [amd64, arm64]
-
-    runs-on: ${{ matrix.arch == 'amd64' && 'gh-hosted-runners-16cores-1-24.04' || 'ubuntu-24.04-arm' }}
-
+    runs-on: ${{ matrix.arch == 'amd64' && matrix.os || format('{0}-arm', matrix.os) }}
     env:
       ARCH: ${{ matrix.arch }}
-      
     steps:
     - name: Skip CI
       run: |

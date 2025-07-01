@@ -112,7 +112,7 @@ jobs:
         if [ "$ARCH" = "arm64" ]; then
           wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/mysql-server_8.0.35_arm64.deb
           wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb
-          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/libaio1_0.3.112-5_arm64.deb
+          wget https://github.com/ranimandepudi/vitess/releases/download/mysql-8.0.35-arm64-debs/libaio1_0.3.112-5_arm64.deb
           sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb libaio1_0.3.112-5_arm64.deb
           sudo dpkg -i mysql-server_8.0.35_arm64.deb
           export PATH=$PATH:/usr/local/mysql/bin
