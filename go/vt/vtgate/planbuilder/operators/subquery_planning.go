@@ -551,6 +551,9 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if !subQuery.IsArgument {
 		op.Source = newFilter(outer.Source, subQuery.Original)
 	}
+	if outer.Comments != nil {
+		op.Comments = outer.Comments
+	}
 	ctx.MergedSubqueries = append(ctx.MergedSubqueries, subQuery.originalSubquery)
 	return op, Rewrote("merged subquery with outer")
 }
