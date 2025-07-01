@@ -632,6 +632,8 @@ func testScheduler(t *testing.T) {
 		})
 		t.Run("complete with irrelevant shards", func(t *testing.T) {
 			onlineddl.CheckCompleteMigrationShards(t, &vtParams, shards, t1uuid, "x,y,z", false)
+			// Added an artificial sleep here just to ensure we're not missing a would-be completion./
+			time.Sleep(2 * time.Second)
 			// Migration should still be in running state
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			// postpone_completion should still be set
