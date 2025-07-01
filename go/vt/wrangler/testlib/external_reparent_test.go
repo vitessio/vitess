@@ -503,8 +503,8 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	flag.Set("disable_active_reparents", "true")
-	defer flag.Set("disable_active_reparents", "false")
+	flag.Set("disable-active-reparents", "true")
+	defer flag.Set("disable-active-reparents", "false")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()

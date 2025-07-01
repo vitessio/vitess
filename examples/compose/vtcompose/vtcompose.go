@@ -46,7 +46,7 @@ const (
 	cellUsage             = "Vitess Cell name"
 	DefaultExternalDbData = ""
 	externalDbDataUsage   = "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'"
-	DefaultTopologyFlags  = "--topo_implementation consul --topo_global_server_address consul1:8500 --topo_global_root vitess/global"
+	DefaultTopologyFlags  = "--topo-implementation consul --topo-global-server-address consul1:8500 --topo-global-root vitess/global"
 	topologyFlagsUsage    = "Vitess Topology Flags config"
 )
 
@@ -632,12 +632,12 @@ func generateVtctld(opts vtOptions) string {
     command: ["sh", "-c", " /vt/bin/vtctld \
         %[3]s \
         --cell %[4]s \
-        --service_map 'grpc-vtctl,grpc-vtctld' \
-        --backup_storage_implementation file \
+        --service-map 'grpc-vtctl,grpc-vtctld' \
+        --backup-storage-implementation file \
         --file_backup_storage_root /vt/vtdataroot/backups \
         --logtostderr=true \
         --port %[1]d \
-        --grpc_port %[2]d \
+        --grpc-port %[2]d \
         "]
     volumes:
       - .:/script
@@ -665,14 +665,14 @@ func generateVtgate(opts vtOptions) string {
         %[4]s \
         --logtostderr=true \
         --port %[1]d \
-        --grpc_port %[2]d \
-        --mysql_server_port %[3]d \
-        --mysql_auth_server_impl none \
+        --grpc-port %[2]d \
+        --mysql-server-port %[3]d \
+        --mysql-auth-server-impl none \
         --cell %[5]s \
         --cells_to_watch %[5]s \
-        --tablet_types_to_wait PRIMARY,REPLICA,RDONLY \
-        --service_map 'grpc-vtgateservice' \
-        --normalize_queries=true \
+        --tablet-types-to-wait PRIMARY,REPLICA,RDONLY \
+        --service-map 'grpc-vtgateservice' \
+        --normalize-queries=true \
         "]
     volumes:
       - .:/script

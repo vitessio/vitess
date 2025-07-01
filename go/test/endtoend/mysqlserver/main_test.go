@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -64,8 +65,8 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	// setting grpc max size
-	if os.Getenv("grpc_max_massage_size") == "" {
-		os.Setenv("grpc_max_message_size", strconv.FormatInt(16*1024*1024, 10))
+	if os.Getenv("grpc-max-message-size") == "" {
+		os.Setenv("grpc-max-message-size", strconv.FormatInt(16*1024*1024, 10))
 	}
 
 	exitcode, err := func() (int, error) {
@@ -109,11 +110,11 @@ func TestMain(m *testing.M) {
 
 		clusterInstance.VtGateExtraArgs = []string{
 			"--vschema_ddl_authorized_users=%",
-			"--mysql_server_query_timeout", "1s",
-			"--mysql_auth_server_impl", "static",
+			utils.GetFlagVariantForTests("--mysql-server-query-timeout"), "1s",
+			utils.GetFlagVariantForTests("--mysql-auth-server-impl"), "static",
 			"--mysql_auth_server_static_file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
-			"--mysql_server_version", "8.0.16-7",
-			"--warn_sharded_only=true",
+			utils.GetFlagVariantForTests("--mysql-server-version"), "8.0.16-7",
+			utils.GetFlagVariantForTests("--warn-sharded-only") + "=true",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{

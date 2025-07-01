@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -211,7 +212,7 @@ func isIncrementalBackup(params BackupParams) bool {
 }
 
 func registerBackupEngineFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&backupEngineImplementation, "backup_engine_implementation", backupEngineImplementation, "Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup.")
+	utils.SetFlagStringVar(fs, &backupEngineImplementation, "backup-engine-implementation", backupEngineImplementation, "Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup.")
 }
 
 // GetBackupEngine returns the BackupEngine implementation that should be used

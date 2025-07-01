@@ -3333,33 +3333,17 @@ func TestSelectWithUnionAll(t *testing.T) {
 	bv1, _ := sqltypes.BuildBindVariable([]int64{1, 2})
 	bv2, _ := sqltypes.BuildBindVariable([]int64{3})
 	sbc1WantQueries := []*querypb.BoundQuery{{
-		Sql: "select id from `user` where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals union all select id from `user` where id in ::vtg1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": bv1,
 			"vtg1":   bv,
-			"vtg2":   bv,
-		},
-	}, {
-		Sql: "select id from `user` where id in ::__vals",
-		BindVariables: map[string]*querypb.BindVariable{
-			"__vals": bv1,
-			"vtg1":   bv,
-			"vtg2":   bv,
 		},
 	}}
 	sbc2WantQueries := []*querypb.BoundQuery{{
-		Sql: "select id from `user` where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals union all select id from `user` where id in ::vtg1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": bv2,
 			"vtg1":   bv,
-			"vtg2":   bv,
-		},
-	}, {
-		Sql: "select id from `user` where id in ::__vals",
-		BindVariables: map[string]*querypb.BindVariable{
-			"__vals": bv2,
-			"vtg1":   bv,
-			"vtg2":   bv,
 		},
 	}}
 	session := &vtgatepb.Session{

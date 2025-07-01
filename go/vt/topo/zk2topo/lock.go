@@ -88,8 +88,8 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string) (topo.Lock
 	// sequential nodes, they are created as children, not siblings.
 	locksDir := path.Join(zs.root, dirPath, locksPath) + "/"
 
-	// Create the locks path, possibly creating the parent.
-	nodePath, err := CreateRecursive(ctx, zs.conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), 1)
+	// Create the lock path, creating the parents as needed.
+	nodePath, err := CreateRecursive(ctx, zs.conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), -1)
 	if err != nil {
 		return nil, convertError(err, locksDir)
 	}

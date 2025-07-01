@@ -235,7 +235,7 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	defer panicHandler(&err)
 
 	span.Annotate("keyspace", req.Keyspace)
-	span.Annotate("ddl_strategy", req.DdlStrategy)
+	span.Annotate("ddl-strategy", req.DdlStrategy)
 
 	if len(req.Sql) == 0 {
 		err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Sql must be a non-empty array")

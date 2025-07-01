@@ -61,10 +61,10 @@ func NewVtctlPipe(ctx context.Context, t *testing.T, ts *topo.Server) *VtctlPipe
 		vtctlclient.RegisterFlags(fs)
 
 		err := fs.Parse([]string{
-			"--vtctl_client_protocol",
+			"--vtctl-client-protocol",
 			"grpc",
 		})
-		require.NoError(t, err, "failed to set `--vtctl_client_protocol=%s`", "grpc")
+		require.NoError(t, err, "failed to set `--vtctl-client-protocol=%s`", "grpc")
 
 		servenv.FireRunHooks()
 	})

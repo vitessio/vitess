@@ -322,3 +322,31 @@ func TestHostMetrics(t *testing.T) {
 	assert.Equal(t, "datadir-used-ratio", metric.Name)
 	assert.Empty(t, metric.Error)
 }
+
+func TestGetMycnfTemplateMySQL9(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	// Test MySQL 9.0
+	testMysqld.capabilities = newCapabilitySet(FlavorMySQL, ServerVersion{Major: 9, Minor: 0, Patch: 0})
+	template := testMysqld.getMycnfTemplate()
+	assert.Contains(t, template, "[mysqld]")
+	// Should use MySQL 9.0 config for MySQL 9.x
+	assert.Contains(t, template, "# This file is auto-included when MySQL 9.0 or later is detected.")
+	assert.NotContains(t, template, "mysql_native_password = ON")
+
+	// Test MySQL 9.1
+	testMysqld.capabilities = newCapabilitySet(FlavorMySQL, ServerVersion{Major: 9, Minor: 1, Patch: 5})
+	template = testMysqld.getMycnfTemplate()
+	assert.Contains(t, template, "[mysqld]")
+	// Should use MySQL 9.0 config for MySQL 9.x
+	assert.Contains(t, template, "# This file is auto-included when MySQL 9.0 or later is detected.")
+	assert.NotContains(t, template, "mysql_native_password = ON")
+}

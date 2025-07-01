@@ -197,7 +197,7 @@
 			"Manual": false,
 			"Shard": "12",
 			"RetryMax": 1,
-			"Tags": []
+			"Tags": ["upgrade_downgrade_query_serving_queries"]
 		},
 		"mysql_server": {
 			"File": "unused.go",
@@ -1387,7 +1387,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVDiff2", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_vtctldclient_vdiff2_movetables_tz",
+			"Shard": "vreplication_vdiff2",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1396,7 +1396,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVtctldclientCLI", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_vtctldclient_vdiff2_movetables_tz",
+			"Shard": "vreplication_vtctldclient_movetables_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1405,7 +1405,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesTZ"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_vtctldclient_vdiff2_movetables_tz",
+			"Shard": "vreplication_vtctldclient_movetables_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1414,7 +1414,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestLookupIndex"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_vtctldclient_vdiff2_movetables_tz",
+			"Shard": "vreplication_vtctldclient_movetables_tz",
 			"RetryMax": 1,
 			"Tags": []
 		},

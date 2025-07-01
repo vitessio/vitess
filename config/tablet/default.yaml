@@ -1,34 +1,34 @@
 tabletID: zone-1234
 
 init:
-  dbName:            # init_db_name_override
-  keyspace:          # init_keyspace
-  shard:             # init_shard
-  tabletType:        # init_tablet_type
-  timeoutSeconds: 60 # init_timeout
+  dbName:            # init-db-name-override
+  keyspace:          # init-keyspace
+  shard:             # init-shard
+  tabletType:        # init-tablet-type
+  timeoutSeconds: 60 # init-timeout
 
 db:
-  socket:     # db_socket
-  host:       # db_host
-  port: 0     # db_port
-  charSet:    # db_charset
-  flags: 0    # db_flags
-  flavor:     # db_flavor
-  sslCa:      # db_ssl_ca
-  sslCaPath:  # db_ssl_ca_path
-  sslCert:    # db_ssl_cert
-  sslKey:     # db_ssl_key
-  serverName: # db_server_name
-  connectTimeoutMilliseconds: 0 # db_connect_timeout_ms
+  socket:     # db-socket
+  host:       # db-host
+  port: 0     # db-port
+  charSet:    # db-charset
+  flags: 0    # db-flags
+  flavor:     # db-flavor
+  sslCa:      # db-ssl-ca
+  sslCaPath:  # db-ssl-ca-path
+  sslCert:    # db-ssl-cert
+  sslKey:     # db-ssl-key
+  serverName: # db-server-name
+  connectTimeoutMilliseconds: 0 # db-connect-timeout-ms
   app:
     user: vt_app      # db_app_user
     password:         # db_app_password
     useSsl: true      # db_app_use_ssl
     preferTcp: false
   dba:
-    user: vt_dba      # db_dba_user
-    password:         # db_dba_password
-    useSsl: true      # db_dba_use_ssl
+    user: vt_dba      # db-dba-user
+    password:         # db-dba-password
+    useSsl: true      # db-dba-use-ssl
     preferTcp: false
   filtered:
     user: vt_filtered # db_filtered_user
@@ -77,8 +77,8 @@ oltp:
   warnRows: 0             # queryserver-config-warn-result-size
 
 healthcheck:
-  intervalSeconds: 20             # health_check_interval
-  degradedThresholdSeconds: 30    # degraded_threshold
+  intervalSeconds: 20             # health-check-interval
+  degradedThresholdSeconds: 30    # degraded-threshold
   unhealthyThresholdSeconds: 7200 # unhealthy_threshold
 
 gracePeriods:
@@ -86,28 +86,28 @@ gracePeriods:
   transitionSeconds: 0 # serving_state_grace_period
 
 replicationTracker:
-  mode: disable                    # enable_replication_reporter
-  heartbeatIntervalMilliseconds: 0 # heartbeat_enable, heartbeat_interval
+  mode: disable                    # enable-replication-reporter
+  heartbeatIntervalMilliseconds: 0 # heartbeat-enable, heartbeat-interval
 
 hotRowProtection:
-  mode: disable|dryRun|enable # enable_hot_row_protection, enable_hot_row_protection_dry_run
+  mode: disable|dryRun|enable # enable-hot-row-protection, enable-hot-row-protection-dry-run
   # Recommended value: same as txPool.size.
-  maxQueueSize: 20            # hot_row_protection_max_queue_size
-  maxGlobalQueueSize: 1000    # hot_row_protection_max_global_queue_size
-  maxConcurrency: 5           # hot_row_protection_concurrent_transactions
+  maxQueueSize: 20            # hot-row-protection-max-queue-size
+  maxGlobalQueueSize: 1000    # hot-row-protection-max-global-queue-size
+  maxConcurrency: 5           # hot-row-protection-concurrent-transactions
 
 consolidator: enable|disable|notOnPrimary # enable-consolidator, enable-consolidator-replicas
 passthroughDML: false                    # queryserver-config-passthrough-dmls
 streamBufferSize: 32768                  # queryserver-config-stream-buffer-size
 schemaReloadIntervalSeconds: 1800        # queryserver-config-schema-reload-time
-watchReplication: false                  # watch_replication_stream
+watchReplication: false                  # watch-replication-stream
 terseErrors: false                       # queryserver-config-terse-errors
 truncateErrorLen: 0                      # queryserver-config-truncate-error-len
 messagePostponeParallelism: 4            # queryserver-config-message-postpone-cap
 
 
 # The following flags are currently not supported.
-# enforce_strict_trans_tables
+# enforce-strict-trans-tables
 # queryserver-config-strict-table-acl
 # queryserver-config-enable-table-acl-dry-run
 # queryserver-config-acl-exempt-acl
@@ -115,10 +115,10 @@ messagePostponeParallelism: 4            # queryserver-config-message-postpone-c
 # tx-throttler-config
 # tx-throttler-healthcheck-cells
 # tx-throttler-tablet-types
-# enable_transaction_limit
-# enable_transaction_limit_dry_run
-# transaction_limit_per_user
-# transaction_limit_by_username
-# transaction_limit_by_principal
-# transaction_limit_by_component
-# transaction_limit_by_subcomponent
+# enable-transaction-limit
+# enable-transaction-limit-dry-run
+# transaction-limit-per-user
+# transaction-limit-by-username
+# transaction-limit-by-principal
+# transaction-limit-by-component
+# transaction-limit-by-subcomponent

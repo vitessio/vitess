@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -30,7 +31,7 @@ var logQueriesToFile string
 
 func registerFlags(fs *pflag.FlagSet) {
 	// logQueriesToFile is the vttablet startup flag that must be set for this plugin to be active.
-	fs.StringVar(&logQueriesToFile, "log_queries_to_file", logQueriesToFile, "Enable query logging to the specified file")
+	utils.SetFlagStringVar(fs, &logQueriesToFile, "log-queries-to-file", logQueriesToFile, "Enable query logging to the specified file")
 }
 
 func init() {

@@ -361,6 +361,75 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 	}
 }
 
+// TestEtcd2TopoServerClosed tests that operations on a closed server return
+// appropriate errors instead of panicking due to nil pointer dereference.
+func TestEtcd2TopoServerClosed(t *testing.T) {
+	// Start a single etcd in the background.
+	clientAddr, _ := startEtcd(t, 0)
+
+	testRoot := "/test-closed"
+
+	// Create the server on the new root.
+	ts, err := topo.OpenServer("etcd2", clientAddr, path.Join(testRoot, topo.GlobalCell))
+	require.NoError(t, err, "OpenServer() failed: %v", err)
+
+	// Create the CellInfo first.
+	ctx := context.Background()
+	err = ts.CreateCellInfo(ctx, "test_cell", &topodatapb.CellInfo{
+		ServerAddress: clientAddr,
+		Root:          path.Join(testRoot, "test_cell"),
+	})
+	require.NoError(t, err, "CreateCellInfo() failed: %v", err)
+
+	// Get the connection for the cell
+	conn, err := ts.ConnForCell(ctx, "test_cell")
+	require.NoError(t, err, "ConnForCell() failed: %v", err)
+
+	// Test that operations work before closing
+	testPath := "test_key"
+	testContents := []byte("test_value")
+
+	_, err = conn.Create(ctx, testPath, testContents)
+	require.NoError(t, err, "Create() before close should succeed")
+
+	// Close the connection
+	ts.Close()
+
+	// Test that operations return appropriate errors after closing
+	_, err = conn.Create(ctx, "another_key", testContents)
+	require.Error(t, err, "Create() after close should fail")
+	require.True(t, topo.IsErrType(err, topo.Interrupted), "Error should be topo.Interrupted, got: %v", err)
+
+	_, _, err = conn.Get(ctx, testPath)
+	require.Error(t, err, "Get() after close should fail")
+	require.True(t, topo.IsErrType(err, topo.Interrupted), "Error should be topo.Interrupted, got: %v", err)
+
+	_, err = conn.GetVersion(ctx, testPath, 1)
+	require.Error(t, err, "GetVersion() after close should fail")
+	require.True(t, topo.IsErrType(err, topo.Interrupted), "Error should be topo.Interrupted, got: %v", err)
+
+	err = conn.Delete(ctx, testPath, nil)
+	require.Error(t, err, "Delete() after close should fail")
+	require.True(t, topo.IsErrType(err, topo.Interrupted), "Error should be topo.Interrupted, got: %v", err)
+
+	_, err = conn.List(ctx, "/")
+	require.Error(t, err, "List() after close should fail")
+	require.True(t, topo.IsErrType(err, topo.Interrupted), "Error should be topo.Interrupted, got: %v", err)
+
+	_, err = conn.Update(ctx, testPath, testContents, nil)
+	require.Error(t, err, "Update() after close should fail")
+	require.True(t, topo.IsErrType(err, topo.Interrupted), "Error should be topo.Interrupted, got: %v", err)
+
+	// Test watch operations after close
+	_, _, err = conn.Watch(ctx, testPath)
+	require.Error(t, err, "Watch() after close should fail")
+	require.True(t, topo.IsErrType(err, topo.Interrupted), "Error should be topo.Interrupted, got: %v", err)
+
+	_, _, err = conn.WatchRecursive(ctx, "/")
+	require.Error(t, err, "WatchRecursive() after close should fail")
+	require.True(t, topo.IsErrType(err, topo.Interrupted), "Error should be topo.Interrupted, got: %v", err)
+}
+
 // testKeyspaceLock tests etcd-specific heartbeat (TTL).
 // Note TTL granularity is in seconds, even though the API uses time.Duration.
 // So we have to wait a long time in these tests.
