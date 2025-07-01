@@ -22,7 +22,7 @@ jobs:
       matrix:
         os: ["{{.RunsOn}}"]
         arch: [amd64, arm64]
-    runs-on: ${{"{{"}} matrix.arch == 'amd64' && matrix.os || format('{0}-arm', matrix.os) {{"}}"}}
+    runs-on: ${{"{{"}} matrix.arch == 'amd64' && matrix.os || 'ubuntu-24.04-arm' {{"}}"}}
     env:
       ARCH: ${{"{{"}} matrix.arch {{"}}"}}
 {{- else }}
