@@ -169,6 +169,7 @@ func TestReshardCreate(t *testing.T) {
 
 			for i, target := range tc.targetKeyspace.ShardNames {
 				tabletUID := startingTargetTabletUID + (tabletUIDStep * i)
+
 				env.tmc.expectVRQuery(
 					tabletUID,
 					insertPrefix+
