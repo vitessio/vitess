@@ -19,15 +19,14 @@ limitations under the License.
 package events
 
 import (
+	"fmt"
 	"log/syslog"
 	"testing"
 
-	"vitess.io/vitess/go/textutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestShardChangeSyslog(t *testing.T) {
-	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123/shard-123 [shard] status value: primary_alias:{cell:\"test\" uid:123}"
 	sc := &ShardChange{
 		KeyspaceName: "keyspace-123",
 		ShardName:    "shard-123",
@@ -39,12 +38,14 @@ func TestShardChangeSyslog(t *testing.T) {
 		},
 		Status: "status",
 	}
+
+	wantSev, wantMsg := syslog.LOG_INFO, fmt.Sprintf("%s/%s [shard] %s value: %s", "keyspace-123", "shard-123", "status", sc.Shard.String())
 	gotSev, gotMsg := sc.Syslog()
 
 	if gotSev != wantSev {
 		t.Errorf("wrong severity: got %v, want %v", gotSev, wantSev)
 	}
-	if textutil.Normalize(gotMsg) != textutil.Normalize(wantMsg) {
+	if gotMsg != wantMsg {
 		t.Errorf("wrong message: got %v, want %v", gotMsg, wantMsg)
 	}
 }
