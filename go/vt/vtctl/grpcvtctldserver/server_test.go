@@ -29,10 +29,10 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	_flag "vitess.io/vitess/go/internal/flag"
-	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
@@ -8416,7 +8416,20 @@ func TestGetTopologyPath(t *testing.T) {
 				Cell: &vtctldatapb.TopologyCell{
 					Name: "Tablet",
 					Path: "/cell1/tablets/cell1-0000000100/Tablet",
-					Data: "alias:{cell:\"cell1\" uid:100} hostname:\"localhost\" keyspace:\"keyspace1\" mysql_hostname:\"localhost\" mysql_port:17100",
+					Data: func() string {
+						tablet := &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "cell1",
+								Uid:  100,
+							},
+							Hostname:      "localhost",
+							Keyspace:      "keyspace1",
+							MysqlHostname: "localhost",
+							MysqlPort:     17100,
+						}
+						data, _ := topo.DecodeContent("/cell1/tablets/cell1-0000000100/Tablet", []byte(tablet.String()), false)
+						return data
+					}(),
 				},
 			},
 		},
@@ -8430,7 +8443,21 @@ func TestGetTopologyPath(t *testing.T) {
 				Cell: &vtctldatapb.TopologyCell{
 					Name: "Tablet",
 					Path: "/cell1/tablets/cell1-0000000100/Tablet",
-					Data: "{\n  \"alias\": {\n    \"cell\": \"cell1\",\n    \"uid\": 100\n  },\n  \"hostname\": \"localhost\",\n  \"keyspace\": \"keyspace1\",\n  \"mysql_hostname\": \"localhost\",\n  \"mysql_port\": 17100\n}",
+					Data: func() string {
+						tablet := &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "cell1",
+								Uid:  100,
+							},
+							Hostname:      "localhost",
+							Keyspace:      "keyspace1",
+							MysqlHostname: "localhost",
+							MysqlPort:     17100,
+						}
+						dataBytes, _ := protojson.MarshalOptions{Multiline: true, UseProtoNames: true}.Marshal(tablet)
+						data, _ := topo.DecodeContent("/cell1/tablets/cell1-0000000100/Tablet", dataBytes, true)
+						return data
+					}(),
 				},
 			},
 		},
@@ -8963,7 +8990,13 @@ func TestPlannedReparentShard(t *testing.T) {
 					Nanos:   1,
 				},
 			},
-			expectedErr: "duration: seconds:-1 nanos:1 is out of range for time.Duration",
+			expectedErr: func() string {
+				duration := &vttime.Duration{
+					Seconds: -1,
+					Nanos:   1,
+				}
+				return fmt.Sprintf("duration: %v is out of range for time.Duration", duration)
+			}(),
 		},
 		{
 			name: "tablet unreachable",
@@ -9061,7 +9094,7 @@ func TestPlannedReparentShard(t *testing.T) {
 			}()
 
 			if tt.expectedErr != "" {
-				assert.Equal(t, textutil.Normalize(err.Error()), textutil.Normalize(tt.expectedErr))
+				assert.Equal(t, err.Error(), tt.expectedErr)
 
 				return
 			}

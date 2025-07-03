@@ -36,7 +36,6 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -450,7 +449,7 @@ func (tmc *testTMClient) expectVRQuery(tabletID int, query string, result *sqlty
 	defer tmc.mu.Unlock()
 
 	tmc.vrQueries[tabletID] = append(tmc.vrQueries[tabletID], &queryResult{
-		query:  textutil.Normalize(query),
+		query:  query,
 		result: sqltypes.ResultToProto3(result),
 	})
 }

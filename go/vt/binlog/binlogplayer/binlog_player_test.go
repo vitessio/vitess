@@ -19,6 +19,7 @@ package binlogplayer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -26,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/textutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -383,9 +383,16 @@ func applyEvents(blp *BinlogPlayer) func() error {
 }
 
 func TestCreateVReplicationKeyRange(t *testing.T) {
-	want := "insert into _vt.vreplication " +
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) " +
-		`values ('Resharding', 'keyspace:"ks" shard:"0" key_range:{end:"\\x80"}', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running', 'db', 0, 0, false, '{}')`
+	source := &binlogdatapb.BinlogSource{
+		Keyspace: "ks",
+		Shard:    "0",
+		KeyRange: &topodatapb.KeyRange{
+			End: []byte{0x80},
+		},
+	}
+	want := fmt.Sprintf("insert into _vt.vreplication "+
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, %v, %v, %d, %d, %v, %s)", encodeString("Resharding"), encodeString(source.String()), encodeString("MariaDB/0-1-1083"), 9223372036854775807, 9223372036854775807, 481823, encodeString("Running"), encodeString("db"), 0, 0, false, encodeString("{}"))
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -396,15 +403,20 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 	}
 
 	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db", 0, 0, false)
-	if textutil.Normalize(got) != textutil.Normalize(want) {
+	if got != want {
 		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
 	}
 }
 
 func TestCreateVReplicationTables(t *testing.T) {
-	want := "insert into _vt.vreplication " +
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) " +
-		`values ('Resharding', 'keyspace:"ks" shard:"0" tables:"a" tables:"b"', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running', 'db', 0, 0, false, '{}')`
+	source := &binlogdatapb.BinlogSource{
+		Keyspace: "ks",
+		Shard:    "0",
+		Tables:   []string{"a", "b"},
+	}
+	want := fmt.Sprintf("insert into _vt.vreplication "+
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys, options) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, %v, %v, %d, %d, %v, %s)", encodeString("Resharding"), encodeString(source.String()), encodeString("MariaDB/0-1-1083"), 9223372036854775807, 9223372036854775807, 481823, encodeString("Running"), encodeString("db"), 0, 0, false, encodeString("{}"))
 
 	bls := binlogdatapb.BinlogSource{
 		Keyspace: "ks",
@@ -413,7 +425,7 @@ func TestCreateVReplicationTables(t *testing.T) {
 	}
 
 	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db", 0, 0, false)
-	if textutil.Normalize(got) != textutil.Normalize(want) {
+	if got != want {
 		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
 	}
 }
@@ -425,7 +437,7 @@ func TestUpdateVReplicationPos(t *testing.T) {
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0, 0, false)
-	if textutil.Normalize(got) != textutil.Normalize(want) {
+	if got != want {
 		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
 	}
 }
@@ -437,7 +449,7 @@ func TestUpdateVReplicationTimestamp(t *testing.T) {
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828, 0, false)
-	if textutil.Normalize(got) != textutil.Normalize(want) {
+	if got != want {
 		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
 	}
 }
@@ -445,7 +457,7 @@ func TestUpdateVReplicationTimestamp(t *testing.T) {
 func TestReadVReplicationPos(t *testing.T) {
 	want := "select pos from _vt.vreplication where id=482821"
 	got := ReadVReplicationPos(482821)
-	if textutil.Normalize(got) != textutil.Normalize(want) {
+	if got != want {
 		t.Errorf("ReadVReplicationPos(482821) = %#v, want %#v", got, want)
 	}
 }
@@ -453,7 +465,7 @@ func TestReadVReplicationPos(t *testing.T) {
 func TestReadVReplicationStatus(t *testing.T) {
 	want := "select pos, state, message from _vt.vreplication where id=482821"
 	got := ReadVReplicationStatus(482821)
-	if textutil.Normalize(got) != textutil.Normalize(want) {
+	if got != want {
 		t.Errorf("ReadVReplicationStatus(482821) = %#v, want %#v", got, want)
 	}
 }
