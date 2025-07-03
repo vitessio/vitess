@@ -163,10 +163,3 @@ func TruncateText(text string, limit int, location TruncationLocation, indicator
 		return "", fmt.Errorf("invalid truncation location: %d", location)
 	}
 }
-
-// Normalize normalizes whitespace in a string by trimming leading and trailing
-// whitespace and replacing any sequence of whitespace characters (spaces, tabs,
-// newlines, etc.) with a single space character.
-func Normalize(s string) string {
-	return strings.Join(strings.Fields(s), " ")
-}

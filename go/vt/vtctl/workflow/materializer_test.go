@@ -32,7 +32,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -552,7 +551,7 @@ func TestMigrateVSchema(t *testing.T) {
 		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,
 	}
 	for _, wantstr := range want {
-		require.Contains(t, textutil.Normalize(got), textutil.Normalize(wantstr))
+		require.Contains(t, got, wantstr)
 	}
 }
 
