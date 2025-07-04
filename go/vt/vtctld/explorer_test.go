@@ -145,7 +145,12 @@ func TestHandlePathTablet(t *testing.T) {
 		Hostname: "example.com",
 		PortMap:  map[string]int32{"vt": 4321},
 	}
-	want := "alias:{cell:\"cell1\" uid:123} hostname:\"example.com\" port_map:{key:\"vt\" value:4321}"
+
+	want := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 123},
+		Hostname: "example.com",
+		PortMap:  map[string]int32{"vt": 4321},
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -158,7 +163,7 @@ func TestHandlePathTablet(t *testing.T) {
 
 	ex := newBackendExplorer(ts)
 	result := ex.HandlePath(input, nil)
-	if got := result.Data; got != want {
+	if got := result.Data; got != want.String() {
 		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
 	}
 	if got, want := result.Children, []string(nil); !reflect.DeepEqual(got, want) {
