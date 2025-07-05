@@ -33544,6 +33544,9 @@ export namespace tabletmanagerdata {
 
         /** ValidateVReplicationPermissionsResponse ok */
         ok?: (boolean|null);
+
+        /** ValidateVReplicationPermissionsResponse error */
+        error?: (string|null);
     }
 
     /** Represents a ValidateVReplicationPermissionsResponse. */
@@ -33560,6 +33563,9 @@ export namespace tabletmanagerdata {
 
         /** ValidateVReplicationPermissionsResponse ok. */
         public ok: boolean;
+
+        /** ValidateVReplicationPermissionsResponse error. */
+        public error: string;
 
         /**
          * Creates a new ValidateVReplicationPermissionsResponse instance using the specified properties.
