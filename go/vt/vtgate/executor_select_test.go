@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -1839,7 +1838,12 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 
 	results, err := executorStream(ctx, executor, "select id from `user`")
 	require.Error(t, err)
-	assert.Contains(t, textutil.Normalize(err.Error()), textutil.Normalize(`no healthy tablet available for 'keyspace:"TestExecutor" shard:"40-60"`))
+	target := &querypb.Target{
+		Keyspace:   "TestExecutor",
+		Shard:      "40-60",
+		TabletType: topodatapb.TabletType_PRIMARY,
+	}
+	assert.Contains(t, err.Error(), fmt.Sprintf(`no healthy tablet available for '%s'`, target.String()))
 	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 	assert.Nil(t, results)
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select id from `user`", 8)
@@ -2949,12 +2953,12 @@ func TestSubQueryAndQueryWithLimit(t *testing.T) {
 	require.Equal(t, 2, len(sbc2.Queries))
 
 	// sub query is evaluated first, and sees a limit of 1
-	assert.Equal(t, `type:INT64 value:"1"`, textutil.Normalize(sbc1.Queries[0].BindVariables["__upper_limit"].String()))
-	assert.Equal(t, `type:INT64 value:"1"`, textutil.Normalize(sbc2.Queries[0].BindVariables["__upper_limit"].String()))
+	assert.Equal(t, sqltypes.Int64BindVariable(1), sbc1.Queries[0].BindVariables["__upper_limit"])
+	assert.Equal(t, sqltypes.Int64BindVariable(1), sbc2.Queries[0].BindVariables["__upper_limit"])
 
 	// outer limit is only applied to the outer query
-	assert.Equal(t, `type:INT64 value:"100"`, textutil.Normalize(sbc1.Queries[1].BindVariables["__upper_limit"].String()))
-	assert.Equal(t, `type:INT64 value:"100"`, textutil.Normalize(sbc2.Queries[1].BindVariables["__upper_limit"].String()))
+	assert.Equal(t, sqltypes.Int64BindVariable(100), sbc1.Queries[1].BindVariables["__upper_limit"])
+	assert.Equal(t, sqltypes.Int64BindVariable(100), sbc2.Queries[1].BindVariables["__upper_limit"])
 }
 
 func TestSelectUsingMultiEqualOnLookupColumn(t *testing.T) {

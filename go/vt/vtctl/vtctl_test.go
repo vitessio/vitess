@@ -74,14 +74,14 @@ func TestApplyVSchema(t *testing.T) {
 			},
 		},
 	}
-	json, err := protojson.MarshalOptions{Multiline: true, UseProtoNames: true}.Marshal(keyspace)
+	keyspaceJson, err := protojson.MarshalOptions{Multiline: true, UseProtoNames: true}.Marshal(keyspace)
 	require.NoError(t, err)
 
 	expectedLog := regexp.QuoteMeta(fmt.Sprintf(`New VSchema object:
 %s
 If this is not what you expected, check the input data (as JSON parsing will skip unexpected fields).
 
-`, string(json))) +
+`, string(keyspaceJson))) +
 		`W.* vtctl\.go:\d+\] Unknown parameter in vindex binary_vdx: hello\n` +
 		`W.* vtctl\.go:\d+\] Unknown parameter in vindex hash_vdx: foo\n` +
 		`W.* vtctl\.go:\d+\] Unknown parameter in vindex hash_vdx: hello`
