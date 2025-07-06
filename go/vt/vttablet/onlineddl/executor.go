@@ -114,7 +114,7 @@ func init() {
 
 func registerOnlineDDLFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &migrationCheckInterval, "migration-check-interval", migrationCheckInterval, "Interval between migration checks")
-	fs.DurationVar(&retainOnlineDDLTables, "retain_online_ddl_tables", retainOnlineDDLTables, "How long should vttablet keep an old migrated table before purging it")
+	utils.SetFlagDurationVar(fs, &retainOnlineDDLTables, "retain-online-ddl-tables", retainOnlineDDLTables, "How long should vttablet keep an old migrated table before purging it")
 	utils.SetFlagIntVar(fs, &maxConcurrentOnlineDDLs, "max-concurrent-online-ddl", maxConcurrentOnlineDDLs, "Maximum number of online DDL changes that may run concurrently")
 }
 

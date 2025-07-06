@@ -31,7 +31,7 @@ Flags:
       --data_dir string                                                  Directory where the data files will be placed, defaults to a random directory under /vt/vtdataroot
       --dba-idle-timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba-pool-size int                                                Size of the connection pool for dba connections (default 20)
-      --default_schema_dir string                                        Default directory for initial schema files. If no schema is found in schema_dir, default to this location.
+      --default_schema_dir string                                        Default directory for initial schema files. If no schema is found in schema-dir, default to this location.
       --enable_direct_ddl                                                Allow users to submit direct DDL statements (default true)
       --enable_online_ddl                                                Allow users to submit, review and control Online DDL (default true)
       --enable_system_settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
@@ -105,7 +105,7 @@ Flags:
       --num_shards strings                                               Comma separated shard count (one per keyspace) (default [2])
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
-      --persistent_mode                                                  If this flag is set, the MySQL data directory is not cleaned up when LocalCluster.TearDown() is called. This is useful for running vttestserver as a database container in local developer environments. Note that db migration files (--schema_dir option) and seeding of random data (--initialize-with-random-data option) will only run during cluster startup if the data directory does not already exist.  Changes to VSchema are persisted across cluster restarts using a simple watcher if the --data_dir argument is specified.
+      --persistent_mode                                                  If this flag is set, the MySQL data directory is not cleaned up when LocalCluster.TearDown() is called. This is useful for running vttestserver as a database container in local developer environments. Note that db migration files (--schema-dir option) and seeding of random data (--initialize-with-random-data option) will only run during cluster startup if the data directory does not already exist.  Changes to VSchema are persisted across cluster restarts using a simple watcher if the --data_dir argument is specified.
       --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --planner-version string                                           Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right
       --pool-hostname-resolve-interval duration                          if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
@@ -119,7 +119,7 @@ Flags:
       --replica_count int                                                Replica tablets per shard (includes primary) (default 2)
       --replication-connect-retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
       --rng_seed int                                                     The random number generator seed to use when initializing with random data (see also --initialize-with-random-data). Multiple runs with the same seed will result with the same initial data. (default 123)
-      --schema_dir string                                                Directory for initial schema files. Within this dir, there should be a subdir for each keyspace. Within each keyspace dir, each file is executed as SQL after the database is created on each shard. If the directory contains a vschema.json file, it will be used as the vschema for the V3 API.
+      --schema-dir string                                                Directory for initial schema files. Within this dir, there should be a subdir for each keyspace. Within each keyspace dir, each file is executed as SQL after the database is created on each shard. If the directory contains a vschema.json file, it will be used as the vschema for the V3 API.
       --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --snapshot_file string                                             A MySQL DB snapshot file
