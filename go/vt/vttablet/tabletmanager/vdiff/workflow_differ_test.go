@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -35,6 +34,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TestReconcileExtraRows tests reconcileExtraRows() by providing different types of source and target slices and validating
@@ -900,7 +900,7 @@ func TestBuildPlanFailure(t *testing.T) {
 			Match:  "t1",
 			Filter: "select c3 from t1",
 		},
-		err: "column c3 not found in table t1 on tablet cell:\"cell1\" uid:100",
+		err: fmt.Sprintf("column c3 not found in table t1 on tablet %v", &topodatapb.TabletAlias{Cell: "cell1", Uid: 100}),
 	}}
 	for _, tcase := range testcases {
 		dbc := binlogplayer.NewMockDBClient(t)
@@ -910,6 +910,6 @@ func TestBuildPlanFailure(t *testing.T) {
 		require.NoError(t, err)
 		dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 		err = wd.buildPlan(dbc, filter, testSchema)
-		assert.Equal(t, textutil.Normalize(err.Error()), textutil.Normalize(tcase.err), tcase.input)
+		assert.Equal(t, err.Error(), tcase.err, tcase.input)
 	}
 }
