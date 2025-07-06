@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -634,8 +633,8 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 		),
 		`ks|shard_gtids:{keyspace:"ks" shard:"-40" gtid:"a"} shard_gtids:{keyspace:"ks" shard:"40-80" gtid:"b"} shard_gtids:{keyspace:"ks" shard:"80-c0" gtid:"c"} shard_gtids:{keyspace:"ks" shard:"c0-" gtid:"d"}`,
 	)
-	want := textutil.Normalize(fmt.Sprintf("%v", wantResult.Rows))
-	got := textutil.Normalize(fmt.Sprintf("%v", result.Rows))
+	want := fmt.Sprintf("%v", wantResult.Rows)
+	got := fmt.Sprintf("%v", result.Rows)
 	assert.Equal(t, want, got)
 }
 
