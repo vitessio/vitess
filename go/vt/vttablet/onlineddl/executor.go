@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -73,6 +74,10 @@ var (
 	ErrExecutorMigrationAlreadyRunning = errors.New("cannot run migration since a migration is already running")
 	// ErrMigrationNotFound is returned by readMigration when given UUI cannot be found
 	ErrMigrationNotFound = errors.New("migration not found")
+)
+
+var (
+	staleMigrationMinutesStats = stats.NewGauge("OnlineDDLStaleMigrationMinutes", "longest stale migration in minutes")
 )
 
 var (
@@ -116,6 +121,7 @@ func registerOnlineDDLFlags(fs *pflag.FlagSet) {
 const (
 	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
 	staleMigrationMinutes                    = 180
+	staleMigrationWarningMinutes             = 60
 	progressPctStarted               float64 = 0
 	progressPctFull                  float64 = 100.0
 	etaSecondsUnknown                        = -1
@@ -3251,6 +3257,43 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	return countRunnning, cancellable, nil
 }
 
+// warnStaleMigrations marks as 'failed' migrations whose status is 'running' but which have
+// shown no liveness in past X minutes. It also attempts to terminate them
+func (e *Executor) warnStaleMigrations(ctx context.Context) error {
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	var maxStaleMinutes int64
+
+	query, err := sqlparser.ParseAndBind(sqlSelectStaleMigrations,
+		sqltypes.Int64BindVariable(staleMigrationWarningMinutes),
+	)
+	if err != nil {
+		return err
+	}
+	r, err := e.execQuery(ctx, query)
+	if err != nil {
+		return err
+	}
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		staleMinutes := row.AsInt64("stale_minutes", 0)
+
+		onlineDDL, row, err := e.readMigration(ctx, uuid)
+		if err != nil {
+			return err
+		}
+		livenessTimestamp := row.AsString("liveness_timestamp", "")
+		message := fmt.Sprintf("stale migration %s: found running but indicates no liveness for %v minutes, since %v", onlineDDL.UUID, staleMinutes, livenessTimestamp)
+		log.Warning("warnStaleMigrations: %s", message)
+
+		maxStaleMinutes = max(maxStaleMinutes, staleMinutes)
+	}
+	staleMigrationMinutesStats.Set(maxStaleMinutes)
+
+	return nil
+}
+
 // reviewStaleMigrations marks as 'failed' migrations whose status is 'running' but which have
 // shown no liveness in past X minutes. It also attempts to terminate them
 func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
@@ -3508,6 +3551,9 @@ func (e *Executor) onMigrationCheckTick() {
 	if _, cancellable, err := e.reviewRunningMigrations(ctx); err != nil {
 		log.Error(err)
 	} else if err := e.cancelMigrations(ctx, cancellable, false); err != nil {
+		log.Error(err)
+	}
+	if err := e.warnStaleMigrations(ctx); err != nil {
 		log.Error(err)
 	}
 	if err := e.reviewStaleMigrations(ctx); err != nil {
