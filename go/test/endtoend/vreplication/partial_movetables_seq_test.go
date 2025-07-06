@@ -321,6 +321,8 @@ func TestSequenceResetOnSwitchTraffic(t *testing.T) {
 	tc := initSequenceResetTestCase(t)
 	defer tc.teardown()
 
+	currentCustomerCount = getCustomerCount(t, "")
+	newCustomerCount = 4
 	t.Run("Verify sequence reset during traffic switching", func(t *testing.T) {
 		tc.setupKeyspaces([]string{"customer"})
 		wf := tc.newWorkflow("MoveTables", "customer", "commerce", "customer", &workflowOptions{
@@ -342,8 +344,6 @@ func TestSequenceResetOnSwitchTraffic(t *testing.T) {
 
 		wf.switchTraffic()
 
-		currentCustomerCount = getCustomerCount(t, "after first switch")
-		newCustomerCount = 4
 		insertCustomers(t)
 
 		afterFirstSwitchSeqValue := getSequenceNextID()
@@ -354,8 +354,6 @@ func TestSequenceResetOnSwitchTraffic(t *testing.T) {
 
 		afterReverseSeqValue := getSequenceNextID()
 		t.Logf("After reverse switch sequence next_id: %d", afterReverseSeqValue)
-
-		currentCustomerCount = getCustomerCount(t, "after reverse switch")
 
 		// Insert some random values when all writes are reversed back to
 		// source keyspace. We are inserting here rows with IDs 1004, 1005,
@@ -448,7 +446,6 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	targetKs := "customer2"
 	shard := "80-"
 	var wf80Dash, wfDash80 *workflow
-	currentCustomerCount = getCustomerCount(t, "before customer2.80-")
 	vtgateConn, closeConn := getVTGateConn()
 	t.Run("Start MoveTables on customer2.80-", func(t *testing.T) {
 		// Now setup the customer2 keyspace so we can do a partial move tables for one of the two shards: 80-.
@@ -460,13 +457,10 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		})
 		wf80Dash.create()
 
-		currentCustomerCount = getCustomerCount(t, "after customer2.80-")
 		waitForRowCount(t, vtgateConn, "customer2:80-", "customer", 2) // customer2: 80-
 		waitForRowCount(t, vtgateConn, "customer", "customer", 3)      // customer: all shards
 		waitForRowCount(t, vtgateConn, "customer2", "customer", 3)     // customer2: all shards
 	})
-
-	currentCustomerCount = getCustomerCount(t, "after customer2.80-/2")
 
 	// This query uses an ID that should always get routed to shard 80-
 	shard80DashRoutedQuery := "select name from customer where cid = 1 and noexistcol = 'foo'"
@@ -506,14 +500,12 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 
 		_, err = vtgateConn.ExecuteFetch("use `customer`", 0, false) // switch vtgate default db back to customer
 		require.NoError(t, err)
-		currentCustomerCount = getCustomerCount(t, "")
 
 		// Switch all traffic for the shard
 		wf80Dash.switchTraffic()
 		expectedSwitchOutput := fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s\n\nStart State: Reads Not Switched. Writes Not Switched\nCurrent State: Reads partially switched, for shards: %s. Writes partially switched, for shards: %s\n\n",
 			targetKs, wfName, shard, shard)
 		require.Equal(t, expectedSwitchOutput, lastOutput)
-		currentCustomerCount = getCustomerCount(t, "")
 
 		// Confirm global routing rules -- everything should still be routed
 		// to the source side, customer, globally.
@@ -555,7 +547,6 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 		_, err = vtgateConn.ExecuteFetch("use `customer`", 0, false) // switch vtgate default db back to customer
 		require.NoError(t, err)
 	})
-	currentCustomerCount = getCustomerCount(t, "")
 
 	// Now move the other shard: -80
 	t.Run("Move shard -80 and validate routing rules", func(t *testing.T) {
