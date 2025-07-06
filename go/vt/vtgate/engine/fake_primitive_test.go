@@ -26,7 +26,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/textutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -172,7 +171,7 @@ func (f *fakePrimitive) GetFields(ctx context.Context, vcursor VCursor, bindVars
 
 func (f *fakePrimitive) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
-	if textutil.Normalize(strings.Join(f.log, "\n")) != textutil.Normalize(strings.Join(want, "\n")) {
+	if strings.Join(f.log, "\n") != strings.Join(want, "\n") {
 		t.Errorf("vc.log got:\n%v\nwant:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
 	}
 }
