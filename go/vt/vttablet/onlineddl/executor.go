@@ -120,8 +120,8 @@ func registerOnlineDDLFlags(fs *pflag.FlagSet) {
 
 const (
 	maxPasswordLength                        = 32 // MySQL's *replication* password may not exceed 32 characters
-	staleMigrationMinutes                    = 180
-	staleMigrationWarningMinutes             = 60
+	staleMigrationFailMinutes                = 180
+	staleMigrationWarningMinutes             = 5
 	progressPctStarted               float64 = 0
 	progressPctFull                  float64 = 100.0
 	etaSecondsUnknown                        = -1
@@ -3127,7 +3127,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if _, ok := e.vreplicationLastError[uuid]; !ok {
 					e.vreplicationLastError[uuid] = vterrors.NewLastError(
 						fmt.Sprintf("Online DDL migration %v", uuid),
-						staleMigrationMinutes*time.Minute,
+						staleMigrationFailMinutes*time.Minute,
 					)
 				}
 				lastError := e.vreplicationLastError[uuid]
@@ -3257,9 +3257,11 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	return countRunnning, cancellable, nil
 }
 
-// warnStaleMigrations marks as 'failed' migrations whose status is 'running' but which have
-// shown no liveness in past X minutes. It also attempts to terminate them
-func (e *Executor) warnStaleMigrations(ctx context.Context) error {
+// monitorStaleMigrations checks for stale migrations, i.e. migrations that are in 'running' state
+// but have not updated their liveness timestamp in past X minutes. It updates the stats
+// staleMigrationMinutesStats with the maximum number of stale minutes found, and logs a warning
+// for each stale migration found.
+func (e *Executor) monitorStaleMigrations(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -3301,7 +3303,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 	defer e.migrationMutex.Unlock()
 
 	query, err := sqlparser.ParseAndBind(sqlSelectStaleMigrations,
-		sqltypes.Int64BindVariable(staleMigrationMinutes),
+		sqltypes.Int64BindVariable(staleMigrationFailMinutes),
 	)
 	if err != nil {
 		return err
@@ -3318,7 +3320,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 			return err
 		}
 		log.Infof("reviewStaleMigrations: stale migration found: %s", onlineDDL.UUID)
-		message := fmt.Sprintf("stale migration %s: found running but indicates no liveness in the past %v minutes", onlineDDL.UUID, staleMigrationMinutes)
+		message := fmt.Sprintf("stale migration %s: found running but indicates no liveness in the past %v minutes", onlineDDL.UUID, staleMigrationFailMinutes)
 		if onlineDDL.TabletAlias != e.TabletAliasString() {
 			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. primary failover)
 			if err := e.updateTabletFailure(ctx, onlineDDL.UUID); err != nil {
@@ -3553,7 +3555,7 @@ func (e *Executor) onMigrationCheckTick() {
 	} else if err := e.cancelMigrations(ctx, cancellable, false); err != nil {
 		log.Error(err)
 	}
-	if err := e.warnStaleMigrations(ctx); err != nil {
+	if err := e.monitorStaleMigrations(ctx); err != nil {
 		log.Error(err)
 	}
 	if err := e.reviewStaleMigrations(ctx); err != nil {
