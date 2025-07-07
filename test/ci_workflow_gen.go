@@ -48,7 +48,7 @@ var (
 
 const (
 	oracleCloudRunner = "oracle-16cpu-64gb-x86-64"
-	githubRunner      = "gh-hosted-runners-16cores-1-24.04"
+	githubRunner      = "oracle-vm-16cpu-64gb-x86-64"
 	cores16RunnerName = githubRunner
 	defaultRunnerName = "ubuntu-24.04"
 )
