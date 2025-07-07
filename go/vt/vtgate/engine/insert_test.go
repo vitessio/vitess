@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -110,10 +111,10 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		// Fetch two sequence value.
 		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
-		`ExecuteStandalone dummy_generate n: type:INT64 value:"2" ks2 0`,
+		fmt.Sprintf(`ExecuteStandalone dummy_generate n: %v ks2 0`, sqltypes.Int64BindVariable(2)),
 		// Fill those values into the insert.
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: dummy_insert {__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"4" __seq2: type:INT64 value:"2" __seq3: type:INT64 value:"5" __seq4: type:INT64 value:"3"} true true`,
+		fmt.Sprintf(`ExecuteMultiShard ks.0: dummy_insert {__seq0: %v __seq1: %v __seq2: %v __seq3: %v __seq4: %v} true true`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(4), sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(5), sqltypes.Int64BindVariable(3)),
 	})
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
@@ -163,10 +164,10 @@ func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		// Fetch two sequence value.
 		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
-		`ExecuteStandalone dummy_generate n: type:INT64 value:"2" ks2 0`,
+		fmt.Sprintf(`ExecuteStandalone dummy_generate n: %v ks2 0`, sqltypes.Int64BindVariable(2)),
 		// Fill those values into the insert.
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.0: dummy_insert {__seq0: type:INT64 value:"1" __seq1: type:INT64 value:"4" __seq2: type:INT64 value:"2" __seq3: type:INT64 value:"5" __seq4: type:INT64 value:"3"} true true`,
+		fmt.Sprintf(`ExecuteMultiShard ks.0: dummy_insert {__seq0: %v __seq1: %v __seq2: %v __seq3: %v __seq4: %v} true true`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(4), sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(5), sqltypes.Int64BindVariable(3)),
 	})
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
@@ -227,7 +228,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		`ResolveDestinations sharded [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix(:_id_0 /* INT64 */) {_id_0: type:INT64 value:"1"} ` +
+			fmt.Sprintf(`sharded.20-: prefix(:_id_0 /* INT64 */) {_id_0: %v} `, sqltypes.Int64BindVariable(1)) +
 			`true true`,
 	})
 
@@ -266,8 +267,8 @@ func TestInsertShardedSimple(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) {_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
-			`sharded.-20: prefix(:_id_1 /* INT64 */) {_id_1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) {_id_0: %v _id_2: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(3)) +
+			fmt.Sprintf(`sharded.-20: prefix(:_id_1 /* INT64 */) {_id_1: %v} `, sqltypes.Int64BindVariable(2)) +
 			`true false`,
 	})
 
@@ -309,8 +310,8 @@ func TestInsertShardedSimple(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) {_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
-			`sharded.-20: prefix(:_id_1 /* INT64 */) {_id_1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) {_id_0: %v _id_2: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(3)) +
+			fmt.Sprintf(`sharded.-20: prefix(:_id_1 /* INT64 */) {_id_1: %v} `, sqltypes.Int64BindVariable(2)) +
 			`true true`,
 	})
 }
@@ -378,8 +379,11 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix(:_id_0 /* INT64 */) on duplicate key update ` +
 			`suffix1 = :_id_0 /* INT64 */, suffix2 = if(values(col) in ::_id_1, col, values(col)) ` +
-			`{_id_0: type:INT64 value:"1" ` +
-			`_id_1: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"}} ` +
+			fmt.Sprintf(`{_id_0: %v `, sqltypes.Int64BindVariable(1)) +
+			fmt.Sprintf(`_id_1: %v} `, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{
+				{Type: querypb.Type_INT64, Value: []byte("1")},
+				{Type: querypb.Type_INT64, Value: []byte("2")},
+			}}) +
 			`true true`,
 	})
 
@@ -420,8 +424,8 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
-			`sharded.-20: prefix(:_id_1 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: %v _id_2: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(3)) +
+			fmt.Sprintf(`sharded.-20: prefix(:_id_1 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: %v _id_1: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2)) +
 			`true false`,
 	})
 
@@ -465,8 +469,8 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
-			`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
-			`sharded.-20: prefix(:_id_1 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: type:INT64 value:"1" _id_1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`sharded.20-: prefix(:_id_0 /* INT64 */),(:_id_2 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: %v _id_2: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(3)) +
+			fmt.Sprintf(`sharded.-20: prefix(:_id_1 /* INT64 */) on duplicate key update suffix = :_id_0 /* INT64 */ {_id_0: %v _id_1: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2)) +
 			`true true`,
 	})
 }
@@ -605,15 +609,15 @@ func TestInsertShardedGenerate(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
-		`ExecuteStandalone dummy_generate n: type:INT64 value:"1" ks2 -20`,
+		fmt.Sprintf(`ExecuteStandalone dummy_generate n: %v ks2 -20`, sqltypes.Int64BindVariable(1)),
 		// Based on shardForKsid, values returned will be 20-, -20, 20-.
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		// Row 2 will go to -20, rows 1 & 3 will go to 20-
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix(:__seq0 /* INT64 */),(:__seq2 /* INT64 */) ` +
-			`{__seq0: type:INT64 value:"1" __seq2: type:INT64 value:"3"} ` +
+			fmt.Sprintf(`{__seq0: %v __seq2: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(3)) +
 			`sharded.-20: prefix(:__seq1 /* INT64 */) ` +
-			`{__seq1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`{__seq1: %v} `, sqltypes.Int64BindVariable(2)) +
 			`true false`,
 	})
 
@@ -720,24 +724,26 @@ func TestInsertShardedOwned(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0), (:from1_1, :from2_1, :toc_1), (:from1_2, :from2_2, :toc_2) ` +
-			`from1_0: type:INT64 value:"4" from1_1: type:INT64 value:"5" from1_2: type:INT64 value:"6" ` +
-			`from2_0: type:INT64 value:"7" from2_1: type:INT64 value:"8" from2_2: type:INT64 value:"9" ` +
-			`toc_0: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" toc_1: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" toc_2: type:VARBINARY value:"N\xb1\x90ɢ\xfa\x16\x9c" true`,
+			fmt.Sprintf(`from1_0: %v from1_1: %v from1_2: %v `, sqltypes.Int64BindVariable(4), sqltypes.Int64BindVariable(5), sqltypes.Int64BindVariable(6)) +
+			fmt.Sprintf(`from2_0: %v from2_1: %v from2_2: %v `, sqltypes.Int64BindVariable(7), sqltypes.Int64BindVariable(8), sqltypes.Int64BindVariable(9)) +
+			fmt.Sprintf(`toc_0: %v toc_1: %v toc_2: %v `, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x06\xe7\xea\"Βp\x8f")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("N\xb1\x90ɢ\xfa\x16\x9c")}) +
+			`true`,
 		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0), (:from_1, :toc_1), (:from_2, :toc_2) ` +
-			`from_0: type:INT64 value:"10" from_1: type:INT64 value:"11" from_2: type:INT64 value:"12" ` +
-			`toc_0: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" toc_1: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" toc_2: type:VARBINARY value:"N\xb1\x90ɢ\xfa\x16\x9c" true`,
+			fmt.Sprintf(`from_0: %v from_1: %v from_2: %v `, sqltypes.Int64BindVariable(10), sqltypes.Int64BindVariable(11), sqltypes.Int64BindVariable(12)) +
+			fmt.Sprintf(`toc_0: %v toc_1: %v toc_2: %v `, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x06\xe7\xea\"Βp\x8f")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("N\xb1\x90ɢ\xfa\x16\x9c")}) +
+			`true`,
 		// Based on shardForKsid, values returned will be 20-, -20, 20-.
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix(:_id_0 /* INT64 */, :_c1_0 /* INT64 */, :_c2_0 /* INT64 */, :_c3_0 /* INT64 */)` +
 			`,(:_id_2 /* INT64 */, :_c1_2 /* INT64 */, :_c2_2 /* INT64 */, :_c3_2 /* INT64 */) ` +
-			`{_c1_0: type:INT64 value:"4" _c1_2: type:INT64 value:"6" ` +
-			`_c2_0: type:INT64 value:"7" _c2_2: type:INT64 value:"9" ` +
-			`_c3_0: type:INT64 value:"10" _c3_2: type:INT64 value:"12" ` +
-			`_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
+			fmt.Sprintf(`{_c1_0: %v _c1_2: %v `, sqltypes.Int64BindVariable(4), sqltypes.Int64BindVariable(6)) +
+			fmt.Sprintf(`_c2_0: %v _c2_2: %v `, sqltypes.Int64BindVariable(7), sqltypes.Int64BindVariable(9)) +
+			fmt.Sprintf(`_c3_0: %v _c3_2: %v `, sqltypes.Int64BindVariable(10), sqltypes.Int64BindVariable(12)) +
+			fmt.Sprintf(`_id_0: %v _id_2: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(3)) +
 			`sharded.-20: prefix(:_id_1 /* INT64 */, :_c1_1 /* INT64 */, :_c2_1 /* INT64 */, :_c3_1 /* INT64 */) ` +
-			`{_c1_1: type:INT64 value:"5" _c2_1: type:INT64 value:"8" _c3_1: type:INT64 value:"11" ` +
-			`_id_1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`{_c1_1: %v _c2_1: %v _c3_1: %v `, sqltypes.Int64BindVariable(5), sqltypes.Int64BindVariable(8), sqltypes.Int64BindVariable(11)) +
+			fmt.Sprintf(`_id_1: %v} `, sqltypes.Int64BindVariable(2)) +
 			`true false`,
 	})
 }
@@ -813,7 +819,8 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard sharded.20-: prefix(:_id_0 /* INT64 */, :_c3_0 /* NULL_TYPE */) ` +
-			`{_c3_0:  _id_0: type:INT64 value:"1"} true true`,
+			fmt.Sprintf(`{_c3_0:  _id_0: %v} `, sqltypes.Int64BindVariable(1)) +
+			`true true`,
 	})
 }
 
@@ -898,13 +905,14 @@ func TestInsertShardedGeo(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`Execute insert into id_idx(id, keyspace_id) values(:id_0, :keyspace_id_0), (:id_1, :keyspace_id_1) ` +
-			`id_0: type:INT64 value:"1" id_1: type:INT64 value:"1" ` +
-			`keyspace_id_0: type:VARBINARY value:"\x01\x16k@\xb4J\xbaK\xd6" keyspace_id_1: type:VARBINARY value:"\xff\x16k@\xb4J\xbaK\xd6" true`,
+			fmt.Sprintf(`id_0: %v id_1: %v `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(1)) +
+			fmt.Sprintf(`keyspace_id_0: %v keyspace_id_1: %v `, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x01\x16k@\xb4J\xbaK\xd6")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\xff\x16k@\xb4J\xbaK\xd6")}) +
+			`true`,
 		`ResolveDestinations sharded [value:"0" value:"1"] Destinations:DestinationKeyspaceID(01166b40b44aba4bd6),DestinationKeyspaceID(ff166b40b44aba4bd6)`,
 		`ExecuteMultiShard sharded.20-: prefix(:_region_0 /* INT64 */, :_id_0 /* INT64 */) ` +
-			`{_id_0: type:INT64 value:"1" _region_0: type:INT64 value:"1"} ` +
+			fmt.Sprintf(`{_id_0: %v _region_0: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(1)) +
 			`sharded.-20: prefix(:_region_1 /* INT64 */, :_id_1 /* INT64 */) ` +
-			`{_id_1: type:INT64 value:"1" _region_1: type:INT64 value:"255"} ` +
+			fmt.Sprintf(`{_id_1: %v _region_1: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(255)) +
 			`true false`,
 	})
 }
@@ -1049,28 +1057,31 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`Execute select from1, toc from prim where from1 in ::from1 ` +
-			`from1: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"3"} values:{type:INT64 value:"4"} false`,
+			fmt.Sprintf(`from1: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}, {Type: querypb.Type_INT64, Value: []byte("3")}, {Type: querypb.Type_INT64, Value: []byte("4")}}}),
 		`Execute insert ignore into lkp2(from1, from2, toc) values` +
 			`(:from1_0, :from2_0, :toc_0), (:from1_1, :from2_1, :toc_1), (:from1_2, :from2_2, :toc_2) ` +
-			`from1_0: type:INT64 value:"5" from1_1: type:INT64 value:"7" from1_2: type:INT64 value:"8" ` +
-			`from2_0: type:INT64 value:"9" from2_1: type:INT64 value:"11" from2_2: type:INT64 value:"12" ` +
-			`toc_0: type:VARBINARY value:"\x00" toc_1: type:VARBINARY value:"\x00" toc_2: type:VARBINARY value:"\x00" true`,
-		`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: type:INT64 value:"5" toc: type:VARBINARY value:"\x00" false`,
-		`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: type:INT64 value:"7" toc: type:VARBINARY value:"\x00" false`,
-		`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: type:INT64 value:"8" toc: type:VARBINARY value:"\x00" false`,
+			fmt.Sprintf(`from1_0: %v from1_1: %v from1_2: %v `, sqltypes.Int64BindVariable(5), sqltypes.Int64BindVariable(7), sqltypes.Int64BindVariable(8)) +
+			fmt.Sprintf(`from2_0: %v from2_1: %v from2_2: %v `, sqltypes.Int64BindVariable(9), sqltypes.Int64BindVariable(11), sqltypes.Int64BindVariable(12)) +
+			fmt.Sprintf(`toc_0: %v toc_1: %v toc_2: %v `, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x00")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x00")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x00")}) +
+			`true`,
+		fmt.Sprintf(`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: %v toc: %v false`, sqltypes.Int64BindVariable(5), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x00")}),
+		fmt.Sprintf(`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: %v toc: %v false`, sqltypes.Int64BindVariable(7), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x00")}),
+		fmt.Sprintf(`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: %v toc: %v false`, sqltypes.Int64BindVariable(8), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x00")}),
 		`Execute insert ignore into lkp1(from, toc) values(:from_0, :toc_0), (:from_1, :toc_1) ` +
-			`from_0: type:INT64 value:"13" from_1: type:INT64 value:"16" ` +
-			`toc_0: type:VARBINARY value:"\x00" toc_1: type:VARBINARY value:"\x00" true`,
+			fmt.Sprintf(`from_0: %v from_1: %v `, sqltypes.Int64BindVariable(13), sqltypes.Int64BindVariable(16)) +
+			fmt.Sprintf(`toc_0: %v toc_1: %v `, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x00")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x00")}) +
+			`true`,
 		// row 2 is out because it failed Verify. Only two verifications from lkp1.
-		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"13" toc: type:VARBINARY value:"\x00" false`,
-		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"16" toc: type:VARBINARY value:"\x00" false`,
+		fmt.Sprintf(`Execute select from from lkp1 where from = :from and toc = :toc from: %v toc: %v false`, sqltypes.Int64BindVariable(13), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x00")}),
+		fmt.Sprintf(`Execute select from from lkp1 where from = :from and toc = :toc from: %v toc: %v false`, sqltypes.Int64BindVariable(16), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x00")}),
 		`ResolveDestinations sharded [value:"0" value:"2"] Destinations:DestinationKeyspaceID(00),DestinationKeyspaceID(00)`,
 		// Bind vars for rows 2 may be missing because they were not sent.
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix(:_id_0 /* INT64 */, :_c1_0 /* INT64 */, :_c2_0 /* INT64 */, :_c3_0 /* INT64 */) ` +
-			`{_c1_0: type:INT64 value:"5" _c2_0: type:INT64 value:"9" _c3_0: type:INT64 value:"13" _id_0: type:INT64 value:"1"} ` +
+			fmt.Sprintf(`{_c1_0: %v _c2_0: %v _c3_0: %v _id_0: %v} `, sqltypes.Int64BindVariable(5), sqltypes.Int64BindVariable(9), sqltypes.Int64BindVariable(13), sqltypes.Int64BindVariable(1)) +
 			`sharded.-20: prefix(:_id_2 /* INT64 */, :_c1_2 /* INT64 */, :_c2_2 /* INT64 */, :_c3_2 /* INT64 */) ` +
-			`{_c1_2: type:INT64 value:"8" _c2_2: type:INT64 value:"12" _c3_2: type:INT64 value:"16" _id_2: type:INT64 value:"4"} true false`,
+			fmt.Sprintf(`{_c1_2: %v _c2_2: %v _c3_2: %v _id_2: %v} `, sqltypes.Int64BindVariable(8), sqltypes.Int64BindVariable(12), sqltypes.Int64BindVariable(16), sqltypes.Int64BindVariable(4)) +
+			`true false`,
 	})
 }
 
@@ -1156,10 +1167,11 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`Execute select from from lkp1 where from = :from and toc = :toc from:  toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" false`,
+		fmt.Sprintf(`Execute select from from lkp1 where from = :from and toc = :toc from:  toc: %v false`, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
 		`ResolveDestinations sharded [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard sharded.-20: prefix(:_id_0 /* INT64 */, :_c3_0 /* INT64 */) ` +
-			`{_c3_0:  _id_0: type:INT64 value:"1"} true true`,
+			fmt.Sprintf(`{_c3_0:  _id_0: %v} `, sqltypes.Int64BindVariable(1)) +
+			`true true`,
 	})
 }
 
@@ -1280,24 +1292,20 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		// Perform verification for each colvindex.
 		// Note that only first column of each colvindex is used.
-		`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: type:INT64 value:"4" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" false`,
-		`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: type:INT64 value:"5" toc: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" false`,
-		`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: type:INT64 value:"6" toc: type:VARBINARY value:"N\xb1\x90ɢ\xfa\x16\x9c" false`,
-		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"10" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" false`,
-		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"11" toc: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" false`,
-		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"12" toc: type:VARBINARY value:"N\xb1\x90ɢ\xfa\x16\x9c" false`,
+		fmt.Sprintf(`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: %v toc: %v false`, sqltypes.Int64BindVariable(4), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
+		fmt.Sprintf(`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: %v toc: %v false`, sqltypes.Int64BindVariable(5), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x06\xe7\xea\"Βp\x8f")}),
+		fmt.Sprintf(`Execute select from1 from lkp2 where from1 = :from1 and toc = :toc from1: %v toc: %v false`, sqltypes.Int64BindVariable(6), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("N\xb1\x90ɢ\xfa\x16\x9c")}),
+		fmt.Sprintf(`Execute select from from lkp1 where from = :from and toc = :toc from: %v toc: %v false`, sqltypes.Int64BindVariable(10), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
+		fmt.Sprintf(`Execute select from from lkp1 where from = :from and toc = :toc from: %v toc: %v false`, sqltypes.Int64BindVariable(11), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x06\xe7\xea\"Βp\x8f")}),
+		fmt.Sprintf(`Execute select from from lkp1 where from = :from and toc = :toc from: %v toc: %v false`, sqltypes.Int64BindVariable(12), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("N\xb1\x90ɢ\xfa\x16\x9c")}),
 		// Based on shardForKsid, values returned will be 20-, -20, 20-.
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix(:_id_0 /* INT64 */, :_c1_0 /* INT64 */, :_c2_0 /* INT64 */, :_c3_0 /* INT64 */),` +
 			`(:_id_2 /* INT64 */, :_c1_2 /* INT64 */, :_c2_2 /* INT64 */, :_c3_2 /* INT64 */) ` +
-			`{_c1_0: type:INT64 value:"4" _c1_2: type:INT64 value:"6" ` +
-			`_c2_0: type:INT64 value:"7" _c2_2: type:INT64 value:"9" ` +
-			`_c3_0: type:INT64 value:"10" _c3_2: type:INT64 value:"12" ` +
-			`_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
+			fmt.Sprintf(`{_c1_0: %v _c1_2: %v _c2_0: %v _c2_2: %v _c3_0: %v _c3_2: %v _id_0: %v _id_2: %v} `, sqltypes.Int64BindVariable(4), sqltypes.Int64BindVariable(6), sqltypes.Int64BindVariable(7), sqltypes.Int64BindVariable(9), sqltypes.Int64BindVariable(10), sqltypes.Int64BindVariable(12), sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(3)) +
 			`sharded.-20: prefix(:_id_1 /* INT64 */, :_c1_1 /* INT64 */, :_c2_1 /* INT64 */, :_c3_1 /* INT64 */) ` +
-			`{_c1_1: type:INT64 value:"5" _c2_1: type:INT64 value:"8" ` +
-			`_c3_1: type:INT64 value:"11" _id_1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`{_c1_1: %v _c2_1: %v _c3_1: %v _id_1: %v} `, sqltypes.Int64BindVariable(5), sqltypes.Int64BindVariable(8), sqltypes.Int64BindVariable(11), sqltypes.Int64BindVariable(2)) +
 			`true false`,
 	})
 }
@@ -1394,16 +1402,16 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		// Perform verification for each colvindex.
 		// Note that only first column of each colvindex is used.
-		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"10" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" false`,
-		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"11" toc: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" false`,
-		`Execute select from from lkp1 where from = :from and toc = :toc from: type:INT64 value:"12" toc: type:VARBINARY value:"N\xb1\x90ɢ\xfa\x16\x9c" false`,
+		fmt.Sprintf(`Execute select from from lkp1 where from = :from and toc = :toc from: %v toc: %v false`, sqltypes.Int64BindVariable(10), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
+		fmt.Sprintf(`Execute select from from lkp1 where from = :from and toc = :toc from: %v toc: %v false`, sqltypes.Int64BindVariable(11), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x06\xe7\xea\"Βp\x8f")}),
+		fmt.Sprintf(`Execute select from from lkp1 where from = :from and toc = :toc from: %v toc: %v false`, sqltypes.Int64BindVariable(12), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("N\xb1\x90ɢ\xfa\x16\x9c")}),
 		// Based on shardForKsid, values returned will be 20-, -20.
 		`ResolveDestinations sharded [value:"0" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix(:_id_0 /* INT64 */, :_c3_0 /* INT64 */, :v1 /* VARCHAR */) ` +
-			`{_c3_0: type:INT64 value:"10" _id_0: type:INT64 value:"1" v1: type:VARCHAR value:"a"} ` +
+			fmt.Sprintf(`{_c3_0: %v _id_0: %v v1: %v} `, sqltypes.Int64BindVariable(10), sqltypes.Int64BindVariable(1), &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}) +
 			`sharded.-20: prefix(:_id_2 /* INT64 */, :_c3_2 /* INT64 */, :v3 /* VARCHAR */) ` +
-			`{_c3_2: type:INT64 value:"12" _id_2: type:INT64 value:"3" v3: type:VARCHAR value:"c"} ` +
+			fmt.Sprintf(`{_c3_2: %v _id_2: %v v3: %v} `, sqltypes.Int64BindVariable(12), sqltypes.Int64BindVariable(3), &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("c")}) +
 			`true false`,
 	})
 }
@@ -1589,13 +1597,14 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 		`ExecuteMultiShard sharded.20-: ` +
 			`prefix(:_id_0 /* INT64 */, :_c1_0 /* NULL_TYPE */, :_c2_0 /* NULL_TYPE */, :_c3_0 /* NULL_TYPE */),` +
 			`(:_id_2 /* INT64 */, :_c1_2 /* NULL_TYPE */, :_c2_2 /* NULL_TYPE */, :_c3_2 /* NULL_TYPE */) ` +
-			`{_c1_0: type:UINT64 value:"1" _c1_2: type:UINT64 value:"3" ` +
+			fmt.Sprintf(`{_c1_0: %v _c1_2: %v `, sqltypes.Uint64BindVariable(1), sqltypes.Uint64BindVariable(3)) +
 			`_c2_0:  _c2_2:  ` +
-			`_c3_0: type:UINT64 value:"1" _c3_2: type:UINT64 value:"3" ` +
-			`_id_0: type:INT64 value:"1" _id_2: type:INT64 value:"3"} ` +
+			fmt.Sprintf(`_c3_0: %v _c3_2: %v `, sqltypes.Uint64BindVariable(1), sqltypes.Uint64BindVariable(3)) +
+			fmt.Sprintf(`_id_0: %v _id_2: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(3)) +
 			`sharded.-20: ` +
 			`prefix(:_id_1 /* INT64 */, :_c1_1 /* NULL_TYPE */, :_c2_1 /* NULL_TYPE */, :_c3_1 /* NULL_TYPE */) ` +
-			`{_c1_1: type:UINT64 value:"2" _c2_1:  _c3_1: type:UINT64 value:"2" _id_1: type:INT64 value:"2"} true false`,
+			fmt.Sprintf(`{_c1_1: %v _c2_1:  _c3_1: %v _id_1: %v} `, sqltypes.Uint64BindVariable(2), sqltypes.Uint64BindVariable(2), sqltypes.Int64BindVariable(2)) +
+			`true false`,
 	})
 }
 
@@ -1713,10 +1722,11 @@ func TestInsertSelectSimple(t *testing.T) {
 		// two rows go to the 20- shard, and one row go to the -20 shard
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) ` +
-			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1"` +
-			` _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`{_c0_0: %v _c0_1: %v `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(1)) +
+			fmt.Sprintf(`_c2_0: %v _c2_1: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("b")}, sqltypes.Int64BindVariable(2)) +
 			`sharded.-20: prefix values (:_c1_0, :_c1_1)` +
-			` {_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} true false`})
+			fmt.Sprintf(` {_c1_0: %v _c1_1: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(3)) +
+			`true false`})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -1733,10 +1743,11 @@ func TestInsertSelectSimple(t *testing.T) {
 		// two rows go to the 20- shard, and one row go to the -20 shard
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) ` +
-			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1"` +
-			` _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`{_c0_0: %v _c0_1: %v `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(1)) +
+			fmt.Sprintf(`_c2_0: %v _c2_1: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("b")}, sqltypes.Int64BindVariable(2)) +
 			`sharded.-20: prefix values (:_c1_0, :_c1_1)` +
-			` {_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} true false`})
+			fmt.Sprintf(` {_c1_0: %v _c1_1: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(3)) +
+			`true false`})
 }
 
 func TestInsertSelectOwned(t *testing.T) {
@@ -1803,7 +1814,7 @@ func TestInsertSelectOwned(t *testing.T) {
 		`ExecuteMultiShard sharded.-20: dummy_select {} sharded.20-: dummy_select {} false false`,
 
 		// insert values into the owned lookup vindex
-		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0), (:from_1, :toc_1), (:from_2, :toc_2) from_0: type:VARCHAR value:"a" from_1: type:VARCHAR value:"a" from_2: type:VARCHAR value:"b" toc_0: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" toc_1: type:VARBINARY value:"N\xb1\x90ɢ\xfa\x16\x9c" toc_2: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" true`,
+		fmt.Sprintf(`Execute insert into lkp1(from, toc) values(:from_0, :toc_0), (:from_1, :toc_1), (:from_2, :toc_2) from_0: %v from_1: %v from_2: %v toc_0: %v toc_1: %v toc_2: %v true`, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("b")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("N\xb1\x90ɢ\xfa\x16\x9c")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x06\xe7\xea\"Βp\x8f")}),
 
 		// Values 0 1 2 come from the id column
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(4eb190c9a2fa169c),DestinationKeyspaceID(06e7ea22ce92708f)`,
@@ -1812,11 +1823,11 @@ func TestInsertSelectOwned(t *testing.T) {
 		`ExecuteMultiShard ` +
 			// first we insert two rows on the 20- shard
 			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) ` +
-			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1" _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`{_c0_0: %v _c0_1: %v _c2_0: %v _c2_1: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(1), &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("b")}, sqltypes.Int64BindVariable(2)) +
 
 			// next we insert one row on the -20 shard
 			`sharded.-20: prefix values (:_c1_0, :_c1_1) ` +
-			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} ` +
+			fmt.Sprintf(`{_c1_0: %v _c1_1: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(3)) +
 			`true false`})
 
 	vc.Rewind()
@@ -1831,7 +1842,7 @@ func TestInsertSelectOwned(t *testing.T) {
 		`StreamExecuteMulti dummy_select sharded.-20: {} sharded.20-: {} `,
 
 		// insert values into the owned lookup vindex
-		`Execute insert into lkp1(from, toc) values(:from_0, :toc_0), (:from_1, :toc_1), (:from_2, :toc_2) from_0: type:VARCHAR value:"a" from_1: type:VARCHAR value:"a" from_2: type:VARCHAR value:"b" toc_0: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" toc_1: type:VARBINARY value:"N\xb1\x90ɢ\xfa\x16\x9c" toc_2: type:VARBINARY value:"\x06\xe7\xea\"Βp\x8f" true`,
+		fmt.Sprintf(`Execute insert into lkp1(from, toc) values(:from_0, :toc_0), (:from_1, :toc_1), (:from_2, :toc_2) from_0: %v from_1: %v from_2: %v toc_0: %v toc_1: %v toc_2: %v true`, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("b")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("N\xb1\x90ɢ\xfa\x16\x9c")}, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x06\xe7\xea\"Βp\x8f")}),
 
 		// Values 0 1 2 come from the id column
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(4eb190c9a2fa169c),DestinationKeyspaceID(06e7ea22ce92708f)`,
@@ -1840,11 +1851,11 @@ func TestInsertSelectOwned(t *testing.T) {
 		`ExecuteMultiShard ` +
 			// first we insert two rows on the 20- shard
 			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) ` +
-			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1" _c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`{_c0_0: %v _c0_1: %v _c2_0: %v _c2_1: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(1), &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("b")}, sqltypes.Int64BindVariable(2)) +
 
 			// next we insert one row on the -20 shard
 			`sharded.-20: prefix values (:_c1_0, :_c1_1) ` +
-			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"3"} ` +
+			fmt.Sprintf(`{_c1_0: %v _c1_1: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(3)) +
 			`true false`})
 }
 
@@ -1921,18 +1932,18 @@ func TestInsertSelectGenerate(t *testing.T) {
 		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
 
 		// this is the sequence table query
-		`ExecuteStandalone dummy_generate n: type:INT64 value:"2" ks2 -20`,
+		fmt.Sprintf(`ExecuteStandalone dummy_generate n: %v ks2 -20`, sqltypes.Int64BindVariable(2)),
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			// first we send the insert to the 20- shard
 			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) ` +
-			`{_c0_0: type:VARCHAR value:"a" ` +
-			`_c0_1: type:INT64 value:"1" ` +
-			`_c2_0: type:VARCHAR value:"b" ` +
-			`_c2_1: type:INT64 value:"3"} ` +
+			fmt.Sprintf(`{_c0_0: %v `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}) +
+			fmt.Sprintf(`_c0_1: %v `, sqltypes.Int64BindVariable(1)) +
+			fmt.Sprintf(`_c2_0: %v `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("b")}) +
+			fmt.Sprintf(`_c2_1: %v} `, sqltypes.Int64BindVariable(3)) +
 			// next we send the insert to the -20 shard
 			`sharded.-20: prefix values (:_c1_0, :_c1_1) ` +
-			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`{_c1_0: %v _c1_1: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(2)) +
 			`true false`,
 	})
 
@@ -2018,18 +2029,18 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
 
 		// this is the sequence table query
-		`ExecuteStandalone dummy_generate n: type:INT64 value:"2" ks2 -20`,
+		fmt.Sprintf(`ExecuteStandalone dummy_generate n: %v ks2 -20`, sqltypes.Int64BindVariable(2)),
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			// first we send the insert to the 20- shard
 			`sharded.20-: prefix values (:_c0_0, :_c0_1), (:_c2_0, :_c2_1) ` +
-			`{_c0_0: type:VARCHAR value:"a" ` +
-			`_c0_1: type:INT64 value:"1" ` +
-			`_c2_0: type:VARCHAR value:"b" ` +
-			`_c2_1: type:INT64 value:"3"} ` +
+			fmt.Sprintf(`{_c0_0: %v `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}) +
+			fmt.Sprintf(`_c0_1: %v `, sqltypes.Int64BindVariable(1)) +
+			fmt.Sprintf(`_c2_0: %v `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("b")}) +
+			fmt.Sprintf(`_c2_1: %v} `, sqltypes.Int64BindVariable(3)) +
 			// next we send the insert to the -20 shard
 			`sharded.-20: prefix values (:_c1_0, :_c1_1) ` +
-			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`{_c1_0: %v _c1_1: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(2)) +
 			`true false`,
 	})
 
@@ -2109,14 +2120,14 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
 
 		// this is the sequence table query
-		`ExecuteStandalone dummy_generate n: type:INT64 value:"3" ks2 -20`,
+		fmt.Sprintf(`ExecuteStandalone dummy_generate n: %v ks2 -20`, sqltypes.Int64BindVariable(3)),
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix values (:_c0_0, :_c0_1, :_c0_2), (:_c2_0, :_c2_1, :_c2_2) ` +
-			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1" _c0_2: type:INT64 value:"10" ` +
-			`_c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"3" _c2_2: type:INT64 value:"12"} ` +
+			fmt.Sprintf(`{_c0_0: %v _c0_1: %v _c0_2: %v `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(10)) +
+			fmt.Sprintf(`_c2_0: %v _c2_1: %v _c2_2: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("b")}, sqltypes.Int64BindVariable(3), sqltypes.Int64BindVariable(12)) +
 			`sharded.-20: prefix values (:_c1_0, :_c1_1, :_c1_2) ` +
-			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"2" _c1_2: type:INT64 value:"11"} ` +
+			fmt.Sprintf(`{_c1_0: %v _c1_1: %v _c1_2: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(11)) +
 			`true false`,
 	})
 
@@ -2200,14 +2211,14 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
 
 		// this is the sequence table query
-		`ExecuteStandalone dummy_generate n: type:INT64 value:"3" ks2 -20`,
+		fmt.Sprintf(`ExecuteStandalone dummy_generate n: %v ks2 -20`, sqltypes.Int64BindVariable(3)),
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix values (:_c0_0, :_c0_1, :_c0_2), (:_c2_0, :_c2_1, :_c2_2) ` +
-			`{_c0_0: type:VARCHAR value:"a" _c0_1: type:INT64 value:"1" _c0_2: type:INT64 value:"10" ` +
-			`_c2_0: type:VARCHAR value:"b" _c2_1: type:INT64 value:"3" _c2_2: type:INT64 value:"12"} ` +
+			fmt.Sprintf(`{_c0_0: %v _c0_1: %v _c0_2: %v `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(10)) +
+			fmt.Sprintf(`_c2_0: %v _c2_1: %v _c2_2: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("b")}, sqltypes.Int64BindVariable(3), sqltypes.Int64BindVariable(12)) +
 			`sharded.-20: prefix values (:_c1_0, :_c1_1, :_c1_2) ` +
-			`{_c1_0: type:VARCHAR value:"a" _c1_1: type:INT64 value:"2" _c1_2: type:INT64 value:"11"} ` +
+			fmt.Sprintf(`{_c1_0: %v _c1_1: %v _c1_2: %v} `, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("a")}, sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(11)) +
 			`true false`,
 	})
 
@@ -2271,7 +2282,7 @@ func TestInsertSelectUnowned(t *testing.T) {
 		`ExecuteMultiShard sharded.-20: dummy_select {} sharded.20-: dummy_select {} false false`,
 
 		// select values into the unowned lookup vindex for routing
-		`Execute select from, toc from lkp1 where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"3"} values:{type:INT64 value:"2"} false`,
+		fmt.Sprintf(`Execute select from, toc from lkp1 where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}, {Type: querypb.Type_INT64, Value: []byte("3")}, {Type: querypb.Type_INT64, Value: []byte("2")}}}),
 
 		// values from lookup vindex resolved to destination
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(31),DestinationKeyspaceID(32),DestinationKeyspaceID(33)`,
@@ -2280,11 +2291,11 @@ func TestInsertSelectUnowned(t *testing.T) {
 		`ExecuteMultiShard ` +
 			// first we insert two rows on the 20- shard
 			`sharded.20-: prefix values (:_c0_0), (:_c2_0) ` +
-			`{_c0_0: type:INT64 value:"1" _c2_0: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`{_c0_0: %v _c2_0: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2)) +
 
 			// next we insert one row on the -20 shard
 			`sharded.-20: prefix values (:_c1_0) ` +
-			`{_c1_0: type:INT64 value:"3"} ` +
+			fmt.Sprintf(`{_c1_0: %v} `, sqltypes.Int64BindVariable(3)) +
 			`true false`})
 
 	vc.Rewind()
@@ -2299,7 +2310,7 @@ func TestInsertSelectUnowned(t *testing.T) {
 		`StreamExecuteMulti dummy_select sharded.-20: {} sharded.20-: {} `,
 
 		// select values into the unowned lookup vindex for routing
-		`Execute select from, toc from lkp1 where from in ::from from: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"3"} values:{type:INT64 value:"2"} false`,
+		fmt.Sprintf(`Execute select from, toc from lkp1 where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}, {Type: querypb.Type_INT64, Value: []byte("3")}, {Type: querypb.Type_INT64, Value: []byte("2")}}}),
 
 		// values from lookup vindex resolved to destination
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(31),DestinationKeyspaceID(32),DestinationKeyspaceID(33)`,
@@ -2308,11 +2319,11 @@ func TestInsertSelectUnowned(t *testing.T) {
 		`ExecuteMultiShard ` +
 			// first we insert two rows on the 20- shard
 			`sharded.20-: prefix values (:_c0_0), (:_c2_0) ` +
-			`{_c0_0: type:INT64 value:"1" _c2_0: type:INT64 value:"2"} ` +
+			fmt.Sprintf(`{_c0_0: %v _c2_0: %v} `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2)) +
 
 			// next we insert one row on the -20 shard
 			`sharded.-20: prefix values (:_c1_0) ` +
-			`{_c1_0: type:INT64 value:"3"} ` +
+			fmt.Sprintf(`{_c1_0: %v} `, sqltypes.Int64BindVariable(3)) +
 			`true false`})
 }
 
@@ -2389,7 +2400,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2403,7 +2414,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
 
 	// sks1 and uks2
 	ins.Input = uRoute
@@ -2418,7 +2429,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2432,7 +2443,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
 
 	// uks1 and sks2
 	ins = newInsertSelect(
@@ -2455,7 +2466,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2469,7 +2480,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
 
 	// uks1 and uks2
 	ins.Input = uRoute
@@ -2484,7 +2495,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
 
 	vc.Rewind()
 	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
@@ -2498,5 +2509,5 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: type:INT64 value:"1"} true true`})
+		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1))})
 }
