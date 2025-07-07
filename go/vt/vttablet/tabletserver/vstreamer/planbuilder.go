@@ -318,7 +318,7 @@ func (plan *Plan) shouldFilter(values []sqltypes.Value, charsets []collations.ID
 	return true, hasVindex, nil
 }
 
-// filter maps the row values against the plan.
+// mapValues maps the row values against the plan.
 // The output of the filtering operation is stored in the 'result' argument because
 // filtering cannot be performed in-place. The result argument must be a slice of
 // length equal to ColExprs
