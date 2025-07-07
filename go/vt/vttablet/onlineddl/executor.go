@@ -634,6 +634,14 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, uuid st
 	}
 	defer conn.Close()
 
+	skipKill := func(threadId int64) bool {
+		for _, excludeId := range excludeIds {
+			if threadId == excludeId {
+				return true
+			}
+		}
+		return false
+	}
 	{
 		// First, let's look at PROCESSLIST for queries that _might_ be operating on our table. This may have
 		// plenty false positives as we're simply looking for the table name as a query substring.
@@ -651,11 +659,9 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, uuid st
 		// Now that we have some list of queries, we actually parse them to find whether the query actually references our table:
 		for _, row := range rs.Named().Rows {
 			threadId := row.AsInt64("id", 0)
-			for _, excludeId := range excludeIds {
-				if threadId == excludeId {
-					log.Infof("killTableLockHoldersAndAccessors %v: skipping thread %v as it is excluded", uuid, threadId)
-					continue
-				}
+			if skipKill(threadId) {
+				log.Infof("killTableLockHoldersAndAccessors %v: skipping thread %v as it is excluded", uuid, threadId)
+				continue
 			}
 			infoQuery := row.AsString("info", "")
 			stmt, err := e.env.Environment().Parser().Parse(infoQuery)
@@ -711,11 +717,9 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, uuid st
 		log.Infof("terminateTransactions %v: found %v transactions locking table `%s` %s", uuid, len(rs.Rows), tableName, description)
 		for _, row := range rs.Named().Rows {
 			threadId := row.AsInt64(column, 0)
-			for _, excludeId := range excludeIds {
-				if threadId == excludeId {
-					log.Infof("terminateTransactions %v: skipping thread %v as it is excluded", uuid, threadId)
-					continue
-				}
+			if skipKill(threadId) {
+				log.Infof("terminateTransactions %v: skipping thread %v as it is excluded", uuid, threadId)
+				continue
 			}
 			log.Infof("terminateTransactions %v: killing connection %v with transaction locking table `%s` %s", uuid, threadId, tableName, description)
 			killConnection := fmt.Sprintf("KILL %d", threadId)
