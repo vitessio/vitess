@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -804,9 +805,10 @@ func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	if len(f.log) == 0 && len(want) == 0 {
 		return
 	}
-	if strings.Join(f.log, "\n") != strings.Join(want, "\n") {
+	if !reflect.DeepEqual(f.log, want) {
 		t.Errorf("got:\n%s\nwant:\n%s", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
 	}
+	utils.MustMatch(t, want, f.log, "")
 }
 
 func (f *loggingVCursor) ExpectWarnings(t *testing.T, want []*querypb.QueryWarning) {
