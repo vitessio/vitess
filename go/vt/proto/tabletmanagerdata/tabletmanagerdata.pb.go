@@ -6183,7 +6183,9 @@ type ValidateVReplicationPermissionsResponse struct {
 	User string `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
 	// Does the user have the minimum privileges needed to manage
 	// vreplication metadata.
-	Ok            bool `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
+	Ok bool `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"`
+	// The error has to be passed from the tablet since the sidecar name is tablet-specific
+	Error         string `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6230,6 +6232,13 @@ func (x *ValidateVReplicationPermissionsResponse) GetOk() bool {
 		return x.Ok
 	}
 	return false
+}
+
+func (x *ValidateVReplicationPermissionsResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
 }
 
 type VDiffRequest struct {
@@ -8722,10 +8731,11 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x14ConfigOverridesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"(\n" +
-	"&ValidateVReplicationPermissionsRequest\"M\n" +
+	"&ValidateVReplicationPermissionsRequest\"c\n" +
 	"'ValidateVReplicationPermissionsResponse\x12\x12\n" +
 	"\x04user\x18\x01 \x01(\tR\x04user\x12\x0e\n" +
-	"\x02ok\x18\x02 \x01(\bR\x02ok\"\xd7\x01\n" +
+	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xd7\x01\n" +
 	"\fVDiffRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x1a\n" +
 	"\bworkflow\x18\x02 \x01(\tR\bworkflow\x12\x16\n" +

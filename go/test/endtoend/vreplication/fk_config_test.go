@@ -20,7 +20,7 @@ package vreplication
 // (child before parent), t1,t2  are in lexical order, and t11,t12  have valid circular foreign key constraints.
 var (
 	initialFKSchema = `
-create table parent(id int, name varchar(128), primary key(id)) engine=innodb;
+create table parent(id int, name varchar(128), primary key(id), key(name)) engine=innodb;
 create table child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade) engine=innodb;
 create view vparent as select * from parent;
 create table t1(id int, name varchar(128), primary key(id)) engine=innodb;

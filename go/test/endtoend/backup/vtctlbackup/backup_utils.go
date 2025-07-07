@@ -167,6 +167,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		mysqlShellArgs := []string{
 			vtutils.GetFlagVariantForTests("--backup-engine-implementation"), "mysqlshell",
 			"--mysql-shell-backup-location", mysqlShellBackupLocation,
+			"--mysql-shell-speedup-restore=true",
 		}
 		commonTabletArg = append(commonTabletArg, mysqlShellArgs...)
 	}

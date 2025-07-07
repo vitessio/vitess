@@ -942,6 +942,74 @@
     "skip_e2e": true
   },
   {
+    "comment": "Comments with subquery",
+    "query": "select /* comment */ user.col from user where id IN (select id from user where id > 1 and id < 10)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select /* comment */ user.col from user where id IN (select id from user where id > 1 and id < 10)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select /* comment */ `user`.col from `user` where id in (select id from `user` where id > 1 and id < 10)"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Comments with subquery not merged into a single route",
+    "query": "select /* comment */ user.col from user where foo IN (select id from user where id > 1 and id < 10)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /* comment */ user.col from user where foo IN (select id from user where id > 1 and id < 10)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select /* comment */ id from `user` where id > 1 and id < 10"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select /* comment */ `user`.col from `user` where :__sq_has_values and foo in ::__sq1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "for update",
     "query": "select user.col from user join user_extra for update",
     "plan": {
@@ -1700,8 +1768,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from music where 1 != 1 union select id from music where 1 != 1) as dt(c0) where 1 != 1",
-            "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from music where music.user_id in ::__vals union select id from music where music.user_id in (1, 2, 3)) as dt(c0)",
+            "FieldQuery": "select id, weight_string(id) from music where 1 != 1 union select id, weight_string(id) from music where 1 != 1",
+            "Query": "select id, weight_string(id) from music where music.user_id in ::__vals union select id, weight_string(id) from music where music.user_id in (1, 2, 3)",
             "Values": [
               "(1, 2, 3)"
             ],
@@ -1735,8 +1803,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from music where 1 != 1 union select id from music where 1 != 1) as dt(c0) where 1 != 1",
-            "Query": "select dt.c0 as id, weight_string(dt.c0) from (select id from music where music.user_id in ::__vals union select id from music where music.user_id in ::vtg1) as dt(c0)",
+            "FieldQuery": "select id, weight_string(id) from music where 1 != 1 union select id, weight_string(id) from music where 1 != 1",
+            "Query": "select id, weight_string(id) from music where music.user_id in ::__vals union select id, weight_string(id) from music where music.user_id in ::vtg1",
             "Values": [
               "::vtg1"
             ],

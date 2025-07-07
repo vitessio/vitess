@@ -51,14 +51,6 @@ const (
 )
 
 var (
-	actionableRecoveriesNames = []string{
-		RecoverDeadPrimaryRecoveryName,
-		RecoverPrimaryHasPrimaryRecoveryName,
-		ElectNewPrimaryRecoveryName,
-		FixPrimaryRecoveryName,
-		FixReplicaRecoveryName,
-	}
-
 	countPendingRecoveries = stats.NewGauge("PendingRecoveries", "Count of the number of pending recoveries")
 
 	// detectedProblems is used to track the number of detected problems.
@@ -75,14 +67,17 @@ var (
 	// shardsLockCounter is a count of in-flight shard locks. Use atomics to read/update.
 	shardsLockCounter int64
 
+	// recoveriesCounterLabels are labels for grouping the counter based stats for recoveries.
+	recoveriesCounterLabels = []string{"RecoveryType", "Keyspace", "Shard"}
+
 	// recoveriesCounter counts the number of recoveries that VTOrc has performed
-	recoveriesCounter = stats.NewCountersWithSingleLabel("RecoveriesCount", "Count of the different recoveries performed", "RecoveryType", actionableRecoveriesNames...)
+	recoveriesCounter = stats.NewCountersWithMultiLabels("RecoveriesCount", "Count of the different recoveries performed", recoveriesCounterLabels)
 
 	// recoveriesSuccessfulCounter counts the number of successful recoveries that VTOrc has performed
-	recoveriesSuccessfulCounter = stats.NewCountersWithSingleLabel("SuccessfulRecoveries", "Count of the different successful recoveries performed", "RecoveryType", actionableRecoveriesNames...)
+	recoveriesSuccessfulCounter = stats.NewCountersWithMultiLabels("SuccessfulRecoveries", "Count of the different successful recoveries performed", recoveriesCounterLabels)
 
 	// recoveriesFailureCounter counts the number of failed recoveries that VTOrc has performed
-	recoveriesFailureCounter = stats.NewCountersWithSingleLabel("FailedRecoveries", "Count of the different failed recoveries performed", "RecoveryType", actionableRecoveriesNames...)
+	recoveriesFailureCounter = stats.NewCountersWithMultiLabels("FailedRecoveries", "Count of the different failed recoveries performed", recoveriesCounterLabels)
 
 	// shardLockTimings measures the timing of LockShard operations.
 	shardLockTimingsActions = []string{"Lock", "Unlock"}
@@ -485,8 +480,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 	}
 }
 
-// isClusterWideRecovery returns whether the given recovery is a cluster-wide recovery or not
-func isClusterWideRecovery(recoveryFunctionCode recoveryFunction) bool {
+// isShardWideRecovery returns whether the given recovery is a recovery that affects all tablets in a shard
+func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
 	case recoverDeadPrimaryFunc, electNewPrimaryFunc, recoverPrimaryTabletDeletedFunc:
 		return true
@@ -553,13 +548,13 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 
 	// Prioritise primary recovery.
 	// If we are performing some other action, first ensure that it is not because of primary issues.
-	// This step is only meant to improve the time taken to detect and fix cluster wide recoveries, it does not impact correctness.
+	// This step is only meant to improve the time taken to detect and fix shard-wide recoveries, it does not impact correctness.
 	// If a VTOrc detects an issue on a replica like ReplicationStopped, the underlying cause could be a dead primary instead.
 	// So, we try to reload that primary's information before proceeding with the replication stopped fix. We do this before acquiring the shard lock
 	// to allow another VTOrc instance to proceed with the dead primary recovery if it is indeed the case and it detects it before us. If however, the primary
 	// is not dead, then we will proceed with the fix for the replica. Essentially, we are trading off speed in replica recoveries (by doing an additional primary tablet reload)
-	// for speed in cluster-wide recoveries (by not holding the shard lock before reloading the primary tablet information).
-	if !isClusterWideRecovery(checkAndRecoverFunctionCode) {
+	// for speed in shard-wide recoveries (by not holding the shard lock before reloading the primary tablet information).
+	if !isShardWideRecovery(checkAndRecoverFunctionCode) {
 		if err = recheckPrimaryHealth(analysisEntry, DiscoverInstance); err != nil {
 			return err
 		}
@@ -591,10 +586,10 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 			logger.Errorf("Failed to refresh keyspace and shard, aborting recovery: %v", err)
 			return err
 		}
-		// If we are about to run a cluster-wide recovery, it is imperative to first refresh all the tablets
-		// of a shard because a new tablet could have been promoted, and we need to have this visibility before we
-		// run a cluster operation of our own.
-		if isClusterWideRecovery(checkAndRecoverFunctionCode) {
+		// If we are about to run a shard-wide recovery, it is imperative to first refresh all the tablets
+		// of a shard because a new tablet could have been promoted, and we need to have this visibility
+		// before we run a shard-wide operation of our own.
+		if isShardWideRecovery(checkAndRecoverFunctionCode) {
 			var tabletsToIgnore []string
 			if checkAndRecoverFunctionCode == recoverDeadPrimaryFunc {
 				tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
@@ -604,7 +599,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 			logger.Info("Force refreshing all shard tablets")
 			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, tabletsToIgnore)
 		} else {
-			// If we are not running a cluster-wide recovery, then it is only concerned with the specific tablet
+			// If we are not running a shard-wide recovery, then it is only concerned with the specific tablet
 			// on which the failure occurred and the primary instance of the shard.
 			// For example, ConnectedToWrongPrimary analysis only cares for whom the current primary tablet is
 			// and the host-port set on the tablet in question.
@@ -651,13 +646,14 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 		return err
 	}
 	recoveryName := getRecoverFunctionName(checkAndRecoverFunctionCode)
-	recoveriesCounter.Add(recoveryName, 1)
+	recoveryLabels := []string{recoveryName, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard}
+	recoveriesCounter.Add(recoveryLabels, 1)
 	if err != nil {
 		logger.Errorf("Failed to recover: %+v", err)
-		recoveriesFailureCounter.Add(recoveryName, 1)
+		recoveriesFailureCounter.Add(recoveryLabels, 1)
 	} else {
 		logger.Info("Recovery succeeded")
-		recoveriesSuccessfulCounter.Add(recoveryName, 1)
+		recoveriesSuccessfulCounter.Add(recoveryLabels, 1)
 	}
 	if topologyRecovery == nil {
 		logger.Error("Topology recovery is nil - recovery might have failed")
@@ -668,11 +664,11 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.ReplicationAnalysis) (er
 	} else {
 		logger.Infof("Topology recovery: %+v", topologyRecovery)
 	}
-	// If we ran a cluster wide recovery and actually attempted it, then we know that the replication state for all the tablets in this cluster
+	// If we ran a shard-wide recovery and actually attempted it, then we know that the replication state for all the tablets in this cluster
 	// would have changed. So we can go ahead and pre-emptively refresh them.
 	// For this refresh we don't use the same context that we used for the recovery, since that context might have expired or could expire soon
 	// Instead we pass the background context. The call forceRefreshAllTabletsInShard handles adding a timeout to it for us.
-	if isClusterWideRecovery(checkAndRecoverFunctionCode) {
+	if isShardWideRecovery(checkAndRecoverFunctionCode) {
 		logger.Info("Forcing refresh of all tablets post recovery")
 		forceRefreshAllTabletsInShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, nil)
 	} else {
@@ -718,7 +714,7 @@ func recheckPrimaryHealth(analysisEntry *inst.ReplicationAnalysis, discoveryFunc
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not
 func checkIfAlreadyFixed(analysisEntry *inst.ReplicationAnalysis) (bool, error) {
 	// Run a replication analysis again. We will check if the problem persisted
-	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, &inst.ReplicationAnalysisHints{})
+	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, &inst.ReplicationAnalysisHints{})
 	if err != nil {
 		return false, err
 	}
@@ -799,7 +795,7 @@ func electNewPrimary(ctx context.Context, analysisEntry *inst.ReplicationAnalysi
 		_ = AuditTopologyRecovery(topologyRecovery, message)
 		return false, nil, err
 	}
-	logger.Infof("Analysis: %v, will elect a new primary for %v:%v", analysisEntry.Analysis, analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard)
+	logger.Infof("Analysis: %v, will elect a new primary for %v:%v", analysisEntry.Analysis, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.

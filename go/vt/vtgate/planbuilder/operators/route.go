@@ -692,6 +692,16 @@ func addWSColumnToInput(ctx *plancontext.PlanningContext, source Operator, offse
 		return true, op.AddWSColumn(ctx, offset, true)
 	case *Aggregator:
 		return true, op.AddWSColumn(ctx, offset, true)
+	case *Union:
+		cloned := slice.Map(op.Sources, func(src Operator) Operator {
+			return Clone(src)
+		})
+		wsOffset, err := op.addWeightStringToOffset(ctx, offset)
+		if err != nil {
+			op.Sources = cloned
+			return false, -1
+		}
+		return true, wsOffset
 	}
 	return false, -1
 }
