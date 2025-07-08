@@ -147,10 +147,10 @@ Flags:
   -h, --help                                                        help for vtbackup
       --incremental_from_pos string                                 Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.
       --init-db-name-override string                                (init parameter) override the name of the db used by vttablet
+      --init-db-sql-file string                                     path to .sql file to run after mysql_install_db
       --init-keyspace string                                        (init parameter) keyspace to use for this tablet
       --init-shard string                                           (init parameter) shard to use for this tablet
-      --init_db_sql_file string                                     path to .sql file to run after mysql_install_db
-      --initial_backup                                              Instead of restoring from backup, initialize an empty database with the provided init_db_sql_file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).
+      --initial_backup                                              Instead of restoring from backup, initialize an empty database with the provided init-db-sql-file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).
       --keep-alive-timeout duration                                 Wait until timeout elapses after a successful backup before shutting down.
       --keep-logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep-logs-by-mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
