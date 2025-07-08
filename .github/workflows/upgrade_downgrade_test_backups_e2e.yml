@@ -123,7 +123,11 @@ jobs:
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo percona-release enable-only tools
+        if [ "$ARCH" = "arm64" ]; then
+          sudo percona-release enable pxb-80
+        else
+          sudo percona-release enable-only tools
+        fi
         sudo apt-get update
         sudo apt-get install -y percona-xtrabackup-80
 
