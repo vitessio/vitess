@@ -621,9 +621,19 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 	if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
 		log.Errorf("FAIL vreplicationExec: uuid=%s, query=%v, error=%v", uuid, query, err)
 	}
+	return nil
+}
 
-	if err := e.deleteVReplicationEntry(ctx, uuid); err != nil {
+func (e *Executor) startVreplication(ctx context.Context, tablet *topodatapb.Tablet, workflow string) (err error) {
+	query, err := sqlparser.ParseAndBind(sqlStartVReplStream,
+		sqltypes.StringBindVariable(e.dbName),
+		sqltypes.StringBindVariable(workflow),
+	)
+	if err != nil {
 		return err
+	}
+	if _, err := e.vreplicationExec(ctx, tablet, query); err != nil {
+		return vterrors.Wrapf(err, "FAIL vreplicationExec: uuid=%s, query=%v", workflow, query)
 	}
 	return nil
 }
@@ -1070,6 +1080,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed stopping vreplication")
 	}
 	go log.Infof("cutOverVReplMigration %v: stopped vreplication", s.workflow)
+
+	defer func() {
+		if !renameWasSuccessful {
+			// Restarting vreplication
+			if err := e.startVreplication(ctx, tablet.Tablet, s.workflow); err != nil {
+				log.Errorf("cutOverVReplMigration %v: failed restarting vreplication after cutover failure: %v", s.workflow, err)
+			}
+			go log.Infof("cutOverVReplMigration %v: started vreplication after cutover failure", s.workflow)
+		}
+	}()
 
 	// rename tables atomically (remember, writes on source tables are stopped)
 	{
@@ -3137,6 +3157,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
 				}
 				if !s.isRunning() {
+					log.Infof("migration %s in 'running' state but vreplication state is '%s'", uuid, s.state.String())
 					return nil
 				}
 				// This VRepl migration may have started from outside this tablet, so
@@ -4128,7 +4149,7 @@ func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context) (result *s
 	if err != nil {
 		return result, err
 	}
-	log.Infof("ForceCutOverPendingMigrations: iterating %v migrations %s", len(uuids))
+	log.Infof("ForceCutOverPendingMigrations: iterating %v migrations", len(uuids))
 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
