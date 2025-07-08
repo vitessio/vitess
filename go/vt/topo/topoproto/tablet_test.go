@@ -21,7 +21,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -127,5 +129,31 @@ func TestIsTabletsInList(t *testing.T) {
 			out := IsTabletInList(testcase.tablet, testcase.allTablets)
 			assert.Equal(t, testcase.isInList, out)
 		})
+	}
+}
+
+func TestIsTabletWithinKeyRangesString(t *testing.T) {
+	tablet := &topodatapb.Tablet{
+		Keyspace: "ks",
+		KeyRange: key.NewKeyRange([]byte{0x00}, []byte{0x40}),
+	}
+
+	{
+		// match
+		found, err := IsTabletWithinKeyRangesString(tablet, "-40")
+		require.NoError(t, err)
+		require.True(t, found)
+	}
+	{
+		// no match
+		found, err := IsTabletWithinKeyRangesString(tablet, "80-")
+		require.NoError(t, err)
+		require.False(t, found)
+	}
+	{
+		// bad shard spec
+		found, err := IsTabletWithinKeyRangesString(tablet, "!!!won'tparse!!!")
+		require.Error(t, err)
+		require.False(t, found)
 	}
 }
