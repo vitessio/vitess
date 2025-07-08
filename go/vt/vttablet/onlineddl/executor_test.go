@@ -126,7 +126,7 @@ func TestShouldCutOverAccordingToBackoff(t *testing.T) {
 			expectShouldForceCutOver: true,
 		},
 		{
-			name:                     "2 milliseoncds, not ready",
+			name:                     "2 milliseconds, not ready",
 			cutoverAttempts:          3,
 			forceCutOverAfter:        2 * time.Millisecond,
 			sinceReadyToComplete:     time.Millisecond,
