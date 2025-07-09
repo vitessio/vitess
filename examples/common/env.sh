@@ -65,6 +65,9 @@ elif [ "${TOPO}" = "consul" ]; then
     #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
     TOPOLOGY_FLAGS="--topo_implementation consul --topo_global_server_address ${CONSUL_SERVER}:${CONSUL_HTTP_PORT} --topo_global_root vitess/global/"
     mkdir -p "${VTDATAROOT}/consul"
+elif [ "${TOPO}" = "mysql" ]; then
+    MYSQL_TOPO_ADDR="topouser:topopass@127.0.0.1:3306/topo"
+    TOPOLOGY_FLAGS="--topo_implementation mysql --topo_global_server_address $MYSQL_TOPO_ADDR --topo_global_root /vitess/global"
 else
     ETCD_SERVER="localhost:2379"
     #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation

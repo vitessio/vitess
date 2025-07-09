@@ -101,6 +101,7 @@ Flags:
       --topo-global-root string                                     the path of the global topology data in the global topology server
       --topo-global-server-address string                           the address of the global topology server
       --topo-implementation string                                  the topology implementation to use
+      --topo-mysql-lock-ttl duration                            TTL for MySQL topo locks (default 5m0s)
       --topo-information-refresh-duration duration                  Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server (default 15s)
       --topo-read-concurrency int                                   Maximum concurrency of topo reads per global or local cell. (default 32)
       --topo-zk-auth-file string                                    auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass
