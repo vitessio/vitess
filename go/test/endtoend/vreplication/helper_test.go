@@ -63,7 +63,7 @@ import (
 const (
 	defaultTick          = 1 * time.Second
 	defaultTimeout       = 60 * time.Second
-	workflowStateTimeout = 300 * time.Second
+	workflowStateTimeout = 90 * time.Second
 )
 
 func setSidecarDBName(dbName string) {
