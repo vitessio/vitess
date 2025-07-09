@@ -33,7 +33,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
-	"os"
 	"path"
 	"strings"
 	"testing"
@@ -49,16 +48,16 @@ import (
 )
 
 // getTestMySQLAddr returns the MySQL server address for testing.
-// It checks environment variables for custom settings, otherwise uses defaults.
 func getTestMySQLAddr() string {
-	if addr := os.Getenv("MYSQL_TOPO_TEST_ADDR"); addr != "" {
-		return addr
-	}
-	return "root@localhost:3306/"
+	return mySQLTopoTestAddr
 }
 
 // setupMySQLTopo sets up a MySQL topo server for testing.
 func setupMySQLTopo(t *testing.T, serverAddr string) (*Server, func()) {
+	if serverAddr == "" {
+		t.Fatal("MySQL server address is required but not provided. Check TestMain setup.")
+	}
+
 	params := parseServerAddr(serverAddr)
 	testDB := fmt.Sprintf("topo_test_%d_%d", time.Now().UnixNano(), rand.Int())
 	params.DbName = testDB
@@ -125,9 +124,6 @@ func TestMySQLTopo(t *testing.T) {
 		// Store cleanup function for later use
 		t.Cleanup(cleanup)
 
-		// Debug: Log the database being used
-		t.Logf("Using test database: %s", server.params.DbName)
-
 		// Create the server address using the isolated database
 		var testServerAddr string
 		if server.params.Pass != "" {
@@ -144,9 +140,6 @@ func TestMySQLTopo(t *testing.T) {
 				server.params.Port,
 				server.params.DbName)
 		}
-
-		t.Logf("Using server address: %s", testServerAddr)
-
 		// Create the server on the new root using the isolated database
 		ts, err := topo.OpenServer("mysql", testServerAddr, path.Join(testRoot, topo.GlobalCell))
 		if err != nil {
