@@ -161,12 +161,18 @@ func (entry *watchEntry) update(ctx context.Context, value any, err error, init 
 		entry.onValueLocked(value)
 	}
 
-	listeners := entry.listeners
-	entry.listeners = entry.listeners[:0]
+	// Only notify listeners on success or when no cached value exists after error processing.
+	// This prevents unnecessary notifications during topo outages when cached data is available.
+	shouldNotifyListeners := err == nil || entry.value == nil
 
-	for _, callback := range listeners {
-		if callback(entry.value, entry.lastError) {
-			entry.listeners = append(entry.listeners, callback)
+	if shouldNotifyListeners {
+		listeners := entry.listeners
+		entry.listeners = entry.listeners[:0]
+
+		for _, callback := range listeners {
+			if callback(entry.value, entry.lastError) {
+				entry.listeners = append(entry.listeners, callback)
+			}
 		}
 	}
 }
