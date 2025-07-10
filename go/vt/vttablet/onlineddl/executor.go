@@ -630,7 +630,7 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string, del
 	return nil
 }
 
-func (e *Executor) startVreplication(ctx context.Context, tablet *topodatapb.Tablet, workflow string) (err error) {
+func (e *Executor) startVReplication(ctx context.Context, tablet *topodatapb.Tablet, workflow string) (err error) {
 	query, err := sqlparser.ParseAndBind(sqlStartVReplStream,
 		sqltypes.StringBindVariable(e.dbName),
 		sqltypes.StringBindVariable(workflow),
