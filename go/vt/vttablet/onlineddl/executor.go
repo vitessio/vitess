@@ -632,14 +632,22 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 // connections with open transactions, holding locks on the table.
 // This is done on a best-effort basis, by issuing `KILL` and `KILL QUERY` commands. As MySQL goes,
 // it is not guaranteed that the queries/transactions will terminate in a timely manner.
-func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableName string) error {
-	log.Infof("killTableLockHoldersAndAccessors: %v", tableName)
+func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, uuid string, tableName string, excludeIds ...int64) error {
+	log.Infof("killTableLockHoldersAndAccessors %v:, table-%v", uuid, tableName)
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 
+	skipKill := func(threadId int64) bool {
+		for _, excludeId := range excludeIds {
+			if threadId == excludeId {
+				return true
+			}
+		}
+		return false
+	}
 	{
 		// First, let's look at PROCESSLIST for queries that _might_ be operating on our table. This may have
 		// plenty false positives as we're simply looking for the table name as a query substring.
@@ -653,10 +661,14 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 			return vterrors.Wrapf(err, "finding queries potentially operating on table")
 		}
 
-		log.Infof("killTableLockHoldersAndAccessors: found %v potential queries", len(rs.Rows))
+		log.Infof("killTableLockHoldersAndAccessors %v: found %v potential queries", uuid, len(rs.Rows))
 		// Now that we have some list of queries, we actually parse them to find whether the query actually references our table:
 		for _, row := range rs.Named().Rows {
 			threadId := row.AsInt64("id", 0)
+			if skipKill(threadId) {
+				log.Infof("killTableLockHoldersAndAccessors %v: skipping thread %v as it is excluded", uuid, threadId)
+				continue
+			}
 			infoQuery := row.AsString("info", "")
 			stmt, err := e.env.Environment().Parser().Parse(infoQuery)
 			if err != nil {
@@ -683,7 +695,7 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 			}, stmt)
 
 			if queryUsesTable {
-				log.Infof("killTableLockHoldersAndAccessors: killing query %v: %.100s", threadId, infoQuery)
+				log.Infof("killTableLockHoldersAndAccessors %v: killing query %v: %.100s", uuid, threadId, infoQuery)
 				killQuery := fmt.Sprintf("KILL QUERY %d", threadId)
 				if _, err := conn.Conn.ExecuteFetch(killQuery, 1, false); err != nil {
 					log.Error(vterrors.Errorf(vtrpcpb.Code_ABORTED, "could not kill query %v. Ignoring", threadId))
@@ -708,14 +720,18 @@ func (e *Executor) killTableLockHoldersAndAccessors(ctx context.Context, tableNa
 		if err != nil {
 			return vterrors.Wrapf(err, "finding transactions locking table `%s` %s", tableName, description)
 		}
-		log.Infof("terminateTransactions: found %v transactions locking table `%s` %s", len(rs.Rows), tableName, description)
+		log.Infof("terminateTransactions %v: found %v transactions locking table `%s` %s", uuid, len(rs.Rows), tableName, description)
 		for _, row := range rs.Named().Rows {
 			threadId := row.AsInt64(column, 0)
-			log.Infof("terminateTransactions: killing connection %v with transaction locking table `%s` %s", threadId, tableName, description)
+			if skipKill(threadId) {
+				log.Infof("terminateTransactions %v: skipping thread %v as it is excluded", uuid, threadId)
+				continue
+			}
+			log.Infof("terminateTransactions %v: killing connection %v with transaction locking table `%s` %s", uuid, threadId, tableName, description)
 			killConnection := fmt.Sprintf("KILL %d", threadId)
 			_, err = conn.Conn.ExecuteFetch(killConnection, 1, false)
 			if err != nil {
-				log.Errorf("terminateTransactions: unable to kill the connection %d locking table `%s` %s: %v", threadId, tableName, description, err)
+				log.Errorf("terminateTransactions %v: unable to kill the connection %d locking table `%s` %s: %v", uuid, threadId, tableName, description, err)
 			}
 		}
 		return nil
@@ -861,7 +877,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		// impacts query serving so we wait for a multiple of the cutover threshold here, with
 		// that variable primarily serving to limit the max time we later spend waiting for
 		// a position again AFTER we've taken the locks and table access is blocked.
-		if err := waitForPos(s, postSentryPos, onlineDDL.CutOverThreshold*3); err != nil {
+		if err := waitForPos(s, postSentryPos, 3*onlineDDL.CutOverThreshold); err != nil {
 			return vterrors.Wrapf(err, "failed waiting for pos after sentry creation")
 		}
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "post-sentry pos reached")
@@ -874,7 +890,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	defer lockConn.Recycle()
 	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
-	lockConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, lockConn.Conn, 5*onlineDDL.CutOverThreshold)
+	lockConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, lockConn.Conn, 3*onlineDDL.CutOverThreshold)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
 	}
@@ -889,7 +905,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	}
 	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
-	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 5*onlineDDL.CutOverThreshold*4)
+	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 2*onlineDDL.CutOverThreshold)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on rename connection")
 	}
@@ -999,7 +1015,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		if err := e.checkOnPreparedPool(ctx, onlineDDL.Table, 100*time.Millisecond); err != nil {
 			return vterrors.Wrapf(err, "checking prepared pool for table")
 		}
-		if err := e.killTableLockHoldersAndAccessors(ctx, onlineDDL.Table); err != nil {
+		if err := e.killTableLockHoldersAndAccessors(ctx, onlineDDL.UUID, onlineDDL.Table); err != nil {
 			return vterrors.Wrapf(err, "failed killing table lock holders and accessors")
 		}
 	}
@@ -1019,18 +1035,22 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		// real production
 
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "locking tables")
-		lockCtx, cancel := context.WithTimeout(ctx, onlineDDL.CutOverThreshold)
-		defer cancel()
+		lockCtx, killWhileRenamingCancel := context.WithTimeout(ctx, onlineDDL.CutOverThreshold)
+		defer killWhileRenamingCancel()
 		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, sentryTableName, onlineDDL.Table)
 		if _, err := lockConn.Conn.Exec(lockCtx, lockTableQuery.Query, 1, false); err != nil {
 			return vterrors.Wrapf(err, "failed locking tables")
 		}
 
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "renaming tables")
+		killWhileRenamingContext, killWhileRenamingCancel := context.WithCancel(ctx)
+		defer killWhileRenamingCancel()
+		// We run the RENAME in a goroutine, so that we can wait for
 		go func() {
 			defer close(renameCompleteChan)
 			_, err := renameConn.Conn.Exec(ctx, renameQuery.Query, 1, false)
 			renameCompleteChan <- err
+			killWhileRenamingCancel() // RENAME is done, no need to kill queries anymore
 		}()
 		// the rename should block, because of the LOCK. Wait for it to show up.
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "waiting for RENAME to block")
@@ -1038,6 +1058,13 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			return vterrors.Wrapf(err, "failed waiting for rename process")
 		}
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "RENAME found")
+
+		if shouldForceCutOver {
+			log.Infof("cutOverVReplMigration %v: force cut-over requested, killing table lock holders and accessors while RENAME is in place", s.workflow)
+			if err := e.killTableLockHoldersAndAccessors(killWhileRenamingContext, onlineDDL.UUID, onlineDDL.Table, lockConn.Conn.ID(), renameConn.Conn.ID()); err != nil {
+				return vterrors.Wrapf(err, "failed killing table lock holders and accessors")
+			}
+		}
 	}
 
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "reading post-lock pos")
@@ -1113,7 +1140,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 				if err := <-renameCompleteChan; err != nil {
 					return vterrors.Wrapf(err, "failed waiting for rename to complete")
 				}
-				renameWasSuccessful = true
+				renameWasSuccessful = true // Migration effectively successful
 			}
 		}
 	}
@@ -2524,7 +2551,7 @@ func (e *Executor) executeSpecialAlterDirectDDLActionMigration(ctx context.Conte
 
 	if forceCutOverAfter > 0 {
 		// Irrespective of the --force-cut-over-after flag value, as long as it's nonzero, we now terminate
-		// connections adn transactions on the migrated table.
+		// connections and transactions on the migrated table.
 		// --force-cut-over-after was designed to work with `vitess` migrations, that could cut-over multiple times,
 		// and was meant to set a limit to the overall duration of the attempts, for example 1 hour.
 		// With INSTANT DDL or other quick operations, this becomes meaningless. Once we begin the operation, there
@@ -2537,7 +2564,7 @@ func (e *Executor) executeSpecialAlterDirectDDLActionMigration(ctx context.Conte
 		if err := e.checkOnPreparedPool(ctx, onlineDDL.Table, 100*time.Millisecond); err != nil {
 			return vterrors.Wrapf(err, "checking prepared pool for table")
 		}
-		if err := e.killTableLockHoldersAndAccessors(ctx, onlineDDL.Table); err != nil {
+		if err := e.killTableLockHoldersAndAccessors(ctx, onlineDDL.UUID, onlineDDL.Table); err != nil {
 			return vterrors.Wrapf(err, "failed killing table lock holders and accessors")
 		}
 	}
@@ -3025,11 +3052,16 @@ func shouldCutOverAccordingToBackoff(
 	// is beyond the --force-cut-over-after setting, or the column `force_cutover` is "1", and this means:
 	// - we do not want to backoff, we want to cutover asap
 	// - we agree to brute-force KILL any pending queries on the migrated table so as to ensure it's unlocked.
-	if forceCutOverAfter > 0 && sinceReadyToComplete > forceCutOverAfter {
-		// time since migration was ready to complete is beyond the --force-cut-over-after setting
-		return true, true
+	if forceCutOverAfter > 0 {
+		if sinceReadyToComplete > forceCutOverAfter {
+			// time since migration was ready to complete is beyond the --force-cut-over-after setting
+			return true, true
+		}
+		if forceCutOverAfter <= time.Millisecond {
+			// --force-cut-over-after is set so low that it is effectively "now", even if "sinceReadyToComplete" is lower.
+			return true, true
+		}
 	}
-
 	// Backoff mechanism. Do not attempt to cut-over every single minute. Check how much time passed since last cut-over attempt
 	desiredTimeSinceLastCutover := cutoverIntervals[len(cutoverIntervals)-1]
 	if int(cutoverAttempts) < len(cutoverIntervals) {
@@ -3210,7 +3242,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				}
 				if err := e.cutOverVReplMigration(ctx, s, shouldForceCutOver); err != nil {
 					_ = e.updateMigrationMessage(ctx, uuid, err.Error())
-					log.Errorf("cutOverVReplMigration failed: err=%v", err)
+					log.Errorf("cutOverVReplMigration failed %s: err=%v", onlineDDL.UUID, err)
 
 					if sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); isSQLErr && sqlErr != nil {
 						// let's see if this error is actually acceptable
