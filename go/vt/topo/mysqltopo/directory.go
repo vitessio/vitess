@@ -18,6 +18,8 @@ package mysqltopo
 
 import (
 	"context"
+	"path"
+	"sort"
 	"strings"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -25,102 +27,122 @@ import (
 
 // ListDir is part of the topo.Conn interface.
 func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.DirEntry, error) {
-	// Convert to full path using the server's root
+	if err := s.checkClosed(); err != nil {
+		return nil, convertError(err, dirPath)
+	}
+
 	fullDirPath := s.fullPath(dirPath)
 
-	// Prepare the query to get all direct children
-	// Ensure we don't have double slashes
-	dirPrefix := fullDirPath
-	if !strings.HasSuffix(dirPrefix, "/") {
-		dirPrefix = dirPrefix + "/"
+	// Ensure the directory path ends with a slash for proper prefix matching
+	if !strings.HasSuffix(fullDirPath, "/") {
+		fullDirPath += "/"
 	}
 
-	// Get files in this directory - only direct children
-	fileResult, err := s.query(`
-		SELECT SUBSTRING_INDEX(SUBSTRING(path, LENGTH(%s) + 1), '/', 1) AS name
-		FROM topo_files
-		WHERE path LIKE %s AND path NOT LIKE %s
-		GROUP BY name
-	`, dirPrefix, dirPrefix+"%", dirPrefix+"%/%")
+	// Use LIKE with proper escaping for prefix matching
+	likePattern := strings.ReplaceAll(fullDirPath, "_", "\\_")
+	likePattern = strings.ReplaceAll(likePattern, "%", "\\%")
+	likePattern += "%"
 
+	rows, err := s.db.QueryContext(ctx, "SELECT path FROM topo_data WHERE path LIKE ?", likePattern)
 	if err != nil {
-		return nil, err
+		return nil, convertError(err, dirPath)
+	}
+	defer rows.Close()
+
+	// Collect all paths that are direct children of the directory
+	childrenMap := make(map[string]bool)
+	for rows.Next() {
+		var filePath string
+		if err := rows.Scan(&filePath); err != nil {
+			return nil, convertError(err, dirPath)
+		}
+
+		// Remove the directory prefix to get the relative path
+		relativePath := strings.TrimPrefix(filePath, fullDirPath)
+		if relativePath == "" {
+			continue // Skip the directory itself if it exists as a file
+		}
+
+		// Get the immediate child name (first path component)
+		parts := strings.Split(relativePath, "/")
+		if len(parts) > 0 && parts[0] != "" {
+			childrenMap[parts[0]] = len(parts) == 1 // true if it's a file, false if it's a directory
+		}
 	}
 
-	// Get subdirectories - only direct children
-	dirResult, err := s.query(`
-		SELECT SUBSTRING_INDEX(SUBSTRING(path, LENGTH(%s) + 1), '/', 1) AS name
-		FROM topo_directories
-		WHERE path LIKE %s AND path != %s AND path NOT LIKE %s
-		GROUP BY name
-	`, dirPrefix, dirPrefix+"%", fullDirPath, dirPrefix+"%/%")
+	if err := rows.Err(); err != nil {
+		return nil, convertError(err, dirPath)
+	}
 
+	// Also check for locks in this directory (they are ephemeral entries)
+	lockLikePattern := strings.ReplaceAll(fullDirPath, "_", "\\_")
+	lockLikePattern = strings.ReplaceAll(lockLikePattern, "%", "\\%")
+	lockLikePattern += "%"
+
+	lockRows, err := s.db.QueryContext(ctx, "SELECT path FROM topo_locks WHERE path LIKE ?", lockLikePattern)
 	if err != nil {
-		return nil, err
+		return nil, convertError(err, dirPath)
 	}
+	defer lockRows.Close()
 
-	// Combine results
-	entries := make(map[string]topo.DirEntry)
+	for lockRows.Next() {
+		var lockPath string
+		if err := lockRows.Scan(&lockPath); err != nil {
+			return nil, convertError(err, dirPath)
+		}
 
-	// Process file results
-	for _, row := range fileResult.Rows {
-		name := row[0].ToString()
-
-		// Skip if empty
-		if name == "" {
+		// Remove the directory prefix to get the relative path
+		relativePath := strings.TrimPrefix(lockPath, fullDirPath)
+		if relativePath == "" {
 			continue
 		}
 
+		// Get the immediate child name (first path component)
+		parts := strings.Split(relativePath, "/")
+		if len(parts) > 0 && parts[0] != "" {
+			// Mark as ephemeral file
+			childrenMap[parts[0]] = true
+		}
+	}
+
+	if err := lockRows.Err(); err != nil {
+		return nil, convertError(err, dirPath)
+	}
+
+	if len(childrenMap) == 0 {
+		return nil, topo.NewError(topo.NoNode, dirPath)
+	}
+
+	// Convert to DirEntry slice
+	var entries []topo.DirEntry
+	for name, isFile := range childrenMap {
 		entry := topo.DirEntry{
 			Name: name,
 		}
+
 		if full {
-			entry.Type = topo.TypeFile
-			entry.Ephemeral = false
-		}
-		entries[name] = entry
-	}
-
-	// Process directory results
-	for _, row := range dirResult.Rows {
-		name := row[0].ToString()
-
-		// Skip if empty
-		if name == "" {
-			continue
-		}
-
-		entry := topo.DirEntry{
-			Name: name,
-		}
-		if full {
-			entry.Type = topo.TypeDirectory
-			entry.Ephemeral = false
-		}
-		entries[name] = entry
-	}
-
-	// Check if the directory exists when no entries found
-	if len(entries) == 0 {
-		// Check if the directory itself exists
-		if fullDirPath != "/" {
-			checkResult, err := s.queryRow("SELECT 1 FROM topo_directories WHERE path = %s", fullDirPath)
-			if err != nil {
-				return nil, err
+			if isFile {
+				entry.Type = topo.TypeFile
+			} else {
+				entry.Type = topo.TypeDirectory
 			}
-			if len(checkResult.Rows) == 0 {
-				return nil, topo.NewError(topo.NoNode, dirPath)
+
+			// Check if this is an ephemeral entry (lock file)
+			lockPath := path.Join(fullDirPath, name)
+			var lockExists bool
+			err := s.db.QueryRowContext(ctx, "SELECT 1 FROM topo_locks WHERE path = ?", lockPath).Scan(&lockExists)
+			if err == nil {
+				entry.Ephemeral = true
 			}
 		}
+
+		entries = append(entries, entry)
 	}
 
-	// Convert map to slice
-	result := make([]topo.DirEntry, 0, len(entries))
-	for _, entry := range entries {
-		result = append(result, entry)
-	}
+	// Sort entries by name
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Name < entries[j].Name
+	})
 
-	// Sort the results
-	topo.DirEntriesSortByName(result)
-	return result, nil
+	return entries, nil
 }

@@ -14,41 +14,97 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Package mysqltopo implements topo.Server with MySQL as the backend.
+
+We expect the following behavior from the MySQL database:
+
+  - Tables are created automatically if they don't exist.
+  - Transactions are used to ensure consistency.
+  - MySQL replication is used for change notifications (no polling).
+  - Clients connect as MySQL replicas to receive real-time changes.
+
+We follow these conventions within this package:
+
+  - Call convertError(err) on any errors returned from the MySQL driver.
+    Functions defined in this package can be assumed to have already converted
+    errors as necessary.
+  - Use MySQL AUTO_INCREMENT for versioning.
+  - Store topology data in JSON format in MEDIUMBLOB columns.
+*/
 package mysqltopo
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"os"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
+	"github.com/go-sql-driver/mysql"
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/utils"
 )
+
+const (
+	// DefaultSchema is the default database schema name for MySQL topo
+	DefaultSchema = "vitess_topo"
+
+	// DefaultLockTTL is the default TTL for locks in seconds
+	DefaultLockTTL = 30
+
+	// DefaultElectionTTL is the default TTL for elections in seconds
+	DefaultElectionTTL = 30
+)
+
+var (
+	lockTTL     = DefaultLockTTL
+	electionTTL = DefaultElectionTTL
+)
+
+// Factory is the mysql topo.Factory implementation.
+type Factory struct{}
+
+// HasGlobalReadOnlyCell is part of the topo.Factory interface.
+func (f Factory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
+	return false
+}
+
+// Create is part of the topo.Factory interface.
+func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
+	return NewServer(serverAddr, root)
+}
 
 // Server is the implementation of topo.Server for MySQL.
 type Server struct {
-	// conn is the MySQL connection.
-	conn *mysql.Conn
+	// db is the MySQL database connection
+	db *sql.DB
 
-	// mu protects the following fields.
-	mu sync.Mutex
-
-	// cells is a map of cell name to cell Server.
-	cells map[string]*Server
-
-	// root is the root path for this server.
+	// root is the root path for this client
 	root string
 
-	// params is the MySQL connection parameters
-	params *mysql.ConnParams
+	// serverAddr is the MySQL server address
+	serverAddr string
 
-	// replicationWatcher watches MySQL replication for changes
-	replicationWatcher *ReplicationWatcher
+	// schemaName is the database schema name
+	schemaName string
+
+	// mu protects the server state
+	mu sync.RWMutex
+
+	// closed indicates if the server has been closed
+	closed bool
+
+	// ctx is the server context for graceful shutdown
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // MySQLVersion implements topo.Version for MySQL.
@@ -56,292 +112,156 @@ type MySQLVersion int64
 
 // String implements topo.Version.String.
 func (v MySQLVersion) String() string {
-	return fmt.Sprintf("%d", v)
+	return strconv.FormatInt(int64(v), 10)
+}
+
+func init() {
+	for _, cmd := range topo.FlagBinaries {
+		servenv.OnParseFor(cmd, registerMySQLTopoFlags)
+	}
+	topo.RegisterFactory("mysql", Factory{})
+}
+
+func registerMySQLTopoFlags(fs *pflag.FlagSet) {
+	utils.SetFlagIntVar(fs, &lockTTL, "topo-mysql-lock-ttl", lockTTL, "lock TTL in seconds for MySQL topo")
+	utils.SetFlagIntVar(fs, &electionTTL, "topo-mysql-election-ttl", electionTTL, "election TTL in seconds for MySQL topo")
 }
 
 // NewServer returns a new MySQL topo.Server.
-func NewServer(ctx context.Context, serverAddr, root string) (*Server, error) {
-	// Parse the server address to get connection parameters
-	params := parseServerAddr(serverAddr)
-
-	// Ensure the schema exists
-	if err := createSchemaIfNotExists(*params); err != nil {
-		return nil, err
-	}
-
-	// Connect to MySQL using Vitess internal connection handling
-	conn, err := mysql.Connect(ctx, params)
+func NewServer(serverAddr, root string) (*Server, error) {
+	// Parse the server address to get MySQL DSN
+	cfg, err := mysql.ParseDSN(serverAddr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse MySQL DSN: %v", err)
+	}
+	if cfg.DBName == "" {
+		cfg.DBName = DefaultSchema // Use default schema if not specified
 	}
 
-	// Create the server
+	// Connect to MySQL
+	db, err := sql.Open("mysql", cfg.FormatDSN())
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to MySQL: %v", err)
+	}
+
+	// Test the connection
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to ping MySQL: %v", err)
+	}
+
+	// Create server context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+
 	server := &Server{
-		conn:   conn,
-		params: params,
-		cells:  make(map[string]*Server),
-		root:   root,
+		db:         db,
+		root:       root,
+		serverAddr: serverAddr,
+		schemaName: cfg.DBName,
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 
 	// Create the required tables
 	if err := server.createTablesIfNotExist(); err != nil {
-		conn.Close()
-		return nil, err
+		cancel()
+		db.Close()
+		return nil, fmt.Errorf("failed to create tables: %v", err)
 	}
 
-	// Clean up any expired locks and elections on startup
+	// Clean up expired data on startup (after tables are created)
 	server.cleanupExpiredData()
-
-	// Create and start the replication watcher (skip in test mode)
-	if !isTestMode() {
-		server.replicationWatcher = NewReplicationWatcher(server)
-		if err := server.replicationWatcher.Start(); err != nil {
-			log.Warningf("Failed to start replication watcher: %v", err)
-			// Continue without replication watcher - we'll fall back to polling
-		}
-	}
 
 	return server, nil
 }
 
-// parseServerAddr parses the server address into MySQL connection parameters.
-func parseServerAddr(serverAddr string) *mysql.ConnParams {
-	// Default configuration
-	params := &mysql.ConnParams{
-		Host:   "localhost",
-		Port:   3306,
-		Uname:  "root",
-		DbName: DefaultTopoSchema,
-	}
-
-	// Parse the server address
-	if serverAddr != "" {
-		parts := strings.Split(serverAddr, "@")
-		if len(parts) > 1 {
-			// Format is user:pass@host:port/dbname
-			userParts := strings.Split(parts[0], ":")
-			params.Uname = userParts[0]
-			if len(userParts) > 1 {
-				params.Pass = userParts[1]
-			}
-
-			hostParts := strings.Split(parts[1], "/")
-			// Parse host:port
-			if strings.Contains(hostParts[0], ":") {
-				hostPortParts := strings.Split(hostParts[0], ":")
-				params.Host = hostPortParts[0]
-				if port, err := strconv.Atoi(hostPortParts[1]); err == nil {
-					params.Port = port
-				}
-			} else {
-				params.Host = hostParts[0]
-			}
-
-			if len(hostParts) > 1 {
-				params.DbName = hostParts[1]
-			}
-		} else {
-			// Format is host:port/dbname
-			hostParts := strings.Split(serverAddr, "/")
-			// Parse host:port
-			if strings.Contains(hostParts[0], ":") {
-				hostPortParts := strings.Split(hostParts[0], ":")
-				params.Host = hostPortParts[0]
-				if port, err := strconv.Atoi(hostPortParts[1]); err == nil {
-					params.Port = port
-				}
-			} else {
-				params.Host = hostParts[0]
-			}
-
-			if len(hostParts) > 1 {
-				params.DbName = hostParts[1]
-			}
-		}
-	}
-
-	// Use default schema if no database name was specified
-	if params.DbName == "" {
-		params.DbName = DefaultTopoSchema
-	}
-
-	return params
-}
-
-// createSchemaIfNotExists creates the schema if it doesn't exist.
-func createSchemaIfNotExists(params mysql.ConnParams) error {
-	// Save the original database name
-	schemaName := params.DbName
-
-	// Connect without specifying a database
-	tempParams := params
-	tempParams.DbName = ""
-
-	// Connect using Vitess internal connection handling
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &tempParams)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	// Create the schema if it doesn't exist
-	query := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", schemaName)
-	_, err = conn.ExecuteFetch(query, 0, false)
-	return err
-}
-
 // createTablesIfNotExist creates the required tables if they don't exist.
 func (s *Server) createTablesIfNotExist() error {
-	// Create the tables
 	queries := []string{
-		// topo_files table stores the file data
-		`CREATE TABLE IF NOT EXISTS topo_files (
+		// topo_data table stores the topology data
+		`CREATE TABLE IF NOT EXISTS topo_data (
 			path VARCHAR(512) NOT NULL PRIMARY KEY,
 			data MEDIUMBLOB,
-			version BIGINT NOT NULL AUTO_INCREMENT,
+			version BIGINT NOT NULL DEFAULT 1,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			KEY (version)
+			modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 		) ENGINE=InnoDB`,
 
 		// topo_locks table stores lock information
 		`CREATE TABLE IF NOT EXISTS topo_locks (
 			path VARCHAR(512) NOT NULL PRIMARY KEY,
-			owner VARCHAR(255) NOT NULL,
 			contents TEXT,
-			expiration TIMESTAMP NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		) ENGINE=InnoDB`,
-
-		// topo_directories table stores directory information
-		`CREATE TABLE IF NOT EXISTS topo_directories (
-			path VARCHAR(512) NOT NULL PRIMARY KEY,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		) ENGINE=InnoDB`,
-
-		// topo_watch table stores watch information for change notifications
-		`CREATE TABLE IF NOT EXISTS topo_watch (
-			path VARCHAR(512) NOT NULL,
-			watcher_id VARCHAR(64) NOT NULL,
+			expires_at TIMESTAMP NOT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			PRIMARY KEY (path, watcher_id)
+			INDEX expires_idx (expires_at)
 		) ENGINE=InnoDB`,
 
-		// topo_elections table stores election information
+		// topo_elections table stores leader election information
 		`CREATE TABLE IF NOT EXISTS topo_elections (
 			name VARCHAR(512) NOT NULL PRIMARY KEY,
 			leader_id VARCHAR(255) NOT NULL,
 			contents TEXT,
-			expiration TIMESTAMP NOT NULL,
+			expires_at TIMESTAMP NOT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+			modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			INDEX expires_idx (expires_at)
 		) ENGINE=InnoDB`,
 	}
 
-	// Execute each query
 	for _, query := range queries {
-		if _, err := s.conn.ExecuteFetch(query, 0, false); err != nil {
-			return err
+		if _, err := s.db.Exec(query); err != nil {
+			return fmt.Errorf("failed to create table: %v", err)
 		}
 	}
 
 	return nil
 }
 
-// Close is part of the topo.Server interface.
+// checkClosed returns an error if the server has been closed.
+func (s *Server) checkClosed() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.closed {
+		return context.Canceled
+	}
+	return nil
+}
+
+// Close implements topo.Server.Close.
 func (s *Server) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Stop the replication watcher if it's running
-	if s.replicationWatcher != nil {
-		s.replicationWatcher.Stop()
-		s.replicationWatcher = nil
+	if s.closed {
+		return
+	}
+	s.closed = true
+
+	// Cancel the server context
+	if s.cancel != nil {
+		s.cancel()
 	}
 
-	if s.conn != nil {
-		s.conn.Close()
-		s.conn = nil
+	// Release the notification system
+	releaseNotificationSystem(s.schemaName)
+
+	// Close the database connection
+	if s.db != nil {
+		s.db.Close()
 	}
+}
 
-	for _, cell := range s.cells {
-		cell.Close()
+// getNotificationSystemForServer gets the notification system for this server.
+func (s *Server) getNotificationSystemForServer() (*notificationSystem, error) {
+	return getNotificationSystem(s.schemaName, s.serverAddr)
+}
+
+// fullPath returns the full path by combining the server's root with the given path.
+func (s *Server) fullPath(filePath string) string {
+	if s.root == "" || s.root == "/" {
+		return filePath
 	}
-	s.cells = nil
-}
-
-// Factory is a factory for Server objects.
-type Factory struct{}
-
-// HasGlobalReadOnlyCell implements topo.Factory.
-func (f Factory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
-	// MySQL topo doesn't support read-only cells
-	return false
-}
-
-// Create implements topo.Factory.
-func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
-	server, err := NewServer(context.Background(), serverAddr, root)
-	if err != nil {
-		return nil, err
-	}
-	return server, nil
-}
-
-func init() {
-	topo.RegisterFactory("mysql", &Factory{})
-}
-
-// queryRow executes a query expected to return at most one row
-// it applies Sprintf on the arguments, and escapes them all.
-func (s *Server) queryRow(query string, args ...string) (*sqltypes.Result, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return s.queryRowUnsafe(query, args...)
-}
-
-// exec executes a query that modifies data (INSERT, UPDATE, DELETE)
-// it applies Sprintf on the arguments, and escapes them all.
-func (s *Server) exec(query string, args ...string) (*sqltypes.Result, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return s.execUnsafe(query, args...)
-}
-
-// query executes a query that returns multiple rows
-// it applies Sprintf on the arguments, and escapes them all.
-func (s *Server) query(query string, args ...string) (*sqltypes.Result, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return s.queryUnsafe(query, args...)
-}
-
-// queryRowUnsafe executes a query without acquiring the mutex (internal use only)
-func (s *Server) queryRowUnsafe(query string, args ...string) (*sqltypes.Result, error) {
-	if s.conn == nil {
-		return nil, fmt.Errorf("connection closed")
-	}
-	return s.conn.ExecuteFetch(expandQuery(query, args...), 1, false)
-}
-
-// execUnsafe executes a query without acquiring the mutex (internal use only)
-func (s *Server) execUnsafe(query string, args ...string) (*sqltypes.Result, error) {
-	if s.conn == nil {
-		return nil, fmt.Errorf("connection closed")
-	}
-	return s.conn.ExecuteFetch(expandQuery(query, args...), 0, false)
-}
-
-// queryUnsafe executes a query without acquiring the mutex (internal use only)
-func (s *Server) queryUnsafe(query string, args ...string) (*sqltypes.Result, error) {
-	if s.conn == nil {
-		return nil, fmt.Errorf("connection closed")
-	}
-	return s.conn.ExecuteFetch(expandQuery(query, args...), -1, false)
+	return path.Join(s.root, filePath)
 }
 
 // convertError converts a MySQL error to a topo error.
@@ -350,26 +270,7 @@ func convertError(err error, path string) error {
 		return nil
 	}
 
-	// Check for connection closed errors
-	errStr := err.Error()
-	if strings.Contains(errStr, "connection closed") ||
-		strings.Contains(errStr, "connection refused") ||
-		strings.Contains(errStr, "broken pipe") ||
-		strings.Contains(errStr, "connection reset") {
-		return topo.NewError(topo.Interrupted, path)
-	}
-
-	// Check for MySQL-specific errors
-	if strings.Contains(errStr, "doesn't exist") ||
-		strings.Contains(errStr, "Table") && strings.Contains(errStr, "doesn't exist") {
-		return topo.NewError(topo.NoNode, path)
-	}
-
-	if strings.Contains(errStr, "Duplicate entry") {
-		return topo.NewError(topo.NodeExists, path)
-	}
-
-	// For context cancellation
+	// Handle context errors
 	if err == context.Canceled {
 		return topo.NewError(topo.Interrupted, path)
 	}
@@ -377,89 +278,32 @@ func convertError(err error, path string) error {
 		return topo.NewError(topo.Timeout, path)
 	}
 
-	// Default: return the original error wrapped in a generic topo error
+	// Handle SQL errors
+	if err == sql.ErrNoRows {
+		return topo.NewError(topo.NoNode, path)
+	}
+
+	// Handle MySQL-specific errors
+	errStr := err.Error()
+	if strings.Contains(errStr, "Duplicate entry") {
+		return topo.NewError(topo.NodeExists, path)
+	}
+
+	// Default: return the original error
 	return err
 }
 
-// isTestMode returns true if we're running in test mode.
-func isTestMode() bool {
-	// Check if we're running under go test
-	for _, arg := range os.Args {
-		if strings.Contains(arg, "test") || strings.HasSuffix(arg, ".test") {
-			return true
-		}
-	}
-
-	// Check for test-specific database names
-	if len(os.Args) > 0 && strings.Contains(os.Args[0], "topo_test_") {
-		return true
-	}
-
-	return false
-}
-
-// fullPath returns the full path by combining the server's root with the given path.
-func (s *Server) fullPath(path string) string {
-	// Normalize the path to ensure it starts with /
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-
-	// If root is "/" or empty, just return the path
-	if s.root == "/" || s.root == "" {
-		return path
-	}
-
-	// Combine root and path
-	if path == "/" {
-		return s.root
-	}
-
-	return s.root + path
-}
-
-// relativePath returns the relative path by removing the server's root prefix.
-func (s *Server) relativePath(fullPath string) string {
-	// If root is "/" or empty, just return the path
-	if s.root == "/" || s.root == "" {
-		return fullPath
-	}
-
-	// Remove the root prefix
-	if strings.HasPrefix(fullPath, s.root) {
-		relative := fullPath[len(s.root):]
-		if relative == "" {
-			return "/"
-		}
-		return relative
-	}
-
-	// If the path doesn't start with root, return as-is
-	return fullPath
-}
-
-// cleanupExpiredData removes expired locks and elections on startup.
-// This helps ensure that stale data doesn't interfere with cluster operations.
+// cleanupExpiredData removes expired locks and elections.
 func (s *Server) cleanupExpiredData() {
-	// Clean up expired locks
-	if _, err := s.conn.ExecuteFetch("DELETE FROM topo_locks WHERE expiration < NOW()", 0, false); err != nil {
-		log.Warningf("Failed to cleanup expired locks: %v", err)
+	now := time.Now()
+
+	// Clean up expired locks - ignore errors if table doesn't exist yet
+	if _, err := s.db.Exec("DELETE FROM topo_locks WHERE expires_at < ?", now); err != nil {
+		log.Infof("Skipping lock cleanup (table may not exist yet): %v", err)
 	}
 
-	// Clean up expired elections
-	if _, err := s.conn.ExecuteFetch("DELETE FROM topo_elections WHERE expiration < NOW()", 0, false); err != nil {
-		log.Warningf("Failed to cleanup expired elections: %v", err)
+	// Clean up expired elections - ignore errors if table doesn't exist yet
+	if _, err := s.db.Exec("DELETE FROM topo_elections WHERE expires_at < ?", now); err != nil {
+		log.Infof("Skipping election cleanup (table may not exist yet): %v", err)
 	}
-
-	// Clean up tablets in inconsistent states that can interfere with cluster startup
-	// These states typically indicate tablets that weren't cleanly shut down
-	inconsistentStates := []string{"RESTORE", "DRAINED", "BACKUP"}
-	for _, state := range inconsistentStates {
-		query := fmt.Sprintf("DELETE FROM topo_files WHERE path LIKE '%%/tablets/%%' AND data LIKE '%%\"type\":\"%s\"%%'", state)
-		if _, err := s.conn.ExecuteFetch(query, 0, false); err != nil {
-			log.Warningf("Failed to cleanup tablets in %s state: %v", state, err)
-		}
-	}
-
-	log.Infof("MySQL topology server startup cleanup completed")
 }

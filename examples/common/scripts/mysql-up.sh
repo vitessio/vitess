@@ -22,11 +22,11 @@ cell=${CELL:-'test'}
 echo "Setting up mysql topo.."
 
 # Check if MySQL is already running
-# Extract user, password, host and port from MYSQL_TOPO_ADDR (format: user:password@host:port/database)
+# Extract user, password, host and port from MYSQL_TOPO_ADDR (format: user:password@tcp(host:port)/database)
 MYSQL_USER_PASS=$(echo "$MYSQL_TOPO_ADDR" | sed 's/@.*//')
 MYSQL_USER=$(echo "$MYSQL_USER_PASS" | cut -d: -f1)
 MYSQL_PASS=$(echo "$MYSQL_USER_PASS" | cut -d: -f2)
-MYSQL_HOST_PORT=$(echo "$MYSQL_TOPO_ADDR" | sed 's/.*@\([^/]*\).*/\1/')
+MYSQL_HOST_PORT=$(echo "$MYSQL_TOPO_ADDR" | sed 's/.*@tcp(\([^)]*\)).*/\1/')
 MYSQL_HOST=$(echo "$MYSQL_HOST_PORT" | cut -d: -f1)
 MYSQL_PORT=$(echo "$MYSQL_HOST_PORT" | cut -d: -f2)
 CREATEUSER="CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%' IDENTIFIED WITH mysql_native_password BY '${MYSQL_PASS}';"

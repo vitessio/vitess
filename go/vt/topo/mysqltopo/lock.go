@@ -18,388 +18,227 @@ package mysqltopo
 
 import (
 	"context"
-	"fmt"
+	"database/sql"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// lockDescriptor implements topo.LockDescriptor.
-type lockDescriptor struct {
-	s       *Server
-	dirPath string
-	lockID  string
-}
+// MySQLLockDescriptor implements topo.LockDescriptor for MySQL.
+type MySQLLockDescriptor struct {
+	server   *Server
+	path     string
+	contents string
+	ttl      time.Duration
 
-// Lock is part of the topo.Conn interface.
-func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	return s.LockWithTTL(ctx, dirPath, contents, *mysqlTopoLockTTL)
-}
-
-// LockWithTTL is part of the topo.Conn interface.
-func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (topo.LockDescriptor, error) {
-	// Convert to full path using the server's root
-	fullDirPath := s.fullPath(dirPath)
-
-	// Check if the directory exists
-	if fullDirPath != "/" {
-		result, err := s.queryRow(`
-			SELECT EXISTS(
-				SELECT 1 FROM (
-					SELECT 1 FROM topo_files WHERE path LIKE %s
-					UNION
-					SELECT 1 FROM topo_directories WHERE path = %s
-				) as subquery
-			)
-		`, fullDirPath+"/%", fullDirPath)
-
-		if err != nil {
-			return nil, convertError(err, dirPath)
-		}
-
-		if len(result.Rows) == 0 {
-			return nil, topo.NewError(topo.NoNode, dirPath)
-		}
-
-		exists, err := result.Rows[0][0].ToBool()
-		if err != nil {
-			return nil, convertError(err, dirPath)
-		}
-
-		if !exists {
-			return nil, topo.NewError(topo.NoNode, dirPath)
-		}
-	}
-
-	// Create a unique lock ID
-	lockID := fmt.Sprintf("%v", time.Now().UnixNano())
-
-	// Calculate expiration time
-	expiration := time.Now().Add(ttl).Format("2006-01-02 15:04:05")
-
-	// Try to acquire the lock with proper transaction isolation and lock timeouts
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, convertError(ctx.Err(), dirPath)
-		default:
-		}
-
-		// Try to acquire the lock using a single transaction
-		log.Infof("Attempting to acquire lock for path %s with lockID %s", fullDirPath, lockID)
-
-		acquired, err := s.tryAcquireLockInTransaction(fullDirPath, lockID, contents, expiration)
-		if err != nil {
-			log.Errorf("Failed to acquire lock: %v", err)
-			return nil, convertError(err, dirPath)
-		}
-
-		if acquired {
-			// Lock acquired
-			log.Infof("Lock acquired successfully for path %s with lockID %s", fullDirPath, lockID)
-			return &lockDescriptor{
-				s:       s,
-				dirPath: fullDirPath,
-				lockID:  lockID,
-			}, nil
-		}
-
-		// Lock not acquired, wait and try again
-		select {
-		case <-ctx.Done():
-			return nil, convertError(ctx.Err(), dirPath)
-		case <-time.After(100 * time.Millisecond):
-		}
-	}
-}
-
-// LockName is part of the topo.Conn interface.
-func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	// Named locks don't require the path to exist, so we skip the directory existence check
-	// Convert to full path using the server's root
-	fullDirPath := s.fullPath(dirPath)
-
-	// Create parent directories if needed for named locks
-	if err := s.createParentDirectories(ctx, fullDirPath); err != nil {
-		return nil, convertError(err, dirPath)
-	}
-
-	// Create a unique lock ID
-	lockID := fmt.Sprintf("%v", time.Now().UnixNano())
-
-	// Use a 24-hour TTL as specified in the interface
-	ttl := 24 * time.Hour
-	expiration := time.Now().Add(ttl).Format("2006-01-02 15:04:05")
-
-	// Try to acquire the lock with proper transaction isolation and lock timeouts
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, convertError(ctx.Err(), dirPath)
-		default:
-		}
-
-		// Try to acquire the lock using a single transaction
-		log.Infof("Attempting to acquire named lock for path %s with lockID %s", fullDirPath, lockID)
-
-		acquired, err := s.tryAcquireLockInTransaction(fullDirPath, lockID, contents, expiration)
-		if err != nil {
-			log.Errorf("Failed to acquire named lock: %v", err)
-			return nil, convertError(err, dirPath)
-		}
-
-		if acquired {
-			// Lock acquired
-			log.Infof("Named lock acquired successfully for path %s with lockID %s", fullDirPath, lockID)
-			return &lockDescriptor{
-				s:       s,
-				dirPath: fullDirPath,
-				lockID:  lockID,
-			}, nil
-		}
-
-		// Lock not acquired, wait and try again
-		select {
-		case <-ctx.Done():
-			return nil, convertError(ctx.Err(), dirPath)
-		case <-time.After(100 * time.Millisecond):
-		}
-	}
-}
-
-// TryLock is part of the topo.Conn interface.
-func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	// Convert to full path using the server's root
-	fullDirPath := s.fullPath(dirPath)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Check if the directory exists
-	if fullDirPath != "/" {
-		result, err := s.queryRowUnsafe(`
-			SELECT EXISTS(
-				SELECT 1 FROM (
-					SELECT 1 FROM topo_files WHERE path LIKE %s
-					UNION
-					SELECT 1 FROM topo_directories WHERE path = %s
-				) as subquery
-			)
-		`, fullDirPath+"/%", fullDirPath)
-
-		if err != nil {
-			return nil, convertError(err, dirPath)
-		}
-
-		if len(result.Rows) == 0 {
-			return nil, topo.NewError(topo.NoNode, dirPath)
-		}
-
-		exists, err := result.Rows[0][0].ToBool()
-		if err != nil {
-			return nil, convertError(err, dirPath)
-		}
-
-		if !exists {
-			return nil, topo.NewError(topo.NoNode, dirPath)
-		}
-	}
-
-	// Try to acquire the lock atomically with proper transaction isolation
-	lockID := fmt.Sprintf("%v", time.Now().UnixNano())
-	expiration := time.Now().Add(*mysqlTopoLockTTL).Format("2006-01-02 15:04:05")
-
-	// Try to acquire the lock using a single transaction (without additional mutex)
-	acquired, err := s.tryAcquireLockInTransactionUnsafe(fullDirPath, lockID, contents, expiration)
-	if err != nil {
-		return nil, convertError(err, dirPath)
-	}
-
-	if acquired {
-		// Lock acquired
-		return &lockDescriptor{
-			s:       s,
-			dirPath: fullDirPath,
-			lockID:  lockID,
-		}, nil
-	}
-
-	// Lock not acquired, return NodeExists error
-	return nil, topo.NewError(topo.NodeExists, dirPath)
+	// heartbeat context and cancel function
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // Check is part of the topo.LockDescriptor interface.
-func (ld *lockDescriptor) Check(ctx context.Context) error {
-	result, err := ld.s.queryRow("SELECT owner, expiration FROM topo_locks WHERE path = %s", ld.dirPath)
+func (ld *MySQLLockDescriptor) Check(ctx context.Context) error {
+	if err := ld.server.checkClosed(); err != nil {
+		return convertError(err, ld.path)
+	}
+
+	// Check if the lock still exists and hasn't expired
+	var exists bool
+	err := ld.server.db.QueryRowContext(ctx,
+		"SELECT 1 FROM topo_locks WHERE path = ? AND expires_at > NOW()",
+		ld.path).Scan(&exists)
+
+	if err == sql.ErrNoRows {
+		return topo.NewError(topo.NoNode, ld.path)
+	}
 	if err != nil {
-		return err
-	}
-
-	if len(result.Rows) == 0 {
-		return fmt.Errorf("lock lost")
-	}
-
-	owner := result.Rows[0][0].ToString()
-	expirationStr := result.Rows[0][1].ToString()
-
-	if owner != ld.lockID {
-		return fmt.Errorf("lock was lost (owner mismatch: expected %s, got %s)", ld.lockID, owner)
-	}
-
-	// Parse the expiration time
-	expiration, err := time.Parse("2006-01-02 15:04:05", expirationStr)
-	if err != nil {
-		return fmt.Errorf("failed to parse expiration time: %v", err)
-	}
-
-	// Only refresh the lock if it's going to expire soon (within 1 minute)
-	if expiration.Before(time.Now().Add(1 * time.Minute)) {
-		newExpiration := time.Now().Add(*mysqlTopoLockTTL).Format("2006-01-02 15:04:05")
-		_, err = ld.s.exec("UPDATE topo_locks SET expiration = %s WHERE path = %s AND owner = %s",
-			newExpiration, ld.dirPath, ld.lockID)
-		if err != nil {
-			return err
-		}
+		return convertError(err, ld.path)
 	}
 
 	return nil
 }
 
 // Unlock is part of the topo.LockDescriptor interface.
-func (ld *lockDescriptor) Unlock(ctx context.Context) error {
-	result, err := ld.s.exec("DELETE FROM topo_locks WHERE path = %s AND owner = %s", ld.dirPath, ld.lockID)
-	if err != nil {
-		return err
+func (ld *MySQLLockDescriptor) Unlock(ctx context.Context) error {
+	// Stop the heartbeat goroutine first
+	if ld.cancel != nil {
+		ld.cancel()
+		ld.cancel = nil // Prevent double cancellation
 	}
 
-	// Check if we actually deleted a lock
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("lock not found or already unlocked")
+	if err := ld.server.checkClosed(); err != nil {
+		return convertError(err, ld.path)
+	}
+
+	// Remove the lock
+	result, err := ld.server.db.ExecContext(ctx, "DELETE FROM topo_locks WHERE path = ?", ld.path)
+	if err != nil {
+		return convertError(err, ld.path)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return convertError(err, ld.path)
+	}
+	if rowsAffected == 0 {
+		// Lock was already removed or expired - this should be an error for double unlock
+		return topo.NewError(topo.NoNode, ld.path)
 	}
 
 	return nil
 }
 
-// tryAcquireLockInTransaction attempts to acquire a lock atomically using a MySQL transaction.
-// It returns true if the lock was successfully acquired, false if another lock exists.
-func (s *Server) tryAcquireLockInTransaction(dirPath, lockID, contents, expiration string) (bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.conn == nil {
-		return false, fmt.Errorf("connection closed")
-	}
-
-	// Start a transaction
-	_, err := s.conn.ExecuteFetch("START TRANSACTION", 0, false)
-	if err != nil {
-		return false, err
-	}
-
-	// Ensure we rollback on any error
-	defer func() {
-		if err != nil {
-			_, _ = s.conn.ExecuteFetch("ROLLBACK", 0, false)
-		}
-	}()
-
-	// First, clean up any expired locks for this path
-	_, err = s.conn.ExecuteFetch(expandQuery(
-		"DELETE FROM topo_locks WHERE path = %s AND expiration < NOW()",
-		dirPath,
-	), 0, false)
-	if err != nil {
-		return false, err
-	}
-
-	// Try to acquire the lock by inserting a new record
-	// Use INSERT IGNORE to avoid errors if a lock already exists
-	result, err := s.conn.ExecuteFetch(expandQuery(
-		"INSERT IGNORE INTO topo_locks (path, owner, contents, expiration) VALUES (%s, %s, %s, %s)",
-		dirPath, lockID, contents, expiration,
-	), 0, false)
-	if err != nil {
-		return false, err
-	}
-
-	// Check if we successfully inserted the lock
-	lockAcquired := result.RowsAffected > 0
-
-	if lockAcquired {
-		// Commit the transaction
-		_, err = s.conn.ExecuteFetch("COMMIT", 0, false)
-		if err != nil {
-			return false, err
-		}
-		return true, nil
-	}
-
-	// Lock was not acquired, rollback and return false
-	_, err = s.conn.ExecuteFetch("ROLLBACK", 0, false)
-	if err != nil {
-		return false, err
-	}
-
-	return false, nil
+// Lock is part of the topo.Conn interface.
+func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	return s.LockWithTTL(ctx, dirPath, contents, time.Duration(lockTTL)*time.Second)
 }
 
-// tryAcquireLockInTransactionUnsafe attempts to acquire a lock atomically using a MySQL transaction.
-// This version assumes the mutex is already held by the caller.
-func (s *Server) tryAcquireLockInTransactionUnsafe(dirPath, lockID, contents, expiration string) (bool, error) {
-	if s.conn == nil {
-		return false, fmt.Errorf("connection closed")
+// LockWithTTL is part of the topo.Conn interface.
+func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (topo.LockDescriptor, error) {
+	if err := s.checkClosed(); err != nil {
+		return nil, convertError(err, dirPath)
 	}
 
-	// Start a transaction
-	_, err := s.conn.ExecuteFetch("START TRANSACTION", 0, false)
+	fullPath := s.fullPath(dirPath)
+
+	// Check if the directory exists by looking for any files under it
+	var exists bool
+	likePattern := fullPath + "%"
+	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM topo_data WHERE path LIKE ? LIMIT 1", likePattern).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return nil, topo.NewError(topo.NoNode, fullPath)
+	}
 	if err != nil {
-		return false, err
+		return nil, convertError(err, fullPath)
 	}
 
-	// Ensure we rollback on any error
-	defer func() {
+	return s.acquireLock(ctx, fullPath, contents, ttl, false)
+}
+
+// LockName is part of the topo.Conn interface.
+func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	if err := s.checkClosed(); err != nil {
+		return nil, convertError(err, dirPath)
+	}
+
+	fullPath := s.fullPath(dirPath)
+
+	// Named locks have a static 24 hour TTL
+	ttl := 24 * time.Hour
+
+	return s.acquireLock(ctx, fullPath, contents, ttl, false)
+}
+
+// TryLock is part of the topo.Conn interface.
+func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	if err := s.checkClosed(); err != nil {
+		return nil, convertError(err, dirPath)
+	}
+
+	fullPath := s.fullPath(dirPath)
+
+	// Check if the directory exists by looking for any files under it
+	var exists bool
+	likePattern := fullPath + "%"
+	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM topo_data WHERE path LIKE ? LIMIT 1", likePattern).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return nil, topo.NewError(topo.NoNode, fullPath)
+	}
+	if err != nil {
+		return nil, convertError(err, fullPath)
+	}
+
+	return s.acquireLock(ctx, fullPath, contents, time.Duration(lockTTL)*time.Second, true)
+}
+
+// acquireLock attempts to acquire a lock with the given parameters.
+func (s *Server) acquireLock(ctx context.Context, path, contents string, ttl time.Duration, tryLock bool) (topo.LockDescriptor, error) {
+	expiresAt := time.Now().Add(ttl)
+
+	for {
+		// Clean up any expired locks first
+		_, err := s.db.ExecContext(ctx, "DELETE FROM topo_locks WHERE expires_at < NOW()")
 		if err != nil {
-			_, _ = s.conn.ExecuteFetch("ROLLBACK", 0, false)
+			return nil, convertError(err, path)
 		}
-	}()
 
-	// First, clean up any expired locks for this path
-	_, err = s.conn.ExecuteFetch(expandQuery(
-		"DELETE FROM topo_locks WHERE path = %s AND expiration < NOW()",
-		dirPath,
-	), 0, false)
-	if err != nil {
-		return false, err
-	}
+		// Try to acquire the lock
+		_, err = s.db.ExecContext(ctx,
+			"INSERT INTO topo_locks (path, contents, expires_at) VALUES (?, ?, ?)",
+			path, contents, expiresAt)
 
-	// Try to acquire the lock by inserting a new record
-	// Use INSERT IGNORE to avoid errors if a lock already exists
-	result, err := s.conn.ExecuteFetch(expandQuery(
-		"INSERT IGNORE INTO topo_locks (path, owner, contents, expiration) VALUES (%s, %s, %s, %s)",
-		dirPath, lockID, contents, expiration,
-	), 0, false)
-	if err != nil {
-		return false, err
-	}
-
-	// Check if we successfully inserted the lock
-	lockAcquired := result.RowsAffected > 0
-
-	if lockAcquired {
-		// Commit the transaction
-		_, err = s.conn.ExecuteFetch("COMMIT", 0, false)
-		if err != nil {
-			return false, err
+		if err == nil {
+			// Lock acquired successfully
+			break
 		}
-		return true, nil
+
+		// Check if it's a duplicate key error (lock already exists)
+		if isDuplicateKeyError(err) {
+			if tryLock {
+				return nil, topo.NewError(topo.NodeExists, path)
+			}
+
+			// Wait a bit and try again
+			select {
+			case <-ctx.Done():
+				return nil, convertError(ctx.Err(), path)
+			case <-time.After(100 * time.Millisecond):
+				continue
+			}
+		}
+
+		// Other error
+		return nil, convertError(err, path)
 	}
 
-	// Lock was not acquired, rollback and return false
-	_, err = s.conn.ExecuteFetch("ROLLBACK", 0, false)
-	if err != nil {
-		return false, err
+	// Create the lock descriptor with heartbeat
+	lockCtx, cancel := context.WithCancel(s.ctx)
+	ld := &MySQLLockDescriptor{
+		server:   s,
+		path:     path,
+		contents: contents,
+		ttl:      ttl,
+		ctx:      lockCtx,
+		cancel:   cancel,
 	}
 
-	return false, nil
+	// Start heartbeat goroutine to keep the lock alive
+	go ld.heartbeat()
+
+	return ld, nil
+}
+
+// heartbeat keeps the lock alive by periodically updating its expiration time.
+func (ld *MySQLLockDescriptor) heartbeat() {
+	ticker := time.NewTicker(ld.ttl / 3) // Refresh at 1/3 of TTL
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ld.ctx.Done():
+			return
+		case <-ticker.C:
+			// Update the lock expiration
+			newExpiresAt := time.Now().Add(ld.ttl)
+			_, err := ld.server.db.ExecContext(ld.ctx,
+				"UPDATE topo_locks SET expires_at = ? WHERE path = ?",
+				newExpiresAt, ld.path)
+
+			if err != nil {
+				log.Warningf("Failed to refresh lock for path %s: %v", ld.path, err)
+				// The lock may have been lost, but we'll let Check() handle detection
+			}
+		}
+	}
+}
+
+// isDuplicateKeyError checks if the error is a MySQL duplicate key error.
+func isDuplicateKeyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "Duplicate entry") || strings.Contains(errStr, "duplicate key")
 }

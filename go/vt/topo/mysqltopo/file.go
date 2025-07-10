@@ -18,134 +18,204 @@ package mysqltopo
 
 import (
 	"context"
-	"fmt"
-	"path"
+	"database/sql"
 	"strings"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
 
+// beginTxWithReadCommitted starts a transaction with READ COMMITTED isolation level
+// to avoid gap locking issues in MySQL.
+func (s *Server) beginTxWithReadCommitted(ctx context.Context) (*sql.Tx, error) {
+	return s.db.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelReadCommitted,
+	})
+}
+
 // Create is part of the topo.Conn interface.
 func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
-	// Convert to full path using the server's root
+	if err := s.checkClosed(); err != nil {
+		return nil, convertError(err, filePath)
+	}
+
 	fullPath := s.fullPath(filePath)
 
+	// Use a transaction with READ COMMITTED isolation to avoid gap locking
+	tx, err := s.beginTxWithReadCommitted(ctx)
+	if err != nil {
+		return nil, convertError(err, fullPath)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback() // Rollback if not committed
+		}
+	}()
+
 	// Check if the file already exists
-	result, err := s.queryRow("SELECT version FROM topo_files WHERE path = %s", fullPath)
+	var exists bool
+	err = tx.QueryRowContext(ctx, "SELECT 1 FROM topo_data WHERE path = ?", fullPath).Scan(&exists)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, convertError(err, fullPath)
+	}
+	if exists {
+		return nil, topo.NewError(topo.NodeExists, fullPath)
+	}
+
+	// Insert the new file with version 1
+	_, err = tx.ExecContext(ctx, "INSERT INTO topo_data (path, data, version) VALUES (?, ?, 1)", fullPath, contents)
 	if err != nil {
-		return nil, convertError(err, filePath)
-	}
-	if len(result.Rows) > 0 {
-		// File exists
-		return nil, topo.NewError(topo.NodeExists, filePath)
+		return nil, convertError(err, fullPath)
 	}
 
-	// Create parent directories if needed
-	if err := s.createParentDirectories(ctx, fullPath); err != nil {
-		return nil, convertError(err, filePath)
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return nil, convertError(err, fullPath)
+	}
+	tx = nil // Prevent rollback on defer
+
+	// Notify watchers of the change
+	if ns, err := s.getNotificationSystemForServer(); err == nil {
+		ns.notifyChange(fullPath, contents, MySQLVersion(1))
 	}
 
-	// Create the file
-	result, err = s.exec("INSERT INTO topo_files (path, data) VALUES (%s, %s)", fullPath, encodeBinaryData(contents))
-	if err != nil {
-		return nil, convertError(err, filePath)
-	}
-
-	// Get the version (auto-increment ID)
-	id := result.InsertID
-
-	// Notify watchers
-	if err := s.notifyWatchers(ctx, fullPath); err != nil {
-		// Log error but don't fail the operation
-		// The watch mechanism will eventually catch up
-		log.Warningf("Failed to notify watchers for file %s: %v", fullPath, err)
-	}
-
-	return MySQLVersion(id), nil
+	return MySQLVersion(1), nil
 }
 
 // Update is part of the topo.Conn interface.
 func (s *Server) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
-	// Convert to full path using the server's root
+	if err := s.checkClosed(); err != nil {
+		return nil, convertError(err, filePath)
+	}
+
 	fullPath := s.fullPath(filePath)
 
-	// Create parent directories if needed
-	if err := s.createParentDirectories(ctx, fullPath); err != nil {
-		return nil, convertError(err, filePath)
+	// Use a transaction with READ COMMITTED isolation to avoid gap locking
+	tx, err := s.beginTxWithReadCommitted(ctx)
+	if err != nil {
+		return nil, convertError(err, fullPath)
 	}
-
-	var result *sqltypes.Result
-	var err error
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback() // Rollback if not committed
+		}
+	}()
 
 	if version != nil {
-		// Conditional update
-		mysqlVersion, ok := version.(MySQLVersion)
-		if !ok {
-			return nil, fmt.Errorf("bad version type %T, expected MySQLVersion", version)
+		// Conditional update - check version matches and increment it
+		var currentVersion int64
+		err = tx.QueryRowContext(ctx, "SELECT version FROM topo_data WHERE path = ?", fullPath).Scan(&currentVersion)
+		if err == sql.ErrNoRows {
+			return nil, topo.NewError(topo.NoNode, fullPath)
 		}
-		result, err = s.exec("UPDATE topo_files SET data = %s, version = version + 1 WHERE path = %s AND version = %s",
-			encodeBinaryData(contents), fullPath, fmt.Sprintf("%d", int64(mysqlVersion)))
+		if err != nil {
+			return nil, convertError(err, fullPath)
+		}
+
+		expectedVersion := int64(version.(MySQLVersion))
+		if currentVersion != expectedVersion {
+			log.Infof("Version mismatch for %s: current=%d, expected=%d", fullPath, currentVersion, expectedVersion)
+			return nil, topo.NewError(topo.BadVersion, fullPath)
+		}
+
+		// Update with version increment
+		newVersion := currentVersion + 1
+		result, err := tx.ExecContext(ctx,
+			"UPDATE topo_data SET data = ?, version = ? WHERE path = ? AND version = ?",
+			contents, newVersion, fullPath, expectedVersion)
+		if err != nil {
+			return nil, convertError(err, fullPath)
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return nil, convertError(err, fullPath)
+		}
+		if rowsAffected == 0 {
+			return nil, topo.NewError(topo.BadVersion, fullPath)
+		}
+
+		// Commit the transaction
+		if err := tx.Commit(); err != nil {
+			return nil, convertError(err, fullPath)
+		}
+		tx = nil // Prevent rollback on defer
+
+		// Notify watchers of the change
+		if ns, err := s.getNotificationSystemForServer(); err == nil {
+			ns.notifyChange(fullPath, contents, MySQLVersion(newVersion))
+		}
+
+		return MySQLVersion(newVersion), nil
 	} else {
-		// Unconditional update or create
-		result, err = s.exec("INSERT INTO topo_files (path, data) VALUES (%s, %s) ON DUPLICATE KEY UPDATE data = VALUES(data), version = version + 1",
-			fullPath, encodeBinaryData(contents))
-	}
+		// Unconditional update (upsert)
+		// First try to update existing record
+		var currentVersion int64
+		err = tx.QueryRowContext(ctx, "SELECT version FROM topo_data WHERE path = ?", fullPath).Scan(&currentVersion)
 
-	if err != nil {
-		return nil, convertError(err, filePath)
-	}
+		if err == sql.ErrNoRows {
+			// Record doesn't exist, insert it with version 1
+			_, err = tx.ExecContext(ctx,
+				"INSERT INTO topo_data (path, data, version) VALUES (?, ?, 1)",
+				fullPath, contents)
+			if err != nil {
+				return nil, convertError(err, fullPath)
+			}
 
-	// Check if the update was successful
-	if result.RowsAffected == 0 && version != nil {
-		// No rows were affected, which means the version didn't match
-		return nil, topo.NewError(topo.BadVersion, filePath)
-	}
+			// Commit the transaction
+			if err := tx.Commit(); err != nil {
+				return nil, convertError(err, fullPath)
+			}
 
-	// Get the new version
-	result, err = s.queryRow("SELECT version FROM topo_files WHERE path = %s", fullPath)
-	if err != nil {
-		return nil, convertError(err, filePath)
-	}
-	if len(result.Rows) == 0 {
-		return nil, topo.NewError(topo.NoNode, filePath)
-	}
+			// Notify watchers of the change
+			if ns, err := s.getNotificationSystemForServer(); err == nil {
+				ns.notifyChange(fullPath, contents, MySQLVersion(1))
+			}
 
-	newVersion, err := result.Rows[0][0].ToInt64()
-	if err != nil {
-		return nil, err
-	}
+			return MySQLVersion(1), nil
+		} else if err != nil {
+			return nil, convertError(err, fullPath)
+		} else {
+			// Record exists, update it with incremented version
+			newVersion := currentVersion + 1
+			_, err = tx.ExecContext(ctx,
+				"UPDATE topo_data SET data = ?, version = ? WHERE path = ?",
+				contents, newVersion, fullPath)
+			if err != nil {
+				return nil, convertError(err, fullPath)
+			}
 
-	// Notify watchers
-	if err := s.notifyWatchers(ctx, fullPath); err != nil {
-		// Log error but don't fail the operation
-		log.Warningf("Failed to notify watchers for file %s: %v", fullPath, err)
-	}
+			// Commit the transaction
+			if err := tx.Commit(); err != nil {
+				return nil, convertError(err, fullPath)
+			}
 
-	return MySQLVersion(newVersion), nil
+			// Notify watchers of the change
+			if ns, err := s.getNotificationSystemForServer(); err == nil {
+				ns.notifyChange(fullPath, contents, MySQLVersion(newVersion))
+			}
+
+			return MySQLVersion(newVersion), nil
+		}
+	}
 }
 
 // Get is part of the topo.Conn interface.
 func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
-	// Convert to full path using the server's root
-	fullPath := s.fullPath(filePath)
-
-	result, err := s.queryRow("SELECT data, version FROM topo_files WHERE path = %s", fullPath)
-	if err != nil {
+	if err := s.checkClosed(); err != nil {
 		return nil, nil, convertError(err, filePath)
 	}
-	if len(result.Rows) == 0 {
-		return nil, nil, topo.NewError(topo.NoNode, filePath)
-	}
 
-	data, err := decodeBinaryData(result.Rows[0][0])
-	if err != nil {
-		return nil, nil, err
+	fullPath := s.fullPath(filePath)
+
+	var data []byte
+	var version int64
+	err := s.db.QueryRowContext(ctx, "SELECT data, version FROM topo_data WHERE path = ?", fullPath).Scan(&data, &version)
+	if err == sql.ErrNoRows {
+		return nil, nil, topo.NewError(topo.NoNode, fullPath)
 	}
-	version, err := result.Rows[0][1].ToInt64()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, convertError(err, fullPath)
 	}
 
 	return data, MySQLVersion(version), nil
@@ -153,60 +223,73 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 
 // GetVersion is part of the topo.Conn interface.
 func (s *Server) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
-	// Convert to full path using the server's root
-	fullPath := s.fullPath(filePath)
-
-	result, err := s.queryRow("SELECT data FROM topo_files WHERE path = %s AND version = %s",
-		fullPath, fmt.Sprintf("%d", version))
-	if err != nil {
+	if err := s.checkClosed(); err != nil {
 		return nil, convertError(err, filePath)
 	}
-	if len(result.Rows) == 0 {
-		return nil, topo.NewError(topo.NoNode, filePath)
+
+	fullPath := s.fullPath(filePath)
+
+	// MySQL doesn't store historical versions by default, so we can only get the current version
+	// if it matches the requested version
+	var data []byte
+	var currentVersion int64
+	err := s.db.QueryRowContext(ctx, "SELECT data, version FROM topo_data WHERE path = ?", fullPath).Scan(&data, &currentVersion)
+	if err == sql.ErrNoRows {
+		return nil, topo.NewError(topo.NoNode, fullPath)
+	}
+	if err != nil {
+		return nil, convertError(err, fullPath)
 	}
 
-	data, err := decodeBinaryData(result.Rows[0][0])
-	if err != nil {
-		return nil, err
+	if currentVersion != version {
+		return nil, topo.NewError(topo.NoNode, fullPath)
 	}
+
 	return data, nil
 }
 
 // List is part of the topo.Conn interface.
 func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo, error) {
-	// Convert to full path using the server's root
-	fullPathPrefix := s.fullPath(filePathPrefix)
-
-	// Query for all files with the given prefix
-	result, err := s.query("SELECT path, data, version FROM topo_files WHERE path LIKE %s", fullPathPrefix+"%")
-	if err != nil {
+	if err := s.checkClosed(); err != nil {
 		return nil, convertError(err, filePathPrefix)
 	}
 
-	var results []topo.KVInfo
-	for _, row := range result.Rows {
-		fullPath := row[0].ToString()
-		// Convert back to relative path for the result
-		relativePath := s.relativePath(fullPath)
+	fullPathPrefix := s.fullPath(filePathPrefix)
 
-		data, err := decodeBinaryData(row[1])
-		if err != nil {
-			return nil, err
-		}
-		version, err := row[2].ToInt64()
-		if err != nil {
-			return nil, err
+	// Use LIKE with proper escaping for prefix matching
+	likePattern := strings.ReplaceAll(fullPathPrefix, "_", "\\_")
+	likePattern = strings.ReplaceAll(likePattern, "%", "\\%")
+	likePattern += "%"
+
+	rows, err := s.db.QueryContext(ctx, "SELECT path, data, version FROM topo_data WHERE path LIKE ?", likePattern)
+	if err != nil {
+		return nil, convertError(err, fullPathPrefix)
+	}
+	defer rows.Close()
+
+	var results []topo.KVInfo
+	for rows.Next() {
+		var kvPath string
+		var data []byte
+		var version int64
+
+		if err := rows.Scan(&kvPath, &data, &version); err != nil {
+			return nil, convertError(err, fullPathPrefix)
 		}
 
 		results = append(results, topo.KVInfo{
-			Key:     []byte(relativePath),
+			Key:     []byte(kvPath),
 			Value:   data,
 			Version: MySQLVersion(version),
 		})
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, convertError(err, fullPathPrefix)
+	}
+
 	if len(results) == 0 {
-		return nil, topo.NewError(topo.NoNode, filePathPrefix)
+		return nil, topo.NewError(topo.NoNode, fullPathPrefix)
 	}
 
 	return results, nil
@@ -214,144 +297,72 @@ func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo
 
 // Delete is part of the topo.Conn interface.
 func (s *Server) Delete(ctx context.Context, filePath string, version topo.Version) error {
-	// Convert to full path using the server's root
-	fullPath := s.fullPath(filePath)
-
-	var result *sqltypes.Result
-	var err error
-
-	if version != nil {
-		// Conditional delete
-		mysqlVersion, ok := version.(MySQLVersion)
-		if !ok {
-			return fmt.Errorf("bad version type %T, expected MySQLVersion", version)
-		}
-		result, err = s.exec("DELETE FROM topo_files WHERE path = %s AND version = %s",
-			fullPath, fmt.Sprintf("%d", int64(mysqlVersion)))
-	} else {
-		// Unconditional delete
-		result, err = s.exec("DELETE FROM topo_files WHERE path = %s", fullPath)
-	}
-
-	if err != nil {
+	if err := s.checkClosed(); err != nil {
 		return convertError(err, filePath)
 	}
 
-	// Check if the delete was successful
-	if result.RowsAffected == 0 {
-		if version != nil {
-			// No rows were affected, check if the file exists
-			checkResult, err := s.queryRow("SELECT 1 FROM topo_files WHERE path = %s", fullPath)
+	fullPath := s.fullPath(filePath)
+
+	// Use a transaction with READ COMMITTED isolation to avoid gap locking
+	tx, err := s.beginTxWithReadCommitted(ctx)
+	if err != nil {
+		return convertError(err, fullPath)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback() // Rollback if not committed
+		}
+	}()
+
+	if version != nil {
+		// Conditional delete - check version matches
+		result, err := tx.ExecContext(ctx, "DELETE FROM topo_data WHERE path = ? AND version = ?", fullPath, int64(version.(MySQLVersion)))
+		if err != nil {
+			return convertError(err, fullPath)
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return convertError(err, fullPath)
+		}
+		if rowsAffected == 0 {
+			// Check if the file exists with a different version
+			var exists bool
+			err = tx.QueryRowContext(ctx, "SELECT 1 FROM topo_data WHERE path = ?", fullPath).Scan(&exists)
+			if err == sql.ErrNoRows {
+				return topo.NewError(topo.NoNode, fullPath)
+			}
 			if err != nil {
-				return convertError(err, filePath)
+				return convertError(err, fullPath)
 			}
-			if len(checkResult.Rows) == 0 {
-				return topo.NewError(topo.NoNode, filePath)
-			}
-			return topo.NewError(topo.BadVersion, filePath)
+			return topo.NewError(topo.BadVersion, fullPath)
 		}
-		return topo.NewError(topo.NoNode, filePath)
-	}
-
-	// Clean up empty parent directories
-	if err := s.cleanupEmptyDirectories(ctx, fullPath); err != nil {
-		// Log error but don't fail the operation
-		log.Warningf("Failed to cleanup empty directories for file %s: %v", fullPath, err)
-	}
-
-	// Notify watchers
-	if err := s.notifyWatchers(ctx, fullPath); err != nil {
-		// Log error but don't fail the operation
-		log.Warningf("Failed to notify watchers for file %s: %v", fullPath, err)
-	}
-
-	return nil
-}
-
-// createParentDirectories creates all parent directories for a given file path.
-// The filePath should already be the full path including the server's root.
-func (s *Server) createParentDirectories(ctx context.Context, filePath string) error {
-	// Get the directory path
-	dirPath := path.Dir(filePath)
-	if dirPath == "/" || dirPath == "." {
-		return nil
-	}
-
-	// Split the path into components
-	components := strings.Split(dirPath, "/")
-	currentPath := ""
-
-	// Create each directory component
-	for _, component := range components {
-		if component == "" {
-			continue
-		}
-
-		if currentPath == "" {
-			currentPath = "/" + component
-		} else {
-			currentPath = currentPath + "/" + component
-		}
-
-		// Insert the directory if it doesn't exist
-		_, err := s.exec("INSERT IGNORE INTO topo_directories (path) VALUES (%s)", currentPath)
+	} else {
+		// Unconditional delete
+		result, err := tx.ExecContext(ctx, "DELETE FROM topo_data WHERE path = ?", fullPath)
 		if err != nil {
-			return err
+			return convertError(err, fullPath)
 		}
-	}
 
-	return nil
-}
-
-// cleanupEmptyDirectories removes empty directories after a file is deleted.
-// The filePath should already be the full path including the server's root.
-func (s *Server) cleanupEmptyDirectories(ctx context.Context, filePath string) error {
-	// Get the directory path
-	dirPath := path.Dir(filePath)
-	if dirPath == "/" || dirPath == "." {
-		return nil
-	}
-
-	// Check if the directory is empty by looking for:
-	// 1. Any files that are direct children of this directory
-	// 2. Any subdirectories that are direct children of this directory
-	result, err := s.queryRow(`
-		SELECT COUNT(*) FROM (
-			SELECT 1 FROM topo_files WHERE path LIKE %s AND path NOT LIKE %s
-			UNION ALL
-			SELECT 1 FROM topo_directories WHERE path LIKE %s AND path != %s AND path NOT LIKE %s
-		) AS t
-	`, dirPath+"/%", dirPath+"/%/%", dirPath+"/%", dirPath, dirPath+"/%/%")
-
-	if err != nil {
-		return err
-	}
-	if len(result.Rows) == 0 {
-		return fmt.Errorf("no count result")
-	}
-
-	count, err := result.Rows[0][0].ToInt64()
-	if err != nil {
-		return err
-	}
-
-	if count == 0 {
-		// Directory is empty, delete it
-		_, err := s.exec("DELETE FROM topo_directories WHERE path = %s", dirPath)
+		rowsAffected, err := result.RowsAffected()
 		if err != nil {
-			return err
+			return convertError(err, fullPath)
 		}
-
-		// Recursively cleanup parent directories
-		return s.cleanupEmptyDirectories(ctx, dirPath)
+		if rowsAffected == 0 {
+			return topo.NewError(topo.NoNode, fullPath)
+		}
 	}
 
-	return nil
-}
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return convertError(err, fullPath)
+	}
+	tx = nil // Prevent rollback on defer
 
-// notifyWatchers notifies all watchers of a change to a file.
-func (s *Server) notifyWatchers(ctx context.Context, filePath string) error {
-	// This is a placeholder for the actual implementation
-	// In a real implementation, we would use MySQL replication to notify watchers
+	// Notify watchers of the deletion
+	if ns, err := s.getNotificationSystemForServer(); err == nil {
+		ns.notifyDeletion(fullPath)
+	}
+
 	return nil
 }

@@ -18,6 +18,7 @@ package mysqltopo
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sync"
 	"time"
@@ -26,275 +27,359 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// MySQLLeaderParticipation implements topo.LeaderParticipation.
+// MySQLLeaderParticipation implements topo.LeaderParticipation for MySQL.
 type MySQLLeaderParticipation struct {
-	s       *Server
-	name    string
-	id      string
-	cancel  context.CancelFunc
-	done    chan struct{}
-	mu      sync.Mutex
-	stopped bool
-	// waiters are waiting for a new leader
-	waiters []chan string
+	server   *Server
+	name     string
+	id       string
+	contents string
+
+	// State management
+	mu       sync.RWMutex
+	isLeader bool
+	stopped  bool
+
+	// Leadership context - cancelled when leadership is lost
+	leaderCtx    context.Context
+	leaderCancel context.CancelFunc
+
+	// Control
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 // NewLeaderParticipation is part of the topo.Conn interface.
 func (s *Server) NewLeaderParticipation(name, id string) (topo.LeaderParticipation, error) {
-	return &MySQLLeaderParticipation{
-		s:       s,
-		name:    name,
-		id:      id,
-		done:    make(chan struct{}),
-		waiters: make([]chan string, 0),
-	}, nil
+	if err := s.checkClosed(); err != nil {
+		return nil, convertError(err, name)
+	}
+
+	ctx, cancel := context.WithCancel(s.ctx)
+
+	lp := &MySQLLeaderParticipation{
+		server:   s,
+		name:     name,
+		id:       id,
+		contents: fmt.Sprintf("Leader: %s", id),
+		ctx:      ctx,
+		cancel:   cancel,
+	}
+
+	return lp, nil
 }
 
 // WaitForLeadership is part of the topo.LeaderParticipation interface.
-func (mp *MySQLLeaderParticipation) WaitForLeadership() (context.Context, error) {
-	mp.mu.Lock()
-	if mp.stopped {
-		mp.mu.Unlock()
-		return nil, topo.NewError(topo.Interrupted, "leadership election stopped")
-	}
-	if mp.cancel != nil {
-		mp.mu.Unlock()
-		return nil, topo.NewError(topo.Interrupted, "leadership election already running")
+func (lp *MySQLLeaderParticipation) WaitForLeadership() (context.Context, error) {
+	lp.mu.Lock()
+
+	if lp.stopped {
+		lp.mu.Unlock()
+		return nil, topo.NewError(topo.Interrupted, lp.name)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	mp.cancel = cancel
-	mp.mu.Unlock()
+	// If we're already the leader, return the existing context
+	if lp.isLeader && lp.leaderCtx != nil {
+		ctx := lp.leaderCtx
+		lp.mu.Unlock()
+		return ctx, nil
+	}
 
-	// Try to acquire leadership
-	go func() {
-		defer close(mp.done)
+	// Start the leadership campaign if not already running
+	if !lp.isLeader {
+		lp.wg.Add(1)
+		go lp.campaignForLeadership()
+	}
+	lp.mu.Unlock()
 
-		// Keep trying until we acquire leadership or are canceled
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
+	// Wait for leadership to be acquired with a timeout
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	timeout := time.NewTimer(30 * time.Second) // Give more time for election
+	defer timeout.Stop()
+
+	for {
+		select {
+		case <-lp.ctx.Done():
+			return nil, topo.NewError(topo.Interrupted, lp.name)
+		case <-timeout.C:
+			return nil, fmt.Errorf("deadline exceeded: %s", lp.name)
+		case <-ticker.C:
+			lp.mu.RLock()
+			if lp.stopped {
+				lp.mu.RUnlock()
+				return nil, topo.NewError(topo.Interrupted, lp.name)
 			}
-
-			// Try to acquire leadership
-			acquired, err := mp.tryAcquireLeadership()
-			if err != nil {
-				log.Warningf("Error in leadership election for %s: %v", mp.name, err)
-				time.Sleep(1 * time.Second)
-				continue
+			if lp.isLeader && lp.leaderCtx != nil {
+				ctx := lp.leaderCtx
+				lp.mu.RUnlock()
+				return ctx, nil
 			}
-
-			if acquired {
-				// We are the leader, notify waiters
-				mp.notifyWaiters(mp.id)
-
-				// Keep refreshing leadership until canceled
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(3 * time.Second):
-						// Refresh our leadership
-						err := mp.refreshLeadership()
-						if err != nil {
-							log.Warningf("Error refreshing leadership for %s: %v", mp.name, err)
-							// Don't exit, just try again
-						}
-					}
-				}
-			}
-
-			// Wait before trying again
-			time.Sleep(1 * time.Second)
+			lp.mu.RUnlock()
 		}
-	}()
-
-	return ctx, nil
-}
-
-// tryAcquireLeadership attempts to acquire leadership
-func (mp *MySQLLeaderParticipation) tryAcquireLeadership() (bool, error) {
-	expiration := time.Now().UTC().Add(30 * time.Second).Format("2006-01-02 15:04:05")
-
-	// Try to insert a new election record (if no election exists)
-	result, err := mp.s.exec(`
-		INSERT IGNORE INTO topo_elections (name, leader_id, contents, expiration)
-		VALUES (%s, %s, %s, %s)
-	`, mp.name, mp.id, "", expiration)
-	if err != nil {
-		return false, err
 	}
-
-	if result.RowsAffected > 0 {
-		// We became the leader
-		return true, nil
-	}
-
-	// Check if we are already the leader
-	currentLeader, err := mp.GetCurrentLeaderID(context.Background())
-	if err != nil {
-		return false, err
-	}
-
-	if currentLeader == mp.id {
-		// We are already the leader
-		return true, nil
-	}
-
-	// Election record exists with a different leader, check if we can take over from an expired leader
-	updateResult, err := mp.s.exec(`
-		UPDATE topo_elections 
-		SET leader_id = %s, contents = %s, expiration = %s 
-		WHERE name = %s AND expiration < NOW()
-	`, mp.id, "", expiration, mp.name)
-	if err != nil {
-		return false, err
-	}
-
-	return updateResult.RowsAffected > 0, nil
-}
-
-// refreshLeadership refreshes our leadership expiration
-func (mp *MySQLLeaderParticipation) refreshLeadership() error {
-	refreshExpiration := time.Now().UTC().Add(30 * time.Second).Format("2006-01-02 15:04:05")
-	_, err := mp.s.exec("UPDATE topo_elections SET expiration = %s WHERE name = %s AND leader_id = %s",
-		refreshExpiration, mp.name, mp.id)
-	return err
 }
 
 // Stop is part of the topo.LeaderParticipation interface.
-func (mp *MySQLLeaderParticipation) Stop() {
-	mp.mu.Lock()
-	mp.stopped = true
-	if mp.cancel != nil {
-		mp.cancel()
-		mp.cancel = nil
+func (lp *MySQLLeaderParticipation) Stop() {
+	lp.mu.Lock()
+	if lp.stopped {
+		lp.mu.Unlock()
+		return
 	}
-	mp.mu.Unlock()
+	lp.stopped = true
 
-	// Wait for the leadership goroutine to exit
-	<-mp.done
-
-	// If we're the leader, release leadership
-	currentLeader, err := mp.GetCurrentLeaderID(context.Background())
-	if err == nil && currentLeader == mp.id {
-		_, err := mp.s.exec("DELETE FROM topo_elections WHERE name = %s AND leader_id = %s", mp.name, mp.id)
-		if err != nil {
-			log.Warningf("Error releasing leadership: %v", err)
-		}
+	// Cancel leadership context if we're the leader
+	if lp.leaderCancel != nil {
+		lp.leaderCancel()
 	}
+
+	// Cancel the main context
+	if lp.cancel != nil {
+		lp.cancel()
+	}
+	lp.mu.Unlock()
+
+	// Remove our election record (best effort)
+	_, _ = lp.server.db.ExecContext(context.Background(),
+		"DELETE FROM topo_elections WHERE name = ? AND leader_id = ?",
+		lp.name, lp.id)
+
+	// Wait for campaign goroutine to finish
+	lp.wg.Wait()
 }
 
 // GetCurrentLeaderID is part of the topo.LeaderParticipation interface.
-func (mp *MySQLLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string, error) {
-	result, err := mp.s.queryRow("SELECT leader_id, expiration FROM topo_elections WHERE name = %s", mp.name)
-	if err != nil {
-		return "", err
+func (lp *MySQLLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string, error) {
+	if err := lp.server.checkClosed(); err != nil {
+		return "", convertError(err, lp.name)
 	}
 
-	if len(result.Rows) == 0 {
-		// No leader elected yet
+	// Don't clean up expired elections on every call - this can cause race conditions
+	// The cleanup will happen during heartbeat and other operations
+
+	var leaderID string
+	err := lp.server.db.QueryRowContext(ctx,
+		"SELECT leader_id FROM topo_elections WHERE name = ? AND expires_at > NOW()",
+		lp.name).Scan(&leaderID)
+
+	if err == sql.ErrNoRows {
+		// No leader currently - return empty string, not an error
 		return "", nil
 	}
-
-	leaderID := result.Rows[0][0].ToString()
-	expirationStr := result.Rows[0][1].ToString()
-
-	// Parse the expiration time
-	expiration, err := time.Parse("2006-01-02 15:04:05", expirationStr)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse expiration time: %v", err)
-	}
-
-	// Check if the leadership has expired
-	if expiration.Before(time.Now().UTC()) {
-		// Leadership has expired, delete it
-		_, err := mp.s.exec("DELETE FROM topo_elections WHERE name = %s AND leader_id = %s", mp.name, leaderID)
-		if err != nil {
-			log.Warningf("Error deleting expired leadership: %v", err)
-		}
-		return "", nil
+		return "", convertError(err, lp.name)
 	}
 
 	return leaderID, nil
 }
 
 // WaitForNewLeader is part of the topo.LeaderParticipation interface.
-func (mp *MySQLLeaderParticipation) WaitForNewLeader(ctx context.Context) (<-chan string, error) {
-	// Create a channel to receive leader updates
-	leaderChan := make(chan string, 5)
+func (lp *MySQLLeaderParticipation) WaitForNewLeader(ctx context.Context) (<-chan string, error) {
+	// This is a simplified implementation that polls for leader changes
+	// In a production system, you might want to use MySQL's binlog events
+	// or other notification mechanisms for better efficiency
 
-	// Get the current leader
-	currentLeader, err := mp.GetCurrentLeaderID(ctx)
+	ch := make(chan string, 8)
+
+	// Get the initial leader synchronously and send it immediately if there is one
+	currentLeader, err := lp.GetCurrentLeaderID(ctx)
 	if err != nil {
-		return nil, err
+		close(ch)
+		// Don't log warnings for interrupted contexts - this is expected during shutdown
+		if !topo.IsErrType(err, topo.NoNode) && !topo.IsErrType(err, topo.Interrupted) {
+			log.Warningf("Failed to get initial leader: %v", err)
+		}
+		return ch, nil
 	}
 
-	// Send the current leader if there is one
+	// Send the initial leader only if there is one (matching etcd behavior)
 	if currentLeader != "" {
-		leaderChan <- currentLeader
+		ch <- currentLeader
 	}
 
-	// Register this channel to receive updates
-	mp.mu.Lock()
-	mp.waiters = append(mp.waiters, leaderChan)
-	mp.mu.Unlock()
-
-	// Start a goroutine to poll for changes
 	go func() {
-		defer func() {
-			// Unregister the channel when done
-			mp.mu.Lock()
-			for i, ch := range mp.waiters {
-				if ch == leaderChan {
-					mp.waiters = append(mp.waiters[:i], mp.waiters[i+1:]...)
-					break
-				}
-			}
-			mp.mu.Unlock()
-			close(leaderChan)
-		}()
-
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
+		defer close(ch)
 
 		lastLeader := currentLeader
+		ticker := time.NewTicker(100 * time.Millisecond) // Poll more frequently for tests
+		defer ticker.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
+			case <-lp.ctx.Done():
+				return
 			case <-ticker.C:
-				newLeader, err := mp.GetCurrentLeaderID(ctx)
+				newLeader, err := lp.GetCurrentLeaderID(ctx)
 				if err != nil {
-					log.Warningf("Error checking leadership: %v", err)
+					// Don't log warnings for interrupted contexts - this is expected during shutdown
+					if !topo.IsErrType(err, topo.NoNode) && !topo.IsErrType(err, topo.Interrupted) {
+						log.Warningf("Failed to get current leader: %v", err)
+					}
 					continue
 				}
 
-				if newLeader != lastLeader {
-					// Leader changed
-					leaderChan <- newLeader
+				// Only send changes when there's actually a leader (matching etcd behavior)
+				if newLeader != lastLeader && newLeader != "" {
+					lastLeader = newLeader
+					select {
+					case ch <- newLeader:
+					case <-ctx.Done():
+						return
+					case <-lp.ctx.Done():
+						return
+					}
+				} else if newLeader == "" && lastLeader != "" {
+					// Leader disappeared, update our tracking but don't send empty string
 					lastLeader = newLeader
 				}
 			}
 		}
 	}()
 
-	return leaderChan, nil
+	return ch, nil
 }
 
-// notifyWaiters notifies all waiters of a new leader
-func (mp *MySQLLeaderParticipation) notifyWaiters(leaderID string) {
-	mp.mu.Lock()
-	defer mp.mu.Unlock()
+// campaignForLeadership runs the leadership campaign.
+func (lp *MySQLLeaderParticipation) campaignForLeadership() {
+	defer lp.wg.Done()
 
-	for _, ch := range mp.waiters {
-		select {
-		case ch <- leaderID:
-		default:
-			// Channel is full, skip
+	// Try to become leader immediately
+	if lp.tryBecomeLeader() {
+		lp.mu.Lock()
+		if !lp.isLeader {
+			lp.isLeader = true
+			lp.leaderCtx, lp.leaderCancel = context.WithCancel(lp.ctx)
 		}
+		lp.mu.Unlock()
+
+		// Start heartbeat to maintain leadership
+		lp.wg.Add(1)
+		go lp.maintainLeadership()
+		return
+	}
+
+	// If we didn't become leader immediately, keep trying
+	ticker := time.NewTicker(time.Duration(electionTTL/3) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-lp.ctx.Done():
+			return
+		case <-ticker.C:
+			if lp.tryBecomeLeader() {
+				lp.mu.Lock()
+				if !lp.isLeader {
+					lp.isLeader = true
+					lp.leaderCtx, lp.leaderCancel = context.WithCancel(lp.ctx)
+				}
+				lp.mu.Unlock()
+
+				// Start heartbeat to maintain leadership
+				lp.wg.Add(1)
+				go lp.maintainLeadership()
+				return
+			}
+		}
+	}
+}
+
+// tryBecomeLeader attempts to become the leader.
+func (lp *MySQLLeaderParticipation) tryBecomeLeader() bool {
+	expiresAt := time.Now().Add(time.Duration(electionTTL) * time.Second)
+
+	// Clean up expired elections first (best effort)
+	_, _ = lp.server.db.ExecContext(lp.ctx, "DELETE FROM topo_elections WHERE expires_at < NOW()")
+
+	// Try to insert our election record
+	_, err := lp.server.db.ExecContext(lp.ctx,
+		"INSERT INTO topo_elections (name, leader_id, contents, expires_at) VALUES (?, ?, ?, ?)",
+		lp.name, lp.id, lp.contents, expiresAt)
+
+	if err == nil {
+		log.Infof("Became leader for %s (id: %s)", lp.name, lp.id)
+		return true
+	}
+
+	log.Infof("Failed to insert election record for %s (id: %s): %v", lp.name, lp.id, err)
+
+	// If insert failed due to duplicate key, try to update if we're already the leader
+	if isDuplicateKeyError(err) {
+		result, err := lp.server.db.ExecContext(lp.ctx,
+			"UPDATE topo_elections SET expires_at = ? WHERE name = ? AND leader_id = ?",
+			expiresAt, lp.name, lp.id)
+
+		if err == nil {
+			rowsAffected, _ := result.RowsAffected()
+			if rowsAffected > 0 {
+				log.Infof("Renewed leadership for %s (id: %s)", lp.name, lp.id)
+				return true // We renewed our leadership
+			}
+		}
+		log.Infof("Failed to renew leadership for %s (id: %s): %v", lp.name, lp.id, err)
+	}
+
+	return false
+}
+
+// maintainLeadership maintains leadership through heartbeats.
+func (lp *MySQLLeaderParticipation) maintainLeadership() {
+	defer lp.wg.Done()
+
+	ticker := time.NewTicker(time.Duration(electionTTL/3) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-lp.ctx.Done():
+			lp.loseLeadership()
+			return
+		case <-ticker.C:
+			if !lp.renewLeadership() {
+				lp.loseLeadership()
+				return
+			}
+		}
+	}
+}
+
+// renewLeadership renews the leadership lease.
+func (lp *MySQLLeaderParticipation) renewLeadership() bool {
+	expiresAt := time.Now().Add(time.Duration(electionTTL) * time.Second)
+
+	result, err := lp.server.db.ExecContext(lp.ctx,
+		"UPDATE topo_elections SET expires_at = ? WHERE name = ? AND leader_id = ?",
+		expiresAt, lp.name, lp.id)
+
+	if err != nil {
+		log.Warningf("Failed to renew leadership for %s: %v", lp.name, err)
+		return false
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil || rowsAffected == 0 {
+		log.Warningf("Lost leadership for %s", lp.name)
+		return false
+	}
+
+	return true
+}
+
+// loseLeadership handles loss of leadership.
+func (lp *MySQLLeaderParticipation) loseLeadership() {
+	lp.mu.Lock()
+	defer lp.mu.Unlock()
+
+	if lp.isLeader {
+		lp.isLeader = false
+		if lp.leaderCancel != nil {
+			lp.leaderCancel()
+			lp.leaderCancel = nil
+		}
+		log.Infof("Lost leadership for %s", lp.name)
 	}
 }

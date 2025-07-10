@@ -154,7 +154,6 @@ Flags:
       --topo-global-root string                  the path of the global topology data in the global topology server (default "/vitess/global")
       --topo-global-server-address strings       the address of the global topology server(s) (default [localhost:2379])
       --topo-implementation string               the topology implementation to use (default "etcd2")
-      --topo-mysql-lock-ttl duration             TTL for MySQL topo locks (default 5m0s)
   -v, --v Level                                  log level for V logs
       --version                                  version for vtctldclient
       --vmodule vModuleFlag                      comma-separated list of pattern=N settings for file-filtered logging

@@ -80,11 +80,11 @@ if [ -n "$VTDATAROOT" ]; then
 	# ERROR: Cannot determine primary tablet for keyspace/shard commerce/0
 	if [ "${TOPO}" = "mysql" ]; then
 		echo "Cleaning up MySQL topology database..."
-		# Extract user, password, host and port from MYSQL_TOPO_ADDR (format: user:password@host:port/database)
+		# Extract user, password, host and port from MYSQL_TOPO_ADDR (format: user:password@tcp(host:port)/database)
 		MYSQL_USER_PASS=$(echo "$MYSQL_TOPO_ADDR" | sed 's/@.*//')
 		MYSQL_USER=$(echo "$MYSQL_USER_PASS" | cut -d: -f1)
 		MYSQL_PASS=$(echo "$MYSQL_USER_PASS" | cut -d: -f2)
-		MYSQL_HOST_PORT=$(echo "$MYSQL_TOPO_ADDR" | sed 's/.*@\([^/]*\).*/\1/')
+		MYSQL_HOST_PORT=$(echo "$MYSQL_TOPO_ADDR" | sed 's/.*@tcp(\([^)]*\)).*/\1/')
 		MYSQL_HOST=$(echo "$MYSQL_HOST_PORT" | cut -d: -f1)
 		MYSQL_PORT=$(echo "$MYSQL_HOST_PORT" | cut -d: -f2)
 		mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "DROP DATABASE IF EXISTS topo"

@@ -17,10 +17,16 @@ limitations under the License.
 package mysqltopo
 
 import (
+	"crypto/rand"
+	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path"
 	"testing"
+
+	"github.com/go-sql-driver/mysql"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -34,7 +40,7 @@ var (
 
 // TestMain handles global test setup and teardown
 func TestMain(m *testing.M) {
-	if addr := os.Getenv("MYSQL_TOPO_TEST_ADDR"); addr != "" {
+	if addr := os.Getenv("MYSQL_TEST_ADDR"); addr != "" {
 		mySQLTopoTestAddr = addr
 		log.Infof("Using custom MySQL server address: %s", mySQLTopoTestAddr)
 	} else {
@@ -67,13 +73,12 @@ func TestMain(m *testing.M) {
 		}
 
 		// Get the MySQL port from the environment (should be 13002)
-		mysqlPort := env.PortForProtocol("mysql", "")
-
 		// Build the connection string using our custom topo user
+		mysqlPort := env.PortForProtocol("mysql", "")
 		host := "127.0.0.1"
 		user := "topo"
 		pass := "topopass"
-		mySQLTopoTestAddr = fmt.Sprintf("%s:%s@%s:%d/", user, pass, host, mysqlPort)
+		mySQLTopoTestAddr = fmt.Sprintf("%s:%s@tcp(%s:%d)/", user, pass, host, mysqlPort)
 		log.Infof("Started test MySQL server at: %s (port: %d, user: %s)", mySQLTopoTestAddr, mysqlPort, user)
 	}
 
@@ -87,4 +92,42 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(code)
+}
+
+// generateRandomSchemaName generates a random schema name for testing
+func generateRandomSchemaName() string {
+	bytes := make([]byte, 8)
+	rand.Read(bytes)
+	return fmt.Sprintf("vitess_topo_test_%s", hex.EncodeToString(bytes))
+}
+
+// createTestServer creates a test server with a specified schema name
+func createTestServer(t *testing.T, schemaName string) (*Server, string, func()) {
+	cfg, err := mysql.ParseDSN(mySQLTopoTestAddr)
+	require.NoError(t, err)
+
+	// Create schema first
+	if schemaName == "" {
+		schemaName = generateRandomSchemaName()
+	}
+	cfg.DBName = "" // to create schema
+	baseDB, err := sql.Open("mysql", cfg.FormatDSN())
+	require.NoError(t, err)
+
+	_, err = baseDB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", schemaName))
+	require.NoError(t, err)
+
+	// Create the server with the new schema
+	cfg.DBName = schemaName
+	testAddr := cfg.FormatDSN()
+	server, err := NewServer(testAddr, "/test")
+	require.NoError(t, err)
+
+	// Return cleanup function
+	cleanup := func() {
+		server.Close()
+		_, _ = baseDB.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", schemaName))
+		_ = baseDB.Close()
+	}
+	return server, schemaName, cleanup
 }

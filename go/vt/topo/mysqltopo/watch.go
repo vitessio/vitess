@@ -18,219 +18,134 @@ package mysqltopo
 
 import (
 	"context"
-	"time"
+	"fmt"
 
-	"github.com/google/uuid"
-
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
 
 // Watch is part of the topo.Conn interface.
 func (s *Server) Watch(ctx context.Context, filePath string) (current *topo.WatchData, changes <-chan *topo.WatchData, err error) {
-	// First get the current value
+	if err := s.checkClosed(); err != nil {
+		return nil, nil, convertError(err, filePath)
+	}
+
+	fullPath := s.fullPath(filePath)
+
+	// Get the current value
 	data, version, err := s.Get(ctx, filePath)
 	if err != nil {
+		// If the file doesn't exist, return the error directly (not in WatchData)
 		return nil, nil, err
 	}
 
-	// Create a channel for changes
-	watchChan := make(chan *topo.WatchData, 10)
-
-	// Create a unique watcher ID
-	watcherID := uuid.New().String()
-
-	// Register the watcher
-	_, err = s.exec("INSERT INTO topo_watch (path, watcher_id) VALUES (%s, %s)", filePath, watcherID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Start a goroutine to process changes
-	go func() {
-		defer func() {
-			// Unregister the watcher when done
-			_, err := s.exec("DELETE FROM topo_watch WHERE path = %s AND watcher_id = %s", filePath, watcherID)
-			if err != nil {
-				log.Errorf("Failed to unregister watcher: %v", err)
-			}
-			close(watchChan)
-		}()
-
-		// Use polling since replication watcher is complex
-		ticker := time.NewTicker(100 * time.Millisecond) // More frequent polling for tests
-		defer ticker.Stop()
-
-		currentVersion := version
-
-		for {
-			select {
-			case <-ctx.Done():
-				// Context canceled, send error and exit
-				watchChan <- &topo.WatchData{
-					Err: topo.NewError(topo.Interrupted, "watch canceled"),
-				}
-				return
-
-			case <-ticker.C:
-				// Poll for changes
-				data, newVersion, err := s.Get(context.Background(), filePath)
-				if err != nil {
-					if topo.IsErrType(err, topo.NoNode) {
-						// Node was deleted
-						watchChan <- &topo.WatchData{
-							Err: topo.NewError(topo.NoNode, filePath),
-						}
-						return // Close the channel and exit
-					}
-
-					// Other error, retry
-					log.Warningf("Error watching %v: %v", filePath, err)
-					continue
-				}
-
-				// Check if the version changed
-				if newVersion.String() != currentVersion.String() {
-					// Version changed, send update
-					watchChan <- &topo.WatchData{
-						Contents: data,
-						Version:  newVersion,
-					}
-					currentVersion = newVersion
-				}
-			}
-		}
-	}()
-
-	return &topo.WatchData{
+	current = &topo.WatchData{
 		Contents: data,
 		Version:  version,
-	}, watchChan, nil
+	}
+
+	// Get the notification system - this is required for watches to work
+	ns, err := s.getNotificationSystemForServer()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to initialize watch: %v", err)
+	}
+
+	// Create the watcher
+	watchCtx, cancel := context.WithCancel(ctx)
+	changes_chan := make(chan *topo.WatchData, 10) // Buffered channel
+
+	w := &watcher{
+		path:    fullPath,
+		changes: changes_chan,
+		ctx:     watchCtx,
+		cancel:  cancel,
+	}
+
+	// Add to notification system
+	ns.addWatcher(w)
+
+	// Start a goroutine to handle cleanup when context is cancelled
+	go func() {
+		<-watchCtx.Done()
+		ns.removeWatcher(w)
+
+		// Check if this watcher was cancelled due to deletion
+		w.deletedMu.Lock()
+		wasDeleted := w.deleted
+		w.deletedMu.Unlock()
+
+		// Only send interrupted error if not cancelled due to deletion
+		if !wasDeleted {
+			select {
+			case changes_chan <- &topo.WatchData{Err: topo.NewError(topo.Interrupted, fullPath)}:
+			default:
+			}
+		}
+		close(changes_chan)
+	}()
+
+	return current, changes_chan, nil
 }
 
 // WatchRecursive is part of the topo.Conn interface.
-func (s *Server) WatchRecursive(ctx context.Context, dirPath string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
-	// Get all files under the directory
-	kvs, err := s.List(ctx, dirPath)
-	if err != nil {
+func (s *Server) WatchRecursive(ctx context.Context, pathPrefix string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
+	if err := s.checkClosed(); err != nil {
+		return nil, nil, convertError(err, pathPrefix)
+	}
+
+	fullPathPrefix := s.fullPath(pathPrefix)
+
+	// Get current values
+	kvInfos, err := s.List(ctx, pathPrefix)
+	if err != nil && !topo.IsErrType(err, topo.NoNode) {
 		return nil, nil, err
 	}
 
-	// Create the initial result
-	initial := make([]*topo.WatchDataRecursive, 0, len(kvs))
-	for _, kv := range kvs {
-		initial = append(initial, &topo.WatchDataRecursive{
-			Path: string(kv.Key),
+	var current []*topo.WatchDataRecursive
+	for _, kvInfo := range kvInfos {
+		current = append(current, &topo.WatchDataRecursive{
+			Path: string(kvInfo.Key),
 			WatchData: topo.WatchData{
-				Contents: kv.Value,
-				Version:  kv.Version,
+				Contents: kvInfo.Value,
+				Version:  kvInfo.Version,
 			},
 		})
 	}
 
-	// Create a channel for changes
-	watchChan := make(chan *topo.WatchDataRecursive, 10)
-
-	// Create a unique watcher ID
-	watcherID := uuid.New().String()
-
-	// Register the watcher
-	_, err = s.exec("INSERT INTO topo_watch (path, watcher_id) VALUES (%s, %s)", dirPath, watcherID)
+	// Get the notification system - this is required for watches to work
+	ns, err := s.getNotificationSystemForServer()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to initialize recursive watch: %v", err)
 	}
 
-	// Start a goroutine to process changes
+	// Create the recursive watcher
+	watchCtx, cancel := context.WithCancel(ctx)
+	changes_chan := make(chan *topo.WatchDataRecursive, 10) // Buffered channel
+
+	w := &recursiveWatcher{
+		pathPrefix: fullPathPrefix,
+		changes:    changes_chan,
+		ctx:        watchCtx,
+		cancel:     cancel,
+	}
+
+	// Add to notification system
+	ns.addRecursiveWatcher(w)
+
+	// Start a goroutine to handle cleanup when context is cancelled
 	go func() {
-		defer func() {
-			// Unregister the watcher when done
-			_, err := s.exec("DELETE FROM topo_watch WHERE path = %s AND watcher_id = %s", dirPath, watcherID)
-			if err != nil {
-				log.Errorf("Failed to unregister watcher: %v", err)
-			}
-			close(watchChan)
-		}()
+		<-watchCtx.Done()
+		ns.removeRecursiveWatcher(w)
 
-		// Keep track of the current versions
-		versionMap := make(map[string]string)
-		for _, item := range initial {
-			versionMap[item.Path] = item.Version.String()
+		// Send final interrupted error and close channel
+		select {
+		case changes_chan <- &topo.WatchDataRecursive{
+			Path:      fullPathPrefix,
+			WatchData: topo.WatchData{Err: topo.NewError(topo.Interrupted, fullPathPrefix)},
+		}:
+		default:
 		}
-
-		// Use polling
-		ticker := time.NewTicker(100 * time.Millisecond) // More frequent polling for tests
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				// Context canceled, send error and exit
-				watchChan <- &topo.WatchDataRecursive{
-					Path: dirPath,
-					WatchData: topo.WatchData{
-						Err: topo.NewError(topo.Interrupted, "watch canceled"),
-					},
-				}
-				return
-
-			case <-ticker.C:
-				// Poll for changes
-				newKvs, err := s.List(context.Background(), dirPath)
-				if err != nil {
-					if topo.IsErrType(err, topo.NoNode) {
-						// Directory was deleted - send notification but continue watching
-						// The test expects us to continue watching until canceled
-						watchChan <- &topo.WatchDataRecursive{
-							Path: dirPath,
-							WatchData: topo.WatchData{
-								Err: topo.NewError(topo.NoNode, dirPath),
-							},
-						}
-						// Clear the version map since directory is gone
-						versionMap = make(map[string]string)
-						continue // Continue watching, don't return
-					}
-
-					// Other error, retry
-					log.Warningf("Error watching %v: %v", dirPath, err)
-					continue
-				}
-
-				// Check for new or updated files
-				newVersionMap := make(map[string]bool)
-				for _, kv := range newKvs {
-					path := string(kv.Key)
-					newVersionMap[path] = true
-
-					oldVersion, exists := versionMap[path]
-					if !exists || oldVersion != kv.Version.String() {
-						// New or updated file
-						watchChan <- &topo.WatchDataRecursive{
-							Path: path,
-							WatchData: topo.WatchData{
-								Contents: kv.Value,
-								Version:  kv.Version,
-							},
-						}
-						versionMap[path] = kv.Version.String()
-					}
-				}
-
-				// Check for deleted files
-				for path := range versionMap {
-					if !newVersionMap[path] {
-						// File was deleted
-						watchChan <- &topo.WatchDataRecursive{
-							Path: path,
-							WatchData: topo.WatchData{
-								Err: topo.NewError(topo.NoNode, path),
-							},
-						}
-						delete(versionMap, path)
-					}
-				}
-			}
-		}
+		close(changes_chan)
 	}()
-	return initial, watchChan, nil
+
+	return current, changes_chan, nil
 }
