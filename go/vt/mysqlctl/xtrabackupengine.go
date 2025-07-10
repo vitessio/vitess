@@ -65,6 +65,8 @@ var (
 	// striping mode
 	xtrabackupStripes         uint
 	xtrabackupStripeBlockSize = uint(102400)
+	// drain a tablet when taking a backup
+	xtrabackupShouldDrain = false
 )
 
 const (
@@ -135,6 +137,7 @@ func registerXtraBackupEngineFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &xtrabackupUser, "xtrabackup-user", xtrabackupUser, "User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.")
 	utils.SetFlagUintVar(fs, &xtrabackupStripes, "xtrabackup-stripes", xtrabackupStripes, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
 	utils.SetFlagUintVar(fs, &xtrabackupStripeBlockSize, "xtrabackup-stripe-block-size", xtrabackupStripeBlockSize, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
+	utils.SetFlagBoolVar(fs, &xtrabackupShouldDrain, "xtrabackup-should-drain", xtrabackupShouldDrain, "Decide if we should drain while taking a backup or continue to serving traffic")
 }
 
 func (be *XtrabackupEngine) backupFileName() string {
@@ -945,9 +948,9 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
 }
 
 // ShouldDrainForBackup satisfies the BackupEngine interface
-// xtrabackup can run while tablet is serving, hence false
+// xtrabackup can run while tablet is serving, so we can control this via a flag.
 func (be *XtrabackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.BackupRequest) bool {
-	return false
+	return xtrabackupShouldDrain
 }
 
 // ShouldStartMySQLAfterRestore signifies if this backup engine needs to restart MySQL once the restore is completed.
