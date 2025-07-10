@@ -1034,7 +1034,7 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusCancelled)
 		})
 
-		// now, we submit the exact same migratoin again: same UUID, same migration context.
+		// now, we submit the exact same migration again: same UUID, same migration context.
 		t.Run("resubmit migration", func(t *testing.T) {
 			executedUUID := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtctl", "", "", true)) // skip wait
 			require.Equal(t, uuid, executedUUID)
