@@ -59,11 +59,15 @@ func TestWatcherOutageBehavior(t *testing.T) {
 	require.NoError(t, err)
 
 	var watcherCallCount atomic.Int32
-	var lastWatcherError error
+	var lastWatcherError atomic.Value
 
 	rs.WatchSrvVSchema(ctx, "test_cell", func(v *vschemapb.SrvVSchema, e error) bool {
 		watcherCallCount.Add(1)
-		lastWatcherError = e
+		if e != nil {
+			lastWatcherError.Store(e)
+		} else {
+			lastWatcherError.Store((*error)(nil))
+		}
 		return true
 	})
 
@@ -74,7 +78,11 @@ func TestWatcherOutageBehavior(t *testing.T) {
 
 	initialWatcherCalls := watcherCallCount.Load()
 	require.GreaterOrEqual(t, initialWatcherCalls, int32(1))
-	require.NoError(t, lastWatcherError)
+	if errPtr := lastWatcherError.Load(); errPtr != nil {
+		if err, ok := errPtr.(error); ok && err != nil {
+			require.NoError(t, err)
+		}
+	}
 
 	// Verify Get operations work normally
 	vschema, err := rs.GetSrvVSchema(ctx, "test_cell")
@@ -115,7 +123,9 @@ func TestWatcherOutageBehavior(t *testing.T) {
 	// Verify recovery callback occurs
 	watcherCallsBeforeRecovery := watcherCallCount.Load()
 	assert.Eventually(t, func() bool {
-		return watcherCallCount.Load() > watcherCallsBeforeRecovery && lastWatcherError == nil
+		errPtr := lastWatcherError.Load()
+		isNoError := errPtr == nil || (errPtr.(*error) == nil)
+		return watcherCallCount.Load() > watcherCallsBeforeRecovery && isNoError
 	}, 2*time.Second, 10*time.Millisecond)
 
 	// Verify recovery worked
