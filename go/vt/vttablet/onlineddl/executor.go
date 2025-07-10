@@ -1090,7 +1090,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	defer func() {
 		if !renameWasSuccessful {
 			// Restarting vreplication
-			if err := e.startVreplication(ctx, tablet.Tablet, s.workflow); err != nil {
+			if err := e.startVReplication(ctx, tablet.Tablet, s.workflow); err != nil {
 				log.Errorf("cutOverVReplMigration %v: failed restarting vreplication after cutover failure: %v", s.workflow, err)
 			}
 			go log.Infof("cutOverVReplMigration %v: started vreplication after cutover failure", s.workflow)
