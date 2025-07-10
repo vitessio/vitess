@@ -23,17 +23,22 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/consul/api"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/test"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // startConsul starts a consul subprocess, and waits for it to be ready.
@@ -334,4 +339,121 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 			t.Errorf("Expected CreateCellInfo to fail: got  %v, want %s", err, want)
 		}
 	}
+}
+
+// TestConsulWatcherStormPrevention tests that resilient watchers don't storm subscribers during Consul outages.
+// This test validates the fix for the specific Consul storm scenario reported by the team.
+func TestConsulWatcherStormPrevention(t *testing.T) {
+	// Save original values and restore them after the test
+	originalWatchPollDuration := watchPollDuration
+	originalAuthFile := consulAuthClientStaticFile
+	defer func() {
+		watchPollDuration = originalWatchPollDuration
+		consulAuthClientStaticFile = originalAuthFile
+	}()
+
+	// Configure test settings - using direct assignment since flag parsing in tests is complex
+	watchPollDuration = 100 * time.Millisecond // Faster polling for test
+	consulAuthClientStaticFile = ""            // Clear auth file to avoid conflicts
+
+	// Start Consul server
+	cmd, configFilename, serverAddr := startConsul(t, "")
+	defer func() {
+		if err := cmd.Process.Kill(); err != nil {
+			log.Errorf("cmd process kill has an error: %v", err)
+		}
+		if err := cmd.Wait(); err != nil {
+			log.Errorf("cmd wait has an error: %v", err)
+		}
+		os.Remove(configFilename)
+	}()
+
+	ctx := context.Background()
+	testRoot := "storm-test"
+
+	// Create the topo server
+	ts, err := topo.OpenServer("consul", serverAddr, path.Join(testRoot, topo.GlobalCell))
+	require.NoError(t, err, "OpenServer() failed")
+
+	// Create the CellInfo
+	cellName := "test_cell"
+	err = ts.CreateCellInfo(ctx, cellName, &topodatapb.CellInfo{
+		ServerAddress: serverAddr,
+		Root:          path.Join(testRoot, cellName),
+	})
+	require.NoError(t, err, "CreateCellInfo() failed")
+
+	// Create resilient server
+	counts := stats.NewCountersWithSingleLabel("", "Consul storm test", "type")
+	rs := srvtopo.NewResilientServer(ctx, ts, counts)
+
+	// Set initial VSchema
+	initialVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"test_keyspace": {Sharded: false},
+		},
+	}
+	err = ts.UpdateSrvVSchema(ctx, cellName, initialVSchema)
+	require.NoError(t, err, "UpdateSrvVSchema() failed")
+
+	// Set up watcher with call counter
+	var watcherCallCount atomic.Int32
+	var lastWatcherError error
+
+	rs.WatchSrvVSchema(ctx, cellName, func(v *vschemapb.SrvVSchema, e error) bool {
+		count := watcherCallCount.Add(1)
+		lastWatcherError = e
+		if e != nil {
+			t.Logf("Watcher callback #%d - error: %v", count, e)
+		} else {
+			t.Logf("Watcher callback #%d - success", count)
+		}
+		return true
+	})
+
+	// Wait for initial callback
+	assert.Eventually(t, func() bool {
+		return watcherCallCount.Load() >= 1
+	}, 10*time.Second, 10*time.Millisecond)
+
+	initialWatcherCalls := watcherCallCount.Load()
+	require.GreaterOrEqual(t, initialWatcherCalls, int32(1), "Expected at least 1 initial watcher call")
+	require.NoError(t, lastWatcherError, "Initial watcher call should not have error")
+
+	// Verify Get operations work normally
+	vschema, err := rs.GetSrvVSchema(ctx, cellName)
+	require.NoError(t, err, "GetSrvVSchema() failed")
+	require.NotNil(t, vschema, "GetSrvVSchema() returned nil")
+
+	t.Logf("Setup complete. Initial watcher calls: %d", initialWatcherCalls)
+
+	// Simulate Consul outage by killing the Consul process
+	// This will cause watch errors which previously triggered storms
+	err = cmd.Process.Kill()
+	require.NoError(t, err, "Failed to kill consul process")
+
+	// Get should still work from cache during outage
+	vschema, err = rs.GetSrvVSchema(ctx, cellName)
+	assert.NoError(t, err, "GetSrvVSchema() should work from cache during outage")
+	assert.NotNil(t, vschema, "GetSrvVSchema() should return cached value during outage")
+
+	// Wait during outage period - this is when storms would occur without our fix
+	outageDuration := 2 * time.Second
+	t.Logf("Waiting %v during Consul outage to check for watcher storms...", outageDuration)
+	time.Sleep(outageDuration)
+
+	// Check watcher calls during outage - key assertion for storm prevention
+	watcherCallsDuringOutage := watcherCallCount.Load() - initialWatcherCalls
+	t.Logf("Watcher calls during outage: %d", watcherCallsDuringOutage)
+
+	// With our fix, watchers should remain silent during outage when cached data is available
+	// This is the core validation: no storm of subscriber calls during Consul outages
+	assert.Equal(t, int32(0), watcherCallsDuringOutage, "Watchers should remain completely silent during Consul outage")
+
+	// Get operations should continue working from cache
+	vschema, err = rs.GetSrvVSchema(ctx, cellName)
+	assert.NoError(t, err, "GetSrvVSchema() should continue working from cache")
+	assert.NotNil(t, vschema, "GetSrvVSchema() should continue returning cached value")
+
+	t.Log("Consul storm prevention test completed - watchers remained quiet during outage")
 }
