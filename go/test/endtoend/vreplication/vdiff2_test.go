@@ -215,6 +215,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		require.NoError(t, vc.AddShards(t, cells, tks, tc.targetShards, 0, 0, tc.tabletBaseID, targetKsOpts))
 
 	}
+	fmt.Println("test")
 	ksWorkflow := fmt.Sprintf("%s.%s", tc.targetKs, tc.workflow)
 	statsShard := arrTargetShards[0]
 	statsTablet := vc.getPrimaryTablet(t, tc.targetKs, statsShard)
