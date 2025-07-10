@@ -63,6 +63,7 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 		args = append(args, "--")
 	}
 
+	//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	args = append(args, "--init_db_sql_file", mysqlctl.InitDBFile)
 	if *isCoverage {
 		args = append([]string{"--test.coverprofile=" + getCoveragePath("mysql-initdb.out"), "--test.v"}, args...)
@@ -156,7 +157,7 @@ ssl_key={{.ServerKey}}
 			if mysqlctl.MajorVersion < 18 {
 				tmpProcess.Args = append(tmpProcess.Args, "--")
 			}
-
+			//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 			tmpProcess.Args = append(tmpProcess.Args, "--init_db_sql_file", mysqlctl.InitDBFile)
 		} else {
 			tmpProcess.Args = append(tmpProcess.Args, "start")
