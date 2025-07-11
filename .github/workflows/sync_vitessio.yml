@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: write
-  
+
 jobs:
   sync:
     runs-on: ubuntu-24.04
