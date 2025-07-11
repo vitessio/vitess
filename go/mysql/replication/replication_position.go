@@ -101,6 +101,8 @@ func (rp Position) IsZero() bool {
 // 0 if both a anb b are equal positions.
 // 1 if a is > than b.
 // -1 if a is < than b.
+// This can be used as a sort function via
+// slices.SortFunc and slices.SortFuncStable.
 func ComparePositions(a, b Position) int {
 	if a.Equal(b) {
 		return 0
