@@ -10,7 +10,9 @@ on:
     branches:
       - sync-vitessio-workflow
   workflow_dispatch:
-
+permissions:
+  contents: write
+  
 jobs:
   sync:
     runs-on: ubuntu-24.04
