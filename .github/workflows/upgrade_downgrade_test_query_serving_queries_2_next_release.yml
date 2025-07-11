@@ -17,7 +17,7 @@ jobs:
   upgrade_downgrade_test:
     timeout-minutes: 60
     name: Run Upgrade Downgrade Test - Query Serving (Queries - 2) Next Release
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    runs-on: oracle-vm-16cpu-64gb-x86-64
 
     steps:
     - name: Skip CI
