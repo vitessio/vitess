@@ -354,7 +354,7 @@ func restrictValidCandidates(validCandidates map[string]replication.Position, ta
 	validPositionsSlice = validPositionsSlice[:majorityCandidatesCount]
 	for tabletAlias, position := range restrictedValidCandidates {
 		if slices.ContainsFunc(validPositionsSlice, func(rp replication.Position) bool {
-			return position.String() == rp.String()
+			return position.Equal(rp)
 		}) {
 			continue
 		}
