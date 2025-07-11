@@ -64,7 +64,7 @@ var (
 		// Frequently reload schema, generating some tablet traffic,
 		//   so we can speed up token refresh
 		"--queryserver-config-schema-reload-time", "5s",
-		"--serving_state_grace_period", "1s"}
+		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s"}
 	vaultTabletArg = []string{
 		"--db-credentials-server", "vault",
 		"--db-credentials-vault-timeout", "3s",

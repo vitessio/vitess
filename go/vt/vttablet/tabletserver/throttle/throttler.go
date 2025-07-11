@@ -65,6 +65,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -114,7 +115,7 @@ func init() {
 }
 
 func registerThrottlerFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&throttleTabletTypes, "throttle_tablet_types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included")
+	utils.SetFlagStringVar(fs, &throttleTabletTypes, "throttle-tablet-types", throttleTabletTypes, "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' always implicitly included")
 }
 
 var (
@@ -278,7 +279,7 @@ func (throttler *Throttler) StoreMetricsThreshold(threshold float64) {
 	throttler.MetricsThreshold.Store(math.Float64bits(threshold))
 }
 
-// initThrottleTabletTypes reads the user supplied throttle_tablet_types and sets these
+// initThrottleTabletTypes reads the user supplied throttle-tablet-types and sets these
 // for the duration of this tablet's lifetime
 func (throttler *Throttler) initThrottleTabletTypes() {
 	throttler.throttleTabletTypesMap = make(map[topodatapb.TabletType]bool)

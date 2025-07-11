@@ -115,7 +115,7 @@ func TestNewVTGateHealthCheckFilters(t *testing.T) {
 		{
 			name:          "failInvalidTabletFilters",
 			tabletFilters: []string{"shouldfail|"},
-			expectedError: "failed to parse tablet_filters value \"shouldfail|\": error parsing shard name : Code: INVALID_ARGUMENT\nempty name\n",
+			expectedError: "failed to parse tablet-filters value \"shouldfail|\": error parsing shard name : Code: INVALID_ARGUMENT\nempty name\n",
 		},
 	}
 
@@ -862,7 +862,7 @@ func TestRemoveTablet(t *testing.T) {
 // the demoted primary will advertise itself as a `PRIMARY`
 // tablet until it recognizes that it was demoted,
 // and until all in-flight operations have either finished
-// (successfully or unsuccessfully, see `--shutdown_grace_period` flag).
+// (successfully or unsuccessfully, see `--shutdown-grace-period` flag).
 //
 // During this time, operations like `RemoveTablet` should not lead
 // to multiple tablets becoming valid targets for `PRIMARY`.
