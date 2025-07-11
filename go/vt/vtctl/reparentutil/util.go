@@ -350,14 +350,15 @@ func restrictValidCandidates(validCandidates map[string]replication.Position, ta
 	slices.SortStableFunc(validPositionsSlice, func(a, b replication.Position) int {
 		return replication.ComparePositions(a, b)
 	})
-	majorityValidCandidatesCount := getValidCandidatesMajorityCount(restrictedValidCandidates)
-	validPositionsSlice = validPositionsSlice[:majorityValidCandidatesCount]
+	majorityCandidatesCount := getValidCandidatesMajorityCount(restrictedValidCandidates)
+	validPositionsSlice = validPositionsSlice[:majorityCandidatesCount]
 	for tabletAlias, position := range restrictedValidCandidates {
-		if !slices.ContainsFunc(validPositionsSlice, func(rp replication.Position) bool {
-			return rp.String() == position.String()
+		if slices.ContainsFunc(validPositionsSlice, func(rp replication.Position) bool {
+			return position.String() == rp.String()
 		}) {
-			delete(restrictedValidCandidates, tabletAlias)
+			continue
 		}
+		delete(restrictedValidCandidates, tabletAlias)
 	}
 	return restrictedValidCandidates, nil
 }
