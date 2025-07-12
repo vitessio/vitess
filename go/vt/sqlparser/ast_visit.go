@@ -1410,6 +1410,9 @@ func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
 		return err
 	}
+	if err := VisitTableStatement(in.Select, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfCreateView(in *CreateView, f Visit) error {

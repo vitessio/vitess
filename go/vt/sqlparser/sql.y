@@ -594,14 +594,14 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <ignore> ignore_opt
 %type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
+%type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt as_opt
 %type <empty> to_opt for_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <identifierCI> sql_id sql_id_opt reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <identifierCS> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt use_table_name
 %type <rowAlias> row_alias_opt
-%type <empty> as_opt work_opt savepoint_opt
+%type <empty> work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
 %type <scope> set_session_or_global
@@ -666,6 +666,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <txAccessModes> tx_chacteristics_opt tx_chars
 %type <txAccessMode> tx_char
 %type <killType> kill_type_opt
+%type <str> ignore_or_replace_opt
 %start parse
 
 %%
@@ -1488,6 +1489,23 @@ create_statement:
   {
     // Create table [name] like [name]
     $1.OptLike = $2
+    $1.FullyParsed = true
+    $$ = $1
+  }
+| create_table_prefix ignore_or_replace_opt as_opt select_statement
+  {
+    $1.IgnoreOrReplace = $2
+    $1.HasAs = $3
+    $1.Select = $4
+    $1.FullyParsed = true
+    $$ = $1
+  }
+| create_table_prefix table_spec ignore_or_replace_opt as_opt select_statement
+  {
+    $1.TableSpec = $2
+    $1.IgnoreOrReplace = $3
+    $1.HasAs = $4
+    $1.Select = $5
     $1.FullyParsed = true
     $$ = $1
   }
@@ -5535,9 +5553,9 @@ on_expression_opt:
   { $$ = &JoinCondition{On: $2} }
 
 as_opt:
-  { $$ = struct{}{} }
+  { $$ = false }
 | AS
-  { $$ = struct{}{} }
+  { $$ = true }
 
 as_opt_id:
   {
@@ -8488,6 +8506,13 @@ ignore_opt:
   { $$ = false }
 | IGNORE
   { $$ = true }
+
+ignore_or_replace_opt:
+  { $$ = "" }
+| IGNORE
+  { $$ = "ignore" }
+| REPLACE
+  { $$ = "replace" }
 
 to_opt:
   { $$ = struct{}{} }
