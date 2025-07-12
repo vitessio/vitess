@@ -2434,6 +2434,16 @@ func (node *CreateTable) Format(buf *TrackedBuffer) {
 	if node.TableSpec != nil {
 		buf.astPrintf(node, " %v", node.TableSpec)
 	}
+	if node.Select != nil {
+		if node.IgnoreOrReplace != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.IgnoreOrReplace)
+		}
+		if node.HasAs {
+			buf.literal(" as")
+		}
+		buf.astPrintf(node, " %v", node.Select)
+	}
 }
 
 // Format formats the node.

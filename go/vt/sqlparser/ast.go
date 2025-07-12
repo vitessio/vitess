@@ -574,13 +574,16 @@ type (
 
 	// CreateTable represents a CREATE TABLE statement.
 	CreateTable struct {
-		Temp        bool
-		Table       TableName
-		IfNotExists bool
-		TableSpec   *TableSpec
-		OptLike     *OptLike
-		Comments    *ParsedComments
-		FullyParsed bool
+		Temp            bool
+		Table           TableName
+		IfNotExists     bool
+		TableSpec       *TableSpec
+		OptLike         *OptLike
+		Comments        *ParsedComments
+		Select          TableStatement
+		IgnoreOrReplace string
+		HasAs           bool
+		FullyParsed     bool
 	}
 
 	// CreateView represents a CREATE VIEW query

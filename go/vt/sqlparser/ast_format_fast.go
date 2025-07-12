@@ -3182,6 +3182,17 @@ func (node *CreateTable) FormatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		node.TableSpec.FormatFast(buf)
 	}
+	if node.Select != nil {
+		if node.IgnoreOrReplace != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.IgnoreOrReplace)
+		}
+		if node.HasAs {
+			buf.WriteString(" as")
+		}
+		buf.WriteByte(' ')
+		node.Select.FormatFast(buf)
+	}
 }
 
 // FormatFast formats the node.

@@ -1200,6 +1200,7 @@ func CloneRefOfCreateTable(n *CreateTable) *CreateTable {
 	out.TableSpec = CloneRefOfTableSpec(n.TableSpec)
 	out.OptLike = CloneRefOfOptLike(n.OptLike)
 	out.Comments = CloneRefOfParsedComments(n.Comments)
+	out.Select = CloneTableStatement(n.Select)
 	return &out
 }
 
