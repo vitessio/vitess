@@ -766,10 +766,22 @@ func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, sm *tabletmana
 }
 
 func (tm *TabletManager) UpdateSequenceTables(ctx context.Context, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+	sequenceTables := make([]string, 0, len(req.Sequences))
 	for _, sm := range req.Sequences {
 		if err := tm.updateSequenceValue(ctx, sm); err != nil {
 			return nil, err
 		}
+		sequenceTables = append(sequenceTables, sm.BackingTableName)
+	}
+
+	// It is important to reset in-memory sequence counters on the tables,
+	// since it is possible for it to be outdated, this will prevent duplicate
+	// key errors.
+	err := tm.ResetSequences(ctx, sequenceTables)
+	if err != nil {
+		return nil, vterrors.Errorf(
+			vtrpcpb.Code_INTERNAL, "failed to reset sequences on %q: %v",
+			tm.DBConfigs.DBName, err)
 	}
 	return &tabletmanagerdatapb.UpdateSequenceTablesResponse{}, nil
 }
