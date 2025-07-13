@@ -229,7 +229,32 @@ func execVDiffWithRetry(t *testing.T, expectError bool, args []string) (string, 
 			}
 			retry = false
 			log.Infof("Calling vtctldclient with args: %+v", args)
-			output, err = vc.VtctldClient.ExecuteCommandWithOutput(args...)
+
+			// Execute command with timeout to prevent hanging
+			cmdResultCh := make(chan vdiffResult)
+			go func() {
+				cmdOutput, cmdErr := vc.VtctldClient.ExecuteCommandWithOutput(args...)
+				cmdResultCh <- vdiffResult{output: cmdOutput, err: cmdErr}
+			}()
+
+			// Wait for command completion or timeout
+			select {
+			case <-ctx.Done():
+				vdiffResultCh <- vdiffResult{
+					output: "", err: fmt.Errorf("context done before vdiff completed: %v", ctx.Err()),
+				}
+				return
+			case cmdResult := <-cmdResultCh:
+				output = cmdResult.output
+				err = cmdResult.err
+			case <-time.After(vdiffRetryTimeout):
+				log.Infof("vtctldclient command timed out after %v, treating as retryable error", vdiffRetryTimeout)
+				// err = fmt.Errorf("vtctldclient command timed out after %v", vdiffRetryTimeout)
+				output = ""
+				// Treat timeout as retryable error
+				retry = true
+			}
+
 			log.Infof("vtctldclient finished: err=%v output=%q", err, output)
 			if err != nil {
 				if expectError {
