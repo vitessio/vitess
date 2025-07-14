@@ -129,7 +129,7 @@ type ConnPool[C Connection] struct {
 	// workers is a waitgroup for all the currently running worker goroutines
 	workers    sync.WaitGroup
 	close      chan struct{}
-	capacityMu sync.Mutex
+	capacityMu sync.RWMutex
 
 	config struct {
 		// connect is the callback to create a new connection for the pool
@@ -430,18 +430,40 @@ func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
 	if pool.wait.tryReturnConn(conn) {
 		return true
 	}
-	if pool.closeOnIdleLimitReached(conn) {
+
+	for {
+		if pool.capacity.Load() < pool.active.Load() {
+			conn.Close()
+			pool.closedConn()
+			return true
+		}
+
+		if pool.closeOnIdleLimitReached(conn) {
+			return false
+		}
+
+		if !pool.capacityMu.TryRLock() {
+			// If we can't get a read lock here, it means that the pool is being closed. Retry and check `capacity` again.
+			continue
+		}
+		defer pool.capacityMu.RUnlock()
+
+		if pool.capacity.Load() < pool.active.Load() {
+			conn.Close()
+			pool.closedConn()
+			return true
+		}
+
+		connSetting := conn.Conn.Setting()
+		if connSetting == nil {
+			pool.clean.Push(conn)
+		} else {
+			stack := connSetting.bucket & stackMask
+			pool.settings[stack].Push(conn)
+			pool.freshSettingsStack.Store(int64(stack))
+		}
 		return false
 	}
-	connSetting := conn.Conn.Setting()
-	if connSetting == nil {
-		pool.clean.Push(conn)
-	} else {
-		stack := connSetting.bucket & stackMask
-		pool.settings[stack].Push(conn)
-		pool.freshSettingsStack.Store(int64(stack))
-	}
-	return false
 }
 
 func (pool *ConnPool[C]) pop(stack *connStack[C]) *Pooled[C] {
@@ -595,7 +617,9 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	// to other clients, wait until one of the connections is returned
 	if conn == nil {
 		start := time.Now()
-		conn, err = pool.wait.waitForConn(ctx, nil)
+		conn, err = pool.wait.waitForConn(ctx, nil, func() bool {
+			return pool.close == nil || pool.capacity.Load() == 0
+		})
 		if err != nil {
 			return nil, ErrTimeout
 		}
@@ -652,7 +676,9 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 	// wait for one of them
 	if conn == nil {
 		start := time.Now()
-		conn, err = pool.wait.waitForConn(ctx, setting)
+		conn, err = pool.wait.waitForConn(ctx, setting, func() bool {
+			return pool.close == nil || pool.capacity.Load() == 0
+		})
 		if err != nil {
 			return nil, ErrTimeout
 		}
