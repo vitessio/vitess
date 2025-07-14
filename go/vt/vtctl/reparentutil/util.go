@@ -350,12 +350,11 @@ func restrictValidCandidates(validCandidates map[string]replication.Position, ta
 	majorityCandidatesCount := getValidCandidatesMajorityCount(restrictedValidCandidates)
 	validPositions = validPositions[:majorityCandidatesCount]
 	for tabletAlias, position := range restrictedValidCandidates {
-		if slices.ContainsFunc(validPositions, func(rp replication.Position) bool {
+		if !slices.ContainsFunc(validPositions, func(rp replication.Position) bool {
 			return position.Equal(rp)
 		}) {
-			continue
+			delete(restrictedValidCandidates, tabletAlias)
 		}
-		delete(restrictedValidCandidates, tabletAlias)
 	}
 	return restrictedValidCandidates, nil
 }
