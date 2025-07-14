@@ -30,11 +30,29 @@ type Connection interface {
 	Close()
 }
 
+type Pool[C Connection] interface {
+	put(conn *Pooled[C])
+}
+
+const (
+	NOT_IN_USE = iota
+	IN_USE
+	REMOVED
+)
+
+type ConnectionState struct {
+	state   uint
+	setting *Setting
+}
+
 type Pooled[C Connection] struct {
 	next        atomic.Pointer[Pooled[C]]
 	timeCreated timestamp
 	timeUsed    timestamp
-	pool        *ConnPool[C]
+	pool        Pool[C]
+
+	state             atomic.Value
+	markedForEviction atomic.Bool
 
 	Conn C
 }
