@@ -222,6 +222,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP.
+	// The remaining candidates are reduced to a majority with the most advanced relay log GTIDs.
 	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap)
 	if err != nil {
 		return err
