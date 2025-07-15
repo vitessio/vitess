@@ -48,6 +48,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 const (
@@ -216,7 +217,7 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 	clusterInstance := cluster.NewCluster(cell, hostname)
 
 	// Start topo server
-	clusterInstance.VtctldExtraArgs = []string{"--remote_operation_timeout", "30s", "--topo_etcd_lease_ttl", "40"}
+	clusterInstance.VtctldExtraArgs = []string{vtutils.GetFlagVariantForTests("--remote-operation-timeout"), "30s", "--topo-etcd-lease-ttl", "40"}
 	if err := clusterInstance.StartTopo(); err != nil {
 		return nil, 1
 	}
@@ -241,7 +242,7 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 		"--buffer_window", "10m",
 		"--buffer_max_failover_duration", "10m",
 		"--buffer_min_time_between_failovers", "20m",
-		"--tablet_refresh_interval", "1s",
+		vtutils.GetFlagVariantForTests("--tablet-refresh-interval"), "1s",
 		"--buffer_drain_concurrency", "4",
 	}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, bt.VtGateExtraArgs...)

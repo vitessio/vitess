@@ -55,21 +55,6 @@ type VindexLookup struct {
 	SendTo *Route
 }
 
-// RouteType implements the Primitive interface
-func (vr *VindexLookup) RouteType() string {
-	return "VindexLookup"
-}
-
-// GetKeyspaceName implements the Primitive interface
-func (vr *VindexLookup) GetKeyspaceName() string {
-	return vr.SendTo.GetKeyspaceName()
-}
-
-// GetTableName implements the Primitive interface
-func (vr *VindexLookup) GetTableName() string {
-	return vr.SendTo.GetTableName()
-}
-
 // GetFields implements the Primitive interface
 func (vr *VindexLookup) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return vr.SendTo.GetFields(ctx, vcursor, bindVars)

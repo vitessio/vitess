@@ -42,6 +42,7 @@ func TestInitializeTargetSequences(t *testing.T) {
 
 	workflowName := "wf1"
 	tableName := "t1"
+	tableName2 := "t2"
 	sourceKeyspaceName := "sourceks"
 	targetKeyspaceName := "targetks"
 
@@ -51,6 +52,14 @@ func TestInitializeTargetSequences(t *testing.T) {
 				{
 					Name:   tableName,
 					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+		tableName2: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName2,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName2),
 				},
 			},
 		},
@@ -87,18 +96,66 @@ func TestInitializeTargetSequences(t *testing.T) {
 				},
 			},
 		},
+		"my-seq2": {
+			backingTableName:     "my-seq2",
+			backingTableKeyspace: sourceKeyspaceName,
+			backingTableDBName:   fmt.Sprintf("vt_%s", sourceKeyspaceName),
+			usingTableName:       tableName2,
+			usingTableDBName:     "vt_targetks",
+			usingTableDefinition: &vschema.Table{
+				AutoIncrement: &vschema.AutoIncrement{
+					Column:   "my-col-2",
+					Sequence: fmt.Sprintf("%s.my-seq2", sourceKeyspace.KeyspaceName),
+				},
+			},
+		},
 	}
 
-	env.tmc.expectVRQuery(200, "/select max.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("maxval", "int64"), "34"))
-	// Expect the insert query to be executed with 35 as a params, since we provide a maxID of 34 in the last query
-	env.tmc.expectVRQuery(100, "/insert into.*35.*", &sqltypes.Result{RowsAffected: 1})
+	env.tmc.expectGetMaxValueForSequencesRequest(200, &getMaxValueForSequencesRequestResponse{
+		req: &tabletmanagerdatapb.GetMaxValueForSequencesRequest{
+			Sequences: []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata{
+				{
+					BackingTableName:        "my-seq1",
+					UsingColEscaped:         "`my-col`",
+					UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName),
+					UsingTableDbNameEscaped: "`vt_targetks`",
+				},
+				{
+					BackingTableName:        "my-seq2",
+					UsingColEscaped:         "`my-col-2`",
+					UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName2),
+					UsingTableDbNameEscaped: "`vt_targetks`",
+				},
+			},
+		},
+		res: &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
+			MaxValuesBySequenceTable: map[string]int64{
+				"my-seq1": 34,
+				"my-seq2": 10,
+			},
+		},
+	})
+	env.tmc.expectUpdateSequenceTablesRequest(100, &tabletmanagerdatapb.UpdateSequenceTablesRequest{
+		Sequences: []*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{
+			{
+				BackingTableName:   "my-seq1",
+				BackingTableDbName: fmt.Sprintf("vt_%s", sourceKeyspaceName),
+				MaxValue:           34,
+			},
+			{
+				BackingTableName:   "my-seq2",
+				BackingTableDbName: fmt.Sprintf("vt_%s", sourceKeyspaceName),
+				MaxValue:           10,
+			},
+		},
+	})
 
 	err = sw.initializeTargetSequences(ctx, sequencesByBackingTable)
 	assert.NoError(t, err)
 
-	// Expect the queries to be cleared
-	assert.Emptyf(t, env.tmc.vrQueries[100], "expected no queries to be executed, found: %q", env.tmc.vrQueries[100])
-	assert.Empty(t, env.tmc.vrQueries[200], "expected no queries to be executed, found: %q", env.tmc.vrQueries[200])
+	// Expect the requests to be cleared
+	assert.Emptyf(t, env.tmc.updateSequenceTablesRequests, "expected no remaining UpdateSequenceTables requests")
+	assert.Emptyf(t, env.tmc.getMaxValueForSequencesRequests, "expected no remaining GetMaxValueForSequences requests")
 }
 
 func TestGetTargetSequenceMetadata(t *testing.T) {

@@ -86,11 +86,6 @@ func (ins *InsertSelect) Inputs() ([]Primitive, []map[string]any) {
 	return []Primitive{ins.Input}, nil
 }
 
-// RouteType returns a description of the query routing type used by the primitive
-func (ins *InsertSelect) RouteType() string {
-	return "InsertSelect"
-}
-
 // TryExecute performs a non-streaming exec.
 func (ins *InsertSelect) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	if ins.Keyspace.Sharded {
@@ -319,7 +314,6 @@ func (ins *InsertSelect) execInsertSharded(ctx context.Context, vcursor VCursor,
 
 func (ins *InsertSelect) description() PrimitiveDescription {
 	other := ins.commonDesc()
-	other["TableName"] = ins.GetTableName()
 
 	if len(ins.VindexValueOffset) > 0 {
 		valuesOffsets := map[string]string{}

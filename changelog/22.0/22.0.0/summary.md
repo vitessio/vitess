@@ -28,9 +28,10 @@
     - [Maximum Idle Connections in the Pool](#max-idle-connections)
     - [Filtering Query logs on Error](#query-logs)
     - [MultiQuery RPC in vtgate](#multiquery)
+    - [Unsharded `CREATE PROCEDURE` support](#create-procedure)
   - **[Optimization](#optimization)**
     - [Prepared Statement](#prepared-statement)
-  - **[RPC Changes](#rpc-changes)**
+  - **[New VtctldServer RPC](#rpc-changes)**
   - **[Prefer not promoting a replica that is currently taking a backup](#reparents-prefer-not-backing-up)**
   - **[Semi-sync monitor in vttablet](#semi-sync-monitor)**
   - **[Wrapped fatal transaction errors](#new-errors-fatal-tx)**
@@ -61,7 +62,7 @@
 | Component  |            Flag Name             | Notes                                                                                                          |                     Deprecation PR                      |
 |:----------:|:--------------------------------:|----------------------------------------------------------------------------------------------------------------|:-------------------------------------------------------:|
 | `vttablet` |          `twopc_enable`          | Usage of TwoPC commit will be determined by the `transaction_mode` set on VTGate via flag or session variable. | [#17279](https://github.com/vitessio/vitess/pull/17279) |
-|  `vtgate`  | `grpc-send-session-in-streaming` | Session will be sent as part of response on StreamExecute API call.                                            | [#17907](https://github.com/vitessio/vitess/pull/17907) |
+|  `vtgate`  | `grpc-send-session-in-streaming` | Session will always be sent as part of the response from the StreamExecute RPC.                                | [#17907](https://github.com/vitessio/vitess/pull/17907) |
 
 ---
 
@@ -69,7 +70,7 @@
 
 #### <a id="deleted-metrics"/>Metrics</a>
 
-| Component  |      Metric Name      | Was Deprecated In |                     Deprecation PR                      |
+| Component  |      Metric Name      | Was Deprecated In |                       Deletion PR                       |
 |:----------:|:---------------------:|:-----------------:|:-------------------------------------------------------:|
 | `vttablet` |  `QueryCacheLength`   |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
 | `vttablet` |   `QueryCacheSize`    |     `v21.0.0`     | [#16289](https://github.com/vitessio/vitess/pull/16289) |
@@ -80,7 +81,7 @@
 
 #### <a id="deleted-cli-flags"/>CLI Flags</a>
 
-|           Component           |             Flag Name              | Was Deprecated In |                     Deprecation PR                      |
+|           Component           |             Flag Name              | Was Deprecated In |                       Deletion PR                       |
 |:-----------------------------:|:----------------------------------:|:-----------------:|:-------------------------------------------------------:|
 |          `vttablet`           | `queryserver-enable-settings-pool` |     `v21.0.0`     | [#16280](https://github.com/vitessio/vitess/pull/16280) |
 |          `vttablet`           |  `remove-sharded-auto-increment`   |     `v21.0.0`     | [#16860](https://github.com/vitessio/vitess/pull/16860) |
@@ -96,7 +97,7 @@ These `vttablet` flags have been removed:
 - `--gh-ost-path`
 - `--pt-osc-path`
 
-The use of `gh-ost` and `pt-osc` as strategies as follows, yields an error:
+Attempting to use `gh-ost` or `pt-osc` as `--ddl-strategy` will yield an error:
 ```sh
 $ vtctldclient ApplySchema --ddl-strategy="gh-ost" ...
 $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
@@ -112,15 +113,15 @@ $ vtctldclient ApplySchema --ddl-strategy="pt-osc" ...
 |:-------------------------:|:-------------------------------------:|:-----------------------------------------------------------:|:-------------------------------------------------------:|
 |     `QueryExecutions`     |       `Query`, `Plan`, `Tablet`       |                 Number of queries executed.                 | [#17727](https://github.com/vitessio/vitess/pull/17727) |
 |       `QueryRoutes`       |       `Query`, `Plan`, `Tablet`       |       Number of vttablets the query was executed on.        | [#17727](https://github.com/vitessio/vitess/pull/17727) |
-| `QueryExecutionsByTable`  |           `Query`, `Table`            | Queries executed at vtgate, with counts recorded per table. | [#17727](https://github.com/vitessio/vitess/pull/17727) |
-|      `VStreamsCount`      | `Keyspace`, `ShardName`, `TabletType` |                  Number of active vstream.                  | [#17858](https://github.com/vitessio/vitess/pull/17858) |
+| `QueryExecutionsByTable`  |           `Query`, `Table`            | Queries executed by vtgate, with counts recorded per table. | [#17727](https://github.com/vitessio/vitess/pull/17727) |
+|      `VStreamsCount`      | `Keyspace`, `ShardName`, `TabletType` |                 Number of active vstreams.                  | [#17858](https://github.com/vitessio/vitess/pull/17858) |
 | `VStreamsEventsStreamed`  | `Keyspace`, `ShardName`, `TabletType` |         Number of events sent across all vstreams.          | [#17858](https://github.com/vitessio/vitess/pull/17858) |
 | `VStreamsEndedWithErrors` | `Keyspace`, `ShardName`, `TabletType` |         Number of vstreams that ended with errors.          | [#17858](https://github.com/vitessio/vitess/pull/17858) |
 |    `CommitModeTimings`    |                `Mode`                 |      Timing metrics for commit (Single, Multi, TwoPC).      | [#16939](https://github.com/vitessio/vitess/pull/16939) |
-|    `CommitUnresolved`     |                  N/A                  |             Counter for failure after Prepare.              | [#16939](https://github.com/vitessio/vitess/pull/16939) |
+|    `CommitUnresolved`     |                  N/A                  |     Counter for 2PC transaction failures after Prepare.     | [#16939](https://github.com/vitessio/vitess/pull/16939) |
 
 
-The work done in [#17727](https://github.com/vitessio/vitess/pull/17727) introduces new metrics for queries. Via this work we have deprecated several vtgate metrics, please see the [Deprecated Metrics](#deprecated-metrics) section. Here is an example on how to use them:
+The work done in [#17727](https://github.com/vitessio/vitess/pull/17727) introduces new metrics for queries. Via this work we have deprecated several vtgate metrics, please see the [Deprecated Metrics](#deprecated-metrics) section. Here is an example of how the new metrics are calculated:
 ```
 Query: select t1.a, t2.b from t1 join t2 on t1.id = t2.id
 Shards: 2
@@ -140,9 +141,9 @@ Metrics Published:
 | `TableClusteredIndexSize` |     `Table`      | Byte size of the clustered index (i.e. row data). | [#17570](https://github.com/vitessio/vitess/pull/17570) |
 |    `IndexCardinality`     | `Table`, `Index` |  Estimated number of unique values in the index   | [#17570](https://github.com/vitessio/vitess/pull/17570) |
 |       `IndexBytes`        | `Table`, `Index` |              Byte size of the index.              | [#17570](https://github.com/vitessio/vitess/pull/17570) |
-|  `UnresolvedTransaction`  |  `ManagerType`   |    Number of events sent across all vstreams.     | [#16939](https://github.com/vitessio/vitess/pull/16939) |
-|   `CommitPreparedFail`    |  `FailureType`   |    Number of vstreams that ended with errors.     | [#16939](https://github.com/vitessio/vitess/pull/16939) |
-|    `RedoPreparedFail`     |  `FailureType`   | Timing metrics for commit (Single, Multi, TwoPC)  | [#16939](https://github.com/vitessio/vitess/pull/16939) |
+|  `UnresolvedTransaction`  |  `ManagerType`   |    Current number of unresolved transactions.     | [#16939](https://github.com/vitessio/vitess/pull/16939) |
+|   `CommitPreparedFail`    |  `FailureType`   | Transactions that failed to commit after prepare. | [#16939](https://github.com/vitessio/vitess/pull/16939) |
+|    `RedoPreparedFail`     |  `FailureType`   |      Transactions that failed to re-prepare.      | [#16939](https://github.com/vitessio/vitess/pull/16939) |
 
 ---
 
@@ -150,7 +151,7 @@ Metrics Published:
 
 #### <a id="vtorc-config-file-changes"/>VTOrc</a>
 
-The configuration file for VTOrc has been updated to now support dynamic fields. The old `--config` parameter has been removed. The alternative is to use the `--config-file` parameter. The configuration can now be provided in json, yaml or any other format that [viper](https://github.com/spf13/viper) supports.
+VTOrc now supports dynamic configuration using [viper](https://github.com/spf13/viper). The old `--config` parameter has been removed. Use the `--config-file` parameter instead. Configuration can be provided in json, yaml or any other format that viper supports.
 
 The following fields can be dynamically changed -
 1. `instance-poll-time`
@@ -167,7 +168,7 @@ The following fields can be dynamically changed -
 12. `allow-emergency-reparent`
 13. `change-tablets-with-errant-gtid-to-drained`
 
-To upgrade to the newer version of the configuration file, first switch to using the flags in your current deployment before upgrading. Then you can switch to using the configuration file in the newer release.
+To upgrade to the new version of the configuration file, first switch to using the flags in your current deployment before upgrading. Then you can switch to using the configuration file after upgrade.
 
 #### <a id="vtgate-config-file-changes"/>VTGate</a>
 
@@ -180,7 +181,7 @@ The Viper configuration keys for the following flags has been changed to match t
 | `discovery_min_number_serving_vttablets`         | `discovery.min_number_serving_vttablets`         | `discovery_min_number_serving_vttablets`         |
 | `discovery_legacy_replication_lag_algorithm`     | `discovery.legacy_replication_lag_algorithm`     | `discovery_legacy_replication_lag_algorithm`     |
 
-To upgrade to the newer version of the configuration keys, first switch to using the flags in your current deployment before upgrading. Then you can switch to using the new configuration keys in the newer release.
+To upgrade to the newer version of the configuration keys, first switch to using the flags in your current deployment before upgrading. Then you can switch to using the new configuration keys after upgrade.
 
 ---
 
@@ -189,7 +190,7 @@ To upgrade to the newer version of the configuration keys, first switch to using
 #### <a id="stall-disk-recovery-vtorc"/>Stalled Disk Recovery</a>
 
 VTOrc can now identify and recover from stalled disk errors.
-VTTablets test whether the disk is writable and they send this information in the full status output to VTOrc.
+VTTablets test whether the disk is writable and they send this information in the `FullStatus` RPC response to VTOrc.
 If the disk is not writable on the primary tablet, VTOrc will attempt to recover the cluster by promoting a new primary.
 This is useful in scenarios where the disk is stalled and the primary vttablet is unable to accept writes because of it.
 
@@ -212,13 +213,13 @@ Users can continue to specify exact keyranges. The new feature is backward compa
 #### <a id="mysql-8-0-40"/>MySQL 8.0.40</a>
 
 The default major MySQL version used by our `vitess/lite:latest` image is going from `8.0.30` to `8.0.40`.
-This change was brought by [#17552](https://github.com/vitessio/vitess/pull/17552).
+This change was merged in [#17552](https://github.com/vitessio/vitess/pull/17552).
 
-VTGate also advertises MySQL version `8.0.40` by default instead of `8.0.30` if no explicit version is set. The users can set the `mysql_server_version` flag to advertise the correct version.
+VTGate also advertises MySQL version `8.0.40` by default instead of `8.0.30`. If that is not what you are running, you can set the `mysql_server_version` flag to advertise the desired version.
 
 >  ⚠️ Upgrading to this release with vitess-operator:
 >
-> If you are using the `vitess-operator`, considering that we are bumping the patch version of MySQL 80 from `8.0.30` to `8.0.40`, you will have to manually upgrade:
+> If you are using the `vitess-operator`, considering that we are bumping the MySQL version from `8.0.30` to `8.0.40`, you will have to manually upgrade:
 >
 > 1. Add `innodb_fast_shutdown=0` to your extra cnf in your YAML file.
 > 2. Apply this file.
@@ -231,7 +232,7 @@ VTGate also advertises MySQL version `8.0.40` by default instead of `8.0.30` if 
 
 #### <a id="debian-bookworm"/>Docker `vitess/lite` images with Debian Bookworm</a>
 
-The base system now uses Debian Bookworm instead of Debian Bullseye for the `vitess/lite` images. This change was brought by [#17552](https://github.com/vitessio/vitess/pull/17552).
+The docker build system now uses Debian Bookworm instead of Debian Bullseye for the `vitess/lite` images. This change was merged in [#17552](https://github.com/vitessio/vitess/pull/17552).
 
 ---
 
@@ -269,9 +270,15 @@ The `querylog-mode` setting can be configured to `error` to log only queries tha
 
 #### <a id="multiquery"/>MultiQuery RPC in vtgate</a>
 
-New RPCs in vtgate have been added that allow users to pass multiple queries in a single sql string. It behaves the same way MySQL does where-in multiple result sets for the queries are returned in the same order as the queries were passed until an error is encountered. The new RPCs are `ExecuteMulti` and `StreamExecuteMulti`. 
+New RPCs have been added to VTGate that allow users to pass multiple queries in a single sql string. The behavior is the same as that of MySQL: the RPCs will return multiple result sets in the same order as the queries until and unless an error is encountered. The new RPCs are `ExecuteMulti` and `StreamExecuteMulti`. 
 
 A new flag `--mysql-server-multi-query-protocol` has also been added that makes the server use this new implementation. This flag is set to `false` by default, so the old implementation is used by default. The new implementation is more efficient and allows for better performance when executing multiple queries in a single RPC call.
+
+---
+
+#### <a id="create-procedure"/>Unsharded `CREATE PROCEDURE` support</a>
+
+Until now Vitess didn't allow users to create procedures through VTGate. They had to be created by running a DDL directly against the underlying MySQL. In this release, we have started adding support for running `CREATE PROCEDURE` statements through VTGate for unsharded keyspaces. Not all constructs of procedures are currently supported in the parser, so there are still some limitations which will be addressed in future releases.
 
 ---
 
@@ -284,22 +291,20 @@ Subsequent executions dynamically switch between these plans based on input valu
 
 ---
 
-### <a id="rpc-changes"/>RPC Changes</a>
+### <a id="rpc-changes"/>New VtctldServer RPC</a>
 
-These are the RPC changes made in this release -
-
-1. `GetTransactionInfo` RPC has been added to both `VtctldServer`, and `TabletManagerClient` interface. These RPCs are used to facilitate the users in reading the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
+`GetTransactionInfo` RPC has been added to `VtctldServer` and `TabletManagerClient` interfaces. These RPCs can be used to read the state of an unresolved distributed transaction. This can be useful in debugging what went wrong and how to fix the problem.
 
 ---
 
 ### <a id="reparents-prefer-not-backing-up"/>Prefer not promoting a replica that is currently taking a backup
 
-Emergency reparents now prefer not promoting replicas that are currently taking backups with a backup engine other than
+Emergency reparents now prefer to not promote replicas that are currently taking backups with a backup engine other than
 `builtin`. Note that if there's only one suitable replica to promote, and it is taking a backup, it will still be
 promoted.
 
 For planned reparents, hosts taking backups with a backup engine other than `builtin` are filtered out of the list of
-valid candidates. This means they will never get promoted - not even if there's no other candidates.
+valid candidates. This means they will never get promoted - not even if there are no other candidates.
 
 Note that behavior for `builtin` backups remains unchanged: a replica that is currently taking a `builtin` backup will
 never be promoted, neither by planned nor by emergency reparents.
@@ -308,12 +313,12 @@ never be promoted, neither by planned nor by emergency reparents.
 
 ### <a id="semi-sync-monitor"/>Semi-sync monitor in vttablet</a>
 
-A new component has been added to the vttablet binary to monitor the semi-sync status of primary vttablets.
+Primary VTTablets now monitor the semi-sync status of their underlying MySQL instance .
 We've observed cases where a brief network disruption can cause the primary to get stuck indefinitely waiting for semi-sync ACKs.
-In rare scenarios, this can block reparent operations and render the primary unresponsive.
+In rare scenarios, this can also block reparent operations and render the primary unresponsive.
 More information can be found in the issues [#17709](https://github.com/vitessio/vitess/issues/17709) and [#17749](https://github.com/vitessio/vitess/issues/17749).
 
-To address this, the new component continuously monitors the semi-sync status. If the primary becomes stuck on semi-sync ACKs, it generates writes to unblock it. If this fails, VTOrc is notified of the issue and initiates an emergency reparent operation.
+To address this, the primary VTTablets continuously monitor their semi-sync status. If the primary MySQL gets stuck waiting for semi-sync ACKs, the monitor generates synthetic writes to unblock it. If this fails, VTOrc is notified of the issue and it will initiate an emergency reparent operation.
 
 The monitoring interval can be adjusted using the `--semi-sync-monitor-interval` flag, which defaults to 10 seconds.
 
@@ -321,10 +326,9 @@ The monitoring interval can be adjusted using the `--semi-sync-monitor-interval`
 
 ### <a id="new-errors-fatal-tx"/>Wrapped fatal transaction errors</a>
 
+When a query fails while running in a transaction, due to the transaction no longer being valid (e.g. PRS, rollout, primary down, etc.), the original error is now wrapped in a `VT15001` error.
 
-When a query fails while being in a transaction, due to the transaction no longer being valid (e.g. PRS, rollout, primary down, etc), the original error is now wrapped around a `VT15001` error.
-
-For non-transactional queries that produce a `VT15001`, VTGate will try to rollback and clear the transaction.
+When a query produce a `VT15001` error, VTGate will try to rollback and clear the transaction.
 Any new queries on the same connection will fail with a `VT09032` error, until a `ROLLBACK` is received
 to acknowledge that the transaction was automatically rolled back and cleared by VTGate.
 

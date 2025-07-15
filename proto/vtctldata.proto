@@ -55,6 +55,9 @@ enum MaterializationIntent {
 
   // CREATELOOKUPINDEX is when we are creating a CreateLookupIndex flow
   CREATELOOKUPINDEX = 2;
+
+  // REFERENCE is when we are creating a materialization for reference tables
+  REFERENCE = 3;
 }
 
 // TableMaterializeSttings contains the settings for one table.
@@ -228,6 +231,8 @@ message WorkflowOptions {
   // Where to create any related schema and vschema objects such as
   // sequence tables.
   string global_keyspace = 5;
+  // Lookup Vindexes that are being backfilled by the workflow.
+  repeated string lookup_vindexes = 6;
 }
 
 // TODO: comment the hell out of this.
@@ -1316,6 +1321,16 @@ message MaterializeCreateRequest {
 }
 
 message MaterializeCreateResponse {
+}
+
+message WorkflowAddTablesRequest {
+  string workflow = 1;
+  string keyspace = 2;
+  repeated TableMaterializeSettings table_settings = 3;
+  MaterializationIntent materialization_intent = 4;
+}
+
+message WorkflowAddTablesResponse {
 }
 
 message MigrateCreateRequest {

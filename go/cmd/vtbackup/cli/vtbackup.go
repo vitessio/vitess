@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -209,15 +210,15 @@ func init() {
 	Main.Flags().BoolVar(&upgradeSafe, "upgrade-safe", upgradeSafe, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
 
 	// vttablet-like flags
-	Main.Flags().StringVar(&initDbNameOverride, "init_db_name_override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
-	Main.Flags().StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
-	Main.Flags().StringVar(&initShard, "init_shard", initShard, "(init parameter) shard to use for this tablet")
+	utils.SetFlagStringVar(Main.Flags(), &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
+	utils.SetFlagStringVar(Main.Flags(), &initKeyspace, "init-keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
+	utils.SetFlagStringVar(Main.Flags(), &initShard, "init-shard", initShard, "(init parameter) shard to use for this tablet")
 	Main.Flags().IntVar(&concurrency, "concurrency", concurrency, "(init restore parameter) how many concurrent files to restore at once")
 	Main.Flags().StringVar(&incrementalFromPos, "incremental_from_pos", incrementalFromPos, "Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.")
 
 	// mysqlctld-like flags
-	Main.Flags().IntVar(&mysqlPort, "mysql_port", mysqlPort, "mysql port")
-	Main.Flags().StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "path to the mysql socket")
+	utils.SetFlagIntVar(Main.Flags(), &mysqlPort, "mysql-port", mysqlPort, "MySQL port")
+	utils.SetFlagStringVar(Main.Flags(), &mysqlSocket, "mysql-socket", mysqlSocket, "Path to the mysqld socket file")
 	Main.Flags().DurationVar(&mysqlTimeout, "mysql_timeout", mysqlTimeout, "how long to wait for mysqld startup")
 	Main.Flags().DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "how long to wait for mysqld shutdown")
 	Main.Flags().StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "path to .sql file to run after mysql_install_db")

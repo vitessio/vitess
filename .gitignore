@@ -96,3 +96,5 @@ report
 
 # thirdparty
 /go/thirdparty/
+
+go/flags/endtoend/count_flags.sh

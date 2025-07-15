@@ -148,6 +148,8 @@ service TabletManager {
   rpc ValidateVReplicationPermissions(tabletmanagerdata.ValidateVReplicationPermissionsRequest) returns(tabletmanagerdata.ValidateVReplicationPermissionsResponse) {};
   rpc VReplicationExec(tabletmanagerdata.VReplicationExecRequest) returns(tabletmanagerdata.VReplicationExecResponse) {};
   rpc VReplicationWaitForPos(tabletmanagerdata.VReplicationWaitForPosRequest) returns(tabletmanagerdata.VReplicationWaitForPosResponse) {};
+  rpc UpdateSequenceTables(tabletmanagerdata.UpdateSequenceTablesRequest) returns(tabletmanagerdata.UpdateSequenceTablesResponse) {};
+  rpc GetMaxValueForSequences(tabletmanagerdata.GetMaxValueForSequencesRequest) returns(tabletmanagerdata.GetMaxValueForSequencesResponse) {};
 
   // VDiff API
   rpc VDiff(tabletmanagerdata.VDiffRequest) returns(tabletmanagerdata.VDiffResponse) {};

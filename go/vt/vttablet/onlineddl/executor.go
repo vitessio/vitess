@@ -2482,6 +2482,65 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	return nil
 }
 
+// executeSpecialAlterDirectDDLActionMigration executes a special plan using a direct ALTER TABLE statement.
+func (e *Executor) executeSpecialAlterDirectDDLActionMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
+
+	forceCutOverAfter, err := onlineDDL.StrategySetting().ForceCutOverAfter()
+	if err != nil {
+		return err
+	}
+
+	bufferingCtx, bufferingContextCancel := context.WithCancel(ctx)
+	defer bufferingContextCancel()
+
+	// Buffer queries while issuing the ALTER TABLE statement (we assume this ALTER is going to be quick,
+	// as in ALGORITHM=INSTANT or a quick partition operation)
+	toggleBuffering := func(bufferQueries bool) {
+		log.Infof("toggling buffering: %t in migration %v", bufferQueries, onlineDDL.UUID)
+		timeout := onlineDDL.CutOverThreshold + qrBufferExtraTimeout
+
+		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, timeout, bufferQueries)
+		if !bufferQueries {
+			// unbuffer existing queries:
+			bufferingContextCancel()
+		}
+		log.Infof("toggled buffering: %t in migration %v", bufferQueries, onlineDDL.UUID)
+	}
+	defer toggleBuffering(false)
+	toggleBuffering(true)
+
+	// Give a fraction of a second for a scenario where a query is in
+	// query executor, it passed the ACLs and is _about to_ execute. This will be nicer to those queries:
+	// they will be able to complete before the ALTER.
+	e.updateMigrationStage(ctx, onlineDDL.UUID, "graceful wait for buffering")
+	time.Sleep(100 * time.Millisecond)
+
+	if forceCutOverAfter > 0 {
+		// Irrespective of the --force-cut-over-after flag value, as long as it's nonzero, we now terminate
+		// connections adn transactions on the migrated table.
+		// --force-cut-over-after was designed to work with `vitess` migrations, that could cut-over multiple times,
+		// and was meant to set a limit to the overall duration of the attempts, for example 1 hour.
+		// With INSTANT DDL or other quick operations, this becomes meaningless. Once we begin the operation, there
+		// is no going back. We submit it to MySQL, and it takes however long it takes.
+		// In this particular function, we expect *very quick* operation.
+		// So we take --force-cut-over-after as a hint that we should force terminate connections and transactions.
+		//
+		// We should only proceed with forceful cut over if there is no pending atomic transaction for the table.
+		// This will help in keeping the atomicity guarantee of a prepared transaction.
+		if err := e.checkOnPreparedPool(ctx, onlineDDL.Table, 100*time.Millisecond); err != nil {
+			return vterrors.Wrapf(err, "checking prepared pool for table")
+		}
+		if err := e.killTableLockHoldersAndAccessors(ctx, onlineDDL.Table); err != nil {
+			return vterrors.Wrapf(err, "failed killing table lock holders and accessors")
+		}
+	}
+
+	if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+		return err
+	}
+	return nil
+}
+
 // executeSpecialAlterDDLActionMigrationIfApplicable sees if the given migration can be executed via special execution path, that isn't a full blown online schema change process.
 func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context.Context, onlineDDL *schema.OnlineDDL) (specialMigrationExecuted bool, err error) {
 	// Before we jump on to strategies... Some ALTERs can be optimized without having to run through
@@ -2505,11 +2564,11 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 	case instantDDLSpecialOperation:
 		schemadiff.AddInstantAlgorithm(specialPlan.alterTable)
 		onlineDDL.SQL = sqlparser.CanonicalString(specialPlan.alterTable)
-		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+		if err := e.executeSpecialAlterDirectDDLActionMigration(ctx, onlineDDL); err != nil {
 			return false, err
 		}
 	case rangePartitionSpecialOperation:
-		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+		if err := e.executeSpecialAlterDirectDDLActionMigration(ctx, onlineDDL); err != nil {
 			return false, err
 		}
 	default:
@@ -4122,6 +4181,60 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqlty
 		result.AppendResult(res)
 	}
 	log.Infof("CompletePendingMigrations: done iterating %v migrations %s", len(uuids))
+	return result, nil
+}
+
+// PostponeCompleteMigration sets the postpone_completion flag for a given migration, assuming it was not set in the first place
+func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if atomic.LoadInt64(&e.isOpen) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
+	}
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in POSTPONE COMPLETE: %s", uuid)
+	}
+	log.Infof("PostponeCompleteMigration: request to postpone complete migration %s", uuid)
+
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	query, err := sqlparser.ParseAndBind(sqlPostponeCompletion,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer e.triggerNextCheckInterval()
+	rs, err := e.execQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("PostponeCompleteMigration: migration %s marked as postponed", uuid)
+	return rs, nil
+}
+
+// PostponeCompletePendingMigrations sets postpone_completion for all pending migrations (that are expected to run or are running)
+// for this keyspace
+func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+	if atomic.LoadInt64(&e.isOpen) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
+	}
+
+	uuids, err := e.readPendingMigrationsUUIDs(ctx)
+	if err != nil {
+		return result, err
+	}
+	log.Infof("PostponeCompletePendingMigrations: iterating %v migrations %s", len(uuids))
+
+	result = &sqltypes.Result{}
+	for _, uuid := range uuids {
+		log.Infof("PostponeCompletePendingMigrations: postpone completion of %s", uuid)
+		res, err := e.PostponeCompleteMigration(ctx, uuid)
+		if err != nil {
+			return result, err
+		}
+		result.AppendResult(res)
+	}
+	log.Infof("PostponeCompletePendingMigrations: done iterating %v migrations %s", len(uuids))
 	return result, nil
 }
 

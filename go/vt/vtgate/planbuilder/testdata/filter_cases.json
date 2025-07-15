@@ -14,8 +14,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user`",
-        "Table": "`user`"
+        "Query": "select id from `user`"
       },
       "TablesUsed": [
         "user.user"
@@ -37,8 +36,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where someColumn = null",
-        "Table": "`user`"
+        "Query": "select id from `user` where someColumn = null"
       },
       "TablesUsed": [
         "user.user"
@@ -60,8 +58,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where someColumn <=> null",
-        "Table": "`user`"
+        "Query": "select id from `user` where someColumn <=> null"
       },
       "TablesUsed": [
         "user.user"
@@ -84,7 +81,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where `user`.id = 5",
-        "Table": "`user`",
         "Values": [
           "5"
         ],
@@ -111,7 +107,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where `user`.id = 5 + 5",
-        "Table": "`user`",
         "Values": [
           "10"
         ],
@@ -138,7 +133,6 @@
         },
         "FieldQuery": "select id from music where 1 != 1",
         "Query": "select id from music where id = 5 and user_id = 4",
-        "Table": "music",
         "Values": [
           "4"
         ],
@@ -177,7 +171,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -191,8 +184,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'",
-            "Table": "`user`"
+            "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'"
           }
         ]
       },
@@ -229,7 +221,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -243,8 +234,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where costly in ('aa', 'bb') and `name` in ::__vals",
-            "Table": "`user`"
+            "Query": "select id from `user` where costly in ('aa', 'bb') and `name` in ::__vals"
           }
         ]
       },
@@ -281,7 +271,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -295,8 +284,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
-            "Table": "`user`"
+            "Query": "select id from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))"
           }
         ]
       },
@@ -333,7 +321,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -347,8 +334,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where (col, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
-            "Table": "`user`"
+            "Query": "select id from `user` where (col, `name`) in (('aa', 'bb'), ('cc', 'dd'))"
           }
         ]
       },
@@ -385,7 +371,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -399,8 +384,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
-            "Table": "`user`"
+            "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))"
           }
         ]
       },
@@ -437,7 +421,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -451,8 +434,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where (`name`, costly) in (('aa', 'bb'), ('cc', 'dd'))",
-            "Table": "`user`"
+            "Query": "select id from `user` where (`name`, costly) in (('aa', 'bb'), ('cc', 'dd'))"
           }
         ]
       },
@@ -489,7 +471,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -503,8 +484,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where (col, costly) in (('aa', 'bb')) and (col, `name`) in (('cc', 'dd'))",
-            "Table": "`user`"
+            "Query": "select id from `user` where (col, costly) in (('aa', 'bb')) and (col, `name`) in (('cc', 'dd'))"
           }
         ]
       },
@@ -529,7 +509,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where (col, `name`) in (('aa', 'bb')) and id = 5",
-        "Table": "`user`",
         "Values": [
           "5"
         ],
@@ -568,7 +547,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -582,8 +560,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
-            "Table": "`user`"
+            "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))"
           }
         ]
       },
@@ -620,7 +597,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -634,8 +610,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where ((col1, `name`), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
-            "Table": "`user`"
+            "Query": "select id from `user` where ((col1, `name`), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))"
           }
         ]
       },
@@ -672,7 +647,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -686,8 +660,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where (`name`, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
-            "Table": "`user`"
+            "Query": "select id from `user` where (`name`, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))"
           }
         ]
       },
@@ -711,8 +684,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where ((col1, `name`), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
-        "Table": "`user`"
+        "Query": "select id from `user` where ((col1, `name`), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))"
       },
       "TablesUsed": [
         "user.user"
@@ -735,8 +707,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where (col1, `name`) in (select * from music where music.user_id = `user`.id)",
-        "Table": "`user`"
+        "Query": "select id from `user` where (col1, `name`) in (select * from music where music.user_id = `user`.id)"
       },
       "TablesUsed": [
         "user.music",
@@ -773,7 +744,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -787,8 +757,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where (col1, `name`) in (('aa', 1 + 1))",
-            "Table": "`user`"
+            "Query": "select id from `user` where (col1, `name`) in (('aa', 1 + 1))"
           }
         ]
       },
@@ -812,8 +781,7 @@
           "Sharded": true
         },
         "FieldQuery": "select Id from `user` where 1 != 1",
-        "Query": "select Id from `user` where 0",
-        "Table": "`user`"
+        "Query": "select Id from `user` where 0"
       },
       "TablesUsed": [
         "user.user"
@@ -848,7 +816,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -862,8 +829,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where col = 'aa' and `name` = 'bb' or col = 'cc' and `name` = 'dd' or col = 'ee' and `name` = 'ff' or col = 'gg' and `name` = 'hh'",
-            "Table": "`user`"
+            "Query": "select id from `user` where col = 'aa' and `name` = 'bb' or col = 'cc' and `name` = 'dd' or col = 'ee' and `name` = 'ff' or col = 'gg' and `name` = 'hh'"
           }
         ]
       },
@@ -900,7 +866,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -914,8 +879,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where col in ('aa', 'cc', 'ee') and (col in ('aa', 'cc') or `name` = 'ff') and (col = 'aa' or `name` = 'dd' or col = 'ee') and (col = 'aa' or `name` = 'dd' or `name` = 'ff') and (`name` = 'bb' or col = 'cc' or col = 'ee') and (`name` = 'bb' or col = 'cc' or `name` = 'ff') and (`name` in ('bb', 'dd') or col = 'ee') and `name` in ::__vals",
-            "Table": "`user`"
+            "Query": "select id from `user` where col in ('aa', 'cc', 'ee') and (col in ('aa', 'cc') or `name` = 'ff') and (col = 'aa' or `name` = 'dd' or col = 'ee') and (col = 'aa' or `name` = 'dd' or `name` = 'ff') and (`name` = 'bb' or col = 'cc' or col = 'ee') and (`name` = 'bb' or col = 'cc' or `name` = 'ff') and (`name` in ('bb', 'dd') or col = 'ee') and `name` in ::__vals"
           }
         ]
       },
@@ -939,8 +903,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where `name` in (col, 'bb')",
-        "Table": "`user`"
+        "Query": "select id from `user` where `name` in (col, 'bb')"
       },
       "TablesUsed": [
         "user.user"
@@ -975,7 +938,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -989,8 +951,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where `name` = :a",
-            "Table": "`user`"
+            "Query": "select id from `user` where `name` = :a"
           }
         ]
       },
@@ -1015,8 +976,7 @@
           "Sharded": true
         },
         "FieldQuery": "select u.id from `user` as u where 1 != 1",
-        "Query": "select u.id from `user` as u where not exists (select 1 from user_extra as ue where u.id = ue.user_id)",
-        "Table": "`user`"
+        "Query": "select u.id from `user` as u where not exists (select 1 from user_extra as ue where u.id = ue.user_id)"
       },
       "TablesUsed": [
         "user.user",
@@ -1052,7 +1012,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -1066,8 +1025,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where `name` = 18446744073709551615",
-            "Table": "`user`"
+            "Query": "select id from `user` where `name` = 18446744073709551615"
           }
         ]
       },
@@ -1104,7 +1062,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -1118,8 +1075,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where `name` in ::__vals",
-            "Table": "`user`"
+            "Query": "select id from `user` where `name` in ::__vals"
           }
         ]
       },
@@ -1145,7 +1101,6 @@
         },
         "FieldQuery": "select user_extra.id from `user`, user_extra where 1 != 1",
         "Query": "select user_extra.id from `user`, user_extra where `user`.id = 5 and `user`.id = user_extra.user_id",
-        "Table": "`user`, user_extra",
         "Values": [
           "5"
         ],
@@ -1173,7 +1128,6 @@
         },
         "FieldQuery": "select user_extra.id from `user`, user_extra where 1 != 1",
         "Query": "select user_extra.id from `user`, user_extra where user_extra.user_id = 5 and `user`.id = user_extra.user_id",
-        "Table": "`user`, user_extra",
         "Values": [
           "5"
         ],
@@ -1201,7 +1155,6 @@
         },
         "FieldQuery": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where 1 != 1",
         "Query": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where `user`.id = 5",
-        "Table": "`user`, user_extra",
         "Values": [
           "5"
         ],
@@ -1229,7 +1182,6 @@
         },
         "FieldQuery": "select user_extra.id from `user`, user_extra where 1 != 1",
         "Query": "select user_extra.id from `user`, user_extra where user_extra.user_id = 5 and `user`.id = user_extra.user_id",
-        "Table": "`user`, user_extra",
         "Values": [
           "5"
         ],
@@ -1255,7 +1207,6 @@
         "JoinVars": {
           "user_col": 0
         },
-        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1266,7 +1217,6 @@
             },
             "FieldQuery": "select `user`.col from `user` where 1 != 1",
             "Query": "select `user`.col from `user` where `user`.id = 5",
-            "Table": "`user`",
             "Values": [
               "5"
             ],
@@ -1280,8 +1230,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-            "Query": "select user_extra.id from user_extra where user_extra.col = :user_col /* INT16 */",
-            "Table": "user_extra"
+            "Query": "select user_extra.id from user_extra where user_extra.col = :user_col /* INT16 */"
           }
         ]
       },
@@ -1308,7 +1257,6 @@
         },
         "FieldQuery": "select user_extra.id from `user`, user_extra where 1 != 1",
         "Query": "select user_extra.id from `user`, user_extra where `user`.id = 5 and user_extra.user_id = 5 and `user`.col = user_extra.col",
-        "Table": "`user`, user_extra",
         "Values": [
           "5"
         ],
@@ -1335,7 +1283,6 @@
         "JoinVars": {
           "user_col": 0
         },
-        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1345,8 +1292,7 @@
               "Sharded": true
             },
             "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user`",
-            "Table": "`user`"
+            "Query": "select `user`.col from `user`"
           },
           {
             "OperatorType": "Route",
@@ -1357,7 +1303,6 @@
             },
             "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
             "Query": "select user_extra.id from user_extra where user_extra.user_id = :user_col /* INT16 */ and user_extra.col = :user_col /* INT16 */",
-            "Table": "user_extra",
             "Values": [
               ":user_col"
             ],
@@ -1386,7 +1331,6 @@
         "JoinVars": {
           "user_col": 0
         },
-        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1396,8 +1340,7 @@
               "Sharded": true
             },
             "FieldQuery": "select `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.col from `user`",
-            "Table": "`user`"
+            "Query": "select `user`.col from `user`"
           },
           {
             "OperatorType": "Route",
@@ -1407,8 +1350,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-            "Query": "select user_extra.id from user_extra where user_extra.col = :user_col /* INT16 */",
-            "Table": "user_extra"
+            "Query": "select user_extra.id from user_extra where user_extra.col = :user_col /* INT16 */"
           }
         ]
       },
@@ -1435,7 +1377,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where `user`.col = 5 and `user`.id in ::__vals",
-        "Table": "`user`",
         "Values": [
           "(1, 2)"
         ],
@@ -1462,7 +1403,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where `user`.col = case `user`.col when 'foo' then true else false end and `user`.id in ::__vals",
-        "Table": "`user`",
         "Values": [
           "(1, 2)"
         ],
@@ -1501,7 +1441,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -1515,8 +1454,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id or col as val from `user` where 1 != 1",
-            "Query": "select id or col as val from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa'",
-            "Table": "`user`"
+            "Query": "select id or col as val from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa'"
           }
         ]
       },
@@ -1553,7 +1491,6 @@
             },
             "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-            "Table": "name_user_vdx",
             "Values": [
               "::name"
             ],
@@ -1567,8 +1504,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where `user`.col = false and `user`.id in (1, 2) and `user`.`name` = 'aa'",
-            "Table": "`user`"
+            "Query": "select id from `user` where `user`.col = false and `user`.id in (1, 2) and `user`.`name` = 'aa'"
           }
         ]
       },
@@ -1593,7 +1529,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa' and `user`.id = 1",
-        "Table": "`user`",
         "Values": [
           "1"
         ],
@@ -1620,7 +1555,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where `user`.id = 1 and `user`.`name` = 'aa' and `user`.id in (1, 2) and `user`.col = 5",
-        "Table": "`user`",
         "Values": [
           "1"
         ],
@@ -1647,7 +1581,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where (`user`.id = 1 or `user`.`name` = 'aa') and `user`.id in ::__vals",
-        "Table": "`user`",
         "Values": [
           "(1, 2)"
         ],
@@ -1672,7 +1605,6 @@
         "JoinVars": {
           "unsharded_id": 0
         },
-        "TableName": "unsharded_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1682,8 +1614,7 @@
               "Sharded": false
             },
             "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-            "Query": "select unsharded.id from unsharded",
-            "Table": "unsharded"
+            "Query": "select unsharded.id from unsharded"
           },
           {
             "OperatorType": "Route",
@@ -1694,7 +1625,6 @@
             },
             "FieldQuery": "select 1 from `user` where 1 != 1",
             "Query": "select 1 from `user` where `user`.id = :unsharded_id",
-            "Table": "`user`",
             "Values": [
               ":unsharded_id"
             ],
@@ -1725,7 +1655,6 @@
         },
         "FieldQuery": "select col from `user` as route1 where 1 != 1",
         "Query": "select col from `user` as route1 where id = 1",
-        "Table": "`user`",
         "Values": [
           "1"
         ],
@@ -1751,7 +1680,6 @@
         "JoinVars": {
           "user_extra_col": 0
         },
-        "TableName": "user_extra_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1761,8 +1689,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-            "Query": "select user_extra.col from user_extra",
-            "Table": "user_extra"
+            "Query": "select user_extra.col from user_extra"
           },
           {
             "OperatorType": "Route",
@@ -1773,7 +1700,6 @@
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
             "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col /* INT16 */)",
-            "Table": "`user`",
             "Values": [
               "(:user_extra_col, 1)"
             ],
@@ -1802,7 +1728,6 @@
         "JoinVars": {
           "user_extra_col": 0
         },
-        "TableName": "user_extra_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1812,8 +1737,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-            "Query": "select user_extra.col from user_extra",
-            "Table": "user_extra"
+            "Query": "select user_extra.col from user_extra"
           },
           {
             "OperatorType": "Route",
@@ -1824,7 +1748,6 @@
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
             "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id)",
-            "Table": "`user`",
             "Values": [
               "(:user_extra_col, 1)"
             ],
@@ -1850,7 +1773,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "R:0",
-        "TableName": "user_extra_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1860,8 +1782,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
+            "Query": "select 1 from user_extra"
           },
           {
             "OperatorType": "Route",
@@ -1872,7 +1793,6 @@
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
             "Query": "select u.m from `user` as u where u.id = 5 and u.id in (select m2 from `user` where `user`.id = 5)",
-            "Table": "`user`",
             "Values": [
               "5"
             ],
@@ -1901,7 +1821,6 @@
         "JoinVars": {
           "user_extra_col": 0
         },
-        "TableName": "user_extra_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1911,8 +1830,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-            "Query": "select user_extra.col from user_extra",
-            "Table": "user_extra"
+            "Query": "select user_extra.col from user_extra"
           },
           {
             "OperatorType": "Route",
@@ -1923,7 +1841,6 @@
             },
             "FieldQuery": "select u.m from `user` as u where 1 != 1",
             "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col /* INT16 */ and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id))",
-            "Table": "`user`",
             "Values": [
               "(:user_extra_col, 1)"
             ],
@@ -1953,8 +1870,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where `user`.col in (select user_extra.col from user_extra where user_extra.user_id = `user`.id)",
-        "Table": "`user`"
+        "Query": "select id from `user` where `user`.col in (select user_extra.col from user_extra where user_extra.user_id = `user`.id)"
       },
       "TablesUsed": [
         "user.user",
@@ -1979,7 +1895,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where id = 5 and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
-        "Table": "`user`",
         "Values": [
           "5"
         ],
@@ -2008,7 +1923,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where id = 'aa' and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
-        "Table": "`user`",
         "Values": [
           "'aa'"
         ],
@@ -2037,7 +1951,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where id = :a and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
-        "Table": "`user`",
         "Values": [
           ":a"
         ],
@@ -2071,8 +1984,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id2 from `user` as uu where 1 != 1",
-        "Query": "select id2 from `user` as uu where id in (select id from `user` where id = uu.id and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
-        "Table": "`user`"
+        "Query": "select id2 from `user` as uu where id in (select id from `user` where id = uu.id and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))"
       },
       "TablesUsed": [
         "user.user",
@@ -2105,8 +2017,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user`",
-            "Table": "`user`"
+            "Query": "select col from `user`"
           },
           {
             "InputName": "Outer",
@@ -2118,7 +2029,6 @@
             },
             "FieldQuery": "select id from `user` where 1 != 1",
             "Query": "select id from `user` where :__sq_has_values and id in ::__vals",
-            "Table": "`user`",
             "Values": [
               "::__sq1"
             ],
@@ -2155,8 +2065,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user`",
-            "Table": "`user`"
+            "Query": "select col from `user`"
           },
           {
             "InputName": "Outer",
@@ -2167,8 +2076,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where not :__sq_has_values or id not in ::__sq1",
-            "Table": "`user`"
+            "Query": "select id from `user` where not :__sq_has_values or id not in ::__sq1"
           }
         ]
       },
@@ -2204,8 +2112,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from `user` where 1 != 1",
-                "Query": "select 1 from `user` limit 1",
-                "Table": "`user`"
+                "Query": "select 1 from `user` limit 1"
               }
             ]
           },
@@ -2218,8 +2125,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where :__sq_has_values",
-            "Table": "`user`"
+            "Query": "select id from `user` where :__sq_has_values"
           }
         ]
       },
@@ -2251,8 +2157,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user`",
-            "Table": "`user`"
+            "Query": "select col from `user`"
           },
           {
             "InputName": "Outer",
@@ -2264,7 +2169,6 @@
             },
             "FieldQuery": "select id from `user` where 1 != 1",
             "Query": "select id from `user` where id = :__sq1",
-            "Table": "`user`",
             "Values": [
               ":__sq1"
             ],
@@ -2309,8 +2213,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id3 from `user` where 1 != 1",
-                "Query": "select id3 from `user`",
-                "Table": "`user`"
+                "Query": "select id3 from `user`"
               },
               {
                 "InputName": "Outer",
@@ -2321,8 +2224,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id2 from `user` where 1 != 1",
-                "Query": "select id2 from `user` where :__sq_has_values and id2 in ::__sq2",
-                "Table": "`user`"
+                "Query": "select id2 from `user` where :__sq_has_values and id2 in ::__sq2"
               }
             ]
           },
@@ -2336,7 +2238,6 @@
             },
             "FieldQuery": "select id1 from `user` where 1 != 1",
             "Query": "select id1 from `user` where id = :__sq1",
-            "Table": "`user`",
             "Values": [
               ":__sq1"
             ],
@@ -2364,8 +2265,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where id = (select id from `user` as route1 where route1.id = `user`.id)",
-        "Table": "`user`"
+        "Query": "select col from `user` where id = (select id from `user` as route1 where route1.id = `user`.id)"
       },
       "TablesUsed": [
         "user.user"
@@ -2396,8 +2296,7 @@
               "Sharded": false
             },
             "FieldQuery": "select id from unsharded as route2 where 1 != 1",
-            "Query": "select id from unsharded as route2",
-            "Table": "unsharded"
+            "Query": "select id from unsharded as route2"
           },
           {
             "InputName": "Outer",
@@ -2409,7 +2308,6 @@
             },
             "FieldQuery": "select col from `user` where 1 != 1",
             "Query": "select col from `user` where id = :__sq1",
-            "Table": "`user`",
             "Values": [
               ":__sq1"
             ],
@@ -2440,7 +2338,6 @@
         },
         "FieldQuery": "select user_extra.Id from `user`, user_extra where 1 != 1",
         "Query": "select user_extra.Id from `user`, user_extra where `user`.Id = 5 and `user`.iD = user_extra.User_Id",
-        "Table": "`user`, user_extra",
         "Values": [
           "5"
         ],
@@ -2468,8 +2365,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where database()",
-        "Table": "`user`"
+        "Query": "select id from `user` where database()"
       },
       "TablesUsed": [
         "user.user"
@@ -2491,8 +2387,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from music where 1 != 1",
-        "Query": "select id from music where id = null",
-        "Table": "music"
+        "Query": "select id from music where id = null"
       },
       "TablesUsed": [
         "user.music"
@@ -2514,8 +2409,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from music where 1 != 1",
-        "Query": "select id from music where id is null",
-        "Table": "music"
+        "Query": "select id from music where id is null"
       },
       "TablesUsed": [
         "user.music"
@@ -2537,8 +2431,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from music where 1 != 1",
-        "Query": "select id from music where id is not null",
-        "Table": "music"
+        "Query": "select id from music where id is not null"
       },
       "TablesUsed": [
         "user.music"
@@ -2560,8 +2453,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from music where 1 != 1",
-        "Query": "select id from music where user_id = 4 and id = null",
-        "Table": "music"
+        "Query": "select id from music where user_id = 4 and id = null"
       },
       "TablesUsed": [
         "user.music"
@@ -2583,8 +2475,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from music where 1 != 1",
-        "Query": "select id from music where user_id = 4 and id in (null)",
-        "Table": "music"
+        "Query": "select id from music where user_id = 4 and id in (null)"
       },
       "TablesUsed": [
         "user.music"
@@ -2607,7 +2498,6 @@
         },
         "FieldQuery": "select id from music where 1 != 1",
         "Query": "select id from music where user_id = 4 and id in (null, 1, 2)",
-        "Table": "music",
         "Values": [
           "4"
         ],
@@ -2633,8 +2523,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from music where 1 != 1",
-        "Query": "select id from music where user_id = 4 and id not in (null, 1, 2)",
-        "Table": "music"
+        "Query": "select id from music where user_id = 4 and id not in (null, 1, 2)"
       },
       "TablesUsed": [
         "user.music"
@@ -2656,8 +2545,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from music where 1 != 1",
-        "Query": "select id from music where id not in (null, 1, 2) and user_id = 4",
-        "Table": "music"
+        "Query": "select id from music where id not in (null, 1, 2) and user_id = 4"
       },
       "TablesUsed": [
         "user.music"
@@ -2689,7 +2577,6 @@
             },
             "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
             "Query": "select user_extra.col from user_extra where user_extra.user_id = 411",
-            "Table": "user_extra",
             "Values": [
               "411"
             ],
@@ -2714,7 +2601,6 @@
                 },
                 "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
                 "Query": "select user_extra.col from user_extra where user_extra.user_id = 42",
-                "Table": "user_extra",
                 "Values": [
                   "42"
                 ],
@@ -2730,7 +2616,6 @@
                 },
                 "FieldQuery": "select id from `user` where 1 != 1",
                 "Query": "select id from `user` where (not :__sq_has_values or id not in ::__sq1) and :__sq_has_values1 and id in ::__vals",
-                "Table": "`user`",
                 "Values": [
                   "::__sq2"
                 ],
@@ -2763,7 +2648,6 @@
         },
         "FieldQuery": "select c2 from cfc_vindex_col where 1 != 1",
         "Query": "select c2 from cfc_vindex_col where c1 like 'A%'",
-        "Table": "cfc_vindex_col",
         "Values": [
           "'A%'"
         ],
@@ -2790,7 +2674,6 @@
         },
         "FieldQuery": "select col from samecolvin where 1 != 1",
         "Query": "select col from samecolvin where col = :col",
-        "Table": "samecolvin",
         "Values": [
           ":col"
         ],
@@ -2817,8 +2700,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where `user`.id > 5",
-        "Table": "`user`"
+        "Query": "select id from `user` where `user`.id > 5"
       },
       "TablesUsed": [
         "user.user"
@@ -2840,8 +2722,7 @@
           "Sharded": false
         },
         "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
-        "Query": "select unsharded.id from unsharded where unsharded.`name` in (select `name` from unsharded_a)",
-        "Table": "unsharded, unsharded_a"
+        "Query": "select unsharded.id from unsharded where unsharded.`name` in (select `name` from unsharded_a)"
       },
       "TablesUsed": [
         "main.unsharded",
@@ -2873,8 +2754,7 @@
               "Sharded": false
             },
             "FieldQuery": "select col from unsharded where 1 != 1",
-            "Query": "select col from unsharded where col = id",
-            "Table": "unsharded"
+            "Query": "select col from unsharded where col = id"
           },
           {
             "InputName": "Outer",
@@ -2886,7 +2766,6 @@
             },
             "FieldQuery": "select id from `user` where 1 != 1",
             "Query": "select id from `user` where :__sq_has_values and id in ::__vals",
-            "Table": "`user`",
             "Values": [
               "::__sq1"
             ],
@@ -2915,8 +2794,7 @@
           "Sharded": true
         },
         "FieldQuery": "select u.id from `user` as u where 1 != 1",
-        "Query": "select u.id from `user` as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
-        "Table": "`user`"
+        "Query": "select u.id from `user` as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id)"
       },
       "TablesUsed": [
         "user.user",
@@ -2940,8 +2818,7 @@
           "Sharded": false
         },
         "FieldQuery": "select t.table_schema from information_schema.`tables` as t where 1 != 1",
-        "Query": "select t.table_schema from information_schema.`tables` as t where t.table_schema in (select c.`column_name` from information_schema.`columns` as c)",
-        "Table": "information_schema.`tables`"
+        "Query": "select t.table_schema from information_schema.`tables` as t where t.table_schema in (select c.`column_name` from information_schema.`columns` as c)"
       }
     },
     "skip_e2e": true
@@ -2961,8 +2838,7 @@
           "Sharded": true
         },
         "FieldQuery": "select ref.col from ref where 1 != 1",
-        "Query": "select ref.col from ref where ref.col in (select ref.col from ref)",
-        "Table": "ref"
+        "Query": "select ref.col from ref where ref.col in (select ref.col from ref)"
       },
       "TablesUsed": [
         "user.ref"
@@ -2985,7 +2861,6 @@
         },
         "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
         "Query": "select u1.col from `user` as u1 where u1.id = 5 and u1.`name` in (select u2.`name` from `user` as u2 where u2.id = 5)",
-        "Table": "`user`",
         "Values": [
           "5"
         ],
@@ -3012,7 +2887,6 @@
         },
         "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
         "Query": "select u1.col from `user` as u1 where u1.id = 5 and exists (select 1 from `user` as u2 where u2.id = 5)",
-        "Table": "`user`",
         "Values": [
           "5"
         ],
@@ -3039,7 +2913,6 @@
         },
         "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
         "Query": "select u1.col from `user` as u1 where u1.id = 5 and not exists (select 1 from `user` as u2 where u2.id = 5)",
-        "Table": "`user`",
         "Values": [
           "5"
         ],
@@ -3074,7 +2947,6 @@
             },
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
             "Query": "select 1 from `user` as u2 where u2.id = 5 limit 1",
-            "Table": "`user`",
             "Values": [
               "5"
             ],
@@ -3089,8 +2961,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
-            "Query": "select u1.col from `user` as u1 where not :__sq_has_values",
-            "Table": "`user`"
+            "Query": "select u1.col from `user` as u1 where not :__sq_has_values"
           }
         ]
       },
@@ -3124,7 +2995,6 @@
             },
             "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
             "Query": "select user_extra.col from user_extra where user_extra.user_id = 4",
-            "Table": "user_extra",
             "Values": [
               "4"
             ],
@@ -3140,7 +3010,6 @@
             },
             "FieldQuery": "select id from `user` where 1 != 1",
             "Query": "select id from `user` where id = 5 and id not in (select user_extra.col from user_extra where user_extra.user_id = 5) and :__sq_has_values and id in ::__sq2",
-            "Table": "`user`",
             "Values": [
               "5"
             ],
@@ -3180,7 +3049,6 @@
             },
             "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
             "Query": "select user_extra.col from user_extra where user_extra.user_id = 4",
-            "Table": "user_extra",
             "Values": [
               "4"
             ],
@@ -3196,7 +3064,6 @@
             },
             "FieldQuery": "select id from `user` where 1 != 1",
             "Query": "select id from `user` where id = 5 and id in (select user_extra.col from user_extra where user_extra.user_id = 5) and (not :__sq_has_values or id not in ::__sq1)",
-            "Table": "`user`",
             "Values": [
               "5"
             ],
@@ -3226,8 +3093,7 @@
           "Sharded": true
         },
         "FieldQuery": "select u.id from `user` as u where 1 != 1",
-        "Query": "select u.id from `user` as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)",
-        "Table": "`user`"
+        "Query": "select u.id from `user` as u where u.col in (select ue.user_id from user_extra as ue where ue.user_id = u.id) and u.col2 in (select ue.user_id from user_extra as ue where ue.user_id = u.id)"
       },
       "TablesUsed": [
         "user.user",
@@ -3252,7 +3118,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where `user`.id = `user`.col and `user`.col = 5",
-        "Table": "`user`",
         "Values": [
           "5"
         ],
@@ -3278,8 +3143,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from `user`, user_extra where 1 != 1",
-        "Query": "select id from `user`, user_extra where user_extra.col = user_extra.user_id and `user`.id = user_extra.col",
-        "Table": "`user`, user_extra"
+        "Query": "select id from `user`, user_extra where user_extra.col = user_extra.user_id and `user`.id = user_extra.col"
       },
       "TablesUsed": [
         "user.user",
@@ -3302,7 +3166,6 @@
         "JoinVars": {
           "user_extra_col": 0
         },
-        "TableName": "user_extra_`user`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3312,8 +3175,7 @@
               "Sharded": true
             },
             "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-            "Query": "select user_extra.col from user_extra where user_extra.col = user_extra.user_id or user_extra.col2 = user_extra.`name`",
-            "Table": "user_extra"
+            "Query": "select user_extra.col from user_extra where user_extra.col = user_extra.user_id or user_extra.col2 = user_extra.`name`"
           },
           {
             "OperatorType": "Route",
@@ -3324,7 +3186,6 @@
             },
             "FieldQuery": "select id from `user` where 1 != 1",
             "Query": "select id from `user` where `user`.id = :user_extra_col /* INT16 */",
-            "Table": "`user`",
             "Values": [
               ":user_extra_col"
             ],
@@ -3354,8 +3215,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where id = (select id from `user` as a where a.id = `user`.id)",
-        "Table": "`user`"
+        "Query": "select col from `user` where id = (select id from `user` as a where a.id = `user`.id)"
       },
       "TablesUsed": [
         "user.user"
@@ -3377,7 +3237,6 @@
         "JoinVars": {
           "user_col": 1
         },
-        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3387,8 +3246,7 @@
               "Sharded": true
             },
             "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
-            "Query": "select `user`.id, `user`.col from `user`",
-            "Table": "`user`"
+            "Query": "select `user`.id, `user`.col from `user`"
           },
           {
             "OperatorType": "Route",
@@ -3398,8 +3256,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_extra.foobar = 5 and user_extra.col = :user_col /* INT16 */",
-            "Table": "user_extra"
+            "Query": "select 1 from user_extra where user_extra.foobar = 5 and user_extra.col = :user_col /* INT16 */"
           }
         ]
       },
@@ -3435,7 +3292,6 @@
             "JoinVars": {
               "user_col": 1
             },
-            "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3445,8 +3301,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col from `user`",
-                "Table": "`user`"
+                "Query": "select `user`.id, `user`.col from `user`"
               },
               {
                 "OperatorType": "Route",
@@ -3456,8 +3311,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-                "Query": "select user_extra.id from user_extra where user_extra.col = :user_col /* INT16 */",
-                "Table": "user_extra"
+                "Query": "select user_extra.id from user_extra where user_extra.col = :user_col /* INT16 */"
               }
             ]
           }
@@ -3502,8 +3356,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from music where 1 != 1",
-                "Query": "select id from music where col2 = 'a'",
-                "Table": "music"
+                "Query": "select id from music where col2 = 'a'"
               },
               {
                 "InputName": "Outer",
@@ -3514,8 +3367,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values and `user`.col in ::__sq1",
-                "Table": "`user`"
+                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values and `user`.col in ::__sq1"
               }
             ]
           }
@@ -3555,7 +3407,6 @@
             },
             "FieldQuery": "select colb, keyspace_id from colb_colc_map where 1 != 1",
             "Query": "select colb, keyspace_id from colb_colc_map where colb in ::__vals",
-            "Table": "colb_colc_map",
             "Values": [
               "::colb"
             ],
@@ -3569,8 +3420,7 @@
               "Sharded": true
             },
             "FieldQuery": "select * from multicolvin where 1 != 1",
-            "Query": "select * from multicolvin where column_b = 1",
-            "Table": "multicolvin"
+            "Query": "select * from multicolvin where column_b = 1"
           }
         ]
       },
@@ -3607,7 +3457,6 @@
             },
             "FieldQuery": "select colb, keyspace_id from colb_colc_map where 1 != 1",
             "Query": "select colb, keyspace_id from colb_colc_map where colb in ::__vals",
-            "Table": "colb_colc_map",
             "Values": [
               "::colb"
             ],
@@ -3621,8 +3470,7 @@
               "Sharded": true
             },
             "FieldQuery": "select * from multicolvin where 1 != 1",
-            "Query": "select * from multicolvin where column_b = 1 and column_c = 2",
-            "Table": "multicolvin"
+            "Query": "select * from multicolvin where column_b = 1 and column_c = 2"
           }
         ]
       },
@@ -3659,7 +3507,6 @@
             },
             "FieldQuery": "select colb, keyspace_id from colb_colc_map where 1 != 1",
             "Query": "select colb, keyspace_id from colb_colc_map where colb in ::__vals",
-            "Table": "colb_colc_map",
             "Values": [
               "::colb"
             ],
@@ -3673,8 +3520,7 @@
               "Sharded": true
             },
             "FieldQuery": "select * from multicolvin where 1 != 1",
-            "Query": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
-            "Table": "multicolvin"
+            "Query": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3"
           }
         ]
       },
@@ -3711,7 +3557,6 @@
             },
             "FieldQuery": "select colb, keyspace_id from colb_colc_map where 1 != 1",
             "Query": "select colb, keyspace_id from colb_colc_map where colb in ::__vals",
-            "Table": "colb_colc_map",
             "Values": [
               "::colb"
             ],
@@ -3725,8 +3570,7 @@
               "Sharded": true
             },
             "FieldQuery": "select * from multicolvin where 1 != 1",
-            "Query": "select * from multicolvin where column_a = 3 and column_b = 1",
-            "Table": "multicolvin"
+            "Query": "select * from multicolvin where column_a = 3 and column_b = 1"
           }
         ]
       },
@@ -3751,7 +3595,6 @@
         },
         "FieldQuery": "select * from multicol_tbl where 1 != 1",
         "Query": "select * from multicol_tbl where cola = 1 and colb = 2",
-        "Table": "multicol_tbl",
         "Values": [
           "1",
           "2"
@@ -3779,7 +3622,6 @@
         },
         "FieldQuery": "select * from multicol_tbl where 1 != 1",
         "Query": "select * from multicol_tbl where colb = 2 and cola = 1",
-        "Table": "multicol_tbl",
         "Values": [
           "1",
           "2"
@@ -3807,7 +3649,6 @@
         },
         "FieldQuery": "select * from multicol_tbl where 1 != 1",
         "Query": "select * from multicol_tbl where cola in ::__vals0 and colb in ::__vals1",
-        "Table": "multicol_tbl",
         "Values": [
           "(1, 2)",
           "(3, 4)"
@@ -3835,7 +3676,6 @@
         },
         "FieldQuery": "select * from multicol_tbl where 1 != 1",
         "Query": "select * from multicol_tbl where colb in ::__vals1 and cola in ::__vals0",
-        "Table": "multicol_tbl",
         "Values": [
           "(1, 2)",
           "(3, 4)"
@@ -3863,7 +3703,6 @@
         },
         "FieldQuery": "select * from multicol_tbl where 1 != 1",
         "Query": "select * from multicol_tbl where colb = 1 and cola in ::__vals0",
-        "Table": "multicol_tbl",
         "Values": [
           "(3, 4)",
           "1"
@@ -3891,7 +3730,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where id = 34 and `name` = 'apa'",
-        "Table": "`user`",
         "Values": [
           "34"
         ],
@@ -3918,7 +3756,6 @@
         },
         "FieldQuery": "select * from multicol_tbl where 1 != 1",
         "Query": "select * from multicol_tbl where cola in (1, 10) and cola = 4 and colb in (5, 6) and colb = 7",
-        "Table": "multicol_tbl",
         "Values": [
           "4",
           "7"
@@ -3946,7 +3783,6 @@
         },
         "FieldQuery": "select * from multicol_tbl where 1 != 1",
         "Query": "select * from multicol_tbl where colb = 4 and colb in ::__vals1 and cola in ::__vals0",
-        "Table": "multicol_tbl",
         "Values": [
           "(5, 6)",
           "(1, 10)"
@@ -3974,7 +3810,6 @@
         },
         "FieldQuery": "select * from multicol_tbl where 1 != 1",
         "Query": "select * from multicol_tbl where colb in (1, 10) and colb = 4 and cola in ::__vals0",
-        "Table": "multicol_tbl",
         "Values": [
           "(5, 6)",
           "4"
@@ -4002,7 +3837,6 @@
         },
         "FieldQuery": "select * from multicol_tbl where 1 != 1",
         "Query": "select * from multicol_tbl where colb in (1, 2) and cola in (3, 4) and cola = 5 and colb = 6",
-        "Table": "multicol_tbl",
         "Values": [
           "5",
           "6"
@@ -4030,7 +3864,6 @@
         },
         "FieldQuery": "select * from multicol_tbl where 1 != 1",
         "Query": "select * from multicol_tbl where (cola, colb) in ((1, 2), (3, 4))",
-        "Table": "multicol_tbl",
         "Values": [
           "(1, 3)",
           "(2, 4)"
@@ -4058,7 +3891,6 @@
         },
         "FieldQuery": "select * from multicol_tbl where 1 != 1",
         "Query": "select * from multicol_tbl where cola = 1",
-        "Table": "multicol_tbl",
         "Values": [
           "1"
         ],
@@ -4085,7 +3917,6 @@
         },
         "FieldQuery": "select * from multicol_tbl where 1 != 1",
         "Query": "select * from multicol_tbl where cola = 1 and colb in ::__vals1",
-        "Table": "multicol_tbl",
         "Values": [
           "1",
           "(2, 3)"
@@ -4112,8 +3943,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where 1 != 1",
-        "Query": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5",
-        "Table": "unsharded_a, unsharded_b"
+        "Query": "select 0 from unsharded_a left join unsharded_b on unsharded_a.col = unsharded_b.col where coalesce(unsharded_b.col, 4) = 5"
       },
       "TablesUsed": [
         "main.unsharded_a",
@@ -4136,8 +3966,7 @@
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from user_extra left join `user` on user_extra.user_id = `user`.id where 1 != 1",
-        "Query": "select `user`.col from user_extra left join `user` on user_extra.user_id = `user`.id where `user`.id is null",
-        "Table": "`user`, user_extra"
+        "Query": "select `user`.col from user_extra left join `user` on user_extra.user_id = `user`.id where `user`.id is null"
       },
       "TablesUsed": [
         "user.user",
@@ -4162,7 +3991,6 @@
         },
         "FieldQuery": "select music.id from music left join `user` on music.user_id = `user`.id where 1 != 1",
         "Query": "select music.id from music left join `user` on music.user_id = `user`.id where music.user_id = 10 and `user`.id <=> null",
-        "Table": "`user`, music",
         "Values": [
           "10"
         ],
@@ -4190,7 +4018,6 @@
         },
         "FieldQuery": "select music.id from music left join `user` on music.user_id = `user`.id where 1 != 1",
         "Query": "select music.id from music left join `user` on music.user_id = `user`.id where music.user_id = 5 and (`user`.`name` = 'Trent Reznor' or music.genre = 'pop')",
-        "Table": "`user`, music",
         "Values": [
           "5"
         ],
@@ -4218,7 +4045,6 @@
         },
         "FieldQuery": "select music.id from music left join `user` on music.user_id = `user`.id where 1 != 1",
         "Query": "select music.id from music left join `user` on music.user_id = `user`.id where music.user_id = 5 and (`user`.`name` = 'Trent Reznor' or music.genre = 'pop')",
-        "Table": "`user`, music",
         "Values": [
           "5"
         ],
@@ -4246,7 +4072,6 @@
         },
         "FieldQuery": "select music.id from music, `user` where 1 != 1",
         "Query": "select music.id from music, `user` where music.user_id = 5 and music.user_id = `user`.id and music.componist = `user`.`name`",
-        "Table": "`user`, music",
         "Values": [
           "5"
         ],
@@ -4274,7 +4099,6 @@
         },
         "FieldQuery": "select music.id from music, `user` where 1 != 1",
         "Query": "select music.id from music, `user` where music.user_id = 5 and `user`.id is not null and `user`.id = music.user_id",
-        "Table": "`user`, music",
         "Values": [
           "5"
         ],
@@ -4302,7 +4126,6 @@
         },
         "FieldQuery": "select col from `user` where 1 != 1",
         "Query": "select col from `user` where id in ::__vals",
-        "Table": "`user`",
         "Values": [
           "(1, 2)"
         ],
@@ -4329,7 +4152,6 @@
         },
         "FieldQuery": "select col from `user` where 1 != 1",
         "Query": "select col from `user` where id in ::__vals",
-        "Table": "`user`",
         "Values": [
           "(1, 2, 3)"
         ],
@@ -4356,7 +4178,6 @@
         },
         "FieldQuery": "select col from `user` where 1 != 1",
         "Query": "select col from `user` where id in ::__vals",
-        "Table": "`user`",
         "Values": [
           "(1, 2, 3, 4)"
         ],
@@ -4383,7 +4204,6 @@
         },
         "FieldQuery": "select id from music where 1 != 1",
         "Query": "select id from music where id is null and user_id in ::__vals",
-        "Table": "music",
         "Values": [
           "(1, 2)"
         ],
@@ -4409,8 +4229,7 @@
           "Sharded": true
         },
         "FieldQuery": "select a + 2 as a from `user` where 1 != 1",
-        "Query": "select a + 2 as a from `user` where `user`.a + 2 = 42",
-        "Table": "`user`"
+        "Query": "select a + 2 as a from `user` where `user`.a + 2 = 42"
       },
       "TablesUsed": [
         "user.user"
@@ -4434,8 +4253,7 @@
         "FieldQuery": "select a + 2 as a, weight_string(a + 2) from `user` where 1 != 1",
         "OrderBy": "(0|1) ASC",
         "Query": "select a + 2 as a, weight_string(a + 2) from `user` order by `user`.a + 2 asc",
-        "ResultColumns": 1,
-        "Table": "`user`"
+        "ResultColumns": 1
       },
       "TablesUsed": [
         "user.user"
@@ -4457,8 +4275,7 @@
           "Sharded": true
         },
         "FieldQuery": "select `user`.col + 2 as a from `user` where 1 != 1",
-        "Query": "select `user`.col + 2 as a from `user` where `user`.col + 2 = 42",
-        "Table": "`user`"
+        "Query": "select `user`.col + 2 as a from `user` where `user`.col + 2 = 42"
       },
       "TablesUsed": [
         "user.user"
@@ -4480,8 +4297,7 @@
           "Sharded": false
         },
         "FieldQuery": "select col + 2 as a from unsharded where 1 != 1",
-        "Query": "select col + 2 as a from unsharded having a = 42",
-        "Table": "unsharded"
+        "Query": "select col + 2 as a from unsharded having a = 42"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -4504,7 +4320,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where id = 5 and (`name` = 'apa' or foo = 'bar')",
-        "Table": "`user`",
         "Values": [
           "5"
         ],
@@ -4531,7 +4346,6 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` where id in ::__vals and (id = 5 or `name` = 'bar') and (`name` = 'foo' or id = 12) and `name` in ('foo', 'bar')",
-        "Table": "`user`",
         "Values": [
           "(5, 12)"
         ],
@@ -4574,7 +4388,6 @@
                     "JoinVars": {
                       "a_textcol1": 1
                     },
-                    "TableName": "`user`_`user`",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -4585,8 +4398,7 @@
                         },
                         "FieldQuery": "select sum(a.id), a.textcol1 from `user` as a where 1 != 1 group by a.textcol1",
                         "OrderBy": "1 ASC COLLATE latin1_swedish_ci",
-                        "Query": "select sum(a.id), a.textcol1 from `user` as a group by a.textcol1 order by a.textcol1 asc",
-                        "Table": "`user`"
+                        "Query": "select sum(a.id), a.textcol1 from `user` as a group by a.textcol1 order by a.textcol1 asc"
                       },
                       {
                         "OperatorType": "Route",
@@ -4596,8 +4408,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*) from `user` as b where 1 != 1 group by .0",
-                        "Query": "select count(*) from `user` as b where b.textcol2 = :a_textcol1 /* VARCHAR */ group by .0",
-                        "Table": "`user`"
+                        "Query": "select count(*) from `user` as b where b.textcol2 = :a_textcol1 /* VARCHAR */ group by .0"
                       }
                     ]
                   }
@@ -4628,8 +4439,7 @@
           "Sharded": true
         },
         "FieldQuery": "select textcol1 from `user` where 1 != 1",
-        "Query": "select textcol1 from `user` where foo = 42",
-        "Table": "`user`"
+        "Query": "select textcol1 from `user` where foo = 42"
       },
       "TablesUsed": [
         "user.user"
@@ -4647,7 +4457,6 @@
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
-        "TableName": "unsharded_`user`_unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -4657,15 +4466,13 @@
               "Sharded": false
             },
             "FieldQuery": "select 1 from unsharded where 1 != 1",
-            "Query": "select 1 from unsharded",
-            "Table": "unsharded"
+            "Query": "select 1 from unsharded"
           },
           {
             "OperatorType": "SemiJoin",
             "JoinVars": {
               "u1_bar": 0
             },
-            "TableName": "`user`_unsharded",
             "Inputs": [
               {
                 "InputName": "Outer",
@@ -4676,8 +4483,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u1.bar from `user` as u1 where 1 != 1",
-                "Query": "select u1.bar from `user` as u1",
-                "Table": "`user`"
+                "Query": "select u1.bar from `user` as u1"
               },
               {
                 "InputName": "SubQuery",
@@ -4688,8 +4494,7 @@
                   "Sharded": false
                 },
                 "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
-                "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar limit 1",
-                "Table": "unsharded"
+                "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar limit 1"
               }
             ]
           }
@@ -4733,7 +4538,6 @@
                     "JoinVars": {
                       "user_id": 1
                     },
-                    "TableName": "`user`_user_extra",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -4743,8 +4547,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), `user`.id from `user` where 1 != 1 group by `user`.id",
-                        "Query": "select count(*), `user`.id from `user` group by `user`.id",
-                        "Table": "`user`"
+                        "Query": "select count(*), `user`.id from `user` group by `user`.id"
                       },
                       {
                         "OperatorType": "Route",
@@ -4754,8 +4557,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select count(*), user_extra.collections_status from user_extra where 1 != 1 group by user_extra.collections_status",
-                        "Query": "select count(*), user_extra.collections_status from user_extra where user_extra.bar = :user_id group by user_extra.collections_status",
-                        "Table": "user_extra"
+                        "Query": "select count(*), user_extra.collections_status from user_extra where user_extra.bar = :user_id group by user_extra.collections_status"
                       }
                     ]
                   }
@@ -4793,8 +4595,7 @@
             "FieldQuery": "select 1, ts, weight_string(ts) from `user` where 1 != 1",
             "OrderBy": "(1|2) ASC",
             "Query": "select 1, ts, weight_string(ts) from `user` where shard_key = 1 and is_removed = 1 and cmd in ('A', 'B', 'C') and (not user_id = 1 or not user_id is not null or not ts >= 1 or not ts <= 2) and (not user_id = 1 or not user_id is not null or not ts >= 12 or not ts <= 13) and (not user_id = 1 or not user_id is not null or not ts >= 14 or not ts <= 15) and (not user_id = 1 or not user_id is not null or not ts >= 16 or not ts <= 17) and (not user_id = 1 or not user_id is not null or not ts >= 18 or not ts <= 19) and (not user_id = 1 or not user_id is not null or not ts >= 110 or not ts <= 111) and (not user_id = 1 or not user_id is not null or not ts >= 112 or not ts <= 113) and (not user_id = 1 or not user_id is not null or not ts >= 114 or not ts <= 115) and (not user_id = 1 or not user_id is not null or not ts >= 116 or not ts <= 117) and (not user_id = 1 or not user_id is not null or not ts >= 118 or not ts <= 119) and (not user_id = 1 or not user_id is not null or not ts >= 120 or not ts <= 121) and (not user_id = 1 or not user_id is not null or not ts >= 122 or not ts <= 123) and (not user_id = 1 or not user_id is not null or not ts >= 124 or not ts <= 125) and (not user_id = 1 or not user_id is not null or not ts >= 126 or not ts <= 127) and (not user_id = 1 or not user_id is not null or not ts >= 128 or not ts <= 129) and (not user_id = 1 or not user_id is not null or not ts >= 130 or not ts <= 131) and (not user_id = 1 or not user_id is not null or not ts >= 132 or not ts <= 133) and (not user_id = 1 or not user_id is not null or not ts >= 134 or not ts <= 135) and (not user_id = 1 or not user_id is not null or not ts >= 136 or not ts <= 137) and (not user_id = 1 or not user_id is not null or not ts >= 138 or not ts <= 139) and (not user_id = 1 or not user_id is not null or not ts >= 140 or not ts <= 141) and (not user_id = 1 or not user_id is not null or not ts >= 142 or not ts <= 143) and (not user_id = 1 or not user_id is not null or not ts >= 144 or not ts <= 145) and (not user_id = 1 or not user_id is not null or not ts >= 146 or not ts <= 147) and (not user_id = 1 or not user_id is not null or not ts >= 148 or not ts <= 149) and (not user_id = 1 or not user_id is not null or not ts >= 150 or not ts <= 151) and (not user_id = 1 or not user_id is not null or not ts >= 152 or not ts <= 153) and (not user_id = 1 or not user_id is not null or not ts >= 154 or not ts <= 155) and (not user_id = 1 or not user_id is not null or not ts >= 156 or not ts <= 157) and (not user_id = 1 or not user_id is not null or not ts >= 158 or not ts <= 159) and (not user_id = 1 or not user_id is not null or not ts >= 160 or not ts <= 161) and (not user_id = 1 or not user_id is not null or not ts >= 162 or not ts <= 163) and (not user_id = 1 or not user_id is not null or not ts >= 164 or not ts <= 165) and (not user_id = 1 or not user_id is not null or not ts >= 166 or not ts <= 167) and (not user_id = 1 or not user_id is not null or not ts >= 168 or not ts <= 169) and (not user_id = 1 or not user_id is not null or not ts >= 170 or not ts <= 171) and (not user_id = 1 or not user_id is not null or not ts >= 172 or not ts <= 173) and (not user_id = 1 or not user_id is not null or not ts >= 174 or not ts <= 175) and (not user_id = 1 or not user_id is not null or not ts >= 176 or not ts <= 177) and (not user_id = 1 or not user_id is not null or not ts >= 178 or not ts <= 179) and (not user_id = 1 or not user_id is not null or not ts >= 180 or not ts <= 181) and (not user_id = 1 or not user_id is not null or not ts >= 182 or not ts <= 183) and (not user_id = 1 or not user_id is not null or not ts >= 184 or not ts <= 185) and (not user_id = 1 or not user_id is not null or not ts >= 186 or not ts <= 187) and (not user_id = 1 or not user_id is not null or not ts >= 188 or not ts <= 189) and (not user_id = 1 or not user_id is not null or not ts >= 190 or not ts <= 191) and (not user_id = 1 or not user_id is not null or not ts >= 192 or not ts <= 193) and (not user_id = 1 or not user_id is not null or not ts >= 194 or not ts <= 195) and (not user_id = 1 or not user_id is not null or not ts >= 196 or not ts <= 197) and (not user_id = 1 or not user_id is not null or not ts >= 198 or not ts <= 199) and (not user_id = 1 or not user_id is not null or not ts >= 1100 or not ts <= 1101) and (not user_id = 1 or not user_id is not null or not ts >= 1102 or not ts <= 1103) and (not user_id = 1 or not user_id is not null or not ts >= 1104 or not ts <= 1105) and (not user_id = 1 or not user_id is not null or not ts >= 1106 or not ts <= 1107) and (not user_id = 1 or not user_id is not null or not ts >= 1108 or not ts <= 1109) and (not user_id = 1 or not user_id is not null or not ts >= 1110 or not ts <= 1111) and (not user_id = 1 or not user_id is not null or not ts >= 1112 or not ts <= 1113) and (not user_id = 1 or not user_id is not null or not ts >= 1114 or not ts <= 1115) and (not user_id = 1 or not user_id is not null or not ts >= 1116 or not ts <= 1117) and (not user_id = 1 or not user_id is not null or not ts >= 1118 or not ts <= 1119) and (not user_id = 1 or not user_id is not null or not ts >= 1120 or not ts <= 1121) and (not user_id = 1 or not user_id is not null or not ts >= 1122 or not ts <= 1123) and (not user_id = 1 or not user_id is not null or not ts >= 1124 or not ts <= 1125) and (not user_id = 1 or not user_id is not null or not ts >= 1126 or not ts <= 1127) and (not user_id = 1 or not user_id is not null or not ts >= 1128 or not ts <= 1129) and (not user_id = 1 or not user_id is not null or not ts >= 1130 or not ts <= 1131) and (not user_id = 1 or not user_id is not null or not ts >= 1132 or not ts <= 1133) and (not user_id = 1 or not user_id is not null or not ts >= 1134 or not ts <= 1135) and (not user_id = 1 or not user_id is not null or not ts >= 1136 or not ts <= 1137) and (not user_id = 1 or not user_id is not null or not ts >= 1138 or not ts <= 1139) and (not user_id = 1 or not user_id is not null or not ts >= 1140 or not ts <= 1141) and (not user_id = 1 or not user_id is not null or not ts >= 1142 or not ts <= 1143) and (not user_id = 1 or not user_id is not null or not ts >= 1144 or not ts <= 1145) and (not user_id = 1 or not user_id is not null or not ts >= 1146 or not ts <= 1147) and (not user_id = 1 or not user_id is not null or not ts >= 1148 or not ts <= 1149) and (not user_id = 1 or not user_id is not null or not ts >= 1150 or not ts <= 1151) and (not user_id = 1 or not user_id is not null or not ts >= 1152 or not ts <= 1153) and (not user_id = 1 or not user_id is not null or not ts >= 1154 or not ts <= 1155) and (not user_id = 1 or not user_id is not null or not ts >= 1156 or not ts <= 1157) and (not user_id = 1 or not user_id is not null or not ts >= 1158 or not ts <= 1159) and (not user_id = 1 or not user_id is not null or not ts >= 1160 or not ts <= 1161) and (not user_id = 1 or not user_id is not null or not ts >= 1162 or not ts <= 1163) and (not user_id = 1 or not user_id is not null or not ts >= 1164 or not ts <= 1165) and (not user_id = 1 or not user_id is not null or not ts >= 1166 or not ts <= 1167) and (not user_id = 1 or not user_id is not null or not ts >= 1168 or not ts <= 1169) and (not user_id = 1 or not user_id is not null or not ts >= 1170 or not ts <= 1171) and (not user_id = 1 or not user_id is not null or not ts >= 1172 or not ts <= 1173) and (not user_id = 1 or not user_id is not null or not ts >= 1174 or not ts <= 1175) and (not user_id = 1 or not user_id is not null or not ts >= 1176 or not ts <= 1177) and (not user_id = 1 or not user_id is not null or not ts >= 1178 or not ts <= 1179) and (not user_id = 1 or not user_id is not null or not ts >= 1180 or not ts <= 1181) and (not user_id = 1 or not user_id is not null or not ts >= 1182 or not ts <= 1183) and (not user_id = 1 or not user_id is not null or not ts >= 1184 or not ts <= 1185) and (not user_id = 1 or not user_id is not null or not ts >= 1186 or not ts <= 1187) and (not user_id = 1 or not user_id is not null or not ts >= 1188 or not ts <= 1189) and (not user_id = 1 or not user_id is not null or not ts >= 1190 or not ts <= 1191) and (not user_id = 1 or not user_id is not null or not ts >= 1192 or not ts <= 1193) and (not user_id = 1 or not user_id is not null or not ts >= 1194 or not ts <= 1195) and (not user_id = 1 or not user_id is not null or not ts >= 1196 or not ts <= 1197) and (not user_id = 1 or not user_id is not null or not ts >= 1198 or not ts <= 1199) and (not user_id = 1 or not user_id is not null or not ts >= 1200 or not ts <= 1201) and (not user_id = 1 or not user_id is not null or not ts >= 1202 or not ts <= 1203) and (not user_id = 1 or not user_id is not null or not ts >= 1204 or not ts <= 1205) and (not user_id = 1 or not user_id is not null or not ts >= 1206 or not ts <= 1207) and (not user_id = 1 or not user_id is not null or not ts >= 1208 or not ts <= 1209) and (not user_id = 1 or not user_id is not null or not ts >= 1210 or not ts <= 1211) and (not user_id = 1 or not user_id is not null or not ts >= 1212 or not ts <= 1213) and (not user_id = 1 or not user_id is not null or not ts >= 1214 or not ts <= 1215) and (not user_id = 1 or not user_id is not null or not ts >= 1216 or not ts <= 1217) and (not user_id = 1 or not user_id is not null or not ts >= 1218 or not ts <= 1219) and (not user_id = 1 or not user_id is not null or not ts >= 1220 or not ts <= 1221) and (not user_id = 1 or not user_id is not null or not ts >= 1222 or not ts <= 1223) and (not user_id = 1 or not user_id is not null or not ts >= 1224 or not ts <= 1225) and (not user_id = 1 or not user_id is not null or not ts >= 1226 or not ts <= 1227) and (not user_id = 1 or not user_id is not null or not ts >= 1228 or not ts <= 1229) and (not user_id = 1 or not user_id is not null or not ts >= 1230 or not ts <= 1231) and (not user_id = 1 or not user_id is not null or not ts >= 1232 or not ts <= 1233) and (not user_id = 1 or not user_id is not null or not ts >= 1234 or not ts <= 1235) and (not user_id = 1 or not user_id is not null or not ts >= 1236 or not ts <= 1237) and (not user_id = 1 or not user_id is not null or not ts >= 1238 or not ts <= 1239) and (not user_id = 1 or not user_id is not null or not ts >= 1240 or not ts <= 1241) and (not user_id = 1 or not user_id is not null or not ts >= 1242 or not ts <= 1243) and (not user_id = 1 or not user_id is not null or not ts >= 1244 or not ts <= 1245) and (not user_id = 1 or not user_id is not null or not ts >= 1246 or not ts <= 1247) and (not user_id = 1 or not user_id is not null or not ts >= 1248 or not ts <= 1249) and (not user_id = 1 or not user_id is not null or not ts >= 1250 or not ts <= 1251) and (not user_id = 1 or not user_id is not null or not ts >= 1252 or not ts <= 1253) and (not user_id = 1 or not user_id is not null or not ts >= 1254 or not ts <= 1255) and (not user_id = 1 or not user_id is not null or not ts >= 1256 or not ts <= 1257) and (not user_id = 1 or not user_id is not null or not ts >= 1258 or not ts <= 1259) and (not user_id = 1 or not user_id is not null or not ts >= 1260 or not ts <= 1261) and (not user_id = 1 or not user_id is not null or not ts >= 1262 or not ts <= 1263) and (not user_id = 1 or not user_id is not null or not ts >= 1264 or not ts <= 1265) and (not user_id = 1 or not user_id is not null or not ts >= 1266 or not ts <= 1267) and (not user_id = 1 or not user_id is not null or not ts >= 1268 or not ts <= 1269) and (not user_id = 1 or not user_id is not null or not ts >= 1270 or not ts <= 1271) and (not user_id = 1 or not user_id is not null or not ts >= 1272 or not ts <= 1273) and (not user_id = 1 or not user_id is not null or not ts >= 1274 or not ts <= 1275) and (not user_id = 1 or not user_id is not null or not ts >= 1276 or not ts <= 1277) and (not user_id = 1 or not user_id is not null or not ts >= 1278 or not ts <= 1279) and (not user_id = 1 or not user_id is not null or not ts >= 1280 or not ts <= 1281) and (not user_id = 1 or not user_id is not null or not ts >= 1282 or not ts <= 1283) and (not user_id = 1 or not user_id is not null or not ts >= 1284 or not ts <= 1285) and (not user_id = 1 or not user_id is not null or not ts >= 1286 or not ts <= 1287) and (not user_id = 1 or not user_id is not null or not ts >= 1288 or not ts <= 1289) and (not user_id = 1 or not user_id is not null or not ts >= 1290 or not ts <= 1291) and (not user_id = 1 or not user_id is not null or not ts >= 1292 or not ts <= 1293) and (not user_id = 1 or not user_id is not null or not ts >= 1294 or not ts <= 1295) and (not user_id = 1 or not user_id is not null or not ts >= 1296 or not ts <= 1297) and (not user_id = 1 or not user_id is not null or not ts >= 1298 or not ts <= 1299) and (not user_id = 1 or not user_id is not null or not ts >= 1300 or not ts <= 1301) and (not user_id = 1 or not user_id is not null or not ts >= 1302 or not ts <= 1303) and (not user_id = 1 or not user_id is not null or not ts >= 1304 or not ts <= 1305) and (not user_id = 1 or not user_id is not null or not ts >= 1306 or not ts <= 1307) and (not user_id = 1 or not user_id is not null or not ts >= 1308 or not ts <= 1309) and (not user_id = 1 or not user_id is not null or not ts >= 1310 or not ts <= 1311) and (not user_id = 1 or not user_id is not null or not ts >= 1312 or not ts <= 1313) and (not user_id = 1 or not user_id is not null or not ts >= 1314 or not ts <= 1315) and (not user_id = 1 or not user_id is not null or not ts >= 1316 or not ts <= 1317) and (not user_id = 1 or not user_id is not null or not ts >= 1318 or not ts <= 1319) and (not user_id = 1 or not user_id is not null or not ts >= 1320 or not ts <= 1321) and (not user_id = 1 or not user_id is not null or not ts >= 1322 or not ts <= 1323) and (not user_id = 1 or not user_id is not null or not ts >= 1324 or not ts <= 1325) and (not user_id = 1 or not user_id is not null or not ts >= 1326 or not ts <= 1327) and (not user_id = 1 or not user_id is not null or not ts >= 1328 or not ts <= 1329) and (not user_id = 1 or not user_id is not null or not ts >= 1330 or not ts <= 1331) and (not user_id = 1 or not user_id is not null or not ts >= 1332 or not ts <= 1333) and (not user_id = 1 or not user_id is not null or not ts >= 1334 or not ts <= 1335) and (not user_id = 1 or not user_id is not null or not ts >= 1336 or not ts <= 1337) and (not user_id = 1 or not user_id is not null or not ts >= 1338 or not ts <= 1339) and (not user_id = 1 or not user_id is not null or not ts >= 1340 or not ts <= 1341) and (not user_id = 1 or not user_id is not null or not ts >= 1342 or not ts <= 1343) and (not user_id = 1 or not user_id is not null or not ts >= 1344 or not ts <= 1345) and (not user_id = 1 or not user_id is not null or not ts >= 1346 or not ts <= 1347) and (not user_id = 1 or not user_id is not null or not ts >= 1348 or not ts <= 1349) and (not user_id = 1 or not user_id is not null or not ts >= 1350 or not ts <= 1351) and (not user_id = 1 or not user_id is not null or not ts >= 1352 or not ts <= 1353) and (not user_id = 1 or not user_id is not null or not ts >= 1354 or not ts <= 1355) and (not user_id = 1 or not user_id is not null or not ts >= 1356 or not ts <= 1357) and (not user_id = 1 or not user_id is not null or not ts >= 1358 or not ts <= 1359) and (not user_id = 1 or not user_id is not null or not ts >= 1360 or not ts <= 1361) and (not user_id = 1 or not user_id is not null or not ts >= 1362 or not ts <= 1363) and (not user_id = 1 or not user_id is not null or not ts >= 1364 or not ts <= 1365) and (not user_id = 1 or not user_id is not null or not ts >= 1366 or not ts <= 1367) and (not user_id = 1 or not user_id is not null or not ts >= 1368 or not ts <= 1369) and (not user_id = 1 or not user_id is not null or not ts >= 1370 or not ts <= 1371) and (not user_id = 1 or not user_id is not null or not ts >= 1372 or not ts <= 1373) and (not user_id = 1 or not user_id is not null or not ts >= 1374 or not ts <= 1375) and (not user_id = 1 or not user_id is not null or not ts >= 1376 or not ts <= 1377) and (not user_id = 1 or not user_id is not null or not ts >= 1378 or not ts <= 1379) and (not user_id = 1 or not user_id is not null or not ts >= 1380 or not ts <= 1381) and (not user_id = 1 or not user_id is not null or not ts >= 1382 or not ts <= 1383) and (not user_id = 1 or not user_id is not null or not ts >= 1384 or not ts <= 1385) and (not user_id = 1 or not user_id is not null or not ts >= 1386 or not ts <= 1387) and (not user_id = 1 or not user_id is not null or not ts >= 1388 or not ts <= 1389) and (not user_id = 1 or not user_id is not null or not ts >= 1390 or not ts <= 1391) and (not user_id = 1 or not user_id is not null or not ts >= 1392 or not ts <= 1393) and (not user_id = 1 or not user_id is not null or not ts >= 1394 or not ts <= 1395) and (not user_id = 1 or not user_id is not null or not ts >= 1396 or not ts <= 1397) and (not user_id = 1 or not user_id is not null or not ts >= 1398 or not ts <= 1399) and (not user_id = 1 or not user_id is not null or not ts >= 1400 or not ts <= 1401) and (not user_id = 1 or not user_id is not null or not ts >= 1402 or not ts <= 1403) and (not user_id = 1 or not user_id is not null or not ts >= 1404 or not ts <= 1405) and (not user_id = 1 or not user_id is not null or not ts >= 1406 or not ts <= 1407) and (not user_id = 1 or not user_id is not null or not ts >= 1408 or not ts <= 1409) and (not user_id = 1 or not user_id is not null or not ts >= 1410 or not ts <= 1411) and (not user_id = 1 or not user_id is not null or not ts >= 1412 or not ts <= 1413) and (not user_id = 1 or not user_id is not null or not ts >= 1414 or not ts <= 1415) and (not user_id = 1 or not user_id is not null or not ts >= 1416 or not ts <= 1417) and (not user_id = 1 or not user_id is not null or not ts >= 1418 or not ts <= 1419) and (not user_id = 1 or not user_id is not null or not ts >= 1420 or not ts <= 1421) and (not user_id = 1 or not user_id is not null or not ts >= 1422 or not ts <= 1423) and (not user_id = 1 or not user_id is not null or not ts >= 1424 or not ts <= 1425) and (not user_id = 1 or not user_id is not null or not ts >= 1426 or not ts <= 1427) and (not user_id = 1 or not user_id is not null or not ts >= 1428 or not ts <= 1429) and (not user_id = 1 or not user_id is not null or not ts >= 1430 or not ts <= 1431) and (not user_id = 1 or not user_id is not null or not ts >= 1432 or not ts <= 1433) and (not user_id = 1 or not user_id is not null or not ts >= 1434 or not ts <= 1435) and (not user_id = 1 or not user_id is not null or not ts >= 1436 or not ts <= 1437) and (not user_id = 1 or not user_id is not null or not ts >= 1438 or not ts <= 1439) and (not user_id = 1 or not user_id is not null or not ts >= 1440 or not ts <= 1441) and (not user_id = 1 or not user_id is not null or not ts >= 1442 or not ts <= 1443) and (not user_id = 1 or not user_id is not null or not ts >= 1444 or not ts <= 1445) and (not user_id = 1 or not user_id is not null or not ts >= 1446 or not ts <= 1447) and (not user_id = 1 or not user_id is not null or not ts >= 1448 or not ts <= 1449) and (not user_id = 1 or not user_id is not null or not ts >= 1450 or not ts <= 1451) and (not user_id = 1 or not user_id is not null or not ts >= 1452 or not ts <= 1453) and (not user_id = 1 or not user_id is not null or not ts >= 1454 or not ts <= 1455) and (not user_id = 1 or not user_id is not null or not ts >= 1456 or not ts <= 1457) and (not user_id = 1 or not user_id is not null or not ts >= 1458 or not ts <= 1459) and (not user_id = 1 or not user_id is not null or not ts >= 1460 or not ts <= 1461) and (not user_id = 1 or not user_id is not null or not ts >= 1462 or not ts <= 1463) and (not user_id = 1 or not user_id is not null or not ts >= 1464 or not ts <= 1465) and (not user_id = 1 or not user_id is not null or not ts >= 1466 or not ts <= 1467) and (not user_id = 1 or not user_id is not null or not ts >= 1468 or not ts <= 1469) and (not user_id = 1 or not user_id is not null or not ts >= 1470 or not ts <= 1471) and (not user_id = 1 or not user_id is not null or not ts >= 1472 or not ts <= 1473) and (not user_id = 1 or not user_id is not null or not ts >= 1474 or not ts <= 1475) and (not user_id = 1 or not user_id is not null or not ts >= 1476 or not ts <= 1477) and (not user_id = 1 or not user_id is not null or not ts >= 1478 or not ts <= 1479) and (not user_id = 1 or not user_id is not null or not ts >= 1480 or not ts <= 1481) and (not user_id = 1 or not user_id is not null or not ts >= 1482 or not ts <= 1483) and (not user_id = 1 or not user_id is not null or not ts >= 1484 or not ts <= 1485) and (not user_id = 1 or not user_id is not null or not ts >= 1486 or not ts <= 1487) and (not user_id = 1 or not user_id is not null or not ts >= 1488 or not ts <= 1489) and (not user_id = 1 or not user_id is not null or not ts >= 1490 or not ts <= 1491) and (not user_id = 1 or not user_id is not null or not ts >= 1492 or not ts <= 1493) and (not user_id = 1 or not user_id is not null or not ts >= 1494 or not ts <= 1495) and (not user_id = 1 or not user_id is not null or not ts >= 1496 or not ts <= 1497) and (not user_id = 1 or not user_id is not null or not ts >= 1498 or not ts <= 1499) and (not user_id = 1 or not user_id is not null or not ts >= 1500 or not ts <= 1501) and (not user_id = 1 or not user_id is not null or not ts >= 1502 or not ts <= 1503) and (not user_id = 1 or not user_id is not null or not ts >= 1504 or not ts <= 1505) and (not user_id = 1 or not user_id is not null or not ts >= 1506 or not ts <= 1507) and (not user_id = 1 or not user_id is not null or not ts >= 1508 or not ts <= 1509) and (not user_id = 1 or not user_id is not null or not ts >= 1510 or not ts <= 1511) and (not user_id = 1 or not user_id is not null or not ts >= 1512 or not ts <= 1513) and (not user_id = 1 or not user_id is not null or not ts >= 1514 or not ts <= 1515) and (not user_id = 1 or not user_id is not null or not ts >= 1516 or not ts <= 1517) and (not user_id = 1 or not user_id is not null or not ts >= 1518 or not ts <= 1519) and (not user_id = 1 or not user_id is not null or not ts >= 1520 or not ts <= 1521) and (not user_id = 1 or not user_id is not null or not ts >= 1522 or not ts <= 1523) and (not user_id = 1 or not user_id is not null or not ts >= 1524 or not ts <= 1525) and (not user_id = 1 or not user_id is not null or not ts >= 1526 or not ts <= 1527) and (not user_id = 1 or not user_id is not null or not ts >= 1528 or not ts <= 1529) and (not user_id = 1 or not user_id is not null or not ts >= 1530 or not ts <= 1531) and (not user_id = 1 or not user_id is not null or not ts >= 1532 or not ts <= 1533) and (not user_id = 1 or not user_id is not null or not ts >= 1534 or not ts <= 1535) and (not user_id = 1 or not user_id is not null or not ts >= 1536 or not ts <= 1537) and (not user_id = 1 or not user_id is not null or not ts >= 1538 or not ts <= 1539) and (not user_id = 1 or not user_id is not null or not ts >= 1540 or not ts <= 1541) and (not user_id = 1 or not user_id is not null or not ts >= 1542 or not ts <= 1543) and (not user_id = 1 or not user_id is not null or not ts >= 1544 or not ts <= 1545) and (not user_id = 1 or not user_id is not null or not ts >= 1546 or not ts <= 1547) and (not user_id = 1 or not user_id is not null or not ts >= 1548 or not ts <= 1549) and (not user_id = 1 or not user_id is not null or not ts >= 1550 or not ts <= 1551) and (not user_id = 1 or not user_id is not null or not ts >= 1552 or not ts <= 1553) and (not user_id = 1 or not user_id is not null or not ts >= 1554 or not ts <= 1555) and (not user_id = 1 or not user_id is not null or not ts >= 1556 or not ts <= 1557) and (not user_id = 1 or not user_id is not null or not ts >= 1558 or not ts <= 1559) and (not user_id = 1 or not user_id is not null or not ts >= 1560 or not ts <= 1561) and (not user_id = 1 or not user_id is not null or not ts >= 1562 or not ts <= 1563) and (not user_id = 1 or not user_id is not null or not ts >= 1564 or not ts <= 1565) and (not user_id = 1 or not user_id is not null or not ts >= 1566 or not ts <= 1567) and (not user_id = 1 or not user_id is not null or not ts >= 1568 or not ts <= 1569) and (not user_id = 1 or not user_id is not null or not ts >= 1570 or not ts <= 1571) and (not user_id = 1 or not user_id is not null or not ts >= 1572 or not ts <= 1573) and (not user_id = 1 or not user_id is not null or not ts >= 1574 or not ts <= 1575) and (not user_id = 1 or not user_id is not null or not ts >= 1576 or not ts <= 1577) and (not user_id = 1 or not user_id is not null or not ts >= 1578 or not ts <= 1579) and (not user_id = 1 or not user_id is not null or not ts >= 1580 or not ts <= 1581) and (not user_id = 1 or not user_id is not null or not ts >= 1582 or not ts <= 1583) and (not user_id = 1 or not user_id is not null or not ts >= 1584 or not ts <= 1585) and (not user_id = 1 or not user_id is not null or not ts >= 1586 or not ts <= 1587) and (not user_id = 1 or not user_id is not null or not ts >= 1588 or not ts <= 1589) and (not user_id = 1 or not user_id is not null or not ts >= 1590 or not ts <= 1591) and (not user_id = 1 or not user_id is not null or not ts >= 1592 or not ts <= 1593) and (not user_id = 1 or not user_id is not null or not ts >= 1594 or not ts <= 1595) and (not user_id = 1 or not user_id is not null or not ts >= 1596 or not ts <= 1597) and (not user_id = 1 or not user_id is not null or not ts >= 1598 or not ts <= 1599) and (not user_id = 1 or not user_id is not null or not ts >= 1600 or not ts <= 1601) and (not user_id = 1 or not user_id is not null or not ts >= 1602 or not ts <= 1603) and (not user_id = 1 or not user_id is not null or not ts >= 1604 or not ts <= 1605) and (not user_id = 1 or not user_id is not null or not ts >= 1606 or not ts <= 1607) and (not user_id = 1 or not user_id is not null or not ts >= 1608 or not ts <= 1609) and (not user_id = 1 or not user_id is not null or not ts >= 1610 or not ts <= 1611) and (not user_id = 1 or not user_id is not null or not ts >= 1612 or not ts <= 1613) and (not user_id = 1 or not user_id is not null or not ts >= 1614 or not ts <= 1615) and (not user_id = 1 or not user_id is not null or not ts >= 1616 or not ts <= 1617) and (not user_id = 1 or not user_id is not null or not ts >= 1618 or not ts <= 1619) and (not user_id = 1 or not user_id is not null or not ts >= 1620 or not ts <= 1621) and (not user_id = 1 or not user_id is not null or not ts >= 1622 or not ts <= 1623) and (not user_id = 1 or not user_id is not null or not ts >= 1624 or not ts <= 1625) and (not user_id = 1 or not user_id is not null or not ts >= 1626 or not ts <= 1627) and (not user_id = 1 or not user_id is not null or not ts >= 1628 or not ts <= 1629) and (not user_id = 1 or not user_id is not null or not ts >= 1630 or not ts <= 1631) and (not user_id = 1 or not user_id is not null or not ts >= 1632 or not ts <= 1633) and (not user_id = 1 or not user_id is not null or not ts >= 1634 or not ts <= 1635) and (not user_id = 1 or not user_id is not null or not ts >= 1636 or not ts <= 1637) and (not user_id = 1 or not user_id is not null or not ts >= 1638 or not ts <= 1639) and (not user_id = 1 or not user_id is not null or not ts >= 1640 or not ts <= 1641) and (not user_id = 1 or not user_id is not null or not ts >= 1642 or not ts <= 1643) and (not user_id = 1 or not user_id is not null or not ts >= 1644 or not ts <= 1645) and (not user_id = 1 or not user_id is not null or not ts >= 1646 or not ts <= 1647) and (not user_id = 1 or not user_id is not null or not ts >= 1648 or not ts <= 1649) and (not user_id = 1 or not user_id is not null or not ts >= 1650 or not ts <= 1651) and (not user_id = 1 or not user_id is not null or not ts >= 1652 or not ts <= 1653) and (not user_id = 1 or not user_id is not null or not ts >= 1654 or not ts <= 1655) and (not user_id = 1 or not user_id is not null or not ts >= 1656 or not ts <= 1657) and (not user_id = 1 or not user_id is not null or not ts >= 1658 or not ts <= 1659) and (not user_id = 1 or not user_id is not null or not ts >= 1660 or not ts <= 1661) and (not user_id = 1 or not user_id is not null or not ts >= 1662 or not ts <= 1663) and (not user_id = 1 or not user_id is not null or not ts >= 1664 or not ts <= 1665) and (not user_id = 1 or not user_id is not null or not ts >= 1666 or not ts <= 1667) and (not user_id = 1 or not user_id is not null or not ts >= 1668 or not ts <= 1669) and (not user_id = 1 or not user_id is not null or not ts >= 1670 or not ts <= 1671) and (not user_id = 1 or not user_id is not null or not ts >= 1672 or not ts <= 1673) and (not user_id = 1 or not user_id is not null or not ts >= 1674 or not ts <= 1675) and (not user_id = 1 or not user_id is not null or not ts >= 1676 or not ts <= 1677) and (not user_id = 1 or not user_id is not null or not ts >= 1678 or not ts <= 1679) and (not user_id = 1 or not user_id is not null or not ts >= 1680 or not ts <= 1681) and (not user_id = 1 or not user_id is not null or not ts >= 1682 or not ts <= 1683) and (not user_id = 1 or not user_id is not null or not ts >= 1684 or not ts <= 1685) and (not user_id = 1 or not user_id is not null or not ts >= 1686 or not ts <= 1687) and (not user_id = 1 or not user_id is not null or not ts >= 1688 or not ts <= 1689) and (not user_id = 1 or not user_id is not null or not ts >= 1690 or not ts <= 1691) and (not user_id = 1 or not user_id is not null or not ts >= 1692 or not ts <= 1693) and (not user_id = 1 or not user_id is not null or not ts >= 1694 or not ts <= 1695) and (not user_id = 1 or not user_id is not null or not ts >= 1696 or not ts <= 1697) and (not user_id = 1 or not user_id is not null or not ts >= 1698 or not ts <= 1699) and (not user_id = 1 or not user_id is not null or not ts >= 1700 or not ts <= 1701) and (not user_id = 1 or not user_id is not null or not ts >= 1702 or not ts <= 1703) and (not user_id = 1 or not user_id is not null or not ts >= 1704 or not ts <= 1705) and (not user_id = 1 or not user_id is not null or not ts >= 1706 or not ts <= 1707) and (not user_id = 1 or not user_id is not null or not ts >= 1708 or not ts <= 1709) and (not user_id = 1 or not user_id is not null or not ts >= 1710 or not ts <= 1711) and (not user_id = 1 or not user_id is not null or not ts >= 1712 or not ts <= 1713) and (not user_id = 1 or not user_id is not null or not ts >= 1714 or not ts <= 1715) and (not user_id = 1 or not user_id is not null or not ts >= 1716 or not ts <= 1717) and (not user_id = 1 or not user_id is not null or not ts >= 1718 or not ts <= 1719) and (not user_id = 1 or not user_id is not null or not ts >= 1720 or not ts <= 1721) and (not user_id = 1 or not user_id is not null or not ts >= 1722 or not ts <= 1723) and (not user_id = 1 or not user_id is not null or not ts >= 1724 or not ts <= 1725) and (not user_id = 1 or not user_id is not null or not ts >= 1726 or not ts <= 1727) and (not user_id = 1 or not user_id is not null or not ts >= 1728 or not ts <= 1729) and (not user_id = 1 or not user_id is not null or not ts >= 1730 or not ts <= 1731) and (not user_id = 1 or not user_id is not null or not ts >= 1732 or not ts <= 1733) and (not user_id = 1 or not user_id is not null or not ts >= 1734 or not ts <= 1735) and (not user_id = 1 or not user_id is not null or not ts >= 1736 or not ts <= 1737) and (not user_id = 1 or not user_id is not null or not ts >= 1738 or not ts <= 1739) and (not user_id = 1 or not user_id is not null or not ts >= 1740 or not ts <= 1741) and (not user_id = 1 or not user_id is not null or not ts >= 1742 or not ts <= 1743) and (not user_id = 1 or not user_id is not null or not ts >= 1744 or not ts <= 1745) and (not user_id = 1 or not user_id is not null or not ts >= 1746 or not ts <= 1747) and (not user_id = 1 or not user_id is not null or not ts >= 1748 or not ts <= 1749) and (not user_id = 1 or not user_id is not null or not ts >= 1750 or not ts <= 1751) and (not user_id = 1 or not user_id is not null or not ts >= 1752 or not ts <= 1753) and (not user_id = 1 or not user_id is not null or not ts >= 1754 or not ts <= 1755) and (not user_id = 1 or not user_id is not null or not ts >= 1756 or not ts <= 1757) and (not user_id = 1 or not user_id is not null or not ts >= 1758 or not ts <= 1759) and (not user_id = 1 or not user_id is not null or not ts >= 1760 or not ts <= 1761) and (not user_id = 1 or not user_id is not null or not ts >= 1762 or not ts <= 1763) and (not user_id = 1 or not user_id is not null or not ts >= 1764 or not ts <= 1765) and (not user_id = 1 or not user_id is not null or not ts >= 1766 or not ts <= 1767) and (not user_id = 1 or not user_id is not null or not ts >= 1768 or not ts <= 1769) and (not user_id = 1 or not user_id is not null or not ts >= 1770 or not ts <= 1771) and (not user_id = 1 or not user_id is not null or not ts >= 1772 or not ts <= 1773) and (not user_id = 1 or not user_id is not null or not ts >= 1774 or not ts <= 1775) and (not user_id = 1 or not user_id is not null or not ts >= 1776 or not ts <= 1777) and (not user_id = 1 or not user_id is not null or not ts >= 1778 or not ts <= 1779) and (not user_id = 1 or not user_id is not null or not ts >= 1780 or not ts <= 1781) and (not user_id = 1 or not user_id is not null or not ts >= 1782 or not ts <= 1783) and (not user_id = 1 or not user_id is not null or not ts >= 1784 or not ts <= 1785) and (not user_id = 1 or not user_id is not null or not ts >= 1786 or not ts <= 1787) and (not user_id = 1 or not user_id is not null or not ts >= 1788 or not ts <= 1789) and (not user_id = 1 or not user_id is not null or not ts >= 1790 or not ts <= 1791) and (not user_id = 1 or not user_id is not null or not ts >= 1792 or not ts <= 1793) and (not user_id = 1 or not user_id is not null or not ts >= 1794 or not ts <= 1795) and (not user_id = 1 or not user_id is not null or not ts >= 1796 or not ts <= 1797) and (not user_id = 1 or not user_id is not null or not ts >= 1798 or not ts <= 1799) and (not user_id = 1 or not user_id is not null or not ts >= 1800 or not ts <= 1801) and (not user_id = 1 or not user_id is not null or not ts >= 1802 or not ts <= 1803) and (not user_id = 1 or not user_id is not null or not ts >= 1804 or not ts <= 1805) and (not user_id = 1 or not user_id is not null or not ts >= 1806 or not ts <= 1807) and (not user_id = 1 or not user_id is not null or not ts >= 1808 or not ts <= 1809) and (not user_id = 1 or not user_id is not null or not ts >= 1810 or not ts <= 1811) and (not user_id = 1 or not user_id is not null or not ts >= 1812 or not ts <= 1813) and (not user_id = 1 or not user_id is not null or not ts >= 1814 or not ts <= 1815) and (not user_id = 1 or not user_id is not null or not ts >= 1816 or not ts <= 1817) and (not user_id = 1 or not user_id is not null or not ts >= 1818 or not ts <= 1819) and (not user_id = 1 or not user_id is not null or not ts >= 1820 or not ts <= 1821) and (not user_id = 1 or not user_id is not null or not ts >= 1822 or not ts <= 1823) and (not user_id = 1 or not user_id is not null or not ts >= 1824 or not ts <= 1825) and (not user_id = 1 or not user_id is not null or not ts >= 1826 or not ts <= 1827) and (not user_id = 1 or not user_id is not null or not ts >= 1828 or not ts <= 1829) and (not user_id = 1 or not user_id is not null or not ts >= 1830 or not ts <= 1831) and (not user_id = 1 or not user_id is not null or not ts >= 1832 or not ts <= 1833) and (not user_id = 1 or not user_id is not null or not ts >= 1834 or not ts <= 1835) and (not user_id = 1 or not user_id is not null or not ts >= 1836 or not ts <= 1837) and (not user_id = 1 or not user_id is not null or not ts >= 1838 or not ts <= 1839) and (not user_id = 1 or not user_id is not null or not ts >= 1840 or not ts <= 1841) and (not user_id = 1 or not user_id is not null or not ts >= 1842 or not ts <= 1843) and (not user_id = 1 or not user_id is not null or not ts >= 1844 or not ts <= 1845) and (not user_id = 1 or not user_id is not null or not ts >= 1846 or not ts <= 1847) and (not user_id = 1 or not user_id is not null or not ts >= 1848 or not ts <= 1849) and (not user_id = 1 or not user_id is not null or not ts >= 1850 or not ts <= 1851) and (not user_id = 1 or not user_id is not null or not ts >= 1852 or not ts <= 1853) and (not user_id = 1 or not user_id is not null or not ts >= 1854 or not ts <= 1855) and (not user_id = 1 or not user_id is not null or not ts >= 1856 or not ts <= 1857) and (not user_id = 1 or not user_id is not null or not ts >= 1858 or not ts <= 1859) and (not user_id = 1 or not user_id is not null or not ts >= 1860 or not ts <= 1861) and (not user_id = 1 or not user_id is not null or not ts >= 1862 or not ts <= 1863) and (not user_id = 1 or not user_id is not null or not ts >= 1864 or not ts <= 1865) and (not user_id = 1 or not user_id is not null or not ts >= 1866 or not ts <= 1867) and (not user_id = 1 or not user_id is not null or not ts >= 1868 or not ts <= 1869) and (not user_id = 1 or not user_id is not null or not ts >= 1870 or not ts <= 1871) and (not user_id = 1 or not user_id is not null or not ts >= 1872 or not ts <= 1873) and (not user_id = 1 or not user_id is not null or not ts >= 1874 or not ts <= 1875) and (not user_id = 1 or not user_id is not null or not ts >= 1876 or not ts <= 1877) and (not user_id = 1 or not user_id is not null or not ts >= 1878 or not ts <= 1879) and (not user_id = 1 or not user_id is not null or not ts >= 1880 or not ts <= 1881) and (not user_id = 1 or not user_id is not null or not ts >= 1882 or not ts <= 1883) and (not user_id = 1 or not user_id is not null or not ts >= 1884 or not ts <= 1885) and (not user_id = 1 or not user_id is not null or not ts >= 1886 or not ts <= 1887) and (not user_id = 1 or not user_id is not null or not ts >= 1888 or not ts <= 1889) and (not user_id = 1 or not user_id is not null or not ts >= 1890 or not ts <= 1891) and (not user_id = 1 or not user_id is not null or not ts >= 1892 or not ts <= 1893) and (not user_id = 1 or not user_id is not null or not ts >= 1894 or not ts <= 1895) and (not user_id = 1 or not user_id is not null or not ts >= 1896 or not ts <= 1897) and (not user_id = 1 or not user_id is not null or not ts >= 1898 or not ts <= 1899) and (not user_id = 1 or not user_id is not null or not ts >= 1900 or not ts <= 1901) and (not user_id = 1 or not user_id is not null or not ts >= 1902 or not ts <= 1903) and (not user_id = 1 or not user_id is not null or not ts >= 1904 or not ts <= 1905) and (not user_id = 1 or not user_id is not null or not ts >= 1906 or not ts <= 1907) and (not user_id = 1 or not user_id is not null or not ts >= 1908 or not ts <= 1909) and (not user_id = 1 or not user_id is not null or not ts >= 1910 or not ts <= 1911) and (not user_id = 1 or not user_id is not null or not ts >= 1912 or not ts <= 1913) and (not user_id = 1 or not user_id is not null or not ts >= 1914 or not ts <= 1915) and (not user_id = 1 or not user_id is not null or not ts >= 1916 or not ts <= 1917) and (not user_id = 1 or not user_id is not null or not ts >= 1918 or not ts <= 1919) and (not user_id = 1 or not user_id is not null or not ts >= 1920 or not ts <= 1921) and (not user_id = 1 or not user_id is not null or not ts >= 1922 or not ts <= 1923) and (not user_id = 1 or not user_id is not null or not ts >= 1924 or not ts <= 1925) and (not user_id = 1 or not user_id is not null or not ts >= 1926 or not ts <= 1927) and (not user_id = 1 or not user_id is not null or not ts >= 1928 or not ts <= 1929) and (not user_id = 1 or not user_id is not null or not ts >= 1930 or not ts <= 1931) and (not user_id = 1 or not user_id is not null or not ts >= 1932 or not ts <= 1933) and (not user_id = 1 or not user_id is not null or not ts >= 1934 or not ts <= 1935) and (not user_id = 1 or not user_id is not null or not ts >= 1936 or not ts <= 1937) and (not user_id = 1 or not user_id is not null or not ts >= 1938 or not ts <= 1939) and (not user_id = 1 or not user_id is not null or not ts >= 1940 or not ts <= 1941) and (not user_id = 1 or not user_id is not null or not ts >= 1942 or not ts <= 1943) and (not user_id = 1 or not user_id is not null or not ts >= 1944 or not ts <= 1945) and (not user_id = 1 or not user_id is not null or not ts >= 1946 or not ts <= 1947) and (not user_id = 1 or not user_id is not null or not ts >= 1948 or not ts <= 1949) and (not user_id = 1 or not user_id is not null or not ts >= 1950 or not ts <= 1951) and (not user_id = 1 or not user_id is not null or not ts >= 1952 or not ts <= 1953) and (not user_id = 1 or not user_id is not null or not ts >= 1954 or not ts <= 1955) and (not user_id = 1 or not user_id is not null or not ts >= 1956 or not ts <= 1957) and (not user_id = 1 or not user_id is not null or not ts >= 1958 or not ts <= 1959) and (not user_id = 1 or not user_id is not null or not ts >= 1960 or not ts <= 1961) and (not user_id = 1 or not user_id is not null or not ts >= 1962 or not ts <= 1963) and (not user_id = 1 or not user_id is not null or not ts >= 1964 or not ts <= 1965) and (not user_id = 1 or not user_id is not null or not ts >= 1966 or not ts <= 1967) and (not user_id = 1 or not user_id is not null or not ts >= 1968 or not ts <= 1969) and (not user_id = 1 or not user_id is not null or not ts >= 1970 or not ts <= 1971) and (not user_id = 1 or not user_id is not null or not ts >= 1972 or not ts <= 1973) and (not user_id = 1 or not user_id is not null or not ts >= 1974 or not ts <= 1975) and (not user_id = 1 or not user_id is not null or not ts >= 1976 or not ts <= 1977) and (not user_id = 1 or not user_id is not null or not ts >= 1978 or not ts <= 1979) and (not user_id = 1 or not user_id is not null or not ts >= 1980 or not ts <= 1981) and (not user_id = 1 or not user_id is not null or not ts >= 1982 or not ts <= 1983) and (not user_id = 1 or not user_id is not null or not ts >= 1984 or not ts <= 1985) and (not user_id = 1 or not user_id is not null or not ts >= 1986 or not ts <= 1987) and (not user_id = 1 or not user_id is not null or not ts >= 1988 or not ts <= 1989) and (not user_id = 1 or not user_id is not null or not ts >= 1990 or not ts <= 1991) and (not user_id = 1 or not user_id is not null or not ts >= 1992 or not ts <= 1993) and (not user_id = 1 or not user_id is not null or not ts >= 1994 or not ts <= 1995) and (not user_id = 1 or not user_id is not null or not ts >= 1996 or not ts <= 1997) and (not user_id = 1 or not user_id is not null or not ts >= 1998 or not ts <= 1999) and (not user_id = 1 or not user_id is not null or not ts >= 11000 or not ts <= 11001) and (not user_id = 1 or not user_id is not null or not ts >= 11002 or not ts <= 11003) and (not user_id = 1 or not user_id is not null or not ts >= 11004 or not ts <= 11005) and (not user_id = 1 or not user_id is not null or not ts >= 11006 or not ts <= 11007) and (not user_id = 1 or not user_id is not null or not ts >= 11008 or not ts <= 11009) and (not user_id = 1 or not user_id is not null or not ts >= 11010 or not ts <= 11011) and (not user_id = 1 or not user_id is not null or not ts >= 11012 or not ts <= 11013) and (not user_id = 1 or not user_id is not null or not ts >= 11014 or not ts <= 11015) and (not user_id = 1 or not user_id is not null or not ts >= 11016 or not ts <= 11017) and (not user_id = 1 or not user_id is not null or not ts >= 11018 or not ts <= 11019) and (not user_id = 1 or not user_id is not null or not ts >= 11020 or not ts <= 11021) and (not user_id = 1 or not user_id is not null or not ts >= 11022 or not ts <= 11023) and (not user_id = 1 or not user_id is not null or not ts >= 11024 or not ts <= 11025) and (not user_id = 1 or not user_id is not null or not ts >= 11026 or not ts <= 11027) and (not user_id = 1 or not user_id is not null or not ts >= 11028 or not ts <= 11029) and (not user_id = 1 or not user_id is not null or not ts >= 11030 or not ts <= 11031) and (not user_id = 1 or not user_id is not null or not ts >= 11032 or not ts <= 11033) and (not user_id = 1 or not user_id is not null or not ts >= 11034 or not ts <= 11035) and (not user_id = 1 or not user_id is not null or not ts >= 11036 or not ts <= 11037) and (not user_id = 1 or not user_id is not null or not ts >= 11038 or not ts <= 11039) and (not user_id = 1 or not user_id is not null or not ts >= 11040 or not ts <= 11041) and (not user_id = 1 or not user_id is not null or not ts >= 11042 or not ts <= 11043) and (not user_id = 1 or not user_id is not null or not ts >= 11044 or not ts <= 11045) and (not user_id = 1 or not user_id is not null or not ts >= 11046 or not ts <= 11047) and (not user_id = 1 or not user_id is not null or not ts >= 11048 or not ts <= 11049) and (not user_id = 1 or not user_id is not null or not ts >= 11050 or not ts <= 11051) and (not user_id = 1 or not user_id is not null or not ts >= 11052 or not ts <= 11053) and (not user_id = 1 or not user_id is not null or not ts >= 11054 or not ts <= 11055) and (not user_id = 1 or not user_id is not null or not ts >= 11056 or not ts <= 11057) and (not user_id = 1 or not user_id is not null or not ts >= 11058 or not ts <= 11059) and (not user_id = 1 or not user_id is not null or not ts >= 11060 or not ts <= 11061) and (not user_id = 1 or not user_id is not null or not ts >= 11062 or not ts <= 11063) and (not user_id = 1 or not user_id is not null or not ts >= 11064 or not ts <= 11065) and (not user_id = 1 or not user_id is not null or not ts >= 11066 or not ts <= 11067) and (not user_id = 1 or not user_id is not null or not ts >= 11068 or not ts <= 11069) and (not user_id = 1 or not user_id is not null or not ts >= 11070 or not ts <= 11071) and (not user_id = 1 or not user_id is not null or not ts >= 11072 or not ts <= 11073) and (not user_id = 1 or not user_id is not null or not ts >= 11074 or not ts <= 11075) and (not user_id = 1 or not user_id is not null or not ts >= 11076 or not ts <= 11077) and (not user_id = 1 or not user_id is not null or not ts >= 11078 or not ts <= 11079) and (not user_id = 1 or not user_id is not null or not ts >= 11080 or not ts <= 11081) and (not user_id = 1 or not user_id is not null or not ts >= 11082 or not ts <= 11083) and (not user_id = 1 or not user_id is not null or not ts >= 11084 or not ts <= 11085) and (not user_id = 1 or not user_id is not null or not ts >= 11086 or not ts <= 11087) and (not user_id = 1 or not user_id is not null or not ts >= 11088 or not ts <= 11089) and (not user_id = 1 or not user_id is not null or not ts >= 11090 or not ts <= 11091) and (not user_id = 1 or not user_id is not null or not ts >= 11092 or not ts <= 11093) and (not user_id = 1 or not user_id is not null or not ts >= 11094 or not ts <= 11095) and (not user_id = 1 or not user_id is not null or not ts >= 11096 or not ts <= 11097) and (not user_id = 1 or not user_id is not null or not ts >= 11098 or not ts <= 11099) and (not user_id = 1 or not user_id is not null or not ts >= 11100 or not ts <= 11101) and (not user_id = 1 or not user_id is not null or not ts >= 11102 or not ts <= 11103) and (not user_id = 1 or not user_id is not null or not ts >= 11104 or not ts <= 11105) and (not user_id = 1 or not user_id is not null or not ts >= 11106 or not ts <= 11107) and (not user_id = 1 or not user_id is not null or not ts >= 11108 or not ts <= 11109) and (not user_id = 1 or not user_id is not null or not ts >= 11110 or not ts <= 11111) and (not user_id = 1 or not user_id is not null or not ts >= 11112 or not ts <= 11113) and (not user_id = 1 or not user_id is not null or not ts >= 11114 or not ts <= 11115) and (not user_id = 1 or not user_id is not null or not ts >= 11116 or not ts <= 11117) and (not user_id = 1 or not user_id is not null or not ts >= 11118 or not ts <= 11119) and (not user_id = 1 or not user_id is not null or not ts >= 11120 or not ts <= 11121) and (not user_id = 1 or not user_id is not null or not ts >= 11122 or not ts <= 11123) and (not user_id = 1 or not user_id is not null or not ts >= 11124 or not ts <= 11125) and (not user_id = 1 or not user_id is not null or not ts >= 11126 or not ts <= 11127) and (not user_id = 1 or not user_id is not null or not ts >= 11128 or not ts <= 11129) and (not user_id = 1 or not user_id is not null or not ts >= 11130 or not ts <= 11131) and (not user_id = 1 or not user_id is not null or not ts >= 11132 or not ts <= 11133) and (not user_id = 1 or not user_id is not null or not ts >= 11134 or not ts <= 11135) and (not user_id = 1 or not user_id is not null or not ts >= 11136 or not ts <= 11137) and (not user_id = 1 or not user_id is not null or not ts >= 11138 or not ts <= 11139) and (not user_id = 1 or not user_id is not null or not ts >= 11140 or not ts <= 11141) and (not user_id = 1 or not user_id is not null or not ts >= 11142 or not ts <= 11143) and (not user_id = 1 or not user_id is not null or not ts >= 11144 or not ts <= 11145) and (not user_id = 1 or not user_id is not null or not ts >= 11146 or not ts <= 11147) and (not user_id = 1 or not user_id is not null or not ts >= 11148 or not ts <= 11149) and (not user_id = 1 or not user_id is not null or not ts >= 11150 or not ts <= 11151) and (not user_id = 1 or not user_id is not null or not ts >= 11152 or not ts <= 11153) and (not user_id = 1 or not user_id is not null or not ts >= 11154 or not ts <= 11155) and (not user_id = 1 or not user_id is not null or not ts >= 11156 or not ts <= 11157) and (not user_id = 1 or not user_id is not null or not ts >= 11158 or not ts <= 11159) and (not user_id = 1 or not user_id is not null or not ts >= 11160 or not ts <= 11161) and (not user_id = 1 or not user_id is not null or not ts >= 11162 or not ts <= 11163) and (not user_id = 1 or not user_id is not null or not ts >= 11164 or not ts <= 11165) and (not user_id = 1 or not user_id is not null or not ts >= 11166 or not ts <= 11167) and (not user_id = 1 or not user_id is not null or not ts >= 11168 or not ts <= 11169) and (not user_id = 1 or not user_id is not null or not ts >= 11170 or not ts <= 11171) and (not user_id = 1 or not user_id is not null or not ts >= 11172 or not ts <= 11173) and (not user_id = 1 or not user_id is not null or not ts >= 11174 or not ts <= 11175) and (not user_id = 1 or not user_id is not null or not ts >= 11176 or not ts <= 11177) and (not user_id = 1 or not user_id is not null or not ts >= 11178 or not ts <= 11179) and (not user_id = 1 or not user_id is not null or not ts >= 11180 or not ts <= 11181) and (not user_id = 1 or not user_id is not null or not ts >= 11182 or not ts <= 11183) and (not user_id = 1 or not user_id is not null or not ts >= 11184 or not ts <= 11185) and (not user_id = 1 or not user_id is not null or not ts >= 11186 or not ts <= 11187) and (not user_id = 1 or not user_id is not null or not ts >= 11188 or not ts <= 11189) and (not user_id = 1 or not user_id is not null or not ts >= 11190 or not ts <= 11191) and (not user_id = 1 or not user_id is not null or not ts >= 11192 or not ts <= 11193) and (not user_id = 1 or not user_id is not null or not ts >= 11194 or not ts <= 11195) and (not user_id = 1 or not user_id is not null or not ts >= 11196 or not ts <= 11197) and (not user_id = 1 or not user_id is not null or not ts >= 11198 or not ts <= 11199) and (not user_id = 1 or not user_id is not null or not ts >= 11200 or not ts <= 11201) and (not user_id = 1 or not user_id is not null or not ts >= 11202 or not ts <= 11203) and (not user_id = 1 or not user_id is not null or not ts >= 11204 or not ts <= 11205) and (not user_id = 1 or not user_id is not null or not ts >= 11206 or not ts <= 11207) and (not user_id = 1 or not user_id is not null or not ts >= 11208 or not ts <= 11209) and (not user_id = 1 or not user_id is not null or not ts >= 11210 or not ts <= 11211) and (not user_id = 1 or not user_id is not null or not ts >= 11212 or not ts <= 11213) and (not user_id = 1 or not user_id is not null or not ts >= 11214 or not ts <= 11215) and (not user_id = 1 or not user_id is not null or not ts >= 11216 or not ts <= 11217) and (not user_id = 1 or not user_id is not null or not ts >= 11218 or not ts <= 11219) and (not user_id = 1 or not user_id is not null or not ts >= 11220 or not ts <= 11221) and (not user_id = 1 or not user_id is not null or not ts >= 11222 or not ts <= 11223) and (not user_id = 1 or not user_id is not null or not ts >= 11224 or not ts <= 11225) and (not user_id = 1 or not user_id is not null or not ts >= 11226 or not ts <= 11227) and (not user_id = 1 or not user_id is not null or not ts >= 11228 or not ts <= 11229) and (not user_id = 1 or not user_id is not null or not ts >= 11230 or not ts <= 11231) and (not user_id = 1 or not user_id is not null or not ts >= 11232 or not ts <= 11233) and (not user_id = 1 or not user_id is not null or not ts >= 11234 or not ts <= 11235) and (not user_id = 1 or not user_id is not null or not ts >= 11236 or not ts <= 11237) and (not user_id = 1 or not user_id is not null or not ts >= 11238 or not ts <= 11239) and (not user_id = 1 or not user_id is not null or not ts >= 11240 or not ts <= 11241) and (not user_id = 1 or not user_id is not null or not ts >= 11242 or not ts <= 11243) and (not user_id = 1 or not user_id is not null or not ts >= 11244 or not ts <= 11245) and (not user_id = 1 or not user_id is not null or not ts >= 11246 or not ts <= 11247) and (not user_id = 1 or not user_id is not null or not ts >= 11248 or not ts <= 11249) and (not user_id = 1 or not user_id is not null or not ts >= 11250 or not ts <= 11251) and (not user_id = 1 or not user_id is not null or not ts >= 11252 or not ts <= 11253) and (not user_id = 1 or not user_id is not null or not ts >= 11254 or not ts <= 11255) and (not user_id = 1 or not user_id is not null or not ts >= 11256 or not ts <= 11257) and (not user_id = 1 or not user_id is not null or not ts >= 11258 or not ts <= 11259) and (not user_id = 1 or not user_id is not null or not ts >= 11260 or not ts <= 11261) and (not user_id = 1 or not user_id is not null or not ts >= 11262 or not ts <= 11263) and (not user_id = 1 or not user_id is not null or not ts >= 11264 or not ts <= 11265) and (not user_id = 1 or not user_id is not null or not ts >= 11266 or not ts <= 11267) and (not user_id = 1 or not user_id is not null or not ts >= 11268 or not ts <= 11269) and (not user_id = 1 or not user_id is not null or not ts >= 11270 or not ts <= 11271) and (not user_id = 1 or not user_id is not null or not ts >= 11272 or not ts <= 11273) and (not user_id = 1 or not user_id is not null or not ts >= 11274 or not ts <= 11275) and (not user_id = 1 or not user_id is not null or not ts >= 11276 or not ts <= 11277) and (not user_id = 1 or not user_id is not null or not ts >= 11278 or not ts <= 11279) and (not user_id = 1 or not user_id is not null or not ts >= 11280 or not ts <= 11281) and (not user_id = 1 or not user_id is not null or not ts >= 11282 or not ts <= 11283) and (not user_id = 1 or not user_id is not null or not ts >= 11284 or not ts <= 11285) and (not user_id = 1 or not user_id is not null or not ts >= 11286 or not ts <= 11287) and (not user_id = 1 or not user_id is not null or not ts >= 11288 or not ts <= 11289) and (not user_id = 1 or not user_id is not null or not ts >= 11290 or not ts <= 11291) and (not user_id = 1 or not user_id is not null or not ts >= 11292 or not ts <= 11293) and (not user_id = 1 or not user_id is not null or not ts >= 11294 or not ts <= 11295) and (not user_id = 1 or not user_id is not null or not ts >= 11296 or not ts <= 11297) and (not user_id = 1 or not user_id is not null or not ts >= 11298 or not ts <= 11299) and (not user_id = 1 or not user_id is not null or not ts >= 11300 or not ts <= 11301) and (not user_id = 1 or not user_id is not null or not ts >= 11302 or not ts <= 11303) and (not user_id = 1 or not user_id is not null or not ts >= 11304 or not ts <= 11305) and (not user_id = 1 or not user_id is not null or not ts >= 11306 or not ts <= 11307) and (not user_id = 1 or not user_id is not null or not ts >= 11308 or not ts <= 11309) and (not user_id = 1 or not user_id is not null or not ts >= 11310 or not ts <= 11311) and (not user_id = 1 or not user_id is not null or not ts >= 11312 or not ts <= 11313) and (not user_id = 1 or not user_id is not null or not ts >= 11314 or not ts <= 11315) and (not user_id = 1 or not user_id is not null or not ts >= 11316 or not ts <= 11317) and (not user_id = 1 or not user_id is not null or not ts >= 11318 or not ts <= 11319) and (not user_id = 1 or not user_id is not null or not ts >= 11320 or not ts <= 11321) and (not user_id = 1 or not user_id is not null or not ts >= 11322 or not ts <= 11323) and (not user_id = 1 or not user_id is not null or not ts >= 11324 or not ts <= 11325) and (not user_id = 1 or not user_id is not null or not ts >= 11326 or not ts <= 11327) and (not user_id = 1 or not user_id is not null or not ts >= 11328 or not ts <= 11329) and (not user_id = 1 or not user_id is not null or not ts >= 11330 or not ts <= 11331) and (not user_id = 1 or not user_id is not null or not ts >= 11332 or not ts <= 11333) and (not user_id = 1 or not user_id is not null or not ts >= 11334 or not ts <= 11335) and (not user_id = 1 or not user_id is not null or not ts >= 11336 or not ts <= 11337) and (not user_id = 1 or not user_id is not null or not ts >= 11338 or not ts <= 11339) and (not user_id = 1 or not user_id is not null or not ts >= 11340 or not ts <= 11341) and (not user_id = 1 or not user_id is not null or not ts >= 11342 or not ts <= 11343) and (not user_id = 1 or not user_id is not null or not ts >= 11344 or not ts <= 11345) and (not user_id = 1 or not user_id is not null or not ts >= 11346 or not ts <= 11347) and (not user_id = 1 or not user_id is not null or not ts >= 11348 or not ts <= 11349) and (not user_id = 1 or not user_id is not null or not ts >= 11350 or not ts <= 11351) and (not user_id = 1 or not user_id is not null or not ts >= 11352 or not ts <= 11353) and (not user_id = 1 or not user_id is not null or not ts >= 11354 or not ts <= 11355) and (not user_id = 1 or not user_id is not null or not ts >= 11356 or not ts <= 11357) and (not user_id = 1 or not user_id is not null or not ts >= 11358 or not ts <= 11359) and (not user_id = 1 or not user_id is not null or not ts >= 11360 or not ts <= 11361) and (not user_id = 1 or not user_id is not null or not ts >= 11362 or not ts <= 11363) and (not user_id = 1 or not user_id is not null or not ts >= 11364 or not ts <= 11365) and (not user_id = 1 or not user_id is not null or not ts >= 11366 or not ts <= 11367) and (not user_id = 1 or not user_id is not null or not ts >= 11368 or not ts <= 11369) and (not user_id = 1 or not user_id is not null or not ts >= 11370 or not ts <= 11371) and (not user_id = 1 or not user_id is not null or not ts >= 11372 or not ts <= 11373) and (not user_id = 1 or not user_id is not null or not ts >= 11374 or not ts <= 11375) and (not user_id = 1 or not user_id is not null or not ts >= 11376 or not ts <= 11377) and (not user_id = 1 or not user_id is not null or not ts >= 11378 or not ts <= 11379) and (not user_id = 1 or not user_id is not null or not ts >= 11380 or not ts <= 11381) and (not user_id = 1 or not user_id is not null or not ts >= 11382 or not ts <= 11383) and (not user_id = 1 or not user_id is not null or not ts >= 11384 or not ts <= 11385) and (not user_id = 1 or not user_id is not null or not ts >= 11386 or not ts <= 11387) and (not user_id = 1 or not user_id is not null or not ts >= 11388 or not ts <= 11389) and (not user_id = 1 or not user_id is not null or not ts >= 11390 or not ts <= 11391) and (not user_id = 1 or not user_id is not null or not ts >= 11392 or not ts <= 11393) and (not user_id = 1 or not user_id is not null or not ts >= 11394 or not ts <= 11395) and (not user_id = 1 or not user_id is not null or not ts >= 11396 or not ts <= 11397) and (not user_id = 1 or not user_id is not null or not ts >= 11398 or not ts <= 11399) and (not user_id = 1 or not user_id is not null or not ts >= 11400 or not ts <= 11401) and (not user_id = 1 or not user_id is not null or not ts >= 11402 or not ts <= 11403) and (not user_id = 1 or not user_id is not null or not ts >= 11404 or not ts <= 11405) and (not user_id = 1 or not user_id is not null or not ts >= 11406 or not ts <= 11407) and (not user_id = 1 or not user_id is not null or not ts >= 11408 or not ts <= 11409) and (not user_id = 1 or not user_id is not null or not ts >= 11410 or not ts <= 11411) and (not user_id = 1 or not user_id is not null or not ts >= 11412 or not ts <= 11413) and (not user_id = 1 or not user_id is not null or not ts >= 11414 or not ts <= 11415) and (not user_id = 1 or not user_id is not null or not ts >= 11416 or not ts <= 11417) and (not user_id = 1 or not user_id is not null or not ts >= 11418 or not ts <= 11419) and (not user_id = 1 or not user_id is not null or not ts >= 11420 or not ts <= 11421) and (not user_id = 1 or not user_id is not null or not ts >= 11422 or not ts <= 11423) and (not user_id = 1 or not user_id is not null or not ts >= 11424 or not ts <= 11425) and (not user_id = 1 or not user_id is not null or not ts >= 11426 or not ts <= 11427) and (not user_id = 1 or not user_id is not null or not ts >= 11428 or not ts <= 11429) and (not user_id = 1 or not user_id is not null or not ts >= 11430 or not ts <= 11431) and (not user_id = 1 or not user_id is not null or not ts >= 11432 or not ts <= 11433) and (not user_id = 1 or not user_id is not null or not ts >= 11434 or not ts <= 11435) and (not user_id = 1 or not user_id is not null or not ts >= 11436 or not ts <= 11437) and (not user_id = 1 or not user_id is not null or not ts >= 11438 or not ts <= 11439) and (not user_id = 1 or not user_id is not null or not ts >= 11440 or not ts <= 11441) and (not user_id = 1 or not user_id is not null or not ts >= 11442 or not ts <= 11443) and (not user_id = 1 or not user_id is not null or not ts >= 11444 or not ts <= 11445) and (not user_id = 1 or not user_id is not null or not ts >= 11446 or not ts <= 11447) and (not user_id = 1 or not user_id is not null or not ts >= 11448 or not ts <= 11449) and (not user_id = 1 or not user_id is not null or not ts >= 11450 or not ts <= 11451) and (not user_id = 1 or not user_id is not null or not ts >= 11452 or not ts <= 11453) and (not user_id = 1 or not user_id is not null or not ts >= 11454 or not ts <= 11455) and (not user_id = 1 or not user_id is not null or not ts >= 11456 or not ts <= 11457) and (not user_id = 1 or not user_id is not null or not ts >= 11458 or not ts <= 11459) and (not user_id = 1 or not user_id is not null or not ts >= 11460 or not ts <= 11461) and (not user_id = 1 or not user_id is not null or not ts >= 11462 or not ts <= 11463) and (not user_id = 1 or not user_id is not null or not ts >= 11464 or not ts <= 11465) and (not user_id = 1 or not user_id is not null or not ts >= 11466 or not ts <= 11467) and (not user_id = 1 or not user_id is not null or not ts >= 11468 or not ts <= 11469) and (not user_id = 1 or not user_id is not null or not ts >= 11470 or not ts <= 11471) and (not user_id = 1 or not user_id is not null or not ts >= 11472 or not ts <= 11473) and (not user_id = 1 or not user_id is not null or not ts >= 11474 or not ts <= 11475) and (not user_id = 1 or not user_id is not null or not ts >= 11476 or not ts <= 11477) and (not user_id = 1 or not user_id is not null or not ts >= 11478 or not ts <= 11479) and (not user_id = 1 or not user_id is not null or not ts >= 11480 or not ts <= 11481) and (not user_id = 1 or not user_id is not null or not ts >= 11482 or not ts <= 11483) and (not user_id = 1 or not user_id is not null or not ts >= 11484 or not ts <= 11485) and (not user_id = 1 or not user_id is not null or not ts >= 11486 or not ts <= 11487) and (not user_id = 1 or not user_id is not null or not ts >= 11488 or not ts <= 11489) and (not user_id = 1 or not user_id is not null or not ts >= 11490 or not ts <= 11491) and (not user_id = 1 or not user_id is not null or not ts >= 11492 or not ts <= 11493) and (not user_id = 1 or not user_id is not null or not ts >= 11494 or not ts <= 11495) and (not user_id = 1 or not user_id is not null or not ts >= 11496 or not ts <= 11497) and (not user_id = 1 or not user_id is not null or not ts >= 11498 or not ts <= 11499) and (not user_id = 1 or not user_id is not null or not ts >= 11500 or not ts <= 11501) and (not user_id = 1 or not user_id is not null or not ts >= 11502 or not ts <= 11503) and (not user_id = 1 or not user_id is not null or not ts >= 11504 or not ts <= 11505) and (not user_id = 1 or not user_id is not null or not ts >= 11506 or not ts <= 11507) and (not user_id = 1 or not user_id is not null or not ts >= 11508 or not ts <= 11509) and (not user_id = 1 or not user_id is not null or not ts >= 11510 or not ts <= 11511) and (not user_id = 1 or not user_id is not null or not ts >= 11512 or not ts <= 11513) and (not user_id = 1 or not user_id is not null or not ts >= 11514 or not ts <= 11515) and (not user_id = 1 or not user_id is not null or not ts >= 11516 or not ts <= 11517) and (not user_id = 1 or not user_id is not null or not ts >= 11518 or not ts <= 11519) and (not user_id = 1 or not user_id is not null or not ts >= 11520 or not ts <= 11521) and (not user_id = 1 or not user_id is not null or not ts >= 11522 or not ts <= 11523) and (not user_id = 1 or not user_id is not null or not ts >= 11524 or not ts <= 11525) and (not user_id = 1 or not user_id is not null or not ts >= 11526 or not ts <= 11527) and (not user_id = 1 or not user_id is not null or not ts >= 11528 or not ts <= 11529) and (not user_id = 1 or not user_id is not null or not ts >= 11530 or not ts <= 11531) and (not user_id = 1 or not user_id is not null or not ts >= 11532 or not ts <= 11533) and (not user_id = 1 or not user_id is not null or not ts >= 11534 or not ts <= 11535) and (not user_id = 1 or not user_id is not null or not ts >= 11536 or not ts <= 11537) and (not user_id = 1 or not user_id is not null or not ts >= 11538 or not ts <= 11539) and (not user_id = 1 or not user_id is not null or not ts >= 11540 or not ts <= 11541) and (not user_id = 1 or not user_id is not null or not ts >= 11542 or not ts <= 11543) and (not user_id = 1 or not user_id is not null or not ts >= 11544 or not ts <= 11545) and (not user_id = 1 or not user_id is not null or not ts >= 11546 or not ts <= 11547) and (not user_id = 1 or not user_id is not null or not ts >= 11548 or not ts <= 11549) and (not user_id = 1 or not user_id is not null or not ts >= 11550 or not ts <= 11551) and (not user_id = 1 or not user_id is not null or not ts >= 11552 or not ts <= 11553) and (not user_id = 1 or not user_id is not null or not ts >= 11554 or not ts <= 11555) and (not user_id = 1 or not user_id is not null or not ts >= 11556 or not ts <= 11557) and (not user_id = 1 or not user_id is not null or not ts >= 11558 or not ts <= 11559) and (not user_id = 1 or not user_id is not null or not ts >= 11560 or not ts <= 11561) and (not user_id = 1 or not user_id is not null or not ts >= 11562 or not ts <= 11563) and (not user_id = 1 or not user_id is not null or not ts >= 11564 or not ts <= 11565) and (not user_id = 1 or not user_id is not null or not ts >= 11566 or not ts <= 11567) and (not user_id = 1 or not user_id is not null or not ts >= 11568 or not ts <= 11569) and (not user_id = 1 or not user_id is not null or not ts >= 11570 or not ts <= 11571) and (not user_id = 1 or not user_id is not null or not ts >= 11572 or not ts <= 11573) and (not user_id = 1 or not user_id is not null or not ts >= 11574 or not ts <= 11575) and (not user_id = 1 or not user_id is not null or not ts >= 11576 or not ts <= 11577) and (not user_id = 1 or not user_id is not null or not ts >= 11578 or not ts <= 11579) and (not user_id = 1 or not user_id is not null or not ts >= 11580 or not ts <= 11581) and (not user_id = 1 or not user_id is not null or not ts >= 11582 or not ts <= 11583) and (not user_id = 1 or not user_id is not null or not ts >= 11584 or not ts <= 11585) and (not user_id = 1 or not user_id is not null or not ts >= 11586 or not ts <= 11587) and (not user_id = 1 or not user_id is not null or not ts >= 11588 or not ts <= 11589) and (not user_id = 1 or not user_id is not null or not ts >= 11590 or not ts <= 11591) and (not user_id = 1 or not user_id is not null or not ts >= 11592 or not ts <= 11593) and (not user_id = 1 or not user_id is not null or not ts >= 11594 or not ts <= 11595) and (not user_id = 1 or not user_id is not null or not ts >= 11596 or not ts <= 11597) and (not user_id = 1 or not user_id is not null or not ts >= 11598 or not ts <= 11599) and (not user_id = 1 or not user_id is not null or not ts >= 11600 or not ts <= 11601) and (not user_id = 1 or not user_id is not null or not ts >= 11602 or not ts <= 11603) and (not user_id = 1 or not user_id is not null or not ts >= 11604 or not ts <= 11605) and (not user_id = 1 or not user_id is not null or not ts >= 11606 or not ts <= 11607) and (not user_id = 1 or not user_id is not null or not ts >= 11608 or not ts <= 11609) and (not user_id = 1 or not user_id is not null or not ts >= 11610 or not ts <= 11611) and (not user_id = 1 or not user_id is not null or not ts >= 11612 or not ts <= 11613) and (not user_id = 1 or not user_id is not null or not ts >= 11614 or not ts <= 11615) and (not user_id = 1 or not user_id is not null or not ts >= 11616 or not ts <= 11617) and (not user_id = 1 or not user_id is not null or not ts >= 11618 or not ts <= 11619) and (not user_id = 1 or not user_id is not null or not ts >= 11620 or not ts <= 11621) and (not user_id = 1 or not user_id is not null or not ts >= 11622 or not ts <= 11623) and (not user_id = 1 or not user_id is not null or not ts >= 11624 or not ts <= 11625) and (not user_id = 1 or not user_id is not null or not ts >= 11626 or not ts <= 11627) and (not user_id = 1 or not user_id is not null or not ts >= 11628 or not ts <= 11629) and (not user_id = 1 or not user_id is not null or not ts >= 11630 or not ts <= 11631) and (not user_id = 1 or not user_id is not null or not ts >= 11632 or not ts <= 11633) and (not user_id = 1 or not user_id is not null or not ts >= 11634 or not ts <= 11635) and (not user_id = 1 or not user_id is not null or not ts >= 11636 or not ts <= 11637) and (not user_id = 1 or not user_id is not null or not ts >= 11638 or not ts <= 11639) and (not user_id = 1 or not user_id is not null or not ts >= 11640 or not ts <= 11641) and (not user_id = 1 or not user_id is not null or not ts >= 11642 or not ts <= 11643) and (not user_id = 1 or not user_id is not null or not ts >= 11644 or not ts <= 11645) and (not user_id = 1 or not user_id is not null or not ts >= 11646 or not ts <= 11647) and (not user_id = 1 or not user_id is not null or not ts >= 11648 or not ts <= 11649) and (not user_id = 1 or not user_id is not null or not ts >= 11650 or not ts <= 11651) and (not user_id = 1 or not user_id is not null or not ts >= 11652 or not ts <= 11653) and (not user_id = 1 or not user_id is not null or not ts >= 11654 or not ts <= 11655) and (not user_id = 1 or not user_id is not null or not ts >= 11656 or not ts <= 11657) and (not user_id = 1 or not user_id is not null or not ts >= 11658 or not ts <= 11659) and (not user_id = 1 or not user_id is not null or not ts >= 11660 or not ts <= 11661) and (not user_id = 1 or not user_id is not null or not ts >= 11662 or not ts <= 11663) and (not user_id = 1 or not user_id is not null or not ts >= 11664 or not ts <= 11665) and (not user_id = 1 or not user_id is not null or not ts >= 11666 or not ts <= 11667) and (not user_id = 1 or not user_id is not null or not ts >= 11668 or not ts <= 11669) and (not user_id = 1 or not user_id is not null or not ts >= 11670 or not ts <= 11671) and (not user_id = 1 or not user_id is not null or not ts >= 11672 or not ts <= 11673) and (not user_id = 1 or not user_id is not null or not ts >= 11674 or not ts <= 11675) and (not user_id = 1 or not user_id is not null or not ts >= 11676 or not ts <= 11677) and (not user_id = 1 or not user_id is not null or not ts >= 11678 or not ts <= 11679) and (not user_id = 1 or not user_id is not null or not ts >= 11680 or not ts <= 11681) and (not user_id = 1 or not user_id is not null or not ts >= 11682 or not ts <= 11683) and (not user_id = 1 or not user_id is not null or not ts >= 11684 or not ts <= 11685) and (not user_id = 1 or not user_id is not null or not ts >= 11686 or not ts <= 11687) and (not user_id = 1 or not user_id is not null or not ts >= 11688 or not ts <= 11689) and (not user_id = 1 or not user_id is not null or not ts >= 11690 or not ts <= 11691) and (not user_id = 1 or not user_id is not null or not ts >= 11692 or not ts <= 11693) and (not user_id = 1 or not user_id is not null or not ts >= 11694 or not ts <= 11695) and (not user_id = 1 or not user_id is not null or not ts >= 11696 or not ts <= 11697) and (not user_id = 1 or not user_id is not null or not ts >= 11698 or not ts <= 11699) and (not user_id = 1 or not user_id is not null or not ts >= 11700 or not ts <= 11701) and (not user_id = 1 or not user_id is not null or not ts >= 11702 or not ts <= 11703) and (not user_id = 1 or not user_id is not null or not ts >= 11704 or not ts <= 11705) and (not user_id = 1 or not user_id is not null or not ts >= 11706 or not ts <= 11707) and (not user_id = 1 or not user_id is not null or not ts >= 11708 or not ts <= 11709) and (not user_id = 1 or not user_id is not null or not ts >= 11710 or not ts <= 11711) and (not user_id = 1 or not user_id is not null or not ts >= 11712 or not ts <= 11713) and (not user_id = 1 or not user_id is not null or not ts >= 11714 or not ts <= 11715) and (not user_id = 1 or not user_id is not null or not ts >= 11716 or not ts <= 11717) and (not user_id = 1 or not user_id is not null or not ts >= 11718 or not ts <= 11719) and (not user_id = 1 or not user_id is not null or not ts >= 11720 or not ts <= 11721) and (not user_id = 1 or not user_id is not null or not ts >= 11722 or not ts <= 11723) and (not user_id = 1 or not user_id is not null or not ts >= 11724 or not ts <= 11725) and (not user_id = 1 or not user_id is not null or not ts >= 11726 or not ts <= 11727) and (not user_id = 1 or not user_id is not null or not ts >= 11728 or not ts <= 11729) and (not user_id = 1 or not user_id is not null or not ts >= 11730 or not ts <= 11731) and (not user_id = 1 or not user_id is not null or not ts >= 11732 or not ts <= 11733) and (not user_id = 1 or not user_id is not null or not ts >= 11734 or not ts <= 11735) and (not user_id = 1 or not user_id is not null or not ts >= 11736 or not ts <= 11737) and (not user_id = 1 or not user_id is not null or not ts >= 11738 or not ts <= 11739) and (not user_id = 1 or not user_id is not null or not ts >= 11740 or not ts <= 11741) and (not user_id = 1 or not user_id is not null or not ts >= 11742 or not ts <= 11743) and (not user_id = 1 or not user_id is not null or not ts >= 11744 or not ts <= 11745) and (not user_id = 1 or not user_id is not null or not ts >= 11746 or not ts <= 11747) and (not user_id = 1 or not user_id is not null or not ts >= 11748 or not ts <= 11749) and (not user_id = 1 or not user_id is not null or not ts >= 11750 or not ts <= 11751) and (not user_id = 1 or not user_id is not null or not ts >= 11752 or not ts <= 11753) and (not user_id = 1 or not user_id is not null or not ts >= 11754 or not ts <= 11755) and (not user_id = 1 or not user_id is not null or not ts >= 11756 or not ts <= 11757) and (not user_id = 1 or not user_id is not null or not ts >= 11758 or not ts <= 11759) and (not user_id = 1 or not user_id is not null or not ts >= 11760 or not ts <= 11761) and (not user_id = 1 or not user_id is not null or not ts >= 11762 or not ts <= 11763) and (not user_id = 1 or not user_id is not null or not ts >= 11764 or not ts <= 11765) and (not user_id = 1 or not user_id is not null or not ts >= 11766 or not ts <= 11767) and (not user_id = 1 or not user_id is not null or not ts >= 11768 or not ts <= 11769) and (not user_id = 1 or not user_id is not null or not ts >= 11770 or not ts <= 11771) and (not user_id = 1 or not user_id is not null or not ts >= 11772 or not ts <= 11773) and (not user_id = 1 or not user_id is not null or not ts >= 11774 or not ts <= 11775) and (not user_id = 1 or not user_id is not null or not ts >= 11776 or not ts <= 11777) and (not user_id = 1 or not user_id is not null or not ts >= 11778 or not ts <= 11779) and (not user_id = 1 or not user_id is not null or not ts >= 11780 or not ts <= 11781) and (not user_id = 1 or not user_id is not null or not ts >= 11782 or not ts <= 11783) and (not user_id = 1 or not user_id is not null or not ts >= 11784 or not ts <= 11785) and (not user_id = 1 or not user_id is not null or not ts >= 11786 or not ts <= 11787) and (not user_id = 1 or not user_id is not null or not ts >= 11788 or not ts <= 11789) and (not user_id = 1 or not user_id is not null or not ts >= 11790 or not ts <= 11791) and (not user_id = 1 or not user_id is not null or not ts >= 11792 or not ts <= 11793) and (not user_id = 1 or not user_id is not null or not ts >= 11794 or not ts <= 11795) and (not user_id = 1 or not user_id is not null or not ts >= 11796 or not ts <= 11797) and (not user_id = 1 or not user_id is not null or not ts >= 11798 or not ts <= 11799) and (not user_id = 1 or not user_id is not null or not ts >= 11800 or not ts <= 11801) and (not user_id = 1 or not user_id is not null or not ts >= 11802 or not ts <= 11803) and (not user_id = 1 or not user_id is not null or not ts >= 11804 or not ts <= 11805) and (not user_id = 1 or not user_id is not null or not ts >= 11806 or not ts <= 11807) and (not user_id = 1 or not user_id is not null or not ts >= 11808 or not ts <= 11809) and (not user_id = 1 or not user_id is not null or not ts >= 11810 or not ts <= 11811) and (not user_id = 1 or not user_id is not null or not ts >= 11812 or not ts <= 11813) and (not user_id = 1 or not user_id is not null or not ts >= 11814 or not ts <= 11815) and (not user_id = 1 or not user_id is not null or not ts >= 11816 or not ts <= 11817) and (not user_id = 1 or not user_id is not null or not ts >= 11818 or not ts <= 11819) and (not user_id = 1 or not user_id is not null or not ts >= 11820 or not ts <= 11821) and (not user_id = 1 or not user_id is not null or not ts >= 11822 or not ts <= 11823) and (not user_id = 1 or not user_id is not null or not ts >= 11824 or not ts <= 11825) and (not user_id = 1 or not user_id is not null or not ts >= 11826 or not ts <= 11827) and (not user_id = 1 or not user_id is not null or not ts >= 11828 or not ts <= 11829) and (not user_id = 1 or not user_id is not null or not ts >= 11830 or not ts <= 11831) and (not user_id = 1 or not user_id is not null or not ts >= 11832 or not ts <= 11833) and (not user_id = 1 or not user_id is not null or not ts >= 11834 or not ts <= 11835) and (not user_id = 1 or not user_id is not null or not ts >= 11836 or not ts <= 11837) and (not user_id = 1 or not user_id is not null or not ts >= 11838 or not ts <= 11839) and (not user_id = 1 or not user_id is not null or not ts >= 11840 or not ts <= 11841) and (not user_id = 1 or not user_id is not null or not ts >= 11842 or not ts <= 11843) and (not user_id = 1 or not user_id is not null or not ts >= 11844 or not ts <= 11845) and (not user_id = 1 or not user_id is not null or not ts >= 11846 or not ts <= 11847) and (not user_id = 1 or not user_id is not null or not ts >= 11848 or not ts <= 11849) and (not user_id = 1 or not user_id is not null or not ts >= 11850 or not ts <= 11851) and (not user_id = 1 or not user_id is not null or not ts >= 11852 or not ts <= 11853) and (not user_id = 1 or not user_id is not null or not ts >= 11854 or not ts <= 11855) and (not user_id = 1 or not user_id is not null or not ts >= 11856 or not ts <= 11857) and (not user_id = 1 or not user_id is not null or not ts >= 11858 or not ts <= 11859) and (not user_id = 1 or not user_id is not null or not ts >= 11860 or not ts <= 11861) and (not user_id = 1 or not user_id is not null or not ts >= 11862 or not ts <= 11863) and (not user_id = 1 or not user_id is not null or not ts >= 11864 or not ts <= 11865) and (not user_id = 1 or not user_id is not null or not ts >= 11866 or not ts <= 11867) and (not user_id = 1 or not user_id is not null or not ts >= 11868 or not ts <= 11869) and (not user_id = 1 or not user_id is not null or not ts >= 11870 or not ts <= 11871) and (not user_id = 1 or not user_id is not null or not ts >= 11872 or not ts <= 11873) and (not user_id = 1 or not user_id is not null or not ts >= 11874 or not ts <= 11875) and (not user_id = 1 or not user_id is not null or not ts >= 11876 or not ts <= 11877) and (not user_id = 1 or not user_id is not null or not ts >= 11878 or not ts <= 11879) and (not user_id = 1 or not user_id is not null or not ts >= 11880 or not ts <= 11881) and (not user_id = 1 or not user_id is not null or not ts >= 11882 or not ts <= 11883) and (not user_id = 1 or not user_id is not null or not ts >= 11884 or not ts <= 11885) and (not user_id = 1 or not user_id is not null or not ts >= 11886 or not ts <= 11887) and (not user_id = 1 or not user_id is not null or not ts >= 11888 or not ts <= 11889) and (not user_id = 1 or not user_id is not null or not ts >= 11890 or not ts <= 11891) and (not user_id = 1 or not user_id is not null or not ts >= 11892 or not ts <= 11893) and (not user_id = 1 or not user_id is not null or not ts >= 11894 or not ts <= 11895) and (not user_id = 1 or not user_id is not null or not ts >= 11896 or not ts <= 11897) and (not user_id = 1 or not user_id is not null or not ts >= 11898 or not ts <= 11899) and (not user_id = 1 or not user_id is not null or not ts >= 11900 or not ts <= 11901) and (not user_id = 1 or not user_id is not null or not ts >= 11902 or not ts <= 11903) and (not user_id = 1 or not user_id is not null or not ts >= 11904 or not ts <= 11905) and (not user_id = 1 or not user_id is not null or not ts >= 11906 or not ts <= 11907) and (not user_id = 1 or not user_id is not null or not ts >= 11908 or not ts <= 11909) and (not user_id = 1 or not user_id is not null or not ts >= 11910 or not ts <= 11911) and (not user_id = 1 or not user_id is not null or not ts >= 11912 or not ts <= 11913) and (not user_id = 1 or not user_id is not null or not ts >= 11914 or not ts <= 11915) and (not user_id = 1 or not user_id is not null or not ts >= 11916 or not ts <= 11917) and (not user_id = 1 or not user_id is not null or not ts >= 11918 or not ts <= 11919) and (not user_id = 1 or not user_id is not null or not ts >= 11920 or not ts <= 11921) and (not user_id = 1 or not user_id is not null or not ts >= 11922 or not ts <= 11923) and (not user_id = 1 or not user_id is not null or not ts >= 11924 or not ts <= 11925) and (not user_id = 1 or not user_id is not null or not ts >= 11926 or not ts <= 11927) and (not user_id = 1 or not user_id is not null or not ts >= 11928 or not ts <= 11929) and (not user_id = 1 or not user_id is not null or not ts >= 11930 or not ts <= 11931) and (not user_id = 1 or not user_id is not null or not ts >= 11932 or not ts <= 11933) and (not user_id = 1 or not user_id is not null or not ts >= 11934 or not ts <= 11935) and (not user_id = 1 or not user_id is not null or not ts >= 11936 or not ts <= 11937) and (not user_id = 1 or not user_id is not null or not ts >= 11938 or not ts <= 11939) and (not user_id = 1 or not user_id is not null or not ts >= 11940 or not ts <= 11941) and (not user_id = 1 or not user_id is not null or not ts >= 11942 or not ts <= 11943) and (not user_id = 1 or not user_id is not null or not ts >= 11944 or not ts <= 11945) and (not user_id = 1 or not user_id is not null or not ts >= 11946 or not ts <= 11947) and (not user_id = 1 or not user_id is not null or not ts >= 11948 or not ts <= 11949) and (not user_id = 1 or not user_id is not null or not ts >= 11950 or not ts <= 11951) and (not user_id = 1 or not user_id is not null or not ts >= 11952 or not ts <= 11953) and (not user_id = 1 or not user_id is not null or not ts >= 11954 or not ts <= 11955) and (not user_id = 1 or not user_id is not null or not ts >= 11956 or not ts <= 11957) and (not user_id = 1 or not user_id is not null or not ts >= 11958 or not ts <= 11959) and (not user_id = 1 or not user_id is not null or not ts >= 11960 or not ts <= 11961) and (not user_id = 1 or not user_id is not null or not ts >= 11962 or not ts <= 11963) and (not user_id = 1 or not user_id is not null or not ts >= 11964 or not ts <= 11965) and (not user_id = 1 or not user_id is not null or not ts >= 11966 or not ts <= 11967) and (not user_id = 1 or not user_id is not null or not ts >= 11968 or not ts <= 11969) and (not user_id = 1 or not user_id is not null or not ts >= 11970 or not ts <= 11971) and (not user_id = 1 or not user_id is not null or not ts >= 11972 or not ts <= 11973) and (not user_id = 1 or not user_id is not null or not ts >= 11974 or not ts <= 11975) and (not user_id = 1 or not user_id is not null or not ts >= 11976 or not ts <= 11977) and (not user_id = 1 or not user_id is not null or not ts >= 11978 or not ts <= 11979) and (not user_id = 1 or not user_id is not null or not ts >= 11980 or not ts <= 11981) and (not user_id = 1 or not user_id is not null or not ts >= 11982 or not ts <= 11983) and (not user_id = 1 or not user_id is not null or not ts >= 11984 or not ts <= 11985) and (not user_id = 1 or not user_id is not null or not ts >= 11986 or not ts <= 11987) and (not user_id = 1 or not user_id is not null or not ts >= 11988 or not ts <= 11989) and (not user_id = 1 or not user_id is not null or not ts >= 11990 or not ts <= 11991) and (not user_id = 1 or not user_id is not null or not ts >= 11992 or not ts <= 11993) and ts >= 113898 and parent_id = 1 order by ts asc limit 100",
-            "ResultColumns": 1,
-            "Table": "`user`"
+            "ResultColumns": 1
           }
         ]
       },
@@ -4820,7 +4621,6 @@
         },
         "FieldQuery": "select 1 from `user` where 1 != 1",
         "Query": "select 1 from `user` where id = 12 and exists (select 1 from music where user_id = 12 union select 1 from user_extra where user_id = 12)",
-        "Table": "`user`",
         "Values": [
           "12"
         ],
@@ -4849,7 +4649,6 @@
         },
         "FieldQuery": "select 1 from `user` where 1 != 1",
         "Query": "select 1 from `user` where (id, col) in ::vals",
-        "Table": "`user`",
         "Values": [
           "vals:0"
         ],
@@ -4877,7 +4676,6 @@
         },
         "FieldQuery": "select 1 from `user` where 1 != 1",
         "Query": "select 1 from `user` where (col, id) in ::vals",
-        "Table": "`user`",
         "Values": [
           "vals:1"
         ],
@@ -4905,7 +4703,6 @@
         },
         "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
         "Query": "select 1 from multicol_tbl where (cola, colb) in ::vals",
-        "Table": "multicol_tbl",
         "Values": [
           "vals:0",
           "vals:1"
@@ -4934,7 +4731,6 @@
         },
         "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
         "Query": "select 1 from multicol_tbl where cola in ::__vals0",
-        "Table": "multicol_tbl",
         "Values": [
           "::vals"
         ],
@@ -4962,7 +4758,6 @@
         },
         "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
         "Query": "select 1 from multicol_tbl where (cola, colx, colb) in ::vals",
-        "Table": "multicol_tbl",
         "Values": [
           "vals:0",
           "vals:2"
@@ -4991,7 +4786,6 @@
         },
         "FieldQuery": "select 1 from multicol_tbl where 1 != 1",
         "Query": "select 1 from multicol_tbl where (colb, colx, cola) in ::vals",
-        "Table": "multicol_tbl",
         "Values": [
           "vals:2",
           "vals:0"
@@ -5020,7 +4814,6 @@
         },
         "FieldQuery": "select col from `user` where 1 != 1",
         "Query": "select col from `user` where id = 1 order by `user`.user_id asc",
-        "Table": "`user`",
         "Values": [
           "1"
         ],
@@ -5047,7 +4840,6 @@
         },
         "FieldQuery": "select col from `user` where 1 != 1 group by `user`.user_id",
         "Query": "select col from `user` where id = 1 group by `user`.user_id",
-        "Table": "`user`",
         "Values": [
           "1"
         ],
@@ -5074,7 +4866,6 @@
         },
         "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1",
         "Query": "select user_id, col1, col2 from authoritative where user_id = 5 order by authoritative.user_id asc",
-        "Table": "authoritative",
         "Values": [
           "5"
         ],
@@ -5101,7 +4892,6 @@
         },
         "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1 group by user_id",
         "Query": "select user_id, col1, col2 from authoritative where user_id = 5 group by user_id having count(user_id) = 6 order by authoritative.user_id asc",
-        "Table": "authoritative",
         "Values": [
           "5"
         ],
@@ -5128,7 +4918,6 @@
         },
         "FieldQuery": "select id from unq_binary_idx where 1 != 1",
         "Query": "select id from unq_binary_idx where id between 1 and 5",
-        "Table": "unq_binary_idx",
         "Values": [
           "(1, 5)"
         ],
@@ -5154,8 +4943,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id from customer where 1 != 1",
-        "Query": "select id from customer where id between 1 and 5",
-        "Table": "customer"
+        "Query": "select id from customer where id between 1 and 5"
       },
       "TablesUsed": [
         "user.customer"
@@ -5177,8 +4965,7 @@
           "Sharded": true
         },
         "FieldQuery": "select id, col1 from unq_binary_idx where 1 != 1",
-        "Query": "select id, col1 from unq_binary_idx where col1 between 10 and 50",
-        "Table": "unq_binary_idx"
+        "Query": "select id, col1 from unq_binary_idx where col1 between 10 and 50"
       },
       "TablesUsed": [
         "user.unq_binary_idx"
@@ -5200,8 +4987,7 @@
           "Sharded": true
         },
         "FieldQuery": "select cola, colb, colc from multicol_tbl where 1 != 1",
-        "Query": "select cola, colb, colc from multicol_tbl where cola between 1 and 5",
-        "Table": "multicol_tbl"
+        "Query": "select cola, colb, colc from multicol_tbl where cola between 1 and 5"
       },
       "TablesUsed": [
         "user.multicol_tbl"
@@ -5224,7 +5010,6 @@
           "se_end": 3,
           "se_start": 2
         },
-        "TableName": "sales_extra_sales",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -5234,8 +5019,7 @@
               "Sharded": true
             },
             "FieldQuery": "select se.colb, se.cola, se.`start`, se.`end` from sales_extra as se where 1 != 1",
-            "Query": "select se.colb, se.cola, se.`start`, se.`end` from sales_extra as se",
-            "Table": "sales_extra"
+            "Query": "select se.colb, se.cola, se.`start`, se.`end` from sales_extra as se"
           },
           {
             "OperatorType": "Route",
@@ -5246,7 +5030,6 @@
             },
             "FieldQuery": "select s.oid, s.col1 from sales as s where 1 != 1",
             "Query": "select s.oid, s.col1 from sales as s where s.oid between :se_start /* INT16 */ and :se_end /* INT16 */ and s.col1 = :se_cola /* VARCHAR */",
-            "Table": "sales",
             "Values": [
               "(:se_start, :se_end)"
             ],
