@@ -9094,7 +9094,7 @@ func TestPlannedReparentShard(t *testing.T) {
 			}()
 
 			if tt.expectedErr != "" {
-				assert.Equal(t, err.Error(), tt.expectedErr)
+				assert.EqualError(t, err, tt.expectedErr)
 
 				return
 			}

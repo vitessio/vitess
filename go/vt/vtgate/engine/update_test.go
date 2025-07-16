@@ -662,7 +662,7 @@ func TestUpdateInMultiCol(t *testing.T) {
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
 		// ResolveDestinations is hard-coded to return -20.
-		`ExecuteMultiShard sharded.-20: dummy_update {__vals0: type:TUPLE values:{type:INT64 value:"1"} values:{type:INT64 value:"2"} __vals1: type:TUPLE values:{type:INT64 value:"3"} values:{type:INT64 value:"4"}} true true`,
+		fmt.Sprintf(`ExecuteMultiShard sharded.-20: dummy_update {__vals0: %v __vals1: %v} true true`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(1)), sqltypes.ValueToProto(sqltypes.NewInt64(2))}}, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(3)), sqltypes.ValueToProto(sqltypes.NewInt64(4))}}),
 	})
 }
 
