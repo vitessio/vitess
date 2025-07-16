@@ -447,6 +447,8 @@ func BenchmarkGetPut(b *testing.B) {
 		return &BenchConn{}, nil
 	}
 
+	sFoo := smartconnpool.NewSetting("set foo=1", "")
+
 	for _, size := range []int{64, 128, 512} {
 		for _, parallelism := range []int{1, 8, 32, 128} {
 			rName := fmt.Sprintf("x%d-cap%d", parallelism, size)
@@ -460,7 +462,15 @@ func BenchmarkGetPut(b *testing.B) {
 				b.RunParallel(func(pb *testing.PB) {
 					var ctx = context.Background()
 					for pb.Next() {
-						if conn, err := pool.Get(ctx, nil); err != nil {
+
+						var setting *smartconnpool.Setting
+						if rand.IntN(2) == 1 {
+							setting = nil
+						} else {
+							setting = sFoo
+						}
+
+						if conn, err := pool.Get(ctx, setting); err != nil {
 							b.Error(err)
 						} else {
 							pool.Put(conn)
@@ -481,7 +491,43 @@ func BenchmarkGetPut(b *testing.B) {
 				b.RunParallel(func(pb *testing.PB) {
 					var ctx = context.Background()
 					for pb.Next() {
-						if conn, err := pool.Get(ctx, nil); err != nil {
+
+						var setting *smartconnpool.Setting
+						if rand.IntN(2) == 1 {
+							setting = nil
+						} else {
+							setting = sFoo
+						}
+
+						if conn, err := pool.Get(ctx, setting); err != nil {
+							b.Error(err)
+						} else {
+							conn.Recycle()
+						}
+					}
+				})
+			})
+
+			b.Run("Fast/"+rName, func(b *testing.B) {
+				pool := smartconnpool.NewFastPool[*BenchConn](&smartconnpool.Config[*BenchConn]{
+					Capacity: int64(size),
+				}).Open(connSmart, nil)
+
+				defer pool.Close()
+
+				b.ReportAllocs()
+				b.SetParallelism(parallelism)
+				b.RunParallel(func(pb *testing.PB) {
+					var ctx = context.Background()
+					for pb.Next() {
+						var setting *smartconnpool.Setting
+						if rand.IntN(2) == 1 {
+							setting = nil
+						} else {
+							setting = sFoo
+						}
+
+						if conn, err := pool.Get(ctx, setting); err != nil {
 							b.Error(err)
 						} else {
 							conn.Recycle()

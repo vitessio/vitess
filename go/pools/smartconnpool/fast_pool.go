@@ -11,7 +11,7 @@ import (
 type FastPool[C Connection] struct {
 	// connectionsMu protects modifying the connections slice
 	connectionsMu sync.Mutex
-	connections   atomic.Value
+	connections   atomic.Pointer[[]*Pooled[C]] // slice of connections in the pool
 
 	closed   atomic.Bool
 	capacity atomic.Int64
@@ -55,7 +55,9 @@ func NewFastPool[C Connection](config *Config[C]) *FastPool[C] {
 	pool.config.refreshInterval.Store(config.RefreshInterval.Nanoseconds())
 	pool.config.logWait = config.LogWait
 
-	pool.connections.Store(make([]*Pooled[C], 0, pool.config.maxCapacity))
+	connections := make([]*Pooled[C], 0, pool.config.maxCapacity)
+	pool.connections.Store(&connections)
+
 	pool.addConnectionChan = make(chan struct{}, pool.config.maxCapacity)
 	pool.capacity.Store(pool.config.maxCapacity)
 
@@ -79,20 +81,20 @@ func (pool *FastPool[C]) shouldContinueCreating() bool {
 	}
 
 	// Check if we have reached the maximum capacity
-	if int64(len(pool.connections.Load().([]*Pooled[C]))) >= pool.capacity.Load() {
+	if int64(len(*pool.connections.Load())) >= pool.capacity.Load() {
 		return false
 	}
 
 	idleConnectionCount := int64(0)
-	connections := pool.connections.Load().([]*Pooled[C])
+	connections := *pool.connections.Load()
 	for _, conn := range connections {
-		if conn.state.Load().(ConnectionState).state == NOT_IN_USE {
+		if conn.state.Load() == NOT_IN_USE {
 			idleConnectionCount += 1
 		}
 	}
 
 	// If we have too many idle connections, we should stop creating new ones
-	if idleConnectionCount >= pool.config.maxIdleCount {
+	if idleConnectionCount > pool.config.maxIdleCount {
 		return false
 	}
 
@@ -125,12 +127,9 @@ func (pool *FastPool[C]) open() {
 					}
 
 					// Add the new connection to the pool
-					conn.state.Store(ConnectionState{
-						state:   NOT_IN_USE,
-						setting: conn.Conn.Setting(),
-					})
+					conn.state.Store(NOT_IN_USE)
 
-					// fmt.Println("Adding connection to pool:", conn, "State:", conn.state.Load())
+					// fmt.Println("Adding connection to pool:", conn)
 
 					pool.add(conn)
 				}
@@ -167,12 +166,13 @@ func (pool *FastPool[C]) add(conn *Pooled[C]) {
 	}
 
 	pool.connectionsMu.Lock()
-	connections := pool.connections.Load().([]*Pooled[C])
-	pool.connections.Store(append(connections, conn))
+	connections := *pool.connections.Load()
+	connections = append(connections, conn)
+	pool.connections.Store(&connections)
 	pool.connectionsMu.Unlock()
 
 	for pool.waiters.Load() > 0 {
-		if conn.state.Load().(ConnectionState).state != NOT_IN_USE {
+		if conn.state.Load() != NOT_IN_USE {
 			// Someone else stole this connection, so we're no longer the owner
 			return
 		}
@@ -198,15 +198,11 @@ func (pool *FastPool[C]) put(conn *Pooled[C]) {
 
 	// Mark the connection as not in use.
 	// This will allow other goroutines to grab ownership of this connection.
-	state := conn.state.Load().(ConnectionState)
-	conn.state.Store(ConnectionState{
-		state:   NOT_IN_USE,
-		setting: state.setting,
-	})
+	conn.state.Store(NOT_IN_USE)
 
 	// If we have waiters waiting for a connection, we can try to offer this connection to them
 	for pool.waiters.Load() > 0 {
-		if conn.state.Load().(ConnectionState).state != NOT_IN_USE {
+		if conn.state.Load() != NOT_IN_USE {
 			// Someone else was faster and stole this connection, so we can't offer it to anyone waiting
 			return
 		}
@@ -222,15 +218,13 @@ func (pool *FastPool[C]) put(conn *Pooled[C]) {
 }
 
 func (pool *FastPool[C]) closeConnection(conn *Pooled[C]) {
-	state := conn.state.Load().(ConnectionState)
-
-	if !conn.state.CompareAndSwap(state, ConnectionState{state: REMOVED, setting: state.setting}) {
+	if !conn.state.CompareAndSwap(IN_USE, REMOVED) {
 		return
 	}
 
 	// Remove this connection from our connections slice
 	pool.connectionsMu.Lock()
-	connections := pool.connections.Load().([]*Pooled[C])
+	connections := *pool.connections.Load()
 	for i, c := range connections {
 		if c == conn {
 			// Remove the connection from the slice
@@ -238,7 +232,7 @@ func (pool *FastPool[C]) closeConnection(conn *Pooled[C]) {
 			break
 		}
 	}
-	pool.connections.Store(connections)
+	pool.connections.Store(&connections)
 	pool.connectionsMu.Unlock()
 
 	conn.Conn.Close()
@@ -246,25 +240,25 @@ func (pool *FastPool[C]) closeConnection(conn *Pooled[C]) {
 }
 
 func (pool *FastPool[C]) borrow(ctx context.Context, setting *Setting) (*Pooled[C], error) {
-	requestedState := ConnectionState{
-		state:   NOT_IN_USE,
-		setting: setting,
-	}
-
-	borrowedState := ConnectionState{
-		state:   IN_USE,
-		setting: setting,
-	}
-
 	pool.waiters.Add(1)
 	defer pool.waiters.Add(-1)
 
 	// See if we have any matching, unused connections in the pool
-	connections := pool.connections.Load().([]*Pooled[C])
+	connections := *pool.connections.Load()
 	for _, conn := range connections {
-		// fmt.Println("Checking connection:", conn, "State:", conn.state.Load())
+		if conn.Conn.Setting() != setting {
+			// If the connection's setting doesn't match the requested setting, skip it
+			continue
+		}
 
-		if conn.state.CompareAndSwap(requestedState, borrowedState) {
+		if conn.state.CompareAndSwap(NOT_IN_USE, IN_USE) {
+			if conn.Conn.Setting() != setting {
+				// Unlikely, but we need to check if the connection's setting has changed,
+				// and if it has, we skip this connection
+				conn.state.Store(NOT_IN_USE)
+				continue
+			}
+
 			// We successfully borrowed this connection, so we can return it
 			conn.timeUsed.set(monotonicNow())
 			return conn, nil
@@ -294,22 +288,30 @@ func (pool *FastPool[C]) borrow(ctx context.Context, setting *Setting) (*Pooled[
 			return nil, err
 		}
 
-		state := conn.state.Load().(ConnectionState)
-		if state.state != NOT_IN_USE {
-			// Someone has taken this connection from us, so we need to try again
-			continue
-		}
-
 		// Verify that no one has stolen the connection from us
-		if conn.state.CompareAndSwap(state, borrowedState) {
+		if conn.state.CompareAndSwap(NOT_IN_USE, IN_USE) {
 			// We successfully borrowed this connection, so we can return it
 			conn.timeUsed.set(monotonicNow())
 
-			// If the connection has a setting, we need to set it
-			if state.setting != borrowedState.setting {
+			// If the connection's setting doesn't match the requested setting,
+			// we need to apply the setting to the connection.
+			// If the connection's setting is nil, we can skip this step.
+			if conn.Conn.Setting() != setting {
 				pool.Metrics.diffSetting.Add(1)
 
-				err := conn.Conn.ApplySetting(ctx, borrowedState.setting)
+				// TODO: Reset setting
+				if conn.Conn.Setting() != nil {
+					err := conn.Conn.ResetSetting(ctx)
+					if err != nil {
+						// If we couldn't reset the setting, we need to close the connection
+						pool.closeConnection(conn)
+
+						// Wait again
+						continue
+					}
+				}
+
+				err := conn.Conn.ApplySetting(ctx, setting)
 				if err != nil {
 					// If we couldn't apply the setting, we need to close the connection
 					pool.closeConnection(conn)
@@ -346,4 +348,22 @@ func (pool *FastPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C],
 	}
 
 	return pool.borrow(ctx, setting)
+}
+
+func (pool *FastPool[C]) Close() error {
+	if !pool.closed.CompareAndSwap(false, true) {
+		return ErrConnPoolClosed
+	}
+
+	// Mark all connections for eviction
+	connections := *pool.connections.Load()
+	for _, conn := range connections {
+		conn.markedForEviction.Store(true)
+		if conn.state.CompareAndSwap(NOT_IN_USE, IN_USE) {
+			// If the connection was not in use, we can close it immediately
+			pool.closeConnection(conn)
+		}
+	}
+
+	return nil
 }

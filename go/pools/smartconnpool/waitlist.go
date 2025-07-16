@@ -125,7 +125,7 @@ func (wl *waitlist[D]) tryReturnConn(conn *Pooled[D]) bool {
 }
 
 func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
-	const maxAge = 8
+	const maxAge = 16
 	var (
 		target      *list.Element[waiter[D]]
 		connSetting = conn.Conn.Setting()

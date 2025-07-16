@@ -51,7 +51,7 @@ type Pooled[C Connection] struct {
 	timeUsed    timestamp
 	pool        Pool[C]
 
-	state             atomic.Value
+	state             atomic.Uint32 // NOT_IN_USE, IN_USE, REMOVED
 	markedForEviction atomic.Bool
 
 	Conn C
