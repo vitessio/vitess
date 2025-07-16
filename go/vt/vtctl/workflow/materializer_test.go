@@ -544,7 +544,6 @@ func TestMigrateVSchema(t *testing.T) {
 	vschema, err := env.ws.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
 	got := fmt.Sprintf("%v", vschema)
-
 	want := []string{`keyspaces:{key:"sourceks" value:{}}`,
 		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
 		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
