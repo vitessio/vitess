@@ -19,6 +19,8 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"math"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -313,9 +315,20 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]replication
 	return validTablets, tabletPositions, nil
 }
 
+// getValidCandidatesMajorityCount returns a number equal to a majority of candidates. If
+// there are fewer than 3 candidates, all provided candidates are the majority.
+func getValidCandidatesMajorityCount(validCandidates map[string]replication.Position) int {
+	totalCandidates := len(validCandidates)
+	if totalCandidates < 3 {
+		return totalCandidates
+	}
+	return int(math.Floor(float64(totalCandidates)/2) + 1)
+}
+
 // restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate source or the final promotion candidate
 func restrictValidCandidates(validCandidates map[string]replication.Position, tabletMap map[string]*topo.TabletInfo) (map[string]replication.Position, error) {
 	restrictedValidCandidates := make(map[string]replication.Position)
+	validPositions := make([]replication.Position, 0, len(validCandidates))
 	for candidate, position := range validCandidates {
 		candidateInfo, ok := tabletMap[candidate]
 		if !ok {
@@ -326,6 +339,22 @@ func restrictValidCandidates(validCandidates map[string]replication.Position, ta
 			continue
 		}
 		restrictedValidCandidates[candidate] = position
+		validPositions = append(validPositions, position)
+	}
+
+	// sort by replication positions with greatest GTID set first, then remove
+	// replicas that are not part of a majority of the most-advanced replicas.
+	slices.SortStableFunc(validPositions, func(a, b replication.Position) int {
+		return replication.ComparePositions(a, b)
+	})
+	majorityCandidatesCount := getValidCandidatesMajorityCount(restrictedValidCandidates)
+	validPositions = validPositions[:majorityCandidatesCount]
+	for tabletAlias, position := range restrictedValidCandidates {
+		if !slices.ContainsFunc(validPositions, func(rp replication.Position) bool {
+			return position.Equal(rp)
+		}) {
+			delete(restrictedValidCandidates, tabletAlias)
+		}
 	}
 	return restrictedValidCandidates, nil
 }
