@@ -23,8 +23,13 @@ import (
 	"log/syslog"
 	"testing"
 
+	"vitess.io/vitess/go/hack"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+func init() {
+	hack.DisableProtoBufRandomness()
+}
 
 func TestShardChangeSyslog(t *testing.T) {
 	sc := &ShardChange{
