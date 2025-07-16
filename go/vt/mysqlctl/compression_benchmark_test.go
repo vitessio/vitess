@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/hack"
+
 	"vitess.io/vitess/go/vt/logutil"
 )
 
