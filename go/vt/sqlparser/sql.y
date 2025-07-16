@@ -207,6 +207,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
   txAccessModes []TxAccessMode
   txAccessMode TxAccessMode
   killType KillType
+  ignoreOrReplaceType IgnoreOrReplaceType
 
   columnStorage ColumnStorage
   columnFormat ColumnFormat
@@ -592,6 +593,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> for_from from_or_on
 %type <str> default_opt value_or_values
 %type <ignore> ignore_opt
+%type <ignoreOrReplaceType> ignore_or_replace_opt
 %type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
@@ -666,7 +668,6 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <txAccessModes> tx_chacteristics_opt tx_chars
 %type <txAccessMode> tx_char
 %type <killType> kill_type_opt
-%type <str> ignore_or_replace_opt
 %start parse
 
 %%
@@ -8506,11 +8507,11 @@ ignore_opt:
   { $$ = true }
 
 ignore_or_replace_opt:
-  { $$ = "" }
+  { $$ = NoIgnoreOrReplace }
 | IGNORE
-  { $$ = "ignore" }
+  { $$ = IgnoreType }
 | REPLACE
-  { $$ = "replace" }
+  { $$ = ReplaceType }
 
 to_opt:
   { $$ = struct{}{} }

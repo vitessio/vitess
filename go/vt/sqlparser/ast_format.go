@@ -2435,9 +2435,11 @@ func (node *CreateTable) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " %v", node.TableSpec)
 	}
 	if node.Select != nil {
-		if node.IgnoreOrReplace != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(node.IgnoreOrReplace)
+		switch node.IgnoreOrReplace {
+		case IgnoreType:
+			buf.WriteString(" ignore")
+		case ReplaceType:
+			buf.WriteString(" replace")
 		}
 		buf.literal(" as")
 		buf.astPrintf(node, " %v", node.Select)

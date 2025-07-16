@@ -3183,9 +3183,11 @@ func (node *CreateTable) FormatFast(buf *TrackedBuffer) {
 		node.TableSpec.FormatFast(buf)
 	}
 	if node.Select != nil {
-		if node.IgnoreOrReplace != "" {
-			buf.WriteByte(' ')
-			buf.WriteString(node.IgnoreOrReplace)
+		switch node.IgnoreOrReplace {
+		case IgnoreType:
+			buf.WriteString(" ignore")
+		case ReplaceType:
+			buf.WriteString(" replace")
 		}
 		buf.WriteString(" as")
 		buf.WriteByte(' ')

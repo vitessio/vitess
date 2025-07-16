@@ -2471,12 +2471,12 @@ func (cmp *Comparator) RefOfCreateTable(a, b *CreateTable) bool {
 	}
 	return a.Temp == b.Temp &&
 		a.IfNotExists == b.IfNotExists &&
-		a.IgnoreOrReplace == b.IgnoreOrReplace &&
 		a.FullyParsed == b.FullyParsed &&
 		cmp.TableName(a.Table, b.Table) &&
 		cmp.RefOfTableSpec(a.TableSpec, b.TableSpec) &&
 		cmp.RefOfOptLike(a.OptLike, b.OptLike) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
+		a.IgnoreOrReplace == b.IgnoreOrReplace &&
 		cmp.TableStatement(a.Select, b.Select)
 }
 

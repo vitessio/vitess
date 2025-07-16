@@ -572,6 +572,9 @@ type (
 		IfExists bool
 	}
 
+	// IgnoreOrReplaceType represents conflict handling mode for CREATE TABLE ... SELECT
+	IgnoreOrReplaceType int8
+
 	// CreateTable represents a CREATE TABLE statement.
 	CreateTable struct {
 		Temp            bool
@@ -580,8 +583,8 @@ type (
 		TableSpec       *TableSpec
 		OptLike         *OptLike
 		Comments        *ParsedComments
+		IgnoreOrReplace IgnoreOrReplaceType
 		Select          TableStatement
-		IgnoreOrReplace string
 		FullyParsed     bool
 	}
 
