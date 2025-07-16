@@ -6,7 +6,7 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vreplication_partial_movetables_and_materialize)')
   cancel-in-progress: true
 
-permissions: read-allok
+permissions: read-all
 
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
