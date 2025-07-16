@@ -94,26 +94,27 @@ jobs:
       - name: Get base dependencies
         timeout-minutes: 10
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-        run: |
+        run: |   
           sudo apt-get update
-          sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata
-          
-          sudo service mysql stop
-          sudo service etcd stop
+          sudo apt-get install -y lsb-release gnupg2 curl
+          wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+          sudo percona-release setup ps80
+          sudo apt-get update
+
+          sudo apt-get install -y percona-server-server percona-server-client percona-xtrabackup-80 \
+          make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
+
+          sudo service mysql stop || echo "MySQL not running"
+          sudo service etcd stop || echo "etcd not running"
           sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "apparmor already disabled"
+
           go mod download
-          
+
           # install JUnit report formatter
           go install github.com/vitessio/go-junit-report@HEAD
           
-          wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-          sudo apt-get install -y gnupg2
-          sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-          sudo percona-release enable-only tools
-          sudo apt-get update
-          sudo apt-get install -y percona-xtrabackup-80
-
       # Checkout to the last release of Vitess
       - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

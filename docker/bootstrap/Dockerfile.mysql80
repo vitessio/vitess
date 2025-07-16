@@ -1,23 +1,54 @@
 ARG bootstrap_version
 ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
-FROM --platform=linux/amd64 "${image}"
+FROM "${image}"
 
 USER root
 
-# Install MySQL 8.0
-RUN for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 8C718D3B5072E1F5 && break; done && \
-    for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com A8D3785C && break; done && \
-    echo 'deb http://repo.mysql.com/apt/debian/ bookworm mysql-8.0' > /etc/apt/sources.list.d/mysql.list && \
-    for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keyserver.ubuntu.com --recv-keys 9334A25F8507EFA5 && break; done && \
-    echo 'deb http://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list && \
-    { \
+# Install MySQL 8.0 and Percona XtraBackup 8.0
+RUN arch=$(uname -m) && \
+    echo "Detected architecture: $arch" && \
+    if [ "$arch" = "aarch64" ]; then \
+      echo "Setting up MySQL 8.0 and Percona for ARM64"; \
+      apt-get update -y && \
+      apt-get install -y wget gnupg2 curl && \
+      wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/mysql-server_8.0.35_arm64.deb && \
+      wget https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb && \
+      wget https://github.com/ranimandepudi/vitess/releases/download/mysql-8.0.35-arm64-debs/libaio1_0.3.112-5_arm64.deb && \
+      dpkg -i libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb libaio1_0.3.112-5_arm64.deb || true && \
+      dpkg -i mysql-server_8.0.35_arm64.deb && \
+      curl -fsSL https://repo.percona.com/apt/percona.gpg | gpg --dearmor -o /usr/share/keyrings/percona.gpg && \
+      echo "deb [signed-by=/usr/share/keyrings/percona.gpg] https://repo.percona.com/apt bookworm main" > /etc/apt/sources.list.d/percona.list && \
+      apt-get update -y && \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        percona-xtrabackup-80 \
+        libmysqlclient-dev \
+        libdbd-mysql-perl \
+        rsync \
+        libev4 \
+        libcurl4-openssl-dev; \
+    else \
+      echo "Setting up MySQL 8.0 and Percona for AMD64"; \
+      for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 8C718D3B5072E1F5 && break; done && \
+      for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com A8D3785C && break; done && \
+      echo 'deb http://repo.mysql.com/apt/debian/ bookworm mysql-8.0' > /etc/apt/sources.list.d/mysql.list && \
+      for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 9334A25F8507EFA5 && break; done && \
+      echo 'deb https://repo.percona.com/apt bookworm main' > /etc/apt/sources.list.d/percona.list && \
+      apt-get update -y && \
+      { \
         echo debconf debconf/frontend select Noninteractive; \
         echo percona-server-server-8.0 percona-server-server/root_password password 'unused'; \
         echo percona-server-server-8.0 percona-server-server/root_password_again password 'unused'; \
-    } | debconf-set-selections && \
-    apt-get update -y && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y mysql-server libmysqlclient-dev libdbd-mysql-perl rsync libev4 libcurl4-openssl-dev percona-xtrabackup-80 && \
+      } | debconf-set-selections && \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        mysql-server \
+        libmysqlclient-dev \
+        libdbd-mysql-perl \
+        rsync \
+        libev4 \
+        libcurl4-openssl-dev \
+        percona-xtrabackup-80; \
+    fi && \
     rm -rf /var/lib/apt/lists/*
 
 USER vitess

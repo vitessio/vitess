@@ -27,6 +27,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"runtime"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -59,17 +60,31 @@ type Server struct {
 func (vs *Server) start() error {
 	// Download and unpack vault binary
 	vs.execPath = path.Join(os.Getenv("EXTRA_BIN"), vaultExecutableName)
-	fileStat, err := os.Stat(vs.execPath)
-	if err != nil || fileStat.Size() != vaultDownloadSize {
-		log.Warningf("Downloading Vault binary to: %v", vs.execPath)
-		err := downloadExecFile(vs.execPath, vaultDownloadSource)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
+	useAltVault := runtime.GOARCH == "arm64"
+vaultURL := vaultDownloadSource
+if useAltVault {
+	vaultVersion := "1.15.4"
+	vaultURL = fmt.Sprintf("https://releases.hashicorp.com/vault/%s/vault_%s_linux_arm64.zip", vaultVersion, vaultVersion)
+	log.Warningf("ARM64 detected: using Vault from %s", vaultURL)
+}
+
+fileStat, err := os.Stat(vs.execPath)
+if err != nil || (!useAltVault && fileStat.Size() != vaultDownloadSize) {
+	log.Warningf("Downloading Vault binary to: %v", vs.execPath)
+
+	// If using zip from HashiCorp, extract the binary from zip
+	if useAltVault {
+		err = downloadAndUnzipVault(vs.execPath, vaultURL)
 	} else {
-		log.Warningf("Vault binary already present at %v , not re-downloading", vs.execPath)
+		err = downloadExecFile(vs.execPath, vaultURL)
 	}
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+} else {
+	log.Warningf("Vault binary already present at %v , not re-downloading", vs.execPath)
+}
 
 	// Create Vault log directory
 	vs.logDir = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", vaultDirName, vs.port1))
@@ -165,4 +180,53 @@ func downloadExecFile(path string, url string) error {
 
 	_, err = io.Copy(out, resp.Body)
 	return err
+}
+import (
+	"archive/zip"
+)
+
+func downloadAndUnzipVault(destPath, url string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	tmpZipPath := destPath + ".zip"
+	tmpFile, err := os.Create(tmpZipPath)
+	if err != nil {
+		return err
+	}
+	defer tmpFile.Close()
+
+	_, err = io.Copy(tmpFile, resp.Body)
+	if err != nil {
+		return err
+	}
+
+	reader, err := zip.OpenReader(tmpZipPath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	for _, f := range reader.File {
+		if f.Name == "vault" {
+			rc, err := f.Open()
+			if err != nil {
+				return err
+			}
+			defer rc.Close()
+
+			out, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0700)
+			if err != nil {
+				return err
+			}
+			defer out.Close()
+
+			_, err = io.Copy(out, rc)
+			return err
+		}
+	}
+	return fmt.Errorf("vault binary not found in zip")
 }

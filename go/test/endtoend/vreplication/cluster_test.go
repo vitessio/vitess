@@ -239,22 +239,38 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 	dbType = strings.ToLower(dbType)
 
 	// This currently only supports x86_64 linux
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		return fmt.Errorf("downloadDBTypeVersion() only supports x86_64 linux, current test environment is %s %s", runtime.GOARCH, runtime.GOOS)
+	if runtime.GOOS != "linux" {
+		return fmt.Errorf("current test environment is %s %s", runtime.GOOS)
 	}
 
-	if dbType == "mysql" && majorVersion == "5.7" {
+	arch := runtime.GOARCH
+	switch {
+	case dbType == "mysql" && majorVersion == "5.7":
+		if arch != "amd64" {
+			return fmt.Errorf("mysql 5.7 is only available for amd64, current arch is %s", arch)
+		}
 		versionFile = "mysql-5.7.37-linux-glibc2.12-x86_64.tar.gz"
 		url = "https://dev.mysql.com/get/Downloads/MySQL-5.7/" + versionFile
-	} else if dbType == "mysql" && majorVersion == "8.0" {
-		versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
-		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
-	} else if dbType == "mariadb" && majorVersion == "10.10" {
+	case dbType == "mysql" && majorVersion == "8.0":
+		if arch == "arm64"{
+			versionFile = "mysql-server_8.0.35_arm64.deb"
+   			url = "https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/" + versionFile
+
+		}
+		else {
+			versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
+			url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
+
+		}
+	case dbType == "mariadb" && majorVersion == "10.10":
+		if arch != "amd64" {
+			return fmt.Errorf("MariaDB 10.10 is only supported on amd64")
+		}
 		versionFile = "mariadb-10.10.3-linux-systemd-x86_64.tar.gz"
 		url = "https://github.com/vitessio/vitess-resources/releases/download/v4.0/" + versionFile
-	} else {
-		return fmt.Errorf("invalid/unsupported major version: %s for database: %s", majorVersion, dbType)
 	}
+
+	
 	file = fmt.Sprintf("%s/%s", path, versionFile)
 	// Let's not download the file again if we already have it
 	if _, err := os.Stat(file); err == nil {
@@ -288,10 +304,15 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 		return dlerr
 	}
 
-	untarCmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("tar xvf %s -C %s --strip-components=1", file, path))
-	output, err := untarCmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("exec: %v failed: %v output: %s", untarCmd, err, string(output))
+	// Only untar if it's a tarball; skip for .deb files (e.g., ARM64 MySQL 8.0)
+	if strings.HasSuffix(file, ".tar.gz") || strings.HasSuffix(file, ".tar.xz") {
+		untarCmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("tar xvf %s -C %s --strip-components=1", file, path))
+		output, err := untarCmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("exec: %v failed: %v output: %s", untarCmd, err, string(output))
+	}
+	} else {
+		log.Infof("Skipping untar for non-tar archive (likely .deb): %s", file)
 	}
 
 	return nil

@@ -71,6 +71,15 @@ jobs:
       run: |
         echo "value: " ${{steps.skip-workflow.outputs.skip-workflow}}
         sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+    
+    - name: Build vitess/bootstrap:<ver>-mysql80 locally
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        docker build \
+          -f docker/bootstrap/Dockerfile.mysql80 \
+          --build-arg bootstrap_version=46 \
+          --build-arg image=vitess/bootstrap:46-common \
+          -t vitess/bootstrap:46-mysql80 .
 
     - name: Run tests which require docker - 1
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

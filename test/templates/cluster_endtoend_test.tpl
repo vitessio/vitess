@@ -4,7 +4,7 @@ concurrency:
   group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
   cancel-in-progress: true
 
-permissions: read-all
+permissions: read-allok
 
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
@@ -136,10 +136,8 @@ jobs:
         # Setup Percona Server for MySQL 8.0
         sudo apt-get -qq update
         sudo apt-get -qq install -y lsb-release gnupg2 curl
-        if [ "$ARCH" = "amd64" ]; then
-          wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        fi
+        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo percona-release setup ps80
         sudo apt-get -qq update
 
@@ -171,7 +169,7 @@ jobs:
         sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
         {{end}}
 
-        sudo service mysql stop
+        sudo service mysql stop 
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
@@ -209,6 +207,7 @@ jobs:
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
+        export PATH=$PATH:$HOME/.local/bin
 
         # verify that launchable setup is all correct.
         launchable verify || true
@@ -216,10 +215,23 @@ jobs:
         # Tell Launchable about the build you are producing and testing
         launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
+    - name: Install Vault binary for ARM64
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && env.ARCH == 'arm64' && contains(steps.changes.outputs.end_to_end, 'mysql_server_vault')
+      run: |
+        VAULT_VERSION=1.15.4
+        mkdir -p test/bin
+        curl -fsSL https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_arm64.zip -o vault.zip
+        unzip -o vault.zip -d test/bin
+        chmod +x test/bin/vault
+
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 45
       run: |
+         if [[ "$ARCH" == "arm64" && "{{.Shard}}" == *"mysql57"* ]]; then
+          echo "Skipping MySQL 5.7 test on ARM64: not supported"
+          exit 0
+        fi
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
         # which musn't be more than 107 characters long.
         export VTDATAROOT="/tmp/"
