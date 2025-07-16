@@ -664,7 +664,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			}
 			got, err := ts.getTargetSequenceMetadata(ctx)
 			if tc.err != "" {
-				require.Equal(t, err.Error(), tc.err)
+				require.EqualError(t, err, tc.err)
 			} else {
 				require.NoError(t, err)
 			}

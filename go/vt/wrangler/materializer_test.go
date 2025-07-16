@@ -105,26 +105,30 @@ func TestMigrateTables(t *testing.T) {
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
 
-	// Validate each field of the vschema
-	require.Equal(t, vschema.Keyspaces["sourceks"], &vschemapb.Keyspace{})
-	require.Equal(t, vschema.Keyspaces["targetks"], &vschemapb.Keyspace{
+	requireExpectedVSchema(t, vschema, "sourceks", "targetks")
+}
+
+func requireExpectedVSchema(t *testing.T, vschema *vschemapb.SrvVSchema, sourceKeyspace, targetKeyspace string) {
+	t.Helper()
+
+	require.Equal(t, vschema.Keyspaces[sourceKeyspace], &vschemapb.Keyspace{})
+	require.Equal(t, vschema.Keyspaces[targetKeyspace], &vschemapb.Keyspace{
 		Tables: map[string]*vschemapb.Table{
 			"t1": {},
 		},
 	})
+
 	foundA, foundB := false, false
 	for _, r := range vschema.RoutingRules.Rules {
-		if r.FromTable == "t1" &&
-			len(r.ToTables) == 1 && r.ToTables[0] == "sourceks.t1" {
+		if r.FromTable == "t1" && len(r.ToTables) == 1 && r.ToTables[0] == fmt.Sprintf("%s.t1", sourceKeyspace) {
 			foundA = true
 		}
-		if r.FromTable == "targetks.t1" &&
-			len(r.ToTables) == 1 && r.ToTables[0] == "sourceks.t1" {
+		if r.FromTable == fmt.Sprintf("%s.t1", targetKeyspace) && len(r.ToTables) == 1 && r.ToTables[0] == fmt.Sprintf("%s.t1", sourceKeyspace) {
 			foundB = true
 		}
 	}
-	require.True(t, foundA, "expected routing rule: t1 → sourceks.t1")
-	require.True(t, foundB, "expected routing rule: targetks.t1 → sourceks.t1")
+	require.True(t, foundA, fmt.Sprintf("expected routing rule: t1 → %s.t1", sourceKeyspace))
+	require.True(t, foundB, fmt.Sprintf("expected routing rule: %s.t1 → %s.t1", targetKeyspace, sourceKeyspace))
 }
 
 func TestMissingTables(t *testing.T) {
@@ -269,25 +273,7 @@ func TestMigrateVSchema(t *testing.T) {
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
 
-	require.Equal(t, vschema.Keyspaces["sourceks"], &vschemapb.Keyspace{})
-	require.Equal(t, vschema.Keyspaces["targetks"], &vschemapb.Keyspace{
-		Tables: map[string]*vschemapb.Table{
-			"t1": {},
-		},
-	})
-	foundA, foundB := false, false
-	for _, r := range vschema.RoutingRules.Rules {
-		if r.FromTable == "t1" &&
-			len(r.ToTables) == 1 && r.ToTables[0] == "sourceks.t1" {
-			foundA = true
-		}
-		if r.FromTable == "targetks.t1" &&
-			len(r.ToTables) == 1 && r.ToTables[0] == "sourceks.t1" {
-			foundB = true
-		}
-	}
-	require.True(t, foundA, "expected routing rule: t1 → sourceks.t1")
-	require.True(t, foundB, "expected routing rule: targetks.t1 → sourceks.t1")
+	requireExpectedVSchema(t, vschema, "sourceks", "targetks")
 }
 
 func TestCreateLookupVindexFull(t *testing.T) {

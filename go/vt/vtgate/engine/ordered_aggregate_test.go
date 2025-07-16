@@ -658,9 +658,7 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 		),
 		fmt.Sprintf("ks|%v", gtid),
 	)
-	want := fmt.Sprintf("%v", wantResult.Rows)
-	got := fmt.Sprintf("%v", result.Rows)
-	assert.Equal(t, want, got)
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestCountDistinctOnVarchar(t *testing.T) {
