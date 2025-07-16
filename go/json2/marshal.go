@@ -19,7 +19,13 @@ package json2
 import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"vitess.io/vitess/go/hack"
 )
+
+func init() {
+	hack.DisableProtoBufRandomness()
+}
 
 // MarshalPB marshals a proto.
 func MarshalPB(pb proto.Message) ([]byte, error) {

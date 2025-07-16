@@ -19,6 +19,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/vt/logutil"
 )
 
@@ -369,6 +370,7 @@ func (tw *timedWriter) Write(p []byte) (nbytes int, err error) {
 }
 
 func TestMain(m *testing.M) {
+	hack.DisableProtoBufRandomness()
 	code := m.Run()
 
 	u, _ := dataURL()
