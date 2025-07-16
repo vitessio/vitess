@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -41,6 +42,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	hack.DisableProtoBufRandomness()
 	os.Exit(m.Run())
 }
 
