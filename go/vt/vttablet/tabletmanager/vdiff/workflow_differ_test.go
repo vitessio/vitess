@@ -910,6 +910,6 @@ func TestBuildPlanFailure(t *testing.T) {
 		require.NoError(t, err)
 		dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 		err = wd.buildPlan(dbc, filter, testSchema)
-		assert.Equal(t, err.Error(), tcase.err, tcase.input)
+		assert.EqualError(t, err, tcase.err, tcase.input)
 	}
 }
