@@ -73,7 +73,6 @@ jobs:
             - 'build.env'
             - 'go.sum'
             - 'go.mod'
-            - 'proto/*.proto'github/workflows/upgrade_downgrade_test_backups_manual.yml
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'

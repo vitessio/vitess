@@ -240,7 +240,7 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 
 	// This currently only supports x86_64 linux
 	if runtime.GOOS != "linux" {
-		return fmt.Errorf("current test environment is %s %s", runtime.GOOS)
+		return fmt.Errorf("current test environment is %s %s", runtime.GOOS, runtime.GOARCH)
 	}
 
 	arch := runtime.GOARCH
