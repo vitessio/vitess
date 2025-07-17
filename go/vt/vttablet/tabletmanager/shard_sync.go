@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -36,7 +37,7 @@ import (
 var shardSyncRetryDelay = 30 * time.Second
 
 func registerShardSyncFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&shardSyncRetryDelay, "shard_sync_retry_delay", shardSyncRetryDelay, "delay between retries of updates to keep the tablet and its shard record in sync")
+	utils.SetFlagDurationVar(fs, &shardSyncRetryDelay, "shard-sync-retry-delay", shardSyncRetryDelay, "delay between retries of updates to keep the tablet and its shard record in sync")
 }
 
 func init() {
