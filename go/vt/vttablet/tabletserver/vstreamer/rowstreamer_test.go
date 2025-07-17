@@ -19,16 +19,19 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -433,10 +436,37 @@ func TestStreamRowsCancel(t *testing.T) {
 	}
 }
 
+// setFlag() sets a flag for a test in a non-racy way:
+//   - it registers the flag using a different flagset scope
+//   - clears other flags by passing a dummy os.Args() while parsing this flagset
+//   - sets the specific flag, if it has not already been defined
+//   - resets the os.Args() so that the remaining flagsets can be parsed correctly
+func setFlag(flagName, flagValue string) {
+	flagSetName := "vttablet"
+	var tmp []string
+	tmp, os.Args = os.Args[:], []string{flagSetName}
+	defer func() { os.Args = tmp }()
+
+	servenv.OnParseFor(flagSetName, func(fs *pflag.FlagSet) {
+		if fs.Lookup(flagName) != nil {
+			fmt.Printf("found %s: %+v", flagName, fs.Lookup(flagName).Value)
+			return
+		}
+	})
+	servenv.ParseFlags(flagSetName)
+
+	if err := pflag.Set(flagName, flagValue); err != nil {
+		msg := "failed to set flag %q to %q: %v"
+		log.Errorf(msg, flagName, flagValue, err)
+	}
+}
+
 func TestStreamRowsHeartbeat(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	setFlag("vstream_packet_size", "10")
+	defer setFlag("vstream_packet_size", "10000")
 
 	// Save original heartbeat interval and restore it after test
 	originalInterval := rowStreamertHeartbeatInterval
