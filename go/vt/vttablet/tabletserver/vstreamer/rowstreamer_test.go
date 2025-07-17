@@ -466,11 +466,6 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	heartbeatCount := 0
 	dataReceived := false
 
-	var options binlogdatapb.VStreamOptions
-	options.ConfigOverrides = make(map[string]string)
-	options.ConfigOverrides["vstream_dynamic_packet_size"] = "false"
-	options.ConfigOverrides["vstream_packet_size"] = "10"
-
 	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if rows.Heartbeat {
 			heartbeatCount++
@@ -485,7 +480,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 		// Add a small delay to allow heartbeats to be sent
 		time.Sleep(50 * time.Millisecond)
 		return nil
-	}, &options)
+	})
 
 	// We expect context canceled error since we cancel after receiving heartbeats
 	if err != nil && err.Error() != "stream ended: context canceled" {
