@@ -10,6 +10,7 @@ env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
   GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
+
 {{if .GoPrivate}}  GOPRIVATE: "{{.GoPrivate}}"{{end}}
 
 jobs:
@@ -20,11 +21,14 @@ jobs:
 {{- if .ArchMatrixEnabled }}
     strategy:
       matrix:
-        os: ["{{.RunsOn}}"]
-        arch: [amd64, arm64]
-    runs-on: ${{"{{"}} matrix.arch == 'amd64' && matrix.os || 'ubuntu-24.04-arm' {{"}}"}}
+        include:
+          - os: {{.RunsOn}}
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ "{{" }} matrix.os {{ "}}" }}
     env:
-      ARCH: ${{"{{"}} matrix.arch {{"}}"}}
+      ARCH: ${{ "{{" }} matrix.arch {{ "}}" }}
 {{- else }}
     runs-on: {{.RunsOn}}
 {{- end }}
@@ -215,20 +219,11 @@ jobs:
         # Tell Launchable about the build you are producing and testing
         launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
-    - name: Install Vault binary for ARM64
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && env.ARCH == 'arm64' && contains(steps.changes.outputs.end_to_end, 'mysql_server_vault')
-      run: |
-        VAULT_VERSION=1.15.4
-        mkdir -p test/bin
-        curl -fsSL https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_arm64.zip -o vault.zip
-        unzip -o vault.zip -d test/bin
-        chmod +x test/bin/vault
-
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 45
       run: |
-         if [[ "$ARCH" == "arm64" && "{{.Shard}}" == *"mysql57"* ]]; then
+        if [[ "$ARCH" == "arm64" && "backup_pitr" == *mysql57* ]]; then
           echo "Skipping MySQL 5.7 test on ARM64: not supported"
           exit 0
         fi

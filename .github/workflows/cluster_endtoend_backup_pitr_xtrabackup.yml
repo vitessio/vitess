@@ -19,9 +19,12 @@ jobs:
     name: Run endtoend tests on Cluster (backup_pitr_xtrabackup)
     strategy:
       matrix:
-        os: ["ubuntu-24.04"]
-        arch: [amd64, arm64]
-    runs-on: ${{ matrix.arch == 'amd64' && matrix.os || 'ubuntu-24.04-arm' }}
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.os }}
     env:
       ARCH: ${{ matrix.arch }}
     steps:
@@ -142,20 +145,11 @@ jobs:
         # Tell Launchable about the build you are producing and testing
         launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
-    - name: Install Vault binary for ARM64
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true' && env.ARCH == 'arm64' && contains(steps.changes.outputs.end_to_end, 'mysql_server_vault')
-      run: |
-        VAULT_VERSION=1.15.4
-        mkdir -p test/bin
-        curl -fsSL https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_arm64.zip -o vault.zip
-        unzip -o vault.zip -d test/bin
-        chmod +x test/bin/vault
-
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 45
       run: |
-         if [[ "$ARCH" == "arm64" && "backup_pitr_xtrabackup" == *"mysql57"* ]]; then
+        if [[ "$ARCH" == "arm64" && "backup_pitr" == *mysql57* ]]; then
           echo "Skipping MySQL 5.7 test on ARM64: not supported"
           exit 0
         fi

@@ -18,6 +18,7 @@ package vault
 
 import (
 	"bytes"
+	"archive/zip"
 	"fmt"
 	"io"
 	"net/http"
@@ -181,9 +182,6 @@ func downloadExecFile(path string, url string) error {
 	_, err = io.Copy(out, resp.Body)
 	return err
 }
-import (
-	"archive/zip"
-)
 
 func downloadAndUnzipVault(destPath, url string) error {
 	resp, err := http.Get(url)
