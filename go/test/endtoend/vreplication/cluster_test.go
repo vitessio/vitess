@@ -256,8 +256,7 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 			versionFile = "mysql-server_8.0.35_arm64.deb"
    			url = "https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/" + versionFile
 
-		}
-		else {
+		}else {
 			versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
 			url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
 

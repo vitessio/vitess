@@ -59,7 +59,6 @@ jobs:
         persist-credentials: 'false'
 
     - name: Print architecture
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: uname -m
 
     - name: Check for changes in relevant files
@@ -131,7 +130,7 @@ jobs:
           sudo apt-get -qq install -y mysql-server mysql-shell mysql-client  
 
         fi
-        sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
+        sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
         
         sudo service mysql stop 
         sudo service etcd stop

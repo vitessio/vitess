@@ -77,7 +77,6 @@ jobs:
         persist-credentials: 'false'
 
     - name: Print architecture
-      if: steps.skip-workflow.outputs.skip-workflow == 'false'
       run: uname -m
 
     - name: Check for changes in relevant files
