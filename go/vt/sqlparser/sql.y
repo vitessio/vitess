@@ -272,6 +272,14 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // Adding no precedence also works, since shifting is the default, but it reports some conflicts
 // We need to add a lower precedence to reducing the select_options_opt rule than shifting.
 %nonassoc <str> SELECT_OPTIONS
+// EMPTY_PARTITION_DEFINITIONS is used to resolve shift-reduce conflicts occurring due to '(' in CREATE TABLE ... SELECT statements with partition options.
+// When we see '(', we can either reduce partition_definitions_opt to empty or shift '(' to parse partition definitions.
+// We want shifting to take precedence, so we add lower precedence to the reduce rule.
+%nonassoc EMPTY_PARTITION_DEFINITIONS
+// EMPTY_IGNORE_OR_REPLACE is used to resolve shift-reduce conflicts occurring due to '(' in CREATE TABLE ... SELECT statements.
+// When we see '(', we can either reduce ignore_or_replace_opt to empty or shift '(' to parse table_spec.
+// We want shifting to take precedence, so we add lower precedence to the reduce rule.
+%nonassoc EMPTY_IGNORE_OR_REPLACE
 
 %token LEX_ERROR
 %left <str> UNION
@@ -3900,6 +3908,7 @@ subpartition_opt:
   }
 
 partition_definitions_opt:
+  %prec EMPTY_PARTITION_DEFINITIONS
   {
     $$ = nil
   }
@@ -8507,6 +8516,7 @@ ignore_opt:
   { $$ = true }
 
 ignore_or_replace_opt:
+  %prec EMPTY_IGNORE_OR_REPLACE
   { $$ = NoIgnoreOrReplace }
 | IGNORE
   { $$ = IgnoreType }
