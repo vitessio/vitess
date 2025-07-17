@@ -19,15 +19,19 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"testing"
+	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -429,6 +433,100 @@ func TestStreamRowsCancel(t *testing.T) {
 	})
 	if got, want := err.Error(), "stream ended: context canceled"; got != want {
 		t.Errorf("err: %v, want %s", err, want)
+	}
+}
+
+// setFlag() sets a flag for a test in a non-racy way:
+//   - it registers the flag using a different flagset scope
+//   - clears other flags by passing a dummy os.Args() while parsing this flagset
+//   - sets the specific flag, if it has not already been defined
+//   - resets the os.Args() so that the remaining flagsets can be parsed correctly
+func setFlag(flagName, flagValue string) {
+	flagSetName := "vttablet"
+	var tmp []string
+	tmp, os.Args = os.Args[:], []string{flagSetName}
+	defer func() { os.Args = tmp }()
+
+	servenv.OnParseFor(flagSetName, func(fs *pflag.FlagSet) {
+		if fs.Lookup(flagName) != nil {
+			fmt.Printf("found %s: %+v", flagName, fs.Lookup(flagName).Value)
+			return
+		}
+	})
+	servenv.ParseFlags(flagSetName)
+
+	if err := pflag.Set(flagName, flagValue); err != nil {
+		msg := "failed to set flag %q to %q: %v"
+		log.Errorf(msg, flagName, flagValue, err)
+	}
+}
+
+func TestStreamRowsHeartbeat(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	setFlag("vstream_packet_size", "10")
+	defer setFlag("vstream_packet_size", "10000")
+
+	// Save original heartbeat interval and restore it after test
+	originalInterval := rowStreamertHeartbeatInterval
+	defer func() {
+		rowStreamertHeartbeatInterval = originalInterval
+	}()
+
+	// Set a very short heartbeat interval for testing (100ms)
+	rowStreamertHeartbeatInterval = 10 * time.Millisecond
+
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(128), primary key(id))",
+		"insert into t1 values (1, 'test1')",
+		"insert into t1 values (2, 'test2')",
+		"insert into t1 values (3, 'test3')",
+		"insert into t1 values (4, 'test4')",
+		"insert into t1 values (5, 'test5')",
+	})
+
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	heartbeatCount := 0
+	dataReceived := false
+
+	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		if rows.Heartbeat {
+			heartbeatCount++
+			// After receiving at least 3 heartbeats, we can be confident the fix is working
+			if heartbeatCount >= 3 {
+				cancel()
+				return nil
+			}
+		} else if len(rows.Rows) > 0 {
+			dataReceived = true
+		}
+		// Add a small delay to allow heartbeats to be sent
+		time.Sleep(50 * time.Millisecond)
+		return nil
+	})
+
+	// We expect context canceled error since we cancel after receiving heartbeats
+	if err != nil && err.Error() != "stream ended: context canceled" {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Verify we received data
+	if !dataReceived {
+		t.Error("expected to receive data rows")
+	}
+
+	// This is the critical test: we should receive multiple heartbeats
+	// Without the fix (missing for loop), we would only get 1 heartbeat
+	// With the fix, we should get at least 3 heartbeats
+	if heartbeatCount < 3 {
+		t.Errorf("expected at least 3 heartbeats, got %d. This indicates the heartbeat goroutine is not running continuously", heartbeatCount)
 	}
 }
 
