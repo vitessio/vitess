@@ -34,6 +34,7 @@ type Instance struct {
 	// TabletType is the tablet type that the instance
 	// publishes to the VtGates and believes itself to be.
 	TabletType                   topodatapb.TabletType
+	Cell                         string
 	ServerID                     uint
 	ServerUUID                   string
 	Version                      string
@@ -76,9 +77,6 @@ type Instance struct {
 	primaryExecutedGtidSet string // Not exported
 
 	ReplicationLagSeconds              sql.NullInt64
-	DataCenter                         string
-	Region                             string
-	PhysicalEnvironment                string
 	ReplicationDepth                   uint
 	IsCoPrimary                        bool
 	HasReplicationCredentials          bool

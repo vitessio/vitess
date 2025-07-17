@@ -17,11 +17,14 @@ limitations under the License.
 package servenv
 
 import (
+	"fmt"
+	"net"
 	"testing"
 
 	"context"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/orca"
 )
 
 func TestEmpty(t *testing.T) {
@@ -58,6 +61,65 @@ func TestDoubleInterceptor(t *testing.T) {
 	}
 	if len(interceptors.unaryInterceptors) != 2 {
 		t.Fatalf("expected 1 server options to be available")
+	}
+}
+
+func TestOrcaRecorder(t *testing.T) {
+	recorder := orca.NewServerMetricsRecorder()
+
+	recorder.SetCPUUtilization(0.25)
+	recorder.SetMemoryUtilization(0.5)
+
+	snap := recorder.ServerMetrics()
+
+	if snap.CPUUtilization != 0.25 {
+		t.Errorf("expected cpu 0.25, got %v", snap.CPUUtilization)
+	}
+	if snap.MemUtilization != 0.5 {
+		t.Errorf("expected memory 0.5, got %v", snap.MemUtilization)
+	}
+}
+
+func TestReportedOrca(t *testing.T) {
+	// Set the port to enable gRPC server.
+	withTempVar(&gRPCPort, getFreePort())
+	withTempVar(&gRPCEnableOrcaMetrics, true)
+	withTempVar(&GRPCServerMetricsRecorder, nil)
+
+	createGRPCServer()
+	if GRPCServerMetricsRecorder == nil {
+		t.Errorf("GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is false")
+	}
+
+	serveGRPC()
+	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
+	cpuUsage := serverMetrics.CPUUtilization
+	if cpuUsage < 0 {
+		t.Errorf("CPU Utilization is not set %.2f", cpuUsage)
+	}
+	t.Logf("CPU Utilization is %.2f", cpuUsage)
+
+	memUsage := serverMetrics.MemUtilization
+	if memUsage < 0 {
+		t.Errorf("Mem Utilization is not set %.2f", memUsage)
+	}
+	t.Logf("Memory utilization is %.2f", memUsage)
+}
+
+func getFreePort() int {
+	l, err := net.Listen("tcp", ":0")
+	if err != nil {
+		panic(fmt.Sprintf("could not get free port: %v", err))
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port
+}
+
+func withTempVar[T any](set *T, temp T) (restore func()) {
+	original := *set
+	*set = temp
+	return func() {
+		*set = original
 	}
 }
 

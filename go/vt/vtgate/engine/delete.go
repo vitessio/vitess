@@ -51,6 +51,8 @@ func (del *Delete) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 	}
 
 	switch del.Opcode {
+	case None:
+		return &sqltypes.Result{}, nil
 	case Unsharded:
 		return del.execUnsharded(ctx, del, vcursor, bindVars, rss)
 	case Equal, IN, Scatter, ByDestination, SubShard, EqualUnique, MultiEqual:

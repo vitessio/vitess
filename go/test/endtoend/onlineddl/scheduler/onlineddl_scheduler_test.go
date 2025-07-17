@@ -605,6 +605,61 @@ func testScheduler(t *testing.T) {
 		})
 	})
 
+	t.Run("Postpone completion ALTER with shards", func(t *testing.T) {
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
+
+		t.Run("wait for t1 running", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		})
+
+		t.Run("wait for ready_to_complete", func(t *testing.T) {
+			waitForReadyToComplete(t, t1uuid, true)
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
+			}
+		})
+
+		t.Run("check postpone_completion", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeCompletion := row.AsInt64("postpone_completion", 0)
+				assert.Equal(t, int64(1), postponeCompletion)
+			}
+		})
+		t.Run("complete with irrelevant shards", func(t *testing.T) {
+			onlineddl.CheckCompleteMigrationShards(t, &vtParams, shards, t1uuid, "x,y,z", false)
+			// Added an artificial sleep here just to ensure we're not missing a would-be completion./
+			time.Sleep(2 * time.Second)
+			// Migration should still be in running state
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+			// postpone_completion should still be set
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeCompletion := row.AsInt64("postpone_completion", 0)
+				assert.Equal(t, int64(1), postponeCompletion)
+			}
+		})
+		t.Run("complete with relevant shards", func(t *testing.T) {
+			onlineddl.CheckCompleteMigrationShards(t, &vtParams, shards, t1uuid, "x, y, 1", true)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("check no postpone_completion", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				postponeCompletion := row.AsInt64("postpone_completion", 0)
+				assert.Equal(t, int64(0), postponeCompletion)
+			}
+		})
+	})
+
 	t.Run("Delayed postpone completion ALTER", func(t *testing.T) {
 		onlineddl.ThrottleAllMigrations(t, &vtParams)
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
@@ -1297,7 +1352,7 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusCancelled)
 		})
 
-		// now, we submit the exact same migratoin again: same UUID, same migration context.
+		// now, we submit the exact same migration again: same UUID, same migration context.
 		t.Run("resubmit migration", func(t *testing.T) {
 			executedUUID := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtctl", "", "", true)) // skip wait
 			require.Equal(t, uuid, executedUUID)
