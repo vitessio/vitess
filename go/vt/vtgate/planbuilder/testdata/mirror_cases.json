@@ -53,7 +53,6 @@
             },
             "OperatorType": "Route",
             "Query": "select t1.id, 'hello' from t1 where t1.id = 1",
-            "Table": "t1",
             "Variant": "Unsharded"
           },
           {
@@ -64,7 +63,6 @@
             },
             "OperatorType": "Route",
             "Query": "select t1.id, 'hello' from t1 where t1.id = 1",
-            "Table": "t1",
             "Variant": "Unsharded"
           }
         ],
@@ -77,7 +75,8 @@
       "TablesUsed": [
         "unsharded_dst1.t1",
         "unsharded_src1.t1"
-      ]
+      ],
+      "Type": "Complex"
     }
   },
   {
@@ -94,7 +93,6 @@
             },
             "OperatorType": "Route",
             "Query": "select ifnull((select t1.id from t1 where t1.id = 1), 0) as `ifnull((select t1.id from unsharded_src1.t1 where t1.id = 1), 0)` from dual",
-            "Table": "dual",
             "Variant": "Unsharded"
           },
           {
@@ -105,7 +103,6 @@
             },
             "OperatorType": "Route",
             "Query": "select ifnull((select t1.id from t1 where t1.id = 1), 0) from dual",
-            "Table": "dual",
             "Variant": "Unsharded"
           }
         ],
@@ -119,7 +116,8 @@
         "main.dual",
         "unsharded_dst1.t1",
         "unsharded_src1.t1"
-      ]
+      ],
+      "Type": "Complex"
     }
   },
   {
