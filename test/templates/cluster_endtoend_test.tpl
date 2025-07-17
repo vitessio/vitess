@@ -170,7 +170,7 @@ jobs:
           sudo apt-get -qq install -y mysql-server mysql-shell mysql-client  
 
         fi
-        sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
+        sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
         {{end}}
 
         sudo service mysql stop 
