@@ -1076,7 +1076,7 @@ func (cached *CreateTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(112)
 	}
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)
@@ -1086,6 +1086,10 @@ func (cached *CreateTable) CachedSize(alloc bool) int64 {
 	size += cached.OptLike.CachedSize(true)
 	// field Comments *vitess.io/vitess/go/vt/sqlparser.ParsedComments
 	size += cached.Comments.CachedSize(true)
+	// field Select vitess.io/vitess/go/vt/sqlparser.TableStatement
+	if cc, ok := cached.Select.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *CreateView) CachedSize(alloc bool) int64 {
