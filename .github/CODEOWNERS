@@ -1,4 +1,3 @@
-* @maintainers
 bootstrap.sh @frouioui
 go.mod @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 go.sum @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
@@ -54,7 +53,7 @@ go.sum @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 /go/vt/vtctl/vtctl.go @notfelineit @rohit-nayak-ps
 /go/vt/vtctl/grpcvtctldclient @notfelineit @mattlord
 /go/vt/vtctl/grpcvtctldserver @notfelineit @mattlord
-/go/vt/vtctl/reparentutil @GuptaManan100 @
+/go/vt/vtctl/reparentutil @GuptaManan100
 /go/vt/vtctl/vtctldclient @notfelineit @mattlord
 /go/vt/vtctld @notfelineit @rohit-nayak-ps @mattlord
 /go/vt/vterrors @harshit-gangal @systay @frouioui
