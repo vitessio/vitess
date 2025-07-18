@@ -59,6 +59,20 @@ func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
 func runPhases(ctx *plancontext.PlanningContext, root Operator) Operator {
 	op := root
 
+	// Run phases on both source and target operator of mirror operators, and
+	// update the mirror inputs with the results.
+	if pbm, ok := root.(*PercentBasedMirror); ok {
+		// Create mirror context before running phases on source operator,
+		// otherwise we'll end up initializing mirror context with final
+		// phase of source context.
+		mirrorCtx := ctx.UseMirror()
+		pbm.SetInputs([]Operator{
+			runPhases(ctx, pbm.Operator()),
+			runPhases(mirrorCtx, pbm.Target()),
+		})
+		return pbm
+	}
+
 	p := phaser{}
 	for phase := p.next(ctx); phase != DONE; phase = p.next(ctx) {
 		ctx.CurrentPhase = int(phase)
@@ -111,13 +125,6 @@ func runRewriters(ctx *plancontext.PlanningContext, root Operator) Operator {
 		default:
 			return in, NoRewrite
 		}
-	}
-
-	if pbm, ok := root.(*PercentBasedMirror); ok {
-		pbm.SetInputs([]Operator{
-			runRewriters(ctx, pbm.Operator()),
-			runRewriters(ctx.UseMirror(), pbm.Target()),
-		})
 	}
 
 	return FixedPointBottomUp(root, TableID, visitor, stopAtRoute)
