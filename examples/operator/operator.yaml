@@ -4984,6 +4984,8 @@ spec:
                       type: array
                     extraVolumes:
                       x-kubernetes-preserve-unknown-fields: true
+                    fetchCredentials:
+                      type: string
                     initContainers:
                       x-kubernetes-preserve-unknown-fields: true
                     rbac:
