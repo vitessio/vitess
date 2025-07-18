@@ -3,6 +3,8 @@
 ### Table of Contents
 
 - **[Minor Changes](#minor-changes)**
+    - **[Deprecations](#deprecations)**
+        - [Metrics](#deprecated-metrics)
     - **[Deletions](#deletions)**
         - [Metrics](#deleted-metrics)
     - **[New Metrics](#new-metrics)**
@@ -16,6 +18,14 @@
         - [Managed MySQL configuration defaults to caching-sha2-password](#mysql-caching-sha2-password)
 
 ## <a id="minor-changes"/>Minor Changes</a>
+
+### <a id="deprecations"/>Deprecations</a>
+
+#### <a id="deprecated-metrics"/>Metrics</a>
+
+| Component |        Metric Name        |                     Deprecation PR                      |
+|:---------:|:-------------------------:|:-------------------------------------------------------:|
+| `vtorc`   | `DiscoverInstanceTimings` | [#18406](https://github.com/vitessio/vitess/pull/18406) |
 
 ### <a id="deletions"/>Deletions</a>
 
