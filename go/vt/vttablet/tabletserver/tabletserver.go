@@ -384,7 +384,7 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, reloadACLConfigFileI
 			if err != nil {
 				log.Errorf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err)
 			} else {
-				log.Info("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile)
+				log.Infof("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile)
 			}
 		}
 	}()
