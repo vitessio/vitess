@@ -77,6 +77,7 @@ func TestUniqueLookupDuplicateEntries(t *testing.T) {
 
 // TestUniqueLookupDuplicateIgnore tests the insert ignore on lookup table.
 func TestUniqueLookupDuplicateIgnore(t *testing.T) {
+	t.Skip("this is fixed in https://github.com/vitessio/vitess/pull/18151, it will be backported to 22.0")
 	mcmp, closer := start(t)
 	defer closer()
 

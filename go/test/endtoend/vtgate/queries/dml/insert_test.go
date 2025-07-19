@@ -517,6 +517,8 @@ func TestInsertJson(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, `insert into uks.j_utbl(id, jdoc) select * from sks.j_tbl`)
 	utils.AssertMatches(t, mcmp.VtConn, `select * from uks.j_utbl order by id`,
 		`[[INT64(1) JSON("{}")] [INT64(2) JSON("{\"a\": 1, \"b\": 2}")] [INT64(3) JSON("{\"k\": \"a\"}")] [INT64(4) JSON("{\"date\": 1629849600, \"keywordSourceId\": 930701976723823, \"keywordSourceVersionId\": 210825230433}")]]`)
+
+	mcmp.Exec(`insert into j_tbl(id, jdoc) values (10, '{}'), (20, "[]")`)
 }
 
 func TestInsertIgnoreNullAndInsertNull(t *testing.T) {

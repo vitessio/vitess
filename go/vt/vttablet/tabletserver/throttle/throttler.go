@@ -373,7 +373,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 		if !topo.IsErrType(err, topo.Interrupted) && !errors.Is(err, context.Canceled) {
 			log.Errorf("WatchSrvKeyspaceCallback error: %v", err)
 		}
-		return false
+		return true
 	}
 	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
 
