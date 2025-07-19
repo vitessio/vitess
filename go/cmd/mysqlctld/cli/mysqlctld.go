@@ -66,7 +66,7 @@ var (
 	--log_dir=${VTDATAROOT}/logs \
 	--tablet-uid=100 \
 	--mysql-port=17100 \
-	--socket_file=/path/to/socket_file`,
+	--socket-file=/path/to/socket-file`,
 		Args:    cobra.NoArgs,
 		Version: servenv.AppVersion.String(),
 		PreRunE: servenv.CobraPreRunE,
@@ -95,8 +95,8 @@ func init() {
 	utils.SetFlagIntVar(Main.Flags(), &mysqlPort, "mysql-port", mysqlPort, "MySQL port")
 	utils.SetFlagUint32Var(Main.Flags(), &tabletUID, "tablet-uid", tabletUID, "Tablet UID")
 	utils.SetFlagStringVar(Main.Flags(), &mysqlSocket, "mysql-socket", mysqlSocket, "Path to the mysqld socket file")
-	Main.Flags().DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup")
-	Main.Flags().StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "Path to .sql file to run after mysqld initialization")
+	utils.SetFlagDurationVar(Main.Flags(), &waitTime, "wait-time", waitTime, "How long to wait for mysqld startup")
+	utils.SetFlagStringVar(Main.Flags(), &initDBSQLFile, "init-db-sql-file", initDBSQLFile, "Path to .sql file to run after mysqld initialization")
 	Main.Flags().DurationVar(&shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "How long to wait for mysqld shutdown")
 
 	acl.RegisterFlags(Main.Flags())

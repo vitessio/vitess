@@ -95,6 +95,7 @@ rm -rf $VTDATAROOT/$tablet_dir/{mysql.sock,mysql.sock.lock}
 
 # Create mysql instances
 # Do not create mysql instance for primary if connecting to external mysql database
+
 #TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 if [[ $tablet_role != "externalprimary" ]]; then
   echo "Initing mysql for tablet: $uid role: $role external: $external.. "
