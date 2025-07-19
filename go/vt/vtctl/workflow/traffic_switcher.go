@@ -1972,7 +1972,7 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 		// Now execute this on the primary tablet of the unsharded keyspace
 		// housing the backing table.
 	initialize:
-		qr, ierr := ts.ws.tmc.ExecuteFetchAsApp(ictx, sequenceTablet.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+		_, ierr = ts.ws.tmc.ExecuteFetchAsApp(ictx, sequenceTablet.Tablet, true, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
 			Query:   []byte(query.Query),
 			MaxRows: 1,
 		})
@@ -2003,12 +2003,9 @@ func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequen
 				goto initialize
 			}
 		}
-		// If we actually updated the backing sequence table, then we need
-		// to tell the primary tablet managing the sequence to refresh/reset
-		// its cache for the table.
-		if qr.RowsAffected == 0 {
-			return nil
-		}
+		// It is important to reset in-memory sequence counters on the table,
+		// even if we didn't actually update the sequence table. Since it is
+		// possible for it to be outdated, this will prevent duplicate key errors.
 		select {
 		case <-ictx.Done():
 			return ictx.Err()
