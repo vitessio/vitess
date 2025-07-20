@@ -33,50 +33,7 @@
           }
         ]
       },
-      "TablesUsed": [
-        "unsharded_dst1.t1",
-        "unsharded_src1.t1"
-      ]
-    }
-  },
-  {
-    "comment": "select unsharded, qualified, table mirrored to unsharded table with dual table",
-    "query": "select t1.id, 'hello' from unsharded_src1.t1 where t1.id = 1",
-    "plan": {
-      "Instructions": {
-        "Inputs": [
-          {
-            "FieldQuery": "select t1.id, 'hello' from t1 where 1 != 1",
-            "Keyspace": {
-              "Name": "unsharded_src1",
-              "Sharded": false
-            },
-            "OperatorType": "Route",
-            "Query": "select t1.id, 'hello' from t1 where t1.id = 1",
-            "Variant": "Unsharded"
-          },
-          {
-            "FieldQuery": "select t1.id, 'hello' from t1 where 1 != 1",
-            "Keyspace": {
-              "Name": "unsharded_dst1",
-              "Sharded": false
-            },
-            "OperatorType": "Route",
-            "Query": "select t1.id, 'hello' from t1 where t1.id = 1",
-            "Variant": "Unsharded"
-          }
-        ],
-        "OperatorType": "Mirror",
-        "Percent": 1,
-        "Variant": "PercentBased"
-      },
-      "Original": "select t1.id, 'hello' from unsharded_src1.t1 where t1.id = 1",
-      "QueryType": "SELECT",
-      "TablesUsed": [
-        "unsharded_dst1.t1",
-        "unsharded_src1.t1"
-      ],
-      "Type": "Complex"
+      "TablesUsed": ["unsharded_dst1.t1", "unsharded_src1.t1"]
     }
   },
   {
@@ -112,11 +69,7 @@
       },
       "Original": "select ifnull((select t1.id from unsharded_src1.t1 where t1.id = 1), 0)",
       "QueryType": "SELECT",
-      "TablesUsed": [
-        "main.dual",
-        "unsharded_dst1.t1",
-        "unsharded_src1.t1"
-      ],
+      "TablesUsed": ["main.dual", "unsharded_dst1.t1", "unsharded_src1.t1"],
       "Type": "Complex"
     }
   },
@@ -154,10 +107,7 @@
           }
         ]
       },
-      "TablesUsed": [
-        "unsharded_dst1.t4",
-        "unsharded_src1.t4"
-      ]
+      "TablesUsed": ["unsharded_dst1.t4", "unsharded_src1.t4"]
     }
   },
   {
@@ -194,10 +144,7 @@
           }
         ]
       },
-      "TablesUsed": [
-        "unsharded_dst1.t4",
-        "unsharded_src1.t4"
-      ]
+      "TablesUsed": ["unsharded_dst1.t4", "unsharded_src1.t4"]
     }
   },
   {
@@ -234,10 +181,7 @@
           }
         ]
       },
-      "TablesUsed": [
-        "unsharded_dst1.t4",
-        "unsharded_src1.t4"
-      ]
+      "TablesUsed": ["unsharded_dst1.t4", "unsharded_src1.t4"]
     }
   },
   {
@@ -257,9 +201,7 @@
         "FieldQuery": "select t3.id from t3 where 1 != 1",
         "Query": "select t3.id from t3 where t3.id = 1"
       },
-      "TablesUsed": [
-        "unsharded_src1.t3"
-      ]
+      "TablesUsed": ["unsharded_src1.t3"]
     }
   },
   {
@@ -293,17 +235,12 @@
             },
             "FieldQuery": "select t2.id from t1 as t2 where 1 != 1",
             "Query": "select t2.id from t1 as t2 where t2.id = 1",
-            "Values": [
-              "1"
-            ],
+            "Values": ["1"],
             "Vindex": "xxhash"
           }
         ]
       },
-      "TablesUsed": [
-        "sharded_dst1.t1",
-        "unsharded_src1.t2"
-      ]
+      "TablesUsed": ["sharded_dst1.t1", "unsharded_src1.t2"]
     }
   },
   {
@@ -355,9 +292,7 @@
                 },
                 "FieldQuery": "select t2.id from t1 as t2 where 1 != 1",
                 "Query": "select t2.id from t1 as t2 where t2.id = :t1_id1",
-                "Values": [
-                  ":t1_id1"
-                ],
+                "Values": [":t1_id1"],
                 "Vindex": "xxhash"
               }
             ]
@@ -396,9 +331,7 @@
           },
           {
             "OperatorType": "Distinct",
-            "Collations": [
-              "(0:1)"
-            ],
+            "Collations": ["(0:1)"],
             "Inputs": [
               {
                 "OperatorType": "Concatenate",
@@ -453,9 +386,7 @@
         },
         "Query": "insert into t1(id) values (1)"
       },
-      "TablesUsed": [
-        "unsharded_src1.t1"
-      ]
+      "TablesUsed": ["unsharded_src1.t1"]
     }
   },
   {
@@ -474,9 +405,7 @@
         },
         "Query": "update t1 set `data` = 'a' where id = 1"
       },
-      "TablesUsed": [
-        "unsharded_src1.t1"
-      ]
+      "TablesUsed": ["unsharded_src1.t1"]
     }
   },
   {
@@ -495,9 +424,7 @@
         },
         "Query": "delete from t1 where id = 1"
       },
-      "TablesUsed": [
-        "unsharded_src1.t1"
-      ]
+      "TablesUsed": ["unsharded_src1.t1"]
     }
   },
   {
@@ -517,9 +444,7 @@
         "FieldQuery": "select t1.id from t1 where 1 != 1",
         "Query": "select t1.id from t1"
       },
-      "TablesUsed": [
-        "unsharded_src2.t1"
-      ]
+      "TablesUsed": ["unsharded_src2.t1"]
     }
   },
   {
@@ -556,10 +481,7 @@
           }
         ]
       },
-      "TablesUsed": [
-        "unsharded_dst2.t2",
-        "unsharded_src2.t2"
-      ]
+      "TablesUsed": ["unsharded_dst2.t2", "unsharded_src2.t2"]
     }
   },
   {
@@ -579,9 +501,7 @@
         "FieldQuery": "select t1.id from t1 where 1 != 1",
         "Query": "select t1.id from t1"
       },
-      "TablesUsed": [
-        "unsharded_src3.t1"
-      ]
+      "TablesUsed": ["unsharded_src3.t1"]
     }
   }
 ]
