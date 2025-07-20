@@ -2,10 +2,12 @@ package incomingquerythrottler
 
 import (
 	"context"
-	"github.com/prashantv/gostub"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/prashantv/gostub"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
 
