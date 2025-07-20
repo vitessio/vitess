@@ -15,4 +15,14 @@ type ThrottlingStrategyHandler interface {
 	// It returns an error if the system is overloaded or throttling conditions are met.
 	// A nil error means the query can proceed normally.
 	ThrottleIfNeeded(ctx context.Context, targetTabletType topodatapb.TabletType, sql string, transactionID int64, options *querypb.ExecuteOptions) error
+
+	// Start initializes and starts the throttling strategy.
+	// This method should be called when the strategy becomes active.
+	// Implementations may start background processes, caching, or other resources.
+	Start()
+
+	// Stop gracefully shuts down the throttling strategy and releases any resources.
+	// This method should be called when the strategy is no longer needed.
+	// Implementations should clean up background processes, caches, or other resources.
+	Stop()
 }
