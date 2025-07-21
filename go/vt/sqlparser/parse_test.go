@@ -42,6 +42,8 @@ var (
 		partialDDL           bool
 		ignoreNormalizerTest bool
 	}{{
+		input: "select a and b member of (c) from dual",
+	}, {
 		input: "select * from foo limit 5 + 5",
 	}, {
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
@@ -2225,6 +2227,8 @@ var (
 		input:  "create procedure ConditionWithSignalAndHandler() begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Handled with custom condition and signal'; end; signal sqlstate '45000' set message_text = 'Custom signal triggered'; end;",
 		output: "create procedure ConditionWithSignalAndHandler () begin declare custom_error condition for sqlstate '45000'; declare exit handler for custom_error begin select 'Handled with custom condition and signal' from dual; end; signal sqlstate '45000' set message_text = 'Custom signal triggered'; end;",
 	}, {
+		input: "create procedure t1 (in x BIGINT) begin start transaction; insert into unsharded_a values (1, 'a', 'a'); commit; end;",
+	}, {
 		input: "create /*vt+ strategy=online */ or replace view v as select a, b, c from t",
 	}, {
 		input: "alter view a as select * from t",
@@ -2580,7 +2584,15 @@ var (
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete",
 	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete vitess_shards '-40'",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete vitess_shards '-40,40-80'",
+	}, {
 		input: "alter vitess_migration complete all",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' postpone complete",
+	}, {
+		input: "alter vitess_migration postpone complete all",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
 	}, {
@@ -2901,8 +2913,7 @@ var (
 		input:  "begin;",
 		output: "begin",
 	}, {
-		input:  "start transaction",
-		output: "begin",
+		input: "start transaction",
 	}, {
 		input: "start transaction with consistent snapshot",
 	}, {

@@ -52,6 +52,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtutils "vitess.io/vitess/go/vt/utils"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
@@ -232,7 +233,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 		// We rely on holding open transactions to generate innodb history so extend the timeout
 		// to avoid flakiness when the CI is very slow.
 		fmt.Sprintf("--queryserver-config-transaction-timeout=%s", (defaultTimeout * 3).String()),
-		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
+		fmt.Sprintf("%s=%d", vtutils.GetFlagVariantForTests("--vreplication-copy-phase-max-innodb-history-list-length"), maxSourceTrxHistory),
 		parallelInsertWorkers,
 	}
 
@@ -1761,6 +1762,7 @@ func testSwitchTrafficPermissionChecks(t *testing.T, workflowType, sourceKeyspac
 	applyPrivileges := func(query string) {
 		for _, shard := range sourceShards {
 			primary := vc.getPrimaryTablet(t, sourceKeyspace, shard)
+			log.Infof("Running permission query on %s: %s", primary.Name, query)
 			_, err := primary.QueryTablet(query, primary.Keyspace, false)
 			require.NoError(t, err)
 		}
@@ -1787,10 +1789,22 @@ func testSwitchTrafficPermissionChecks(t *testing.T, workflowType, sourceKeyspac
 				sidecarDBIdentifier))
 			runDryRunCmd(false)
 		})
-
 		t.Run("test without global or db level privileges", func(t *testing.T) {
 			applyPrivileges(fmt.Sprintf("revoke select,insert,update,delete on %s.* from vt_filtered@localhost",
 				sidecarDBIdentifier))
+			runDryRunCmd(true)
+		})
+
+		partialSidecarDBName := sidecarDBName[:len(sidecarDBName)-2] + "%"
+		partialSidecarDBIdentifier := sqlparser.String(sqlparser.NewIdentifierCS(partialSidecarDBName))
+		t.Run("test with db level privileges to partial sidecardb name", func(t *testing.T) {
+			applyPrivileges(fmt.Sprintf("grant select,insert,update,delete on %s.* to vt_filtered@localhost",
+				partialSidecarDBIdentifier))
+			runDryRunCmd(false)
+		})
+		t.Run("test after revoking partial sidecardb privs", func(t *testing.T) {
+			applyPrivileges(fmt.Sprintf("revoke select,insert,update,delete on %s.* from vt_filtered@localhost",
+				partialSidecarDBIdentifier))
 			runDryRunCmd(true)
 		})
 

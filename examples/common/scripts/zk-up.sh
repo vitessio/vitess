@@ -18,6 +18,10 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
+# Explicitly set VTROOT for this script, since it requires it.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+export VTROOT=${VTROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}
+
 cell=${CELL:-'test'}
 # Start ZooKeeper servers.
 # The "zkctl init" command won't return until the server is able to contact its

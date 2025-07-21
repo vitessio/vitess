@@ -14,13 +14,34 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package asthelpergen provides code generation for AST (Abstract Syntax Tree) helper methods.
+//
+// This package automatically generates helper methods for AST nodes including:
+//   - Deep cloning (Clone methods)
+//   - Equality comparison (Equals methods)
+//   - Visitor pattern support (Visit methods)
+//   - AST rewriting/transformation (Rewrite methods)
+//   - Path enumeration for navigation
+//   - Copy-on-write functionality
+//
+// The generator works by discovering all types that implement a root interface and
+// then generating the appropriate helper methods for each type using a plugin architecture.
+//
+// Usage:
+//
+//	result, err := asthelpergen.GenerateASTHelpers(&asthelpergen.Options{
+//	    Packages:      []string{"./mypackage"},
+//	    RootInterface: "github.com/example/mypackage.MyASTInterface",
+//	})
+//
+// The generated code follows Go conventions and includes proper error handling,
+// nil checks, and type safety.
 package asthelpergen
 
 import (
 	"bytes"
 	"fmt"
 	"go/types"
-	"log"
 	"os"
 	"path"
 	"strings"
@@ -32,7 +53,13 @@ import (
 	"vitess.io/vitess/go/tools/codegen"
 )
 
-const licenseFileHeader = `Copyright 2025 The Vitess Authors.
+const (
+	// Common constants used across generators
+	visitableName = "Visitable"
+	anyTypeName   = "any"
+
+	// License header for generated files
+	licenseFileHeader = `Copyright 2025 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,35 +72,64 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.`
+)
 
 type (
+	// generatorSPI provides services to individual generators during code generation.
+	// It acts as a service provider interface, giving generators access to type discovery
+	// and scope information needed for generating helper methods.
 	generatorSPI interface {
+		// addType adds a newly discovered type to the processing queue
 		addType(t types.Type)
+		// scope returns the type scope for finding implementations
 		scope() *types.Scope
+		// findImplementations finds all types that implement the given interface
 		findImplementations(iff *types.Interface, impl func(types.Type) error) error
-		iface() *types.Interface // the root interface that all nodes are expected to implement
+		// iface returns the root interface that all nodes are expected to implement
+		iface() *types.Interface
 	}
+
+	// generator defines the interface that all specialized generators must implement.
+	// Each generator handles specific types of Go constructs (structs, interfaces, etc.)
+	// and produces the appropriate helper methods for those types.
 	generator interface {
+		// genFile generates the final output file for this generator
 		genFile(generatorSPI) (string, *jen.File)
+		// interfaceMethod handles interface types with type switching logic
 		interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error
+		// structMethod handles struct types with field iteration
 		structMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
+		// ptrToStructMethod handles pointer-to-struct types
 		ptrToStructMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
+		// ptrToBasicMethod handles pointer-to-basic types (e.g., *int, *string)
 		ptrToBasicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
+		// sliceMethod handles slice types with element processing
 		sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error
+		// basicMethod handles basic types (int, string, bool, etc.)
 		basicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
 	}
-	// astHelperGen finds implementations of the given interface,
-	// and uses the supplied `generator`s to produce the output code
-	astHelperGen struct {
-		DebugTypes bool
-		mod        *packages.Module
-		sizes      types.Sizes
-		namedIface *types.Named
-		_iface     *types.Interface
-		gens       []generator
 
+	// astHelperGen is the main orchestrator that coordinates the code generation process.
+	// It discovers implementations of a root interface and uses multiple specialized
+	// generators to produce helper methods for all discovered types.
+	astHelperGen struct {
+		// DebugTypes enables debug output for type processing
+		DebugTypes bool
+		// mod is the Go module information for path resolution
+		mod *packages.Module
+		// sizes provides platform-specific type size information
+		sizes types.Sizes
+		// namedIface is the root interface type for which helpers are generated
+		namedIface *types.Named
+		// _iface is the underlying interface type
+		_iface *types.Interface
+		// gens is the list of specialized generators (clone, equals, visit, etc.)
+		gens []generator
+
+		// _scope is the type scope for finding implementations
 		_scope *types.Scope
-		todo   []types.Type
+		// todo is the queue of types that need to be processed
+		todo []types.Type
 	}
 )
 
@@ -81,6 +137,15 @@ func (gen *astHelperGen) iface() *types.Interface {
 	return gen._iface
 }
 
+// newGenerator creates a new AST helper generator with the specified configuration.
+//
+// Parameters:
+//   - mod: Go module information for path resolution
+//   - sizes: Platform-specific type size information
+//   - named: The root interface type for which helpers will be generated
+//   - generators: Specialized generators for different helper types (clone, equals, etc.)
+//
+// Returns a configured astHelperGen ready to process types and generate code.
 func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named, generators ...generator) *astHelperGen {
 	return &astHelperGen{
 		DebugTypes: true,
@@ -107,7 +172,7 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 				case *types.Interface:
 					// This is OK; interfaces are references
 				default:
-					panic(fmt.Errorf("interface %s implemented by %s (%s as %T) without ptr", iff.String(), baseType, tt.String(), tt))
+					return fmt.Errorf("interface %s implemented by %s (%s as %T) without ptr", iff.String(), baseType, tt.String(), tt)
 				}
 			}
 			if types.TypeString(baseType, noQualifier) == visitableName {
@@ -140,7 +205,10 @@ func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 
 	gen._scope = pkg.Scope()
 	gen.todo = append(gen.todo, gen.namedIface)
-	jenFiles := gen.createFiles()
+	jenFiles, err := gen.createFiles()
+	if err != nil {
+		return nil, err
+	}
 
 	result := map[string]*jen.File{}
 	for fName, genFile := range jenFiles {
@@ -175,16 +243,34 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 	return errors
 }
 
+// Options configures the AST helper generation process.
 type Options struct {
-	Packages      []string
+	// Packages specifies the Go packages to analyze for AST types.
+	// Can be package paths like "./mypackage" or import paths like "github.com/example/ast".
+	Packages []string
+
+	// RootInterface is the fully qualified name of the root interface that all AST nodes implement.
+	// Format: "package.path.InterfaceName" (e.g., "github.com/example/ast.Node")
 	RootInterface string
 
-	Clone  CloneOptions
+	// Clone configures the clone generator options
+	Clone CloneOptions
+
+	// Equals configures the equality comparison generator options
 	Equals EqualsOptions
 }
 
-// GenerateASTHelpers loads the input code, constructs the necessary generators,
-// and generates the rewriter and clone methods for the AST
+// GenerateASTHelpers is the main entry point for generating AST helper methods.
+//
+// It loads the specified packages, analyzes the types that implement the root interface,
+// and generates comprehensive helper methods including clone, equals, visit, rewrite,
+// path enumeration, and copy-on-write functionality.
+//
+// The function returns a map where keys are file paths and values are the generated
+// Go source files. The caller is responsible for writing these files to disk.
+//
+// Returns an error if package loading fails, the root interface cannot be found,
+// or code generation encounters any issues.
 func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 	loaded, err := packages.Load(&packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
@@ -260,48 +346,76 @@ func (gen *astHelperGen) addType(t types.Type) {
 	gen.todo = append(gen.todo, t)
 }
 
-func (gen *astHelperGen) createFiles() map[string]*jen.File {
+func (gen *astHelperGen) createFiles() (map[string]*jen.File, error) {
+	if err := gen.processTypeQueue(); err != nil {
+		return nil, err
+	}
+	return gen.generateOutputFiles(), nil
+}
+
+// processTypeQueue processes all types in the todo queue with all generators
+func (gen *astHelperGen) processTypeQueue() error {
 	alreadyDone := map[string]bool{}
 	for len(gen.todo) > 0 {
 		t := gen.todo[0]
-		underlying := t.Underlying()
 		typeName := printableTypeName(t)
 		gen.todo = gen.todo[1:]
 
 		if alreadyDone[typeName] {
 			continue
 		}
-		var err error
-		for _, g := range gen.gens {
-			switch underlying := underlying.(type) {
-			case *types.Interface:
-				err = g.interfaceMethod(t, underlying, gen)
-			case *types.Slice:
-				err = g.sliceMethod(t, underlying, gen)
-			case *types.Struct:
-				err = g.structMethod(t, underlying, gen)
-			case *types.Pointer:
-				ptrToType := underlying.Elem().Underlying()
-				switch ptrToType := ptrToType.(type) {
-				case *types.Struct:
-					err = g.ptrToStructMethod(t, ptrToType, gen)
-				case *types.Basic:
-					err = g.ptrToBasicMethod(t, ptrToType, gen)
-				default:
-					panic(fmt.Sprintf("%T", ptrToType))
-				}
-			case *types.Basic:
-				err = g.basicMethod(t, underlying, gen)
-			default:
-				log.Fatalf("don't know how to handle %s %T", typeName, underlying)
-			}
-			if err != nil {
-				log.Fatal(err)
-			}
+
+		if err := gen.processTypeWithGenerators(t); err != nil {
+			return fmt.Errorf("failed to process type %s: %w", typeName, err)
 		}
 		alreadyDone[typeName] = true
 	}
+	return nil
+}
 
+// processTypeWithGenerators dispatches a type to all generators based on its underlying type
+func (gen *astHelperGen) processTypeWithGenerators(t types.Type) error {
+	underlying := t.Underlying()
+	typeName := printableTypeName(t)
+
+	for _, g := range gen.gens {
+		var err error
+		switch underlying := underlying.(type) {
+		case *types.Interface:
+			err = g.interfaceMethod(t, underlying, gen)
+		case *types.Slice:
+			err = g.sliceMethod(t, underlying, gen)
+		case *types.Struct:
+			err = g.structMethod(t, underlying, gen)
+		case *types.Pointer:
+			err = gen.handlePointerType(t, underlying, g)
+		case *types.Basic:
+			err = g.basicMethod(t, underlying, gen)
+		default:
+			return fmt.Errorf("don't know how to handle type %s %T", typeName, underlying)
+		}
+		if err != nil {
+			return fmt.Errorf("generator failed for type %s: %w", typeName, err)
+		}
+	}
+	return nil
+}
+
+// handlePointerType handles pointer types by dispatching to the appropriate method
+func (gen *astHelperGen) handlePointerType(t types.Type, ptr *types.Pointer, g generator) error {
+	ptrToType := ptr.Elem().Underlying()
+	switch ptrToType := ptrToType.(type) {
+	case *types.Struct:
+		return g.ptrToStructMethod(t, ptrToType, gen)
+	case *types.Basic:
+		return g.ptrToBasicMethod(t, ptrToType, gen)
+	default:
+		return fmt.Errorf("unsupported pointer type %T", ptrToType)
+	}
+}
+
+// generateOutputFiles collects the generated files from all generators
+func (gen *astHelperGen) generateOutputFiles() map[string]*jen.File {
 	result := map[string]*jen.File{}
 	for _, g := range gen.gens {
 		fName, jenFile := g.genFile(gen)
@@ -309,6 +423,9 @@ func (gen *astHelperGen) createFiles() map[string]*jen.File {
 	}
 	return result
 }
+
+// noQualifier is used to print types without package qualifiers
+var noQualifier = func(*types.Package) string { return "" }
 
 // printableTypeName returns a string that can be used as a valid golang identifier
 func printableTypeName(t types.Type) string {

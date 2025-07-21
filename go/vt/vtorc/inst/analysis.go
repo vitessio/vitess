@@ -91,11 +91,10 @@ type ReplicationAnalysis struct {
 	TabletType                   topodatapb.TabletType
 	CurrentTabletType            topodatapb.TabletType
 	PrimaryTimeStamp             time.Time
-	ClusterDetails               ClusterInfo
 	AnalyzedKeyspace             string
 	AnalyzedShard                string
 	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
-	ShardPrimaryTermTimestamp                 string
+	ShardPrimaryTermTimestamp                 time.Time
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
 	IsPrimary                                 bool
 	IsClusterPrimary                          bool

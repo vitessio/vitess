@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -54,10 +55,10 @@ var (
 	sidecarDBIdentifier   = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
-	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms", "--enable_buffer", "--buffer_window", loadTestBufferingWindowDuration.String(),
-		"--buffer_size", "250000", "--buffer_min_time_between_failovers", "1s", "--buffer_max_failover_duration", loadTestBufferingWindowDuration.String(),
-		"--buffer_drain_concurrency", "10"}
-	extraVtctldArgs = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
+	extraVTGateArgs       = []string{utils.GetFlagVariantForTests("--tablet-refresh-interval"), "10ms", "--enable_buffer", utils.GetFlagVariantForTests("--buffer-window"), loadTestBufferingWindowDuration.String(),
+		utils.GetFlagVariantForTests("--buffer-size"), "250000", utils.GetFlagVariantForTests("--buffer-min-time-between-failovers"), "1s", utils.GetFlagVariantForTests("--buffer-max-failover-duration"), loadTestBufferingWindowDuration.String(),
+		utils.GetFlagVariantForTests("--buffer-drain-concurrency"), "10"}
+	extraVtctldArgs = []string{utils.GetFlagVariantForTests("--remote-operation-timeout"), "600s", "--topo-etcd-lease-ttl", "120"}
 	// This variable can be used within specific tests to alter vttablet behavior.
 	extraVTTabletArgs = []string{}
 
@@ -494,8 +495,8 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	tablet := &Tablet{}
 	var options []string
 	defaultHeartbeatOptions := []string{
-		"--heartbeat_on_demand_duration", "5s",
-		"--heartbeat_interval", "250ms",
+		utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
+		utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
 	}
 	if !mainClusterConfig.overrideHeartbeatOptions {
 		options = append(options, defaultHeartbeatOptions...)
@@ -504,7 +505,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	options = append(options, extraVTTabletArgs...)
 
 	if mainClusterConfig.vreplicationCompressGTID {
-		options = append(options, "--vreplication_store_compressed_gtid=true")
+		options = append(options, "--vreplication-store-compressed-gtid=true")
 	}
 
 	vttablet := cluster.VttabletProcessInstance(

@@ -21,8 +21,8 @@ Here is an example of how to invoke it:
 ```
 go build
 ./rowlog -ids 1,3,4 -table customer -pk customer_id -source commerce -target customer -vtctld localhost:15999 
-        -vtgate localhost:15991 -cells zone1 -topo_implementation etcd2 -topo_global_server_address localhost:2379 
-        -topo_global_root /vitess/global
+        -vtgate localhost:15991 -cells zone1 -topo-implementation etcd2 -topo-global-server-address localhost:2379 
+        -topo-global-root /vitess/global
 ```
 
 The resulting binlog entries are output to two tab-separated files which can be inspected to validate if 

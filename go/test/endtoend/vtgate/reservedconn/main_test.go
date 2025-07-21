@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -124,9 +125,9 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		// This test requires setting the mysql_server_version vtgate flag
+		// This test requires setting the mysql-server-version vtgate flag
 		// to 5.7 regardless of the actual MySQL version used for the tests.
-		clusterInstance.VtGateExtraArgs = []string{"--lock_heartbeat_time", "2s", "--mysql_server_version", "5.7.0"}
+		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--lock-heartbeat-time"), "2s", vtutils.GetFlagVariantForTests("--mysql-server-version"), "5.7.0"}
 		clusterInstance.VtGatePlannerVersion = querypb.ExecuteOptions_Gen4
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1

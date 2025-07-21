@@ -1009,9 +1009,13 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	case sqlparser.LaunchAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.LaunchMigrations(qre.ctx)
 	case sqlparser.CompleteMigrationType:
-		return qre.tsv.onlineDDLExecutor.CompleteMigration(qre.ctx, alterMigration.UUID)
+		return qre.tsv.onlineDDLExecutor.CompleteMigration(qre.ctx, alterMigration.UUID, alterMigration.Shards)
 	case sqlparser.CompleteAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.CompletePendingMigrations(qre.ctx)
+	case sqlparser.PostponeCompleteMigrationType:
+		return qre.tsv.onlineDDLExecutor.PostponeCompleteMigration(qre.ctx, alterMigration.UUID)
+	case sqlparser.PostponeCompleteAllMigrationType:
+		return qre.tsv.onlineDDLExecutor.PostponeCompletePendingMigrations(qre.ctx)
 	case sqlparser.CancelMigrationType:
 		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user", true)
 	case sqlparser.CancelAllMigrationType:

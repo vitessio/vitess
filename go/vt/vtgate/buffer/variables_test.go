@@ -34,9 +34,9 @@ func TestVariables(t *testing.T) {
 		t.Errorf("failed to parse with default values: %v", err)
 	}
 
-	fs.Set("buffer_size", "23")
+	fs.Set("buffer-size", "23")
 	defer func() {
-		fs.Set("buffer_size", "1")
+		fs.Set("buffer-size", "1")
 	}()
 
 	// Create new buffer which will the flags.

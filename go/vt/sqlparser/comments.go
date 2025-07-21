@@ -43,7 +43,7 @@ const (
 	DirectiveIgnoreMaxPayloadSize = "IGNORE_MAX_PAYLOAD_SIZE"
 	// DirectiveIgnoreMaxMemoryRows skips memory row validation when set.
 	DirectiveIgnoreMaxMemoryRows = "IGNORE_MAX_MEMORY_ROWS"
-	// DirectiveAllowScatter lets scatter plans pass through even when they are turned off by `no-scatter`.
+	// DirectiveAllowScatter lets scatter plans pass through even when they are turned off by `no_scatter`.
 	DirectiveAllowScatter = "ALLOW_SCATTER"
 	// DirectiveAllowHashJoin lets the planner use hash join if possible
 	DirectiveAllowHashJoin = "ALLOW_HASH_JOIN"

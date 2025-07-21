@@ -179,6 +179,37 @@ func CheckCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	}
 }
 
+// CheckCompleteMigrationShards attempts to complete a migration for specific shards, and expects success by counting affected rows
+func CheckCompleteMigrationShards(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, completeShards string, expectCompletePossible bool) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a complete vitess_shards %a",
+		sqltypes.StringBindVariable(uuid),
+		sqltypes.StringBindVariable(completeShards),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	if expectCompletePossible {
+		assert.Equal(t, len(shards), int(r.RowsAffected))
+	} else {
+		assert.Equal(t, int(0), int(r.RowsAffected))
+	}
+}
+
+// CheckPostponeCompleteMigration attempts to postpone an existing migration, and expects success by counting affected rows
+func CheckPostponeCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectPotponePossible bool) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a postpone complete",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	if expectPotponePossible {
+		assert.Equal(t, len(shards), int(r.RowsAffected))
+	} else {
+		assert.Equal(t, int(0), int(r.RowsAffected))
+	}
+}
+
 // CheckLaunchMigration attempts to launch a migration, and expects success by counting affected rows
 func CheckLaunchMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, launchShards string, expectLaunchPossible bool) {
 	query, err := sqlparser.ParseAndBind("alter vitess_migration %a launch vitess_shards %a",
@@ -199,6 +230,17 @@ func CheckLaunchMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
 	completeQuery := "alter vitess_migration complete all"
+	r := VtgateExecQuery(t, vtParams, completeQuery, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
+// CheckPostponeCompleteAllMigrations postpones all pending migrations and expect number of affected rows
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckPostponeCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
+	completeQuery := "alter vitess_migration postpone complete all"
 	r := VtgateExecQuery(t, vtParams, completeQuery, "")
 
 	if expectCount >= 0 {
