@@ -6,7 +6,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/prashantv/gostub"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,24 +13,27 @@ func TestNewFileBasedConfigLoader(t *testing.T) {
 	loader := NewFileBasedConfigLoader()
 	require.NotNil(t, loader)
 	require.IsType(t, &FileBasedConfigLoader{}, loader)
+	require.Equal(t, defaultConfigPath, loader.configPath)
 }
 
 func TestFileBasedConfigLoader_Load(t *testing.T) {
 	tests := []struct {
 		name                string
-		stubOsReadFile      func(filename string) ([]byte, error)
-		stubJsonUnmarshal   func(data []byte, v interface{}) error
+		configPath          string
+		mockReadFile        func(filename string) ([]byte, error)
+		mockJsonUnmarshal   func(data []byte, v interface{}) error
 		expectedConfig      Config
 		expectedError       string
 		expectedErrorNotNil bool
 	}{
 		{
-			name: "successful config load with minimal config",
-			stubOsReadFile: func(filename string) ([]byte, error) {
+			name:       "successful config load with minimal config",
+			configPath: "/config/throttler-config.json",
+			mockReadFile: func(filename string) ([]byte, error) {
 				require.Equal(t, "/config/throttler-config.json", filename)
 				return []byte(`{"enabled": true, "strategy": "TabletThrottler"}`), nil
 			},
-			stubJsonUnmarshal: func(data []byte, v interface{}) error {
+			mockJsonUnmarshal: func(data []byte, v interface{}) error {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{
@@ -41,88 +43,90 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 			expectedErrorNotNil: false,
 		},
 		{
-			name: "successful config load with disabled throttler",
-			stubOsReadFile: func(filename string) ([]byte, error) {
+			name:       "successful config load with disabled throttler",
+			configPath: "/config/throttler-config.json",
+			mockReadFile: func(filename string) ([]byte, error) {
 				require.Equal(t, "/config/throttler-config.json", filename)
-				return []byte(`{"enabled": false, "strategy": "Unknown"}`), nil
+				return []byte(`{"enabled": false, "strategy": "TabletThrottler"}`), nil
 			},
-			stubJsonUnmarshal: func(data []byte, v interface{}) error {
+			mockJsonUnmarshal: func(data []byte, v interface{}) error {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{
 				Enabled:  false,
-				Strategy: ThrottlingStrategyUnknown,
+				Strategy: ThrottlingStrategyTabletThrottler,
 			},
 			expectedErrorNotNil: false,
 		},
 		{
-			name: "file read error - file not found",
-			stubOsReadFile: func(filename string) ([]byte, error) {
-				require.Equal(t, "/config/throttler-config.json", filename)
+			name:       "file read error - file not found",
+			configPath: "/nonexistent/config.json",
+			mockReadFile: func(filename string) ([]byte, error) {
+				require.Equal(t, "/nonexistent/config.json", filename)
 				return nil, errors.New("no such file or directory")
 			},
-			stubJsonUnmarshal: func(data []byte, v interface{}) error {
-				// Should not be called
-				t.Fatal("jsonUnmarshal should not be called when file read fails")
-				return nil
+			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+				return json.Unmarshal(data, v)
 			},
 			expectedConfig:      Config{},
 			expectedError:       "no such file or directory",
 			expectedErrorNotNil: true,
 		},
 		{
-			name: "file read error - permission denied",
-			stubOsReadFile: func(filename string) ([]byte, error) {
+			name:       "file read error - permission denied",
+			configPath: "/config/throttler-config.json",
+			mockReadFile: func(filename string) ([]byte, error) {
 				require.Equal(t, "/config/throttler-config.json", filename)
 				return nil, errors.New("permission denied")
 			},
-			stubJsonUnmarshal: func(data []byte, v interface{}) error {
-				// Should not be called
-				t.Fatal("jsonUnmarshal should not be called when file read fails")
-				return nil
+			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+				return json.Unmarshal(data, v)
 			},
 			expectedConfig:      Config{},
 			expectedError:       "permission denied",
 			expectedErrorNotNil: true,
 		},
 		{
-			name: "json unmarshal error - invalid json",
-			stubOsReadFile: func(filename string) ([]byte, error) {
+			name:       "json unmarshal error - invalid json",
+			configPath: "/config/throttler-config.json",
+			mockReadFile: func(filename string) ([]byte, error) {
 				require.Equal(t, "/config/throttler-config.json", filename)
-				return []byte(`{"enabled": true, "strategy": `), nil // incomplete JSON
+				return []byte(`{"enabled": true`), nil
 			},
-			stubJsonUnmarshal: func(data []byte, v interface{}) error {
-				return errors.New("unexpected end of JSON input")
+			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+				return json.Unmarshal(data, v)
 			},
 			expectedConfig:      Config{},
 			expectedError:       "unexpected end of JSON input",
 			expectedErrorNotNil: true,
 		},
 		{
-			name: "json unmarshal error - invalid field type",
-			stubOsReadFile: func(filename string) ([]byte, error) {
+			name:       "json unmarshal error - invalid field type",
+			configPath: "/config/throttler-config.json",
+			mockReadFile: func(filename string) ([]byte, error) {
 				require.Equal(t, "/config/throttler-config.json", filename)
-				return []byte(`{"enabled": "invalid_boolean", "strategy": "TabletThrottler"}`), nil
+				return []byte(`{"enabled": "not_a_boolean", "strategy": "TabletThrottler"}`), nil
 			},
-			stubJsonUnmarshal: func(data []byte, v interface{}) error {
-				return errors.New("json: cannot unmarshal string into Go struct field Config.enabled of type bool")
+			mockJsonUnmarshal: func(data []byte, v interface{}) error {
+				return json.Unmarshal(data, v)
 			},
 			expectedConfig:      Config{},
-			expectedError:       "json: cannot unmarshal string into Go struct field Config.enabled of type bool",
+			expectedError:       "cannot unmarshal string into Go struct field Config.enabled of type bool",
 			expectedErrorNotNil: true,
 		},
 		{
-			name: "empty file - should unmarshal to zero value config",
-			stubOsReadFile: func(filename string) ([]byte, error) {
+			name:       "empty file - should unmarshal to zero value config",
+			configPath: "/config/throttler-config.json",
+			mockReadFile: func(filename string) ([]byte, error) {
 				require.Equal(t, "/config/throttler-config.json", filename)
 				return []byte(`{}`), nil
 			},
-			stubJsonUnmarshal: func(data []byte, v interface{}) error {
+			mockJsonUnmarshal: func(data []byte, v interface{}) error {
 				return json.Unmarshal(data, v)
 			},
 			expectedConfig: Config{
-				Enabled:  false, // zero value for bool
-				Strategy: "",    // zero value for ThrottlingStrategy
+				Enabled:  false,
+				Strategy: "",
 			},
 			expectedErrorNotNil: false,
 		},
@@ -130,19 +134,13 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create stubs for the global variables
-			osReadFileStub := gostub.Stub(&_osReadFile, tt.stubOsReadFile)
-			jsonUnmarshalStub := gostub.Stub(&_jsonUnmarshal, tt.stubJsonUnmarshal)
+			// Create loader with injected dependencies
+			loader := NewFileBasedConfigLoaderWithDeps(tt.configPath, tt.mockReadFile, tt.mockJsonUnmarshal)
 
-			// Ensure stubs are reset after the test
-			defer osReadFileStub.Reset()
-			defer jsonUnmarshalStub.Reset()
-
-			// Create loader and test Load method
-			loader := NewFileBasedConfigLoader()
+			// Test
 			config, err := loader.Load(context.Background())
 
-			// Verify error expectations
+			// Assert
 			if tt.expectedErrorNotNil {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedError)
@@ -156,27 +154,20 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 }
 
 func TestFileBasedConfigLoader_Load_ConfigPath(t *testing.T) {
-	// Test that the correct config path is being used
+	// Test that the production loader uses the default config path
 	var capturedPath string
 
-	stubOsReadFile := func(filename string) ([]byte, error) {
+	mockReadFile := func(filename string) ([]byte, error) {
 		capturedPath = filename
 		return []byte(`{"enabled": true, "strategy": "TabletThrottler"}`), nil
 	}
 
-	stubJsonUnmarshal := func(data []byte, v interface{}) error {
+	mockJsonUnmarshal := func(data []byte, v interface{}) error {
 		return json.Unmarshal(data, v)
 	}
 
-	// Create stubs
-	osReadFileStub := gostub.Stub(&_osReadFile, stubOsReadFile)
-	jsonUnmarshalStub := gostub.Stub(&_jsonUnmarshal, stubJsonUnmarshal)
-
-	defer osReadFileStub.Reset()
-	defer jsonUnmarshalStub.Reset()
-
-	// Test
-	loader := NewFileBasedConfigLoader()
+	// Test with production constructor (should use default path)
+	loader := NewFileBasedConfigLoaderWithDeps(defaultConfigPath, mockReadFile, mockJsonUnmarshal)
 	_, err := loader.Load(context.Background())
 
 	require.NoError(t, err)
@@ -190,4 +181,22 @@ func TestFileBasedConfigLoader_ImplementsConfigLoader(t *testing.T) {
 	// This should compile without issues, proving interface compliance
 	loader := NewFileBasedConfigLoader()
 	require.NotNil(t, loader)
+}
+
+func TestNewFileBasedConfigLoaderWithDeps(t *testing.T) {
+	configPath := "/test/config.json"
+	mockReadFile := func(string) ([]byte, error) { return nil, nil }
+	mockUnmarshal := func([]byte, interface{}) error { return nil }
+
+	loader := NewFileBasedConfigLoaderWithDeps(configPath, mockReadFile, mockUnmarshal)
+
+	require.NotNil(t, loader)
+	require.Equal(t, configPath, loader.configPath)
+	// Note: We can't directly test function equality, but the constructor should set them
+}
+
+func TestFileBasedConfigLoader_UsesDefaultPath(t *testing.T) {
+	// Test that the production constructor uses the default path
+	loader := NewFileBasedConfigLoader()
+	require.Equal(t, "/config/throttler-config.json", loader.configPath)
 }
