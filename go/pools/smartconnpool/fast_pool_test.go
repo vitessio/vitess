@@ -154,7 +154,7 @@ func BenchmarkPoolWithDifferentSettings(b *testing.B) {
 
 	ctx := context.Background()
 	p := NewPool(&Config[*BenchConn]{
-		Capacity:     30,
+		Capacity:     64,
 		MaxIdleCount: 5,
 		IdleTimeout:  time.Second,
 		LogWait:      state.LogWait,
@@ -166,7 +166,7 @@ func BenchmarkPoolWithDifferentSettings(b *testing.B) {
 
 	b.ReportAllocs()
 
-	b.SetParallelism(128)
+	//	b.SetParallelism(64)
 
 	var m sync.Map
 	var i atomic.Int64
@@ -240,7 +240,7 @@ func BenchmarkFastPoolWithDifferentSettings(b *testing.B) {
 
 	ctx := context.Background()
 	p := NewFastPool(&Config[*BenchConn]{
-		Capacity:     30,
+		Capacity:     64,
 		MaxIdleCount: 5,
 		IdleTimeout:  time.Second,
 		LogWait:      state.LogWait,
@@ -252,7 +252,7 @@ func BenchmarkFastPoolWithDifferentSettings(b *testing.B) {
 
 	b.ReportAllocs()
 
-	b.SetParallelism(128)
+	//	b.SetParallelism(64)
 
 	var m sync.Map
 	var i atomic.Int64

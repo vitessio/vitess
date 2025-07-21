@@ -51,6 +51,7 @@ type Metrics struct {
 	waitTime             atomic.Int64
 	idleClosed           atomic.Int64
 	diffSetting          atomic.Int64
+	openCount            atomic.Int64
 	resetSetting         atomic.Int64
 }
 
