@@ -40,11 +40,6 @@ const (
 	REMOVED
 )
 
-type ConnectionState struct {
-	state   uint
-	setting *Setting
-}
-
 type Pooled[C Connection] struct {
 	next        atomic.Pointer[Pooled[C]]
 	timeCreated timestamp
