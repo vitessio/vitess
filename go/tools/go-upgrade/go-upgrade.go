@@ -338,7 +338,7 @@ func getLatestStableGolangReleases() (version.Collection, error) {
 func chooseNewVersion(curVersion *version.Version, latestVersions version.Collection, allowMajorUpgrade bool) *version.Version {
 	selectedVersion := curVersion
 	for _, latestVersion := range latestVersions {
-		if !allowMajorUpgrade && !isSameMajorMinorVersion(latestVersion, selectedVersion) {
+		if !allowMajorUpgrade && !isSameVersion(latestVersion, selectedVersion) {
 			continue
 		}
 		if latestVersion.GreaterThan(selectedVersion) {
@@ -385,28 +385,12 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		}
 	}
 
-	dockerDigest, err := resolveGolangImageDigest(new)
-	if err != nil {
-		return err
-	}
-
-	for _, fileToChange := range filesToChange {
-		err = replaceInFile(
-			[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGolangDockerImage)},
-			[]string{fmt.Sprintf("${1}%s@%s", golangDockerTag(new), dockerDigest)},
-			fileToChange,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	if !isSameMajorMinorVersion(old, new) {
+	if !isSameVersion(old, new) {
 		goModFiles := []string{"./go.mod"}
 		for _, file := range goModFiles {
 			err = replaceInFile(
 				[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGoModGoVersion)},
-				[]string{fmt.Sprintf("go %d.%d", new.Segments()[0], new.Segments()[1])},
+				[]string{fmt.Sprintf("go %d.%d.%d", new.Segments()[0], new.Segments()[1], new.Segments()[2])},
 				file,
 			)
 			if err != nil {
@@ -502,8 +486,8 @@ func updateBootstrapChangelog(new string, goVersion *version.Version) error {
 	return nil
 }
 
-func isSameMajorMinorVersion(a, b *version.Version) bool {
-	return a.Segments()[0] == b.Segments()[0] && a.Segments()[1] == b.Segments()[1]
+func isSameVersion(a, b *version.Version) bool {
+	return a.Segments()[0] == b.Segments()[0] && a.Segments()[1] == b.Segments()[1] && a.Segments()[2] == b.Segments()[2]
 }
 
 func getListOfFilesInPaths(pathsToExplore []string) ([]string, error) {
