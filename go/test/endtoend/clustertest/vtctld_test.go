@@ -163,7 +163,7 @@ func testExecuteAsDba(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.query, func(t *testing.T) {
-			result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, tcase.query)
+			result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDba", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, tcase.query)
 			if tcase.expectErr {
 				assert.Error(t, err)
 			} else {
