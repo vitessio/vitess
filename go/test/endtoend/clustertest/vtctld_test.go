@@ -153,8 +153,8 @@ func testExecuteAsDba(t *testing.T) {
 			result: "",
 		},
 		{
-			query:  "create table if not exists t(id int); create table if not exists t(id int);",
-			result: "",
+			query:     "create table if not exists t(id int); create table if not exists t(id int);",
+			expectErr: true,
 		},
 		{
 			query:     "create table if not exists t(id int); create table if not exists t(id int); SELECT 1 AS a",
@@ -163,7 +163,7 @@ func testExecuteAsDba(t *testing.T) {
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.query, func(t *testing.T) {
-			result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDba", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, tcase.query)
+			result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, tcase.query)
 			if tcase.expectErr {
 				assert.Error(t, err)
 			} else {
