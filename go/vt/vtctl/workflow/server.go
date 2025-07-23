@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sets"
@@ -3653,8 +3652,7 @@ func (s *Server) validateShardsHaveVReplicationPermissions(ctx context.Context, 
 			}
 			if !res.GetOk() {
 				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-					"user %s does not have the required set of permissions (select,insert,update,delete) on the %s.vreplication table on tablet %s",
-					res.GetUser(), sidecar.GetIdentifier(), topoproto.TabletAliasString(tablet.Alias))
+					"failed to validate required vreplication metadata permissions: %s", res.GetError())
 			}
 			return nil
 		})

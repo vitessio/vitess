@@ -161,7 +161,7 @@ replicationTracker:
   heartbeatIntervalSeconds: 250ms
   mode: disable
 rowStreamer:
-  maxInnoDBTrxHistLen: 1000000
+  maxInnoDBTrxHistLen: 10000000
   maxMySQLReplLagSecs: 43200
 schemaChangeReloadTimeout: 30s
 schemaReloadIntervalSeconds: 30m0s
