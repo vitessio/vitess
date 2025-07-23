@@ -139,8 +139,16 @@ jobs:
         # Setup Percona Server for MySQL 8.0
         sudo apt-get -qq update
         sudo apt-get -qq install -y lsb-release gnupg2 curl
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        if [ "$ARCH" = "arm64" ]; then
+        # ARM64-specific: manually fetch and install Percona release for Ubuntu 24.04 (noble)
+          wget https://repo.percona.com/apt/percona-release_latest.noble_all.deb
+          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.noble_all.deb
+        else
+          # Existing logic for amd64
+          wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        fi
+
         sudo percona-release setup ps80
         sudo apt-get -qq update
 
@@ -156,6 +164,9 @@ jobs:
           sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.16_arm64.deb libaio1_0.3.112-5_arm64.deb
           sudo dpkg -i mysql-server_8.0.35_arm64.deb
           export PATH=$PATH:/usr/local/mysql/bin
+          echo "VT_MYSQL_ROOT=/usr/local/mysql" >> $GITHUB_ENV
+          sudo apt-get update
+          sudo apt-get install -y mysql-shell
         
         else
           wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb

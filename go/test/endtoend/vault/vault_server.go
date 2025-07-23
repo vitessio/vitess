@@ -17,18 +17,18 @@ limitations under the License.
 package vault
 
 import (
-	"bytes"
 	"archive/zip"
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
-	"runtime"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -62,30 +62,30 @@ func (vs *Server) start() error {
 	// Download and unpack vault binary
 	vs.execPath = path.Join(os.Getenv("EXTRA_BIN"), vaultExecutableName)
 	useAltVault := runtime.GOARCH == "arm64"
-vaultURL := vaultDownloadSource
-if useAltVault {
-	vaultVersion := "1.15.4"
-	vaultURL = fmt.Sprintf("https://releases.hashicorp.com/vault/%s/vault_%s_linux_arm64.zip", vaultVersion, vaultVersion)
-	log.Warningf("ARM64 detected: using Vault from %s", vaultURL)
-}
-
-fileStat, err := os.Stat(vs.execPath)
-if err != nil || (!useAltVault && fileStat.Size() != vaultDownloadSize) {
-	log.Warningf("Downloading Vault binary to: %v", vs.execPath)
-
-	// If using zip from HashiCorp, extract the binary from zip
+	vaultURL := vaultDownloadSource
 	if useAltVault {
-		err = downloadAndUnzipVault(vs.execPath, vaultURL)
+		vaultVersion := "1.15.4"
+		vaultURL = fmt.Sprintf("https://releases.hashicorp.com/vault/%s/vault_%s_linux_arm64.zip", vaultVersion, vaultVersion)
+		log.Warningf("ARM64 detected: using Vault from %s", vaultURL)
+	}
+
+	fileStat, err := os.Stat(vs.execPath)
+	if err != nil || (!useAltVault && fileStat.Size() != vaultDownloadSize) {
+		log.Warningf("Downloading Vault binary to: %v", vs.execPath)
+
+		// If using zip from HashiCorp, extract the binary from zip
+		if useAltVault {
+			err = downloadAndUnzipVault(vs.execPath, vaultURL)
+		} else {
+			err = downloadExecFile(vs.execPath, vaultURL)
+		}
+		if err != nil {
+			log.Error(err)
+			return err
+		}
 	} else {
-		err = downloadExecFile(vs.execPath, vaultURL)
+		log.Warningf("Vault binary already present at %v , not re-downloading", vs.execPath)
 	}
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-} else {
-	log.Warningf("Vault binary already present at %v , not re-downloading", vs.execPath)
-}
 
 	// Create Vault log directory
 	vs.logDir = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", vaultDirName, vs.port1))

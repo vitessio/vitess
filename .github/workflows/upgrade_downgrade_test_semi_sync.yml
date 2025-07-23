@@ -97,8 +97,15 @@ jobs:
         run: |   
           sudo apt-get update
           sudo apt-get install -y lsb-release gnupg2 curl
-          wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+          if [ "$ARCH" = "arm64" ]; then
+            # ARM64-specific: manually fetch and install Percona release for Ubuntu 24.04 (noble)
+            wget https://repo.percona.com/apt/percona-release_latest.noble_all.deb
+            sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.noble_all.deb
+          else
+            # Existing logic for amd64
+            wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+            sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+          fi
           sudo percona-release setup ps80
           sudo apt-get update
 

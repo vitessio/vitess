@@ -247,16 +247,17 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 	switch {
 	case dbType == "mysql" && majorVersion == "5.7":
 		if arch != "amd64" {
-			return fmt.Errorf("mysql 5.7 is only available for amd64, current arch is %s", arch)
+			fmt.Printf("Skipping MySQL 5.7 setup: not supported on arch %s\n", arch)
+			return nil // gracefully skip without error
 		}
 		versionFile = "mysql-5.7.37-linux-glibc2.12-x86_64.tar.gz"
 		url = "https://dev.mysql.com/get/Downloads/MySQL-5.7/" + versionFile
 	case dbType == "mysql" && majorVersion == "8.0":
-		if arch == "arm64"{
+		if arch == "arm64" {
 			versionFile = "mysql-server_8.0.35_arm64.deb"
-   			url = "https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/" + versionFile
+			url = "https://github.com/ranimandepudi/vitess/releases/download/mysql-arm64-deb/" + versionFile
 
-		}else {
+		} else {
 			versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
 			url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
 
@@ -269,7 +270,6 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 		url = "https://github.com/vitessio/vitess-resources/releases/download/v4.0/" + versionFile
 	}
 
-	
 	file = fmt.Sprintf("%s/%s", path, versionFile)
 	// Let's not download the file again if we already have it
 	if _, err := os.Stat(file); err == nil {
@@ -309,7 +309,7 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 		output, err := untarCmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("exec: %v failed: %v output: %s", untarCmd, err, string(output))
-	}
+		}
 	} else {
 		log.Infof("Skipping untar for non-tar archive (likely .deb): %s", file)
 	}
