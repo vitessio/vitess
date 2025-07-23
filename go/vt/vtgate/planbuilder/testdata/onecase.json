@@ -1,8 +1,128 @@
 [
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "comment": "TPC-H query 3",
+    "query": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, o_orderdate, o_shippriority from customer, orders, lineitem where c_mktsegment = 'BUILDING' and c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate < date('1995-03-15') and l_shipdate > date('1995-03-15') group by l_orderkey, o_orderdate, o_shippriority order by revenue desc, o_orderdate limit 10",
     "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, o_orderdate, o_shippriority from customer, orders, lineitem where c_mktsegment = 'BUILDING' and c_custkey = o_custkey and l_orderkey = o_orderkey and o_orderdate < date('1995-03-15') and l_shipdate > date('1995-03-15') group by l_orderkey, o_orderdate, o_shippriority order by revenue desc, o_orderdate limit 10",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "10",
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "1 DESC COLLATE utf8mb4_0900_ai_ci, (2|5) ASC",
+            "ResultColumns": 4,
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum(1) AS revenue",
+                "GroupBy": "(0|4), (2|5), (3|6)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      ":2 as l_orderkey",
+                      "sum(l_extendedprice * (1 - l_discount)) * count(*) as revenue",
+                      ":3 as o_orderdate",
+                      ":4 as o_shippriority",
+                      ":5 as weight_string(l_orderkey)",
+                      ":6 as weight_string(o_orderdate)",
+                      ":7 as weight_string(o_shippriority)"
+                    ],
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "(2|5) ASC, (3|6) ASC, (4|7) ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "L:0,R:0,L:1,R:1,R:2,L:2,R:3,R:4",
+                            "JoinVars": {
+                              "l_orderkey": 1
+                            },
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select sum(l_extendedprice * (1 - l_discount)) as revenue, l_orderkey, weight_string(l_orderkey) from lineitem where 1 != 1 group by l_orderkey, weight_string(l_orderkey)",
+                                "Query": "select sum(l_extendedprice * (1 - l_discount)) as revenue, l_orderkey, weight_string(l_orderkey) from lineitem where l_shipdate > date('1995-03-15') group by l_orderkey, weight_string(l_orderkey)"
+                              },
+                              {
+                                "OperatorType": "Projection",
+                                "Expressions": [
+                                  "count(*) * count(*) as count(*)",
+                                  ":2 as o_orderdate",
+                                  ":3 as o_shippriority",
+                                  ":4 as weight_string(o_orderdate)",
+                                  ":5 as weight_string(o_shippriority)"
+                                ],
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Join",
+                                    "Variant": "Join",
+                                    "JoinColumnIndexes": "L:0,R:0,L:1,L:2,L:4,L:5",
+                                    "JoinVars": {
+                                      "o_custkey": 3
+                                    },
+                                    "Inputs": [
+                                      {
+                                        "OperatorType": "Route",
+                                        "Variant": "EqualUnique",
+                                        "Keyspace": {
+                                          "Name": "main",
+                                          "Sharded": true
+                                        },
+                                        "FieldQuery": "select count(*), o_orderdate, o_shippriority, o_custkey, weight_string(o_orderdate), weight_string(o_shippriority) from orders where 1 != 1 group by o_orderdate, o_shippriority, o_custkey, weight_string(o_orderdate), weight_string(o_shippriority)",
+                                        "Query": "select count(*), o_orderdate, o_shippriority, o_custkey, weight_string(o_orderdate), weight_string(o_shippriority) from orders where o_orderdate < date('1995-03-15') and o_orderkey = :l_orderkey group by o_orderdate, o_shippriority, o_custkey, weight_string(o_orderdate), weight_string(o_shippriority)",
+                                        "Values": [
+                                          ":l_orderkey"
+                                        ],
+                                        "Vindex": "hash"
+                                      },
+                                      {
+                                        "OperatorType": "Route",
+                                        "Variant": "EqualUnique",
+                                        "Keyspace": {
+                                          "Name": "main",
+                                          "Sharded": true
+                                        },
+                                        "FieldQuery": "select count(*) from customer where 1 != 1 group by .0",
+                                        "Query": "select count(*) from customer where c_mktsegment = 'BUILDING' and c_custkey = :o_custkey group by .0",
+                                        "Values": [
+                                          ":o_custkey"
+                                        ],
+                                        "Vindex": "hash"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.customer",
+        "main.lineitem",
+        "main.orders"
+      ]
     }
-  }
-]
+  }]
