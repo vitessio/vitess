@@ -17,9 +17,21 @@ jobs:
   build:
     timeout-minutes: 60
     name: Run endtoend tests on Cluster (backup_pitr_xtrabackup)
-    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            os: ubuntu-latest
+          - arch: arm64
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    env:
+      ARCH: ${{ matrix.arch }}
 
     steps:
+    - name: Debug:print architecture
+      run: uname -m
     - name: Skip CI
       run: |
         if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
