@@ -131,7 +131,7 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 	jm := newJoinMerge(preds, in.JoinType)
 	r := jm.mergeJoinInputs(ctx, in.LHS, in.RHS)
 	if r == nil {
-		debugNoRewrite("apply join merge blocked: cannot merge join inputs")
+		// Specific failure reason already logged by mergeJoinInputs
 		return in, NoRewrite
 	}
 	aj, ok := r.Source.(*ApplyJoin)
