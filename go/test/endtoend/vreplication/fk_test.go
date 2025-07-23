@@ -128,8 +128,6 @@ func TestFKWorkflow(t *testing.T) {
 	err = sourceTab.DbServer.StartProvideInit(false)
 	require.NoError(t, err)
 
-	time.Sleep(2 * time.Second)
-
 	err = vc.VtctldClient.ExecuteCommand("SetWritable", fmt.Sprintf("%s-%d", cellName, 100), "true")
 	require.NoError(t, err)
 
