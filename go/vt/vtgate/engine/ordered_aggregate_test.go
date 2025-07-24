@@ -231,7 +231,7 @@ func TestOrderedAggregateGetFields(t *testing.T) {
 
 	oa := &OrderedAggregate{Input: fp}
 
-	got, err := oa.GetFields(context.Background(), nil, nil)
+	got, err := oa.GetFields(context.Background(), &noopVCursor{}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, got, input)
 }
