@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -119,7 +120,7 @@ func TestFKWorkflow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Give some time for the workflow to encounter errors and potentially retry
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * vttablet.GetDefaultVReplicationConfig().RetryDelay)
 
 	// Verify workflow is still running and hasn't terminated due to errors
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
