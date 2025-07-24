@@ -438,8 +438,8 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive: &engine.OrderedAggregate{
 				Aggregates: []*engine.AggregateParams{
-					engine.NewAggregateParam(opcode.AggregateSum, 2, "", collationEnv),
-					engine.NewAggregateParam(opcode.AggregateSum, 3, "", collationEnv),
+					engine.NewAggregateParam(opcode.AggregateSum, 2, nil, "", collationEnv),
+					engine.NewAggregateParam(opcode.AggregateSum, 3, nil, "", collationEnv),
 				},
 				GroupByKeys: []*engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1, CollationEnv: collations.MySQL8()}},
 				Input:       newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),

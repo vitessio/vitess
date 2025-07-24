@@ -379,6 +379,20 @@ func IsColName(node Expr) bool {
 	return ok
 }
 
+var errNotStatic = fmt.Errorf("not static")
+
+// IsConstant returns true if the Expr can be evaluated without input or access to tables.
+func IsConstant(node Expr) bool {
+	err := Walk(func(node SQLNode) (kontinue bool, err error) {
+		switch node.(type) {
+		case *ColName, *Subquery:
+			return false, errNotStatic
+		}
+		return true, nil
+	}, node)
+	return err == nil
+}
+
 // IsValue returns true if the Expr is a string, integral or value arg.
 // NULL is not considered to be a value.
 func IsValue(node Expr) bool {

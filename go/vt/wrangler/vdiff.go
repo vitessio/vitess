@@ -710,6 +710,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 					aggregates = append(aggregates, engine.NewAggregateParam(
 						/*opcode*/ opcode.AggregateSum,
 						/*offset*/ sourceSelect.GetColumnCount()-1,
+						nil,
 						/*alias*/ "", df.env.CollationEnv()))
 				}
 			}
