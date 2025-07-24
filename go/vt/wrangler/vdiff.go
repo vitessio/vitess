@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/config"
+
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -1417,6 +1419,18 @@ func (vc *contextVCursor) ExecutePrimitive(ctx context.Context, primitive engine
 
 func (vc *contextVCursor) StreamExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return primitive.TryStreamExecute(ctx, vc, bindVars, wantfields, callback)
+}
+
+func (vc *contextVCursor) TimeZone() *time.Location {
+	return time.Local
+}
+
+func (vc *contextVCursor) SQLMode() string {
+	return config.DefaultSQLMode
+}
+
+func (vc *contextVCursor) Environment() *vtenv.Environment {
+	return vtenv.NewTestEnv()
 }
 
 // -----------------------------------------------------------------

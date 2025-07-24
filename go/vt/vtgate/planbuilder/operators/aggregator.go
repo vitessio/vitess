@@ -446,7 +446,7 @@ func (aggr Aggr) getPushColumn() sqlparser.Expr {
 
 func (aggr Aggr) getPushColumnExprs() []sqlparser.Expr {
 	switch aggr.OpCode {
-	case opcode.AggregateAnyValue:
+	case opcode.AggregateAnyValue, opcode.AggregateConstant:
 		return []sqlparser.Expr{aggr.Original.Expr}
 	case opcode.AggregateCountStar:
 		return []sqlparser.Expr{sqlparser.NewIntLiteral("1")}

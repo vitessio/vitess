@@ -412,7 +412,10 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env 
 
 	agstate := make([]aggregator, len(fields))
 	for _, aggr := range aggregates {
-		sourceType := fields[aggr.Col].Type
+		var sourceType querypb.Type
+		if aggr.Col < len(fields) {
+			sourceType = fields[aggr.Col].Type
+		}
 		targetType := aggr.typ(sourceType, env)
 
 		var ag aggregator

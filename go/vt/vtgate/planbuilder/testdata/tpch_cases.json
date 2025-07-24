@@ -1508,23 +1508,24 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "sum(ps_supplycost * ps_availqty) * count(*) as sum(ps_supplycost * ps_availqty)"
+                      "sum(ps_supplycost * ps_availqty) * count(*) as sum(ps_supplycost * ps_availqty)",
+                      ":2 as 0.00001000000"
                     ],
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "L:0,R:0,L:2",
+                        "JoinColumnIndexes": "L:0,R:0,L:1",
                         "JoinVars": {
-                          "s_nationkey1": 1
+                          "s_nationkey1": 2
                         },
                         "Inputs": [
                           {
                             "OperatorType": "Projection",
                             "Expressions": [
                               "sum(ps_supplycost * ps_availqty) * count(*) as sum(ps_supplycost * ps_availqty)",
-                              ":3 as s_nationkey",
-                              ":2 as 0.00001000000"
+                              ":2 as 0.00001000000",
+                              ":3 as s_nationkey"
                             ],
                             "Inputs": [
                               {
