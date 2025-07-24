@@ -53,8 +53,8 @@ func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 	args := []string{
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--log_dir", mysqlctld.LogDirectory,
-		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
-		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
+		"--tablet-uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
+		"--mysql-port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
 		"--init_db_sql_file", mysqlctld.InitDBFile,
 	}
 	if mysqlctld.SocketFile != "" {
@@ -76,8 +76,8 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	args := []string{
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--log_dir", mysqlctld.LogDirectory,
-		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
-		"--mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
+		"--tablet-uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
+			"--mysql-port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
 	}
 	if mysqlctld.SocketFile != "" {
 		args = append(args, "--socket_file", mysqlctld.SocketFile)
@@ -163,7 +163,7 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 	tmpProcess := exec.Command(
 		"mysqlctl",
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
+		"--tablet-uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
 	)
 	tmpProcess.Args = append(tmpProcess.Args, mysqlctld.ExtraArgs...)
 	tmpProcess.Args = append(tmpProcess.Args, "shutdown")

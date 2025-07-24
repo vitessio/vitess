@@ -11,15 +11,18 @@ COPY . /vt/src/vitess.io/vitess
 
 {{if .InstallXtraBackup}}
 # install XtraBackup
-RUN wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-RUN apt-get update
-RUN apt-get install -y gnupg2
-RUN dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-RUN percona-release enable-only tools
-RUN apt-get update
-RUN apt-get install -y percona-xtrabackup-24
+RUN arch=$(uname -m) && \
+    if [ "$arch" = "aarch64" ]; then \
+      echo "Skipping Percona XtraBackup 24 install on Arm64"; \
+    else \
+      wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb && \
+      apt-get update && \
+      apt-get install -y gnupg2 && \
+      percona-release enable-only tools && \
+      apt-get update && \
+      apt-get install -y percona-xtrabackup-24; \
+    fi
 {{end}}
-
 # Set the working directory
 WORKDIR /vt/src/vitess.io/vitess
 

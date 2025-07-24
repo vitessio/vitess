@@ -55,8 +55,8 @@ type MysqlctlProcess struct {
 func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	args := []string{"--log_dir", mysqlctl.LogDirectory,
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
-		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
+		"--tablet-uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
+		"--mysql-port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
 		"init",
 	}
 	if mysqlctl.MajorVersion < 18 {
@@ -101,8 +101,8 @@ func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
 		mysqlctl.Binary,
 		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--log_dir", mysqlctl.LogDirectory,
-		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
-		"--mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
+		"--tablet-uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
+		"--mysql-port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
 	)
 	if *isCoverage {
 		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-start.out")}...)
@@ -227,11 +227,10 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference
 func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
-	tmpProcess := exec.Command(
-		mysqlctl.Binary,
-		//TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--log_dir", mysqlctl.LogDirectory,
-		"--tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
+		tmpProcess := exec.Command(
+			mysqlctl.Binary,
+			"--log_dir", mysqlctl.LogDirectory,
+			"--tablet-uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 	)
 	if *isCoverage {
 		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-stop.out")}...)
