@@ -51,7 +51,7 @@ func (sa *ScalarAggregate) GetFields(ctx context.Context, vcursor VCursor, bindV
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 
-	_, fields, err := newAggregation(qr.Fields, sa.Aggregates, env, 0)
+	_, fields, err := newAggregation(qr.Fields, sa.Aggregates, env, vcursor.ConnCollation())
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 
-	agg, fields, err := newAggregation(result.Fields, sa.Aggregates, env, 0)
+	agg, fields, err := newAggregation(result.Fields, sa.Aggregates, env, vcursor.ConnCollation())
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 
 		if agg == nil && len(result.Fields) != 0 {
 			var err error
-			agg, fields, err = newAggregation(result.Fields, sa.Aggregates, env, 0)
+			agg, fields, err = newAggregation(result.Fields, sa.Aggregates, env, vcursor.ConnCollation())
 			if err != nil {
 				return err
 			}

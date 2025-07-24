@@ -132,7 +132,7 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 		return oa.executeGroupBy(result)
 	}
 
-	agg, fields, err := newAggregation(result.Fields, oa.Aggregates, env, 0)
+	agg, fields, err := newAggregation(result.Fields, oa.Aggregates, env, vcursor.ConnCollation())
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +309,7 @@ func (oa *OrderedAggregate) GetFields(ctx context.Context, vcursor VCursor, bind
 		return nil, err
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	_, fields, err := newAggregation(qr.Fields, oa.Aggregates, env, 0)
+	_, fields, err := newAggregation(qr.Fields, oa.Aggregates, env, vcursor.ConnCollation())
 	if err != nil {
 		return nil, err
 	}
