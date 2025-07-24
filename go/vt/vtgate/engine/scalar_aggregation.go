@@ -51,7 +51,7 @@ func (sa *ScalarAggregate) GetFields(ctx context.Context, vcursor VCursor, bindV
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 
-	_, fields, err := newAggregation(qr.Fields, sa.Aggregates, env)
+	_, fields, err := newAggregation(qr.Fields, sa.Aggregates, env, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -73,18 +73,18 @@ func (sa *ScalarAggregate) TryExecute(ctx context.Context, vcursor VCursor, bind
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 
-	agg, fields, err := newAggregation(result.Fields, sa.Aggregates, env)
+	agg, fields, err := newAggregation(result.Fields, sa.Aggregates, env, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, row := range result.Rows {
-		if err := agg.add(row, env); err != nil {
+		if err := agg.add(row); err != nil {
 			return nil, err
 		}
 	}
 
-	values, err := agg.finish(env)
+	values, err := agg.finish()
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 
 	var mu sync.Mutex
-	var agg aggregationState
+	var agg *aggregationState
 	var fields []*querypb.Field
 	fieldsSent := !wantfields
 
@@ -116,7 +116,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 
 		if agg == nil && len(result.Fields) != 0 {
 			var err error
-			agg, fields, err = newAggregation(result.Fields, sa.Aggregates, env)
+			agg, fields, err = newAggregation(result.Fields, sa.Aggregates, env, 0)
 			if err != nil {
 				return err
 			}
@@ -129,7 +129,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		}
 
 		for _, row := range result.Rows {
-			if err := agg.add(row, env); err != nil {
+			if err := agg.add(row); err != nil {
 				return err
 			}
 		}
@@ -139,7 +139,7 @@ func (sa *ScalarAggregate) TryStreamExecute(ctx context.Context, vcursor VCursor
 		return err
 	}
 
-	values, err := agg.finish(env)
+	values, err := agg.finish()
 	if err != nil {
 		return err
 	}

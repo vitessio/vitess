@@ -132,7 +132,7 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 		return oa.executeGroupBy(result)
 	}
 
-	agg, fields, err := newAggregation(result.Fields, oa.Aggregates, env)
+	agg, fields, err := newAggregation(result.Fields, oa.Aggregates, env, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +152,7 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 		}
 
 		if nextGroup {
-			values, err := agg.finish(env)
+			values, err := agg.finish()
 			if err != nil {
 				return nil, err
 			}
@@ -160,13 +160,13 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 			agg.reset()
 		}
 
-		if err := agg.add(row, env); err != nil {
+		if err := agg.add(row); err != nil {
 			return nil, err
 		}
 	}
 
 	if currentKey != nil {
-		values, err := agg.finish(env)
+		values, err := agg.finish()
 		if err != nil {
 			return nil, err
 		}
@@ -238,7 +238,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 		return callback(qr.Truncate(oa.TruncateColumnCount))
 	}
 
-	var agg aggregationState
+	var agg *aggregationState
 	var fields []*querypb.Field
 	var currentKey []sqltypes.Value
 
@@ -246,7 +246,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 		var err error
 
 		if agg == nil && len(qr.Fields) != 0 {
-			agg, fields, err = newAggregation(qr.Fields, oa.Aggregates, env)
+			agg, fields, err = newAggregation(qr.Fields, oa.Aggregates, env, vcursor.ConnCollation())
 			if err != nil {
 				return err
 			}
@@ -266,7 +266,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 
 			if nextGroup {
 				// this is a new grouping. let's yield the old one, and start a new
-				values, err := agg.finish(env)
+				values, err := agg.finish()
 				if err != nil {
 					return err
 				}
@@ -277,7 +277,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 				agg.reset()
 			}
 
-			if err := agg.add(row, env); err != nil {
+			if err := agg.add(row); err != nil {
 				return err
 			}
 		}
@@ -291,7 +291,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 	}
 
 	if currentKey != nil {
-		values, err := agg.finish(env)
+		values, err := agg.finish()
 		if err != nil {
 			return err
 		}
@@ -309,7 +309,7 @@ func (oa *OrderedAggregate) GetFields(ctx context.Context, vcursor VCursor, bind
 		return nil, err
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	_, fields, err := newAggregation(qr.Fields, oa.Aggregates, env)
+	_, fields, err := newAggregation(qr.Fields, oa.Aggregates, env, 0)
 	if err != nil {
 		return nil, err
 	}
