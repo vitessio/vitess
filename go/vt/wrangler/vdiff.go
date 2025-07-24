@@ -149,8 +149,7 @@ type tableDiffer struct {
 	sourcePrimitive engine.Primitive
 	targetPrimitive engine.Primitive
 
-	collationEnv *collations.Environment
-	parser       *sqlparser.Parser
+	env *vtenv.Environment
 }
 
 // shardStreamer streams rows from one shard. This works for
@@ -669,9 +668,8 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		return nil, fmt.Errorf("unexpected: %v", sqlparser.String(statement))
 	}
 	td := &tableDiffer{
-		targetTable:  table.Name,
-		collationEnv: df.env.CollationEnv(),
-		parser:       df.env.Parser(),
+		targetTable: table.Name,
+		env:         df.env,
 	}
 	sourceSelect := &sqlparser.Select{}
 	targetSelect := &sqlparser.Select{}
@@ -775,7 +773,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	if len(aggregates) != 0 {
 		td.sourcePrimitive = &engine.OrderedAggregate{
 			Aggregates:  aggregates,
-			GroupByKeys: pkColsToGroupByParams(td.pkCols, td.collationEnv),
+			GroupByKeys: pkColsToGroupByParams(td.pkCols, td.env.CollationEnv()),
 			Input:       td.sourcePrimitive,
 		}
 	}
@@ -1096,12 +1094,12 @@ type primitiveExecutor struct {
 	err      error
 }
 
-func newPrimitiveExecutor(ctx context.Context, prim engine.Primitive) *primitiveExecutor {
+func newPrimitiveExecutor(ctx context.Context, prim engine.Primitive, env *vtenv.Environment) *primitiveExecutor {
 	pe := &primitiveExecutor{
 		prim:     prim,
 		resultch: make(chan *sqltypes.Result, 1),
 	}
-	vcursor := &contextVCursor{}
+	vcursor := newVCursor(env)
 	go func() {
 		defer close(pe.resultch)
 		pe.err = vcursor.StreamExecutePrimitive(ctx, pe.prim, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
@@ -1183,8 +1181,8 @@ func humanInt(n int64) string { // nolint
 // tableDiffer
 
 func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, onlyPks bool, maxExtraRowsToCompare int) (*DiffReport, error) {
-	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive)
-	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive)
+	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive, td.env)
+	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive, td.env)
 	dr := &DiffReport{}
 	var sourceRow, targetRow []sqltypes.Value
 	var err error
@@ -1324,7 +1322,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		if col.collation == collations.Unknown {
 			collationID = collations.CollationBinaryID
 		}
-		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], td.collationEnv, collationID, col.values)
+		c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], td.env.CollationEnv(), collationID, col.values)
 		if err != nil {
 			return 0, err
 		}
@@ -1338,7 +1336,7 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 func (td *tableDiffer) genRowDiff(queryStmt string, row []sqltypes.Value, debug, onlyPks bool) (*RowDiff, error) {
 	drp := &RowDiff{}
 	drp.Row = make(map[string]sqltypes.Value)
-	statement, err := td.parser.Parse(queryStmt)
+	statement, err := td.env.Parser().Parse(queryStmt)
 	if err != nil {
 		return nil, err
 	}
@@ -1407,6 +1405,11 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 // contextVCursor satisfies VCursor interface
 type contextVCursor struct {
 	engine.VCursor
+	env *vtenv.Environment
+}
+
+func newVCursor(env *vtenv.Environment) *contextVCursor {
+	return &contextVCursor{env: env}
 }
 
 func (vc *contextVCursor) ConnCollation() collations.ID {
@@ -1430,7 +1433,7 @@ func (vc *contextVCursor) SQLMode() string {
 }
 
 func (vc *contextVCursor) Environment() *vtenv.Environment {
-	return vtenv.NewTestEnv()
+	return vc.env
 }
 
 // -----------------------------------------------------------------

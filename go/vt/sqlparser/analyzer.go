@@ -19,6 +19,7 @@ package sqlparser
 // analyzer.go contains utility analysis functions.
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"unicode"
@@ -379,7 +380,7 @@ func IsColName(node Expr) bool {
 	return ok
 }
 
-var errNotStatic = fmt.Errorf("not static")
+var errNotStatic = errors.New("not static")
 
 // IsConstant returns true if the Expr can be evaluated without input or access to tables.
 func IsConstant(node Expr) bool {
