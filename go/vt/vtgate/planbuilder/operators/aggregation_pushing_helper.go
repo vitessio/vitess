@@ -130,7 +130,7 @@ func (ab *aggBuilder) handleAggr(ctx *plancontext.PlanningContext, aggr Aggr) er
 		return nil
 	case opcode.AggregateCount, opcode.AggregateSum:
 		return ab.handleAggrWithCountStarMultiplier(ctx, aggr)
-	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateAnyValue:
+	case opcode.AggregateMax, opcode.AggregateMin, opcode.AggregateAnyValue, opcode.AggregateConstant:
 		return ab.handlePushThroughAggregation(ctx, aggr)
 	case opcode.AggregateGroupConcat:
 		f := aggr.Func.(*sqlparser.GroupConcatExpr)
