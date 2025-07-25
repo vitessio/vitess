@@ -79,6 +79,16 @@ func (a *Aggregator) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser
 	return newFilter(a, expr)
 }
 
+// createNonGroupingAggr creates the appropriate aggregation for a non-grouping, non-aggregation column
+// If the expression is constant, it returns AggregateConstant, otherwise AggregateAnyValue
+func createNonGroupingAggr(expr *sqlparser.AliasedExpr) Aggr {
+	if sqlparser.IsConstant(expr.Expr) {
+		return NewAggr(opcode.AggregateConstant, nil, expr, expr.ColumnName())
+	} else {
+		return NewAggr(opcode.AggregateAnyValue, nil, expr, expr.ColumnName())
+	}
+}
+
 func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, addToGroupBy bool) int {
 	offset := len(a.Columns)
 	a.Columns = append(a.Columns, expr)
@@ -94,12 +104,12 @@ func (a *Aggregator) addColumnWithoutPushing(ctx *plancontext.PlanningContext, e
 			aggr = createAggrFromAggrFunc(e, expr)
 		case *sqlparser.FuncExpr:
 			if ctx.IsAggr(e) {
-				aggr = NewAggr(opcode.AggregateUDF, nil, expr, expr.As.String())
-			} else {
-				aggr = NewAggr(opcode.AggregateAnyValue, nil, expr, expr.As.String())
+				aggr = NewAggr(opcode.AggregateUDF, nil, expr, expr.ColumnName())
 			}
-		default:
-			aggr = NewAggr(opcode.AggregateAnyValue, nil, expr, expr.As.String())
+		}
+
+		if aggr.Alias == "" {
+			aggr = createNonGroupingAggr(expr)
 		}
 		aggr.ColOffset = offset
 		a.Aggregations = append(a.Aggregations, aggr)
@@ -176,7 +186,7 @@ func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gro
 	}
 
 	if !groupBy {
-		aggr := NewAggr(opcode.AggregateAnyValue, nil, ae, ae.As.String())
+		aggr := createNonGroupingAggr(ae)
 		aggr.ColOffset = len(a.Columns)
 		a.Aggregations = append(a.Aggregations, aggr)
 	}
@@ -417,7 +427,7 @@ func (aggr Aggr) setPushColumn(exprs sqlparser.Exprs) {
 
 func (aggr Aggr) getPushColumn() sqlparser.Expr {
 	switch aggr.OpCode {
-	case opcode.AggregateAnyValue:
+	case opcode.AggregateAnyValue, opcode.AggregateConstant:
 		return aggr.Original.Expr
 	case opcode.AggregateCountStar:
 		return sqlparser.NewIntLiteral("1")
@@ -436,7 +446,7 @@ func (aggr Aggr) getPushColumn() sqlparser.Expr {
 
 func (aggr Aggr) getPushColumnExprs() sqlparser.Exprs {
 	switch aggr.OpCode {
-	case opcode.AggregateAnyValue:
+	case opcode.AggregateAnyValue, opcode.AggregateConstant:
 		return sqlparser.Exprs{aggr.Original.Expr}
 	case opcode.AggregateCountStar:
 		return sqlparser.Exprs{sqlparser.NewIntLiteral("1")}
@@ -444,6 +454,9 @@ func (aggr Aggr) getPushColumnExprs() sqlparser.Exprs {
 		// AggregateUDFs can't be evaluated on the vtgate. So either we are able to push everything down, or we will have to fail the query.
 		return nil
 	default:
+		if aggr.Func == nil {
+			return nil
+		}
 		return aggr.Func.GetArgs()
 	}
 }
