@@ -175,3 +175,50 @@ func TestSubqueryGetFields(t *testing.T) {
 	_, err = sq.GetFields(context.Background(), nil, bv)
 	require.EqualError(t, err, `err`)
 }
+
+func TestSubqueryGetFieldsNamesOnly(t *testing.T) {
+	prim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"col1|col2|col3",
+					"int64|varchar|varchar",
+				),
+				"1|a|aa",
+				"2|b|bb",
+				"3|c|cc",
+			),
+		},
+	}
+
+	sq := &SimpleProjection{
+		ColNames: []string{"col1alias", "", "col3alias"},
+		Input:    prim,
+	}
+
+	bv := map[string]*querypb.BindVariable{
+		"a": sqltypes.Int64BindVariable(1),
+	}
+
+	r, err := sq.GetFields(context.Background(), nil, bv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prim.ExpectLog(t, []string{
+		`GetFields a: type:INT64 value:"1"`,
+		`Execute a: type:INT64 value:"1" true`,
+	})
+	expectResult(t, r, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1alias|col2|col3alias",
+			"int64|varchar|varchar",
+		),
+	))
+
+	// Error case.
+	sq.Input = &fakePrimitive{
+		sendErr: errors.New("err"),
+	}
+	_, err = sq.GetFields(context.Background(), nil, bv)
+	require.EqualError(t, err, `err`)
+}
