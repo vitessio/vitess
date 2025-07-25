@@ -38,8 +38,8 @@ import (
 )
 
 func TestVDiffPlanSuccess(t *testing.T) {
+	env := vtenv.NewTestEnv()
 	collationEnv := collations.MySQL8()
-	parser := sqlparser.NewTestParser()
 	schm := &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
 			Name:              "t1",
@@ -100,8 +100,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -119,8 +118,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -138,8 +136,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -157,8 +154,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{1},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -176,8 +172,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		// non-pk text column.
@@ -196,8 +191,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		// non-pk text column, different order.
@@ -216,8 +210,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{1},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		// pk text column.
@@ -236,8 +229,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collationEnv.DefaultConnectionCharset(), nil, false}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collationEnv.DefaultConnectionCharset(), nil, false}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		// pk text column, different order.
@@ -256,8 +248,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{1},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), nil, false}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), nil, false}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		// text column as expression.
@@ -276,8 +267,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{1},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), nil, false}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{1, collationEnv.DefaultConnectionCharset(), nil, false}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -294,8 +284,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0, 1},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}, {1, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		// in_keyrange
@@ -314,8 +303,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		// in_keyrange on RHS of AND.
@@ -335,8 +323,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		// in_keyrange on LHS of AND.
@@ -356,8 +343,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		// in_keyrange on cascaded AND expression
@@ -377,8 +363,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		// in_keyrange parenthesized
@@ -398,8 +383,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		// group by
@@ -418,8 +402,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}, {
 		// aggregations
@@ -438,15 +421,14 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive: &engine.OrderedAggregate{
 				Aggregates: []*engine.AggregateParams{
-					engine.NewAggregateParam(opcode.AggregateSum, 2, "", collationEnv),
-					engine.NewAggregateParam(opcode.AggregateSum, 3, "", collationEnv),
+					engine.NewAggregateParam(opcode.AggregateSum, 2, nil, "", collationEnv),
+					engine.NewAggregateParam(opcode.AggregateSum, 3, nil, "", collationEnv),
 				},
 				GroupByKeys: []*engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1, CollationEnv: collations.MySQL8()}},
 				Input:       newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			},
 			targetPrimitive: newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:    collationEnv,
-			parser:          parser,
+			env:             env,
 		},
 	}, {
 		input: &binlogdatapb.Rule{
@@ -464,8 +446,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
 			targetPrimitive:  newMergeSorter(nil, []compareColInfo{{0, collations.Unknown, nil, true}}, collationEnv),
-			collationEnv:     collationEnv,
-			parser:           parser,
+			env:              env,
 		},
 	}}
 
