@@ -1895,7 +1895,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "any_value(0) AS type, any_value(1) AS id",
+            "Aggregates": "constant_aggr('a') AS type, constant_aggr(0) AS id",
             "GroupBy": "2 COLLATE utf8mb4_0900_ai_ci",
             "ResultColumns": 2,
             "Inputs": [
