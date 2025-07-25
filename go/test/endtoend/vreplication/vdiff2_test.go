@@ -542,12 +542,17 @@ func testStop(t *testing.T, ksWorkflow, cells string) {
 	t.Run("Stop", func(t *testing.T) {
 		// Create a new VDiff and immediately stop it.
 		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false)
+		_, output2 := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
+		jsonOutput2 := getVDiffInfo(output2)
+		fmt.Println("TODO(beingnoble03): remove it, vdiff state:", jsonOutput2.State)
+		fmt.Printf("TODO(beingnoble03): remove it, vdiff state:%+v \n", jsonOutput2)
 		_, _ = performVDiff2Action(t, ksWorkflow, cells, "stop", uuid, false)
 		// Confirm the VDiff is in the expected state.
 		_, output := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
 		jsonOutput := getVDiffInfo(output)
 		// It may have been able to complete before we could stop it (there's virtually no data
 		// to diff). There's no way to avoid this potential race so don't consider that a failure.
+		fmt.Println("TODO(beingnoble03): remove it, vdiff state:", jsonOutput.State)
 		require.True(t, (jsonOutput.State == "stopped" || jsonOutput.State == "completed"), "expected vdiff state to be stopped or completed but it was %s", jsonOutput.State)
 		// Confirm that the context cancelled error was also cleared.
 		require.False(t, strings.Contains(output, `"Errors":`))
