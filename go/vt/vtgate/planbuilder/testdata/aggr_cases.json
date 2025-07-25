@@ -2432,7 +2432,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "any_value(0) AS 1, sum_count(1) AS count(id)",
+            "Aggregates": "constant_aggr(1) AS 1, sum_count(1) AS count(id)",
             "Inputs": [
               {
                 "OperatorType": "VindexLookup",
@@ -2556,7 +2556,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "any_value(0) AS 1, sum_count(1) AS count(id)",
+            "Aggregates": "constant_aggr(1) AS 1, sum_count(1) AS count(id)",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -3972,7 +3972,7 @@
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), any_value(2)",
+                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), constant_aggr(1) AS 1",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -5684,7 +5684,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "any_value(0), sum_count_star(1) AS count(*)",
+            "Aggregates": "constant_aggr(1) AS 1, sum_count_star(1) AS count(*)",
             "Inputs": [
               {
                 "OperatorType": "Route",
