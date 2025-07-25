@@ -2475,7 +2475,9 @@ func (cmp *Comparator) RefOfCreateTable(a, b *CreateTable) bool {
 		cmp.TableName(a.Table, b.Table) &&
 		cmp.RefOfTableSpec(a.TableSpec, b.TableSpec) &&
 		cmp.RefOfOptLike(a.OptLike, b.OptLike) &&
-		cmp.RefOfParsedComments(a.Comments, b.Comments)
+		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
+		a.IgnoreOrReplace == b.IgnoreOrReplace &&
+		cmp.TableStatement(a.Select, b.Select)
 }
 
 // RefOfCreateView does deep equals between the two objects.
