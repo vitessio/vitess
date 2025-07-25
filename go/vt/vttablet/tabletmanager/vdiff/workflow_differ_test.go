@@ -686,8 +686,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 				Direction: sqlparser.AscOrder,
 			}},
 			aggregates: []*engine.AggregateParams{
-				engine.NewAggregateParam(opcode.AggregateSum, 2, "", collations.MySQL8()),
-				engine.NewAggregateParam(opcode.AggregateSum, 3, "", collations.MySQL8()),
+				engine.NewAggregateParam(opcode.AggregateSum, 2, nil, "", collations.MySQL8()),
+				engine.NewAggregateParam(opcode.AggregateSum, 3, nil, "", collations.MySQL8()),
 			},
 		},
 	}, {

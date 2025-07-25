@@ -136,7 +136,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			copyWorkQueue = vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
 			if state.currentTableName != "" {
 				log.Infof("copy of table %s is done at lastpk %+v", state.currentTableName, lastpkbv)
-				if err := vc.deleteCopyState(state.currentTableName); err != nil {
+				if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, state.currentTableName); err != nil {
 					return err
 				}
 			} else {
@@ -294,7 +294,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		if copyWorkQueue != nil {
 			copyWorkQueue.close()
 		}
-		if err := vc.deleteCopyState(state.currentTableName); err != nil {
+		if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, state.currentTableName); err != nil {
 			return err
 		}
 		if err := vc.updatePos(ctx, gtid); err != nil {
@@ -305,11 +305,21 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	return nil
 }
 
-// deleteCopyState deletes the copy state entry for a table, signifying that the copy phase is complete for that table.
-func (vc *vcopier) deleteCopyState(tableName string) error {
-	log.Infof("Deleting copy state for table %s", tableName)
-	delQuery := fmt.Sprintf("delete from _vt.copy_state where table_name=%s and vrepl_id = %d", encodeString(tableName), vc.vr.id)
-	if _, err := vc.vr.dbClient.Execute(delQuery); err != nil {
+// runPostCopyActionsAndDeleteCopyState runs post copy actions and deletes the
+// copy state entry for a table, signifying that the copy phase is complete for
+// that table.
+func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx context.Context, tableName string) error {
+	if err := vc.vr.execPostCopyActions(ctx, tableName); err != nil {
+		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
+	}
+	log.Infof("Deleting copy state and post copy actions for table %s", tableName)
+	delQueryBuf := sqlparser.NewTrackedBuffer(nil)
+	delQueryBuf.Myprintf(
+		"delete cs, pca from _vt.%s as cs left join _vt.%s as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name where cs.vrepl_id=%d and cs.table_name=%s",
+		copyStateTableName, postCopyActionTableName,
+		vc.vr.id, encodeString(tableName),
+	)
+	if _, err := vc.vr.dbClient.Execute(delQueryBuf.String()); err != nil {
 		return err
 	}
 	return nil

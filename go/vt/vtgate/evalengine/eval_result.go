@@ -41,8 +41,13 @@ func (er EvalResult) Value(id collations.ID) sqltypes.Value {
 		return evalToSQLValue(er.v)
 	}
 
-	dst, err := charset.Convert(nil, colldata.Lookup(id).Charset(), str.bytes, colldata.Lookup(str.col.Collation).Charset())
-	if err != nil {
+	lookup := colldata.Lookup(id)
+	var err error
+	var dst []byte
+	if lookup != nil {
+		dst, err = charset.Convert(nil, lookup.Charset(), str.bytes, colldata.Lookup(str.col.Collation).Charset())
+	}
+	if lookup == nil || err != nil {
 		// If we can't convert, we just return what we have, but it's going
 		// to be invalidly encoded. Should normally never happen as only utf8mb4
 		// is really supported for the connection character set anyway and all

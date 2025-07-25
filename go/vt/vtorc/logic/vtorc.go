@@ -274,6 +274,14 @@ func ContinuousDiscovery() {
 	log.Infof("continuous discovery: setting up")
 	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
 
+	if !config.GetAllowRecovery() {
+		log.Info("--allow-recovery is set to 'false', disabling recovery actions")
+		if err := DisableRecovery(); err != nil {
+			log.Errorf("failed to disable recoveries: %+v", err)
+			return
+		}
+	}
+
 	go handleDiscoveryRequests()
 
 	healthTick := time.Tick(config.HealthPollSeconds * time.Second)

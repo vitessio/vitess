@@ -714,7 +714,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "any_value(0) AS 1",
+        "Aggregates": "constant_aggr(1) AS 1",
         "GroupBy": "1, 4",
         "ResultColumns": 1,
         "Inputs": [

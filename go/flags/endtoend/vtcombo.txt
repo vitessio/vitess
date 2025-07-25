@@ -407,8 +407,8 @@ Flags:
   -v, --version                                                          print binary version
       --vmodule vModuleFlag                                              comma-separated list of pattern=N settings for file-filtered logging
       --vreplication-copy-phase-duration duration                        Duration for each copy phase loop (before running the next catchup: default 1h) (default 1h0m0s)
-      --vreplication-copy-phase-max-innodb-history-list-length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 1000000)
-      --vreplication-copy-phase-max-mysql-replication-lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet. (default 43200)
+      --vreplication-copy-phase-max-innodb-history-list-length int       The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet (default 10000000)
+      --vreplication-copy-phase-max-mysql-replication-lag int            The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet (default 43200)
       --vreplication-enable-http-log                                     Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.
       --vreplication-experimental-flags int                              (Bitmask) of experimental features in vreplication to enable (default 7)
       --vreplication-heartbeat-update-interval int                       Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
@@ -444,6 +444,7 @@ Flags:
       --xtrabackup-backup-flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
       --xtrabackup-prepare-flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command
       --xtrabackup-root-path string                                      Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
+      --xtrabackup-should-drain                                          Decide if we should drain while taking a backup or continue to serving traffic
       --xtrabackup-stream-mode string                                    Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0 (default "tar")
       --xtrabackup-stripe-block-size uint                                Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe (default 102400)
       --xtrabackup-stripes uint                                          If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression
