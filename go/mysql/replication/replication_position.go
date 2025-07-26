@@ -94,7 +94,7 @@ func (rp Position) String() string {
 
 // IsZero returns true if this is the zero value, Position{}.
 func (rp Position) IsZero() bool {
-	return rp.GTIDSet == nil
+	return rp.GTIDSet == nil || rp.GTIDSet.Empty()
 }
 
 // AppendGTID returns a new Position that represents the position
@@ -107,6 +107,44 @@ func AppendGTID(rp Position, gtid GTID) Position {
 		return Position{GTIDSet: gtid.GTIDSet()}
 	}
 	return Position{GTIDSet: rp.GTIDSet.AddGTID(gtid)}
+}
+
+// AppendGTID returns a new Position that represents the position
+// after the given GTID is replicated.
+func AppendGTIDInPlace(rp Position, gtid GTID) Position {
+	// If gtid is nil, treat it as a no-op and return the input Position.
+	if gtid == nil {
+		return rp
+	}
+	if rp.GTIDSet == nil {
+		rp.GTIDSet = gtid.GTIDSet()
+	} else {
+		rp.GTIDSet.AddGTIDInPlace(gtid)
+	}
+	return rp
+}
+
+// AppendGTIDSet returns a new Position that represents the position
+// after the given GTIDSet is replicated.
+func AppendGTIDSet(rp Position, gtidSet GTIDSet) Position {
+	if gtidSet == nil {
+		return rp
+	}
+	return Position{GTIDSet: gtidSet.Union(rp.GTIDSet)}
+}
+
+// AppendGTIDSet returns a new Position that represents the position
+// after the given GTIDSet is replicated.
+func AppendGTIDSetInPlace(rp Position, gtidSet GTIDSet) Position {
+	if gtidSet == nil {
+		return rp
+	}
+
+	if rp.GTIDSet == nil {
+		return AppendGTIDSet(rp, gtidSet)
+	}
+	rp.GTIDSet = rp.GTIDSet.UnionInPlace(gtidSet)
+	return rp
 }
 
 // MustParsePosition calls ParsePosition and panics
