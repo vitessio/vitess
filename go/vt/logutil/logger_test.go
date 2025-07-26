@@ -17,6 +17,7 @@ limitations under the License.
 package logutil
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -148,6 +149,38 @@ func TestTeeLogger(t *testing.T) {
 				if got.File != wantFile && got.Level != logutilpb.Level_CONSOLE {
 					t.Errorf("[%v] events[%v].File = %q, want %q", i, j, got.File, wantFile)
 				}
+			}
+		}
+	}
+}
+
+// TestConcurrentLogging ensures that MemoryLogger behaves correctly under concurrent writes.
+func TestConcurrentLogging(t *testing.T) {
+	if race.Enabled {
+		t.Skip("Skipping under -race to avoid flaky behavior")
+	}
+
+	ml := NewMemoryLogger()
+	var wg sync.WaitGroup
+	numGoroutines := 10
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			ml.Infof("log from goroutine %d", id)
+		}(i)
+	}
+	wg.Wait()
+
+	if got, want := len(ml.Events), numGoroutines; got != want {
+		t.Errorf("len(ml.Events) = %v, want %v", got, want)
+	}
+
+	if !race.Enabled {
+		for i, event := range ml.Events {
+			if got, want := event.File, "logger_test.go"; got != want {
+				t.Errorf("ml.Events[%v].File = %q, want %q", i, got, want)
 			}
 		}
 	}
