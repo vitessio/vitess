@@ -1084,6 +1084,17 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 					}
 				}
 			}
+
+			// Add raw before values if only afterOK succeeded
+			if !beforeOK {
+				if len(beforeRawValues) > 0 {
+					beforeValues, err := plan.mapValues(beforeRawValues)
+					if err != nil {
+						return nil, err
+					}
+					rowChange.Before = sqltypes.RowToProto3(beforeValues)
+				}
+			}
 		}
 		rowChanges = append(rowChanges, rowChange)
 	}
