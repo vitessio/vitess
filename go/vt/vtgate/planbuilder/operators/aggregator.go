@@ -303,7 +303,7 @@ func isDerived(op Operator) bool {
 
 func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) (res []*sqlparser.AliasedExpr) {
 	if isDerived(a.Source) {
-		return truncate(a, a.Columns)
+		return a.Columns
 	}
 
 	// we update the incoming columns, so we know about any new columns that have been added
@@ -316,7 +316,7 @@ func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) (res []*sqlpar
 		a.Columns = append(a.Columns, columns[len(a.Columns):]...)
 	}
 
-	return truncate(a, a.Columns)
+	return a.Columns
 }
 
 func (a *Aggregator) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
