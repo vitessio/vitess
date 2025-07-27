@@ -39,8 +39,16 @@ func TestDerivedTableColumnSelection(t *testing.T) {
 
 	// Test Aggregator column truncation for derived tables
 	tableId := semantics.SingleTableSet(0)
+
+	// Create a Horizon as the source (which can be derived)
+	horizon := &Horizon{
+		TableId: &tableId,
+		Alias:   "inner",
+	}
+
 	aggregator := &Aggregator{
-		Columns: []*sqlparser.AliasedExpr{col1, col2},
+		unaryOperator: newUnaryOp(horizon),
+		Columns:       []*sqlparser.AliasedExpr{col1, col2},
 		DT: &DerivedTable{
 			TableID: tableId,
 			Alias:   "t",
@@ -52,7 +60,8 @@ func TestDerivedTableColumnSelection(t *testing.T) {
 	aggregator.setTruncateColumnCount(1)
 
 	// Test the derived table path in GetColumns
-	columns := aggregator.GetColumns(nil)
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
+	columns := aggregator.GetColumns(ctx)
 	assert.Len(t, columns, 1, "Should return only 1 column when ResultColumns is set to 1")
 	assert.Equal(t, "team_id", columns[0].Expr.(*sqlparser.ColName).Name.String())
 }
@@ -73,7 +82,8 @@ func TestRouteColumnTruncation(t *testing.T) {
 
 	// Test with ResultColumns set to 1 - should truncate to 1 column
 	route.setTruncateColumnCount(1)
-	columns := route.GetColumns(nil)
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
+	columns := route.GetColumns(ctx)
 	assert.Len(t, columns, 1, "Should return only 1 column when ResultColumns is set to 1")
 	assert.Equal(t, "team_id", columns[0].Expr.(*sqlparser.ColName).Name.String())
 }

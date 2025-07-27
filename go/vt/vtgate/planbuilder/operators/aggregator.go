@@ -303,6 +303,10 @@ func isDerived(op Operator) bool {
 
 func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) (res []*sqlparser.AliasedExpr) {
 	if isDerived(a.Source) {
+		// If ResultColumns is set, truncate the columns to the expected count
+		if a.ResultColumns > 0 && len(a.Columns) > a.ResultColumns {
+			return a.Columns[:a.ResultColumns]
+		}
 		return a.Columns
 	}
 
@@ -314,6 +318,11 @@ func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) (res []*sqlpar
 	// if this operator is producing more columns than expected, we want to know about it
 	if len(columns) > len(a.Columns) {
 		a.Columns = append(a.Columns, columns[len(a.Columns):]...)
+	}
+
+	// If ResultColumns is set, truncate the columns to the expected count
+	if a.ResultColumns > 0 && len(a.Columns) > a.ResultColumns {
+		return a.Columns[:a.ResultColumns]
 	}
 
 	return a.Columns

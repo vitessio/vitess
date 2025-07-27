@@ -742,7 +742,14 @@ func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _
 }
 
 func (r *Route) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.AliasedExpr {
-	return r.Source.GetColumns(ctx)
+	columns := r.Source.GetColumns(ctx)
+
+	// If ResultColumns is set, truncate the columns to the expected count
+	if r.ResultColumns > 0 && len(columns) > r.ResultColumns {
+		return columns[:r.ResultColumns]
+	}
+
+	return columns
 }
 
 func (r *Route) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
