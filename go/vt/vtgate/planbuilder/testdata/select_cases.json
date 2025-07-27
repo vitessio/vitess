@@ -6183,5 +6183,27 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "derived table column selection should only return requested columns",
+    "query": "select t.id from (select id, name from user) as t",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select t.id from (select id, name from user) as t",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.id from (select id, `name` from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select t.id from (select id, `name` from `user`) as t"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
