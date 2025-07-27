@@ -1054,7 +1054,9 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 		}
 
 		rowChange := &binlogdatapb.RowChange{}
-		if beforeOK {
+
+		// if either the before or after values were ok we'll forward the values
+		if beforeOK || afterOK {
 			if len(beforeRawValues) > 0 {
 				beforeValues, err := plan.mapValues(beforeRawValues)
 				if err != nil {
@@ -1082,17 +1084,6 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 						Count: int64(row.JSONPartialValues.Count()),
 						Cols:  row.JSONPartialValues.Bits(),
 					}
-				}
-			}
-
-			// Add raw before values if only afterOK succeeded
-			if !beforeOK {
-				if len(beforeRawValues) > 0 {
-					beforeValues, err := plan.mapValues(beforeRawValues)
-					if err != nil {
-						return nil, err
-					}
-					rowChange.Before = sqltypes.RowToProto3(beforeValues)
 				}
 			}
 		}
