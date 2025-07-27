@@ -117,12 +117,30 @@ func (rs *pendingResult) SetResult(res *sqltypes.Result) {
 	rs.result = res
 }
 
+
 // Wait waits for the original query to complete execution. Wait should
 // be invoked for duplicate queries.
-func (rs *pendingResult) Wait() {
+func (rs *pendingResult) Wait(ctx context.Context) error {
 	rs.consolidator.Record(rs.query)
-	rs.executing.RLock()
+	acquired := make(chan struct{})
+	go func() {
+		rs.executing.RLock()
+		select {
+		case acquired <- struct{}{}:
+			// lock acquired
+		case <-ctx.Done():
+			// avoid lock leak if ctx expires
+			rs.executing.RUnlock()
+		}
+	}()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-acquired:
+		return nil
+	}
 }
+
 
 func (rs *pendingResult) AddWaiterCounter(c int64) *int64 {
 	atomic.AddInt64(rs.consolidator.totalWaiterCount, c)

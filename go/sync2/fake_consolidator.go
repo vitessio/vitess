@@ -109,8 +109,9 @@ func (fr *FakePendingResult) SetResult(result *sqltypes.Result) {
 }
 
 // Wait records the Wait call for later verification.
-func (fr *FakePendingResult) Wait() {
+func (fr *FakePendingResult) Wait(ctx context.Context) error {
 	fr.WaitCalls++
+	return nil
 }
 
 // AddWaiterCounter is currently a no-op.
