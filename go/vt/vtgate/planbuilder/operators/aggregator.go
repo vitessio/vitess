@@ -292,7 +292,7 @@ func isDerived(op Operator) bool {
 }
 
 func (a *Aggregator) GetColumns(ctx *plancontext.PlanningContext) (res []*sqlparser.AliasedExpr) {
-	if isDerived(a.Source) {
+	if isDerived(a.Source) && len(a.Aggregations) > 0 {
 		return truncate(a, a.Columns)
 	}
 
