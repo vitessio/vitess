@@ -809,6 +809,11 @@ func mysqlSocketPath() string {
 	return mysqlServerSocketPath
 }
 
+// GetMysqlServerSSLCA returns the current value of the mysql-server-ssl-ca flag
+func GetMysqlServerSSLCA() string {
+	return mysqlSslCa
+}
+
 func init() {
 	servenv.OnParseFor("vtgate", registerPluginFlags)
 	servenv.OnParseFor("vtcombo", registerPluginFlags)
