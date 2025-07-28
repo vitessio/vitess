@@ -3340,6 +3340,8 @@ func (ct ColumnType) SQLType() querypb.Type {
 		return sqltypes.Set
 	case keywordStrings[JSON]:
 		return sqltypes.TypeJSON
+	case keywordStrings[VECTOR]:
+		return sqltypes.Vector
 	case keywordStrings[GEOMETRY],
 		keywordStrings[POINT],
 		keywordStrings[LINESTRING],

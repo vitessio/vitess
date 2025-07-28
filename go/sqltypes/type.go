@@ -140,6 +140,7 @@ const (
 	Geometry   = querypb.Type_GEOMETRY
 	TypeJSON   = querypb.Type_JSON
 	Expression = querypb.Type_EXPRESSION
+	Vector     = querypb.Type_VECTOR
 )
 
 // bit-shift the mysql flags by two byte so we
@@ -173,6 +174,7 @@ var mysqlToType = map[int64]querypb.Type{
 	17:  Timestamp,
 	18:  Datetime,
 	19:  Time,
+	242: Vector,
 	245: TypeJSON,
 	246: Decimal,
 	247: Enum,
@@ -304,6 +306,7 @@ var typeToMySQL = map[querypb.Type]struct {
 	Enum:      {typ: 254, flags: mysqlEnum},
 	Set:       {typ: 254, flags: mysqlSet},
 	Geometry:  {typ: 255},
+	Vector:    {typ: 242, flags: mysqlBinary},
 }
 
 // TypeToMySQL returns the equivalent mysql type and flag for a vitess type.

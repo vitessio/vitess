@@ -206,6 +206,9 @@ enum Type {
   // This type is for internal use only.
   // Properties: 31, None.
   EXPRESSION = 31;
+  // VECTOR specifies a VECTOR type.
+  // Properties: 32, IsBinary.
+  VECTOR = 8224;
 }
 
 // Value represents a typed value.
