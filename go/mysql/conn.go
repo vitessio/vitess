@@ -30,8 +30,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/spf13/pflag"
-
 	"vitess.io/vitess/go/bucketpool"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -40,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -69,19 +66,6 @@ const (
 	// ephemeralRead means we currently in process of reading into currentEphemeralBuffer
 	ephemeralRead
 )
-
-var (
-	mysqlMultiQuery = false
-)
-
-func registerConnFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&mysqlMultiQuery, "mysql-server-multi-query-protocol", mysqlMultiQuery, "If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.")
-}
-
-func init() {
-	servenv.OnParseFor("vtgate", registerConnFlags)
-	servenv.OnParseFor("vtcombo", registerConnFlags)
-}
 
 // A Getter has a Get()
 type Getter interface {
@@ -222,6 +206,8 @@ type Conn struct {
 	// This is currently used for testing.
 	keepAliveOn bool
 
+	multiQuery bool
+
 	// mu protects the fields below
 	mu sync.Mutex
 	// cancel keep the cancel function for the current executing query.
@@ -298,6 +284,7 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 		keepAliveOn:    enabledKeepAlive,
 		flushDelay:     listener.flushDelay,
 		truncateErrLen: listener.truncateErrLen,
+		multiQuery:     listener.multiQuery,
 	}
 
 	if listener.connReadBufferSize > 0 {
@@ -930,7 +917,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		res := c.execQuery("use "+sqlescape.EscapeID(db), handler, false)
 		return res != connErr
 	case ComQuery:
-		if mysqlMultiQuery {
+		if c.multiQuery {
 			return c.handleComQueryMulti(handler, data)
 		}
 		return c.handleComQuery(handler, data)

@@ -77,8 +77,8 @@ func createFuzzingSocketPair() (net.Listener, *Conn, *Conn) {
 	}
 
 	// Create a Conn on both sides.
-	cConn := newConn(clientConn, DefaultFlushDelay)
-	sConn := newConn(serverConn, DefaultFlushDelay)
+	cConn := newConn(clientConn, DefaultFlushDelay, 0, false)
+	sConn := newConn(serverConn, DefaultFlushDelay, 0, false)
 
 	return listener, sConn, cConn
 }
@@ -197,7 +197,7 @@ func FuzzHandleNextCommand(data []byte) int {
 		writeToPass: []bool{false},
 		pos:         -1,
 		queryPacket: data,
-	}, DefaultFlushDelay)
+	}, DefaultFlushDelay, 0, false)
 	sConn.PrepareData = map[uint32]*PrepareData{}
 
 	handler := &fuzztestRun{}
