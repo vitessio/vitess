@@ -20,6 +20,9 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"context"
+	"errors"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -82,7 +85,9 @@ func TestConsolidator(t *testing.T) {
 		orig.SetResult(result)
 		orig.Broadcast()
 	}()
-	dup.Wait()
+	if err := dup.Wait(context.Background()); err != nil {
+		t.Fatalf("unexpected error from Wait: %v", err)
+	}
 
 	if orig.Result() != result {
 		t.Errorf("failed to pass result")
@@ -107,7 +112,9 @@ func TestConsolidator(t *testing.T) {
 		second.SetResult(result)
 		second.Broadcast()
 	}()
-	dup.Wait()
+	if err := dup.Wait(context.Background()); err != nil {
+		t.Fatalf("unexpected error from Wait: %v", err)
+	}
 
 	want = []ConsolidatorCacheItem{{Query: sql, Count: 2}}
 	if !reflect.DeepEqual(con.Items(), want) {
@@ -115,3 +122,33 @@ func TestConsolidator(t *testing.T) {
 	}
 
 }
+
+func TestWaitContextCancellation(t *testing.T) {
+	con := NewConsolidator()
+	sql := "select * from TimeoutTable"
+
+	orig, added := con.Create(sql)
+	if !added {
+		t.Fatalf("expected to register original query")
+	}
+
+	// Simulate a second (duplicate) query
+	dup, added := con.Create(sql)
+	if added {
+		t.Fatalf("expected duplicate, not new entry")
+	}
+
+	// Use a context that cancels quickly
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	err := dup.Wait(ctx)
+
+	if err == nil {
+		t.Fatalf("expected context timeout error, got nil")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded error, got: %v", err)
+	}
+}
+

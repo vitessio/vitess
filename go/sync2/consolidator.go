@@ -117,30 +117,31 @@ func (rs *pendingResult) SetResult(res *sqltypes.Result) {
 	rs.result = res
 }
 
-
-// Wait waits for the original query to complete execution. Wait should
-// be invoked for duplicate queries.
+// Wait waits for the original query to complete execution.
+// It returns early if the provided context is cancelled.
 func (rs *pendingResult) Wait(ctx context.Context) error {
 	rs.consolidator.Record(rs.query)
-	acquired := make(chan struct{})
+	acquired := make(chan struct{}, 1) // Signals successful RLock acquisition
+	errCh := make(chan error, 1)       // Signals early context cancellation
 	go func() {
-		rs.executing.RLock()
+		// Exit early if context is already cancelled to avoid leaking this goroutine
 		select {
-		case acquired <- struct{}{}:
-			// lock acquired
 		case <-ctx.Done():
-			// avoid lock leak if ctx expires
-			rs.executing.RUnlock()
+			errCh <- ctx.Err()
+		default:
+			rs.executing.RLock()
+			acquired <- struct{}{}
 		}
 	}()
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return ctx.Err() // Context timed out or was cancelled
 	case <-acquired:
-		return nil
+		return nil       // Lock acquired successfully
+	case err := <-errCh:
+		return err       // Context expired before lock acquisition
 	}
 }
-
 
 func (rs *pendingResult) AddWaiterCounter(c int64) *int64 {
 	atomic.AddInt64(rs.consolidator.totalWaiterCount, c)
