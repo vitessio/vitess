@@ -11,6 +11,7 @@ CREATE TABLE `t2`
 (
     `id`    bigint unsigned NOT NULL AUTO_INCREMENT,
     `t1_id` int unsigned NOT NULL,
+    `col`   int unsigned,
     PRIMARY KEY (`id`)
 ) ENGINE InnoDB,
   CHARSET utf8mb4,
@@ -31,10 +32,10 @@ values (1, 'A'),
        (3, 'C'),
        (4, 'D');
 
-insert into t2 (id, t1_id)
-values (1, 1),
-       (2, 2),
-       (3, 3);
+insert into t2 (id, t1_id, col)
+values (1, 1, 1),
+       (2, 2, 2),
+       (3, 3, 3);
 
 insert into t3 (id, name)
 values (1, 'A'),
@@ -65,3 +66,9 @@ from (select id, count(*) as num_segments from t1 group by 1 order by 2 desc lim
 
 select name
 from (select name from t1 group by name having count(t1.id) > 1) t1;
+
+select t1_id
+from (select t1_id, col
+      from t2
+      group by 1, 2) t
+group by 1;

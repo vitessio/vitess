@@ -88,6 +88,7 @@ func (oa *OrderedAggregate) TryExecute(ctx context.Context, vcursor VCursor, bin
 	return qr.Truncate(oa.TruncateColumnCount), nil
 }
 
+// executeGroupBy is used when the plan contains grouping but not aggregations
 func (oa *OrderedAggregate) executeGroupBy(result *sqltypes.Result) (*sqltypes.Result, error) {
 	if len(result.Rows) < 1 {
 		return result, nil
