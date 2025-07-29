@@ -741,6 +741,15 @@
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
+		"vtgate_schematracker_viewsdisabled": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/viewsdisabled", "-timeout", "20m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_schema_tracker",
+			"RetryMax": 1,
+			"Tags": ["upgrade_downgrade_query_serving_schema"]
+		},
 		"vtgate_mysql80": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/mysql80"],
