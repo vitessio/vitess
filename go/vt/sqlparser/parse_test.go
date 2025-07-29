@@ -3920,6 +3920,10 @@ var (
 			output: "alter table t modify column col1 (\n\tcol1 varchar(255) collate utf8mb4_0900_ai_ci not null\n)",
 		},
 		{
+			input:  "alter table t modify col1 int check (pk < 10)",
+			output: "alter table t modify column col1 (\n\tcol1 int,\n\tcheck (pk < 10)\n)",
+		},
+		{
 			input:  "CREATE TABLE t (col1 BIGINT PRIMARY KEY, col2 DOUBLE DEFAULT -1.1)",
 			output: "create table t (\n\tcol1 BIGINT primary key,\n\tcol2 DOUBLE default -1.1\n)",
 		}, {

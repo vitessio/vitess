@@ -1238,7 +1238,7 @@ create_statement:
     $$ = $1.(*DDL)
   }
   // Currently, only unparenthesized SELECT expressions
-  // are permitted for `CREATE AS` if `AS` is ommitted.
+  // are permitted for `CREATE AS` if `AS` is omitted.
   // This is done to avoid ambiguity when parsing
   // > CREATE TABLE AS (...
 | create_table_prefix create_query_select_expression
@@ -5919,6 +5919,9 @@ alter_table_statement_part:
         },
     }
     ddl.TableSpec.AddColumn($3.(*ColumnDefinition))
+    if len(ddl.TableSpec.Constraints) > 0 {
+      ddl.ConstraintAction = AddStr
+    }
     ddl.Column = $3.(*ColumnDefinition).Name
     $$ = ddl
   }
