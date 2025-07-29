@@ -116,7 +116,8 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 					// but will need to be revisited when we add such support to vreplication
 					aggregates = append(aggregates, engine.NewAggregateParam(
 						/*opcode*/ opcode.AggregateSum,
-						/*offset*/ len(sourceSelect.SelectExprs)-1,
+						/*offset*/ sourceSelect.GetColumnCount()-1,
+						nil,
 						/*alias*/ "", collationEnv),
 					)
 				}
