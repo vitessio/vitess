@@ -201,6 +201,8 @@ type Listener struct {
 	// connBufferPooling configures if vtgate server pools connection buffers
 	connBufferPooling bool
 
+	multiQuery bool
+
 	// connKeepAlivePeriod is period between tcp keep-alives.
 	connKeepAlivePeriod time.Duration
 
@@ -236,6 +238,7 @@ func NewFromListener(
 	connBufferPooling bool,
 	keepAlivePeriod time.Duration,
 	flushDelay time.Duration,
+	multiQuery bool,
 ) (*Listener, error) {
 	cfg := ListenerConfig{
 		Listener:            l,
@@ -247,6 +250,7 @@ func NewFromListener(
 		ConnBufferPooling:   connBufferPooling,
 		ConnKeepAlivePeriod: keepAlivePeriod,
 		FlushDelay:          flushDelay,
+		MultiQuery:          multiQuery,
 	}
 	return NewListenerWithConfig(cfg)
 }
@@ -262,6 +266,7 @@ func NewListener(
 	connBufferPooling bool,
 	keepAlivePeriod time.Duration,
 	flushDelay time.Duration,
+	multiQuery bool,
 ) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
@@ -269,10 +274,10 @@ func NewListener(
 	}
 	if proxyProtocol {
 		proxyListener := &proxyproto.Listener{Listener: listener}
-		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay)
+		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery)
 	}
 
-	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling, keepAlivePeriod, flushDelay, multiQuery)
 }
 
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
@@ -289,6 +294,7 @@ type ListenerConfig struct {
 	ConnBufferPooling   bool
 	ConnKeepAlivePeriod time.Duration
 	FlushDelay          time.Duration
+	MultiQuery          bool
 }
 
 // NewListenerWithConfig creates new listener using provided config. There are
@@ -317,6 +323,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connBufferPooling:   cfg.ConnBufferPooling,
 		connKeepAlivePeriod: cfg.ConnKeepAlivePeriod,
 		flushDelay:          cfg.FlushDelay,
+		multiQuery:          cfg.MultiQuery,
 		truncateErrLen:      cfg.Handler.Env().TruncateErrLen(),
 		charset:             cfg.Handler.Env().CollationEnv().DefaultConnectionCharset(),
 	}, nil
