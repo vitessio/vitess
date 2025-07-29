@@ -5919,6 +5919,9 @@ alter_table_statement_part:
         },
     }
     ddl.TableSpec.AddColumn($3.(*ColumnDefinition))
+    if len(ddl.TableSpec.Constraints) > 0 {
+      ddl.ConstraintAction = AddStr
+    }
     ddl.Column = $3.(*ColumnDefinition).Name
     $$ = ddl
   }
