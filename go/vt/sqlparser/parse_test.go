@@ -3904,6 +3904,15 @@ var (
 		}, {
 			input:  "CREATE TABLE t (id INT PRIMARY KEY, col1 GEOMETRYCOLLECTION NOT NULL SRID 0)",
 			output: "create table t (\n\tid INT primary key,\n\tcol1 GEOMETRYCOLLECTION not null srid 0\n)",
+		}, {
+			input:  "CREATE TABLE t (id INT PRIMARY KEY, vec VECTOR(3))",
+			output: "create table t (\n\tid INT primary key,\n\tvec VECTOR(3)\n)",
+		}, {
+			input:  "CREATE TABLE embeddings (id INT, vector_col VECTOR(128) NOT NULL)",
+			output: "create table embeddings (\n\tid INT,\n\tvector_col VECTOR(128) not null\n)",
+		}, {
+			input:  "CREATE TABLE vectors (pk INT PRIMARY KEY, small_vec VECTOR(1), large_vec VECTOR(16000))",
+			output: "create table vectors (\n\tpk INT primary key,\n\tsmall_vec VECTOR(1),\n\tlarge_vec VECTOR(16000)\n)",
 		},
 		{
 			input:  "ALTER TABLE t ADD COLUMN col1 POINT NOT NULL SRID 0 DEFAULT (POINT(1, 2))",
@@ -7035,6 +7044,7 @@ var sampleColumns = []string{
 	"	col_set2 set('a', 'b', 'c', 'd') character set ascii",
 	"	col_set3 set('a', 'b', 'c', 'd') collate ascii_bin",
 	"	col_set4 set('a', 'b', 'c', 'd') character set ascii collate ascii_bin",
+	"	col_vector vector",
 }
 
 var sampleGeoColumns = []string{
