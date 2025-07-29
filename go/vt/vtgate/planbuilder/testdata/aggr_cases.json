@@ -7406,5 +7406,43 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "Group-only Aggregation on top of a derived table should return the correct number of columns",
+    "query": "select col from (select col, intcol from user group by 1, 2) t group by 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select col from (select col, intcol from user group by 1, 2) t group by 1",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "GroupBy": "0",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "GroupBy": "0, 1",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, intcol from `user` where 1 != 1 group by col, intcol",
+                "OrderBy": "0 ASC, 1 ASC",
+                "Query": "select col, intcol from `user` group by col, intcol order by col asc, intcol asc",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
