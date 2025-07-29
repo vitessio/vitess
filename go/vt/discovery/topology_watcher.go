@@ -88,11 +88,17 @@ type TopologyWatcher struct {
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and reloads them as needed.
+<<<<<<< HEAD
 func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, hc HealthCheck, f TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool) *TopologyWatcher {
+=======
+func NewTopologyWatcher(
+	ctx context.Context, topoServer *topo.Server, hc HealthCheck, filter TabletFilter, cell string, refreshInterval time.Duration, refreshKnownTablets bool, opts ...Option,
+) *TopologyWatcher {
+>>>>>>> 6c5a048081 (discovery: clarify use of TabletFilter in NewHealthCheck (#18512))
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
 		healthcheck:         hc,
-		tabletFilter:        f,
+		tabletFilter:        filter,
 		cell:                cell,
 		refreshInterval:     refreshInterval,
 		refreshKnownTablets: refreshKnownTablets,
