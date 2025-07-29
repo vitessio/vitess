@@ -349,10 +349,18 @@ func NewVTGateHealthCheckFilters() (filters TabletFilters, err error) {
 //
 // filters.
 //
+<<<<<<< HEAD
 //	Is one or more filters to apply when determining what tablets we want to stream healthchecks from.
 func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, filters TabletFilter) *HealthCheckImpl {
 	log.Infof("loading tablets for cells: %v", cellsToWatch)
 
+=======
+//	Is an optional filter (implementing the TabletFilter interface) to apply when determining
+//	what tablets we want to stream healthchecks from. If nil, no filtering is performed.
+func NewHealthCheck(
+	ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string, filter TabletFilter, opts ...Option,
+) *HealthCheckImpl {
+>>>>>>> 6c5a048081 (discovery: clarify use of TabletFilter in NewHealthCheck (#18512))
 	hc := &HealthCheckImpl{
 		ts:                 topoServer,
 		cell:               localCell,
@@ -376,7 +384,11 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 		if c == "" {
 			continue
 		}
+<<<<<<< HEAD
 		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filters, c, refreshInterval, refreshKnownTablets, topo.DefaultConcurrency))
+=======
+		topoWatchers = append(topoWatchers, NewTopologyWatcher(ctx, topoServer, hc, filter, c, refreshInterval, refreshKnownTablets, opts...))
+>>>>>>> 6c5a048081 (discovery: clarify use of TabletFilter in NewHealthCheck (#18512))
 	}
 
 	hc.topoWatchers = topoWatchers
