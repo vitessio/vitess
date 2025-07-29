@@ -294,7 +294,10 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			qg := newQueryGraph()
 			isInfSchema := tableInfo.IsInfSchema()
 			if ctx.IsMirrored() {
-				if mr := tableInfo.GetMirrorRule(); mr != nil {
+				mr := tableInfo.GetMirrorRule()
+				vtbl := tableInfo.GetVindexTable()
+				switch {
+				case mr != nil:
 					newTbl := sqlparser.Clone(tbl)
 					newTbl.Qualifier = sqlparser.NewIdentifierCS(mr.Table.Keyspace.Name)
 					newTbl.Name = mr.Table.Name
@@ -303,7 +306,11 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 						tableExpr.As = tbl.Name
 					}
 					tbl = newTbl
-				} else {
+				case vtbl.Type == vindexes.TypeReference && vtbl.Name.String() == "dual":
+					// Dual tables do not get an entry in the mirror rules,
+					// and we don't really need to mirror them. We just want to
+					// avoid panicking.
+				default:
 					panic(vterrors.VT13001(fmt.Sprintf("unable to find mirror rule for table: %T", tbl)))
 				}
 			}
