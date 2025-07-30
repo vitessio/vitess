@@ -179,6 +179,7 @@ Flags:
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")
       --querylog-row-threshold uint                                      Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.
       --querylog-sample-rate float                                       Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)
+      --querylog-time-threshold duration                                 Execution time duration a query needs to run over before being logged; time duration expressed in the form recognized by time.ParseDuration; not useful for streaming queries.
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
       --retry-count int                                                  retry count (default 2)

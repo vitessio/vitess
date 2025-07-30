@@ -192,6 +192,27 @@ func TestLogStatsRowThreshold(t *testing.T) {
 	assert.Empty(t, got)
 }
 
+func TestLogStatsTimeThreshold(t *testing.T) {
+	logStats := NewLogStats(context.Background(), "test", "sql1 /* LOG_THIS_QUERY */", "", map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)})
+	// Query total time is 1 second and 1234 nanosecond
+	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
+	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
+	params := map[string][]string{"full": {}}
+
+	got := testFormat(t, logStats, params)
+	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\tfalse\t[]\t\"\"\n"
+	assert.Equal(t, want, got)
+
+	got = testFormat(t, logStats, params)
+	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t0.000000\t0.000000\t0.000000\t\t\"sql1 /* LOG_THIS_QUERY */\"\tmap[intVal:type:INT64 value:\"1\"]\t0\t0\t\"\"\t\"\"\t\"\"\tfalse\t[]\t\"\"\n"
+	assert.Equal(t, want, got)
+
+	// Set Query threshold more than query duration: 1 second and 1234 nanosecond
+	streamlog.SetQueryLogTimeThreshold(2 * 1024 * 1024 * 1024)
+	got = testFormat(t, logStats, params)
+	assert.Empty(t, got)
+}
+
 func TestLogStatsContextHTML(t *testing.T) {
 	html := "HtmlContext"
 	callInfo := &fakecallinfo.FakeCallInfo{
