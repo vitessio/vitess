@@ -133,7 +133,7 @@ func (stats *LogStats) MirrorTargetErrorStr() string {
 // Logf formats the log record to the given writer, either as
 // tab-separated list of logged fields or as JSON.
 func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
-	if !stats.Config.ShouldEmitLog(stats.SQL, stats.RowsAffected, stats.RowsReturned, stats.Error != nil) {
+	if !stats.Config.ShouldEmitLog(stats.SQL, stats.RowsAffected, stats.RowsReturned, stats.TotalTime(), stats.Error != nil) {
 		return nil
 	}
 
