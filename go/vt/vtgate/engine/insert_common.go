@@ -230,14 +230,26 @@ func (ic *InsertCommon) processOwned(ctx context.Context, vcursor VCursor, vinde
 	var createIndexes []int
 	var createKeys []sqltypes.Row
 	var createKsids []ksID
+	var vindexNull []bool
 
 	for rowNum, rowColumnKeys := range vindexColumnsKeys {
 		if ksids[rowNum] == nil {
 			continue
 		}
+		keyContainsNull := false
+		for _, columnKey := range rowColumnKeys {
+			if columnKey.IsNull() {
+				// if any of the keys contains a null, we know the vindex will ignore this row,
+				// so it's safe to
+				keyContainsNull = true
+				break
+			}
+		}
+
 		createIndexes = append(createIndexes, rowNum)
 		createKeys = append(createKeys, rowColumnKeys)
 		createKsids = append(createKsids, ksids[rowNum])
+		vindexNull = append(vindexNull, keyContainsNull)
 	}
 	if createKeys == nil {
 		return nil
@@ -254,7 +266,7 @@ func (ic *InsertCommon) processOwned(ctx context.Context, vcursor VCursor, vinde
 		return err
 	}
 	for i, v := range verified {
-		if !v {
+		if !v && !vindexNull[i] {
 			ksids[createIndexes[i]] = nil
 		}
 	}
