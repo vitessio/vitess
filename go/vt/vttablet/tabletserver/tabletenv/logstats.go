@@ -180,7 +180,7 @@ func (stats *LogStats) CallInfo() (string, string) {
 // Logf formats the log record to the given writer, either as
 // tab-separated list of logged fields or as JSON.
 func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
-	if !stats.Config.ShouldEmitLog(stats.OriginalSQL, uint64(stats.RowsAffected), uint64(len(stats.Rows)), stats.Error != nil) {
+	if !stats.Config.ShouldEmitLog(stats.OriginalSQL, uint64(stats.RowsAffected), uint64(len(stats.Rows)), stats.TotalTime(), stats.Error != nil) {
 		return nil
 	}
 

@@ -281,69 +281,105 @@ func TestShouldSampleQuery(t *testing.T) {
 
 func TestShouldEmitLog(t *testing.T) {
 	tests := []struct {
-		sql              string
-		qLogFilterTag    string
-		qLogRowThreshold uint64
-		qLogSampleRate   float64
-		qLogMode         string
-		rowsAffected     uint64
-		rowsReturned     uint64
-		errored          bool
-		ok               bool
+		sql               string
+		qLogFilterTag     string
+		qLogRowThreshold  uint64
+		qLogTimeThreshold time.Duration
+		qLogSampleRate    float64
+		qLogMode          string
+		rowsAffected      uint64
+		rowsReturned      uint64
+		totalTime         time.Duration
+		errored           bool
+		ok                bool
 	}{
 		{
-			sql:              "queryLogThreshold smaller than affected and returned",
-			qLogFilterTag:    "",
-			qLogRowThreshold: 2,
-			qLogSampleRate:   0.0,
-			rowsAffected:     7,
-			rowsReturned:     7,
-			ok:               true,
+			sql:               "queryLogRowThreshold smaller than affected and returned",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  2,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      7,
+			totalTime:         1000,
+			ok:                true,
 		},
 		{
-			sql:              "queryLogThreshold greater than affected and returned",
-			qLogFilterTag:    "",
-			qLogRowThreshold: 27,
-			qLogSampleRate:   0.0,
-			rowsAffected:     7,
-			rowsReturned:     17,
-			ok:               false,
+			sql:               "queryLogRowThreshold greater than affected and returned",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  27,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                false,
 		},
 		{
-			sql:              "this doesn't contains queryFilterTag: TAG",
-			qLogFilterTag:    "special tag",
-			qLogRowThreshold: 10,
-			qLogSampleRate:   0.0,
-			rowsAffected:     7,
-			rowsReturned:     17,
-			ok:               false,
+			sql:               "queryLogTimeThreshold smaller than total time and returned",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 10,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      7,
+			totalTime:         1000,
+			ok:                true,
 		},
 		{
-			sql:              "this contains queryFilterTag: TAG",
-			qLogFilterTag:    "TAG",
-			qLogRowThreshold: 0,
-			qLogSampleRate:   0.0,
-			rowsAffected:     7,
-			rowsReturned:     17,
-			ok:               true,
+			sql:               "queryLogTimeThreshold greater than total time and returned",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 10000,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                false,
 		},
 		{
-			sql:              "this contains querySampleRate: 1.0",
-			qLogFilterTag:    "",
-			qLogRowThreshold: 0,
-			qLogSampleRate:   1.0,
-			rowsAffected:     7,
-			rowsReturned:     17,
-			ok:               true,
+			sql:               "this doesn't contains queryFilterTag: TAG",
+			qLogFilterTag:     "special tag",
+			qLogRowThreshold:  10,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                false,
 		},
 		{
-			sql:              "this contains querySampleRate: 1.0 without expected queryFilterTag",
-			qLogFilterTag:    "TAG",
-			qLogRowThreshold: 0,
-			qLogSampleRate:   1.0,
-			rowsAffected:     7,
-			rowsReturned:     17,
-			ok:               true,
+			sql:               "this contains queryFilterTag: TAG",
+			qLogFilterTag:     "TAG",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    0.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                true,
+		},
+		{
+			sql:               "this contains querySampleRate: 1.0",
+			qLogFilterTag:     "",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    1.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                true,
+		},
+		{
+			sql:               "this contains querySampleRate: 1.0 without expected queryFilterTag",
+			qLogFilterTag:     "TAG",
+			qLogRowThreshold:  0,
+			qLogTimeThreshold: 0,
+			qLogSampleRate:    1.0,
+			rowsAffected:      7,
+			rowsReturned:      17,
+			totalTime:         1000,
+			ok:                true,
 		},
 		{
 			sql:      "log only error - no error",
@@ -362,12 +398,13 @@ func TestShouldEmitLog(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.sql, func(t *testing.T) {
 			qlConfig := QueryLogConfig{
-				FilterTag:    tt.qLogFilterTag,
-				RowThreshold: tt.qLogRowThreshold,
-				sampleRate:   tt.qLogSampleRate,
-				Mode:         tt.qLogMode,
+				FilterTag:     tt.qLogFilterTag,
+				RowThreshold:  tt.qLogRowThreshold,
+				TimeThreshold: tt.qLogTimeThreshold,
+				sampleRate:    tt.qLogSampleRate,
+				Mode:          tt.qLogMode,
 			}
-			require.Equal(t, tt.ok, qlConfig.ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned, tt.errored))
+			require.Equal(t, tt.ok, qlConfig.ShouldEmitLog(tt.sql, tt.rowsAffected, tt.rowsReturned, tt.totalTime, tt.errored))
 		})
 	}
 }
