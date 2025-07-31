@@ -49,6 +49,10 @@ type PooledConn = smartconnpool.Pooled[*Conn]
 // pool of dba connections that are used to kill connections.
 type Pool struct {
 	*smartconnpool.ConnPool[*Conn]
+
+	config        smartconnpool.Config[*Conn]
+	statsExporter *smartconnpool.StatsExporter[*Conn]
+
 	dbaPool *dbconnpool.ConnectionPool
 
 	timeout time.Duration
@@ -82,8 +86,10 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 		cp.getConnTime = env.Exporter().NewTimings(name+"GetConnTime", "Tracks the amount of time it takes to get a connection", "Settings")
 	}
 
+	cp.config = config
+
 	cp.ConnPool = smartconnpool.NewPool(&config)
-	cp.ConnPool.RegisterStats(env.Exporter(), name)
+	cp.statsExporter = smartconnpool.NewStatsExporter[*Conn](env.Exporter(), name)
 
 	cp.dbaPool = dbconnpool.NewConnectionPool("", env.Exporter(), 1, config.IdleTimeout, config.MaxLifetime, 0)
 
@@ -104,6 +110,8 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	}
 
 	cp.ConnPool.Open(connect, refresh)
+	cp.statsExporter.SetPool(cp.ConnPool)
+
 	cp.dbaPool.Open(dbaParams)
 }
 
@@ -111,6 +119,8 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 // exiting.
 func (cp *Pool) Close() {
 	cp.ConnPool.Close()
+	cp.ConnPool = smartconnpool.NewPool(&cp.config)
+
 	cp.dbaPool.Close()
 }
 
