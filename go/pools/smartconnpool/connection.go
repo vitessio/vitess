@@ -36,6 +36,8 @@ type Pooled[C Connection] struct {
 	timeUsed    timestamp
 	pool        *ConnPool[C]
 
+	generation int64 // generation of the pool when this connection was created
+
 	Conn C
 }
 
@@ -48,9 +50,9 @@ func (dbc *Pooled[C]) Recycle() {
 	case dbc.pool == nil:
 		dbc.Conn.Close()
 	case dbc.Conn.IsClosed():
-		dbc.pool.put(nil)
+		dbc.pool.put(nil, dbc.generation)
 	default:
-		dbc.pool.put(dbc)
+		dbc.pool.put(dbc, dbc.generation)
 	}
 }
 
@@ -58,6 +60,6 @@ func (dbc *Pooled[C]) Taint() {
 	if dbc.pool == nil {
 		return
 	}
-	dbc.pool.put(nil)
+	dbc.pool.put(nil, dbc.generation)
 	dbc.pool = nil
 }
