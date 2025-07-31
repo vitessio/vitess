@@ -209,15 +209,15 @@ func TestOpen(t *testing.T) {
 	assert.EqualValues(t, 6, state.lastID.Load())
 
 	// SetCapacity
-	err = p.SetCapacity(ctx, 3)
-	require.NoError(t, err)
+	p.SetCapacity(3)
+
 	assert.EqualValues(t, 3, state.open.Load())
 	assert.EqualValues(t, 6, state.lastID.Load())
 	assert.EqualValues(t, 3, p.Capacity())
 	assert.EqualValues(t, 3, p.Available())
 
-	err = p.SetCapacity(ctx, 6)
-	require.NoError(t, err)
+	p.SetCapacity(6)
+
 	assert.EqualValues(t, 6, p.Capacity())
 	assert.EqualValues(t, 6, p.Available())
 
@@ -266,13 +266,8 @@ func TestShrinking(t *testing.T) {
 		require.NoError(t, err)
 		resources[i] = r
 	}
-	done := make(chan bool)
-	go func() {
-		err := p.SetCapacity(ctx, 3)
-		require.NoError(t, err)
 
-		done <- true
-	}()
+	p.SetCapacity(3)
 	expected := map[string]any{
 		"Capacity":          3,
 		"Available":         -1, // negative because we've borrowed past our capacity
@@ -294,16 +289,48 @@ func TestShrinking(t *testing.T) {
 			assert.Equal(t, expected, stats)
 		}
 	}
-	// There are already 2 resources available in the pool.
-	// So, returning one should be enough for SetCapacity to complete.
+
+	p.put(resources[0], resources[0].generation)
+	assert.Equal(t, map[string]any{
+		"Capacity":          3,
+		"Available":         0,
+		"Active":            4,
+		"InUse":             3,
+		"WaitCount":         0,
+		"WaitTime":          time.Duration(0),
+		"IdleTimeout":       1 * time.Second,
+		"IdleClosed":        0,
+		"MaxLifetimeClosed": 0,
+	}, p.StatsJSON())
+
+	p.put(resources[1], resources[1].generation)
+	assert.Equal(t, map[string]any{
+		"Capacity":          3,
+		"Available":         1,
+		"Active":            4,
+		"InUse":             2,
+		"WaitCount":         0,
+		"WaitTime":          time.Duration(0),
+		"IdleTimeout":       1 * time.Second,
+		"IdleClosed":        0,
+		"MaxLifetimeClosed": 0,
+	}, p.StatsJSON())
+
+	p.put(resources[2], resources[2].generation)
+	assert.Equal(t, map[string]any{
+		"Capacity":          3,
+		"Available":         2,
+		"Active":            4,
+		"InUse":             1,
+		"WaitCount":         0,
+		"WaitTime":          time.Duration(0),
+		"IdleTimeout":       1 * time.Second,
+		"IdleClosed":        0,
+		"MaxLifetimeClosed": 0,
+	}, p.StatsJSON())
+
 	p.put(resources[3], resources[3].generation)
-	<-done
-	// Return the rest of the resources
-	for i := 0; i < 3; i++ {
-		p.put(resources[i], resources[i].generation)
-	}
-	stats := p.StatsJSON()
-	expected = map[string]any{
+	assert.Equal(t, map[string]any{
 		"Capacity":          3,
 		"Available":         3,
 		"Active":            3,
@@ -311,10 +338,10 @@ func TestShrinking(t *testing.T) {
 		"WaitCount":         0,
 		"WaitTime":          time.Duration(0),
 		"IdleTimeout":       1 * time.Second,
-		"IdleClosed":        0,
+		"IdleClosed":        1,
 		"MaxLifetimeClosed": 0,
-	}
-	assert.Equal(t, expected, stats)
+	}, p.StatsJSON())
+
 	assert.EqualValues(t, 3, state.open.Load())
 
 	// Ensure no deadlock if SetCapacity is called after we start
@@ -330,28 +357,27 @@ func TestShrinking(t *testing.T) {
 		require.NoError(t, err)
 		resources[i] = r
 	}
+
+	wg := sync.WaitGroup{}
 	// This will wait because pool is empty
+	wg.Add(1)
 	go func() {
 		r, err := p.Get(ctx, nil)
 		require.NoError(t, err)
 		p.put(r, r.generation)
-		done <- true
+		wg.Done()
 	}()
 
-	// This will also wait
-	go func() {
-		err := p.SetCapacity(ctx, 2)
-		require.NoError(t, err)
-		done <- true
-	}()
+	p.SetCapacity(2)
+
 	time.Sleep(10 * time.Millisecond)
 
 	// This should not hang
 	for i := 0; i < 3; i++ {
 		p.put(resources[i], resources[i].generation)
 	}
-	<-done
-	<-done
+	wg.Wait()
+
 	assert.EqualValues(t, 2, p.Capacity())
 	assert.EqualValues(t, 2, p.Available())
 	assert.EqualValues(t, 1, p.Metrics.WaitCount())
@@ -359,7 +385,8 @@ func TestShrinking(t *testing.T) {
 	assert.EqualValues(t, 2, state.open.Load())
 
 	// Test race condition of SetCapacity with itself
-	err = p.SetCapacity(ctx, 3)
+	p.SetCapacity(3)
+
 	require.NoError(t, err)
 	for i := 0; i < 3; i++ {
 		var r *Pooled[*TestConn]
@@ -372,35 +399,34 @@ func TestShrinking(t *testing.T) {
 		require.NoError(t, err)
 		resources[i] = r
 	}
+
 	// This will wait because pool is empty
+	wg.Add(1)
 	go func() {
 		r, err := p.Get(ctx, nil)
 		require.NoError(t, err)
 		p.put(r, r.generation)
-		done <- true
+		wg.Done()
 	}()
 	time.Sleep(10 * time.Millisecond)
 
 	// This will wait till we Put
-	go func() {
-		err := p.SetCapacity(ctx, 2)
-		require.NoError(t, err)
-	}()
+	p.SetCapacity(2)
+
 	time.Sleep(10 * time.Millisecond)
-	go func() {
-		err := p.SetCapacity(ctx, 4)
-		require.NoError(t, err)
-	}()
+
+	p.SetCapacity(4)
+
 	time.Sleep(10 * time.Millisecond)
 
 	// This should not hang
 	for i := 0; i < 3; i++ {
 		p.put(resources[i], resources[i].generation)
 	}
-	<-done
+	wg.Wait()
 
 	assert.Panics(t, func() {
-		_ = p.SetCapacity(ctx, -1)
+		p.SetCapacity(-1)
 	})
 
 	assert.EqualValues(t, 4, p.Capacity())
