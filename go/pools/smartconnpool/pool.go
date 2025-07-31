@@ -803,58 +803,141 @@ func (pool *ConnPool[C]) StatsJSON() map[string]any {
 	}
 }
 
-// RegisterStats registers this pool's metrics into a stats Exporter
-func (pool *ConnPool[C]) RegisterStats(stats *servenv.Exporter, name string) {
-	if stats == nil || name == "" {
-		return
-	}
+type StatsExporter[C Connection] struct {
+	// The Pool for which this exporter is exporting stats.
+	// It is an atomic pointer so that it can be updated safely.
+	// The pointer is nil if the pool has not been registered yet.
+	pool atomic.Pointer[ConnPool[C]]
+}
 
-	pool.Name = name
+func NewStatsExporter[C Connection](stats *servenv.Exporter, name string) *StatsExporter[C] {
+	se := &StatsExporter[C]{}
 
 	stats.NewGaugeFunc(name+"Capacity", "Tablet server conn pool capacity", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.Capacity()
 	})
 	stats.NewGaugeFunc(name+"Available", "Tablet server conn pool available", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.Available()
 	})
 	stats.NewGaugeFunc(name+"Active", "Tablet server conn pool active", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.Active()
 	})
 	stats.NewGaugeFunc(name+"InUse", "Tablet server conn pool in use", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.InUse()
 	})
 	stats.NewGaugeFunc(name+"MaxCap", "Tablet server conn pool max cap", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		// the smartconnpool doesn't have a maximum capacity
 		return pool.Capacity()
 	})
 	stats.NewGaugeFunc(name+"IdleAllowed", "Tablet server conn pool idle allowed limit", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.IdleCount()
 	})
 	stats.NewCounterFunc(name+"WaitCount", "Tablet server conn pool wait count", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.Metrics.WaitCount()
 	})
 	stats.NewCounterDurationFunc(name+"WaitTime", "Tablet server wait time", func() time.Duration {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.Metrics.WaitTime()
 	})
 	stats.NewGaugeDurationFunc(name+"IdleTimeout", "Tablet server idle timeout", func() time.Duration {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.IdleTimeout()
 	})
 	stats.NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.Metrics.IdleClosed()
 	})
 	stats.NewCounterFunc(name+"MaxLifetimeClosed", "Tablet server conn pool refresh closed", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.Metrics.MaxLifetimeClosed()
 	})
 	stats.NewCounterFunc(name+"Get", "Tablet server conn pool get count", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.Metrics.GetCount()
 	})
 	stats.NewCounterFunc(name+"GetSetting", "Tablet server conn pool get with setting count", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.Metrics.GetSettingCount()
 	})
 	stats.NewCounterFunc(name+"DiffSetting", "Number of times pool applied different setting", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.Metrics.DiffSettingCount()
 	})
 	stats.NewCounterFunc(name+"ResetSetting", "Number of times pool reset the setting", func() int64 {
+		pool := se.pool.Load()
+		if pool == nil {
+			return 0
+		}
+
 		return pool.Metrics.ResetSettingCount()
 	})
+
+	return se
+}
+
+func (se *StatsExporter[C]) SetPool(pool *ConnPool[C]) {
+	se.pool.Store(pool)
 }

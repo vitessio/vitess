@@ -37,7 +37,9 @@ import (
 type ConnectionPool struct {
 	*smartconnpool.ConnPool[*DBConnection]
 
-	name string
+	config        smartconnpool.Config[*DBConnection]
+	statsExporter *smartconnpool.StatsExporter[*DBConnection]
+	name          string
 }
 
 // usedNames is for preventing expvar from panicking. Tests
@@ -55,7 +57,7 @@ func NewConnectionPool(name string, stats *servenv.Exporter, capacity int, idleT
 		MaxLifetime:     maxLifetime,
 		RefreshInterval: dnsResolutionFrequency,
 	}
-	cp := &ConnectionPool{ConnPool: smartconnpool.NewPool(&config), name: name}
+	cp := &ConnectionPool{ConnPool: smartconnpool.NewPool(&config), config: config, name: name}
 	if name == "" || usedNames[name] {
 		return cp
 	}
@@ -65,7 +67,10 @@ func NewConnectionPool(name string, stats *servenv.Exporter, capacity int, idleT
 		// This is unnamed exported so it will use the stats functions directly when adding to the expvar.
 		stats = servenv.NewExporter("", "")
 	}
-	cp.ConnPool.RegisterStats(stats, name)
+
+	cp.statsExporter = smartconnpool.NewStatsExporter[*DBConnection](stats, name)
+
+	//	cp.ConnPool.RegisterStats(stats, name)
 	return cp
 }
 
@@ -88,6 +93,12 @@ func (cp *ConnectionPool) Open(info dbconfigs.Connector) {
 	}
 
 	cp.ConnPool.Open(connect, refresh)
+	cp.statsExporter.SetPool(cp.ConnPool)
+}
+
+func (cp *ConnectionPool) Close() {
+	cp.ConnPool.Close()
+	cp.ConnPool = smartconnpool.NewPool(&cp.config)
 }
 
 func (cp *ConnectionPool) Get(ctx context.Context) (*PooledDBConnection, error) {
