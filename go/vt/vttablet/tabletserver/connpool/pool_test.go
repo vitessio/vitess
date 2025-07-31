@@ -126,10 +126,10 @@ func TestConnPoolSetCapacity(t *testing.T) {
 	defer connPool.Close()
 
 	assert.Panics(t, func() {
-		_ = connPool.SetCapacity(context.Background(), -10)
+		connPool.SetCapacity(-10)
 	})
-	err := connPool.SetCapacity(context.Background(), 10)
-	assert.NoError(t, err)
+	connPool.SetCapacity(10)
+
 	if connPool.Capacity() != 10 {
 		t.Fatalf("capacity should be 10")
 	}
@@ -176,13 +176,11 @@ func TestConnPoolMaxIdleCount(t *testing.T) {
 	// changing the pool capacity will affect the idle count allowed for that pool.
 	// If setting the capacity to lower value than max idle count.
 
-	err := connPool.SetCapacity(context.Background(), 4)
-	require.NoError(t, err)
+	connPool.SetCapacity(4)
 	assert.EqualValues(t, 4, connPool.Capacity(), "pool capacity should be 4")
 	assert.EqualValues(t, 2, connPool.IdleCount(), "pool idle count should be 2")
 
-	err = connPool.SetCapacity(context.Background(), 1)
-	require.NoError(t, err)
+	connPool.SetCapacity(1)
 	assert.EqualValues(t, 1, connPool.Capacity(), "pool capacity should be 1")
 	assert.EqualValues(t, 1, connPool.IdleCount(), "pool idle count should be changed to 1")
 }
