@@ -153,6 +153,11 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 		return false
 	}
 
+	// if the pool's generation has changed, it means that the pool has been closed.
+	if conn.generation != conn.pool.generation.Load() {
+		return false
+	}
+
 	// if we have a target to return the connection to, simply write the connection
 	// into the waiter and signal their semaphore. they'll wake up to pick up the
 	// connection.

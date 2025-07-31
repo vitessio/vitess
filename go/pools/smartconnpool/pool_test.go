@@ -164,7 +164,7 @@ func TestOpen(t *testing.T) {
 			resources[i] = r
 		}
 		for i := 0; i < 5; i++ {
-			p.put(resources[i])
+			p.put(resources[i], resources[i].generation)
 		}
 		close(done)
 	}()
@@ -173,7 +173,7 @@ func TestOpen(t *testing.T) {
 		for p.wait.waiting() == 0 {
 			time.Sleep(time.Millisecond)
 		}
-		p.put(resources[i])
+		p.put(resources[i], resources[i].generation)
 	}
 	<-done
 	assert.EqualValues(t, 5, p.Metrics.WaitCount())
@@ -189,7 +189,7 @@ func TestOpen(t *testing.T) {
 	require.NoError(t, err)
 	r.Close()
 	// A nil Put should cause the resource to be reopened.
-	p.put(nil)
+	p.put(nil, p.generation.Load())
 	assert.EqualValues(t, 5, state.open.Load())
 	assert.EqualValues(t, 6, state.lastID.Load())
 
@@ -203,7 +203,7 @@ func TestOpen(t *testing.T) {
 		resources[i] = r
 	}
 	for i := 0; i < 5; i++ {
-		p.put(resources[i])
+		p.put(resources[i], resources[i].generation)
 	}
 	assert.EqualValues(t, 5, state.open.Load())
 	assert.EqualValues(t, 6, state.lastID.Load())
@@ -231,7 +231,7 @@ func TestOpen(t *testing.T) {
 		resources[i] = r
 	}
 	for i := 0; i < 6; i++ {
-		p.put(resources[i])
+		p.put(resources[i], resources[i].generation)
 	}
 	assert.EqualValues(t, 6, state.open.Load())
 	assert.EqualValues(t, 9, state.lastID.Load())
@@ -296,11 +296,11 @@ func TestShrinking(t *testing.T) {
 	}
 	// There are already 2 resources available in the pool.
 	// So, returning one should be enough for SetCapacity to complete.
-	p.put(resources[3])
+	p.put(resources[3], resources[3].generation)
 	<-done
 	// Return the rest of the resources
 	for i := 0; i < 3; i++ {
-		p.put(resources[i])
+		p.put(resources[i], resources[i].generation)
 	}
 	stats := p.StatsJSON()
 	expected = map[string]any{
@@ -334,7 +334,7 @@ func TestShrinking(t *testing.T) {
 	go func() {
 		r, err := p.Get(ctx, nil)
 		require.NoError(t, err)
-		p.put(r)
+		p.put(r, r.generation)
 		done <- true
 	}()
 
@@ -348,7 +348,7 @@ func TestShrinking(t *testing.T) {
 
 	// This should not hang
 	for i := 0; i < 3; i++ {
-		p.put(resources[i])
+		p.put(resources[i], resources[i].generation)
 	}
 	<-done
 	<-done
@@ -376,7 +376,7 @@ func TestShrinking(t *testing.T) {
 	go func() {
 		r, err := p.Get(ctx, nil)
 		require.NoError(t, err)
-		p.put(r)
+		p.put(r, r.generation)
 		done <- true
 	}()
 	time.Sleep(10 * time.Millisecond)
@@ -395,7 +395,7 @@ func TestShrinking(t *testing.T) {
 
 	// This should not hang
 	for i := 0; i < 3; i++ {
-		p.put(resources[i])
+		p.put(resources[i], resources[i].generation)
 	}
 	<-done
 
@@ -440,9 +440,9 @@ func TestClosing(t *testing.T) {
 	stats := p.StatsJSON()
 	expected := map[string]any{
 		"Capacity":          0,
-		"Available":         -5,
-		"Active":            5,
-		"InUse":             5,
+		"Available":         0,
+		"Active":            0,
+		"InUse":             0,
 		"WaitCount":         0,
 		"WaitTime":          time.Duration(0),
 		"IdleTimeout":       1 * time.Second,
@@ -453,7 +453,7 @@ func TestClosing(t *testing.T) {
 
 	// Put is allowed when closing
 	for i := 0; i < 5; i++ {
-		p.put(resources[i])
+		p.put(resources[i], resources[i].generation)
 	}
 
 	// Wait for Close to return
@@ -523,7 +523,7 @@ func TestReopen(t *testing.T) {
 	assert.Truef(t, refreshed.Load(), "did not refresh")
 
 	for i := 0; i < 5; i++ {
-		p.put(resources[i])
+		p.put(resources[i], resources[i].generation)
 	}
 	time.Sleep(50 * time.Millisecond)
 	stats = p.StatsJSON()
@@ -560,27 +560,82 @@ func TestUserClosing(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	for _, r := range resources[:4] {
-		r.Recycle()
-	}
+	// Put some connections back in the pool
+	resources[0].Recycle()
+	resources[1].Recycle()
+	resources[2].Recycle()
 
-	ch := make(chan error)
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		defer cancel()
+	assert.Equal(t, map[string]any{
+		"Capacity":          5,
+		"Available":         3,
+		"Active":            5,
+		"InUse":             2,
+		"WaitCount":         0,
+		"WaitTime":          time.Duration(0),
+		"IdleTimeout":       1 * time.Second,
+		"IdleClosed":        0,
+		"MaxLifetimeClosed": 0,
+	}, p.StatsJSON())
 
-		err := p.CloseWithContext(ctx)
-		ch <- err
-		close(ch)
-	}()
+	// Close the pool. This will bump the generation number and thus "unlink"
+	// any connections that haven't been put back yet.
+	p.Close()
 
-	select {
-	case <-time.After(5 * time.Second):
-		t.Fatalf("Pool did not shutdown after 5s")
-	case err := <-ch:
-		require.Error(t, err)
-		t.Logf("Shutdown error: %v", err)
-	}
+	assert.Equal(t, map[string]any{
+		"Capacity":          0,
+		"Available":         0,
+		"Active":            0,
+		"InUse":             0,
+		"WaitCount":         0,
+		"WaitTime":          time.Duration(0),
+		"IdleTimeout":       1 * time.Second,
+		"IdleClosed":        0,
+		"MaxLifetimeClosed": 0,
+	}, p.StatsJSON())
+
+	// Put another connection back in the pool.
+	resources[3].Recycle()
+
+	assert.Equal(t, map[string]any{
+		"Capacity":          0,
+		"Available":         0,
+		"Active":            0,
+		"InUse":             0,
+		"WaitCount":         0,
+		"WaitTime":          time.Duration(0),
+		"IdleTimeout":       1 * time.Second,
+		"IdleClosed":        0,
+		"MaxLifetimeClosed": 0,
+	}, p.StatsJSON())
+
+	// Reopen the pool.
+	p.Open(newConnector(&state), nil)
+
+	assert.Equal(t, map[string]any{
+		"Capacity":          5,
+		"Available":         5,
+		"Active":            0,
+		"InUse":             0,
+		"WaitCount":         0,
+		"WaitTime":          time.Duration(0),
+		"IdleTimeout":       1 * time.Second,
+		"IdleClosed":        0,
+		"MaxLifetimeClosed": 0,
+	}, p.StatsJSON())
+
+	resources[4].Recycle()
+
+	assert.Equal(t, map[string]any{
+		"Capacity":          5,
+		"Available":         5,
+		"Active":            0,
+		"InUse":             0,
+		"WaitCount":         0,
+		"WaitTime":          time.Duration(0),
+		"IdleTimeout":       1 * time.Second,
+		"IdleClosed":        0,
+		"MaxLifetimeClosed": 0,
+	}, p.StatsJSON())
 }
 
 func TestConnReopen(t *testing.T) {
@@ -603,7 +658,7 @@ func TestConnReopen(t *testing.T) {
 	// wait enough to reach maxlifetime.
 	time.Sleep(50 * time.Millisecond)
 
-	p.put(conn)
+	p.put(conn, conn.generation)
 	assert.EqualValues(t, 2, state.lastID.Load())
 	assert.EqualValues(t, 1, p.Active())
 
@@ -653,7 +708,7 @@ func TestIdleTimeout(t *testing.T) {
 		for _, conn := range conns {
 			assert.Falsef(t, conn.Conn.IsClosed(), "connection was idle-closed while outside the pool")
 			closers = append(closers, conn.Conn.waitForClose())
-			p.put(conn)
+			p.put(conn, conn.generation)
 		}
 
 		time.Sleep(1 * time.Second)
@@ -700,7 +755,7 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 		// to prevent race with the idle closer, who will
 		// try to use it.
 		state.chaos.failConnect.Store(true)
-		p.put(r)
+		p.put(r, r.generation)
 		timeout := time.After(1 * time.Second)
 		for p.Active() != 0 {
 			select {
@@ -731,7 +786,7 @@ func TestMaxLifetime(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	p.put(r)
+	p.put(r, r.generation)
 	assert.EqualValues(t, 1, state.lastID.Load())
 	assert.EqualValues(t, 1, state.open.Load())
 	assert.EqualValues(t, 0, p.Metrics.MaxLifetimeClosed())
@@ -756,7 +811,7 @@ func TestMaxLifetime(t *testing.T) {
 
 	time.Sleep(5 * time.Millisecond)
 
-	p.put(r)
+	p.put(r, r.generation)
 	assert.EqualValues(t, 1, state.lastID.Load())
 	assert.EqualValues(t, 1, state.open.Load())
 	assert.EqualValues(t, 0, p.Metrics.MaxLifetimeClosed())
@@ -768,7 +823,7 @@ func TestMaxLifetime(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond * 2)
 
-	p.put(r)
+	p.put(r, r.generation)
 	assert.EqualValues(t, 2, state.lastID.Load())
 	assert.EqualValues(t, 1, state.open.Load())
 	assert.EqualValues(t, 1, p.Metrics.MaxLifetimeClosed())
@@ -825,7 +880,7 @@ func TestMaxIdleCount(t *testing.T) {
 		}
 
 		for _, conn := range conns {
-			p.put(conn)
+			p.put(conn, conn.generation)
 		}
 
 		closedConn := 0
@@ -894,7 +949,7 @@ func TestCreateFailOnPut(t *testing.T) {
 
 		// change factory to fail the put.
 		state.chaos.failConnect.Store(true)
-		p.put(nil)
+		p.put(nil, p.generation.Load())
 		assert.Zero(t, p.Active())
 
 		// change back for next iteration.
@@ -939,10 +994,10 @@ func TestSlowCreateFail(t *testing.T) {
 		conn, err := p.Get(ctx, setting)
 		require.NoError(t, err)
 
-		p.put(conn)
+		p.put(conn, conn.generation)
 		conn = <-ch
 		assert.NotNil(t, conn)
-		p.put(conn)
+		p.put(conn, conn.generation)
 		p.Close()
 	}
 }
@@ -973,7 +1028,7 @@ func TestTimeout(t *testing.T) {
 	}
 
 	// put the connection take was taken initially.
-	p.put(r)
+	p.put(r, r.generation)
 }
 
 func TestExpired(t *testing.T) {
@@ -1034,14 +1089,14 @@ func TestMultiSettings(t *testing.T) {
 			resources[i] = r
 		}
 		for i := 0; i < 5; i++ {
-			p.put(resources[i])
+			p.put(resources[i], resources[i].generation)
 		}
 		ch <- true
 	}()
 	for i := 0; i < 5; i++ {
 		// Sleep to ensure the goroutine waits
 		time.Sleep(10 * time.Millisecond)
-		p.put(resources[i])
+		p.put(resources[i], resources[i].generation)
 	}
 	<-ch
 	assert.EqualValues(t, 5, p.Metrics.WaitCount())
@@ -1088,7 +1143,7 @@ func TestMultiSettingsWithReset(t *testing.T) {
 
 	// Put all of them back
 	for i := 0; i < 5; i++ {
-		p.put(resources[i])
+		p.put(resources[i], resources[i].generation)
 	}
 
 	// Getting all with same setting.
@@ -1104,7 +1159,7 @@ func TestMultiSettingsWithReset(t *testing.T) {
 	assert.EqualValues(t, 5, state.open.Load())
 
 	for i := 0; i < 5; i++ {
-		p.put(resources[i])
+		p.put(resources[i], resources[i].generation)
 	}
 
 	// Close
@@ -1138,7 +1193,7 @@ func TestApplySettingsFailure(t *testing.T) {
 	}
 	// put them back
 	for _, r = range resources {
-		p.put(r)
+		p.put(r, r.generation)
 	}
 
 	// any new connection created will fail to apply setting
@@ -1160,7 +1215,7 @@ func TestApplySettingsFailure(t *testing.T) {
 	}
 	// put them back
 	for _, r = range resources {
-		p.put(r)
+		p.put(r, r.generation)
 	}
 	require.Equal(t, 3, failCount)
 
@@ -1173,7 +1228,7 @@ func TestApplySettingsFailure(t *testing.T) {
 	}
 	// put them back
 	for _, r = range resources {
-		p.put(r)
+		p.put(r, r.generation)
 	}
 }
 
@@ -1204,7 +1259,7 @@ func TestGetSpike(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
-		p.put(resources[i])
+		p.put(resources[i], resources[i].generation)
 	}
 
 	assert.EqualValues(t, 5, p.Available())
@@ -1225,7 +1280,7 @@ func TestGetSpike(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				r, err := p.Get(ctx, nil)
-				defer p.put(r)
+				defer p.put(r, r.generation)
 
 				if err != nil {
 					errs <- err
