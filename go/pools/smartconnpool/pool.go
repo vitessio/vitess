@@ -592,9 +592,7 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	// to other clients, wait until one of the connections is returned
 	if conn == nil {
 		start := time.Now()
-		conn, err = pool.wait.waitForConn(ctx, nil, func() bool {
-			return pool.capacity.Load() == 0
-		})
+		conn, err = pool.wait.waitForConn(ctx, nil)
 		if err != nil {
 			return nil, ErrTimeout
 		}
@@ -651,9 +649,7 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 	// wait for one of them
 	if conn == nil {
 		start := time.Now()
-		conn, err = pool.wait.waitForConn(ctx, setting, func() bool {
-			return pool.capacity.Load() == 0
-		})
+		conn, err = pool.wait.waitForConn(ctx, setting)
 		if err != nil {
 			return nil, ErrTimeout
 		}
