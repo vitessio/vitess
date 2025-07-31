@@ -533,8 +533,29 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 func testStop(t *testing.T, ksWorkflow, cells string) {
 	t.Run("Stop", func(t *testing.T) {
 		// Create a new VDiff and immediately stop it.
+<<<<<<< HEAD
 		uuid, _ := performVDiff2Action(t, false, ksWorkflow, cells, "create", "", false)
 		_, _ = performVDiff2Action(t, false, ksWorkflow, cells, "stop", uuid, false)
+=======
+		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false)
+
+		// Ensure the state to be either completed or started
+		isStartedOrCompleted := false
+		maxRetries := 5
+		for i := 1; i <= maxRetries; i++ {
+			_, output := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
+			jsonOutput := getVDiffInfo(output)
+			isStartedOrCompleted = jsonOutput.State == "started" || jsonOutput.State == "completed"
+			if isStartedOrCompleted || i == maxRetries {
+				break
+			}
+			t.Logf("VDiff state expected to be started or completed, got: %s, retrying (attempt %d of %d)", jsonOutput.State, i, maxRetries)
+			time.Sleep(vdiffRetryInterval)
+		}
+		require.True(t, isStartedOrCompleted, "VDiff state should either be started or completed")
+
+		_, _ = performVDiff2Action(t, ksWorkflow, cells, "stop", uuid, false)
+>>>>>>> 7dd3c6b550 (CI: Fix `VDiff2` flaky e2e test (#18494))
 		// Confirm the VDiff is in the expected state.
 		_, output := performVDiff2Action(t, false, ksWorkflow, cells, "show", uuid, false)
 		jsonOutput := getVDiffInfo(output)
