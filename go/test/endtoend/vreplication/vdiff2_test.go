@@ -541,6 +541,22 @@ func testStop(t *testing.T, ksWorkflow, cells string) {
 	t.Run("Stop", func(t *testing.T) {
 		// Create a new VDiff and immediately stop it.
 		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false)
+
+		// Ensure the state to be either completed or started
+		isStartedOrCompleted := false
+		maxRetries := 5
+		for i := 1; i <= maxRetries; i++ {
+			_, output := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
+			jsonOutput := getVDiffInfo(output)
+			isStartedOrCompleted = jsonOutput.State == "started" || jsonOutput.State == "completed"
+			if isStartedOrCompleted || i == maxRetries {
+				break
+			}
+			t.Logf("VDiff state expected to be started or completed, got: %s, retrying (attempt %d of %d)", jsonOutput.State, i, maxRetries)
+			time.Sleep(vdiffRetryInterval)
+		}
+		require.True(t, isStartedOrCompleted, "VDiff state should either be started or completed")
+
 		_, _ = performVDiff2Action(t, ksWorkflow, cells, "stop", uuid, false)
 		// Confirm the VDiff is in the expected state.
 		_, output := performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
