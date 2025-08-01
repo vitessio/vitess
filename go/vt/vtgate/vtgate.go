@@ -438,7 +438,7 @@ func (vtg *VTGate) registerDebugHealthHandler() {
 }
 
 func (vtg *VTGate) registerDebugBalancerHandler() {
-	servenv.HTTPHandleFunc("/debug/balancer", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/debug/balancer", func(w http.ResponseWriter, r *http.Request) {
 		vtg.Gateway().DebugBalancerHandler(w, r)
 	})
 }
