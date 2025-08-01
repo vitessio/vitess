@@ -30,39 +30,41 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
 // queueItem represents an item in the discovery.Queue.
 type queueItem struct {
-	Key      string
-	PushedAt time.Time
+	TabletAlias *topodatapb.TabletAlias
+	PushedAt    time.Time
 }
 
 // Queue is an ordered queue with deduplication.
 type Queue struct {
 	mu       sync.Mutex
-	enqueued map[string]struct{}
+	enqueued map[*topodatapb.TabletAlias]struct{}
 	queue    chan queueItem
 }
 
 // NewQueue creates a new queue.
 func NewQueue() *Queue {
 	return &Queue{
-		enqueued: make(map[string]struct{}),
+		enqueued: make(map[*topodatapb.TabletAlias]struct{}),
 		queue:    make(chan queueItem, config.DiscoveryQueueCapacity),
 	}
 }
 
-// setKeyCheckEnqueued returns true if a key is already enqueued, if
-// not the key will be marked as enqueued and false is returned.
-func (q *Queue) setKeyCheckEnqueued(key string) (alreadyEnqueued bool) {
+// checkAndSetEnqueued returns true if a tablet alias is already enqueued, if
+// not the tablet alias will be marked as enqueued and false is returned.
+func (q *Queue) checkAndSetEnqueued(tabletAlias *topodatapb.TabletAlias) (alreadyEnqueued bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	_, alreadyEnqueued = q.enqueued[key]
+	_, alreadyEnqueued = q.enqueued[tabletAlias]
 	if !alreadyEnqueued {
-		q.enqueued[key] = struct{}{}
+		q.enqueued[tabletAlias] = struct{}{}
 	}
 	return alreadyEnqueued
 }
@@ -75,36 +77,42 @@ func (q *Queue) QueueLen() int {
 	return len(q.enqueued)
 }
 
-// Push enqueues a key if it is not on a queue and is not being
+// Push enqueues a tablet alias if it is not on a queue and is not being
 // processed; silently returns otherwise.
-func (q *Queue) Push(key string) {
-	if q.setKeyCheckEnqueued(key) {
+func (q *Queue) Push(tabletAlias *topodatapb.TabletAlias) {
+	if tabletAlias == nil {
+		return
+	}
+	if q.checkAndSetEnqueued(tabletAlias) {
 		return
 	}
 	q.queue <- queueItem{
-		Key:      key,
-		PushedAt: time.Now(),
+		TabletAlias: tabletAlias,
+		PushedAt:    time.Now(),
 	}
 }
 
-// Consume fetches a key to process; blocks if queue is empty.
+// Consume fetches a tablet alias to process; blocks if queue is empty.
 // Release must be called once after Consume.
-func (q *Queue) Consume() string {
+func (q *Queue) Consume() *topodatapb.TabletAlias {
 	item := <-q.queue
 
 	timeOnQueue := time.Since(item.PushedAt)
 	if timeOnQueue > config.GetInstancePollTime() {
-		log.Warningf("key %v spent %.4fs waiting on a discovery queue", item.Key, timeOnQueue.Seconds())
+		log.Warningf("tablet %v spent %.4fs waiting on a discovery queue",
+			topoproto.TabletAliasString(item.TabletAlias),
+			timeOnQueue.Seconds(),
+		)
 	}
 
-	return item.Key
+	return item.TabletAlias
 }
 
-// Release removes a key from a list of being processed keys
-// which allows that key to be pushed into the queue again.
-func (q *Queue) Release(key string) {
+// Release removes a tablet alias from a list of being processed aliases
+// which allows that tablet to be pushed into the queue again.
+func (q *Queue) Release(tabletAlias *topodatapb.TabletAlias) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	delete(q.enqueued, key)
+	delete(q.enqueued, tabletAlias)
 }

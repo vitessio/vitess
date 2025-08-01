@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -43,7 +44,11 @@ func ReadShardNames(keyspaceName string) (shardNames []string, err error) {
 }
 
 // ReadShardPrimaryInformation reads the vitess shard record and gets the shard primary alias and timestamp.
-func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias string, primaryTimestamp time.Time, err error) {
+func ReadShardPrimaryInformation(keyspaceName, shardName string) (
+	primaryAlias *topodatapb.TabletAlias,
+	primaryTimestamp time.Time,
+	err error,
+) {
 	if err = topo.ValidateKeyspaceName(keyspaceName); err != nil {
 		return
 	}
@@ -60,9 +65,14 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (primaryAlias s
 			AND shard = ?`
 	args := sqlutils.Args(keyspaceName, shardName)
 	shardFound := false
-	err = db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
+	err = db.QueryVTOrc(query, args, func(row sqlutils.RowMap) (err error) {
 		shardFound = true
-		primaryAlias = row.GetString("primary_alias")
+		if primaryAliasStr := row.GetString("primary_alias"); primaryAliasStr != "" {
+			primaryAlias, err = topoproto.ParseTabletAlias(primaryAliasStr)
+			if err != nil {
+				return err
+			}
+		}
 		primaryTimestamp = row.GetTime("primary_timestamp")
 		return nil
 	})
