@@ -59,7 +59,7 @@ const (
 	sqlHasVReplicationWorkflows   = "select if(count(*) > 0, 1, 0) as has_workflows from %s.vreplication where db_name = %a"
 	// Read all VReplication workflows. The final format specifier is used to
 	// optionally add any additional predicates to the query.
-	sqlReadVReplicationWorkflows = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from %s.vreplication where db_name = %a%s group by workflow, id order by workflow, id"
+	sqlReadVReplicationWorkflows = "select workflow, id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from %s.vreplication where db_name = %a%s order by workflow, id"
 	// Read a VReplication workflow.
 	sqlReadVReplicationWorkflow = "select id, source, pos, stop_pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, message, db_name, rows_copied, tags, time_heartbeat, workflow_type, time_throttled, component_throttled, workflow_sub_type, defer_secondary_keys, options from %s.vreplication where workflow = %a and db_name = %a"
 	// Delete VReplication records for the given workflow.
@@ -766,10 +766,22 @@ func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, sm *tabletmana
 }
 
 func (tm *TabletManager) UpdateSequenceTables(ctx context.Context, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+	sequenceTables := make([]string, 0, len(req.Sequences))
 	for _, sm := range req.Sequences {
 		if err := tm.updateSequenceValue(ctx, sm); err != nil {
 			return nil, err
 		}
+		sequenceTables = append(sequenceTables, sm.BackingTableName)
+	}
+
+	// It is important to reset in-memory sequence counters on the tables,
+	// since it is possible for it to be outdated, this will prevent duplicate
+	// key errors.
+	err := tm.ResetSequences(ctx, sequenceTables)
+	if err != nil {
+		return nil, vterrors.Errorf(
+			vtrpcpb.Code_INTERNAL, "failed to reset sequences on %q: %v",
+			tm.DBConfigs.DBName, err)
 	}
 	return &tabletmanagerdatapb.UpdateSequenceTablesResponse{}, nil
 }

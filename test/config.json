@@ -741,6 +741,15 @@
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_query_serving_schema"]
 		},
+		"vtgate_schematracker_viewsdisabled": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/schematracker/viewsdisabled", "-timeout", "20m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_schema_tracker",
+			"RetryMax": 1,
+			"Tags": ["upgrade_downgrade_query_serving_schema"]
+		},
 		"vtgate_mysql80": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/mysql80"],
@@ -1203,6 +1212,15 @@
 		"vreplication_partial_movetables_sequences": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestPartialMoveTablesWithSequences"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_partial_movetables_and_materialize",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_sequence_reset_on_switch_traffic": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestSequenceResetOnSwitchTraffic"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_partial_movetables_and_materialize",

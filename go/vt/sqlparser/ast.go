@@ -572,15 +572,20 @@ type (
 		IfExists bool
 	}
 
+	// IgnoreOrReplaceType represents conflict handling mode for CREATE TABLE ... SELECT
+	IgnoreOrReplaceType int8
+
 	// CreateTable represents a CREATE TABLE statement.
 	CreateTable struct {
-		Temp        bool
-		Table       TableName
-		IfNotExists bool
-		TableSpec   *TableSpec
-		OptLike     *OptLike
-		Comments    *ParsedComments
-		FullyParsed bool
+		Temp            bool
+		Table           TableName
+		IfNotExists     bool
+		TableSpec       *TableSpec
+		OptLike         *OptLike
+		Comments        *ParsedComments
+		IgnoreOrReplace IgnoreOrReplaceType
+		Select          TableStatement
+		FullyParsed     bool
 	}
 
 	// CreateView represents a CREATE VIEW query
