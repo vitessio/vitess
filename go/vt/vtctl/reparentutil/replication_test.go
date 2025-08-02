@@ -1502,3 +1502,62 @@ func TestWaitForRelayLogsToApply(t *testing.T) {
 		})
 	}
 }
+
+func TestRelayLogPositions_AtLeast(t *testing.T) {
+	gtidSet1, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	gtidSet2, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	gtidSet3, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3")
+	gtidSet4, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-2")
+
+	rlp := RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet1},
+		Executed: replication.Position{GTIDSet: gtidSet3},
+	}
+
+	// rlp is equal
+	assert.True(t, rlp.AtLeast(RelayLogPositions{
+		Combined: replication.Position{GTIDSet: rlp.Combined.GTIDSet},
+		Executed: replication.Position{GTIDSet: rlp.Executed.GTIDSet},
+	}))
+
+	// rlp is less advanced
+	assert.False(t, rlp.AtLeast(RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet1},
+		Executed: replication.Position{GTIDSet: gtidSet2},
+	}))
+
+	// rlp is more advanced
+	assert.True(t, rlp.AtLeast(RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet2},
+		Executed: replication.Position{GTIDSet: gtidSet4},
+	}))
+}
+
+func TestRelayLogPositions_Equal(t *testing.T) {
+	gtidSet1, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	gtidSet2, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	gtidSet3, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3")
+
+	rlp := RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet1},
+		Executed: replication.Position{GTIDSet: gtidSet2},
+	}
+
+	// rlp is not equal
+	assert.False(t, rlp.Equal(RelayLogPositions{
+		Combined: replication.Position{GTIDSet: gtidSet2},
+		Executed: replication.Position{GTIDSet: gtidSet3},
+	}))
+
+	// rlp is partially equal
+	assert.False(t, rlp.Equal(RelayLogPositions{
+		Combined: replication.Position{GTIDSet: rlp.Combined.GTIDSet},
+		Executed: replication.Position{GTIDSet: gtidSet3},
+	}))
+
+	// rlp is equal
+	assert.True(t, rlp.Equal(RelayLogPositions{
+		Combined: replication.Position{GTIDSet: rlp.Combined.GTIDSet},
+		Executed: replication.Position{GTIDSet: rlp.Executed.GTIDSet},
+	}))
+}
