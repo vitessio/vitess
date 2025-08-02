@@ -55,6 +55,9 @@ type RelayLogPositions struct {
 // AtLeast returns true if the RelayLogPositions object contains at
 // least the positions provided as pos.
 func (rlp *RelayLogPositions) AtLeast(pos RelayLogPositions) bool {
+	if rlp.Combined.IsZero() || pos.Combined.IsZero() {
+		return rlp.Executed.AtLeast(pos.Executed)
+	}
 	atLeast := rlp.Combined.AtLeast(pos.Combined)
 	if atLeast && !rlp.Executed.IsZero() {
 		return rlp.Executed.AtLeast(pos.Executed)
