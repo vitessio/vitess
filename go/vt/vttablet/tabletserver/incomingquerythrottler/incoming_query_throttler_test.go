@@ -51,16 +51,6 @@ func TestSelectThrottlingStrategy(t *testing.T) {
 		giveThrottlingStrategy ThrottlingStrategy
 		expectedType           ThrottlingStrategyHandler
 	}{
-		//{
-		//	name:                   "TabletThrottler strategy selected",
-		//	giveThrottlingStrategy: ThrottlingStrategyTabletThrottler,
-		//	expectedType:           &TabletThrottlerStrategy{},
-		//},
-		{
-			name:                   "Cinnamon strategy selected",
-			giveThrottlingStrategy: ThrottlingStrategyCinnamon,
-			expectedType:           &CinnamonStrategy{},
-		},
 		{
 			name:                   "Unknown strategy defaults to NoOp",
 			giveThrottlingStrategy: "some-unknown-string",

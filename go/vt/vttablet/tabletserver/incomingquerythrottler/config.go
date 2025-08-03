@@ -11,11 +11,6 @@ const (
 	// Reference: https://vitess.io/docs/21.0/reference/features/tablet-throttler/
 	ThrottlingStrategyTabletThrottler ThrottlingStrategy = "TabletThrottler"
 
-	// ThrottlingStrategyCinnamon uses Uber's Cinnamon load-shedding system
-	// to regulate incoming queries under high load conditions.
-	// Reference: https://www.uber.com/en-IN/blog/cinnamon-using-century-old-tech-to-build-a-mean-load-shedder/
-	ThrottlingStrategyCinnamon ThrottlingStrategy = "Cinnamon"
-
 	// ThrottlingStrategyUnknown is used when the strategy is not known.
 	ThrottlingStrategyUnknown ThrottlingStrategy = "Unknown"
 )
