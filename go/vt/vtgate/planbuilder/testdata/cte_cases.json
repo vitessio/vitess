@@ -396,7 +396,7 @@
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), any_value(2)",
+                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), constant_aggr(1) AS 1",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -1977,7 +1977,7 @@
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "any_value(0), sum(1) AS sum(num)",
+                    "Aggregates": "constant_aggr(1000) AS 1000, sum(1) AS sum(num)",
                     "Inputs": [
                       {
                         "OperatorType": "Projection",

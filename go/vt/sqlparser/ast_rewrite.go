@@ -3254,6 +3254,15 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfCreateTableSelect))
+	}
+	if !a.rewriteTableStatement(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*CreateTable).Select = newNode.(TableStatement)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer

@@ -26,6 +26,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -67,6 +68,7 @@ type QueryLogConfig struct {
 	Format               string
 	Mode                 string
 	RowThreshold         uint64
+	TimeThreshold        time.Duration
 	sampleRate           float64
 }
 
@@ -103,6 +105,9 @@ func registerStreamLogFlags(fs *pflag.FlagSet) {
 
 	// QueryLogRowThreshold only log queries returning or affecting this many rows
 	fs.Uint64Var(&queryLogConfigInstance.RowThreshold, "querylog-row-threshold", queryLogConfigInstance.RowThreshold, "Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.")
+
+	// QueryLogTimeThreshold only log queries with execution time over the time duration threshold
+	fs.DurationVar(&queryLogConfigInstance.TimeThreshold, "querylog-time-threshold", queryLogConfigInstance.TimeThreshold, "Execution time duration a query needs to run over before being logged; time duration expressed in the form recognized by time.ParseDuration; not useful for streaming queries.")
 
 	// QueryLogSampleRate causes a sample of queries to be logged
 	fs.Float64Var(&queryLogConfigInstance.sampleRate, "querylog-sample-rate", queryLogConfigInstance.sampleRate, "Sample rate for logging queries. Value must be between 0.0 (no logging) and 1.0 (all queries)")
@@ -266,11 +271,14 @@ func (qlConfig QueryLogConfig) shouldSampleQuery() bool {
 
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
-func (qlConfig QueryLogConfig) ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64, hasError bool) bool {
+func (qlConfig QueryLogConfig) ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64, totalTime time.Duration, hasError bool) bool {
 	if qlConfig.shouldSampleQuery() {
 		return true
 	}
 	if qlConfig.RowThreshold > max(rowsAffected, rowsReturned) && qlConfig.FilterTag == "" {
+		return false
+	}
+	if qlConfig.TimeThreshold > totalTime && qlConfig.TimeThreshold > 0 && qlConfig.FilterTag == "" {
 		return false
 	}
 	if qlConfig.FilterTag != "" {
