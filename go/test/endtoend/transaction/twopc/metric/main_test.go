@@ -70,7 +70,7 @@ func TestMain(m *testing.M) {
 			utils.GetFlagVariantForTests("--grpc-use-effective-callerid"),
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			"--twopc_abandon_age", "1",
+			utils.GetFlagVariantForTests("--twopc-abandon-age"), "1",
 			"--queryserver-config-transaction-cap", "100",
 		)
 
