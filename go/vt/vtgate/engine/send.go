@@ -140,7 +140,7 @@ func (s *Send) checkAndReturnShards(ctx context.Context, vcursor VCursor) ([]*sr
 
 func (s *Send) canAutoCommit(vcursor VCursor, rss []*srvtopo.ResolvedShard) bool {
 	if s.IsDML {
-		return (len(rss) == 1 || s.MultishardAutocommit) && vcursor.AutocommitApproval()
+		return (len(rss) == 1 || vcursor.DefaultMultiShardAutocommit() || s.MultishardAutocommit) && vcursor.AutocommitApproval()
 	}
 	return false
 }

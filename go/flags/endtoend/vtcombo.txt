@@ -108,6 +108,7 @@ Flags:
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --dbddl_plugin string                                              controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service (default "fail")
       --ddl_strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
+      --default-multi-shard-autocommit                                   By default execute multi-shard DML statements with autocommit, even without the MULTI_SHARD_AUTOCOMMIT directive
       --default_tablet_type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --degraded_threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
       --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.

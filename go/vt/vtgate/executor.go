@@ -124,6 +124,9 @@ type Executor struct {
 
 	warmingReadsPercent int
 	warmingReadsChannel chan bool
+
+	// defaultMultiShardAutocommit will opt into autocommit semantics even for multi shard DMLs
+	defaultMultiShardAutocommit bool
 }
 
 var executorOnce sync.Once
@@ -155,23 +158,25 @@ func NewExecutor(
 	noScatter bool,
 	pv plancontext.PlannerVersion,
 	warmingReadsPercent int,
+	defaultMultiShardAutocommit bool,
 ) *Executor {
 	e := &Executor{
-		env:                 env,
-		serv:                serv,
-		cell:                cell,
-		resolver:            resolver,
-		scatterConn:         resolver.scatterConn,
-		txConn:              resolver.scatterConn.txConn,
-		normalize:           normalize,
-		warnShardedOnly:     warnOnShardedOnly,
-		streamSize:          streamSize,
-		schemaTracker:       schemaTracker,
-		allowScatter:        !noScatter,
-		pv:                  pv,
-		plans:               plans,
-		warmingReadsPercent: warmingReadsPercent,
-		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
+		env:                         env,
+		serv:                        serv,
+		cell:                        cell,
+		resolver:                    resolver,
+		scatterConn:                 resolver.scatterConn,
+		txConn:                      resolver.scatterConn.txConn,
+		normalize:                   normalize,
+		warnShardedOnly:             warnOnShardedOnly,
+		streamSize:                  streamSize,
+		schemaTracker:               schemaTracker,
+		allowScatter:                !noScatter,
+		pv:                          pv,
+		plans:                       plans,
+		warmingReadsPercent:         warmingReadsPercent,
+		warmingReadsChannel:         make(chan bool, warmingReadsConcurrency),
+		defaultMultiShardAutocommit: defaultMultiShardAutocommit,
 	}
 
 	vschemaacl.Init()

@@ -51,6 +51,7 @@ Flags:
       --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
       --dbddl_plugin string                                              controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service (default "fail")
       --ddl_strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
+      --default-multi-shard-autocommit                                   By default execute multi-shard DML statements with autocommit, even without the MULTI_SHARD_AUTOCOMMIT directive
       --default_tablet_type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
       --discovery_high_replication_lag_minimum_serving duration          Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag. (default 2h0m0s)
       --discovery_low_replication_lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)

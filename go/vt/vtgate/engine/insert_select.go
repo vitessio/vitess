@@ -201,7 +201,7 @@ func (ins *InsertSelect) executeInsertQueries(
 	queries []*querypb.BoundQuery,
 	insertID uint64,
 ) (*sqltypes.Result, error) {
-	autocommit := (len(rss) == 1 || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
+	autocommit := (len(rss) == 1 || vcursor.DefaultMultiShardAutocommit() || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	err := allowOnlyPrimary(rss...)
 	if err != nil {
 		return nil, err

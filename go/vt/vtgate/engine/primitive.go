@@ -131,6 +131,9 @@ type (
 
 		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas
 		CloneForReplicaWarming(ctx context.Context) VCursor
+
+		// DefaultMultiShardAutocommit returns true if multi shard autocommit semantics are enabled by default
+		DefaultMultiShardAutocommit() bool
 	}
 
 	// SessionActions gives primitives ability to interact with the session state

@@ -122,8 +122,9 @@ type vcursorImpl struct {
 	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 	pv       plancontext.PlannerVersion
 
-	warmingReadsPercent int
-	warmingReadsChannel chan bool
+	warmingReadsPercent         int
+	warmingReadsChannel         chan bool
+	defaultMultiShardAutocommit bool
 }
 
 // newVcursorImpl creates a vcursorImpl. Before creating this object, you have to separate out any marginComments that came with
@@ -173,24 +174,26 @@ func newVCursorImpl(
 	if executor != nil {
 		warmingReadsPct = executor.warmingReadsPercent
 		warmingReadsChan = executor.warmingReadsChannel
+		defaultMultiShardAutocommit = executor.defaultMultiShardAutocommit
 	}
 	return &vcursorImpl{
-		safeSession:         safeSession,
-		keyspace:            keyspace,
-		tabletType:          tabletType,
-		destination:         destination,
-		marginComments:      marginComments,
-		executor:            executor,
-		logStats:            logStats,
-		collation:           connCollation,
-		resolver:            resolver,
-		vschema:             vschema,
-		vm:                  vm,
-		topoServer:          ts,
-		warnShardedOnly:     warnShardedOnly,
-		pv:                  pv,
-		warmingReadsPercent: warmingReadsPct,
-		warmingReadsChannel: warmingReadsChan,
+		safeSession:                 safeSession,
+		keyspace:                    keyspace,
+		tabletType:                  tabletType,
+		destination:                 destination,
+		marginComments:              marginComments,
+		executor:                    executor,
+		logStats:                    logStats,
+		collation:                   connCollation,
+		resolver:                    resolver,
+		vschema:                     vschema,
+		vm:                          vm,
+		topoServer:                  ts,
+		warnShardedOnly:             warnShardedOnly,
+		pv:                          pv,
+		warmingReadsPercent:         warmingReadsPct,
+		warmingReadsChannel:         warmingReadsChan,
+		defaultMultiShardAutocommit: defaultMultiShardAutocommit,
 	}, nil
 }
 
@@ -1368,4 +1371,8 @@ func (vc *vcursorImpl) UpdateForeignKeyChecksState(fkStateFromQuery *bool) {
 // GetForeignKeyChecksState gets the stored foreign key checks state in the vcursor.
 func (vc *vcursorImpl) GetForeignKeyChecksState() *bool {
 	return vc.fkChecksState
+}
+
+func (vc *vcursorImpl) DefaultMultiShardAutocommit() bool {
+	return vc.defaultMultiShardAutocommit
 }

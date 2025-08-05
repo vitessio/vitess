@@ -130,7 +130,7 @@ func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
 }
 
 func execMultiShard(ctx context.Context, primitive Primitive, vcursor VCursor, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, multiShardAutoCommit bool) (*sqltypes.Result, error) {
-	autocommit := (len(rss) == 1 || multiShardAutoCommit) && vcursor.AutocommitApproval()
+	autocommit := (len(rss) == 1 || multiShardAutoCommit || vcursor.DefaultMultiShardAutocommit()) && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard(ctx, primitive, rss, queries, true /* rollbackOnError */, autocommit)
 	return result, vterrors.Aggregate(errs)
 }
