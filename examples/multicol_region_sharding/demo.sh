@@ -82,10 +82,10 @@ echo "STEP 5: Single Shard Targeting"
 echo "=================================================="
 echo "First, let's see how specific customer queries target single shards:"
 
-echo "Query 5A: Find specific customer by country_id + id (targets single shard)"
+echo "Query 5A: Find specific customer by country_id + id (targets Europe shard → country_id=75)"
 demo_cmd "mysql -h 127.0.0.1 -P 15306 -e \"USE main; SELECT country_id, id, email, 'Single shard target' as targeting FROM customer WHERE country_id = 75 AND id = 202;\""
 
-echo "Query 5B: Find another specific customer (different shard)"
+echo "Query 5B: Find another specific customer (targets APAC shard → country_id=135)"
 demo_cmd "mysql -h 127.0.0.1 -P 15306 -e \"USE main; SELECT country_id, id, email, 'Single shard target' as targeting FROM customer WHERE country_id = 135 AND id = 301;\""
 
 echo "Query 5C: Find customer in MEA region (yet another shard)"
