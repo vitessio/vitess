@@ -1,0 +1,23 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "country_multicol": {
+      "type": "multicol",
+      "params": {
+        "column_count": "2",
+        "column_bytes": "1,7",
+        "column_vindex": "binary,hash"
+      }
+    }
+  },
+  "tables": {
+    "customer": {
+      "column_vindexes": [
+        {
+          "columns": ["country_id", "id"],
+          "name": "country_multicol"
+        }
+      ]
+    }
+  }
+}

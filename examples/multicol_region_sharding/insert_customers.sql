@@ -1,0 +1,32 @@
+use main;
+
+-- Americas customers (country_id 0-63 range maps to -40 shard range)
+insert into customer(id, region_id, country_id, email) values(101, 1, 1, 'john@usa.com');          -- USA (1)
+insert into customer(id, region_id, country_id, email) values(102, 1, 7, 'maria@canada.com');      -- Canada (7)  
+insert into customer(id, region_id, country_id, email) values(103, 1, 15, 'carlos@mexico.com');    -- Mexico (15)
+insert into customer(id, region_id, country_id, email) values(104, 1, 32, 'ana@brazil.com');       -- Brazil (32)
+insert into customer(id, region_id, country_id, email) values(105, 1, 50, 'jose@argentina.com');   -- Argentina (50)
+
+-- Europe customers (country_id 64-127 range maps to 40-80 shard range)
+insert into customer(id, region_id, country_id, email) values(201, 2, 66, 'alice@france.eu');      -- France (66)
+insert into customer(id, region_id, country_id, email) values(202, 2, 75, 'charlie@germany.eu');   -- Germany (75)
+insert into customer(id, region_id, country_id, email) values(203, 2, 88, 'eve@uk.eu');            -- UK (88)
+insert into customer(id, region_id, country_id, email) values(204, 2, 100, 'frank@spain.eu');      -- Spain (100)
+insert into customer(id, region_id, country_id, email) values(205, 2, 66, 'bob@france.eu');        -- France (66)
+insert into customer(id, region_id, country_id, email) values(206, 2, 75, 'diana@germany.eu');     -- Germany (75)
+insert into customer(id, region_id, country_id, email) values(207, 2, 120, 'mario@italy.eu');      -- Italy (120)
+
+-- APAC customers (country_id 128-191 range maps to 80-C0 shard range)
+insert into customer(id, region_id, country_id, email) values(301, 3, 135, 'raj@india.in');        -- India (135)
+insert into customer(id, region_id, country_id, email) values(302, 3, 135, 'priya@india.in');      -- India (135)
+insert into customer(id, region_id, country_id, email) values(303, 3, 150, 'yuki@japan.jp');       -- Japan (150)
+insert into customer(id, region_id, country_id, email) values(304, 3, 150, 'hiroshi@japan.jp');    -- Japan (150)
+insert into customer(id, region_id, country_id, email) values(305, 3, 165, 'wei@singapore.sg');    -- Singapore (165)
+insert into customer(id, region_id, country_id, email) values(306, 3, 180, 'steve@australia.au');  -- Australia (180)
+insert into customer(id, region_id, country_id, email) values(307, 3, 128, 'li@china.cn');         -- China (128)
+
+-- MEA customers (country_id 192-255 range maps to C0- shard range)
+insert into customer(id, region_id, country_id, email) values(401, 4, 200, 'ahmed@uae.ae');        -- UAE (200)
+insert into customer(id, region_id, country_id, email) values(402, 4, 220, 'fatima@egypt.eg');     -- Egypt (220)
+insert into customer(id, region_id, country_id, email) values(403, 4, 245, 'david@south-africa.za'); -- South Africa (245)
+insert into customer(id, region_id, country_id, email) values(404, 4, 199, 'amara@nigeria.ng');    -- Nigeria (199)
