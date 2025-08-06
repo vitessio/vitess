@@ -19,6 +19,7 @@ package vindexes
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -94,6 +95,25 @@ func (vind *Binary) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Val
 }
 
 func (vind *Binary) Hash(id sqltypes.Value) ([]byte, error) {
+	// For integer types, use binary representation instead of string representation
+	if id.IsIntegral() {
+		val, err := id.ToInt64()
+		if err != nil {
+			return nil, err
+		}
+
+		// For values 0-255, use single byte representation for efficient geo-sharding
+		if val >= 0 && val <= 255 {
+			return []byte{byte(val)}, nil
+		}
+
+		// For larger values, use 8-byte big-endian representation
+		buf := make([]byte, 8)
+		binary.BigEndian.PutUint64(buf, uint64(val))
+		return buf, nil
+	}
+
+	// For non-integer types, fall back to original behavior
 	return id.ToBytes()
 }
 
