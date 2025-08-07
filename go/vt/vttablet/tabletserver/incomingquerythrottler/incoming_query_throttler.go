@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -13,13 +15,10 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
 
-var (
-	_configRefreshTicket = time.NewTicker(1 * time.Minute)
-)
-
 type IncomingQueryThrottler struct {
 	ctx            context.Context
 	throttleClient *throttle.Client
+	tabletConfig   *tabletenv.TabletConfig
 	mu             sync.RWMutex
 	// cfg holds the current configuration for the throttler.
 	cfg Config
@@ -30,12 +29,13 @@ type IncomingQueryThrottler struct {
 }
 
 // NewIncomingQueryThrottler creates a new incoming query throttler.
-func NewIncomingQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLoader ConfigLoader) *IncomingQueryThrottler {
+func NewIncomingQueryThrottler(ctx context.Context, throttler *throttle.Throttler, cfgLoader ConfigLoader, env tabletenv.Env) *IncomingQueryThrottler {
 	client := throttle.NewBackgroundClient(throttler, throttlerapp.IncomingQueryThrottlerName, base.UndefinedScope)
 
 	i := &IncomingQueryThrottler{
 		ctx:            ctx,
 		throttleClient: client,
+		tabletConfig:   env.Config(),
 		cfg:            Config{},
 		cfgLoader:      cfgLoader,
 		strategy:       &NoOpStrategy{}, // default strategy until config is loaded
@@ -78,7 +78,7 @@ func (i *IncomingQueryThrottler) EnforceThrottlingIfNodeOverloaded(ctx context.C
 }
 
 // selectThrottlingStrategy returns the appropriate strategy implementation based on the config.
-func selectThrottlingStrategy(cfg Config, client *throttle.Client) ThrottlingStrategyHandler {
+func selectThrottlingStrategy(cfg Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig) ThrottlingStrategyHandler {
 	switch cfg.Strategy {
 	case ThrottlingStrategyTabletThrottler:
 		fallthrough // TODO (to be implemented in next PR)
@@ -88,16 +88,19 @@ func selectThrottlingStrategy(cfg Config, client *throttle.Client) ThrottlingStr
 	}
 }
 
-// startConfigRefreshLoop launches a background goroutine that refreshes the throttler's configuration every minute.
+// startConfigRefreshLoop launches a background goroutine that refreshes the throttler's configuration
+// at the interval specified by IncomingQueryThrottlerConfigRefreshInterval.
 func (i *IncomingQueryThrottler) startConfigRefreshLoop() {
 	go func() {
-		defer _configRefreshTicket.Stop()
+		refreshInterval := i.tabletConfig.IncomingQueryThrottlerConfigRefreshInterval
+		configRefreshTicker := time.NewTicker(refreshInterval)
+		defer configRefreshTicker.Stop()
 
 		for {
 			select {
 			case <-i.ctx.Done():
 				return
-			case <-_configRefreshTicket.C:
+			case <-configRefreshTicker.C:
 				i.mu.Lock()
 				newCfg, err := i.cfgLoader.Load(i.ctx)
 				if err != nil {
@@ -105,7 +108,7 @@ func (i *IncomingQueryThrottler) startConfigRefreshLoop() {
 				}
 
 				// Only restart strategy if the strategy type has changed
-				newStrategy := selectThrottlingStrategy(newCfg, i.throttleClient)
+				newStrategy := selectThrottlingStrategy(newCfg, i.throttleClient, i.tabletConfig)
 				if i.cfg.Strategy != newCfg.Strategy {
 					// Stop the current strategy before switching to a new one
 					if i.strategy != nil {

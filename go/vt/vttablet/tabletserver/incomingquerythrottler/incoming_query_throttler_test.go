@@ -5,36 +5,35 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prashantv/gostub"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
 
 func TestNewIncomingQueryThrottler_ConfigRefresh(t *testing.T) {
-	tickCh := make(chan time.Time, 1)
-	stubTicker := &time.Ticker{C: tickCh}
-	stub := gostub.Stub(&_configRefreshTicket, stubTicker)
-	defer stub.Reset()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	config := &tabletenv.TabletConfig{
+		IncomingQueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
+	}
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
 
 	throttler := &throttle.Throttler{} // use mock if needed
 	iqt := NewIncomingQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
 		Enabled:  true,
 		Strategy: ThrottlingStrategyTabletThrottler,
-	}))
+	}), env)
 
 	// Assert initial state (should be NoOpStrategy)
 	require.NotNil(t, iqt)
 	require.IsType(t, &NoOpStrategy{}, iqt.strategy)
 
-	// Trigger ticker (simulate config refresh after 5s)
-	tickCh <- time.Now()
-
 	// Wait briefly for goroutine to pick up the tick
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
 	// Assert updated cfg and strategy
 	iqt.mu.RLock()
@@ -62,7 +61,11 @@ func TestSelectThrottlingStrategy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := &throttle.Client{}
 
-			strategy := selectThrottlingStrategy(Config{Enabled: true, Strategy: tt.giveThrottlingStrategy}, mockClient)
+			config := &tabletenv.TabletConfig{
+				IncomingQueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
+			}
+
+			strategy := selectThrottlingStrategy(Config{Enabled: true, Strategy: tt.giveThrottlingStrategy}, mockClient, config)
 
 			require.IsType(t, tt.expectedType, strategy)
 		})
@@ -76,10 +79,15 @@ func TestIncomingQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 	defer cancel()
 
 	throttler := &throttle.Throttler{}
+	config := &tabletenv.TabletConfig{
+		IncomingQueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
+	}
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
+
 	iqt := NewIncomingQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
 		Enabled:  true,
 		Strategy: ThrottlingStrategyTabletThrottler,
-	}))
+	}), env)
 
 	// Verify initial strategy was started (NoOpStrategy in this case)
 	require.NotNil(t, iqt.strategy)
@@ -97,11 +105,16 @@ func TestIncomingQueryThrottler_Shutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	config := &tabletenv.TabletConfig{
+		IncomingQueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
+	}
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), config, "TestThrottler")
+
 	throttler := &throttle.Throttler{}
 	iqt := NewIncomingQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
 		Enabled:  false,
 		Strategy: ThrottlingStrategyTabletThrottler,
-	}))
+	}), env)
 
 	// Should not panic when called multiple times
 	iqt.Shutdown()
