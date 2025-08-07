@@ -18,9 +18,11 @@ package topo
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"golang.org/x/sync/semaphore"
+	"golang.org/x/sync/singleflight"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -28,6 +30,11 @@ import (
 )
 
 var _ Conn = (*StatsConn)(nil)
+
+// topoReadConsolidator is used to consolidate duplicate
+// topo reads running concurrently for the same action
+// (Get, GetVersion, List and ListDir) + dir/path.
+var topoReadConsolidator singleflight.Group
 
 var (
 	topoStatsConnTimings = stats.NewMultiTimings(
@@ -43,6 +50,11 @@ var (
 	topoStatsConnReadWaitTimings = stats.NewMultiTimings(
 		"TopologyConnReadWaits",
 		"TopologyConnReadWait timings",
+		[]string{"Operation", "Cell"})
+
+	topoStatsConnReadConsolidatorWaitTimings = stats.NewMultiTimings(
+		"topoStatsConnReadConsolidatorWaits",
+		"topoStatsConnReadConsolidatorWait timings",
 		[]string{"Operation", "Cell"})
 )
 
@@ -70,19 +82,29 @@ func NewStatsConn(cell string, conn Conn, readSem *semaphore.Weighted) *StatsCon
 func (st *StatsConn) ListDir(ctx context.Context, dirPath string, full bool) ([]DirEntry, error) {
 	startTime := time.Now()
 	statsKey := []string{"ListDir", st.cell}
-	if err := st.readSem.Acquire(ctx, 1); err != nil {
+	consolidatorKey := fmt.Sprintf("ListDir:%s:%v", dirPath, full)
+	r, err, shared := topoReadConsolidator.Do(consolidatorKey, func() (interface{}, error) {
+		if err := st.readSem.Acquire(ctx, 1); err != nil {
+			return nil, err
+		}
+		defer st.readSem.Release(1)
+		topoStatsConnReadWaitTimings.Record(statsKey, startTime)
+		startTime = time.Now() // reset
+		defer topoStatsConnTimings.Record(statsKey, startTime)
+		res, err := st.conn.ListDir(ctx, dirPath, full)
+		if err != nil {
+			topoStatsConnErrors.Add(statsKey, int64(1))
+			return res, err
+		}
+		return res, err
+	})
+	if shared {
+		topoStatsConnReadConsolidatorWaitTimings.Record(statsKey, startTime)
+	}
+	if r == nil {
 		return nil, err
 	}
-	defer st.readSem.Release(1)
-	topoStatsConnReadWaitTimings.Record(statsKey, startTime)
-	startTime = time.Now() // reset
-	defer topoStatsConnTimings.Record(statsKey, startTime)
-	res, err := st.conn.ListDir(ctx, dirPath, full)
-	if err != nil {
-		topoStatsConnErrors.Add(statsKey, int64(1))
-		return res, err
-	}
-	return res, err
+	return r.([]DirEntry), err
 }
 
 // Create is part of the Conn interface
@@ -119,59 +141,95 @@ func (st *StatsConn) Update(ctx context.Context, filePath string, contents []byt
 
 // Get is part of the Conn interface
 func (st *StatsConn) Get(ctx context.Context, filePath string) ([]byte, Version, error) {
+	type result struct {
+		bytes   []byte
+		version Version
+	}
+
 	startTime := time.Now()
 	statsKey := []string{"Get", st.cell}
-	if err := st.readSem.Acquire(ctx, 1); err != nil {
+	consolidatorKey := fmt.Sprintf("Get:%s", filePath)
+	r, err, shared := topoReadConsolidator.Do(consolidatorKey, func() (interface{}, error) {
+		if err := st.readSem.Acquire(ctx, 1); err != nil {
+			return nil, err
+		}
+		defer st.readSem.Release(1)
+		topoStatsConnReadWaitTimings.Record(statsKey, startTime)
+		startTime = time.Now() // reset
+		defer topoStatsConnTimings.Record(statsKey, startTime)
+		bytes, version, err := st.conn.Get(ctx, filePath)
+		if err != nil {
+			topoStatsConnErrors.Add(statsKey, int64(1))
+			return nil, err
+		}
+		return result{bytes: bytes, version: version}, err
+	})
+	if shared {
+		topoStatsConnReadConsolidatorWaitTimings.Record(statsKey, startTime)
+	}
+	if r == nil {
 		return nil, nil, err
 	}
-	defer st.readSem.Release(1)
-	topoStatsConnReadWaitTimings.Record(statsKey, startTime)
-	startTime = time.Now() // reset
-	defer topoStatsConnTimings.Record(statsKey, startTime)
-	bytes, version, err := st.conn.Get(ctx, filePath)
-	if err != nil {
-		topoStatsConnErrors.Add(statsKey, int64(1))
-		return bytes, version, err
-	}
-	return bytes, version, err
+	res := r.(result)
+	return res.bytes, res.version, err
 }
 
 // GetVersion is part of the Conn interface.
 func (st *StatsConn) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
 	startTime := time.Now()
 	statsKey := []string{"GetVersion", st.cell}
-	if err := st.readSem.Acquire(ctx, 1); err != nil {
+	consolidatorKey := fmt.Sprintf("GetVersion:%s:%d", filePath, version)
+	r, err, shared := topoReadConsolidator.Do(consolidatorKey, func() (interface{}, error) {
+		if err := st.readSem.Acquire(ctx, 1); err != nil {
+			return nil, err
+		}
+		defer st.readSem.Release(1)
+		topoStatsConnReadWaitTimings.Record(statsKey, startTime)
+		startTime = time.Now() // reset
+		defer topoStatsConnTimings.Record(statsKey, startTime)
+		bytes, err := st.conn.GetVersion(ctx, filePath, version)
+		if err != nil {
+			topoStatsConnErrors.Add(statsKey, int64(1))
+			return bytes, err
+		}
+		return bytes, err
+	})
+	if shared {
+		topoStatsConnReadConsolidatorWaitTimings.Record(statsKey, startTime)
+	}
+	if r == nil {
 		return nil, err
 	}
-	defer st.readSem.Release(1)
-	topoStatsConnReadWaitTimings.Record(statsKey, startTime)
-	startTime = time.Now() // reset
-	defer topoStatsConnTimings.Record(statsKey, startTime)
-	bytes, err := st.conn.GetVersion(ctx, filePath, version)
-	if err != nil {
-		topoStatsConnErrors.Add(statsKey, int64(1))
-		return bytes, err
-	}
-	return bytes, err
+	return r.([]byte), err
 }
 
 // List is part of the Conn interface
 func (st *StatsConn) List(ctx context.Context, filePathPrefix string) ([]KVInfo, error) {
 	startTime := time.Now()
 	statsKey := []string{"List", st.cell}
-	if err := st.readSem.Acquire(ctx, 1); err != nil {
+	consolidatorKey := fmt.Sprintf("List:%s", filePathPrefix)
+	r, err, shared := topoReadConsolidator.Do(consolidatorKey, func() (interface{}, error) {
+		if err := st.readSem.Acquire(ctx, 1); err != nil {
+			return nil, err
+		}
+		defer st.readSem.Release(1)
+		topoStatsConnReadWaitTimings.Record(statsKey, startTime)
+		startTime = time.Now() // reset
+		defer topoStatsConnTimings.Record(statsKey, startTime)
+		bytes, err := st.conn.List(ctx, filePathPrefix)
+		if err != nil {
+			topoStatsConnErrors.Add(statsKey, int64(1))
+			return bytes, err
+		}
+		return bytes, err
+	})
+	if shared {
+		topoStatsConnReadConsolidatorWaitTimings.Record(statsKey, startTime)
+	}
+	if r == nil {
 		return nil, err
 	}
-	defer st.readSem.Release(1)
-	topoStatsConnReadWaitTimings.Record(statsKey, startTime)
-	startTime = time.Now() // reset
-	defer topoStatsConnTimings.Record(statsKey, startTime)
-	bytes, err := st.conn.List(ctx, filePathPrefix)
-	if err != nil {
-		topoStatsConnErrors.Add(statsKey, int64(1))
-		return bytes, err
-	}
-	return bytes, err
+	return r.([]KVInfo), err
 }
 
 // Delete is part of the Conn interface
