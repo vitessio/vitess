@@ -245,9 +245,10 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 	// Now that we have ensured that all the tables are created, we can start populating the foreign keys
 	// in the tables.
 	for tblName, tblInfo := range m {
-		rTbl := ks.Tables[tblName]
+		// We should only add foreign key table info to the routed tables only where the DML operations will be routed.
+		rTbl, _ := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
 		if rTbl == nil {
-			log.Errorf("unable to find table %s in %s", tblName, ksName)
+			log.Errorf("unable to find routed table %s in %s", tblName, ksName)
 			continue
 		}
 		for _, fkDef := range tblInfo.ForeignKeys {
