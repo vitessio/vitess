@@ -300,10 +300,6 @@ func (vm *VSchemaManager) updateUDFsInfo(ks *vindexes.KeyspaceSchema, ksName str
 	ks.AggregateUDFs = vm.schema.UDFs(ksName)
 }
 
-func (vm *VSchemaManager) optmizeForeignKeys(vschema *vindexes.VSchema) {
-
-}
-
 func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
 	for ksName, ks := range vschema.Keyspaces {
 		// Only check cyclic foreign keys for keyspaces that have
