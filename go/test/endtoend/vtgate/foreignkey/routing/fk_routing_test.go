@@ -18,10 +18,10 @@ package routing
 
 import (
 	_ "embed"
+	"flag"
 	"os"
 	"testing"
 
-	flag "github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
