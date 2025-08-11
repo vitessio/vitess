@@ -29,6 +29,13 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// The states a pool can be in.
+const (
+	UNINITIALIZED = iota
+	OPENED
+	CLOSED
+)
+
 var (
 	// ErrTimeout is returned if a connection get times out.
 	ErrTimeout = vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "connection pool timed out")
@@ -127,8 +134,12 @@ type ConnPool[C Connection] struct {
 	idleCount atomic.Int64
 
 	// workers is a waitgroup for all the currently running worker goroutines
-	workers    sync.WaitGroup
-	close      chan struct{}
+	workers sync.WaitGroup
+	close   chan struct{}
+
+	// state represents the state the pool is in: uninitialized, open, or closed.
+	state atomic.Uint32
+
 	capacityMu sync.Mutex
 
 	config struct {
@@ -200,6 +211,19 @@ func (pool *ConnPool[C]) open() {
 	// The expire worker takes care of removing from the waiter list any clients whose
 	// context has been cancelled.
 	pool.runWorker(pool.close, 100*time.Millisecond, func(_ time.Time) bool {
+		if pool.IsClosed() {
+			// Clean up any waiters that may have been added after the pool was closed
+			pool.wait.expire(true)
+
+			// If there are no more active connections, we can close the channel and stop
+			// the workers
+			if pool.active.Load() == 0 {
+				close(pool.close)
+			}
+
+			return true
+		}
+
 		maybeStarving := pool.wait.expire(false)
 
 		// Do not allow connections to starve; if there's waiters in the queue
@@ -241,8 +265,8 @@ func (pool *ConnPool[C]) open() {
 // Open starts the background workers that manage the pool and gets it ready
 // to start serving out connections.
 func (pool *ConnPool[C]) Open(connect Connector[C], refresh RefreshCheck) *ConnPool[C] {
-	if pool.close != nil {
-		// already open
+	if !pool.state.CompareAndSwap(UNINITIALIZED, OPENED) {
+		// already open or closed
 		return pool
 	}
 
@@ -270,20 +294,45 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
 
-	if pool.close == nil || pool.capacity.Load() == 0 {
-		// already closed
+	if !pool.state.CompareAndSwap(OPENED, CLOSED) {
+		// Already closed or uninitialized
 		return nil
 	}
 
-	// close all the connections in the pool; if we time out while waiting for
-	// users to return our connections, we still want to finish the shutdown
-	// for the pool
-	err := pool.setCapacity(ctx, 0)
+	// close all the connections in the pool
 
-	close(pool.close)
-	pool.workers.Wait()
-	pool.close = nil
-	return err
+	newcap := int64(0)
+	oldcap := pool.capacity.Swap(newcap)
+	if oldcap == newcap {
+		return nil
+	}
+
+	// update the idle count to match the new capacity if necessary
+	// wait for connections to be returned to the pool if we're reducing the capacity.
+	defer pool.setIdleCount()
+
+	// close connections until we're under capacity
+	for {
+		// make sure there's no clients waiting for connections because they won't be returned in the future
+		pool.wait.expire(true)
+
+		// try closing from connections which are currently idle in the stacks
+		conn := pool.getFromSettingsStack(nil)
+		if conn == nil {
+			conn = pool.pop(&pool.clean)
+		}
+		if conn == nil {
+			break
+		}
+		conn.Close()
+		pool.closedConn()
+	}
+
+	if pool.active.Load() == 0 {
+		close(pool.close)
+	}
+
+	return nil
 }
 
 func (pool *ConnPool[C]) reopen() {
@@ -312,7 +361,12 @@ func (pool *ConnPool[C]) reopen() {
 
 // IsOpen returns whether the pool is open
 func (pool *ConnPool[C]) IsOpen() bool {
-	return pool.close != nil
+	return pool.state.Load() == OPENED
+}
+
+// IsClosed returns whether the pool is closed
+func (pool *ConnPool[C]) IsClosed() bool {
+	return pool.state.Load() == CLOSED
 }
 
 // Capacity returns the maximum amount of connections that this pool can maintain open
@@ -384,7 +438,7 @@ func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C],
 	if ctx.Err() != nil {
 		return nil, ErrCtxTimeout
 	}
-	if pool.capacity.Load() == 0 {
+	if pool.state.Load() != OPENED {
 		return nil, ErrConnPoolClosed
 	}
 	if setting == nil {
@@ -397,6 +451,16 @@ func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C],
 // Return connections to the pool by calling Pooled.Recycle
 func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	pool.borrowed.Add(-1)
+
+	// Close connection if pool is closed
+	if pool.IsClosed() {
+		if conn != nil {
+			conn.Close()
+			pool.closedConn()
+		}
+
+		return
+	}
 
 	if conn == nil {
 		var err error
@@ -436,10 +500,24 @@ func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
 	connSetting := conn.Conn.Setting()
 	if connSetting == nil {
 		pool.clean.Push(conn)
+
+		// Close connection if pool is closed
+		if pool.IsClosed() {
+			conn = pool.pop(&pool.clean)
+			conn.Close()
+			pool.closedConn()
+		}
 	} else {
 		stack := connSetting.bucket & stackMask
 		pool.settings[stack].Push(conn)
 		pool.freshSettingsStack.Store(int64(stack))
+
+		// Close connection if pool is closed
+		if pool.IsClosed() {
+			conn = pool.pop(&pool.settings[stack])
+			conn.Close()
+			pool.closedConn()
+		}
 	}
 	return false
 }

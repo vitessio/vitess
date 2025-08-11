@@ -564,23 +564,17 @@ func TestUserClosing(t *testing.T) {
 		r.Recycle()
 	}
 
-	ch := make(chan error)
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		defer cancel()
+	p.CloseWithContext(ctx)
 
-		err := p.CloseWithContext(ctx)
-		ch <- err
-		close(ch)
-	}()
+	require.Equal(t, p.Active(), int64(1))
+	require.Equal(t, p.Capacity(), int64(0))
+	require.Equal(t, p.IsOpen(), false)
 
-	select {
-	case <-time.After(5 * time.Second):
-		t.Fatalf("Pool did not shutdown after 5s")
-	case err := <-ch:
-		require.Error(t, err)
-		t.Logf("Shutdown error: %v", err)
-	}
+	resources[4].Recycle()
+
+	require.Equal(t, p.Active(), int64(0))
+
+	p.workers.Wait()
 }
 
 func TestConnReopen(t *testing.T) {
@@ -619,7 +613,6 @@ func TestConnReopen(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	// no active connection should be left.
 	assert.Zero(t, p.Active())
-
 }
 
 func TestIdleTimeout(t *testing.T) {
