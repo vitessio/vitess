@@ -348,7 +348,7 @@ func createFkCascadeOpForDelete(ctx *plancontext.PlanningContext, parentOp Opera
 		// Any RESTRICT type foreign keys that arrive here,
 		// are cross-shard/cross-keyspace RESTRICT cases, which we don't currently support.
 		if fk.OnDelete.IsRestrict() {
-			panic(vterrors.VT12002())
+			panic(vterrors.VT12002(sqlparser.String(tblName), fk.Table.String()))
 		}
 
 		// We need to select all the parent columns for the foreign key constraint, to use in the update of the child table.

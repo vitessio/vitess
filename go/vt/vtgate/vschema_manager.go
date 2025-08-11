@@ -248,9 +248,19 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 		// We should only add foreign key table info to the routed tables only where the DML operations will be routed.
 		rTbl, _ := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
 		if rTbl == nil {
-			log.Errorf("unable to find routed table %s in %s", tblName, ksName)
+			log.Warningf("unable to find routed table %s in %s", tblName, ksName)
 			continue
 		}
+
+		// Skip adding foreign key relationships if table is routed elsewhere.
+		// The table name check is only applicable when routing rules are added by hand;
+		// otherwise, even in routing rules, table names are expected to be the same.
+		// Ideally they should be in different keyspaces.
+		if rTbl.Keyspace.Name != ksName || rTbl.Name.String() != tblName {
+			log.Warningf("table '%s' in keyspace '%s' routed to table '%s'", tblName, ksName, rTbl.String())
+			continue
+		}
+
 		for _, fkDef := range tblInfo.ForeignKeys {
 			// Ignore internal tables as part of foreign key references.
 			if schema.IsInternalOperationTableName(fkDef.ReferenceDefinition.ReferencedTable.Name.String()) {
@@ -288,6 +298,10 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 // updateUDFsInfo updates the aggregate UDFs in the Vschema.
 func (vm *VSchemaManager) updateUDFsInfo(ks *vindexes.KeyspaceSchema, ksName string) {
 	ks.AggregateUDFs = vm.schema.UDFs(ksName)
+}
+
+func (vm *VSchemaManager) optmizeForeignKeys(vschema *vindexes.VSchema) {
+
 }
 
 func markErrorIfCyclesInFk(vschema *vindexes.VSchema) {
