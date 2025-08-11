@@ -929,7 +929,7 @@ func createFkVerifyOpForChildFKForUpdate(ctx *plancontext.PlanningContext, updat
 	// ON UPDATE RESTRICT foreign keys that require validation, should only be allowed in the case where we
 	// are verifying all the FKs on vtgate level.
 	if !ctx.VerifyAllFKs {
-		panic(vterrors.VT12002())
+		panic(vterrors.VT12002(updatedTable.String(), cFk.Table.String()))
 	}
 	parentTblExpr := updStmt.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	parentTbl, err := parentTblExpr.TableName()

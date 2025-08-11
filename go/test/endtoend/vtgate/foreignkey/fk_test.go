@@ -89,7 +89,7 @@ func TestDeleteWithFK(t *testing.T) {
 
 	// table's child foreign key has cross shard fk, so query will fail at vtgate.
 	_, err = utils.ExecAllowError(t, conn, `delete from t1 where id = 42`)
-	assert.ErrorContains(t, err, "VT12002: unsupported: cross-shard foreign keys (errno 1235) (sqlstate 42000)")
+	assert.ErrorContains(t, err, "VT12002: unsupported: cross-shard foreign keys between table 't1' and 'ks.t3' (errno 1235) (sqlstate 42000)")
 
 	// child foreign key is cascade, so this should work as expected.
 	qr = utils.Exec(t, conn, `delete from multicol_tbl1 where cola = 100`)
