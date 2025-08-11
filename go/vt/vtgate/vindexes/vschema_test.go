@@ -541,14 +541,14 @@ func TestVSchemaForeignKeys(t *testing.T) {
       ],
       "parent_foreign_keys": [
         {
-          "parent_table": "t1",
+          "parent_table": "main.t1",
           "parent_columns": ["c1"],
           "child_columns": ["c2"]
         }
       ],
       "child_foreign_keys": [
         {
-          "child_table": "t1",
+          "child_table": "main.t1",
           "child_columns": ["c2"],
           "parent_columns": ["c1"]
         }
