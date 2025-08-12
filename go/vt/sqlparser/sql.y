@@ -10083,6 +10083,10 @@ lock_opt:
   {
     $$ = ForUpdateSkipLockedStr
   }
+| FOR UPDATE NOWAIT
+  {
+    $$ = ForUpdateNowaitStr
+  }
 | LOCK IN SHARE MODE
   {
     $$ = ShareModeStr

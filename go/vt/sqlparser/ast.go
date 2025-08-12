@@ -585,6 +585,7 @@ const (
 	ForUpdateStr           = " for update"
 	ShareModeStr           = " lock in share mode"
 	ForUpdateSkipLockedStr = " for update skip locked"
+	ForUpdateNowaitStr     = " for update nowait"
 )
 
 // AddOrder adds an order by element

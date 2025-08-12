@@ -529,6 +529,8 @@ var (
 		}, {
 			input: "select /* skip locked */ 1 from t for update skip locked",
 		}, {
+			input: "select /* for update nowait */ 1 from t for update nowait",
+		}, {
 			input: "select /* lock in share mode */ 1 from t lock in share mode",
 		}, {
 			input: "select /* select list */ 1, 2 from t",
