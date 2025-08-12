@@ -6073,7 +6073,7 @@ alter_table_options:
   }
 | COMMENT_KEYWORD equal_opt STRING
   {
-    $$ = &DDL{Action: AlterStr}
+    $$ = &DDL{Action: AlterStr, AlterCommentSpec: &AlterCommentSpec{Comment: $3}}
   }
 | COMPRESSION equal_opt STRING
   {

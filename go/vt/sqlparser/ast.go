@@ -2013,6 +2013,10 @@ type AlterCollationSpec struct {
 	Collation    string
 }
 
+type AlterCommentSpec struct {
+	Comment string
+}
+
 type ProcedureSpec struct {
 	ProcName        ProcedureName
 	Definer         string
@@ -2270,6 +2274,9 @@ type DDL struct {
 
 	// AlterCollationSpec is set for CHARACTER SET / COLLATE operations on ALTER statements
 	AlterCollationSpec *AlterCollationSpec
+
+	// AlterCommentSpec is set for COMMENT operations on ALTER statements
+	AlterCommentSpec *AlterCommentSpec
 
 	// EventSpec is set for CREATE EVENT operations
 	EventSpec *EventSpec

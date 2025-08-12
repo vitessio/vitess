@@ -19605,7 +19605,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:6075
 		{
-			yyVAL.val = &DDL{Action: AlterStr}
+			yyVAL.val = &DDL{Action: AlterStr, AlterCommentSpec: &AlterCommentSpec{Comment: yyDollar[3].bytes}}
 		}
 	case 998:
 		yyDollar = yyS[yypt-3 : yypt+1]
