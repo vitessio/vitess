@@ -24,12 +24,14 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	gomysql "github.com/go-mysql-org/go-mysql/mysql"
-	"github.com/go-mysql-org/go-mysql/replication"
 	mysqldriver "github.com/go-sql-driver/mysql"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/binlog"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -50,31 +52,33 @@ type notificationSystem struct {
 	db        *sql.DB
 	isMySQL84 bool // Flag to determine if server is MySQL 8.4+
 
-	// MySQL replication configuration
-	cfg    *replication.BinlogSyncerConfig
-	syncer *replication.BinlogSyncer
+	// MySQL replication using Vitess binlog
+	binlogConn *binlog.BinlogConnection
+	connector  dbconfigs.Connector
 
 	// Watchers from all server instances
 	watchersMu        sync.RWMutex
 	watchers          map[string]map[*watcher]bool          // path -> watchers
 	recursiveWatchers map[string]map[*recursiveWatcher]bool // pathPrefix -> watchers
 
+	// Local cache for deletion detection
+	knownKeysMu sync.RWMutex
+	knownKeys   map[string]int64 // path -> version, used to detect deletions
+
 	// Control
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
-	refCount   int
-	refCountMu sync.Mutex
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
+	refCount atomic.Int32
 }
 
 // watcher represents a single file watch.
 type watcher struct {
-	path      string
-	changes   chan *topo.WatchData
-	ctx       context.Context
-	cancel    context.CancelFunc
-	deletedMu sync.Mutex
-	deleted   bool // Flag to track if this watcher was cancelled due to file deletion
+	path    string
+	changes chan *topo.WatchData
+	ctx     context.Context
+	cancel  context.CancelFunc
+	deleted atomic.Bool
 }
 
 // recursiveWatcher represents a recursive directory watch.
@@ -93,9 +97,7 @@ func getNotificationSystem(schemaName, serverAddr string) (*notificationSystem, 
 	defer notificationSystemsMu.Unlock()
 
 	if ns, exists := notificationSystems[key]; exists {
-		ns.refCountMu.Lock()
-		ns.refCount++
-		ns.refCountMu.Unlock()
+		ns.refCount.Add(1)
 		return ns, nil
 	}
 
@@ -105,7 +107,7 @@ func getNotificationSystem(schemaName, serverAddr string) (*notificationSystem, 
 		return nil, err
 	}
 
-	ns.refCount = 1
+	ns.refCount.Store(1)
 	notificationSystems[key] = ns
 	return ns, nil
 }
@@ -118,12 +120,8 @@ func releaseNotificationSystem(schemaName string) {
 	defer notificationSystemsMu.Unlock()
 
 	if ns, exists := notificationSystems[key]; exists {
-		ns.refCountMu.Lock()
-		ns.refCount--
-		shouldClose := ns.refCount <= 0
-		ns.refCountMu.Unlock()
-
-		if shouldClose {
+		ns.refCount.Add(-1)
+		if ns.refCount.Load() <= 0 {
 			ns.close()
 			delete(notificationSystems, key)
 		}
@@ -132,12 +130,6 @@ func releaseNotificationSystem(schemaName string) {
 
 // newNotificationSystem creates a new notification system.
 func newNotificationSystem(schemaName, serverAddr string) (*notificationSystem, error) {
-	// Parse the server address to get connection details
-	host, port, user, password, err := parseReplicationAddr(serverAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse replication address: %v", err)
-	}
-
 	// Create database connection for queries
 	cfg, err := mysqldriver.ParseDSN(serverAddr)
 	if err != nil {
@@ -146,7 +138,6 @@ func newNotificationSystem(schemaName, serverAddr string) (*notificationSystem, 
 	if cfg.DBName == "" {
 		cfg.DBName = schemaName
 	}
-
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to MySQL: %v", err)
@@ -165,15 +156,35 @@ func newNotificationSystem(schemaName, serverAddr string) (*notificationSystem, 
 		return nil, fmt.Errorf("failed to detect MySQL version: %v", err)
 	}
 
-	// Create replication configuration
-	replCfg := replication.BinlogSyncerConfig{
-		ServerID: generateServerID(),
-		Flavor:   "mysql",
-		Host:     host,
-		Port:     uint16(port),
-		User:     user,
-		Password: password,
+	// Check that GTID mode is enabled - required for binlog replication
+	if err := checkGTIDMode(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("MySQL GTID mode check failed: %v", err)
 	}
+
+	// Create connection parameters for binlog streaming
+	cfg.DBName = schemaName
+
+	// Parse host and port from cfg.Addr
+	host, portStr, err := net.SplitHostPort(cfg.Addr)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to parse host and port from %s: %v", cfg.Addr, err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("invalid port number %s: %v", portStr, err)
+	}
+
+	connParams := mysql.ConnParams{
+		Host:   host,
+		Port:   port,
+		Uname:  cfg.User,
+		Pass:   cfg.Passwd,
+		DbName: schemaName,
+	}
+	connector := dbconfigs.New(&connParams)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -182,14 +193,15 @@ func newNotificationSystem(schemaName, serverAddr string) (*notificationSystem, 
 		serverAddr:        serverAddr,
 		db:                db,
 		isMySQL84:         isMySQL84,
-		cfg:               &replCfg,
+		connector:         connector,
 		watchers:          make(map[string]map[*watcher]bool),
 		recursiveWatchers: make(map[string]map[*recursiveWatcher]bool),
+		knownKeys:         make(map[string]int64),
 		ctx:               ctx,
 		cancel:            cancel,
 	}
 
-	// Initialize the syncer
+	// Initialize the binlog connection
 	if err := ns.init(); err != nil {
 		cancel()
 		db.Close()
@@ -201,51 +213,74 @@ func newNotificationSystem(schemaName, serverAddr string) (*notificationSystem, 
 
 // init initializes the notification system.
 func (ns *notificationSystem) init() error {
-	// Create the binlog syncer
-	ns.syncer = replication.NewBinlogSyncer(*ns.cfg)
-
-	// Get the current master position
-	position, err := ns.getCurrentPosition()
+	// Create the binlog connection using Vitess binlog library
+	var err error
+	ns.binlogConn, err = binlog.NewBinlogConnection(ns.connector)
 	if err != nil {
-		return fmt.Errorf("failed to get current position: %v", err)
+		return fmt.Errorf("failed to create binlog connection: %v", err)
+	}
+
+	// Initialize the known keys cache with current data to avoid sending
+	// notifications for existing data when watchers are first created
+	if err := ns.initializeKnownKeys(); err != nil {
+		return fmt.Errorf("failed to initialize known keys: %v", err)
 	}
 
 	// Start the replication goroutine
 	ns.wg.Add(1)
-	go ns.run(position)
+	go ns.run()
 
 	return nil
 }
 
-// getCurrentPosition gets the current master binlog position by querying MySQL.
-func (ns *notificationSystem) getCurrentPosition() (gomysql.Position, error) {
-	var binlogFile, fake string
-	var binlogPos uint32
-	var binlogPosStmt = "SHOW MASTER STATUS"
-	if ns.isMySQL84 {
-		binlogPosStmt = "SHOW BINARY LOG STATUS"
-	}
-	err := ns.db.QueryRow(binlogPosStmt).Scan(&binlogFile, &binlogPos, &fake, &fake, &fake)
+// initializeKnownKeys populates the known keys cache with current data
+// to avoid sending notifications for existing data when watchers are first created.
+func (ns *notificationSystem) initializeKnownKeys() error {
+	rows, err := ns.db.QueryContext(ns.ctx, "SELECT path, version FROM topo_data")
 	if err != nil {
-		return gomysql.Position{}, err
+		// Check if the error is due to missing database or table
+		errStr := err.Error()
+		if strings.Contains(errStr, "Unknown database") || strings.Contains(errStr, "doesn't exist") {
+			// Database or table doesn't exist yet, which is fine
+			return nil
+		}
+		return fmt.Errorf("failed to query topo_data for initialization: %v", err)
 	}
-	return gomysql.Position{
-		Name: binlogFile,
-		Pos:  binlogPos,
-	}, nil
+	defer rows.Close()
+
+	ns.knownKeysMu.Lock()
+	defer ns.knownKeysMu.Unlock()
+
+	for rows.Next() {
+		var path string
+		var version int64
+
+		if err := rows.Scan(&path, &version); err != nil {
+			log.Warningf("Failed to scan topo_data row during initialization: %v", err)
+			continue
+		}
+
+		ns.knownKeys[path] = version
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating topo_data rows during initialization: %v", err)
+	}
+
+	return nil
 }
 
 // run is the main replication loop.
-func (ns *notificationSystem) run(position gomysql.Position) {
+func (ns *notificationSystem) run() {
 	defer ns.wg.Done()
-	defer ns.syncer.Close()
+	defer ns.binlogConn.Close()
 
 	log.Infof("Starting MySQL notification system for schema %s", ns.schemaName)
-	log.Infof("Starting binlog sync from position: %s:%d", position.Name, position.Pos)
 
-	streamer, err := ns.syncer.StartSync(position)
+	// Start binlog streaming from current position
+	_, eventChan, errChan, err := ns.binlogConn.StartBinlogDumpFromCurrent(ns.ctx)
 	if err != nil {
-		log.Errorf("Failed to start binlog sync: %v", err)
+		log.Errorf("Failed to start binlog dump: %v", err)
 		return
 	}
 
@@ -254,101 +289,121 @@ func (ns *notificationSystem) run(position gomysql.Position) {
 		case <-ns.ctx.Done():
 			log.Infof("Stopping MySQL notification system for schema %s", ns.schemaName)
 			return
-		default:
-		}
-
-		// Read the next binlog event
-		ctx, cancel := context.WithTimeout(ns.ctx, 5*time.Second)
-		ev, err := streamer.GetEvent(ctx)
-		cancel()
-
-		if err != nil {
-			if ns.ctx.Err() != nil {
-				return // Context cancelled
+		case err := <-errChan:
+			if err != nil {
+				if ns.ctx.Err() != nil {
+					return // Context cancelled
+				}
+				log.Warningf("Binlog stream error: %v", err)
+				time.Sleep(time.Second)
+				continue
 			}
-			log.Warningf("Failed to get binlog event: %v", err)
-			time.Sleep(time.Second)
-			continue
+		case ev := <-eventChan:
+			if ev == nil {
+				log.Infof("Binlog event channel closed")
+				return
+			}
+			// Process the event
+			ns.processEvent(ev)
 		}
-
-		// Process the event
-		ns.processEvent(ev)
 	}
 }
 
 // processEvent processes a binlog event and notifies watchers if needed.
-func (ns *notificationSystem) processEvent(ev *replication.BinlogEvent) {
-	switch e := ev.Event.(type) {
-	case *replication.RowsEvent:
-		// Handle row changes in our topo tables
-		if string(e.Table.Schema) == ns.schemaName {
-			ns.handleRowsEvent(e)
-		}
-	case *replication.QueryEvent:
-		// Handle DDL or other queries that might affect our tables
-		if strings.Contains(string(e.Query), "topo_data") ||
-			strings.Contains(string(e.Query), "topo_locks") ||
-			strings.Contains(string(e.Query), "topo_elections") {
-			log.Infof("DDL event on topo table: %s", string(e.Query))
-		}
-	}
-}
-
-// handleRowsEvent handles row change events for topo tables.
-func (ns *notificationSystem) handleRowsEvent(e *replication.RowsEvent) {
-	tableName := string(e.Table.Table)
-
-	switch tableName {
-	case "topo_data":
-		ns.handleTopoDataEvent(e)
-	case "topo_locks":
-		// Lock changes don't need to trigger watches
-		log.Infof("Lock event on table %s", tableName)
-	case "topo_elections":
-		// Election changes might need special handling in the future
-		log.Infof("Election event on table %s", tableName)
-	}
-}
-
-// handleTopoDataEvent handles changes to the topo_data table.
-// When we receive a replication event, we read the latest version from the table
-// to ensure we send the most up-to-date data, preventing issues with delayed replication.
-func (ns *notificationSystem) handleTopoDataEvent(e *replication.RowsEvent) {
-	for _, row := range e.Rows {
-		if len(row) < 1 {
-			continue // Invalid row
-		}
-
-		// Extract path from the row
-		path, ok := row[0].(string)
-		if !ok {
-			continue
-		}
-
-		// Instead of using potentially stale data from the binlog event,
-		// read the latest version from the table to ensure we send current data
-		ns.readAndNotifyLatestData(path)
-	}
-}
-
-// readAndNotifyLatestData reads the latest data for a path from the database and notifies watchers.
-func (ns *notificationSystem) readAndNotifyLatestData(path string) {
-	// Query the latest data for this path using the existing database connection
-	var data []byte
-	var version int64
-	err := ns.db.QueryRow("SELECT data, version FROM topo_data WHERE path = ?", path).Scan(&data, &version)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			// Path was deleted, notify deletion
-			ns.notifyDeletion(path)
-			return
-		}
-		log.Errorf("Failed to query latest data for path %s: %v", path, err)
+func (ns *notificationSystem) processEvent(ev mysql.BinlogEvent) {
+	// Only process events that are valid
+	if !ev.IsValid() {
 		return
 	}
 
-	// Notify watchers with the latest data
-	ns.notifyChange(path, data, MySQLVersion(version))
+	// We're not interested in table map events
+	// It requires logic to parse them.
+	if ev.IsTableMap() {
+		return
+	}
+
+	// For other events (INSERT, UPDATE, DELETE, QUERY etc)
+	// We treat them all the same which is to say that we
+	// check for changes. We don't try and understand the row image,
+	// because it requires tablemap parsing, and more complex logic.
+	ns.checkForTopoDataChanges()
+}
+
+// checkForTopoDataChanges polls the topo_data table for recent changes.
+// based on a notification from processEvent that there is a likely change.
+// We don't know of what the change is, it might be unrelated.
+// We have to call notifyChange() or notify Deletion() if we see
+// any modifications though. We prefer to scan the table rather
+// than read the stream because:
+//  1. It's simpler and saves parsing the table map.
+//  2. There are no staleness issues, particularly if
+//     there is a path updated twice in quick succession.
+func (ns *notificationSystem) checkForTopoDataChanges() {
+	// Query all current data from topo_data table
+	rows, err := ns.db.QueryContext(ns.ctx, "SELECT path, data, version FROM topo_data")
+	if err != nil {
+		// Check if the error is due to missing database or table
+		errStr := err.Error()
+		if strings.Contains(errStr, "Unknown database") || strings.Contains(errStr, "doesn't exist") {
+			// Database or table was dropped, stop the notification system
+			log.Infof("Database %s no longer exists, stopping notification system", ns.schemaName)
+			ns.cancel()
+			return
+		}
+		log.Warningf("Failed to query topo_data for changes: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	// Build a map of current data
+	currentData := make(map[string]struct {
+		data    []byte
+		version int64
+	})
+
+	for rows.Next() {
+		var path string
+		var data []byte
+		var version int64
+
+		if err := rows.Scan(&path, &data, &version); err != nil {
+			log.Warningf("Failed to scan topo_data row: %v", err)
+			continue
+		}
+
+		currentData[path] = struct {
+			data    []byte
+			version int64
+		}{data: data, version: version}
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Warningf("Error iterating topo_data rows: %v", err)
+		return
+	}
+
+	ns.knownKeysMu.Lock()
+	defer ns.knownKeysMu.Unlock()
+
+	// Check for new or updated entries
+	for path, entry := range currentData {
+		if knownVersion, exists := ns.knownKeys[path]; !exists || knownVersion != entry.version {
+			// This is a new or updated entry
+			ns.knownKeys[path] = entry.version
+			// Notify watchers of the change
+			ns.notifyChange(path, entry.data, MySQLVersion(entry.version))
+		}
+	}
+
+	// Check for deleted entries
+	for path := range ns.knownKeys {
+		if _, exists := currentData[path]; !exists {
+			// This entry was deleted
+			delete(ns.knownKeys, path)
+			// Notify watchers of the deletion
+			ns.notifyDeletion(path)
+		}
+	}
 }
 
 // addWatcher adds a new file watcher.
@@ -416,9 +471,6 @@ func (ns *notificationSystem) notifyChange(path string, data []byte, version top
 			case w.changes <- watchData:
 			case <-w.ctx.Done():
 				// Watcher was cancelled, will be cleaned up later
-			default:
-				// Channel is full, skip this notification
-				log.Warningf("Watch channel full for path %s", path)
 			}
 		}
 	}
@@ -439,9 +491,6 @@ func (ns *notificationSystem) notifyChange(path string, data []byte, version top
 				case w.changes <- watchData:
 				case <-w.ctx.Done():
 					// Watcher was cancelled, will be cleaned up later
-				default:
-					// Channel is full, skip this notification
-					log.Warningf("Recursive watch channel full for prefix %s", prefix)
 				}
 			}
 		}
@@ -463,15 +512,10 @@ func (ns *notificationSystem) notifyDeletion(path string) {
 			select {
 			case w.changes <- watchData:
 				// Mark this watcher as deleted and cancel it
-				w.deletedMu.Lock()
-				w.deleted = true
-				w.deletedMu.Unlock()
+				w.deleted.Store(true)
 				w.cancel()
 			case <-w.ctx.Done():
 				// Watcher was cancelled, will be cleaned up later
-			default:
-				// Channel is full, skip this notification
-				log.Warningf("Watch channel full for path %s", path)
 			}
 		}
 	}
@@ -493,9 +537,6 @@ func (ns *notificationSystem) notifyDeletion(path string) {
 					// since they may be watching for other files under the same prefix
 				case <-w.ctx.Done():
 					// Watcher was cancelled, will be cleaned up later
-				default:
-					// Channel is full, skip this notification
-					log.Warningf("Recursive watch channel full for prefix %s", prefix)
 				}
 			}
 		}
@@ -526,6 +567,11 @@ func (ns *notificationSystem) close() {
 
 	ns.wg.Wait()
 
+	// Close the binlog connection
+	if ns.binlogConn != nil {
+		ns.binlogConn.Close()
+	}
+
 	// Close the database connection
 	if ns.db != nil {
 		ns.db.Close()
@@ -552,29 +598,29 @@ func detectMySQL84(db *sql.DB) (bool, error) {
 	return false, nil
 }
 
-// parseReplicationAddr parses the server address for replication connection.
-func parseReplicationAddr(addr string) (host string, port int, user, password string, err error) {
-	cfg, err := mysqldriver.ParseDSN(addr) // Ensure the DSN is valid
+// checkGTIDMode verifies that GTID mode is enabled on the MySQL server.
+// This is required for the binlog replication functionality to work properly.
+func checkGTIDMode(db *sql.DB) error {
+	var gtidMode string
+	err := db.QueryRow("SELECT @@GLOBAL.gtid_mode").Scan(&gtidMode)
 	if err != nil {
-		return "", 0, "", "", fmt.Errorf("invalid MySQL DSN: %v", err)
+		return fmt.Errorf("failed to check GTID mode: %v", err)
 	}
-	// Use the net package to split cfg.Addr into host and port
-	host, portStr, err := net.SplitHostPort(cfg.Addr)
-	if err != nil {
-		return "", 0, "", "", fmt.Errorf("failed to split host and port: %v", err)
-	}
-	// Cast portStr to integer
-	port, err = strconv.Atoi(portStr)
-	if err != nil {
-		return "", 0, "", "", fmt.Errorf("invalid port number: %v", err)
-	}
-	return host, port, cfg.User, cfg.Passwd, nil
 
-}
+	if gtidMode != "ON" {
+		return fmt.Errorf("GTID mode is '%s' but must be 'ON' for MySQL topo server to work with binlog replication. Please set gtid_mode=ON in your MySQL configuration", gtidMode)
+	}
 
-// generateServerID generates a unique server ID for replication.
-func generateServerID() uint32 {
-	// Use current timestamp to generate a unique server ID
-	// In production, this should be more sophisticated
-	return uint32(time.Now().Unix() % 1000000)
+	// Also check that log_bin is enabled
+	var logBin string
+	err = db.QueryRow("SELECT @@GLOBAL.log_bin").Scan(&logBin)
+	if err != nil {
+		return fmt.Errorf("failed to check binary logging status: %v", err)
+	}
+
+	if logBin != "1" && logBin != "ON" {
+		return fmt.Errorf("binary logging is disabled but is required for MySQL topo server. Please set log_bin=ON in your MySQL configuration")
+	}
+
+	return nil
 }

@@ -73,12 +73,6 @@ func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (
 		return nil, convertError(err, fullPath)
 	}
 	tx = nil // Prevent rollback on defer
-
-	// Notify watchers of the change
-	if ns, err := s.getNotificationSystemForServer(); err == nil {
-		ns.notifyChange(fullPath, contents, MySQLVersion(1))
-	}
-
 	return MySQLVersion(1), nil
 }
 
@@ -140,63 +134,46 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 			return nil, convertError(err, fullPath)
 		}
 		tx = nil // Prevent rollback on defer
-
-		// Notify watchers of the change
-		if ns, err := s.getNotificationSystemForServer(); err == nil {
-			ns.notifyChange(fullPath, contents, MySQLVersion(newVersion))
-		}
-
 		return MySQLVersion(newVersion), nil
-	} else {
-		// Unconditional update (upsert)
-		// First try to update existing record
-		var currentVersion int64
-		err = tx.QueryRowContext(ctx, "SELECT version FROM topo_data WHERE path = ?", fullPath).Scan(&currentVersion)
+	}
+	// Else, unconditional update (upsert)
+	// First try to update existing record
+	var currentVersion int64
+	err = tx.QueryRowContext(ctx, "SELECT version FROM topo_data WHERE path = ?", fullPath).Scan(&currentVersion)
 
-		if err == sql.ErrNoRows {
-			// Record doesn't exist, insert it with version 1
-			_, err = tx.ExecContext(ctx,
-				"INSERT INTO topo_data (path, data, version) VALUES (?, ?, 1)",
-				fullPath, contents)
-			if err != nil {
-				return nil, convertError(err, fullPath)
-			}
-
-			// Commit the transaction
-			if err := tx.Commit(); err != nil {
-				return nil, convertError(err, fullPath)
-			}
-
-			// Notify watchers of the change
-			if ns, err := s.getNotificationSystemForServer(); err == nil {
-				ns.notifyChange(fullPath, contents, MySQLVersion(1))
-			}
-
-			return MySQLVersion(1), nil
-		} else if err != nil {
+	if err == sql.ErrNoRows {
+		// Record doesn't exist, insert it with version 1
+		_, err = tx.ExecContext(ctx,
+			"INSERT INTO topo_data (path, data, version) VALUES (?, ?, 1)",
+			fullPath, contents)
+		if err != nil {
 			return nil, convertError(err, fullPath)
-		} else {
-			// Record exists, update it with incremented version
-			newVersion := currentVersion + 1
-			_, err = tx.ExecContext(ctx,
-				"UPDATE topo_data SET data = ?, version = ? WHERE path = ?",
-				contents, newVersion, fullPath)
-			if err != nil {
-				return nil, convertError(err, fullPath)
-			}
-
-			// Commit the transaction
-			if err := tx.Commit(); err != nil {
-				return nil, convertError(err, fullPath)
-			}
-
-			// Notify watchers of the change
-			if ns, err := s.getNotificationSystemForServer(); err == nil {
-				ns.notifyChange(fullPath, contents, MySQLVersion(newVersion))
-			}
-
-			return MySQLVersion(newVersion), nil
 		}
+
+		// Commit the transaction
+		if err := tx.Commit(); err != nil {
+			return nil, convertError(err, fullPath)
+		}
+		tx = nil // Prevent rollback on defer
+		return MySQLVersion(1), nil
+	} else if err != nil {
+		return nil, convertError(err, fullPath)
+	} else {
+		// Record exists, update it with incremented version
+		newVersion := currentVersion + 1
+		_, err = tx.ExecContext(ctx,
+			"UPDATE topo_data SET data = ?, version = ? WHERE path = ?",
+			contents, newVersion, fullPath)
+		if err != nil {
+			return nil, convertError(err, fullPath)
+		}
+
+		// Commit the transaction
+		if err := tx.Commit(); err != nil {
+			return nil, convertError(err, fullPath)
+		}
+		tx = nil // Prevent rollback on defer
+		return MySQLVersion(newVersion), nil
 	}
 }
 
@@ -240,11 +217,9 @@ func (s *Server) GetVersion(ctx context.Context, filePath string, version int64)
 	if err != nil {
 		return nil, convertError(err, fullPath)
 	}
-
 	if currentVersion != version {
 		return nil, topo.NewError(topo.NoNode, fullPath)
 	}
-
 	return data, nil
 }
 
@@ -255,13 +230,12 @@ func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo
 	}
 
 	fullPathPrefix := s.fullPath(filePathPrefix)
+	// Ensure directory path ends with "/" for proper prefix matching
+	if fullPathPrefix != "" && !strings.HasSuffix(fullPathPrefix, "/") {
+		fullPathPrefix += "/"
+	}
 
-	// Use LIKE with proper escaping for prefix matching
-	likePattern := strings.ReplaceAll(fullPathPrefix, "_", "\\_")
-	likePattern = strings.ReplaceAll(likePattern, "%", "\\%")
-	likePattern += "%"
-
-	rows, err := s.db.QueryContext(ctx, "SELECT path, data, version FROM topo_data WHERE path LIKE ?", likePattern)
+	rows, err := s.db.QueryContext(ctx, "SELECT path, data, version FROM topo_data WHERE path LIKE ?", createLikePattern(fullPathPrefix))
 	if err != nil {
 		return nil, convertError(err, fullPathPrefix)
 	}
@@ -358,11 +332,5 @@ func (s *Server) Delete(ctx context.Context, filePath string, version topo.Versi
 		return convertError(err, fullPath)
 	}
 	tx = nil // Prevent rollback on defer
-
-	// Notify watchers of the deletion
-	if ns, err := s.getNotificationSystemForServer(); err == nil {
-		ns.notifyDeletion(fullPath)
-	}
-
 	return nil
 }

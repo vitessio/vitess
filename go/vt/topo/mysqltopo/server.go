@@ -150,6 +150,12 @@ func NewServer(serverAddr, root string) (*Server, error) {
 		return nil, fmt.Errorf("failed to ping MySQL: %v", err)
 	}
 
+	// Check MySQL configuration requirements for binlog replication
+	if err := checkMySQLConfiguration(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("MySQL configuration check failed: %v", err)
+	}
+
 	// Create server context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -306,4 +312,43 @@ func (s *Server) cleanupExpiredData() {
 	if _, err := s.db.Exec("DELETE FROM topo_elections WHERE expires_at < ?", now); err != nil {
 		log.Infof("Skipping election cleanup (table may not exist yet): %v", err)
 	}
+}
+
+// createLikePattern creates a LIKE pattern for prefix matching with proper escaping.
+// It escapes special LIKE characters (_ and %) and appends % for prefix matching.
+// For directory matching, the input should already end with "/" for proper prefix matching.
+func createLikePattern(prefix string) string {
+	// Escape special LIKE characters
+	pattern := strings.ReplaceAll(prefix, "_", "\\_")
+	pattern = strings.ReplaceAll(pattern, "%", "\\%")
+	// And finally, wildcard for prefix matching
+	pattern += "%"
+	return pattern
+}
+
+// checkMySQLConfiguration verifies that MySQL is configured correctly for binlog replication.
+func checkMySQLConfiguration(db *sql.DB) error {
+	// Check GTID mode
+	var gtidMode string
+	err := db.QueryRow("SELECT @@GLOBAL.gtid_mode").Scan(&gtidMode)
+	if err != nil {
+		return fmt.Errorf("failed to check GTID mode: %v", err)
+	}
+
+	if gtidMode != "ON" {
+		return fmt.Errorf("GTID mode is '%s' but must be 'ON' for MySQL topo server to work with binlog replication. Please set gtid_mode=ON in your MySQL configuration", gtidMode)
+	}
+
+	// Check that binary logging is enabled
+	var logBin string
+	err = db.QueryRow("SELECT @@GLOBAL.log_bin").Scan(&logBin)
+	if err != nil {
+		return fmt.Errorf("failed to check binary logging status: %v", err)
+	}
+
+	if logBin != "1" && logBin != "ON" {
+		return fmt.Errorf("binary logging is disabled but is required for MySQL topo server. Please set log_bin=ON in your MySQL configuration")
+	}
+
+	return nil
 }

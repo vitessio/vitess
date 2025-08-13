@@ -51,11 +51,11 @@ func (s *Server) Watch(ctx context.Context, filePath string) (current *topo.Watc
 
 	// Create the watcher
 	watchCtx, cancel := context.WithCancel(ctx)
-	changes_chan := make(chan *topo.WatchData, 10) // Buffered channel
+	changesChan := make(chan *topo.WatchData, 10) // Buffered channel
 
 	w := &watcher{
 		path:    fullPath,
-		changes: changes_chan,
+		changes: changesChan,
 		ctx:     watchCtx,
 		cancel:  cancel,
 	}
@@ -69,21 +69,19 @@ func (s *Server) Watch(ctx context.Context, filePath string) (current *topo.Watc
 		ns.removeWatcher(w)
 
 		// Check if this watcher was cancelled due to deletion
-		w.deletedMu.Lock()
-		wasDeleted := w.deleted
-		w.deletedMu.Unlock()
+		wasDeleted := w.deleted.Load()
 
 		// Only send interrupted error if not cancelled due to deletion
 		if !wasDeleted {
 			select {
-			case changes_chan <- &topo.WatchData{Err: topo.NewError(topo.Interrupted, fullPath)}:
+			case changesChan <- &topo.WatchData{Err: topo.NewError(topo.Interrupted, fullPath)}:
 			default:
 			}
 		}
-		close(changes_chan)
+		close(changesChan)
 	}()
 
-	return current, changes_chan, nil
+	return current, changesChan, nil
 }
 
 // WatchRecursive is part of the topo.Conn interface.
@@ -119,11 +117,11 @@ func (s *Server) WatchRecursive(ctx context.Context, pathPrefix string) ([]*topo
 
 	// Create the recursive watcher
 	watchCtx, cancel := context.WithCancel(ctx)
-	changes_chan := make(chan *topo.WatchDataRecursive, 10) // Buffered channel
+	changesChan := make(chan *topo.WatchDataRecursive, 10) // Buffered channel
 
 	w := &recursiveWatcher{
 		pathPrefix: fullPathPrefix,
-		changes:    changes_chan,
+		changes:    changesChan,
 		ctx:        watchCtx,
 		cancel:     cancel,
 	}
@@ -138,14 +136,14 @@ func (s *Server) WatchRecursive(ctx context.Context, pathPrefix string) ([]*topo
 
 		// Send final interrupted error and close channel
 		select {
-		case changes_chan <- &topo.WatchDataRecursive{
+		case changesChan <- &topo.WatchDataRecursive{
 			Path:      fullPathPrefix,
 			WatchData: topo.WatchData{Err: topo.NewError(topo.Interrupted, fullPathPrefix)},
 		}:
 		default:
 		}
-		close(changes_chan)
+		close(changesChan)
 	}()
 
-	return current, changes_chan, nil
+	return current, changesChan, nil
 }

@@ -97,10 +97,8 @@ func TestNotificationSystemSharing(t *testing.T) {
 	assert.Equal(t, sharedSchemaName, ns2.schemaName, "Schema name should match")
 
 	// Check reference counting
-	ns1.refCountMu.Lock()
-	refCount := ns1.refCount
-	ns1.refCountMu.Unlock()
-	assert.Equal(t, 2, refCount, "Reference count should be 2 for two servers")
+	refCount := ns1.refCount.Load()
+	assert.Equal(t, int32(2), refCount, "Reference count should be 2 for two servers")
 }
 
 // TestNotificationSystemCrossServerUpdates tests that updates from one server
@@ -389,10 +387,8 @@ func TestNotificationSystemCleanup(t *testing.T) {
 	assert.Equal(t, ns1, ns2, "Both servers should share the same notification system")
 
 	// Check initial reference count
-	ns1.refCountMu.Lock()
-	initialRefCount := ns1.refCount
-	ns1.refCountMu.Unlock()
-	assert.Equal(t, 2, initialRefCount, "Should have 2 references initially")
+	initialRefCount := ns1.refCount.Load()
+	assert.Equal(t, int32(2), initialRefCount, "Should have 2 references initially")
 
 	// Close server1
 	server1.Close()
@@ -403,10 +399,8 @@ func TestNotificationSystemCleanup(t *testing.T) {
 	notificationSystemsMu.RUnlock()
 	require.True(t, exists, "Notification system should still exist")
 
-	ns.refCountMu.Lock()
-	refCountAfterClose := ns.refCount
-	ns.refCountMu.Unlock()
-	assert.Equal(t, 1, refCountAfterClose, "Reference count should be 1 after closing one server")
+	refCountAfterClose := ns.refCount.Load()
+	assert.Equal(t, int32(1), refCountAfterClose, "Reference count should be 1 after closing one server")
 
 	// Close server2
 	server2.Close()
@@ -587,10 +581,8 @@ func TestNotificationSystemConcurrentAccess(t *testing.T) {
 	}
 
 	// Check reference count
-	ns.refCountMu.Lock()
-	refCount := ns.refCount
-	ns.refCountMu.Unlock()
-	assert.Equal(t, numServers, refCount, "Reference count should match number of servers")
+	refCount := ns.refCount.Load()
+	assert.Equal(t, int32(numServers), refCount, "Reference count should match number of servers")
 
 	// Close servers concurrently
 	wg.Add(numServers)
@@ -740,8 +732,6 @@ func TestNotificationSystemIntegration(t *testing.T) {
 	}
 
 	// Step 7: Verify reference counting works correctly
-	nsA.refCountMu.Lock()
-	refCount := nsA.refCount
-	nsA.refCountMu.Unlock()
-	assert.GreaterOrEqual(t, refCount, 3, "Should have at least 3 references for 3 servers")
+	refCount := nsA.refCount.Load()
+	assert.GreaterOrEqual(t, int(refCount), 3, "Should have at least 3 references for 3 servers")
 }

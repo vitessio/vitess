@@ -102,11 +102,13 @@ func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl 
 	}
 
 	fullPath := s.fullPath(dirPath)
+	// Ensure directory path ends with "/" for proper prefix matching
+	if fullPath != "" && !strings.HasSuffix(fullPath, "/") {
+		fullPath += "/"
+	}
 
-	// Check if the directory exists by looking for any files under it
 	var exists bool
-	likePattern := fullPath + "%"
-	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM topo_data WHERE path LIKE ? LIMIT 1", likePattern).Scan(&exists)
+	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM topo_data WHERE path LIKE ? LIMIT 1", createLikePattern(fullPath)).Scan(&exists)
 	if err == sql.ErrNoRows {
 		return nil, topo.NewError(topo.NoNode, fullPath)
 	}
@@ -114,7 +116,7 @@ func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl 
 		return nil, convertError(err, fullPath)
 	}
 
-	return s.acquireLock(ctx, fullPath, contents, ttl, false)
+	return s.acquireLock(ctx, s.fullPath(dirPath), contents, ttl, false)
 }
 
 // LockName is part of the topo.Conn interface.
@@ -138,11 +140,13 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 	}
 
 	fullPath := s.fullPath(dirPath)
+	// Ensure directory path ends with "/" for proper prefix matching
+	if fullPath != "" && !strings.HasSuffix(fullPath, "/") {
+		fullPath += "/"
+	}
 
-	// Check if the directory exists by looking for any files under it
 	var exists bool
-	likePattern := fullPath + "%"
-	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM topo_data WHERE path LIKE ? LIMIT 1", likePattern).Scan(&exists)
+	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM topo_data WHERE path LIKE ? LIMIT 1", createLikePattern(fullPath)).Scan(&exists)
 	if err == sql.ErrNoRows {
 		return nil, topo.NewError(topo.NoNode, fullPath)
 	}
@@ -150,7 +154,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		return nil, convertError(err, fullPath)
 	}
 
-	return s.acquireLock(ctx, fullPath, contents, time.Duration(lockTTL)*time.Second, true)
+	return s.acquireLock(ctx, s.fullPath(dirPath), contents, time.Duration(lockTTL)*time.Second, true)
 }
 
 // acquireLock attempts to acquire a lock with the given parameters.
@@ -164,33 +168,39 @@ func (s *Server) acquireLock(ctx context.Context, path, contents string, ttl tim
 			return nil, convertError(err, path)
 		}
 
-		// Try to acquire the lock
-		_, err = s.db.ExecContext(ctx,
-			"INSERT INTO topo_locks (path, contents, expires_at) VALUES (?, ?, ?)",
+		// Try to acquire the lock using INSERT IGNORE
+		result, err := s.db.ExecContext(ctx,
+			"INSERT IGNORE INTO topo_locks (path, contents, expires_at) VALUES (?, ?, ?)",
 			path, contents, expiresAt)
 
-		if err == nil {
+		if err != nil {
+			// Unexpected error (not duplicate key related)
+			return nil, convertError(err, path)
+		}
+
+		// Check if the insert was successful by examining affected rows
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return nil, convertError(err, path)
+		}
+
+		if rowsAffected > 0 {
 			// Lock acquired successfully
 			break
 		}
 
-		// Check if it's a duplicate key error (lock already exists)
-		if isDuplicateKeyError(err) {
-			if tryLock {
-				return nil, topo.NewError(topo.NodeExists, path)
-			}
-
-			// Wait a bit and try again
-			select {
-			case <-ctx.Done():
-				return nil, convertError(ctx.Err(), path)
-			case <-time.After(100 * time.Millisecond):
-				continue
-			}
+		// Lock already exists (rowsAffected == 0)
+		if tryLock {
+			return nil, topo.NewError(topo.NodeExists, path)
 		}
 
-		// Other error
-		return nil, convertError(err, path)
+		// Wait a bit and try again
+		select {
+		case <-ctx.Done():
+			return nil, convertError(ctx.Err(), path)
+		case <-time.After(100 * time.Millisecond):
+			continue
+		}
 	}
 
 	// Create the lock descriptor with heartbeat
@@ -232,13 +242,4 @@ func (ld *MySQLLockDescriptor) heartbeat() {
 			}
 		}
 	}
-}
-
-// isDuplicateKeyError checks if the error is a MySQL duplicate key error.
-func isDuplicateKeyError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	return strings.Contains(errStr, "Duplicate entry") || strings.Contains(errStr, "duplicate key")
 }

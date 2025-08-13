@@ -97,7 +97,6 @@ require (
 	github.com/bndr/gotabulate v1.1.2
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gammazero/deque v1.0.0
-	github.com/go-mysql-org/go-mysql v1.12.0
 	github.com/google/safehtml v0.1.0
 	github.com/hashicorp/go-version v1.7.0
 	github.com/kr/pretty v0.3.1
@@ -116,21 +115,13 @@ require (
 )
 
 require (
-	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/cilium/ebpf v0.16.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect
-	github.com/pingcap/errors v0.11.5-0.20240311024730-e056997136bb // indirect
-	github.com/pingcap/log v1.1.1-0.20230317032135-a0d097d16e22 // indirect
-	github.com/pingcap/tidb/pkg/parser v0.0.0-20241118164214-4f047be191be // indirect
-	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 
 require (
@@ -184,7 +175,7 @@ require (
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
-	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
+	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect

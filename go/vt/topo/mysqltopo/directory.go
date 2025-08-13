@@ -32,18 +32,12 @@ func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo
 	}
 
 	fullDirPath := s.fullPath(dirPath)
-
-	// Ensure the directory path ends with a slash for proper prefix matching
-	if !strings.HasSuffix(fullDirPath, "/") {
+	// Ensure directory path ends with "/" for proper prefix matching
+	if fullDirPath != "" && !strings.HasSuffix(fullDirPath, "/") {
 		fullDirPath += "/"
 	}
 
-	// Use LIKE with proper escaping for prefix matching
-	likePattern := strings.ReplaceAll(fullDirPath, "_", "\\_")
-	likePattern = strings.ReplaceAll(likePattern, "%", "\\%")
-	likePattern += "%"
-
-	rows, err := s.db.QueryContext(ctx, "SELECT path FROM topo_data WHERE path LIKE ?", likePattern)
+	rows, err := s.db.QueryContext(ctx, "SELECT path FROM topo_data WHERE path LIKE ?", createLikePattern(fullDirPath))
 	if err != nil {
 		return nil, convertError(err, dirPath)
 	}
@@ -74,12 +68,7 @@ func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo
 		return nil, convertError(err, dirPath)
 	}
 
-	// Also check for locks in this directory (they are ephemeral entries)
-	lockLikePattern := strings.ReplaceAll(fullDirPath, "_", "\\_")
-	lockLikePattern = strings.ReplaceAll(lockLikePattern, "%", "\\%")
-	lockLikePattern += "%"
-
-	lockRows, err := s.db.QueryContext(ctx, "SELECT path FROM topo_locks WHERE path LIKE ?", lockLikePattern)
+	lockRows, err := s.db.QueryContext(ctx, "SELECT path FROM topo_locks WHERE path LIKE ?", createLikePattern(fullDirPath))
 	if err != nil {
 		return nil, convertError(err, dirPath)
 	}

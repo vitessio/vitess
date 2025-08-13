@@ -295,33 +295,43 @@ func (lp *MySQLLeaderParticipation) tryBecomeLeader() bool {
 	// Clean up expired elections first (best effort)
 	_, _ = lp.server.db.ExecContext(lp.ctx, "DELETE FROM topo_elections WHERE expires_at < NOW()")
 
-	// Try to insert our election record
-	_, err := lp.server.db.ExecContext(lp.ctx,
-		"INSERT INTO topo_elections (name, leader_id, contents, expires_at) VALUES (?, ?, ?, ?)",
+	// Try to insert our election record using INSERT IGNORE
+	result, err := lp.server.db.ExecContext(lp.ctx,
+		"INSERT IGNORE INTO topo_elections (name, leader_id, contents, expires_at) VALUES (?, ?, ?, ?)",
 		lp.name, lp.id, lp.contents, expiresAt)
 
-	if err == nil {
+	if err != nil {
+		log.Infof("Failed to insert election record for %s (id: %s): %v", lp.name, lp.id, err)
+		return false
+	}
+
+	// Check if the insert was successful by examining affected rows
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Infof("Failed to get affected rows for %s (id: %s): %v", lp.name, lp.id, err)
+		return false
+	}
+
+	if rowsAffected > 0 {
+		// Successfully became leader
 		log.Infof("Became leader for %s (id: %s)", lp.name, lp.id)
 		return true
 	}
 
-	log.Infof("Failed to insert election record for %s (id: %s): %v", lp.name, lp.id, err)
+	// Election record already exists (rowsAffected == 0)
+	// Try to update if we're already the leader
+	result, err = lp.server.db.ExecContext(lp.ctx,
+		"UPDATE topo_elections SET expires_at = ? WHERE name = ? AND leader_id = ?",
+		expiresAt, lp.name, lp.id)
 
-	// If insert failed due to duplicate key, try to update if we're already the leader
-	if isDuplicateKeyError(err) {
-		result, err := lp.server.db.ExecContext(lp.ctx,
-			"UPDATE topo_elections SET expires_at = ? WHERE name = ? AND leader_id = ?",
-			expiresAt, lp.name, lp.id)
-
-		if err == nil {
-			rowsAffected, _ := result.RowsAffected()
-			if rowsAffected > 0 {
-				log.Infof("Renewed leadership for %s (id: %s)", lp.name, lp.id)
-				return true // We renewed our leadership
-			}
+	if err == nil {
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected > 0 {
+			log.Infof("Renewed leadership for %s (id: %s)", lp.name, lp.id)
+			return true // We renewed our leadership
 		}
-		log.Infof("Failed to renew leadership for %s (id: %s): %v", lp.name, lp.id, err)
 	}
+	log.Infof("Failed to renew leadership for %s (id: %s): %v", lp.name, lp.id, err)
 
 	return false
 }
@@ -356,16 +366,18 @@ func (lp *MySQLLeaderParticipation) renewLeadership() bool {
 		expiresAt, lp.name, lp.id)
 
 	if err != nil {
-		log.Warningf("Failed to renew leadership for %s: %v", lp.name, err)
+		log.Infof("Failed to obtain leadership for %s: %v", lp.name, err)
 		return false
 	}
-
 	rowsAffected, err := result.RowsAffected()
-	if err != nil || rowsAffected == 0 {
+	if err != nil {
+		log.Warningf("Could not determine leadership state for %s: %v", lp.name, err)
+		return false
+	}
+	if rowsAffected == 0 {
 		log.Warningf("Lost leadership for %s", lp.name)
 		return false
 	}
-
 	return true
 }
 
@@ -380,6 +392,12 @@ func (lp *MySQLLeaderParticipation) loseLeadership() {
 			lp.leaderCancel()
 			lp.leaderCancel = nil
 		}
+
+		// Proactively delete our election record instead of waiting for TTL expiry
+		_, _ = lp.server.db.ExecContext(context.Background(),
+			"DELETE FROM topo_elections WHERE name = ? AND leader_id = ?",
+			lp.name, lp.id)
+
 		log.Infof("Lost leadership for %s", lp.name)
 	}
 }
