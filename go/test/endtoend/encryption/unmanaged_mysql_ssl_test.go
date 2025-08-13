@@ -15,6 +15,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	endtoendutils "vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/utils"
@@ -66,6 +67,7 @@ func TestMain(m *testing.M) {
 // 3. When a MySQL instance does not require SSL connections, and no SSL config is configured in the TabletConfig DB config, there's no error
 // 4. When a MySQL instance does require SSL connections, but no SSL config is configured in the TabletConfig DB config, there's an error
 func TestUnmanagedMysqlSSLConnection(t *testing.T) {
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 22, "vttablet")
 	// Initialize the cluster and create SSL certificates
 	err := setup()
 	require.NoError(t, err, "setup failed")
