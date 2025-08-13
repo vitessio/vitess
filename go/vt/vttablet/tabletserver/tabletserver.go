@@ -1985,7 +1985,10 @@ func (tsv *TabletServer) SetPoolSize(ctx context.Context, val int) error {
 	if val <= 0 {
 		return nil
 	}
-	return tsv.qe.conns.SetCapacity(ctx, int64(val))
+
+	tsv.qe.conns.SetCapacity(int64(val))
+
+	return nil
 }
 
 // PoolSize returns the pool size.
@@ -1995,7 +1998,8 @@ func (tsv *TabletServer) PoolSize() int {
 
 // SetStreamPoolSize changes the pool size to the specified value.
 func (tsv *TabletServer) SetStreamPoolSize(ctx context.Context, val int) error {
-	return tsv.qe.streamConns.SetCapacity(ctx, int64(val))
+	tsv.qe.streamConns.SetCapacity(int64(val))
+	return nil
 }
 
 // SetStreamConsolidationBlocking sets whether the stream consolidator should wait for slow clients
@@ -2011,10 +2015,9 @@ func (tsv *TabletServer) StreamPoolSize() int {
 // SetTxPoolSize changes the tx pool size to the specified value.
 func (tsv *TabletServer) SetTxPoolSize(ctx context.Context, val int) error {
 	// TxPool manages two pools, one for normal connections and one for CLIENT_FOUND_ROWS capability enabled on the connections.
-	if err := tsv.te.txPool.scp.conns.SetCapacity(ctx, int64(val)); err != nil {
-		return err
-	}
-	return tsv.te.txPool.scp.foundRowsPool.SetCapacity(ctx, int64(val))
+	tsv.te.txPool.scp.conns.SetCapacity(int64(val))
+	tsv.te.txPool.scp.foundRowsPool.SetCapacity(int64(val))
+	return nil
 }
 
 // TxPoolSize returns the tx pool size.
