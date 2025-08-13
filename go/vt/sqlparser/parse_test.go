@@ -4248,6 +4248,18 @@ var (
 			output: "alter table t comment 'asdf'",
 		},
 		{
+			input:  `alter table t comment="asdf"`,
+			output: "alter table t comment 'asdf'",
+		},
+		{
+			input:  "alter table t comment 'asdf'",
+			output: "alter table t comment 'asdf'",
+		},
+		{
+			input:  `alter table t comment "asdf"`,
+			output: "alter table t comment 'asdf'",
+		},
+		{
 			input:  "alter table t compression='asdf'",
 			output: "alter table t",
 		},
