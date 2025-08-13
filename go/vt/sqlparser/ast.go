@@ -2683,6 +2683,8 @@ func (node *DDL) alterFormat(buf *TrackedBuffer) {
 		if len(node.AlterCollationSpec.Collation) > 0 {
 			buf.Myprintf(" collate %s", node.AlterCollationSpec.Collation)
 		}
+	} else if node.AlterCommentSpec != nil {
+		buf.Myprintf(" comment '%s'", node.AlterCommentSpec.Comment)
 	}
 }
 
