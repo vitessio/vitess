@@ -40,15 +40,46 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
+// RelayLogPositions contains the positions of the relay log.
+type RelayLogPositions struct {
+	// Combined represents the entire range
+	// of the relaylog with the retrieved +
+	// executed GTID sets combined.
+	Combined replication.Position
+
+	// Executed represents the executed GTID
+	// set of the relaylog/SQL thread.
+	Executed replication.Position
+}
+
+// AtLeast returns true if the RelayLogPositions object contains at
+// least the positions provided as pos.
+func (rlp *RelayLogPositions) AtLeast(pos RelayLogPositions) bool {
+	if rlp.Combined.IsZero() || pos.Combined.IsZero() {
+		return rlp.Executed.AtLeast(pos.Executed)
+	}
+	atLeast := rlp.Combined.AtLeast(pos.Combined)
+	if atLeast && !rlp.Executed.IsZero() {
+		return rlp.Executed.AtLeast(pos.Executed)
+	}
+	return atLeast
+}
+
+// Equal returns true if the RelayLogPositions object is equal to
+// the positions provided as pos.
+func (rlp *RelayLogPositions) Equal(pos RelayLogPositions) bool {
+	return rlp.Combined.Equal(pos.Combined) && rlp.Executed.Equal(pos.Executed)
+}
+
 // FindPositionsOfAllCandidates will find candidates for an emergency
 // reparent, and, if successful, return a mapping of those tablet aliases (as
 // raw strings) to their replication positions for later comparison.
 func FindPositionsOfAllCandidates(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
-) (map[string]replication.Position, bool, error) {
+) (map[string]RelayLogPositions, bool, error) {
 	replicationStatusMap := make(map[string]*replication.ReplicationStatus, len(statusMap))
-	positionMap := make(map[string]replication.Position)
+	positionMap := make(map[string]RelayLogPositions)
 
 	// Build out replication status list from proto types.
 	for alias, statuspb := range statusMap {
@@ -90,11 +121,14 @@ func FindPositionsOfAllCandidates(
 	// Store the final positions in the map.
 	for alias, status := range replicationStatusMap {
 		if !isGTIDBased {
-			positionMap[alias] = status.Position
+			positionMap[alias] = RelayLogPositions{Combined: status.Position}
 
 			continue
 		}
-		positionMap[alias] = status.RelayLogPosition
+		positionMap[alias] = RelayLogPositions{
+			Combined: status.RelayLogPosition,
+			Executed: status.Position,
+		}
 	}
 
 	for alias, primaryStatus := range primaryStatusMap {
@@ -103,7 +137,7 @@ func FindPositionsOfAllCandidates(
 			return nil, false, vterrors.Wrapf(err, "could not decode a primary status executed position for tablet %v: %v", alias, err)
 		}
 
-		positionMap[alias] = executedPosition
+		positionMap[alias] = RelayLogPositions{Combined: executedPosition}
 	}
 
 	return positionMap, isGTIDBased, nil
