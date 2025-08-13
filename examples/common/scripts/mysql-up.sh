@@ -83,6 +83,9 @@ else
                --bind-address="$MYSQL_HOST" \
                --skip-networking=false \
                --skip-mysqlx \
+               --gtid-mode=ON \
+               --enforce-gtid-consistency \
+               --log-bin \
                --log-error="${VTDATAROOT}/tmp/mysql-topo.err" \
                > "${VTDATAROOT}/tmp/mysql-topo.out" 2>&1 &
         
