@@ -2014,6 +2014,10 @@ type AlterCollationSpec struct {
 	Collation    string
 }
 
+type AlterCommentSpec struct {
+	Comment string
+}
+
 type ProcedureSpec struct {
 	ProcName        ProcedureName
 	Definer         string
@@ -2271,6 +2275,9 @@ type DDL struct {
 
 	// AlterCollationSpec is set for CHARACTER SET / COLLATE operations on ALTER statements
 	AlterCollationSpec *AlterCollationSpec
+
+	// AlterCommentSpec is set for COMMENT operations on ALTER statements
+	AlterCommentSpec *AlterCommentSpec
 
 	// EventSpec is set for CREATE EVENT operations
 	EventSpec *EventSpec
@@ -2676,6 +2683,8 @@ func (node *DDL) alterFormat(buf *TrackedBuffer) {
 		if len(node.AlterCollationSpec.Collation) > 0 {
 			buf.Myprintf(" collate %s", node.AlterCollationSpec.Collation)
 		}
+	} else if node.AlterCommentSpec != nil {
+		buf.Myprintf(" comment '%s'", node.AlterCommentSpec.Comment)
 	}
 }
 
