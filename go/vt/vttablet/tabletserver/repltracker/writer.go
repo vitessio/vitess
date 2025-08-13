@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -257,14 +258,14 @@ func (w *heartbeatWriter) write() error {
 	}
 	appConn, err := w.appPool.Get(ctx)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "heartbeatWriter failed to get app connection from pool %v", w.appPool.Name)
 	}
 	defer appConn.Recycle()
 	w.writeConnID.Store(appConn.Conn.ID())
 	defer w.writeConnID.Store(-1)
 	_, err = appConn.Conn.ExecuteFetch(upsert, 1, false)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "heartbeatWriter failed to execute fetch on app connection %v", appConn.Conn.ID())
 	}
 	return nil
 }
