@@ -79,20 +79,20 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 		RefreshInterval: mysqlctl.PoolDynamicHostnameResolution,
 	}
 
+	cp.config = config
+
+	cp.ConnPool.Store(smartconnpool.NewPool(&config))
+
+	cp.dbaPool = dbconnpool.NewConnectionPool("", env.Exporter(), 1, config.IdleTimeout, config.MaxLifetime, 0)
+
 	if name != "" {
 		config.LogWait = func(start time.Time) {
 			env.Stats().WaitTimings.Record(name+"ResourceWaitTime", start)
 		}
 
 		cp.getConnTime = env.Exporter().NewTimings(name+"GetConnTime", "Tracks the amount of time it takes to get a connection", "Settings")
+		cp.statsExporter = smartconnpool.NewStatsExporter[*Conn](env.Exporter(), name)
 	}
-
-	cp.config = config
-
-	cp.ConnPool.Store(smartconnpool.NewPool(&config))
-	cp.statsExporter = smartconnpool.NewStatsExporter[*Conn](env.Exporter(), name)
-
-	cp.dbaPool = dbconnpool.NewConnectionPool("", env.Exporter(), 1, config.IdleTimeout, config.MaxLifetime, 0)
 
 	return cp
 }
@@ -112,7 +112,11 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 
 	pool := cp.ConnPool.Load()
 	pool.Open(connect, refresh)
-	cp.statsExporter.SetPool(pool)
+	if cp.statsExporter != nil {
+		// statsExporter only exists when a name is given and stats are exported
+		pool := cp.ConnPool.Load()
+		cp.statsExporter.SetPool(pool)
+	}
 
 	cp.dbaPool.Open(dbaParams)
 }
