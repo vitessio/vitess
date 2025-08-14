@@ -841,7 +841,7 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.TabletConfig) (bool, error) {
 	// Sanity check for inconsistent flags
 	if tm.Cnf == nil && restoreFromBackup {
-		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
+		return false, fmt.Errorf("you cannot enable --restore-from-backup without a my.cnf file")
 	}
 	if restoreToTimestampStr != "" && restoreToPos != "" {
 		return false, fmt.Errorf("--restore-to-timestamp and --restore-to-pos are mutually exclusive")

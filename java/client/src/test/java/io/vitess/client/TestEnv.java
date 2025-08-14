@@ -83,7 +83,7 @@ public class TestEnv {
     command.add(Integer.toString(port));
     command.add("--proto-topo");
     command.add(getTopology().toString());
-    command.add("--schema_dir");
+    command.add("--schema-dir");
     command.add(schemaDir);
     return command;
   }
