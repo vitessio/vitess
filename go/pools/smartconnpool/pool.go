@@ -311,7 +311,7 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	// wait for connections to be returned to the pool if we're reducing the capacity.
 	defer pool.setIdleCount()
 
-	// close connections until we're under capacity
+	// Close idle connections currently in the stack
 	for {
 		// make sure there's no clients waiting for connections because they won't be returned in the future
 		pool.wait.expire(true)
