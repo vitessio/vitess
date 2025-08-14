@@ -72,7 +72,6 @@ func NewConnectionPool(name string, stats *servenv.Exporter, capacity int, idleT
 
 	cp.statsExporter = smartconnpool.NewStatsExporter[*DBConnection](stats, name)
 
-	//	cp.connPool.Load().RegisterStats(stats, name)
 	return cp
 }
 
