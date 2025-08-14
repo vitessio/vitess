@@ -328,10 +328,6 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 		pool.closedConn()
 	}
 
-	if pool.active.Load() == 0 {
-		close(pool.close)
-	}
-
 	return nil
 }
 
