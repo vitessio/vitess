@@ -3911,6 +3911,10 @@ spatial_type:
   {
     $$ = ColumnType{Type: string($1)}
   }
+| VECTOR char_length_opt
+  {
+    $$ = ColumnType{Type: string($1), Length: $2.(*SQLVal)}
+  }
 | MULTIPOINT
   {
     $$ = ColumnType{Type: string($1)}
