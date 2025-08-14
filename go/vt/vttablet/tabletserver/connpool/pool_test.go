@@ -163,15 +163,15 @@ func TestConnPoolMaxIdleCount(t *testing.T) {
 
 	// after recycle - 1 idle connection
 	conns[0].Recycle()
-	assert.Zero(t, connPool.Metrics.IdleClosed(), "pool idle closed should be 0")
+	assert.Zero(t, connPool.Metrics().IdleClosed(), "pool idle closed should be 0")
 
 	// after recycle - 2 idle connection
 	conns[1].Recycle()
-	assert.Zero(t, connPool.Metrics.IdleClosed(), "pool idle closed should be 0")
+	assert.Zero(t, connPool.Metrics().IdleClosed(), "pool idle closed should be 0")
 
 	// after recycle - 3 idle connection, 1 will be closed
 	conns[2].Recycle()
-	assert.EqualValues(t, 1, connPool.Metrics.IdleClosed(), "pool idle closed should be 1")
+	assert.EqualValues(t, 1, connPool.Metrics().IdleClosed(), "pool idle closed should be 1")
 
 	// changing the pool capacity will affect the idle count allowed for that pool.
 	// If setting the capacity to lower value than max idle count.
@@ -218,8 +218,8 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	connPool.Open(params, params, params)
 	defer connPool.Close()
 	assert.EqualValues(t, 100, connPool.Capacity(), "pool capacity should be 100")
-	assert.EqualValues(t, 0, connPool.Metrics.WaitTime(), "pool wait time should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.WaitCount(), "pool wait count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().WaitTime(), "pool wait time should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().WaitCount(), "pool wait count should be 0")
 	assert.EqualValues(t, idleTimeout, connPool.IdleTimeout(), "pool idle timeout should be 0")
 	assert.EqualValues(t, 100, connPool.Available(), "pool available connections should be 100")
 	assert.EqualValues(t, 0, connPool.Active(), "pool active connections should be 0")
@@ -247,29 +247,29 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	assert.EqualValues(t, 5, connPool.Available(), "pool available connections should be 5")
 	assert.EqualValues(t, 0, connPool.Active(), "pool active connections should be 0")
 	assert.EqualValues(t, 0, connPool.InUse(), "pool inUse connections should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.GetCount(), "pool get count should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.GetSettingCount(), "pool get with settings should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().GetCount(), "pool get count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().GetSettingCount(), "pool get with settings should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().ResetSettingCount(), "pool reset settings count should be 0")
 
 	dbConn, err := connPool.Get(context.Background(), nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
 	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
 	assert.EqualValues(t, 1, connPool.InUse(), "pool inUse connections should be 1")
-	assert.EqualValues(t, 1, connPool.Metrics.GetCount(), "pool get count should be 1")
-	assert.EqualValues(t, 0, connPool.Metrics.GetSettingCount(), "pool get with settings should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics().GetCount(), "pool get count should be 1")
+	assert.EqualValues(t, 0, connPool.Metrics().GetSettingCount(), "pool get with settings should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().ResetSettingCount(), "pool reset settings count should be 0")
 
 	dbConn.Recycle()
 	assert.EqualValues(t, 5, connPool.Available(), "pool available connections should be 5")
 	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
 	assert.EqualValues(t, 0, connPool.InUse(), "pool inUse connections should be 0")
-	assert.EqualValues(t, 1, connPool.Metrics.GetCount(), "pool get count should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.GetSettingCount(), "pool get with settings should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics().GetCount(), "pool get count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().GetSettingCount(), "pool get with settings should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().ResetSettingCount(), "pool reset settings count should be 0")
 
 	db.AddQuery("a", &sqltypes.Result{})
 	sa := smartconnpool.NewSetting("a", "")
@@ -278,19 +278,19 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
 	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
 	assert.EqualValues(t, 1, connPool.InUse(), "pool inUse connections should be 1")
-	assert.EqualValues(t, 1, connPool.Metrics.GetCount(), "pool get count should be 1")
-	assert.EqualValues(t, 1, connPool.Metrics.GetSettingCount(), "pool get with settings should be 1")
-	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics().GetCount(), "pool get count should be 1")
+	assert.EqualValues(t, 1, connPool.Metrics().GetSettingCount(), "pool get with settings should be 1")
+	assert.EqualValues(t, 0, connPool.Metrics().DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().ResetSettingCount(), "pool reset settings count should be 0")
 
 	dbConn.Recycle()
 	assert.EqualValues(t, 5, connPool.Available(), "pool available connections should be 5")
 	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
 	assert.EqualValues(t, 0, connPool.InUse(), "pool inUse connections should be 0")
-	assert.EqualValues(t, 1, connPool.Metrics.GetCount(), "pool get count should be 1")
-	assert.EqualValues(t, 1, connPool.Metrics.GetSettingCount(), "pool get with settings should be 1")
-	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics().GetCount(), "pool get count should be 1")
+	assert.EqualValues(t, 1, connPool.Metrics().GetSettingCount(), "pool get with settings should be 1")
+	assert.EqualValues(t, 0, connPool.Metrics().DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().ResetSettingCount(), "pool reset settings count should be 0")
 
 	// now showcasing diff and reset setting.
 	// Steps 1: acquire all connection with same setting
@@ -308,10 +308,10 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	assert.EqualValues(t, 0, connPool.Available(), "pool available connections should be 0")
 	assert.EqualValues(t, 5, connPool.Active(), "pool active connections should be 5")
 	assert.EqualValues(t, 5, connPool.InUse(), "pool inUse connections should be 5")
-	assert.EqualValues(t, 1, connPool.Metrics.GetCount(), "pool get count should be 1")
-	assert.EqualValues(t, 6, connPool.Metrics.GetSettingCount(), "pool get with settings should be 6")
-	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics().GetCount(), "pool get count should be 1")
+	assert.EqualValues(t, 6, connPool.Metrics().GetSettingCount(), "pool get with settings should be 6")
+	assert.EqualValues(t, 0, connPool.Metrics().DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().ResetSettingCount(), "pool reset settings count should be 0")
 
 	// Step 2
 	for _, conn := range conns {
@@ -320,10 +320,10 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	assert.EqualValues(t, 5, connPool.Available(), "pool available connections should be 5")
 	assert.EqualValues(t, 5, connPool.Active(), "pool active connections should be 5")
 	assert.EqualValues(t, 0, connPool.InUse(), "pool inUse connections should be 0")
-	assert.EqualValues(t, 1, connPool.Metrics.GetCount(), "pool get count should be 1")
-	assert.EqualValues(t, 6, connPool.Metrics.GetSettingCount(), "pool get with settings should be 6")
-	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
-	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics().GetCount(), "pool get count should be 1")
+	assert.EqualValues(t, 6, connPool.Metrics().GetSettingCount(), "pool get with settings should be 6")
+	assert.EqualValues(t, 0, connPool.Metrics().DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 0, connPool.Metrics().ResetSettingCount(), "pool reset settings count should be 0")
 
 	// Step 3
 	dbConn, err = connPool.Get(context.Background(), nil)
@@ -331,10 +331,10 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
 	assert.EqualValues(t, 5, connPool.Active(), "pool active connections should be 5")
 	assert.EqualValues(t, 1, connPool.InUse(), "pool inUse connections should be 1")
-	assert.EqualValues(t, 2, connPool.Metrics.GetCount(), "pool get count should be 2")
-	assert.EqualValues(t, 6, connPool.Metrics.GetSettingCount(), "pool get with settings should be 6")
-	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
-	assert.EqualValues(t, 1, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 1")
+	assert.EqualValues(t, 2, connPool.Metrics().GetCount(), "pool get count should be 2")
+	assert.EqualValues(t, 6, connPool.Metrics().GetSettingCount(), "pool get with settings should be 6")
+	assert.EqualValues(t, 0, connPool.Metrics().DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics().ResetSettingCount(), "pool reset settings count should be 1")
 	dbConn.Recycle()
 
 	// Step 4
@@ -345,10 +345,10 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
 	assert.EqualValues(t, 5, connPool.Active(), "pool active connections should be 5")
 	assert.EqualValues(t, 1, connPool.InUse(), "pool inUse connections should be 1")
-	assert.EqualValues(t, 2, connPool.Metrics.GetCount(), "pool get count should be 2")
-	assert.EqualValues(t, 7, connPool.Metrics.GetSettingCount(), "pool get with settings should be 7")
-	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
-	assert.EqualValues(t, 1, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 1")
+	assert.EqualValues(t, 2, connPool.Metrics().GetCount(), "pool get count should be 2")
+	assert.EqualValues(t, 7, connPool.Metrics().GetSettingCount(), "pool get with settings should be 7")
+	assert.EqualValues(t, 0, connPool.Metrics().DiffSettingCount(), "pool different settings count should be 0")
+	assert.EqualValues(t, 1, connPool.Metrics().ResetSettingCount(), "pool reset settings count should be 1")
 	dbConn.Recycle()
 }
 

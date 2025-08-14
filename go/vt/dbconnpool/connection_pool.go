@@ -24,6 +24,7 @@ package dbconnpool
 import (
 	"context"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/netutil"
@@ -35,7 +36,7 @@ import (
 // ConnectionPool re-exposes ResourcePool as a pool of
 // PooledDBConnection objects.
 type ConnectionPool struct {
-	*smartconnpool.ConnPool[*DBConnection]
+	ConnPool atomic.Pointer[smartconnpool.ConnPool[*DBConnection]]
 
 	config        smartconnpool.Config[*DBConnection]
 	statsExporter *smartconnpool.StatsExporter[*DBConnection]
@@ -57,7 +58,8 @@ func NewConnectionPool(name string, stats *servenv.Exporter, capacity int, idleT
 		MaxLifetime:     maxLifetime,
 		RefreshInterval: dnsResolutionFrequency,
 	}
-	cp := &ConnectionPool{ConnPool: smartconnpool.NewPool(&config), config: config, name: name}
+	cp := &ConnectionPool{config: config, name: name}
+	cp.ConnPool.Store(smartconnpool.NewPool(&config))
 	if name == "" || usedNames[name] {
 		return cp
 	}
@@ -70,7 +72,7 @@ func NewConnectionPool(name string, stats *servenv.Exporter, capacity int, idleT
 
 	cp.statsExporter = smartconnpool.NewStatsExporter[*DBConnection](stats, name)
 
-	//	cp.ConnPool.RegisterStats(stats, name)
+	//	cp.connPool.Load().RegisterStats(stats, name)
 	return cp
 }
 
@@ -92,17 +94,31 @@ func (cp *ConnectionPool) Open(info dbconfigs.Connector) {
 		return NewDBConnection(ctx, info)
 	}
 
-	cp.ConnPool.Open(connect, refresh)
+	pool := cp.ConnPool.Load()
+	pool.Open(connect, refresh)
 	if cp.statsExporter != nil {
-		cp.statsExporter.SetPool(cp.ConnPool)
+		cp.statsExporter.SetPool(pool)
 	}
 }
 
 func (cp *ConnectionPool) Close() {
-	cp.ConnPool.Close()
-	cp.ConnPool = smartconnpool.NewPool(&cp.config)
+	pool := cp.ConnPool.Load()
+	pool.Close()
+	cp.ConnPool.Store(smartconnpool.NewPool(&cp.config))
 }
 
 func (cp *ConnectionPool) Get(ctx context.Context) (*PooledDBConnection, error) {
-	return cp.ConnPool.Get(ctx, nil)
+	pool := cp.ConnPool.Load()
+	return pool.Get(ctx, nil)
+}
+
+func (cp *ConnectionPool) IsOpen() bool {
+	pool := cp.ConnPool.Load()
+	return pool.IsOpen()
+}
+
+func (cp *ConnectionPool) SetIdleTimeout(timeout time.Duration) {
+	cp.config.IdleTimeout = timeout
+	pool := cp.ConnPool.Load()
+	pool.SetIdleTimeout(timeout)
 }
