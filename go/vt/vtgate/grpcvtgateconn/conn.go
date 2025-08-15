@@ -57,11 +57,11 @@ func init() {
 		"vtctl",
 		"vttestserver",
 	} {
-		servenv.OnParseFor(cmd, registerFlags)
+		servenv.OnParseFor(cmd, RegisterFlags)
 	}
 }
 
-func registerFlags(fs *pflag.FlagSet) {
+func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &cert, "vtgate-grpc-cert", "", "the cert to use to connect")
 	utils.SetFlagStringVar(fs, &key, "vtgate-grpc-key", "", "the key to use to connect")
 	utils.SetFlagStringVar(fs, &ca, "vtgate-grpc-ca", "", "the server ca to use to validate servers when connecting")
