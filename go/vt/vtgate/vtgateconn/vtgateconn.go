@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2024 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -169,6 +169,11 @@ func (sn *VTGateSession) Prepare(ctx context.Context, query string) ([]*querypb.
 	session, fields, paramsCount, err := sn.impl.Prepare(ctx, sn.session, query)
 	sn.session = session
 	return fields, paramsCount, err
+}
+
+// CloseSession closes the session provided by rolling back any active transaction.
+func (sn *VTGateSession) CloseSession(ctx context.Context) error {
+	return sn.impl.CloseSession(ctx, sn.session)
 }
 
 //
