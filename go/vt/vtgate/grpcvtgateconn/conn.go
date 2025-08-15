@@ -39,11 +39,12 @@ import (
 )
 
 var (
-	cert string
-	key  string
-	ca   string
-	crl  string
-	name string
+	cert     string
+	key      string
+	ca       string
+	crl      string
+	name     string
+	failFast bool
 )
 
 func init() {
@@ -66,6 +67,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &ca, "vtgate-grpc-ca", "", "the server ca to use to validate servers when connecting")
 	utils.SetFlagStringVar(fs, &crl, "vtgate-grpc-crl", "", "the server crl to use to validate server certificates when connecting")
 	utils.SetFlagStringVar(fs, &name, "vtgate-grpc-server-name", "", "the server name to use to validate server certificate")
+	utils.SetFlagBoolVar(fs, &failFast, "vtgate-grpc-fail-fast", false, "whether to enable grpc fail fast when communicating with vtgate")
 }
 
 type vtgateConn struct {
@@ -87,7 +89,7 @@ func Dial(opts ...grpc.DialOption) vtgateconn.DialerFunc {
 
 		opts = append(opts, opt)
 
-		cc, err := grpcclient.DialContext(ctx, address, grpcclient.FailFast(false), opts...)
+		cc, err := grpcclient.DialContext(ctx, address, grpcclient.FailFast(failFast), opts...)
 		if err != nil {
 			return nil, err
 		}
