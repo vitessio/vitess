@@ -509,7 +509,7 @@ func TestConnAttrs(t *testing.T) {
 		Port:  port,
 		Uname: "user1",
 		Pass:  "password1",
-		Attributes: map[string]string{
+		Attributes: &ConnectionAttributes{
 			"key1": "value1",
 			"k2":   "v2",
 		},
@@ -522,7 +522,7 @@ func TestConnAttrs(t *testing.T) {
 
 	serverConn := th.LastConn()
 	assert.Equal(t, uint32(CapabilityClientConnAttr), clientConn.Capabilities&CapabilityClientConnAttr, "ConnAttr flag: %x, bit must be set", th.LastConn().Capabilities)
-	assert.Equal(t, serverConn.Attributes, params.Attributes, "attributes should be sent and parsed")
+	assert.Equal(t, serverConn.Attributes, *params.Attributes, "attributes should be sent and parsed")
 
 	clientConn.Close()
 	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")
@@ -551,7 +551,7 @@ func TestConnAttrs(t *testing.T) {
 		Port:  port,
 		Uname: "user1",
 		Pass:  "password1",
-		Attributes: map[string]string{
+		Attributes: &ConnectionAttributes{
 			"tooLongKey": strings.Repeat("a", 256),
 		},
 	}

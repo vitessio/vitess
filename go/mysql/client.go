@@ -296,7 +296,7 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 	}
 
 	// Connection attributes.
-	if capabilities&CapabilityClientConnAttr != 0 && len(params.Attributes) > 0 {
+	if capabilities&CapabilityClientConnAttr != 0 && params.Attributes != nil && len(*params.Attributes) > 0 {
 		c.Capabilities |= CapabilityClientConnAttr
 	}
 
@@ -572,9 +572,9 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	// If the server supports CapabilityClientConnAttr and there are attributes to be
 	// sent, then indicate
 	var attrLength int
-	if capabilities&CapabilityClientConnAttr != 0 && len(params.Attributes) > 0 {
+	if capabilities&CapabilityClientConnAttr != 0 && params.Attributes != nil && len(*params.Attributes) > 0 {
 		capabilityFlags |= CapabilityClientConnAttr
-		for key, value := range params.Attributes {
+		for key, value := range *params.Attributes {
 			// 1 byte for key len + key + 1 byte for val len + val
 			attrLength += 1 + len(key) + 1 + len(value)
 		}
@@ -621,7 +621,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	if attrLength > 0 {
 		pos = writeLenEncInt(data, pos, uint64(attrLength))
 
-		for key, value := range params.Attributes {
+		for key, value := range *params.Attributes {
 			if len(key) > 255 || len(value) > 255 {
 				return sqlerror.NewSQLErrorf(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "writeHandshakeResponse41: attribute key or value is too long")
 			}

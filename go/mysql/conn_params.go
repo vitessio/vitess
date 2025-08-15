@@ -68,7 +68,7 @@ type ConnParams struct {
 
 	MultiQuery bool
 
-	Attributes ConnectionAttributes
+	Attributes *ConnectionAttributes
 }
 
 // EnableSSL will set the right flag on the parameters.
