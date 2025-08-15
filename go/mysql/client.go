@@ -295,6 +295,11 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 		return sqlerror.NewSQLErrorf(sqlerror.CRSSLConnectionError, sqlerror.SSUnknownSQLState, "server doesn't support ClientSessionTrack but client asked for it")
 	}
 
+	// Connection attributes.
+	if capabilities&CapabilityClientConnAttr != 0 && len(params.Attributes) > 0 {
+		c.Capabilities |= CapabilityClientConnAttr
+	}
+
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
 	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, uint8(params.Charset), params); err != nil {
@@ -564,6 +569,18 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		length++
 	}
 
+	// If the server supports CapabilityClientConnAttr and there are attributes to be
+	// sent, then indicate
+	var attrLength int
+	if capabilities&CapabilityClientConnAttr != 0 && len(params.Attributes) > 0 {
+		capabilityFlags |= CapabilityClientConnAttr
+		for key, value := range params.Attributes {
+			// 1 byte for key len + key + 1 byte for val len + val
+			attrLength += 1 + len(key) + 1 + len(value)
+		}
+		length += lenEncIntSize(uint64(attrLength)) + attrLength
+	}
+
 	data, pos := c.startEphemeralPacketWithHeader(length)
 
 	// Client capability flags.
@@ -599,6 +616,22 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 
 	// Assume native client during response
 	pos = writeNullString(data, pos, string(c.authPluginName))
+
+	// Client conn attributes
+	if attrLength > 0 {
+		pos = writeLenEncInt(data, pos, uint64(attrLength))
+
+		for key, value := range params.Attributes {
+			if len(key) > 255 || len(value) > 255 {
+				return sqlerror.NewSQLErrorf(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "writeHandshakeResponse41: attribute key or value is too long")
+			}
+
+			pos = writeByte(data, pos, byte(len(key)))
+			pos += copy(data[pos:], key)
+			pos = writeByte(data, pos, byte(len(value)))
+			pos += copy(data[pos:], value)
+		}
+	}
 
 	// Sanity-check the length.
 	if pos != len(data) {
