@@ -279,8 +279,8 @@ func (gw *TabletGateway) DebugBalancerHandler(w http.ResponseWriter, r *http.Req
 // withRetry also adds shard information to errors returned from the inner QueryService, so
 // withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
-	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
-
+	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
 	if inTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tabletGateway's query service can only be used for non-transactional queries on replicas")
@@ -359,35 +359,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			break
 		}
 
-		var th *discovery.TabletHealth
-
-		useBalancer := balancerEnabled
-		if balancerEnabled && len(balancerKeyspaces) > 0 {
-			useBalancer = slices.Contains(balancerKeyspaces, target.Keyspace)
-		}
-		if useBalancer {
-			// filter out the tablets that we've tried before (if any), then pick the best one
-			if len(invalidTablets) > 0 {
-				tablets = slices.DeleteFunc(tablets, func(t *discovery.TabletHealth) bool {
-					_, isInvalid := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]
-					return isInvalid
-				})
-			}
-
-			th = gw.balancer.Pick(target, tablets)
-
-		} else {
-			gw.shuffleTablets(gw.localCell, tablets)
-
-			// skip tablets we tried before
-			for _, t := range tablets {
-				if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
-					th = t
-					break
-				}
-			}
-		}
-
+		th := gw.getBalancerTablet(target, invalidTablets, tablets)
 		if th == nil {
 			// do not override error from last attempt.
 			if err == nil {
@@ -419,9 +391,44 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 	return NewShardError(err, target)
 }
 
+// getBalancerTablet selects a tablet for the given query target, using the configured balancer if enabled. Otherwise, it will
+// select a random tablet, with preference to the local cell.
+func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, invalidTablets map[string]bool, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
+	useBalancer := balancerEnabled
+	if balancerEnabled && len(balancerKeyspaces) > 0 {
+		useBalancer = slices.Contains(balancerKeyspaces, target.Keyspace)
+	}
+
+	// Get the tablet from the balancer if enabled
+	if useBalancer {
+		// filter out the tablets that we've tried before (if any), then pick the best one
+		if len(invalidTablets) > 0 {
+			tablets = slices.DeleteFunc(tablets, func(t *discovery.TabletHealth) bool {
+				_, isInvalid := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]
+				return isInvalid
+			})
+		}
+
+		return gw.balancer.Pick(target, tablets, nil)
+	}
+
+	// Otherwise, randomly select a tablet, with preference to the local cell
+	gw.shuffleTablets(gw.localCell, tablets)
+
+	// skip tablets we tried before
+	for _, t := range tablets {
+		if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
+			return t
+		}
+	}
+
+	return nil
+}
+
 // withShardError adds shard information to errors returned from the inner QueryService.
 func (gw *TabletGateway) withShardError(ctx context.Context, target *querypb.Target, conn queryservice.QueryService,
-	_ string, _ bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	_ string, _ bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error),
+) error {
 	_, err := inner(ctx, target, conn)
 	return NewShardError(err, target)
 }
@@ -449,7 +456,6 @@ func (gw *TabletGateway) getStatsAggregator(target *querypb.Target) *TabletStatu
 }
 
 func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.TabletHealth) {
-
 	// Randomly shuffle the list of tablets, putting the same-cell hosts at the front
 	// of the list and the other-cell hosts at the back
 	//

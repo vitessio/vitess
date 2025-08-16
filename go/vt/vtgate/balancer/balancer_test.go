@@ -298,7 +298,7 @@ func TestBalancedPick(t *testing.T) {
 			b := NewTabletBalancer(localCell, vtGateCells).(*tabletBalancer)
 
 			for i := 0; i < N/len(vtGateCells); i++ {
-				th := b.Pick(target, tablets)
+				th := b.Pick(target, tablets, nil)
 				if i == 0 {
 					t.Logf("Target Flows %v, Balancer: %s\n", expectedPerCell, b.print())
 				}
@@ -336,7 +336,7 @@ func TestTopologyChanged(t *testing.T) {
 	tablets = tablets[0:2]
 
 	for i := 0; i < N; i++ {
-		th := b.Pick(target, tablets)
+		th := b.Pick(target, tablets, nil)
 		allocation, totalAllocation := b.getAllocation(target, tablets)
 
 		assert.Equalf(t, ALLOCATION/2, totalAllocation, "totalAllocation mismatch %s", b.print())
@@ -346,7 +346,7 @@ func TestTopologyChanged(t *testing.T) {
 
 	// Run again with the full topology. Now traffic should go to cell b
 	for i := 0; i < N; i++ {
-		th := b.Pick(target, allTablets)
+		th := b.Pick(target, allTablets, nil)
 
 		allocation, totalAllocation := b.getAllocation(target, allTablets)
 
@@ -359,7 +359,7 @@ func TestTopologyChanged(t *testing.T) {
 	newTablet := createTestTablet("b")
 	allTablets[2] = newTablet
 	for i := 0; i < N; i++ {
-		th := b.Pick(target, allTablets)
+		th := b.Pick(target, allTablets, nil)
 
 		allocation, totalAllocation := b.getAllocation(target, allTablets)
 
@@ -367,5 +367,4 @@ func TestTopologyChanged(t *testing.T) {
 		assert.Equalf(t, ALLOCATION/4, allocation[th.Tablet.Alias.Uid], "allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
 		assert.Equalf(t, "b", th.Tablet.Alias.Cell, "shuffle promoted wrong tablet from cell %s", allTablets[0].Tablet.Alias.Cell)
 	}
-
 }
