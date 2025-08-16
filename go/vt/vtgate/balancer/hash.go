@@ -17,6 +17,7 @@ limitations under the License.
 package balancer
 
 import (
+	"context"
 	"net/http"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -29,15 +30,51 @@ import (
 type ConsistentHashBalancer struct {
 	// localCell is the cell the gateway is currently running in.
 	localCell string
+
+	// hc is the tablet health check.
+	hc discovery.HealthCheck
+
+	// // hcChan is the channel to receive tablet health events on.
+	// hcChan chan *discovery.TabletHealth
+}
+
+// NewConsistentHashBalancer creates a new consistent hash balancer.
+func NewConsistentHashBalancer(ctx context.Context, localCell string, hc discovery.HealthCheck) TabletBalancer {
+	b := &ConsistentHashBalancer{
+		localCell: localCell,
+		hc:        hc,
+	}
+
+	// Set up health check subscription
+	hcChan := b.hc.Subscribe("ConsistentHashBalancer")
+	go b.watchHealthCheck(ctx, hcChan)
+
+	return b
 }
 
 // Pick is the main entry point to the balancer.
 //
 // For a given session, it will return the same tablet for its duration. The tablet is
 // initially selected randomly, with preference to tablets in the local cell.
-func Pick(target *querypb.Target, _ []*discovery.TabletHealth, opts *PickOpts) *discovery.TabletHealth {
+func (b *ConsistentHashBalancer) Pick(target *querypb.Target, _ []*discovery.TabletHealth, opts *PickOpts) *discovery.TabletHealth {
 	return nil
 }
 
 // DebugHandler provides a summary of the consistent hash balancer state.
-func DebugHandler(w http.ResponseWriter, r *http.Request) {}
+func (b *ConsistentHashBalancer) DebugHandler(w http.ResponseWriter, r *http.Request) {}
+
+// watchHealthCheck watches the health check channel for tablet health changes, and updates hash rings accordingly.
+func (b *ConsistentHashBalancer) watchHealthCheck(ctx context.Context, hcChan chan *discovery.TabletHealth) {
+	for {
+		select {
+		case <-ctx.Done():
+			b.hc.Unsubscribe(hcChan)
+			close(hcChan)
+			return
+		case th := <-hcChan:
+			if th == nil {
+				return
+			}
+		}
+	}
+}
