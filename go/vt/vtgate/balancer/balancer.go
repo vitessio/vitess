@@ -90,10 +90,17 @@ converge on the desired balanced query load.
 type TabletBalancer interface {
 	// Pick is the main entry point to the balancer. Returns the best tablet out of the list
 	// for a given query to maintain the desired balanced allocation over multiple executions.
-	Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth
+	Pick(target *querypb.Target, tablets []*discovery.TabletHealth, opts *PickOpts) *discovery.TabletHealth
 
 	// DebugHandler provides a summary of tablet balancer state
 	DebugHandler(w http.ResponseWriter, r *http.Request)
+}
+
+// PickOpts are balancer options that are passed into Pick. This exists so that as more balancer
+// implementations are added the Pick signature does not get overly long.
+type PickOpts struct {
+	// sessionHash is the hash of the current session UUID.
+	sessionHash uint64
 }
 
 func NewTabletBalancer(localCell string, vtGateCells []string) TabletBalancer {
@@ -167,8 +174,7 @@ func (b *tabletBalancer) DebugHandler(w http.ResponseWriter, _ *http.Request) {
 // Given the total allocation for the set of tablets, choose the best target
 // by a weighted random sample so that over time the system will achieve the
 // desired balanced allocation.
-func (b *tabletBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
-
+func (b *tabletBalancer) Pick(target *querypb.Target, tablets []*discovery.TabletHealth, _ *PickOpts) *discovery.TabletHealth {
 	numTablets := len(tablets)
 	if numTablets == 0 {
 		return nil
@@ -306,7 +312,7 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *ta
 					// to avoid truncating the integer values.
 					shiftFlow := overAllocatedFlow * currentFlow * underAllocatedFlow / a.Inflows[overAllocatedCell] / unbalancedFlow
 
-					//fmt.Printf("shift %d %s %s -> %s (over %d current %d in %d under %d unbalanced %d) \n", shiftFlow, vtgateCell, overAllocatedCell, underAllocatedCell,
+					// fmt.Printf("shift %d %s %s -> %s (over %d current %d in %d under %d unbalanced %d) \n", shiftFlow, vtgateCell, overAllocatedCell, underAllocatedCell,
 					//	overAllocatedFlow, currentFlow, a.Inflows[overAllocatedCell], underAllocatedFlow, unbalancedFlow)
 
 					a.Outflows[vtgateCell][overAllocatedCell] -= shiftFlow
