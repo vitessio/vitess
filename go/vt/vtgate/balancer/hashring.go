@@ -58,7 +58,7 @@ func newHashRing() *hashRing {
 	}
 }
 
-// add adds a tablet to the hash ring. It does not sort the nodes after adding.
+// add adds a tablet to the hash ring.
 func (r *hashRing) add(tablet *discovery.TabletHealth) {
 	if r.contains(tablet) {
 		return
@@ -79,6 +79,7 @@ func (r *hashRing) add(tablet *discovery.TabletHealth) {
 		r.nodeMap[hash] = tablet
 	}
 
+	slices.Sort(r.nodes)
 	r.tablets[tabletAlias(tablet)] = struct{}{}
 }
 
