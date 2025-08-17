@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/cespare/xxhash/v2"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
@@ -116,8 +117,21 @@ func (r *hashRing) get(key string) *discovery.TabletHealth {
 		return nil
 	}
 
-	// Find the first node greater than or equal to this hash
 	hash := xxhash.Sum64String(key)
+	tablet := r.getHashed(hash)
+	return tablet
+}
+
+// getHashed returns the tablet for the given hash.
+func (r *hashRing) getHashed(hash uint64) *discovery.TabletHealth {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if len(r.nodes) == 0 {
+		return nil
+	}
+
+	// Find the first node greater than or equal to this hash
 	i := sort.Search(len(r.nodes), func(i int) bool {
 		return r.nodes[i] >= hash
 	})
@@ -130,6 +144,7 @@ func (r *hashRing) get(key string) *discovery.TabletHealth {
 	// Return the associated tablet
 	node := r.nodes[i]
 	tablet := r.nodeMap[node]
+
 	return tablet
 }
 

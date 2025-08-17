@@ -17,12 +17,13 @@ limitations under the License.
 package balancer
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -52,7 +53,7 @@ func TestNewSessionBalancer(t *testing.T) {
 }
 
 func TestPickNoTablets(t *testing.T) {
-	b, hcChan := newSessionBalancer(t)
+	b, _ := newSessionBalancer(t)
 
 	target := &querypb.Target{
 		Keyspace:   "keyspace",
@@ -61,7 +62,8 @@ func TestPickNoTablets(t *testing.T) {
 		Cell:       "local",
 	}
 
-	result := b.Pick(target, nil, nil)
+	opts := sessionHash(12345)
+	result := b.Pick(target, nil, opts)
 	require.Nil(t, result)
 }
 
@@ -114,20 +116,23 @@ func TestPickLocalOnly(t *testing.T) {
 	hcChan <- localTablet1
 	hcChan <- localTablet2
 
+	// Give a moment for the worker to process the tablets
+	time.Sleep(10 * time.Millisecond)
+
 	// Pick for a specific session hash
-	opts := &PickOpts{sessionHash: 12345}
+	opts := sessionHash(12345)
 	picked1 := b.Pick(target, nil, opts)
 	require.NotNil(t, picked1)
 
 	// Pick again with same session hash, should return same tablet
 	picked2 := b.Pick(target, nil, opts)
-	require.Equal(t, picked1, picked2)
+	require.Equal(t, picked1, picked2, fmt.Sprintf("expected %s, got %s", tabletAlias(picked1), tabletAlias(picked2)))
 
-	// Pick with different session hash, empirically know that it should return different tablet
-	opts = &PickOpts{sessionHash: 67890}
+	// Pick with different session hash, empirically know that it should return tablet2
+	opts = sessionHash(5018141287610575993)
 	picked3 := b.Pick(target, nil, opts)
 	require.NotNil(t, picked3)
-	require.NotEqual(t, picked2, picked3)
+	require.NotEqual(t, picked2, picked3, fmt.Sprintf("expected different tablets, got %s", tabletAlias(picked3)))
 }
 
 func TestPickPreferLocal(t *testing.T) {
@@ -198,8 +203,11 @@ func TestPickPreferLocal(t *testing.T) {
 	hcChan <- localTablet2
 	hcChan <- externalTablet
 
+	// Give a moment for the worker to process the tablets
+	time.Sleep(10 * time.Millisecond)
+
 	// Pick should prefer local cell
-	opts := &PickOpts{sessionHash: 12345}
+	opts := sessionHash(5018141287610575993)
 	picked1 := b.Pick(target, nil, opts)
 	require.NotNil(t, picked1)
 	require.Equal(t, "local", picked1.Target.Cell)
@@ -254,11 +262,205 @@ func TestPickNoLocal(t *testing.T) {
 	hcChan <- externalTablet1
 	hcChan <- externalTablet2
 
+	// Give a moment for the worker to process the tablets
+	time.Sleep(10 * time.Millisecond)
+
 	// Pick should return external cell since there are no local cells
-	opts := &PickOpts{sessionHash: 12345}
+	opts := sessionHash(12345)
 	picked1 := b.Pick(target, nil, opts)
 	require.NotNil(t, picked1)
 	require.Equal(t, "external", picked1.Target.Cell)
+}
+
+func TestTabletNotServing(t *testing.T) {
+	b, hcChan := newSessionBalancer(t)
+
+	target := &querypb.Target{
+		Keyspace:   "keyspace",
+		Shard:      "0",
+		TabletType: topodatapb.TabletType_REPLICA,
+	}
+
+	localTablet := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "local",
+				Uid:  100,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	externalTablet := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "external",
+				Uid:  200,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+			Cell:       "external",
+		},
+		Serving: true,
+	}
+
+	hcChan <- localTablet
+	hcChan <- externalTablet
+
+	// Give a moment for the worker to process the tablets
+	time.Sleep(10 * time.Millisecond)
+
+	opts := sessionHash(5018141287610575993)
+	picked1 := b.Pick(target, nil, opts)
+	require.NotNil(t, picked1)
+
+	// Local tablet goes out of serving
+	localTablet.Serving = false
+	hcChan <- localTablet
+
+	// Give a moment for the worker to process the tablets
+	time.Sleep(10 * time.Millisecond)
+
+	// Should not pick the local tablet again
+	picked2 := b.Pick(target, nil, opts)
+	require.NotEqual(t, picked1, picked2)
+}
+
+func TestNewLocalTablet(t *testing.T) {
+	b, hcChan := newSessionBalancer(t)
+
+	target := &querypb.Target{
+		Keyspace:   "keyspace",
+		Shard:      "0",
+		TabletType: topodatapb.TabletType_REPLICA,
+	}
+
+	localTablet1 := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "local",
+				Uid:  100,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	hcChan <- localTablet1
+
+	time.Sleep(10 * time.Millisecond)
+
+	opts := sessionHash(5018141287610575993)
+	picked1 := b.Pick(target, nil, opts)
+	require.NotNil(t, picked1)
+
+	localTablet2 := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "local",
+				Uid:  101,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	hcChan <- localTablet2
+
+	time.Sleep(10 * time.Millisecond)
+
+	picked2 := b.Pick(target, nil, opts)
+	require.NotNil(t, picked2)
+	require.NotEqual(t, picked1, picked2, fmt.Sprintf("expected different tablets, got %s", tabletAlias(picked2)))
+}
+
+func TestNewExternalTablet(t *testing.T) {
+	b, hcChan := newSessionBalancer(t)
+
+	target := &querypb.Target{
+		Keyspace:   "keyspace",
+		Shard:      "0",
+		TabletType: topodatapb.TabletType_REPLICA,
+	}
+
+	externalTablet1 := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "external",
+				Uid:  100,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	hcChan <- externalTablet1
+
+	time.Sleep(10 * time.Millisecond)
+
+	opts := sessionHash(5018141287610575993)
+	picked1 := b.Pick(target, nil, opts)
+	require.NotNil(t, picked1)
+
+	externalTablet2 := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "external",
+				Uid:  101,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	hcChan <- externalTablet2
+
+	time.Sleep(10 * time.Millisecond)
+
+	picked2 := b.Pick(target, nil, opts)
+	require.NotNil(t, picked2)
+	require.NotEqual(t, picked1, picked2, fmt.Sprintf("expected different tablets, got %s", tabletAlias(picked2)))
 }
 
 func TestDebugHandler(t *testing.T) {
@@ -273,4 +475,8 @@ func TestDebugHandler(t *testing.T) {
 
 	b.DebugHandler(w, r)
 	require.Equal(t, http.StatusOK, w.Code)
+}
+
+func sessionHash(i uint64) *PickOpts {
+	return &PickOpts{sessionHash: &i}
 }

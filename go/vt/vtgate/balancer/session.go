@@ -19,7 +19,10 @@ package balancer
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
+	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -65,31 +68,46 @@ func NewSessionBalancer(ctx context.Context, localCell string, hc discovery.Heal
 
 // Pick is the main entry point to the balancer.
 //
-// For a given session, it will return the same tablet for its duration. The tablet is
-// initially selected randomly, with preference to tablets in the local cell.
+// For a given session, it will return the same tablet for its duration, with preference to tablets
+// in the local cell.
+//
+// NOTE: this currently won't consider any invalid tablets. This means we'll keep returning the same
+// invalid tablet on subsequent tries. We can improve this by maybe returning a random tablet (local
+// cell preferred) when the session hash falls on an invalid tablet.
 func (b *SessionBalancer) Pick(target *querypb.Target, _ []*discovery.TabletHealth, opts *PickOpts) *discovery.TabletHealth {
-	return nil
+	if opts == nil || opts.sessionHash == nil {
+		// No session hash. Returning nil here will allow the gateway to select a random
+		// tablet instead.
+		return nil
+	}
+
+	sessionHash := *opts.sessionHash
+
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	// Try to find a tablet in the local cell first
+	tablet := getFromRing(b.localRings, target, sessionHash)
+	if tablet != nil {
+		return tablet
+	}
+
+	// If we didn't find a tablet in the local cell, try external cells
+	tablet = getFromRing(b.externalRings, target, sessionHash)
+	return tablet
 }
 
 // DebugHandler provides a summary of the session balancer state.
 func (b *SessionBalancer) DebugHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprintf(w, "Session Balancer\n")
+	fmt.Fprintf(w, "Session balancer\n")
 	fmt.Fprintf(w, "================\n")
-	fmt.Fprintf(w, "Local Cell: %s\n\n", b.localCell)
+	fmt.Fprintf(w, "Local cell: %s\n\n", b.localCell)
 
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	fmt.Fprintf(w, "Local Rings (%d):\n", len(b.localRings))
-	for key := range b.localRings {
-		fmt.Fprintf(w, "  - %s\n", key)
-	}
-
-	fmt.Fprintf(w, "\nExternal Rings (%d):\n", len(b.externalRings))
-	for key := range b.externalRings {
-		fmt.Fprintf(w, "  - %s\n", key)
-	}
+	fmt.Fprint(w, b.print())
 }
 
 // watchHealthCheck watches the health check channel for tablet health changes, and updates hash rings accordingly.
@@ -116,21 +134,20 @@ func (b *SessionBalancer) onTabletHealthChange(tablet *discovery.TabletHealth) {
 
 	var ring *hashRing
 	if tablet.Target.Cell == b.localCell {
-		ring = getRing(b.localRings, tablet)
+		ring = getOrCreateRing(b.localRings, tablet)
 	} else {
-		ring = getRing(b.externalRings, tablet)
+		ring = getOrCreateRing(b.externalRings, tablet)
 	}
 
 	if tablet.Serving {
 		ring.add(tablet)
-		ring.sort()
 	} else {
 		ring.remove(tablet)
 	}
 }
 
-// getRing gets or creates a new ring for the given tablet.
-func getRing(rings map[discovery.KeyspaceShardTabletType]*hashRing, tablet *discovery.TabletHealth) *hashRing {
+// getOrCreateRing gets or creates a new ring for the given tablet.
+func getOrCreateRing(rings map[discovery.KeyspaceShardTabletType]*hashRing, tablet *discovery.TabletHealth) *hashRing {
 	key := discovery.KeyFromTarget(tablet.Target)
 
 	ring, exists := rings[key]
@@ -140,4 +157,48 @@ func getRing(rings map[discovery.KeyspaceShardTabletType]*hashRing, tablet *disc
 	}
 
 	return ring
+}
+
+// print returns a string representation of the session balancer state for debugging.
+func (b *SessionBalancer) print() string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	sb := strings.Builder{}
+
+	sb.WriteString("Local rings:\n")
+	if len(b.localRings) == 0 {
+		sb.WriteString("\tNo local rings\n")
+	}
+
+	for target, ring := range b.localRings {
+		sb.WriteString(fmt.Sprintf("\t - Target: %s\n", target))
+		sb.WriteString(fmt.Sprintf("\t\tNode count: %d\n", len(ring.nodes)))
+		sb.WriteString(fmt.Sprintf("\t\tTablets: %+v\n", slices.Collect(maps.Keys(ring.tablets))))
+	}
+
+	sb.WriteString("External rings:\n")
+	if len(b.externalRings) == 0 {
+		sb.WriteString("\tNo external rings\n")
+	}
+
+	for target, ring := range b.externalRings {
+		sb.WriteString(fmt.Sprintf("\t - Target: %s\n", target))
+		sb.WriteString(fmt.Sprintf("\t\tNode count: %d\n", len(ring.nodes)))
+		sb.WriteString(fmt.Sprintf("\t\tTablets: %+v\n", slices.Collect(maps.Keys(ring.tablets))))
+	}
+
+	return sb.String()
+}
+
+// getFromRing gets a tablet from the respective ring for the given target and session hash.
+func getFromRing(rings map[discovery.KeyspaceShardTabletType]*hashRing, target *querypb.Target, sessionHash uint64) *discovery.TabletHealth {
+	key := discovery.KeyFromTarget(target)
+
+	ring, exists := rings[key]
+	if !exists {
+		return nil
+	}
+
+	return ring.getHashed(sessionHash)
 }

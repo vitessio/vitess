@@ -100,7 +100,7 @@ type TabletBalancer interface {
 // implementations are added the Pick signature does not get overly long.
 type PickOpts struct {
 	// sessionHash is the hash of the current session UUID.
-	sessionHash uint64
+	sessionHash *uint64
 }
 
 func NewTabletBalancer(localCell string, vtGateCells []string) TabletBalancer {
