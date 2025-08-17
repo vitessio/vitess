@@ -394,6 +394,8 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 // getBalancerTablet selects a tablet for the given query target, using the configured balancer if enabled. Otherwise, it will
 // select a random tablet, with preference to the local cell.
 func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, invalidTablets map[string]bool, tablets []*discovery.TabletHealth) *discovery.TabletHealth {
+	var tablet *discovery.TabletHealth
+
 	useBalancer := balancerEnabled
 	if balancerEnabled && len(balancerKeyspaces) > 0 {
 		useBalancer = slices.Contains(balancerKeyspaces, target.Keyspace)
@@ -409,7 +411,11 @@ func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, invalidTablet
 			})
 		}
 
-		return gw.balancer.Pick(target, tablets, nil)
+		tablet = gw.balancer.Pick(target, tablets, nil)
+	}
+
+	if tablet != nil {
+		return tablet
 	}
 
 	// Otherwise, randomly select a tablet, with preference to the local cell
