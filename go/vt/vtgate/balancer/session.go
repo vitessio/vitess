@@ -29,7 +29,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// SessionBalancer implements the [TabletBalancer] interface. For a given session,
+// SessionBalancer implements the TabletBalancer interface. For a given session,
 // it will return the same tablet for its duration, with preference to tablets in
 // the local cell.
 type SessionBalancer struct {
@@ -42,11 +42,11 @@ type SessionBalancer struct {
 	mu sync.RWMutex
 
 	// localRings are the hash rings created for each target. It contains only tablets
-	// local to [localCell].
+	// local to localCell.
 	localRings map[discovery.KeyspaceShardTabletType]*hashRing
 
 	// externalRings are the hash rings created for each target. It contains only tablets
-	// external to [localCell].
+	// external to localCell.
 	externalRings map[discovery.KeyspaceShardTabletType]*hashRing
 }
 
