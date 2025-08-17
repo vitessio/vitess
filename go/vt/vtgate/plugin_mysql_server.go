@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
 	"github.com/spf13/pflag"
 
@@ -181,7 +182,8 @@ var r = regexp.MustCompile(`/\*VT_SPAN_CONTEXT=(.*)\*/`)
 // this function is here to make this logic easy to test by decoupling the logic from the `trace.NewSpan` and `trace.NewFromString` functions
 func startSpanTestable(ctx context.Context, query, label string,
 	newSpan func(context.Context, string) (trace.Span, context.Context),
-	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error)) (trace.Span, context.Context, error) {
+	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error),
+) (trace.Span, context.Context, error) {
 	_, comments := sqlparser.SplitMarginComments(query)
 	match := r.FindStringSubmatch(comments.Leading)
 	span, ctx := getSpan(ctx, match, newSpan, label, newSpanFromString)
@@ -517,6 +519,7 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session == nil {
 		u, _ := uuid.NewUUID()
+		sessionHash := xxhash.Sum64String(u.String())
 		session = &vtgatepb.Session{
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
@@ -528,6 +531,7 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 			DDLStrategy:          defaultDDLStrategy,
 			MigrationContext:     "",
 			SessionUUID:          u.String(),
+			SessionHash:          sessionHash,
 			EnableSystemSettings: sysVarSetEnabled,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
