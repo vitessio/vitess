@@ -29,9 +29,9 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// SessionBalancer implements the [TabletBalancer] interface. For a given
-// session, it will return the same tablet for its duration. The tablet is initially
-// selected randomly, with preference to tablets in the local cell.
+// SessionBalancer implements the [TabletBalancer] interface. For a given session,
+// it will return the same tablet for its duration, with preference to tablets in
+// the local cell.
 type SessionBalancer struct {
 	// localCell is the cell the gateway is currently running in.
 	localCell string
