@@ -418,7 +418,8 @@ func (gw *TabletGateway) getBalancerTablet(target *querypb.Target, invalidTablet
 		return tablet
 	}
 
-	// Otherwise, randomly select a tablet, with preference to the local cell
+	// If the balancer isn't enabled, or it didn't return a tablet, randomly select a
+	// tablet, with preference to the local cell
 	gw.shuffleTablets(gw.localCell, tablets)
 
 	// skip tablets we tried before
