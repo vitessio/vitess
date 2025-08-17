@@ -96,8 +96,7 @@ type TabletBalancer interface {
 	DebugHandler(w http.ResponseWriter, r *http.Request)
 }
 
-// PickOpts are balancer options that are passed into Pick. This exists so that as more balancer
-// implementations are added the Pick signature does not get overly long.
+// PickOpts are balancer options that are passed into Pick.
 type PickOpts struct {
 	// sessionHash is the hash of the current session UUID.
 	sessionHash *uint64
