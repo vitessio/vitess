@@ -477,6 +477,49 @@ func TestDebugHandler(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestPickNoSessionHash(t *testing.T) {
+	b, hcChan := newSessionBalancer(t)
+
+	target := &querypb.Target{
+		Keyspace:   "keyspace",
+		Shard:      "0",
+		TabletType: topodatapb.TabletType_REPLICA,
+		Cell:       "local",
+	}
+
+	localTablet := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "local",
+				Uid:  100,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	hcChan <- localTablet
+
+	// Give a moment for the worker to process the tablets
+	time.Sleep(10 * time.Millisecond)
+
+	// Test with nil opts
+	result := b.Pick(target, nil, nil)
+	require.Nil(t, result)
+
+	// Test with opts but nil session hash
+	optsNoHash := &PickOpts{sessionHash: nil}
+	result = b.Pick(target, nil, optsNoHash)
+	require.Nil(t, result)
+}
+
 func sessionHash(i uint64) *PickOpts {
 	return &PickOpts{sessionHash: &i}
 }

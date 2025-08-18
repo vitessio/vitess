@@ -70,7 +70,6 @@ func (m *Session) CloneVT() *Session {
 	r.QueryTimeout = m.QueryTimeout
 	r.MigrationContext = m.MigrationContext
 	r.ErrorUntilRollback = m.ErrorUntilRollback
-	r.SessionHash = m.SessionHash
 	if rhs := m.ShardSessions; rhs != nil {
 		tmpContainer := make([]*Session_ShardSession, len(rhs))
 		for k, v := range rhs {
@@ -131,6 +130,10 @@ func (m *Session) CloneVT() *Session {
 			tmpContainer[k] = v.CloneVT()
 		}
 		r.PrepareStatement = tmpContainer
+	}
+	if rhs := m.SessionHash; rhs != nil {
+		tmpVal := *rhs
+		r.SessionHash = &tmpVal
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -690,8 +693,8 @@ func (m *Session) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.SessionHash != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.SessionHash))
+	if m.SessionHash != nil {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(*m.SessionHash))
 		i--
 		dAtA[i] = 0x1
 		i--
@@ -2464,8 +2467,8 @@ func (m *Session) SizeVT() (n int) {
 	if m.ErrorUntilRollback {
 		n += 3
 	}
-	if m.SessionHash != 0 {
-		n += 2 + protohelpers.SizeOfVarint(uint64(m.SessionHash))
+	if m.SessionHash != nil {
+		n += 2 + protohelpers.SizeOfVarint(uint64(*m.SessionHash))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -4285,7 +4288,7 @@ func (m *Session) UnmarshalVT(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SessionHash", wireType)
 			}
-			m.SessionHash = 0
+			var v uint64
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -4295,11 +4298,12 @@ func (m *Session) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.SessionHash |= uint64(b&0x7F) << shift
+				v |= uint64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			m.SessionHash = &v
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
