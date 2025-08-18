@@ -531,7 +531,7 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 			DDLStrategy:          defaultDDLStrategy,
 			MigrationContext:     "",
 			SessionUUID:          u.String(),
-			SessionHash:          sessionHash,
+			SessionHash:          &sessionHash,
 			EnableSystemSettings: sysVarSetEnabled,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
