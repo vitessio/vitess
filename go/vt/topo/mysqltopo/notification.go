@@ -19,6 +19,7 @@ package mysqltopo
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -30,6 +31,7 @@ import (
 	mysqldriver "github.com/go-sql-driver/mysql"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -42,6 +44,8 @@ var (
 	notificationSystems   = make(map[string]*notificationSystem)
 )
 
+const TopoDataTableName = "topo_data"
+
 // notificationSystem handles MySQL replication and distributes notifications to all watchers
 // across all server instances that use the same schema.
 type notificationSystem struct {
@@ -53,8 +57,16 @@ type notificationSystem struct {
 	isMySQL84 bool // Flag to determine if server is MySQL 8.4+
 
 	// MySQL replication using Vitess binlog
-	binlogConn *binlog.BinlogConnection
-	connector  dbconfigs.Connector
+	binlogConn      *binlog.BinlogConnection
+	connector       dbconfigs.Connector
+	topoDataTableID uint64 // tableID for the topo_data table
+
+	// Binlog format information
+	format mysql.BinlogFormat
+
+	// Position tracking for binlog streaming
+	lastPositionMu sync.Mutex
+	lastPosition   replication.Position
 
 	// Watchers from all server instances
 	watchersMu        sync.RWMutex
@@ -156,10 +168,10 @@ func newNotificationSystem(schemaName, serverAddr string) (*notificationSystem, 
 		return nil, fmt.Errorf("failed to detect MySQL version: %v", err)
 	}
 
-	// Check that GTID mode is enabled - required for binlog replication
-	if err := checkGTIDMode(db); err != nil {
+	// Check that GTID mode is enabled and format = ROW
+	if err := checkMySQLSettings(db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("MySQL GTID mode check failed: %v", err)
+		return nil, fmt.Errorf("MySQL configuration check failed: %v", err)
 	}
 
 	// Create connection parameters for binlog streaming
@@ -270,63 +282,245 @@ func (ns *notificationSystem) initializeKnownKeys() error {
 	return nil
 }
 
-// run is the main replication loop.
+// run is the main replication loop with retry logic.
 func (ns *notificationSystem) run() {
 	defer ns.wg.Done()
-	defer ns.binlogConn.Close()
+	defer func() {
+		if ns.binlogConn != nil {
+			ns.binlogConn.Close()
+		}
+	}()
 
 	log.Infof("Starting MySQL notification system for schema %s", ns.schemaName)
 
-	// Start binlog streaming from current position
-	_, eventChan, errChan, err := ns.binlogConn.StartBinlogDumpFromCurrent(ns.ctx)
-	if err != nil {
-		log.Errorf("Failed to start binlog dump: %v", err)
+	const (
+		maxRetries     = 5
+		baseRetryDelay = 1 * time.Second
+		maxRetryDelay  = 30 * time.Second
+	)
+
+	retryCount := 0
+
+	for {
+		if ns.ctx.Err() != nil {
+			log.Infof("Context cancelled, stopping MySQL notification system for schema %s", ns.schemaName)
+			return
+		}
+
+		// Create a new binlog connection for each retry attempt
+		// This ensures we don't reuse a broken connection object
+		if ns.binlogConn != nil {
+			ns.binlogConn.Close()
+		}
+		var err error
+		ns.binlogConn, err = binlog.NewBinlogConnection(ns.connector)
+		if err != nil {
+			if ns.ctx.Err() != nil {
+				return // Context cancelled
+			}
+
+			retryCount++
+			if retryCount > maxRetries {
+				log.Errorf("Failed to create new binlog connection after %d retries: %v", maxRetries, err)
+				return
+			}
+
+			// Calculate exponential backoff delay
+			delay := time.Duration(1<<uint(retryCount-1)) * baseRetryDelay
+			if delay > maxRetryDelay {
+				delay = maxRetryDelay
+			}
+
+			log.Warningf("Failed to create binlog connection (attempt %d/%d): %v, retrying in %v", retryCount, maxRetries, err, delay)
+
+			select {
+			case <-ns.ctx.Done():
+				return
+			case <-time.After(delay):
+				continue
+			}
+		}
+
+		// Get the current last position
+		ns.lastPositionMu.Lock()
+		currentPosition := ns.lastPosition
+		ns.lastPositionMu.Unlock()
+
+		// If we have a previous position, try to restart from there
+		var eventChan <-chan mysql.BinlogEvent
+		var errChan <-chan error
+
+		if !currentPosition.IsZero() {
+			log.Infof("Restarting binlog dump from position %v (retry %d/%d)", currentPosition, retryCount, maxRetries)
+			eventChan, errChan, err = ns.binlogConn.StartBinlogDumpFromPosition(ns.ctx, "", currentPosition)
+		} else {
+			log.Infof("Starting binlog dump from current position")
+			var startPosition replication.Position
+			startPosition, eventChan, errChan, err = ns.binlogConn.StartBinlogDumpFromCurrent(ns.ctx)
+			if err == nil {
+				// Save the starting position
+				ns.lastPositionMu.Lock()
+				ns.lastPosition = startPosition
+				ns.lastPositionMu.Unlock()
+			}
+		}
+
+		if err != nil {
+			if ns.ctx.Err() != nil {
+				return // Context cancelled
+			}
+
+			retryCount++
+			if retryCount > maxRetries {
+				log.Errorf("Failed to start binlog dump after %d retries: %v", maxRetries, err)
+				return
+			}
+
+			// Calculate exponential backoff delay
+			delay := time.Duration(1<<uint(retryCount-1)) * baseRetryDelay
+			if delay > maxRetryDelay {
+				delay = maxRetryDelay
+			}
+
+			log.Warningf("Failed to start binlog dump (attempt %d/%d): %v, retrying in %v", retryCount, maxRetries, err, delay)
+
+			select {
+			case <-ns.ctx.Done():
+				return
+			case <-time.After(delay):
+				continue
+			}
+		}
+
+		// Reset retry count on successful connection
+		retryCount = 0
+
+		// Process events from the binlog stream
+		// This function is blocking, and continues to loop
+		// through replicaiton events until it receives an error.
+		if err := ns.processEventStream(eventChan, errChan); err != nil {
+			if ns.ctx.Err() != nil {
+				return // Context cancelled
+			}
+
+			// We received an error, it's not context related so presumably it
+			// is MySQL connection related (server has gone away etc.)
+			// We don't have to check what kind of error it is,
+			// we can just continue which will restart the for loop and connect to the
+			// last saved position.
+			log.Warningf("Error processing binlog event stream: %v", err)
+			continue
+		}
+
+		// If we reach here, the event stream ended normally
+		// This is triggered by closing the channel eventChan
+		log.Infof("Binlog event stream ended normally")
 		return
 	}
+}
 
+// processEventStream processes events from the binlog stream and updates the last position.
+func (ns *notificationSystem) processEventStream(eventChan <-chan mysql.BinlogEvent, errChan <-chan error) error {
 	for {
 		select {
 		case <-ns.ctx.Done():
-			log.Infof("Stopping MySQL notification system for schema %s", ns.schemaName)
-			return
+			return ns.ctx.Err()
 		case err := <-errChan:
 			if err != nil {
-				if ns.ctx.Err() != nil {
-					return // Context cancelled
-				}
-				log.Warningf("Binlog stream error: %v", err)
-				time.Sleep(time.Second)
-				continue
+				return err
 			}
 		case ev := <-eventChan:
 			if ev == nil {
-				log.Infof("Binlog event channel closed")
-				return
+				return nil // Channel closed normally
 			}
-			// Process the event
-			ns.processEvent(ev)
+
+			// Process the event.
+			if err := ns.processEvent(ev); err != nil {
+				return fmt.Errorf("failed to process binlog event: %v", err)
+			}
+
+			// Update position tracking with GTID from the event if it's a GTID event
+			// Only extract GTID from actual GTID events and only if we have a valid format
+			if !ns.format.IsZero() && ev.IsGTID() {
+				if gtidEvent, _, err := ev.GTID(ns.format); err == nil {
+					ns.lastPositionMu.Lock()
+					if ns.lastPosition.GTIDSet != nil {
+						ns.lastPosition.GTIDSet = ns.lastPosition.GTIDSet.AddGTID(gtidEvent)
+					}
+					ns.lastPositionMu.Unlock()
+				}
+			}
 		}
 	}
 }
 
 // processEvent processes a binlog event and notifies watchers if needed.
-func (ns *notificationSystem) processEvent(ev mysql.BinlogEvent) {
-	// Only process events that are valid
+// It is called in a go-routine but for simplicity we allow it to return
+// errors that the caller will handle.
+func (ns *notificationSystem) processEvent(ev mysql.BinlogEvent) error {
 	if !ev.IsValid() {
-		return
+		// Only process events that are valid
+		return errors.New("invalid binlog event")
 	}
 
-	// We're not interested in table map events
-	// It requires logic to parse them.
+	// We need to keep checking for FORMAT_DESCRIPTION_EVENT even after we've
+	// seen one, because another one might come along (e.g. on log rotate due to
+	// binlog settings change) that changes the format.
+	if ev.IsFormatDescription() {
+		format, err := ev.Format()
+		if err != nil {
+			return err
+		}
+		ns.format = format
+		return nil
+	}
+
+	// We can't parse anything until we get a FORMAT_DESCRIPTION_EVENT that
+	// tells us the size of the event header.
+	if ns.format.IsZero() {
+		// The only thing that should come before the FORMAT_DESCRIPTION_EVENT
+		// is a fake ROTATE_EVENT, which the primary sends to tell us the name
+		// of the current log file.
+		if ev.IsRotate() {
+			return nil
+		}
+		return errors.New("received an event before receiving a binlog format event, this is unexpected")
+	}
+
+	// Strip the checksum, if any. We don't actually verify the checksum, so discard it.
+	// This is important to do before parsing TableMap events to avoid a panic.
+	ev, _, err := ev.StripChecksum(ns.format)
+	if err != nil {
+		return fmt.Errorf("can't strip checksum from binlog event: %v, event data: %#v", err, ev)
+	}
+
+	// We only care about the table "topo_data". So if we receive a TableMap event,
+	// we just need to determine the tableID for that table and save it for later.
 	if ev.IsTableMap() {
-		return
+		tableID := ev.TableID(ns.format)
+		tm, err := ev.TableMap(ns.format)
+		if err != nil {
+			return fmt.Errorf("failed to parse TableMap event: %v", err)
+		}
+		if tm.Name == TopoDataTableName && tm.Database == ns.schemaName {
+			ns.topoDataTableID = tableID
+		}
+		return nil
 	}
 
-	// For other events (INSERT, UPDATE, DELETE, QUERY etc)
-	// We treat them all the same which is to say that we
-	// check for changes. We don't try and understand the row image,
-	// because it requires tablemap parsing, and more complex logic.
-	ns.checkForTopoDataChanges()
+	if ev.IsWriteRows() || ev.IsUpdateRows() || ev.IsDeleteRows() || ev.IsPartialUpdateRows() {
+		tableID := ev.TableID(ns.format)
+		if tableID == ns.topoDataTableID {
+			// This is a data modification event on the topo_data table
+			// This is enough for us to check for changes. We do not
+			// rely on the contents of this row, we only use it
+			// as a signal.
+			if err := ns.checkForTopoDataChanges(); err != nil {
+				return err // could not check for changes.
+			}
+		}
+	}
+	return nil
 }
 
 // checkForTopoDataChanges polls the topo_data table for recent changes.
@@ -334,11 +528,9 @@ func (ns *notificationSystem) processEvent(ev mysql.BinlogEvent) {
 // We don't know of what the change is, it might be unrelated.
 // We have to call notifyChange() or notify Deletion() if we see
 // any modifications though. We prefer to scan the table rather
-// than read the stream because:
-//  1. It's simpler and saves parsing the table map.
-//  2. There are no staleness issues, particularly if
-//     there is a path updated twice in quick succession.
-func (ns *notificationSystem) checkForTopoDataChanges() {
+// than read the stream because there are no staleness issues,
+// particularly if there is a path updated twice in quick succession.
+func (ns *notificationSystem) checkForTopoDataChanges() error {
 	// Query all current data from topo_data table
 	rows, err := ns.db.QueryContext(ns.ctx, "SELECT path, data, version FROM topo_data")
 	if err != nil {
@@ -346,12 +538,10 @@ func (ns *notificationSystem) checkForTopoDataChanges() {
 		errStr := err.Error()
 		if strings.Contains(errStr, "Unknown database") || strings.Contains(errStr, "doesn't exist") {
 			// Database or table was dropped, stop the notification system
-			log.Infof("Database %s no longer exists, stopping notification system", ns.schemaName)
 			ns.cancel()
-			return
+			return fmt.Errorf("topo database appears to be incorrectly formatted: %v", errStr)
 		}
-		log.Warningf("Failed to query topo_data for changes: %v", err)
-		return
+		return fmt.Errorf("failed to query topo_data for changes: %v", err)
 	}
 	defer rows.Close()
 
@@ -367,8 +557,7 @@ func (ns *notificationSystem) checkForTopoDataChanges() {
 		var version int64
 
 		if err := rows.Scan(&path, &data, &version); err != nil {
-			log.Warningf("Failed to scan topo_data row: %v", err)
-			continue
+			return fmt.Errorf("failed to scan topo_data row: %v", err)
 		}
 
 		currentData[path] = struct {
@@ -378,8 +567,7 @@ func (ns *notificationSystem) checkForTopoDataChanges() {
 	}
 
 	if err := rows.Err(); err != nil {
-		log.Warningf("Error iterating topo_data rows: %v", err)
-		return
+		return fmt.Errorf("error iterating topo_data rows: %v", err)
 	}
 
 	ns.knownKeysMu.Lock()
@@ -404,6 +592,7 @@ func (ns *notificationSystem) checkForTopoDataChanges() {
 			ns.notifyDeletion(path)
 		}
 	}
+	return nil
 }
 
 // addWatcher adds a new file watcher.
@@ -574,7 +763,7 @@ func (ns *notificationSystem) close() {
 
 	// Close the database connection
 	if ns.db != nil {
-		ns.db.Close()
+		_ = ns.db.Close()
 	}
 }
 
@@ -598,9 +787,9 @@ func detectMySQL84(db *sql.DB) (bool, error) {
 	return false, nil
 }
 
-// checkGTIDMode verifies that GTID mode is enabled on the MySQL server.
+// checkMySQLSettings verifies that GTID mode is enabled on the MySQL server.
 // This is required for the binlog replication functionality to work properly.
-func checkGTIDMode(db *sql.DB) error {
+func checkMySQLSettings(db *sql.DB) error {
 	var gtidMode string
 	err := db.QueryRow("SELECT @@GLOBAL.gtid_mode").Scan(&gtidMode)
 	if err != nil {
@@ -620,6 +809,16 @@ func checkGTIDMode(db *sql.DB) error {
 
 	if logBin != "1" && logBin != "ON" {
 		return fmt.Errorf("binary logging is disabled but is required for MySQL topo server. Please set log_bin=ON in your MySQL configuration")
+	}
+
+	// Check that the binlog format is row.
+	var binlogFormat string
+	err = db.QueryRow("SELECT @@GLOBAL.binlog_format").Scan(&binlogFormat)
+	if err != nil {
+		return fmt.Errorf("failed to check binlog format: %v", err)
+	}
+	if binlogFormat != "ROW" {
+		return fmt.Errorf("binlog format is '%s' but must be 'ROW' for MySQL topo server to work with binlog replication. Please set binlog_format=ROW in your MySQL configuration", binlogFormat)
 	}
 
 	return nil

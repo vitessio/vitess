@@ -19,7 +19,6 @@ package mysqltopo
 import (
 	"context"
 	"database/sql"
-	"strings"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -39,7 +38,7 @@ func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (
 		return nil, convertError(err, filePath)
 	}
 
-	fullPath := s.fullPath(filePath)
+	fullPath := s.resolvePath(filePath)
 
 	// Use a transaction with READ COMMITTED isolation to avoid gap locking
 	tx, err := s.beginTxWithReadCommitted(ctx)
@@ -82,7 +81,7 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 		return nil, convertError(err, filePath)
 	}
 
-	fullPath := s.fullPath(filePath)
+	fullPath := s.resolvePath(filePath)
 
 	// Use a transaction with READ COMMITTED isolation to avoid gap locking
 	tx, err := s.beginTxWithReadCommitted(ctx)
@@ -183,7 +182,7 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 		return nil, nil, convertError(err, filePath)
 	}
 
-	fullPath := s.fullPath(filePath)
+	fullPath := s.resolvePath(filePath)
 
 	var data []byte
 	var version int64
@@ -204,7 +203,7 @@ func (s *Server) GetVersion(ctx context.Context, filePath string, version int64)
 		return nil, convertError(err, filePath)
 	}
 
-	fullPath := s.fullPath(filePath)
+	fullPath := s.resolvePath(filePath)
 
 	// MySQL doesn't store historical versions by default, so we can only get the current version
 	// if it matches the requested version
@@ -229,13 +228,8 @@ func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo
 		return nil, convertError(err, filePathPrefix)
 	}
 
-	fullPathPrefix := s.fullPath(filePathPrefix)
-	// Ensure directory path ends with "/" for proper prefix matching
-	if fullPathPrefix != "" && !strings.HasSuffix(fullPathPrefix, "/") {
-		fullPathPrefix += "/"
-	}
-
-	rows, err := s.db.QueryContext(ctx, "SELECT path, data, version FROM topo_data WHERE path LIKE ?", createLikePattern(fullPathPrefix))
+	fullPathPrefix := s.resolvePath(filePathPrefix)
+	rows, err := s.db.QueryContext(ctx, "SELECT path, data, version FROM topo_data WHERE path LIKE ?", matchDirectory(fullPathPrefix))
 	if err != nil {
 		return nil, convertError(err, fullPathPrefix)
 	}
@@ -275,7 +269,7 @@ func (s *Server) Delete(ctx context.Context, filePath string, version topo.Versi
 		return convertError(err, filePath)
 	}
 
-	fullPath := s.fullPath(filePath)
+	fullPath := s.resolvePath(filePath)
 
 	// Use a transaction with READ COMMITTED isolation to avoid gap locking
 	tx, err := s.beginTxWithReadCommitted(ctx)

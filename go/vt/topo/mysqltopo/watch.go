@@ -29,7 +29,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (current *topo.Watc
 		return nil, nil, convertError(err, filePath)
 	}
 
-	fullPath := s.fullPath(filePath)
+	fullPath := s.resolvePath(filePath)
 
 	// Get the current value
 	data, version, err := s.Get(ctx, filePath)
@@ -90,7 +90,7 @@ func (s *Server) WatchRecursive(ctx context.Context, pathPrefix string) ([]*topo
 		return nil, nil, convertError(err, pathPrefix)
 	}
 
-	fullPathPrefix := s.fullPath(pathPrefix)
+	fullPathPrefix := s.resolvePath(pathPrefix)
 
 	// Get current values
 	kvInfos, err := s.List(ctx, pathPrefix)

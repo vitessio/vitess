@@ -31,13 +31,8 @@ func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo
 		return nil, convertError(err, dirPath)
 	}
 
-	fullDirPath := s.fullPath(dirPath)
-	// Ensure directory path ends with "/" for proper prefix matching
-	if fullDirPath != "" && !strings.HasSuffix(fullDirPath, "/") {
-		fullDirPath += "/"
-	}
-
-	rows, err := s.db.QueryContext(ctx, "SELECT path FROM topo_data WHERE path LIKE ?", createLikePattern(fullDirPath))
+	fullDirPath := s.resolvePath(dirPath)
+	rows, err := s.db.QueryContext(ctx, "SELECT path FROM topo_data WHERE path LIKE ?", matchDirectory(fullDirPath))
 	if err != nil {
 		return nil, convertError(err, dirPath)
 	}
@@ -51,10 +46,9 @@ func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo
 			return nil, convertError(err, dirPath)
 		}
 
-		// Remove the directory prefix to get the relative path
-		relativePath := strings.TrimPrefix(filePath, fullDirPath)
+		relativePath := s.relativePath(filePath, fullDirPath)
 		if relativePath == "" {
-			continue // Skip the directory itself if it exists as a file
+			continue
 		}
 
 		// Get the immediate child name (first path component)
@@ -68,7 +62,7 @@ func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo
 		return nil, convertError(err, dirPath)
 	}
 
-	lockRows, err := s.db.QueryContext(ctx, "SELECT path FROM topo_locks WHERE path LIKE ?", createLikePattern(fullDirPath))
+	lockRows, err := s.db.QueryContext(ctx, "SELECT path FROM topo_locks WHERE path LIKE ?", matchDirectory(fullDirPath))
 	if err != nil {
 		return nil, convertError(err, dirPath)
 	}
@@ -80,8 +74,7 @@ func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo
 			return nil, convertError(err, dirPath)
 		}
 
-		// Remove the directory prefix to get the relative path
-		relativePath := strings.TrimPrefix(lockPath, fullDirPath)
+		relativePath := s.relativePath(lockPath, fullDirPath)
 		if relativePath == "" {
 			continue
 		}

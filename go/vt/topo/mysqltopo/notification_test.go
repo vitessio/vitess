@@ -49,6 +49,7 @@ package mysqltopo
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"sync"
@@ -116,7 +117,7 @@ func TestNotificationSystemCrossServerUpdates(t *testing.T) {
 
 	t.Logf("Testing cross-server updates with schema: %s", sharedSchemaName)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	testPath := "cross_server_test"
@@ -150,7 +151,7 @@ func TestNotificationSystemCrossServerUpdates(t *testing.T) {
 	updatedData := []byte("updated data from server1")
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		newVersion, err := server1.Update(context.Background(), testPath, updatedData, current.Version)
+		newVersion, err := server1.Update(t.Context(), testPath, updatedData, current.Version)
 		if err != nil {
 			t.Logf("Server1 failed to update file: %v", err)
 		} else {
@@ -191,7 +192,7 @@ func TestNotificationSystemMultipleWatchers(t *testing.T) {
 
 	t.Logf("Testing multiple watchers with schema: %s", sharedSchemaName)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	testPath := "multiple_watchers_test"
@@ -214,7 +215,7 @@ func TestNotificationSystemMultipleWatchers(t *testing.T) {
 	ns, err := server1.getNotificationSystemForServer()
 	require.NoError(t, err)
 
-	fullPath := server1.fullPath(testPath)
+	fullPath := server1.resolvePath(testPath)
 	ns.watchersMu.RLock()
 	watchers := ns.watchers[fullPath]
 	watcherCount := len(watchers)
@@ -226,7 +227,7 @@ func TestNotificationSystemMultipleWatchers(t *testing.T) {
 	updatedData := []byte("updated data for multiple watchers")
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		_, err := server1.Update(context.Background(), testPath, updatedData, version)
+		_, err := server1.Update(t.Context(), testPath, updatedData, version)
 		if err != nil {
 			t.Logf("Failed to update file: %v", err)
 		}
@@ -298,7 +299,7 @@ func TestNotificationSystemRecursiveWatchers(t *testing.T) {
 
 	t.Logf("Testing recursive watchers with schema: %s", sharedSchemaName)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	// Create some initial files in a directory structure
@@ -321,7 +322,7 @@ func TestNotificationSystemRecursiveWatchers(t *testing.T) {
 	ns, err := server1.getNotificationSystemForServer()
 	require.NoError(t, err)
 
-	fullPathPrefix := server1.fullPath(basePath)
+	fullPathPrefix := server1.resolvePath(basePath)
 	ns.watchersMu.RLock()
 	recursiveWatchers := ns.recursiveWatchers[fullPathPrefix]
 	recursiveWatcherCount := len(recursiveWatchers)
@@ -335,7 +336,7 @@ func TestNotificationSystemRecursiveWatchers(t *testing.T) {
 
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		_, err := server1.Create(context.Background(), newFilePath, newFileData)
+		_, err := server1.Create(t.Context(), newFilePath, newFileData)
 		if err != nil {
 			t.Logf("Failed to create new file: %v", err)
 		} else {
@@ -351,7 +352,7 @@ func TestNotificationSystemRecursiveWatchers(t *testing.T) {
 			// In test environment without proper binary logging, we may receive notifications
 			// for existing files rather than the new file. The key is that we received
 			// a recursive notification, proving the system works.
-			assert.True(t, strings.HasPrefix(change.Path, server1.fullPath(basePath)), "Path should be under the watched prefix")
+			assert.True(t, strings.HasPrefix(change.Path, server1.resolvePath(basePath)), "Path should be under the watched prefix")
 			t.Log("✅ Recursive notification system is working")
 		} else {
 			t.Logf("Recursive watch error: %v", change.Err)
@@ -424,7 +425,7 @@ func TestNotificationSystemWatcherCleanup(t *testing.T) {
 
 	t.Logf("Testing watcher cleanup with schema: %s", sharedSchemaName)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	testPath := "watcher_cleanup_test"
@@ -443,7 +444,7 @@ func TestNotificationSystemWatcherCleanup(t *testing.T) {
 	ns, err := server.getNotificationSystemForServer()
 	require.NoError(t, err)
 
-	fullPath := server.fullPath(testPath)
+	fullPath := server.resolvePath(testPath)
 	ns.watchersMu.RLock()
 	watchers := ns.watchers[fullPath]
 	watcherCount := len(watchers)
@@ -620,7 +621,7 @@ func TestNotificationSystemIntegration(t *testing.T) {
 	serverC, _, cleanupC := createTestServer(t, sharedSchemaName)
 	defer cleanupC()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	// Test scenario: ServerA creates data, ServerB and ServerC watch it,
@@ -658,7 +659,7 @@ func TestNotificationSystemIntegration(t *testing.T) {
 	assert.Equal(t, sharedSchemaName, nsA.schemaName, "Schema name should match")
 
 	// Step 4: Check that the notification system has the expected watchers
-	fullPath := serverA.fullPath(testPath)
+	fullPath := serverA.resolvePath(testPath)
 	nsA.watchersMu.RLock()
 	watchers := nsA.watchers[fullPath]
 	watcherCount := len(watchers)
@@ -669,7 +670,7 @@ func TestNotificationSystemIntegration(t *testing.T) {
 	updatedData := []byte("updated data from serverB")
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		newVersion, err := serverB.Update(context.Background(), testPath, updatedData, version)
+		newVersion, err := serverB.Update(t.Context(), testPath, updatedData, version)
 		if err != nil {
 			t.Logf("ServerB failed to update file: %v", err)
 		} else {
@@ -734,4 +735,122 @@ func TestNotificationSystemIntegration(t *testing.T) {
 	// Step 7: Verify reference counting works correctly
 	refCount := nsA.refCount.Load()
 	assert.GreaterOrEqual(t, int(refCount), 3, "Should have at least 3 references for 3 servers")
+}
+
+// TestNotificationSystemReconnection tests the MySQL connection retry logic
+// in the notification system's run() method. This test simulates connection
+// failures and verifies that the system can recover and continue processing.
+func TestNotificationSystemReconnection(t *testing.T) {
+	// Create a test schema
+	schemaName := generateRandomSchemaName()
+	server, _, cleanup := createTestServer(t, schemaName)
+	defer cleanup()
+
+	t.Logf("Testing notification system reconnection with schema: %s", schemaName)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+
+	// Create initial test data
+	testPath := "reconnection_test"
+	initialData := []byte("initial data")
+	version, err := server.Create(ctx, testPath, initialData)
+	require.NoError(t, err)
+	t.Logf("Created initial file with version: %v", version)
+
+	// Start watching to ensure the notification system is active
+	current, changes, err := server.Watch(ctx, testPath)
+	require.NoError(t, err)
+	require.Equal(t, initialData, current.Contents)
+
+	// Create a separate connection to monitor and kill connections
+	monitorDB, err := sql.Open("mysql", mySQLTopoTestAddr)
+	require.NoError(t, err)
+	defer monitorDB.Close()
+
+	// Test the reconnection logic by killing the binlog connection multiple times
+	reconnectionTests := []struct {
+		name       string
+		waitBefore time.Duration
+		waitAfter  time.Duration
+	}{
+		{"First reconnection", 1 * time.Second, 2 * time.Second},
+		{"Second reconnection", 1 * time.Second, 2 * time.Second},
+	}
+
+	for i, test := range reconnectionTests {
+		t.Logf("Running %s", test.name)
+
+		// Wait before killing connection
+		time.Sleep(test.waitBefore)
+
+		// Kill the binlog dump connection
+		killed, err := killBinlogConnection(t, monitorDB, schemaName)
+		require.NoError(t, err)
+		require.True(t, killed, "Should have killed a binlog dump connection")
+
+		// Wait for reconnection to happen
+		time.Sleep(test.waitAfter)
+
+		// Verify the system is still working by updating the file
+		// syncronously.
+		updateData := []byte(fmt.Sprintf("updated data after reconnection %d", i+1))
+		newVersion, err := server.Update(t.Context(), testPath, updateData, version)
+		require.NoError(t, err, "Should be able to update file after reconnection")
+		version = newVersion // Update the version for the next iteration
+
+		// Check if we receive the notification (indicating successful reconnection)
+		select {
+		case change := <-changes:
+			require.NoError(t, change.Err, "Should not receive an error on watch after reconnection")
+			assert.Equal(t, updateData, change.Contents, "Should receive updated data after reconnection")
+			assert.Equal(t, newVersion, change.Version, "Should receive correct version after reconnection")
+		case <-time.After(10 * time.Second):
+			t.Error("no notification received")
+		}
+	}
+
+}
+
+func killBinlogConnection(t *testing.T, monitorDB *sql.DB, schemaName string) (bool, error) {
+	rows, err := monitorDB.Query("SHOW PROCESSLIST")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	var connectionID uint64
+	found := false
+
+	for rows.Next() {
+		var id uint64
+		var user, host, db, command, time, state, info sql.NullString
+
+		err := rows.Scan(&id, &user, &host, &db, &command, &time, &state, &info)
+		require.NoError(t, err)
+
+		// Look for binlog dump connections that match our schema
+		if command.Valid && (strings.Contains(command.String, "Binlog Dump") ||
+			strings.Contains(command.String, "Binlog Dump GTID")) &&
+			db.Valid && db.String == schemaName {
+			connectionID = id
+			found = true
+			t.Logf("Found binlog dump connection: ID=%d, User=%s, DB=%s, Command=%s, State=%s",
+				id, user.String, db.String, command.String, state.String)
+			break
+		}
+	}
+
+	if !found {
+		return false, nil
+	}
+
+	// Kill the connection
+	_, err = monitorDB.Exec(fmt.Sprintf("KILL %d", connectionID))
+	if err != nil {
+		return false, fmt.Errorf("failed to kill connection %d: %v", connectionID, err)
+	}
+
+	t.Logf("Killed binlog dump connection ID: %d", connectionID)
+	return true, nil
 }

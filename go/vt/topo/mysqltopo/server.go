@@ -47,6 +47,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -262,12 +263,20 @@ func (s *Server) getNotificationSystemForServer() (*notificationSystem, error) {
 	return getNotificationSystem(s.schemaName, s.serverAddr)
 }
 
-// fullPath returns the full path by combining the server's root with the given path.
-func (s *Server) fullPath(filePath string) string {
+// resolvePath returns the full path by combining the server's root with the given path
+// For example:
+// keyspaces/commerce => '/vitess/global/keyspaces/commerce'
+// keyspaces/commerce/shards/0 => '/vitess/global/keyspaces/commerce/shards/0'
+func (s *Server) resolvePath(filePath string) string {
 	if s.root == "" || s.root == "/" {
 		return filePath
 	}
 	return path.Join(s.root, filePath)
+}
+
+// relativePath converts a fullDirPath back to a relativePath
+func (s *Server) relativePath(filePath, fullDirPath string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(filePath, fullDirPath), "/")
 }
 
 // convertError converts a MySQL error to a topo error.
@@ -290,11 +299,10 @@ func convertError(err error, path string) error {
 	}
 
 	// Handle MySQL-specific errors
-	errStr := err.Error()
-	if strings.Contains(errStr, "Duplicate entry") {
+	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+	if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERDupEntry {
 		return topo.NewError(topo.NodeExists, path)
 	}
-
 	// Default: return the original error
 	return err
 }
@@ -314,14 +322,12 @@ func (s *Server) cleanupExpiredData() {
 	}
 }
 
-// createLikePattern creates a LIKE pattern for prefix matching with proper escaping.
-// It escapes special LIKE characters (_ and %) and appends % for prefix matching.
-// For directory matching, the input should already end with "/" for proper prefix matching.
-func createLikePattern(prefix string) string {
+// matchDirectory creates a LIKE pattern for prefix matching a directory.
+// It escapes special LIKE characters (_ and %) and appends % for prefix matching
+func matchDirectory(prefix string) string {
 	// Escape special LIKE characters
 	pattern := strings.ReplaceAll(prefix, "_", "\\_")
 	pattern = strings.ReplaceAll(pattern, "%", "\\%")
-	// And finally, wildcard for prefix matching
 	pattern += "%"
 	return pattern
 }

@@ -84,41 +84,38 @@ func (lp *MySQLLeaderParticipation) WaitForLeadership() (context.Context, error)
 		lp.mu.Unlock()
 		return ctx, nil
 	}
-
-	// Start the leadership campaign if not already running
-	if !lp.isLeader {
-		lp.wg.Add(1)
-		go lp.campaignForLeadership()
-	}
 	lp.mu.Unlock()
 
-	// Wait for leadership to be acquired with a timeout
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	timeout := time.NewTimer(30 * time.Second) // Give more time for election
-	defer timeout.Stop()
-
-	for {
-		select {
-		case <-lp.ctx.Done():
-			return nil, topo.NewError(topo.Interrupted, lp.name)
-		case <-timeout.C:
-			return nil, fmt.Errorf("deadline exceeded: %s", lp.name)
-		case <-ticker.C:
-			lp.mu.RLock()
-			if lp.stopped {
-				lp.mu.RUnlock()
-				return nil, topo.NewError(topo.Interrupted, lp.name)
-			}
-			if lp.isLeader && lp.leaderCtx != nil {
-				ctx := lp.leaderCtx
-				lp.mu.RUnlock()
-				return ctx, nil
-			}
-			lp.mu.RUnlock()
+	// Try to become leader immediately - fail fast if we can't
+	if lp.tryBecomeLeader() {
+		lp.mu.Lock()
+		if !lp.isLeader {
+			lp.isLeader = true
+			lp.leaderCtx, lp.leaderCancel = context.WithCancel(lp.ctx)
 		}
+		ctx := lp.leaderCtx
+		lp.mu.Unlock()
+
+		// Start heartbeat to maintain leadership
+		lp.wg.Add(1)
+		go lp.maintainLeadership()
+		return ctx, nil
 	}
+
+	// If we can't become leader immediately, check if someone else is already leader
+	currentLeader, err := lp.GetCurrentLeaderID(lp.ctx)
+	if err != nil {
+		return nil, err
+	}
+	if currentLeader != "" && currentLeader != lp.id {
+		// Someone else is already the leader - fail fast like etcd does
+		return nil, topo.NewError(topo.NoNode, fmt.Sprintf("leadership already held by %s", currentLeader))
+	}
+
+	// No current leader, but we couldn't acquire it immediately
+	// This could be due to database contention or other transient issues
+	// Fail fast rather than retrying - the caller can retry if needed
+	return nil, topo.NewError(topo.NoNode, "unable to acquire leadership")
 }
 
 // Stop is part of the topo.LeaderParticipation interface.
@@ -243,51 +240,6 @@ func (lp *MySQLLeaderParticipation) WaitForNewLeader(ctx context.Context) (<-cha
 	return ch, nil
 }
 
-// campaignForLeadership runs the leadership campaign.
-func (lp *MySQLLeaderParticipation) campaignForLeadership() {
-	defer lp.wg.Done()
-
-	// Try to become leader immediately
-	if lp.tryBecomeLeader() {
-		lp.mu.Lock()
-		if !lp.isLeader {
-			lp.isLeader = true
-			lp.leaderCtx, lp.leaderCancel = context.WithCancel(lp.ctx)
-		}
-		lp.mu.Unlock()
-
-		// Start heartbeat to maintain leadership
-		lp.wg.Add(1)
-		go lp.maintainLeadership()
-		return
-	}
-
-	// If we didn't become leader immediately, keep trying
-	ticker := time.NewTicker(time.Duration(electionTTL/3) * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-lp.ctx.Done():
-			return
-		case <-ticker.C:
-			if lp.tryBecomeLeader() {
-				lp.mu.Lock()
-				if !lp.isLeader {
-					lp.isLeader = true
-					lp.leaderCtx, lp.leaderCancel = context.WithCancel(lp.ctx)
-				}
-				lp.mu.Unlock()
-
-				// Start heartbeat to maintain leadership
-				lp.wg.Add(1)
-				go lp.maintainLeadership()
-				return
-			}
-		}
-	}
-}
-
 // tryBecomeLeader attempts to become the leader.
 func (lp *MySQLLeaderParticipation) tryBecomeLeader() bool {
 	expiresAt := time.Now().Add(time.Duration(electionTTL) * time.Second)
@@ -331,7 +283,7 @@ func (lp *MySQLLeaderParticipation) tryBecomeLeader() bool {
 			return true // We renewed our leadership
 		}
 	}
-	log.Infof("Failed to renew leadership for %s (id: %s): %v", lp.name, lp.id, err)
+	log.Infof("Failed to obtain leadership for %s (id: %s): %v", lp.name, lp.id, err)
 
 	return false
 }
@@ -340,7 +292,12 @@ func (lp *MySQLLeaderParticipation) tryBecomeLeader() bool {
 func (lp *MySQLLeaderParticipation) maintainLeadership() {
 	defer lp.wg.Done()
 
-	ticker := time.NewTicker(time.Duration(electionTTL/3) * time.Second)
+	// Ensure ticker interval is at least 1 second to avoid zero duration
+	tickerInterval := electionTTL / 3
+	if tickerInterval < 1 {
+		tickerInterval = 1
+	}
+	ticker := time.NewTicker(time.Duration(tickerInterval) * time.Second)
 	defer ticker.Stop()
 
 	for {

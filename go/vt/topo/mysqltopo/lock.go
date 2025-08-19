@@ -19,7 +19,6 @@ package mysqltopo
 import (
 	"context"
 	"database/sql"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -96,19 +95,15 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 }
 
 // LockWithTTL is part of the topo.Conn interface.
+// Before we acquire a lock, we check that the row exists in topo_data
 func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (topo.LockDescriptor, error) {
 	if err := s.checkClosed(); err != nil {
 		return nil, convertError(err, dirPath)
 	}
 
-	fullPath := s.fullPath(dirPath)
-	// Ensure directory path ends with "/" for proper prefix matching
-	if fullPath != "" && !strings.HasSuffix(fullPath, "/") {
-		fullPath += "/"
-	}
-
+	fullPath := s.resolvePath(dirPath)
 	var exists bool
-	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM topo_data WHERE path LIKE ? LIMIT 1", createLikePattern(fullPath)).Scan(&exists)
+	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM topo_data WHERE path LIKE ? LIMIT 1", matchDirectory(fullPath)).Scan(&exists)
 	if err == sql.ErrNoRows {
 		return nil, topo.NewError(topo.NoNode, fullPath)
 	}
@@ -116,7 +111,7 @@ func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl 
 		return nil, convertError(err, fullPath)
 	}
 
-	return s.acquireLock(ctx, s.fullPath(dirPath), contents, ttl, false)
+	return s.acquireLock(ctx, s.resolvePath(dirPath), contents, ttl, false)
 }
 
 // LockName is part of the topo.Conn interface.
@@ -125,7 +120,7 @@ func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.L
 		return nil, convertError(err, dirPath)
 	}
 
-	fullPath := s.fullPath(dirPath)
+	fullPath := s.resolvePath(dirPath)
 
 	// Named locks have a static 24 hour TTL
 	ttl := 24 * time.Hour
@@ -139,14 +134,9 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		return nil, convertError(err, dirPath)
 	}
 
-	fullPath := s.fullPath(dirPath)
-	// Ensure directory path ends with "/" for proper prefix matching
-	if fullPath != "" && !strings.HasSuffix(fullPath, "/") {
-		fullPath += "/"
-	}
-
+	fullPath := s.resolvePath(dirPath)
 	var exists bool
-	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM topo_data WHERE path LIKE ? LIMIT 1", createLikePattern(fullPath)).Scan(&exists)
+	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM topo_data WHERE path LIKE ? LIMIT 1", matchDirectory(fullPath)).Scan(&exists)
 	if err == sql.ErrNoRows {
 		return nil, topo.NewError(topo.NoNode, fullPath)
 	}
@@ -154,7 +144,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		return nil, convertError(err, fullPath)
 	}
 
-	return s.acquireLock(ctx, s.fullPath(dirPath), contents, time.Duration(lockTTL)*time.Second, true)
+	return s.acquireLock(ctx, s.resolvePath(dirPath), contents, time.Duration(lockTTL)*time.Second, true)
 }
 
 // acquireLock attempts to acquire a lock with the given parameters.
