@@ -34,15 +34,19 @@ func TestNewIncomingQueryThrottler_ConfigRefresh(t *testing.T) {
 	require.NotNil(t, iqt)
 	require.IsType(t, &registry.NoOpStrategy{}, iqt.strategy)
 
-	// Wait briefly for goroutine to pick up the tick
-	time.Sleep(50 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		iqt.mu.RLock()
+		defer iqt.mu.RUnlock()
 
-	// Assert updated cfg and strategy
-	iqt.mu.RLock()
-	defer iqt.mu.RUnlock()
-
-	require.True(t, iqt.cfg.Enabled)
-	require.Equal(t, registry.ThrottlingStrategyTabletThrottler, iqt.cfg.Strategy)
+		// Assert updated cfg and strategy after config refresh
+		if !iqt.cfg.Enabled {
+			return false
+		}
+		if iqt.cfg.Strategy != registry.ThrottlingStrategyTabletThrottler {
+			return false
+		}
+		return true
+	}, 1*time.Second, 10*time.Millisecond, "Config should be refreshed and strategy should be updated")
 }
 
 func TestSelectThrottlingStrategy(t *testing.T) {
