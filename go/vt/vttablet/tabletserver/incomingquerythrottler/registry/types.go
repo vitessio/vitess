@@ -32,7 +32,6 @@ type ThrottleDecision struct {
 // must satisfy. This avoids circular imports by using a generic interface.
 type StrategyConfig interface {
 	GetStrategy() ThrottlingStrategy
-	GetTabletStrategyConfig() interface{} // Using interface{} to avoid circular dependency
 }
 
 // Deps holds the dependencies required by strategy factories.

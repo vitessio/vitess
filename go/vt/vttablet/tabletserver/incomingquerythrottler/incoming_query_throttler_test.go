@@ -43,7 +43,6 @@ func TestNewIncomingQueryThrottler_ConfigRefresh(t *testing.T) {
 
 	require.True(t, iqt.cfg.Enabled)
 	require.Equal(t, registry.ThrottlingStrategyTabletThrottler, iqt.cfg.Strategy)
-	//require.IsType(t, &TabletThrottlerStrategy{}, iqt.strategy)
 }
 
 func TestSelectThrottlingStrategy(t *testing.T) {

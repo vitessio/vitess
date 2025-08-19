@@ -5,15 +5,13 @@ import (
 	"sync"
 	"time"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
-
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -28,7 +26,7 @@ type IncomingQueryThrottler struct {
 	cfg Config
 	// cfgLoader is responsible for loading the configuration.
 	cfgLoader ConfigLoader
-	// ThrottlingStrategyHandler is the strategy to use for throttling.
+	// strategy is the current throttling strategy handler.
 	strategy registry.ThrottlingStrategyHandler
 }
 
@@ -96,13 +94,11 @@ func (i *IncomingQueryThrottler) EnforceThrottlingIfNodeOverloaded(ctx context.C
 
 // selectThrottlingStrategy returns the appropriate strategy implementation based on the config.
 func selectThrottlingStrategy(cfg Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig) registry.ThrottlingStrategyHandler {
-	switch cfg.Strategy {
-	case registry.ThrottlingStrategyTabletThrottler:
-		fallthrough // TODO (to be implemented in next PR)
-	default:
-		log.Warningf("Unknown throttling strategy: %v, defaulting to NoOpStrategy", cfg.Strategy)
-		return &registry.NoOpStrategy{}
+	deps := registry.Deps{
+		ThrottleClient: client,
+		TabletConfig:   tabletConfig,
 	}
+	return registry.CreateStrategy(cfg, deps)
 }
 
 // startConfigRefreshLoop launches a background goroutine that refreshes the throttler's configuration
@@ -125,13 +121,13 @@ func (i *IncomingQueryThrottler) startConfigRefreshLoop() {
 				}
 
 				// Only restart strategy if the strategy type has changed
-				newStrategy := selectThrottlingStrategy(newCfg, i.throttleClient, i.tabletConfig)
 				if i.cfg.Strategy != newCfg.Strategy {
 					// Stop the current strategy before switching to a new one
 					if i.strategy != nil {
 						i.strategy.Stop()
 					}
 
+					newStrategy := selectThrottlingStrategy(newCfg, i.throttleClient, i.tabletConfig)
 					// Update strategy and start the new one
 					i.strategy = newStrategy
 					if i.strategy != nil {
@@ -139,8 +135,8 @@ func (i *IncomingQueryThrottler) startConfigRefreshLoop() {
 					}
 				}
 
-				i.mu.Lock()
 				// Always update the configuration
+				i.mu.Lock()
 				i.cfg = newCfg
 				i.mu.Unlock()
 			}
