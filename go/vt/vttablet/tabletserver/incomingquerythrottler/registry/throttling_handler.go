@@ -1,4 +1,4 @@
-package incomingquerythrottler
+package registry
 
 import (
 	"context"
@@ -11,10 +11,10 @@ import (
 // used by the IncomingQueryThrottler. Each strategy encapsulates its own logic
 // to determine whether throttling should be applied for an incoming query.
 type ThrottlingStrategyHandler interface {
-	// ThrottleIfNeeded method is invoked before a query is executed and evaluates whether the incoming query should be throttled.
-	// It returns an error if the system is overloaded or throttling conditions are met.
-	// A nil error means the query can proceed normally.
-	ThrottleIfNeeded(ctx context.Context, targetTabletType topodatapb.TabletType, sql string, transactionID int64, options *querypb.ExecuteOptions) error
+	// Evaluate determines whether a query should be throttled and returns detailed information about the decision.
+	// This method separates the decision-making logic from the enforcement action, enabling features like dry-run mode.
+	// It returns a ThrottleDecision struct containing all relevant information about the throttling decision.
+	Evaluate(ctx context.Context, targetTabletType topodatapb.TabletType, sql string, transactionID int64, options *querypb.ExecuteOptions) ThrottleDecision
 
 	// Start initializes and starts the throttling strategy.
 	// This method should be called when the strategy becomes active.

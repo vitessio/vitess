@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
 
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -30,7 +31,7 @@ func TestNewIncomingQueryThrottler_ConfigRefresh(t *testing.T) {
 
 	// Assert initial state (should be NoOpStrategy)
 	require.NotNil(t, iqt)
-	require.IsType(t, &NoOpStrategy{}, iqt.strategy)
+	require.IsType(t, &registry.NoOpStrategy{}, iqt.strategy)
 
 	// Wait briefly for goroutine to pick up the tick
 	time.Sleep(50 * time.Millisecond)
@@ -48,12 +49,12 @@ func TestSelectThrottlingStrategy(t *testing.T) {
 	tests := []struct {
 		name                   string
 		giveThrottlingStrategy ThrottlingStrategy
-		expectedType           ThrottlingStrategyHandler
+		expectedType           registry.ThrottlingStrategyHandler
 	}{
 		{
 			name:                   "Unknown strategy defaults to NoOp",
 			giveThrottlingStrategy: "some-unknown-string",
-			expectedType:           &NoOpStrategy{},
+			expectedType:           &registry.NoOpStrategy{},
 		},
 	}
 

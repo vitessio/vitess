@@ -4,6 +4,9 @@ import (
 	"context"
 	"sync"
 	"time"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -25,7 +28,7 @@ type IncomingQueryThrottler struct {
 	// cfgLoader is responsible for loading the configuration.
 	cfgLoader ConfigLoader
 	// ThrottlingStrategyHandler is the strategy to use for throttling.
-	strategy ThrottlingStrategyHandler
+	strategy registry.ThrottlingStrategyHandler
 }
 
 // NewIncomingQueryThrottler creates a new incoming query throttler.
@@ -38,7 +41,7 @@ func NewIncomingQueryThrottler(ctx context.Context, throttler *throttle.Throttle
 		tabletConfig:   env.Config(),
 		cfg:            Config{},
 		cfgLoader:      cfgLoader,
-		strategy:       &NoOpStrategy{}, // default strategy until config is loaded
+		strategy:       &registry.NoOpStrategy{}, // default strategy until config is loaded
 	}
 
 	// Start the initial strategy
@@ -64,27 +67,40 @@ func (i *IncomingQueryThrottler) Shutdown() {
 
 // EnforceThrottlingIfNodeOverloaded checks if the tablet is under heavy load
 // and enforces throttling by rejecting the incoming request if necessary.
+// Note: This method performs lock-free reads of config and strategy for optimal performance.
+// Config updates are rare (default: every 1 minute) compared to query frequency,
+// so the tiny risk of reading slightly stale data during config updates is acceptable
+// for the significant performance improvement of avoiding mutex contention.
 func (i *IncomingQueryThrottler) EnforceThrottlingIfNodeOverloaded(ctx context.Context, tabletType topodatapb.TabletType, sql string, transactionID int64, options *querypb.ExecuteOptions) error {
-	i.mu.RLock()
+	// Lock-free read: for maximum performance in the hot path as cfg and strategy are updated rarely (default once per minute).
+	// They are word-sized and safe for atomic reads; stale data for one query is acceptable and avoids mutex contention in the hot path.
 	tCfg := i.cfg
 	tStrategy := i.strategy
-	i.mu.RUnlock()
 
 	if !tCfg.Enabled {
 		return nil
 	}
 
-	return tStrategy.ThrottleIfNeeded(ctx, tabletType, sql, transactionID, options)
+	// Evaluate the throttling decision
+	decision := tStrategy.Evaluate(ctx, tabletType, sql, transactionID, options)
+
+	// If no throttling is needed, allow the query
+	if !decision.Throttle {
+		return nil
+	}
+
+	// Normal throttling: return an error to reject the query
+	return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, decision.Message)
 }
 
 // selectThrottlingStrategy returns the appropriate strategy implementation based on the config.
-func selectThrottlingStrategy(cfg Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig) ThrottlingStrategyHandler {
+func selectThrottlingStrategy(cfg Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig) registry.ThrottlingStrategyHandler {
 	switch cfg.Strategy {
 	case ThrottlingStrategyTabletThrottler:
 		fallthrough // TODO (to be implemented in next PR)
 	default:
 		log.Warningf("Unknown throttling strategy: %v, defaulting to NoOpStrategy", cfg.Strategy)
-		return &NoOpStrategy{}
+		return &registry.NoOpStrategy{}
 	}
 }
 
@@ -101,10 +117,10 @@ func (i *IncomingQueryThrottler) startConfigRefreshLoop() {
 			case <-i.ctx.Done():
 				return
 			case <-configRefreshTicker.C:
-				i.mu.Lock()
 				newCfg, err := i.cfgLoader.Load(i.ctx)
 				if err != nil {
 					log.Errorf("Error loading config: %v", err)
+					continue
 				}
 
 				// Only restart strategy if the strategy type has changed
@@ -122,9 +138,9 @@ func (i *IncomingQueryThrottler) startConfigRefreshLoop() {
 					}
 				}
 
+				i.mu.Lock()
 				// Always update the configuration
 				i.cfg = newCfg
-
 				i.mu.Unlock()
 			}
 		}
