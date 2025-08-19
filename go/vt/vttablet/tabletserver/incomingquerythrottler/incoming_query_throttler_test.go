@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 	"time"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
 
 	"vitess.io/vitess/go/vt/vtenv"

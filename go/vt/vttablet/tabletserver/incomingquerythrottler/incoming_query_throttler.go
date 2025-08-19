@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"time"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
