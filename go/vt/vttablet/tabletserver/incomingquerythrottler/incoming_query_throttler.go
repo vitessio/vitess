@@ -97,7 +97,7 @@ func (i *IncomingQueryThrottler) EnforceThrottlingIfNodeOverloaded(ctx context.C
 // selectThrottlingStrategy returns the appropriate strategy implementation based on the config.
 func selectThrottlingStrategy(cfg Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig) registry.ThrottlingStrategyHandler {
 	switch cfg.Strategy {
-	case ThrottlingStrategyTabletThrottler:
+	case registry.ThrottlingStrategyTabletThrottler:
 		fallthrough // TODO (to be implemented in next PR)
 	default:
 		log.Warningf("Unknown throttling strategy: %v, defaulting to NoOpStrategy", cfg.Strategy)

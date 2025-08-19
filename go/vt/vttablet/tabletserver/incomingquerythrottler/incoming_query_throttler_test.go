@@ -27,7 +27,7 @@ func TestNewIncomingQueryThrottler_ConfigRefresh(t *testing.T) {
 	throttler := &throttle.Throttler{} // use mock if needed
 	iqt := NewIncomingQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
 		Enabled:  true,
-		Strategy: ThrottlingStrategyTabletThrottler,
+		Strategy: registry.ThrottlingStrategyTabletThrottler,
 	}), env)
 
 	// Assert initial state (should be NoOpStrategy)
@@ -42,14 +42,14 @@ func TestNewIncomingQueryThrottler_ConfigRefresh(t *testing.T) {
 	defer iqt.mu.RUnlock()
 
 	require.True(t, iqt.cfg.Enabled)
-	require.Equal(t, ThrottlingStrategyTabletThrottler, iqt.cfg.Strategy)
+	require.Equal(t, registry.ThrottlingStrategyTabletThrottler, iqt.cfg.Strategy)
 	//require.IsType(t, &TabletThrottlerStrategy{}, iqt.strategy)
 }
 
 func TestSelectThrottlingStrategy(t *testing.T) {
 	tests := []struct {
 		name                   string
-		giveThrottlingStrategy ThrottlingStrategy
+		giveThrottlingStrategy registry.ThrottlingStrategy
 		expectedType           registry.ThrottlingStrategyHandler
 	}{
 		{
@@ -88,7 +88,7 @@ func TestIncomingQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 
 	iqt := NewIncomingQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
 		Enabled:  true,
-		Strategy: ThrottlingStrategyTabletThrottler,
+		Strategy: registry.ThrottlingStrategyTabletThrottler,
 	}), env)
 
 	// Verify initial strategy was started (NoOpStrategy in this case)
@@ -115,7 +115,7 @@ func TestIncomingQueryThrottler_Shutdown(t *testing.T) {
 	throttler := &throttle.Throttler{}
 	iqt := NewIncomingQueryThrottler(ctx, throttler, newFakeConfigLoader(Config{
 		Enabled:  false,
-		Strategy: ThrottlingStrategyTabletThrottler,
+		Strategy: registry.ThrottlingStrategyTabletThrottler,
 	}), env)
 
 	// Should not panic when called multiple times

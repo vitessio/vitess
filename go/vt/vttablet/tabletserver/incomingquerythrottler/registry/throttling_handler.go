@@ -7,6 +7,21 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// Predefined throttling strategies for the IncomingQueryThrottler.
+const (
+	// ThrottlingStrategyTabletThrottler uses Vitess Tablet Throttler to shed load
+	// from incoming queries when the tablet is under pressure.
+	// Reference: https://vitess.io/docs/21.0/reference/features/tablet-throttler/
+	ThrottlingStrategyTabletThrottler ThrottlingStrategy = "TabletThrottler"
+
+	// ThrottlingStrategyUnknown is used when the strategy is not known.
+	ThrottlingStrategyUnknown ThrottlingStrategy = "Unknown"
+)
+
+// ThrottlingStrategy represents the strategy used to apply throttling
+// to incoming queries based on system load or external signals.
+type ThrottlingStrategy string
+
 // ThrottlingStrategyHandler defines the interface for throttling strategies
 // used by the IncomingQueryThrottler. Each strategy encapsulates its own logic
 // to determine whether throttling should be applied for an incoming query.

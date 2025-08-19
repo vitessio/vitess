@@ -6,6 +6,8 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/incomingquerythrottler/registry"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,7 +40,7 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 			},
 			expectedConfig: Config{
 				Enabled:  true,
-				Strategy: ThrottlingStrategyTabletThrottler,
+				Strategy: registry.ThrottlingStrategyTabletThrottler,
 			},
 			expectedErrorNotNil: false,
 		},
@@ -54,7 +56,7 @@ func TestFileBasedConfigLoader_Load(t *testing.T) {
 			},
 			expectedConfig: Config{
 				Enabled:  false,
-				Strategy: ThrottlingStrategyTabletThrottler,
+				Strategy: registry.ThrottlingStrategyTabletThrottler,
 			},
 			expectedErrorNotNil: false,
 		},

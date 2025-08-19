@@ -1,5 +1,10 @@
 package registry
 
+import (
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+)
+
 // ThrottleDecision represents the result of evaluating whether a query should be throttled.
 // It separates the decision-making logic from the enforcement action.
 type ThrottleDecision struct {
@@ -21,4 +26,22 @@ type ThrottleDecision struct {
 
 	// ThrottlePercentage contains the percentage chance this query was throttled (0.0-1.0).
 	ThrottlePercentage float64
+}
+
+// StrategyConfig defines the configuration interface that strategy implementations
+// must satisfy. This avoids circular imports by using a generic interface.
+type StrategyConfig interface {
+	GetStrategy() ThrottlingStrategy
+	GetTabletStrategyConfig() interface{} // Using interface{} to avoid circular dependency
+}
+
+// Deps holds the dependencies required by strategy factories.
+type Deps struct {
+	ThrottleClient *throttle.Client
+	TabletConfig   *tabletenv.TabletConfig
+}
+
+// StrategyFactory creates a new strategy instance with the given dependencies and configuration.
+type StrategyFactory interface {
+	New(deps Deps, cfg StrategyConfig) (ThrottlingStrategyHandler, error)
 }
