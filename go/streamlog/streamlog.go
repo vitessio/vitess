@@ -118,7 +118,7 @@ func registerStreamLogFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&queryLogConfigInstance.Mode, "querylog-mode", queryLogConfigInstance.Mode, `Mode for logging queries. "error" will only log queries that return an error. Otherwise all queries will be logged.`)
 
 	// EmitOnAnyConditionMet logs queries on any condition met (time/row/filtertag)
-	fs.BoolVar(&queryLogConfigInstance.EmitOnAnyConditionMet, "querylog-on-any-condition-met", queryLogConfigInstance.EmitOnAnyConditionMet, "Emit to query log when any of the conditions (row-threshold, time-threshold, filter-tag) is met (default false)")
+	fs.BoolVar(&queryLogConfigInstance.EmitOnAnyConditionMet, "querylog-emit-on-any-condition-met", queryLogConfigInstance.EmitOnAnyConditionMet, "Emit to query log when any of the conditions (row-threshold, time-threshold, filter-tag) is met (default false)")
 }
 
 // StreamLogger is a non-blocking broadcaster of messages.
