@@ -4041,6 +4041,7 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 			atomic.StoreInt64(&runningMigration.ReadyToComplete, storeValue)
 		}
 	}
+	log.Infof("updateMigrationReadyToComplete: uuid=%s, isReady=%t", uuid, isReady)
 
 	if isReady {
 		// We set progress to 100%. Remember that progress is based on table rows estimation. We can get here
