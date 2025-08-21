@@ -153,16 +153,12 @@ type (
 
 var executorOnce sync.Once
 
-const (
-	pathQueryPlans   = "/debug/query_plans"
-	pathScatterStats = "/debug/scatter_stats"
-	pathVSchema      = "/debug/vschema"
-)
+const pathQueryPlans = "/debug/query_plans"
+const pathScatterStats = "/debug/scatter_stats"
+const pathVSchema = "/debug/vschema"
 
-type (
-	PlanCacheKey = theine.HashKey256
-	PlanCache    = theine.Store[PlanCacheKey, *engine.Plan]
-)
+type PlanCacheKey = theine.HashKey256
+type PlanCache = theine.Store[PlanCacheKey, *engine.Plan]
 
 func DefaultPlanCache() *PlanCache {
 	// when being endtoend tested, disable the doorkeeper to ensure reproducible results
@@ -1121,8 +1117,7 @@ func (e *Executor) fetchOrCreatePlan(
 	logStats *logstats.LogStats,
 	isExecutePath bool, // this means we are trying to execute the query - this is not a PREPARE call
 ) (
-	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, err error,
-) {
+	plan *engine.Plan, vcursor *econtext.VCursorImpl, stmt sqlparser.Statement, err error) {
 	if e.VSchema() == nil {
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
