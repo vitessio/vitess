@@ -48,6 +48,15 @@ type connectResult struct {
 // FIXME(alainjobart) once we have more of a server side, add test cases
 // to cover all failure scenarios.
 func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
+	return ConnectWithAttributes(ctx, params, nil)
+}
+
+// ConnectWithAttributes creates a connection to a server with connection attributes.
+// It then handles the initial handshake.
+//
+// If context is canceled before the end of the process, this function
+// will return nil, ctx.Err().
+func ConnectWithAttributes(ctx context.Context, params *ConnParams, attributes *ConnectionAttributes) (*Conn, error) {
 	if params.ConnectTimeoutMs != 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(params.ConnectTimeoutMs)*time.Millisecond)
@@ -116,7 +125,7 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		// make any read or write just return with an error
 		// right away.
 		status <- connectResult{
-			err: c.clientHandshake(params),
+			err: c.clientHandshake(params, attributes),
 		}
 	}()
 
@@ -198,7 +207,7 @@ func (c *Conn) Ping() error {
 // clientHandshake handles the client side of the handshake.
 // Note the connection can be closed while this is running.
 // Returns a SQLError.
-func (c *Conn) clientHandshake(params *ConnParams) error {
+func (c *Conn) clientHandshake(params *ConnParams, attributes *ConnectionAttributes) error {
 	// if EnableQueryInfo is set, make sure that all queries starting with the handshake
 	// will actually process the INFO fields in QUERY_OK packets
 	if params.EnableQueryInfo {
@@ -296,13 +305,13 @@ func (c *Conn) clientHandshake(params *ConnParams) error {
 	}
 
 	// Connection attributes.
-	if capabilities&CapabilityClientConnAttr != 0 && params.Attributes != nil && len(*params.Attributes) > 0 {
+	if capabilities&CapabilityClientConnAttr != 0 && attributes != nil && len(*attributes) > 0 {
 		c.Capabilities |= CapabilityClientConnAttr
 	}
 
 	// Build and send our handshake response 41.
 	// Note this one will never have SSL flag on.
-	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, uint8(params.Charset), params); err != nil {
+	if err := c.writeHandshakeResponse41(capabilities, scrambledPassword, uint8(params.Charset), params, attributes); err != nil {
 		return err
 	}
 
@@ -532,7 +541,7 @@ const CapabilityFlagsSsl = CapabilityFlags |
 
 // writeHandshakeResponse41 writes the handshake response.
 // Returns a SQLError.
-func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword []byte, characterSet uint8, params *ConnParams) error {
+func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword []byte, characterSet uint8, params *ConnParams, attributes *ConnectionAttributes) error {
 	// Build our flags.
 	capabilityFlags := CapabilityFlags |
 		// If the server supported
@@ -572,9 +581,9 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	// If the server supports CapabilityClientConnAttr and there are attributes to be
 	// sent, then indicate
 	var attrLength int
-	if capabilities&CapabilityClientConnAttr != 0 && params.Attributes != nil && len(*params.Attributes) > 0 {
+	if capabilities&CapabilityClientConnAttr != 0 && attributes != nil && len(*attributes) > 0 {
 		capabilityFlags |= CapabilityClientConnAttr
-		for key, value := range *params.Attributes {
+		for key, value := range *attributes {
 			// 1 byte for key len + key + 1 byte for val len + val
 			attrLength += 1 + len(key) + 1 + len(value)
 		}
@@ -621,7 +630,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	if attrLength > 0 {
 		pos = writeLenEncInt(data, pos, uint64(attrLength))
 
-		for key, value := range *params.Attributes {
+		for key, value := range *attributes {
 			if len(key) > 255 || len(value) > 255 {
 				return sqlerror.NewSQLErrorf(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "writeHandshakeResponse41: attribute key or value is too long")
 			}

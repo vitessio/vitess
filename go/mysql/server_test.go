@@ -509,20 +509,22 @@ func TestConnAttrs(t *testing.T) {
 		Port:  port,
 		Uname: "user1",
 		Pass:  "password1",
-		Attributes: &ConnectionAttributes{
-			"key1": "value1",
-			"k2":   "v2",
-		},
 	}
+
+	attributes := ConnectionAttributes{
+		"key1": "value1",
+		"k2":   "v2",
+	}
+
 	go l.Accept()
 	defer cleanupListener(ctx, l, params)
 
-	clientConn, err := Connect(ctx, params)
+	clientConn, err := ConnectWithAttributes(ctx, params, &attributes)
 	require.NoError(t, err, "Connect failed")
 
 	serverConn := th.LastConn()
 	assert.Equal(t, uint32(CapabilityClientConnAttr), clientConn.Capabilities&CapabilityClientConnAttr, "ConnAttr flag: %x, bit must be set", th.LastConn().Capabilities)
-	assert.Equal(t, serverConn.Attributes, *params.Attributes, "attributes should be sent and parsed")
+	assert.Equal(t, serverConn.Attributes, attributes, "attributes should be sent and parsed")
 
 	clientConn.Close()
 	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")
@@ -551,12 +553,13 @@ func TestConnAttrs(t *testing.T) {
 		Port:  port,
 		Uname: "user1",
 		Pass:  "password1",
-		Attributes: &ConnectionAttributes{
-			"tooLongKey": strings.Repeat("a", 256),
-		},
 	}
 
-	_, err = Connect(ctx, params)
+	tooLongAttributes := ConnectionAttributes{
+		"tooLongKey": strings.Repeat("a", 256),
+	}
+
+	_, err = ConnectWithAttributes(ctx, params, &tooLongAttributes)
 	require.Error(t, err, "writeHandshakeResponse41: attribute key or value is too long")
 
 }

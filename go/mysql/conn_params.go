@@ -67,8 +67,6 @@ type ConnParams struct {
 	TruncateErrLen int
 
 	MultiQuery bool
-
-	Attributes *ConnectionAttributes
 }
 
 // EnableSSL will set the right flag on the parameters.
