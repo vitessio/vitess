@@ -67,7 +67,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &ca, "vtgate-grpc-ca", "", "the server ca to use to validate servers when connecting")
 	utils.SetFlagStringVar(fs, &crl, "vtgate-grpc-crl", "", "the server crl to use to validate server certificates when connecting")
 	utils.SetFlagStringVar(fs, &name, "vtgate-grpc-server-name", "", "the server name to use to validate server certificate")
-	utils.SetFlagBoolVar(fs, &failFast, "vtgate-grpc-fail-fast", false, "whether to enable grpc fail fast when communicating with vtgate")
+	utils.SetFlagBoolVar(fs, &failFast, "vtgate-grpc-fail-fast", false, "whether to enable grpc fail fast when connecting")
 }
 
 type vtgateConn struct {
