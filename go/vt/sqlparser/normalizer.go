@@ -743,6 +743,7 @@ func (nz *normalizer) sysVarRewrite(cursor *Cursor, node *Variable) {
 		sysvars.Version.Name,
 		sysvars.VersionComment.Name,
 		sysvars.QueryTimeout.Name,
+		sysvars.TransactionTimeout.Name,
 		sysvars.Workload.Name:
 		found = true
 	}

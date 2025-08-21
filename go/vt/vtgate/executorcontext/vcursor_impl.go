@@ -173,6 +173,7 @@ type (
 		vm                  VSchemaOperator
 		semTable            *semantics.SemTable
 		queryTimeout        time.Duration
+		transactionTimeout  time.Duration
 
 		warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 
@@ -1152,6 +1153,11 @@ func (vc *VCursorImpl) SetQueryTimeout(maxExecutionTime int64) {
 	vc.SafeSession.QueryTimeout = maxExecutionTime
 }
 
+// SetTransactionTimeout implements the SessionActions interface
+func (vc *VCursorImpl) SetTransactionTimeout(transactionTimeout int64) {
+	vc.SafeSession.GetOrCreateOptions().TransactionTimeout = &transactionTimeout
+}
+
 // SetClientFoundRows implements the SessionActions interface
 func (vc *VCursorImpl) SetClientFoundRows(_ context.Context, clientFoundRows bool) error {
 	vc.SafeSession.GetOrCreateOptions().ClientFoundRows = clientFoundRows
@@ -1329,6 +1335,7 @@ func (vc *VCursorImpl) AddAdvisoryLock(name string) {
 func (vc *VCursorImpl) GetBindVars() map[string]*querypb.BindVariable {
 	return vc.bindVars
 }
+
 func (vc *VCursorImpl) SetBindVars(m map[string]*querypb.BindVariable) {
 	vc.bindVars = m
 }

@@ -363,7 +363,6 @@ func (e *Executor) StreamExecute(
 		err := vc.StreamExecutePrimitive(ctx, plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
 			return srr.storeResultStats(plan.QueryType, qr)
 		})
-
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
 			if safeSession.InTransaction() && e.rollbackOnFatalTxError(ctx, safeSession, err) {
@@ -488,6 +487,12 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 			bindVars[key] = sqltypes.BoolBindVariable(session.Autocommit)
 		case sysvars.QueryTimeout.Name:
 			bindVars[key] = sqltypes.Int64BindVariable(session.GetQueryTimeout())
+		case sysvars.TransactionTimeout.Name:
+			var v int64
+			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
+				v = options.GetTransactionTimeout()
+			})
+			bindVars[key] = sqltypes.Int64BindVariable(v)
 		case sysvars.ClientFoundRows.Name:
 			var v bool
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
