@@ -957,6 +957,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_foreignkey_routing": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/foreignkey/routing"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_foreignkey_stress",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_foreignkey_stress": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/foreignkey/stress", "-timeout", "30m"],

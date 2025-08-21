@@ -4041,6 +4041,16 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 			atomic.StoreInt64(&runningMigration.ReadyToComplete, storeValue)
 		}
 	}
+	log.Infof("updateMigrationReadyToComplete: uuid=%s, isReady=%t", uuid, isReady)
+
+	if isReady {
+		// We set progress to 100%. Remember that progress is based on table rows estimation. We can get here
+		// with progress 87% or another value that is way off. But once we realize the migration is ready to complete,
+		// we know row copy is fully complete _and_ that vplayer is not far behind. So it's a better DX to report 100%.
+		if err = e.updateMigrationProgress(ctx, uuid, progressPctFull); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

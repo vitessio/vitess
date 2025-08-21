@@ -569,6 +569,7 @@ func testScheduler(t *testing.T) {
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
+				assert.Equal(t, 100.0, row.AsFloat64("progress", 0))
 			}
 		})
 
@@ -619,6 +620,7 @@ func testScheduler(t *testing.T) {
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
+				assert.Equal(t, 100.0, row.AsFloat64("progress", 0))
 			}
 		})
 
