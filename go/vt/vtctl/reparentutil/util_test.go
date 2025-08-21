@@ -1722,6 +1722,10 @@ func TestWaitForCatchUp(t *testing.T) {
 }
 
 func TestRestrictValidCandidates(t *testing.T) {
+	gtidSet1, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	gtidSet2, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	gtidSet3, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3")
+	gtidSet4, _ := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-2")
 	tests := []struct {
 		name            string
 		validCandidates map[string]replication.Position
@@ -1731,12 +1735,12 @@ func TestRestrictValidCandidates(t *testing.T) {
 		{
 			name: "remove invalid tablets",
 			validCandidates: map[string]replication.Position{
-				"zone1-0000000100": {},
-				"zone1-0000000101": {},
-				"zone1-0000000102": {},
-				"zone1-0000000103": {},
-				"zone1-0000000104": {},
-				"zone1-0000000105": {},
+				"zone1-0000000100": {GTIDSet: gtidSet1},
+				"zone1-0000000101": {GTIDSet: gtidSet2},
+				"zone1-0000000102": {GTIDSet: gtidSet2},
+				"zone1-0000000103": {GTIDSet: gtidSet3},
+				"zone1-0000000104": {GTIDSet: gtidSet3},
+				"zone1-0000000105": {GTIDSet: gtidSet4},
 			},
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
@@ -1795,9 +1799,8 @@ func TestRestrictValidCandidates(t *testing.T) {
 				},
 			},
 			result: map[string]replication.Position{
-				"zone1-0000000100": {},
-				"zone1-0000000101": {},
-				"zone1-0000000104": {},
+				"zone1-0000000100": {GTIDSet: gtidSet1},
+				"zone1-0000000101": {GTIDSet: gtidSet2},
 			},
 		},
 	}
@@ -2073,4 +2076,19 @@ func TestGetBackupCandidates(t *testing.T) {
 			require.EqualValues(t, tt.expected, res)
 		})
 	}
+}
+
+func TestGetValidCandidatesMajorityCount(t *testing.T) {
+	buildCandidatesFunc := func(length int) map[string]replication.Position {
+		candidates := make(map[string]replication.Position, length)
+		for i := 1; i <= length; i++ {
+			candidates[fmt.Sprintf("candidate-%d", i)] = replication.Position{}
+		}
+		return candidates
+	}
+	require.Equal(t, 1, getValidCandidatesMajorityCount(buildCandidatesFunc(1)))
+	require.Equal(t, 2, getValidCandidatesMajorityCount(buildCandidatesFunc(2)))
+	require.Equal(t, 2, getValidCandidatesMajorityCount(buildCandidatesFunc(3)))
+	require.Equal(t, 3, getValidCandidatesMajorityCount(buildCandidatesFunc(5)))
+	require.Equal(t, 5, getValidCandidatesMajorityCount(buildCandidatesFunc(9)))
 }
