@@ -1335,7 +1335,6 @@ func (vc *VCursorImpl) AddAdvisoryLock(name string) {
 func (vc *VCursorImpl) GetBindVars() map[string]*querypb.BindVariable {
 	return vc.bindVars
 }
-
 func (vc *VCursorImpl) SetBindVars(m map[string]*querypb.BindVariable) {
 	vc.bindVars = m
 }
