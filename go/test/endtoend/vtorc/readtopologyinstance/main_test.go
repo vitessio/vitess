@@ -57,6 +57,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 		"--topo_global_root", clusterInfo.ClusterInstance.VtctlProcess.TopoGlobalRoot,
 	}
 	servenv.ParseFlags("vtorc")
+	config.Config.AllowRecovery = true
 	config.Config.RecoveryPeriodBlockSeconds = 1
 	config.Config.InstancePollSeconds = 1
 	config.MarkConfigurationLoaded()

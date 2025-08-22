@@ -17,6 +17,7 @@ vtorc \
 
 Flags:
       --allow-emergency-reparent                                    Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary (default true)
+      --allow-recovery                                              Whether VTOrc should be allowed to run recovery actions (default true)
       --alsologtostderr                                             log to standard error as well as files
       --audit-file-location string                                  File location where the audit logs are to be stored
       --audit-purge-duration duration                               Duration for which audit logs are held before being purged. Should be in multiples of days (default 168h0m0s)

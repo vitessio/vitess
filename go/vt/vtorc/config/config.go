@@ -62,6 +62,7 @@ var (
 	tolerableReplicationLag        = 0 * time.Second
 	topoInformationRefreshDuration = 15 * time.Second
 	recoveryPollDuration           = 1 * time.Second
+	allowRecovery                  = true
 	ersEnabled                     = true
 	convertTabletsWithErrantGTIDs  = false
 )
@@ -83,6 +84,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&tolerableReplicationLag, "tolerable-replication-lag", tolerableReplicationLag, "Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS")
 	fs.DurationVar(&topoInformationRefreshDuration, "topo-information-refresh-duration", topoInformationRefreshDuration, "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
 	fs.DurationVar(&recoveryPollDuration, "recovery-poll-duration", recoveryPollDuration, "Timer duration on which VTOrc polls its database to run a recovery")
+	fs.BoolVar(&allowRecovery, "allow-recovery", allowRecovery, "Whether VTOrc should be allowed to run recovery actions")
 	fs.BoolVar(&ersEnabled, "allow-emergency-reparent", ersEnabled, "Whether VTOrc should be allowed to run emergency reparent operation when it detects a dead primary")
 	fs.BoolVar(&convertTabletsWithErrantGTIDs, "change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs, "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
 }
@@ -106,6 +108,7 @@ type Configuration struct {
 	WaitReplicasTimeoutSeconds            int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
 	TolerableReplicationLagSeconds        int    // Amount of replication lag that is considered acceptable for a tablet to be eligible for promotion when Vitess makes the choice of a new primary in PRS.
 	TopoInformationRefreshSeconds         int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
+	AllowRecovery                         bool   // Allow recoveries.
 	RecoveryPollSeconds                   int    // Timer duration on which VTOrc recovery analysis runs
 }
 
@@ -137,6 +140,7 @@ func UpdateConfigValuesFromFlags() {
 	Config.WaitReplicasTimeoutSeconds = int(waitReplicasTimeout / time.Second)
 	Config.TolerableReplicationLagSeconds = int(tolerableReplicationLag / time.Second)
 	Config.TopoInformationRefreshSeconds = int(topoInformationRefreshDuration / time.Second)
+	Config.AllowRecovery = allowRecovery
 	Config.RecoveryPollSeconds = int(recoveryPollDuration / time.Second)
 }
 
@@ -148,6 +152,11 @@ func ERSEnabled() bool {
 // SetERSEnabled sets the value for the ersEnabled variable. This should only be used from tests.
 func SetERSEnabled(val bool) {
 	ersEnabled = val
+}
+
+// GetAllowRecovery is a getter function.
+func GetAllowRecovery() bool {
+	return allowRecovery
 }
 
 // ConvertTabletWithErrantGTIDs reports whether VTOrc is allowed to change the tablet type of tablets with errant GTIDs to DRAINED.
@@ -181,6 +190,7 @@ func newConfiguration() *Configuration {
 		PreventCrossDataCenterPrimaryFailover: false,
 		WaitReplicasTimeoutSeconds:            30,
 		TopoInformationRefreshSeconds:         15,
+		AllowRecovery:                         true,
 		RecoveryPollSeconds:                   1,
 	}
 }
