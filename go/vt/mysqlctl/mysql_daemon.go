@@ -128,7 +128,7 @@ type MysqlDaemon interface {
 	AcquireGlobalReadLock(ctx context.Context) error
 
 	// ReleaseGlobalReadLock release a lock acquired with the connection from the above function.
-	ReleaseGlobalReadLock(ctx context.Context) error
+	ReleaseGlobalReadLock(ctx context.Context)
 
 	// Close will close this instance of Mysqld. It will wait for all dba
 	// queries to be finished.

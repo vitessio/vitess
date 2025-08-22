@@ -106,10 +106,12 @@ var (
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
-	dbcfgs   *dbconfigs.DBConfigs
-	dbaPool  *dbconnpool.ConnectionPool
-	appPool  *dbconnpool.ConnectionPool
-	lockConn *dbconnpool.PooledDBConnection
+	dbcfgs  *dbconfigs.DBConfigs
+	dbaPool *dbconnpool.ConnectionPool
+	appPool *dbconnpool.ConnectionPool
+
+	lockConnMutex sync.Mutex
+	lockConn      *dbconnpool.PooledDBConnection
 
 	capabilities capabilitySet
 

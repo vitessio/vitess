@@ -750,11 +750,8 @@ func (fmd *FakeMysqlDaemon) AcquireGlobalReadLock(ctx context.Context) error {
 }
 
 // ReleaseGlobalReadLock is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) error {
+func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) {
 	if fmd.GlobalReadLock {
 		fmd.GlobalReadLock = false
-		return nil
 	}
-
-	return errors.New("no read locks acquired yet")
 }
