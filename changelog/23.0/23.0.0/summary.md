@@ -74,6 +74,6 @@ In future Vitess versions, the `mysql_native_password` authentication plugin wil
 
 #### <a id="mysql-timezone-env"/>MySQL timezone environment propagation</a>
 
-Fixed a bug where the `TZ` environment variable was not propagated to the mysqld process.
+Fixed a bug where environment variables like `TZ` were not propagated from mysqlctl to the mysqld process.
 As a result, timezone settings from the environment were previously ignored. Now mysqld correctly inherits environment variables.
 ⚠️ Deployments that relied on the old behavior and explicitly set a non-UTC timezone may see changes in how DATETIME values are interpreted. To preserve compatibility, set `TZ=UTC` explicitly in MySQL pods.
