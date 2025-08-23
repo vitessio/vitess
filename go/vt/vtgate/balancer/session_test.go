@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 func newSessionBalancer(t *testing.T) (*SessionBalancer, chan *discovery.TabletHealth) {
@@ -63,7 +64,7 @@ func TestPickNoTablets(t *testing.T) {
 	}
 
 	opts := sessionHash(12345)
-	result := b.Pick(target, nil, opts)
+	result := b.Pick(target, nil, nil, opts)
 	require.Nil(t, result)
 }
 
@@ -121,16 +122,16 @@ func TestPickLocalOnly(t *testing.T) {
 
 	// Pick for a specific session hash
 	opts := sessionHash(12345)
-	picked1 := b.Pick(target, nil, opts)
+	picked1 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked1)
 
 	// Pick again with same session hash, should return same tablet
-	picked2 := b.Pick(target, nil, opts)
+	picked2 := b.Pick(target, nil, nil, opts)
 	require.Equal(t, picked1, picked2, fmt.Sprintf("expected %s, got %s", tabletAlias(picked1), tabletAlias(picked2)))
 
 	// Pick with different session hash, empirically know that it should return tablet2
 	opts = sessionHash(5018141287610575993)
-	picked3 := b.Pick(target, nil, opts)
+	picked3 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked3)
 	require.NotEqual(t, picked2, picked3, fmt.Sprintf("expected different tablets, got %s", tabletAlias(picked3)))
 }
@@ -208,7 +209,7 @@ func TestPickPreferLocal(t *testing.T) {
 
 	// Pick should prefer local cell
 	opts := sessionHash(5018141287610575993)
-	picked1 := b.Pick(target, nil, opts)
+	picked1 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked1)
 	require.Equal(t, "local", picked1.Target.Cell)
 }
@@ -267,7 +268,7 @@ func TestPickNoLocal(t *testing.T) {
 
 	// Pick should return external cell since there are no local cells
 	opts := sessionHash(12345)
-	picked1 := b.Pick(target, nil, opts)
+	picked1 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked1)
 	require.Equal(t, "external", picked1.Target.Cell)
 }
@@ -324,7 +325,7 @@ func TestTabletNotServing(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	opts := sessionHash(5018141287610575993)
-	picked1 := b.Pick(target, nil, opts)
+	picked1 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked1)
 
 	// Local tablet goes out of serving
@@ -335,7 +336,7 @@ func TestTabletNotServing(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Should not pick the local tablet again
-	picked2 := b.Pick(target, nil, opts)
+	picked2 := b.Pick(target, nil, nil, opts)
 	require.NotEqual(t, picked1, picked2)
 }
 
@@ -371,7 +372,7 @@ func TestNewLocalTablet(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	opts := sessionHash(5018141287610575993)
-	picked1 := b.Pick(target, nil, opts)
+	picked1 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked1)
 
 	localTablet2 := &discovery.TabletHealth{
@@ -396,7 +397,7 @@ func TestNewLocalTablet(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	picked2 := b.Pick(target, nil, opts)
+	picked2 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked2)
 	require.NotEqual(t, picked1, picked2, fmt.Sprintf("expected different tablets, got %s", tabletAlias(picked2)))
 }
@@ -433,7 +434,7 @@ func TestNewExternalTablet(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	opts := sessionHash(5018141287610575993)
-	picked1 := b.Pick(target, nil, opts)
+	picked1 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked1)
 
 	externalTablet2 := &discovery.TabletHealth{
@@ -458,7 +459,7 @@ func TestNewExternalTablet(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	picked2 := b.Pick(target, nil, opts)
+	picked2 := b.Pick(target, nil, nil, opts)
 	require.NotNil(t, picked2)
 	require.NotEqual(t, picked1, picked2, fmt.Sprintf("expected different tablets, got %s", tabletAlias(picked2)))
 }
@@ -511,13 +512,81 @@ func TestPickNoSessionHash(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Test with nil opts
-	result := b.Pick(target, nil, nil)
+	result := b.Pick(target, nil, nil, nil)
 	require.Nil(t, result)
 
 	// Test with opts but nil session hash
 	optsNoHash := &PickOpts{sessionHash: nil}
-	result = b.Pick(target, nil, optsNoHash)
+	result = b.Pick(target, nil, nil, optsNoHash)
 	require.Nil(t, result)
+}
+
+func TestPickInvalidTablets(t *testing.T) {
+	b, hcChan := newSessionBalancer(t)
+
+	target := &querypb.Target{
+		Keyspace:   "keyspace",
+		Shard:      "0",
+		TabletType: topodatapb.TabletType_REPLICA,
+		Cell:       "local",
+	}
+
+	localTablet := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "local",
+				Uid:  100,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	localTablet2 := &discovery.TabletHealth{
+		Tablet: &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: "local",
+				Uid:  101,
+			},
+			Keyspace: "keyspace",
+			Shard:    "0",
+		},
+		Target: &querypb.Target{
+			Keyspace:   "keyspace",
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_REPLICA,
+			Cell:       "local",
+		},
+		Serving: true,
+	}
+
+	hcChan <- localTablet
+	hcChan <- localTablet2
+
+	// Give a moment for the worker to process the tablets
+	time.Sleep(10 * time.Millisecond)
+
+	// Get a tablet regularly
+	opts := sessionHash(5018141287610575993)
+	tablet := b.Pick(target, nil, nil, opts)
+	require.NotNil(t, tablet)
+
+	// Mark returned tablet as invalid, should return other tablet
+	invalidTablets := map[string]bool{topoproto.TabletAliasString(tablet.Tablet.Alias): true}
+	tablet2 := b.Pick(target, nil, invalidTablets, opts)
+	require.NotEqual(t, tablet, tablet2)
+
+	// Mark both as invalid, should return nil
+	invalidTablets[topoproto.TabletAliasString(tablet2.Tablet.Alias)] = true
+	tablet3 := b.Pick(target, nil, invalidTablets, opts)
+	require.Nil(t, tablet3)
 }
 
 func sessionHash(i uint64) *PickOpts {
