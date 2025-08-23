@@ -142,20 +142,20 @@ func TestHashRingGet(t *testing.T) {
 	tablet1 := createTestTabletForHashRing("cell1", 100)
 	tablet2 := createTestTabletForHashRing("cell2", 200)
 
-	result := ring.get("test_key")
+	result := ring.get("test_key", nil)
 	require.Nil(t, result)
 
 	ring.add(tablet1)
 	ring.sort()
 
-	result = ring.get("test_key")
+	result = ring.get("test_key", nil)
 	require.NotNil(t, result)
 	require.Equal(t, tablet1, result)
 
 	ring.add(tablet2)
 	ring.sort()
 
-	result = ring.get("test_key")
+	result = ring.get("test_key", nil)
 	require.NotNil(t, result)
 
 	// Empirically know that "test_key" hashes closest to tablet2
@@ -212,19 +212,19 @@ func TestHashRingAddRemoveSequence(t *testing.T) {
 
 	key := "test_sequence"
 
-	initialTablet := ring.get(key)
+	initialTablet := ring.get(key, nil)
 	require.NotNil(t, initialTablet)
 
 	ring.remove(tablet2)
 	ring.sort()
 
-	afterRemovalTablet := ring.get(key)
+	afterRemovalTablet := ring.get(key, nil)
 	require.NotNil(t, afterRemovalTablet)
 
 	ring.add(tablet2)
 	ring.sort()
 
-	afterReaddTablet := ring.get(key)
+	afterReaddTablet := ring.get(key, nil)
 	require.NotNil(t, afterReaddTablet)
 
 	require.Equal(t, initialTablet, afterReaddTablet)
@@ -243,7 +243,7 @@ func TestHashRingWrapAround(t *testing.T) {
 	ring.nodeMap[3000] = tablet1
 
 	// Any large hash should wrap around to the first node
-	result := ring.get("this_should_wrap_around_with_large_hash")
+	result := ring.get("this_should_wrap_around_with_large_hash", nil)
 	require.NotNil(t, result)
 	require.Contains(t, []*discovery.TabletHealth{tablet1, tablet2}, result)
 }
@@ -265,7 +265,7 @@ func TestHashRingRemoveAllTablets(t *testing.T) {
 
 	require.Empty(t, ring.nodes)
 	require.Empty(t, ring.nodeMap)
-	require.Nil(t, ring.get("any_key"))
+	require.Nil(t, ring.get("any_key", nil))
 }
 
 func TestHashRingMultipleAddSameTablet(t *testing.T) {
@@ -294,13 +294,13 @@ func TestHashRingGetAfterRemove(t *testing.T) {
 	ring.sort()
 
 	// Empirically know that this hashes closest to tablet3
-	got := ring.get("key")
+	got := ring.get("key", nil)
 	require.Equal(t, tablet3, got)
 
 	// Remove tablet3
 	ring.remove(tablet3)
 
-	got = ring.get("key")
+	got = ring.get("key", nil)
 	require.NotEqual(t, tablet3, got)
 }
 
@@ -321,7 +321,7 @@ func TestHashRingConcurrentGetOperations(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			key := fmt.Sprintf("concurrent_key_%d", i)
-			tablet := ring.get(key)
+			tablet := ring.get(key, nil)
 			require.NotNil(t, tablet)
 		}(i)
 	}

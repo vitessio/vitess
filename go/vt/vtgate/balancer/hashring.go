@@ -108,8 +108,8 @@ func (r *hashRing) remove(tablet *discovery.TabletHealth) {
 	delete(r.tablets, tabletAlias(tablet))
 }
 
-// get returns the tablet for the given key.
-func (r *hashRing) get(key string) *discovery.TabletHealth {
+// get returns the tablet for the given key, ignoring invalid tablets.
+func (r *hashRing) get(key string, invalidTablets map[string]bool) *discovery.TabletHealth {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -118,12 +118,12 @@ func (r *hashRing) get(key string) *discovery.TabletHealth {
 	}
 
 	hash := xxhash.Sum64String(key)
-	tablet := r.getHashed(hash)
+	tablet := r.getHashed(hash, invalidTablets)
 	return tablet
 }
 
-// getHashed returns the tablet for the given hash.
-func (r *hashRing) getHashed(hash uint64) *discovery.TabletHealth {
+// getHashed returns the tablet for the given hash, ignoring invalid tablets.
+func (r *hashRing) getHashed(hash uint64, invalidTablets map[string]bool) *discovery.TabletHealth {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -131,14 +131,22 @@ func (r *hashRing) getHashed(hash uint64) *discovery.TabletHealth {
 		return nil
 	}
 
-	// Find the first node greater than or equal to this hash
+	// Find the first node greater than or equal to this hash, and isn't invalid
 	i := sort.Search(len(r.nodes), func(i int) bool {
-		return r.nodes[i] >= hash
+		node := r.nodes[i]
+
+		return !r.invalidNode(node, invalidTablets) && r.nodes[i] >= hash
 	})
 
 	// Wrap around if needed
 	if i == len(r.nodes) {
 		i = 0
+
+		// If the first tablet is invalid, it means we couldn't find any valid tablets
+		node := r.nodes[i]
+		if r.invalidNode(node, invalidTablets) {
+			return nil
+		}
 	}
 
 	// Return the associated tablet
@@ -195,4 +203,14 @@ func removeNodes(nodes []uint64, hashes map[uint64]struct{}) []uint64 {
 	}
 
 	return nodes[:writeIdx]
+}
+
+// invalidNode returns whether the virtual node is associated with an invalid tablet.
+func (r *hashRing) invalidNode(node uint64, invalidTablets map[string]bool) bool {
+	tablet := r.nodeMap[node]
+
+	alias := topoproto.TabletAliasString(tablet.Tablet.Alias)
+	_, invalid := invalidTablets[alias]
+
+	return invalid
 }

@@ -70,11 +70,7 @@ func NewSessionBalancer(ctx context.Context, localCell string, hc discovery.Heal
 //
 // For a given session, it will return the same tablet for its duration, with preference to tablets
 // in the local cell.
-//
-// NOTE: this currently won't consider any invalid tablets. This means we'll keep returning the same
-// invalid tablet on subsequent tries. We can improve this by maybe returning a random tablet (local
-// cell preferred) when the session hash falls on an invalid tablet.
-func (b *SessionBalancer) Pick(target *querypb.Target, _ []*discovery.TabletHealth, opts *PickOpts) *discovery.TabletHealth {
+func (b *SessionBalancer) Pick(target *querypb.Target, _ []*discovery.TabletHealth, invalidTablets map[string]bool, opts *PickOpts) *discovery.TabletHealth {
 	if opts == nil || opts.sessionHash == nil {
 		// No session hash. Returning nil here will allow the gateway to select a random
 		// tablet instead.
@@ -87,13 +83,13 @@ func (b *SessionBalancer) Pick(target *querypb.Target, _ []*discovery.TabletHeal
 	defer b.mu.RUnlock()
 
 	// Try to find a tablet in the local cell first
-	tablet := getFromRing(b.localRings, target, sessionHash)
+	tablet := getFromRing(b.localRings, target, invalidTablets, sessionHash)
 	if tablet != nil {
 		return tablet
 	}
 
 	// If we didn't find a tablet in the local cell, try external cells
-	tablet = getFromRing(b.externalRings, target, sessionHash)
+	tablet = getFromRing(b.externalRings, target, invalidTablets, sessionHash)
 	return tablet
 }
 
@@ -192,7 +188,7 @@ func (b *SessionBalancer) print() string {
 }
 
 // getFromRing gets a tablet from the respective ring for the given target and session hash.
-func getFromRing(rings map[discovery.KeyspaceShardTabletType]*hashRing, target *querypb.Target, sessionHash uint64) *discovery.TabletHealth {
+func getFromRing(rings map[discovery.KeyspaceShardTabletType]*hashRing, target *querypb.Target, invalidTablets map[string]bool, sessionHash uint64) *discovery.TabletHealth {
 	key := discovery.KeyFromTarget(target)
 
 	ring, exists := rings[key]
@@ -200,5 +196,5 @@ func getFromRing(rings map[discovery.KeyspaceShardTabletType]*hashRing, target *
 		return nil
 	}
 
-	return ring.getHashed(sessionHash)
+	return ring.getHashed(sessionHash, invalidTablets)
 }
