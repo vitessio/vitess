@@ -25,9 +25,15 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/DataDog/appsec-internal-go/log"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/srvtopo"
 )
+
+// tabletTypesToWatch are the tablet types that will be included in the hash rings.
+var tabletTypesToWatch = []topodata.TabletType{topodata.TabletType_PRIMARY, topodata.TabletType_REPLICA, topodata.TabletType_BATCH}
 
 // SessionBalancer implements the TabletBalancer interface. For a given session,
 // it will return the same tablet for its duration, with preference to tablets in
@@ -51,7 +57,7 @@ type SessionBalancer struct {
 }
 
 // NewSessionBalancer creates a new session balancer.
-func NewSessionBalancer(ctx context.Context, localCell string, hc discovery.HealthCheck) TabletBalancer {
+func NewSessionBalancer(ctx context.Context, localCell string, topoServer srvtopo.Server, hc discovery.HealthCheck) TabletBalancer {
 	b := &SessionBalancer{
 		localCell:     localCell,
 		hc:            hc,
@@ -60,8 +66,7 @@ func NewSessionBalancer(ctx context.Context, localCell string, hc discovery.Heal
 	}
 
 	// Set up health check subscription
-	hcChan := b.hc.Subscribe("SessionBalancer")
-	go b.watchHealthCheck(ctx, hcChan)
+	go b.watchHealthCheck(ctx, topoServer)
 
 	return b
 }
@@ -107,7 +112,26 @@ func (b *SessionBalancer) DebugHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // watchHealthCheck watches the health check channel for tablet health changes, and updates hash rings accordingly.
-func (b *SessionBalancer) watchHealthCheck(ctx context.Context, hcChan chan *discovery.TabletHealth) {
+func (b *SessionBalancer) watchHealthCheck(ctx context.Context, topoServer srvtopo.Server) {
+	// Build initial hash rings
+
+	// Find all the targets we're watching
+	targets, _, err := srvtopo.FindAllTargetsAndKeyspaces(ctx, topoServer, b.localCell, discovery.KeyspacesToWatch, tabletTypesToWatch)
+	if err != nil {
+		log.Errorf("session balancer: failed to find all targets and keyspaces: %q", err)
+		return
+	}
+
+	// Add each tablet to the hash ring
+	for _, target := range targets {
+		tablets := b.hc.GetHealthyTabletStats(target)
+		for _, tablet := range tablets {
+			b.onTabletHealthChange(tablet)
+		}
+	}
+
+	// Start watching health check channel for future tablet health changes
+	hcChan := b.hc.Subscribe("SessionBalancer")
 	for {
 		select {
 		case <-ctx.Done():
@@ -123,7 +147,9 @@ func (b *SessionBalancer) watchHealthCheck(ctx context.Context, hcChan chan *dis
 	}
 }
 
-// onTabletHealthChange is the handler for tablet health events.
+// onTabletHealthChange is the handler for tablet health events. If a tablet goes into serving,
+// it is added to the appropriate (local or external) hash ring for its target. If it goes out
+// of serving, it is removed from the hash ring.
 func (b *SessionBalancer) onTabletHealthChange(tablet *discovery.TabletHealth) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
