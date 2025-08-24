@@ -73,20 +73,20 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	// Server ID - "select @@global.server_id"
 	serverID, err := tm.MysqlDaemon.GetServerID(ctx)
 	if err != nil {
-		return nil, err
+		return nil, convertMysqlDaemonError(err)
 	}
 
 	// Server UUID - "select @@global.server_uuid"
 	serverUUID, err := tm.MysqlDaemon.GetServerUUID(ctx)
 	if err != nil {
-		return nil, err
+		return nil, convertMysqlDaemonError(err)
 	}
 
 	// Replication status - "SHOW REPLICA STATUS"
 	replicationStatus, err := tm.MysqlDaemon.ReplicationStatus(ctx)
 	var replicationStatusProto *replicationdatapb.Status
 	if err != nil && err != mysql.ErrNotReplica {
-		return nil, err
+		return nil, convertMysqlDaemonError(err)
 	}
 	if err == nil {
 		replicationStatusProto = replication.ReplicationStatusToProto(replicationStatus)
@@ -96,7 +96,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	primaryStatus, err := tm.MysqlDaemon.PrimaryStatus(ctx)
 	var primaryStatusProto *replicationdatapb.PrimaryStatus
 	if err != nil && err != mysql.ErrNoPrimaryStatus {
-		return nil, err
+		return nil, convertMysqlDaemonError(err)
 	}
 	if err == nil {
 		primaryStatusProto = replication.PrimaryStatusToProto(primaryStatus)
@@ -105,13 +105,13 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	// Purged GTID set
 	purgedGTIDs, err := tm.MysqlDaemon.GetGTIDPurged(ctx)
 	if err != nil {
-		return nil, err
+		return nil, convertMysqlDaemonError(err)
 	}
 
 	// Version string "majorVersion.minorVersion.patchRelease"
 	version, err := tm.MysqlDaemon.GetVersionString(ctx)
 	if err != nil {
-		return nil, err
+		return nil, convertMysqlDaemonError(err)
 	}
 	_, v, err := mysqlctl.ParseVersionString(version)
 	if err != nil {
@@ -122,31 +122,31 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	// Version comment "select @@global.version_comment"
 	versionComment, err := tm.MysqlDaemon.GetVersionComment(ctx)
 	if err != nil {
-		return nil, err
+		return nil, convertMysqlDaemonError(err)
 	}
 
 	// Read only - "SHOW VARIABLES LIKE 'read_only'"
 	readOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
 	if err != nil {
-		return nil, err
+		return nil, convertMysqlDaemonError(err)
 	}
 
 	// superReadOnly - "SELECT @@global.super_read_only"
 	superReadOnly, err := tm.MysqlDaemon.IsSuperReadOnly(ctx)
 	if err != nil {
-		return nil, err
+		return nil, convertMysqlDaemonError(err)
 	}
 
 	// Binlog Information - "select @@global.binlog_format, @@global.log_bin, @@global.log_replica_updates, @@global.binlog_row_image"
 	binlogFormat, logBin, logReplicaUpdates, binlogRowImage, err := tm.MysqlDaemon.GetBinlogInformation(ctx)
 	if err != nil {
-		return nil, err
+		return nil, convertMysqlDaemonError(err)
 	}
 
 	// GTID Mode - "select @@global.gtid_mode" - Only applicable for MySQL variants
 	gtidMode, err := tm.MysqlDaemon.GetGTIDMode(ctx)
 	if err != nil {
-		return nil, err
+		return nil, convertMysqlDaemonError(err)
 	}
 
 	// Semi sync settings - "show global variables like 'rpl_semi_sync_%_enabled'"
@@ -163,7 +163,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 
 	replConfiguration, err := tm.MysqlDaemon.ReplicationConfiguration(ctx)
 	if err != nil {
-		return nil, err
+		return nil, convertMysqlDaemonError(err)
 	}
 
 	return &replicationdatapb.FullStatus{
@@ -951,7 +951,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	// returns an error, so a user can optionally inspect the status before a stop was called.
 	rs, err := tm.MysqlDaemon.ReplicationStatus(ctx)
 	if err != nil {
-		return StopReplicationAndGetStatusResponse{}, vterrors.Wrap(err, "before status failed")
+		return StopReplicationAndGetStatusResponse{}, wrapMysqlDaemonError(err, "before status failed")
 	}
 	before := replication.ReplicationStatusToProto(rs)
 	before.BackupRunning = tm.IsBackupRunning()
@@ -970,7 +970,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 				Status: &replicationdatapb.StopReplicationStatus{
 					Before: before,
 				},
-			}, vterrors.Wrap(err, "stop io thread failed")
+			}, wrapMysqlDaemonError(err, "stop io thread failed")
 		}
 	} else {
 		if !rs.Healthy() {
@@ -987,7 +987,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 				Status: &replicationdatapb.StopReplicationStatus{
 					Before: before,
 				},
-			}, vterrors.Wrap(err, "stop replication failed")
+			}, wrapMysqlDaemonError(err, "stop replication failed")
 		}
 	}
 
@@ -998,7 +998,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 			Status: &replicationdatapb.StopReplicationStatus{
 				Before: before,
 			},
-		}, vterrors.Wrap(err, "acquiring replication status failed")
+		}, wrapMysqlDaemonError(err, "acquiring replication status failed")
 	}
 	after := replication.ReplicationStatusToProto(rsAfter)
 	after.BackupRunning = tm.IsBackupRunning()
