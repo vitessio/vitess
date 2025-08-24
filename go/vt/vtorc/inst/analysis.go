@@ -86,8 +86,8 @@ type ReplicationAnalysisHints struct {
 
 // ReplicationAnalysis notes analysis on replication chain status, per instance
 type ReplicationAnalysis struct {
-	AnalyzedInstanceAlias        string
-	AnalyzedInstancePrimaryAlias string
+	AnalyzedInstanceAlias        *topodatapb.TabletAlias
+	AnalyzedInstancePrimaryAlias *topodatapb.TabletAlias
 	TabletType                   topodatapb.TabletType
 	CurrentTabletType            topodatapb.TabletType
 	PrimaryTimeStamp             time.Time
