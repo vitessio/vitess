@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
@@ -36,7 +37,7 @@ func newSessionBalancer(t *testing.T) (*SessionBalancer, chan *discovery.TabletH
 
 	ch := make(chan *discovery.TabletHealth, 10)
 	hc := discovery.NewFakeHealthCheck(ch)
-	b := NewSessionBalancer(ctx, "local", hc)
+	b := NewSessionBalancer(ctx, "local", &fakesrvtopo.FakeSrvTopo{}, hc)
 	sb := b.(*SessionBalancer)
 
 	return sb, ch
@@ -465,11 +466,7 @@ func TestNewExternalTablet(t *testing.T) {
 }
 
 func TestDebugHandler(t *testing.T) {
-	ctx := t.Context()
-
-	ch := make(chan *discovery.TabletHealth, 10)
-	hc := discovery.NewFakeHealthCheck(ch)
-	b := NewSessionBalancer(ctx, "local", hc)
+	b, _ := newSessionBalancer(t)
 
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/debug", nil)
